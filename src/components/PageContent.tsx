@@ -168,24 +168,27 @@ export default function PageContent() {
               autoPlay
               muted
               playsInline
+              preload="auto"
               loop
+              poster="/hero.jpg"
               style={{
                 position: "absolute", inset: 0,
                 width: "100%", height: "100%",
                 objectFit: "cover",
-                filter: "brightness(1.6) contrast(1.1)",
+                zIndex: 1,
+                filter: "brightness(1) contrast(1)",
               }}
             >
               <source src="/bread-intro.mp4" type="video/mp4" />
             </video>
             <div style={{
-              position: "absolute", inset: 0,
+              position: "absolute", inset: 0, zIndex: 2,
               background: "radial-gradient(ellipse at center, transparent 40%, rgba(6,4,2,0.6) 100%)",
               pointerEvents: "none",
             }} />
             {/* Bold statement + CTA — bottom */}
             <div style={{
-              position: "absolute", bottom: 72, left: 0, right: 0,
+              position: "absolute", bottom: 72, left: 0, right: 0, zIndex: 3,
               padding: "0 clamp(28px, 8vw, 80px)",
             }}>
               <p style={{
@@ -205,7 +208,7 @@ export default function PageContent() {
                 textShadow: "0 2px 40px rgba(0,0,0,0.6)",
                 pointerEvents: "none",
               }}>
-                Same Bread.<br />Better Built.
+                Same Routine.<br />Better Protein.
               </p>
               <button style={{
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
@@ -217,7 +220,7 @@ export default function PageContent() {
             </div>
 
             <div style={{
-              position: "absolute", bottom: 32, left: "50%",
+              position: "absolute", bottom: 32, left: "50%", zIndex: 3,
               transform: "translateX(-50%)",
               fontFamily: "var(--font-body)", fontSize: 8,
               fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
