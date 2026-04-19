@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.next/
+node_modules/
+*.mp4
+*.mov
+*.avi
+
