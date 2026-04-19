@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Next.js Dev Server",
+      "runtimeExecutable": "/opt/homebrew/Cellar/node/25.8.2/bin/npx",
+      "runtimeArgs": ["next", "dev"],
+      "autoPort": true,
+      "port": 3000
+    }
+  ]
+}

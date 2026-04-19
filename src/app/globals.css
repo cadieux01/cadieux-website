@@ -1,0 +1,210 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-cream: #fbf3d4;
+  --color-gold: #024628;
+  --color-dark: #1d1d1f;
+  --color-green: #024628;
+  --color-offwhite: #fbf3d4;
+  --color-charcoal: #1d1d1f;
+  --color-silver: #c0c8ce;
+  --color-blue: #436cb4;
+  --glass-bg: rgba(251, 243, 212, 0.05);
+  --glass-border: rgba(192, 200, 206, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  /* overflow-x: hidden here breaks position:sticky — do not add it */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  /* clip does NOT create a scroll container, so position:sticky still works */
+  overflow-x: clip;
+  cursor: none;
+  background: radial-gradient(ellipse at 20% 50%, rgba(2,70,40,0.15) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 20%, rgba(67,108,180,0.08) 0%, transparent 55%),
+              #1d1d1f;
+  color: var(--color-cream);
+}
+
+/* Design system utility classes */
+
+.heading-xl {
+  font-family: var(--font-heading);
+  font-weight: 300;
+  font-size: clamp(3rem, 8vw, 7rem);
+  line-height: 1.05;
+  letter-spacing: 0.08em;
+  color: var(--color-cream);
+  text-transform: uppercase;
+}
+
+.label-text {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.65rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(192, 200, 206, 0.6);
+}
+
+.body-text {
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: 1rem;
+  line-height: 1.75;
+  letter-spacing: 0.02em;
+  color: rgba(192, 200, 206, 0.7);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .heading-xl {
+    font-size: 3rem;
+  }
+  .body-text {
+    max-width: 100% !important;
+  }
+  .hidden-mobile {
+    display: none !important;
+  }
+}
+
+/* Glass panel */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+}
+
+/* Ingredient items */
+.ingredient-item {
+  position: absolute;
+  opacity: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 160px;
+}
+
+.ingredient-item.right-side {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.ingredient-name {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fbf3d4;
+}
+
+.ingredient-desc {
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 300;
+  color: rgba(192, 200, 206, 0.6);
+  line-height: 1.5;
+}
+
+.ingredient-arrow {
+  font-size: 0.75rem;
+  color: #436cb4;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 768px) {
+  .ingredients-panel {
+    display: none !important;
+  }
+}
+
+/* Hero floating ingredient items */
+.hero-ingredient-wrapper {
+  cursor: default;
+}
+
+@media (max-width: 768px) {
+  .hero-ingredient-wrapper {
+    display: none !important;
+  }
+}
+
+.hero-ingredient {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.hero-ingredient.right-side {
+  flex-direction: row-reverse;
+}
+
+.hi-line {
+  width: clamp(30px, 4vw, 60px);
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(192,200,206,0.35));
+  flex-shrink: 0;
+  margin-right: 10px;
+}
+
+.hero-ingredient.right-side .hi-line {
+  background: linear-gradient(to left, transparent, rgba(192,200,206,0.35));
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+.hi-content {
+  display: inline-block;
+}
+
+.hero-ingredient.right-side .hi-content {
+  text-align: right;
+}
+
+.hi-name {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: clamp(1.1rem, 2.2vw, 1.7rem);
+  font-weight: 300;
+  color: #fbf3d4;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+.hi-desc {
+  display: block;
+  font-family: var(--font-body);
+  font-size: clamp(0.6rem, 1vw, 0.68rem);
+  font-weight: 300;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(192,200,206,0.55);
+  margin-top: 3px;
+}
+
+/* Scroll line animation */
+@keyframes scrollLine {
+  0% { transform: scaleY(0); transform-origin: top center; opacity: 1; }
+  100% { transform: scaleY(1); transform-origin: top center; opacity: 0; }
+}
+
+/* Immersive entry scroll hint breathing */
+@keyframes immersiveBreathe {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.9; }
+}
+.immersive-breathe {
+  animation: immersiveBreathe 1.7s ease-in-out infinite;
+}

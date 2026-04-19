@@ -1,0 +1,337 @@
+"use client";
+
+import { useRef, useEffect, useState } from "react";
+import QASection from "./QASection";
+
+/* ── Helpers ── */
+const sr    = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+const remap = (v: number, lo: number, hi: number) => clamp((v - lo) / (hi - lo), 0, 1);
+const ease  = (t: number) => t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+
+/* ── SVG grain texture ── */
+const GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+
+/* ── Content ── */
+const INGREDIENTS = [
+  { name: "Whey Protein",          desc: "Builds lean muscle and speeds up recovery" },
+  { name: "Oat Protein",           desc: "Sustained energy with every bite" },
+  { name: "Soya Protein",          desc: "Complete plant protein for daily strength" },
+  { name: "Wheat Protein",         desc: "Natural gluten structure for lasting fullness" },
+  { name: "Wheat Fibres",          desc: "Keeps your gut moving, naturally" },
+  { name: "Sunflower Seeds",       desc: "Rich in vitamin E and healthy fats" },
+  { name: "Sesame Seeds",          desc: "Tiny seeds, massive mineral content" },
+  { name: "Linseeds",              desc: "Omega-3 powerhouse for heart and brain" },
+  { name: "Soya Flour",            desc: "Boosts protein density in every slice" },
+  { name: "Oat Bran",              desc: "Lowers cholesterol, feeds your gut bacteria" },
+  { name: "Iodised Salt",          desc: "Essential minerals, perfectly balanced" },
+  { name: "Rye Sourdough Ferment", desc: "Ancient fermentation for better digestion" },
+  { name: "Barley Malt",           desc: "Natural sweetness with a low glycemic touch" },
+  { name: "Wholemeal Flour",       desc: "Full grain nutrition, nothing stripped away" },
+];
+
+const CARD_BG = ["#0E0804", "#120A04", "#0A0804", "#140C06"];
+
+/* ── Deterministic floating grain data ── */
+const GRAINS = Array.from({ length: 22 }, (_, i) => ({
+  id:    i,
+  x:     sr(i * 13 + 1) * 88,
+  y:     sr(i * 13 + 2) * 95,
+  size:  44 + sr(i * 13 + 3) * 46,
+  rot:   sr(i * 13 + 4) * 360,
+  op:    0.07 + sr(i * 13 + 5) * 0.07,
+  dur:   8  + sr(i * 13 + 6) * 12,
+  delay: sr(i * 13 + 7) * 8,
+  anim:  i % 2 === 0 ? "grain-float" : "grain-sway",
+}));
+
+const N_C = INGREDIENTS.length;
+
+export default function PageContent() {
+  const grainRefs     = useRef<(HTMLImageElement | null)[]>([]);
+  const cardsOuterRef = useRef<HTMLDivElement>(null);
+  const videoRef      = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = true;
+    v.play().catch(() => {});
+  }, []);
+
+  /* ── Scroll-driven card progress ── */
+  const [cardsP, setCardsP] = useState(0);
+
+  useEffect(() => {
+    let rafId: number;
+    let last = -1;
+    const tick = () => {
+      rafId = requestAnimationFrame(tick);
+      const sy = window.scrollY;
+      if (sy === last) return;
+      last = sy;
+      const el = cardsOuterRef.current;
+      if (!el) return;
+      const top = sy + el.getBoundingClientRect().top;
+      const h   = el.scrollHeight;
+      const wh  = window.innerHeight;
+      setCardsP(clamp((sy - top) / (h - wh), 0, 1));
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  /* ── Grains — opacity boost on viewport entry ── */
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      entries => entries.forEach(e => {
+        const el = e.target as HTMLImageElement;
+        const base = parseFloat(el.dataset.op ?? "0.08");
+        el.style.opacity = e.isIntersecting ? String(Math.min(0.18, base + 0.06)) : String(base);
+      }),
+      { threshold: 0.1 }
+    );
+    grainRefs.current.forEach(el => el && io.observe(el));
+    return () => io.disconnect();
+  }, []);
+
+  /* ── Per-card visibility from scroll progress ── */
+  const cardVis = INGREDIENTS.map((_, i) => {
+    const f = cardsP * N_C - i;
+    let opacity = 0, ty = 52;
+    if (f > -0.5 && f <= 0) {
+      const t = ease(remap(f, -0.5, 0));
+      opacity = t; ty = (1 - t) * 52;
+    } else if (f > 0 && f <= 0.5) {
+      opacity = 1; ty = 0;
+    } else if (f > 0.5 && f < 1.1) {
+      const t = ease(remap(f, 0.5, 1.1));
+      opacity = 1 - t; ty = -t * 40;
+    }
+    return { opacity, ty };
+  });
+
+  const activeCard = Math.round(clamp(cardsP * N_C - 0.5, 0, N_C - 1));
+
+  return (
+    <>
+      <style>{`
+        @keyframes grain-float {
+          0%,100% { transform: translateY(0px)   rotate(var(--gr)); }
+          50%      { transform: translateY(-26px) rotate(calc(var(--gr) + 5deg)); }
+        }
+        @keyframes grain-sway {
+          0%,100% { transform: translateX(0px)   rotate(var(--gr)); }
+          50%      { transform: translateX(15px)  rotate(calc(var(--gr) - 7deg)); }
+        }
+
+      `}</style>
+
+      <div style={{ position: "relative", background: "rgb(6,4,2)", overflowX: "clip" }}>
+
+        {/* ── Floating grain layer ── */}
+        <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
+          {GRAINS.map((g, i) => (
+            <img
+              key={g.id}
+              ref={el => { grainRefs.current[i] = el; }}
+              src="/grains.png"
+              alt=""
+              data-op={g.op.toFixed(3)}
+              style={{
+                position: "absolute",
+                left: `${g.x}%`, top: `${g.y}%`,
+                width: g.size, height: g.size,
+                objectFit: "cover",
+                opacity: g.op,
+                mixBlendMode: "screen",
+                willChange: "transform",
+                animationName: g.anim,
+                animationDuration: `${g.dur}s`,
+                animationDelay: `${-g.delay}s`,
+                animationTimingFunction: "ease-in-out",
+                animationIterationCount: "infinite",
+                transition: "opacity 0.6s ease",
+                "--gr": `${g.rot}deg`,
+              } as React.CSSProperties}
+            />
+          ))}
+        </div>
+
+        <div style={{ position: "relative", zIndex: 1 }}>
+
+          {/* ══ SECTION 1 — VIDEO ══ */}
+          <section style={{ position: "relative", height: "100dvh", overflow: "hidden" }}>
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              loop
+              style={{
+                position: "absolute", inset: 0,
+                width: "100%", height: "100%",
+                objectFit: "cover",
+                filter: "brightness(1.6) contrast(1.1)",
+              }}
+            >
+              <source src="/bread-intro.mp4" type="video/mp4" />
+            </video>
+            <div style={{
+              position: "absolute", inset: 0,
+              background: "radial-gradient(ellipse at center, transparent 40%, rgba(6,4,2,0.6) 100%)",
+              pointerEvents: "none",
+            }} />
+            {/* Bold statement + CTA — bottom */}
+            <div style={{
+              position: "absolute", bottom: 72, left: 0, right: 0,
+              padding: "0 clamp(28px, 8vw, 80px)",
+            }}>
+              <p style={{
+                margin: "0 0 16px",
+                fontFamily: "var(--font-body)", fontSize: 10,
+                fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
+                color: "rgb(240,223,200)", pointerEvents: "none",
+              }}>Cadieux</p>
+              <p style={{
+                margin: "0 0 24px",
+                fontFamily: "var(--font-heading)",
+                fontSize: "clamp(40px, 10vw, 88px)",
+                fontWeight: 600,
+                color: "rgb(240,223,200)",
+                lineHeight: 1.1,
+                letterSpacing: "0.02em",
+                textShadow: "0 2px 40px rgba(0,0,0,0.6)",
+                pointerEvents: "none",
+              }}>
+                Same Bread.<br />Better Built.
+              </p>
+              <button style={{
+                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                letterSpacing: "0.4em", textTransform: "uppercase",
+                color: "rgb(6,4,2)", background: "rgb(240,223,200)",
+                border: "none", padding: "16px 40px", cursor: "pointer",
+                WebkitTapHighlightColor: "transparent",
+              }}>Shop Now</button>
+            </div>
+
+            <div style={{
+              position: "absolute", bottom: 32, left: "50%",
+              transform: "translateX(-50%)",
+              fontFamily: "var(--font-body)", fontSize: 8,
+              fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
+              color: "rgba(200,144,58,0.7)",
+              pointerEvents: "none",
+            }}>Scroll</div>
+          </section>
+
+          {/* ══ Q&A SECTION ══ */}
+          <QASection />
+
+          {/* ══ SECTION 4 — INGREDIENT CARDS (scroll-driven sticky) ══ */}
+          <div ref={cardsOuterRef} style={{ position: "relative", height: `${N_C * 100}vh` }}>
+            <div style={{
+              position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
+              background: "#0E0804",
+            }}>
+              {/* Shared grain overlay */}
+              <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
+
+              {/* Cards */}
+              {INGREDIENTS.map((ing, i) => {
+                const { opacity, ty } = cardVis[i];
+                return (
+                  <div key={i} style={{
+                    position: "absolute", inset: 0,
+                    background: CARD_BG[i % CARD_BG.length],
+                    opacity, zIndex: i,
+                    willChange: "opacity",
+                    pointerEvents: "none",
+                  }}>
+                    <div style={{
+                      position: "absolute", top: "50%", left: 0, right: 0,
+                      padding: "0 clamp(28px,8vw,80px)",
+                      transform: `translateY(calc(-50% + ${ty}px))`,
+                      willChange: "transform", textAlign: "center",
+                    }}>
+                      {/* Amber rule */}
+                      <div style={{ width: 40, height: 1, background: "rgba(200,144,58,0.45)", margin: "0 auto 28px" }} />
+
+                      {/* Counter */}
+                      <p style={{
+                        margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 8,
+                        fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
+                        color: "rgba(200,144,58,0.4)",
+                      }}>{String(i + 1).padStart(2, "0")} — {String(N_C).padStart(2, "0")}</p>
+
+                      {/* Name */}
+                      <h2 style={{
+                        margin: "0 0 22px", fontFamily: "var(--font-heading)",
+                        fontSize: "clamp(44px, 11vw, 88px)", fontWeight: 300,
+                        color: "rgb(240,223,200)", letterSpacing: "0.01em", lineHeight: 1,
+                      }}>{ing.name}</h2>
+
+                      {/* Benefit */}
+                      <p style={{
+                        margin: 0, fontFamily: "var(--font-body)", fontSize: 9,
+                        fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase",
+                        color: "rgb(200,144,58)", lineHeight: 1.9,
+                      }}>{ing.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Progress indicator */}
+              <div style={{
+                position: "absolute", bottom: 28, left: "50%",
+                transform: "translateX(-50%)", display: "flex", gap: 6,
+                alignItems: "center", zIndex: 20, pointerEvents: "none",
+              }}>
+                {INGREDIENTS.map((_, j) => (
+                  <div key={j} style={{
+                    width: activeCard === j ? 16 : 4, height: 1,
+                    background: activeCard === j ? "rgb(200,144,58)" : "rgba(200,144,58,0.22)",
+                    transition: "width 0.4s cubic-bezier(.22,1,.36,1), background 0.4s",
+                  }} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ══ SECTION 5 — CLOSING CTA ══ */}
+          <section style={{
+            minHeight: "100dvh", display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            padding: "80px 28px", textAlign: "center", position: "relative",
+          }}>
+            <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
+
+            <p style={{
+              margin: 0, fontFamily: "var(--font-heading)",
+              fontSize: "clamp(52px, 16vw, 96px)", fontWeight: 300,
+              color: "rgb(240,223,200)", letterSpacing: "0.06em", lineHeight: 1,
+            }}>Cadieux</p>
+
+            <p style={{
+              margin: "20px 0 0", fontFamily: "var(--font-body)", fontSize: 9,
+              fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
+              color: "rgb(200,144,58)",
+            }}>Same Bread. Better Built.</p>
+
+            <button style={{
+              display: "block", width: "100%", maxWidth: 320, marginTop: 28,
+              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+              letterSpacing: "0.4em", textTransform: "uppercase",
+              color: "rgb(6,4,2)", background: "rgb(240,223,200)",
+              border: "none", padding: 18, cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
+            }}>Shop Now</button>
+          </section>
+
+        </div>
+      </div>
+    </>
+  );
+}

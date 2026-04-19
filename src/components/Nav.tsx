@@ -1,0 +1,219 @@
+"use client";
+
+import { useState, useEffect } from "react";
+
+type Page = "blogs" | "making" | "store-locator" | null;
+
+const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+
+const LINKS: { id: Page; label: string }[] = [
+  { id: "blogs",          label: "Blogs" },
+  { id: "making",         label: "Making" },
+  { id: "store-locator",  label: "Store Locator" },
+];
+
+/* ── Sub-page content ── */
+function BlogsContent() {
+  const posts = [
+    "Why Protein Bread Is the Future of Everyday Eating",
+    "The Ancient Grains We Swear By",
+    "What Happens to Your Body When You Switch to Better Bread",
+  ];
+  return (
+    <>
+      <h1 style={{
+        margin: "0 0 64px", fontFamily: "var(--font-heading)",
+        fontSize: "clamp(52px,12vw,96px)", fontWeight: 300,
+        color: "rgb(240,223,200)", letterSpacing: "0.02em", lineHeight: 1,
+      }}>Stories &amp; Bakes</h1>
+      {posts.map((title, i) => (
+        <div key={i} style={{ borderTop: "1px solid rgba(240,223,200,0.08)", paddingTop: 28, marginBottom: 36 }}>
+          <p style={{
+            margin: 0, fontFamily: "var(--font-heading)",
+            fontSize: "clamp(20px,4vw,32px)", fontWeight: 300,
+            color: "rgba(240,223,200,0.75)", letterSpacing: "0.01em", lineHeight: 1.2,
+          }}>{title}</p>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function MakingContent() {
+  return (
+    <>
+      <h1 style={{
+        margin: "0 0 48px", fontFamily: "var(--font-heading)",
+        fontSize: "clamp(52px,12vw,96px)", fontWeight: 300,
+        color: "rgb(240,223,200)", letterSpacing: "0.02em", lineHeight: 1,
+      }}>How It&apos;s Made</h1>
+      <p style={{
+        margin: 0, fontFamily: "var(--font-body)", fontSize: 11,
+        fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase",
+        color: "rgb(200,144,58)", lineHeight: 2.2, maxWidth: 640,
+      }}>
+        Every loaf begins with slow fermentation — rye sourdough cultures
+        developed over days, not hours. We cold-proof overnight, layer in
+        five distinct protein sources, and bake at precise temperatures to
+        lock in structure without sacrificing crust. Nothing is rushed.
+        Nothing is stripped away.
+      </p>
+    </>
+  );
+}
+
+function StoreContent() {
+  return (
+    <>
+      <h1 style={{
+        margin: "0 0 48px", fontFamily: "var(--font-heading)",
+        fontSize: "clamp(52px,12vw,96px)", fontWeight: 300,
+        color: "rgb(240,223,200)", letterSpacing: "0.02em", lineHeight: 1,
+      }}>Find Cadieux</h1>
+      <div style={{ maxWidth: 400 }}>
+        <p style={{
+          margin: "0 0 24px",
+          fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
+          letterSpacing: "0.3em", textTransform: "uppercase",
+          color: "rgba(240,223,200,0.5)",
+        }}>Which area are you in?</p>
+        <input
+          type="text"
+          placeholder="Enter your area"
+          style={{
+            display: "block", width: "100%", background: "none",
+            border: "none", borderBottom: "1px solid rgb(200,144,58)",
+            outline: "none", padding: "12px 0",
+            fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
+            letterSpacing: "0.3em", textTransform: "uppercase",
+            color: "rgb(240,223,200)",
+          }}
+        />
+        <button style={{
+          display: "block", width: "100%", marginTop: 24,
+          background: "rgb(200,144,58)", border: "none",
+          padding: 18, cursor: "pointer",
+          fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+          letterSpacing: "0.4em", textTransform: "uppercase",
+          color: "rgb(6,4,2)", WebkitTapHighlightColor: "transparent",
+        }}>Find</button>
+      </div>
+    </>
+  );
+}
+
+/* ── Nav ── */
+export default function Nav() {
+  const [active, setActive] = useState<Page>(null);
+
+  useEffect(() => {
+    const el = document.getElementById("main-page");
+    if (!el) return;
+    el.style.transition = "opacity 0.4s ease";
+    el.style.opacity        = active ? "0" : "1";
+    el.style.pointerEvents  = active ? "none" : "auto";
+  }, [active]);
+
+  const close = () => setActive(null);
+
+  return (
+    <>
+      <style>{`
+        .nav-btn {
+          background: none; border: none; cursor: pointer; padding: 0;
+          font-family: var(--font-body); font-size: 9px; font-weight: 200;
+          letter-spacing: 0.45em; text-transform: uppercase;
+          color: rgba(240,223,200,0.5); transition: color 0.4s ease;
+        }
+        .nav-btn:hover { color: rgb(200,144,58); }
+        .nav-btn.nav-active {
+          color: rgb(240,223,200); font-weight: 300; cursor: default;
+        }
+        .nav-cadieux {
+          background: none; border: none; padding: 0; display: block;
+          font-family: var(--font-body); font-size: 9px; font-weight: 200;
+          letter-spacing: 0.45em; text-transform: uppercase;
+          color: rgba(240,223,200,0.22); transition: color 0.4s ease;
+          margin-bottom: 10px; text-align: center;
+        }
+        .nav-cadieux.is-close { color: rgb(200,144,58); cursor: pointer; }
+        .nav-cadieux.is-close:hover { color: rgb(240,223,200); }
+        input::placeholder { color: rgba(200,144,58,0.4); }
+      `}</style>
+
+      {/* Back button — top left when subpage open */}
+      {active && (
+        <button
+          onClick={close}
+          style={{
+            position: "fixed", top: 24, left: 28, zIndex: 101,
+            background: "none", border: "none", cursor: "pointer", padding: 0,
+            display: "flex", alignItems: "center", gap: 8,
+            fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+            letterSpacing: "0.35em", textTransform: "uppercase",
+            color: "rgb(200,144,58)",
+            pointerEvents: "auto",
+          }}
+        >
+          <span style={{ fontSize: 14, lineHeight: 1 }}>←</span>
+          <span>Cadieux</span>
+        </button>
+      )}
+
+      {/* Fixed nav bar */}
+      <nav style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+        display: "flex", flexDirection: "column", alignItems: "center",
+        padding: "20px 28px 0", pointerEvents: "none",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "clamp(24px,5vw,56px)" }}>
+          {active ? (
+            <span className="nav-btn nav-active">
+              {LINKS.find(l => l.id === active)?.label}
+            </span>
+          ) : (
+            LINKS.map(({ id, label }) => (
+              <button
+                key={id}
+                className="nav-btn"
+                onClick={() => setActive(id)}
+                style={{ pointerEvents: "auto" }}
+              >
+                {label}
+              </button>
+            ))
+          )}
+        </div>
+      </nav>
+
+      {/* Sub-page overlays */}
+      {LINKS.map(({ id }) => (
+        <div
+          key={id}
+          style={{
+            position: "fixed", inset: 0, zIndex: 99,
+            background: "rgb(6,4,2)",
+            transform: active === id ? "translateY(0)" : "translateY(100vh)",
+            transition: "transform 0.6s cubic-bezier(0.22,1,0.36,1)",
+            pointerEvents: active === id ? "auto" : "none",
+            overflowY: "auto",
+          }}
+        >
+          {/* Grain overlay */}
+          <div style={{
+            position: "fixed", inset: 0, backgroundImage: GRAIN,
+            opacity: 0.055, pointerEvents: "none", zIndex: 0,
+          }} />
+          <div style={{
+            position: "relative", zIndex: 1,
+            padding: "120px clamp(28px,8vw,120px) 80px",
+          }}>
+            {id === "blogs"          && <BlogsContent />}
+            {id === "making"         && <MakingContent />}
+            {id === "store-locator"  && <StoreContent />}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
