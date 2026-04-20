@@ -160,7 +160,11 @@ function StoreContent() {
             />
             {/* Arrow icon */}
             <span
-              onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+              onClick={e => {
+                e.stopPropagation();
+                if (!open) setQuery(""); // clear filter so all areas show
+                setOpen(o => !o);
+              }}
               style={{
                 cursor: "pointer", userSelect: "none",
                 color: "rgba(251,243,212,0.4)", fontSize: 14,
@@ -349,19 +353,49 @@ export default function Nav() {
     return () => window.removeEventListener("openShop", handler);
   }, []);
 
-  // When overlay is open, intercept wheel events before Lenis sees them
-  // and redirect them to the active overlay div
+  // When overlay is open, intercept wheel/touch events before Lenis sees them
   useEffect(() => {
     if (!active) return;
+
+    function findScrollable(start: HTMLElement | null, boundary: HTMLElement): HTMLElement | null {
+      let el = start;
+      while (el && el !== boundary) {
+        if (el.scrollHeight > el.clientHeight + 2 && getComputedStyle(el).overflowY !== "visible") return el;
+        el = el.parentElement;
+      }
+      return null;
+    }
+
     const wheelHandler = (e: WheelEvent) => {
       const overlay = document.querySelector<HTMLElement>(`[data-overlay="${active}"]`);
       if (!overlay) return;
       e.stopImmediatePropagation();
       e.preventDefault();
-      overlay.scrollTop += e.deltaY;
+      const scrollable = findScrollable(e.target as HTMLElement, overlay) ?? overlay;
+      scrollable.scrollTop += e.deltaY;
     };
+
+    let touchStartY = 0;
+    const touchStart = (e: TouchEvent) => { touchStartY = e.touches[0].clientY; };
+    const touchMove = (e: TouchEvent) => {
+      const overlay = document.querySelector<HTMLElement>(`[data-overlay="${active}"]`);
+      if (!overlay) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      const deltaY = touchStartY - e.touches[0].clientY;
+      touchStartY = e.touches[0].clientY;
+      const scrollable = findScrollable(e.target as HTMLElement, overlay) ?? overlay;
+      scrollable.scrollTop += deltaY;
+    };
+
     window.addEventListener("wheel", wheelHandler, { passive: false, capture: true });
-    return () => window.removeEventListener("wheel", wheelHandler, { capture: true });
+    window.addEventListener("touchstart", touchStart, { passive: true, capture: true });
+    window.addEventListener("touchmove", touchMove, { passive: false, capture: true });
+    return () => {
+      window.removeEventListener("wheel", wheelHandler, { capture: true });
+      window.removeEventListener("touchstart", touchStart, { capture: true });
+      window.removeEventListener("touchmove", touchMove, { capture: true });
+    };
   }, [active]);
 
   const close = () => setActive(null);
