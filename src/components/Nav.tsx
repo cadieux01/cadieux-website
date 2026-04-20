@@ -85,17 +85,17 @@ function MakingContent() {
 }
 
 const VIZAG_AREAS = [
-  "Madhurawada",
+  "Bheemunipatnam",
+  "Chinna Waltair",
+  "Dwaraka Nagar",
   "Gajuwaka",
+  "Kommadi",
+  "Madhurawada",
   "MVP Colony",
+  "Pendurthi",
   "Rushikonda",
   "Seethammadhara",
-  "Dwaraka Nagar",
-  "Bheemunipatnam",
-  "Kommadi",
-  "Pendurthi",
   "Waltair Uplands",
-  "Chinna Waltair",
 ];
 
 const STORES: Record<string, { name: string; address: string }[]> = {
