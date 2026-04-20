@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 
-type Page = "blogs" | "making" | "store-locator" | null;
+type Page = "blogs" | "making" | "store-locator" | "shop" | null;
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
@@ -10,6 +10,25 @@ const LINKS: { id: Page; label: string }[] = [
   { id: "blogs",          label: "Blogs" },
   { id: "making",         label: "Making" },
   { id: "store-locator",  label: "Store Locator" },
+];
+
+const PRODUCTS = [
+  {
+    name: "Multi-Grain Protein Bread",
+    tags: ["Multi Grains", "No Maida"],
+    price: 140,
+    protein: "7.2g protein per slice",
+    weight: "240g net weight",
+    desc: "Ancient grains, seeds, and five distinct protein sources — slow-fermented, cold-proofed, and baked to lock in structure.",
+  },
+  {
+    name: "Plain High Protein Bread",
+    tags: ["Sandwich Bread", "10 Slices"],
+    price: 110,
+    protein: "7.2g protein per slice",
+    weight: "400g packet",
+    desc: "Clean, everyday bread built for high protein without the fuss. Soft sandwich slices with no compromise on nutrition.",
+  },
 ];
 
 /* ── Sub-page content ── */
@@ -102,6 +121,76 @@ function StoreContent() {
   );
 }
 
+function ShopContent() {
+  return (
+    <>
+      <h1 style={{
+        margin: "0 0 64px", fontFamily: "var(--font-heading)",
+        fontSize: "clamp(52px,12vw,96px)", fontWeight: 300,
+        color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1,
+      }}>Our Breads</h1>
+      <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
+        {PRODUCTS.map((p, i) => (
+          <div key={i} style={{
+            borderTop: "1px solid rgba(240,223,200,0.1)",
+            paddingTop: 36,
+            display: "flex", flexDirection: "column", gap: 16,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <p style={{
+                margin: 0, fontFamily: "var(--font-heading)",
+                fontSize: "clamp(22px,5vw,38px)", fontWeight: 300,
+                color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1.2,
+                maxWidth: "65%",
+              }}>{p.name}</p>
+              <p style={{
+                margin: 0, fontFamily: "var(--font-heading)",
+                fontSize: "clamp(28px,6vw,44px)", fontWeight: 300,
+                color: "#FBF3D4", letterSpacing: "0.02em",
+              }}>₹{p.price}</p>
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {p.tags.map((tag, j) => (
+                <span key={j} style={{
+                  fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                  letterSpacing: "0.4em", textTransform: "uppercase",
+                  color: "rgba(251,243,212,0.5)",
+                  border: "1px solid rgba(251,243,212,0.15)",
+                  padding: "6px 14px",
+                }}>{tag}</span>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 32 }}>
+              <p style={{
+                margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+                letterSpacing: "0.3em", textTransform: "uppercase",
+                color: "rgba(251,243,212,0.45)",
+              }}>{p.protein}</p>
+              <p style={{
+                margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+                letterSpacing: "0.3em", textTransform: "uppercase",
+                color: "rgba(251,243,212,0.45)",
+              }}>{p.weight}</p>
+            </div>
+            <p style={{
+              margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200,
+              lineHeight: 1.8, color: "rgba(251,243,212,0.55)", maxWidth: 480,
+            }}>{p.desc}</p>
+            <button style={{
+              alignSelf: "flex-start", marginTop: 8,
+              background: "#024628", border: "none",
+              padding: "12px 32px", cursor: "pointer",
+              fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+              letterSpacing: "0.4em", textTransform: "uppercase",
+              color: "#FBF3D4", WebkitTapHighlightColor: "transparent",
+            }}>Add to Cart</button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 /* ── Nav ── */
 export default function Nav() {
   const [active, setActive] = useState<Page>(null);
@@ -114,6 +203,12 @@ export default function Nav() {
     el.style.pointerEvents  = active ? "none" : "auto";
   }, [active]);
 
+  useEffect(() => {
+    const handler = () => setActive("shop");
+    window.addEventListener("openShop", handler);
+    return () => window.removeEventListener("openShop", handler);
+  }, []);
+
   const close = () => setActive(null);
 
   return (
@@ -121,7 +216,7 @@ export default function Nav() {
       <style>{`
         .nav-btn {
           background: none; border: none; cursor: pointer; padding: 0;
-          font-family: var(--font-body); font-size: 9px; font-weight: 200;
+          font-family: var(--font-body); font-size: 12px; font-weight: 200;
           letter-spacing: 0.45em; text-transform: uppercase;
           color: rgba(251,243,212,0.5); transition: color 0.4s ease;
         }
@@ -187,7 +282,7 @@ export default function Nav() {
       </nav>
 
       {/* Sub-page overlays */}
-      {LINKS.map(({ id }) => (
+      {(["blogs", "making", "store-locator", "shop"] as Page[]).map((id) => (
         <div
           key={id}
           style={{
@@ -211,6 +306,7 @@ export default function Nav() {
             {id === "blogs"          && <BlogsContent />}
             {id === "making"         && <MakingContent />}
             {id === "store-locator"  && <StoreContent />}
+            {id === "shop"           && <ShopContent />}
           </div>
         </div>
       ))}

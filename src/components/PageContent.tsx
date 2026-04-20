@@ -156,70 +156,76 @@ export default function PageContent() {
         <div style={{ position: "relative", zIndex: 1 }}>
 
           {/* ══ SECTION 1 — VIDEO ══ */}
-          <section style={{
-            position: "relative", height: "100dvh", overflow: "hidden",
-            display: "flex", flexDirection: "column", justifyContent: "flex-start",
-            maskImage: "linear-gradient(to bottom, black 45%, transparent 88%)",
-            WebkitMaskImage: "linear-gradient(to bottom, black 45%, transparent 88%)",
-          }}>
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              preload="auto"
-              loop
-              poster="/hero.jpg"
-              style={{
-                position: "absolute", inset: 0,
-                width: "100%", height: "100%",
-                objectFit: "cover",
-                zIndex: 1,
-                filter: "brightness(1) contrast(1)",
-              }}
-            >
-              <source src="/bread-intro.mp4" type="video/mp4" />
-            </video>
-            <div style={{
-              position: "absolute", inset: 0, zIndex: 2,
-              background: "radial-gradient(ellipse at center, transparent 40%, rgba(29,29,31,0.6) 100%)",
-              pointerEvents: "none",
-            }} />
-            {/* Bold statement + CTA */}
-            <div style={{
-              position: "relative", zIndex: 3,
-              paddingLeft: "clamp(28px, 8vw, 80px)",
-              paddingRight: "clamp(28px, 8vw, 80px)",
-              paddingTop: "clamp(80px, 18vh, 160px)",
+          <div style={{ position: "relative", height: "100dvh" }}>
+            <section style={{
+              position: "absolute", inset: 0, overflow: "hidden",
+              display: "flex", flexDirection: "column", justifyContent: "flex-start",
+              maskImage: "linear-gradient(to bottom, black 45%, transparent 88%)",
+              WebkitMaskImage: "linear-gradient(to bottom, black 45%, transparent 88%)",
             }}>
-              <p style={{
-                margin: "0 0 16px",
-                fontFamily: "var(--font-body)", fontSize: 10,
-                fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
-                color: "#FBF3D4", pointerEvents: "none",
-              }}>Cadieux</p>
-              <p style={{
-                margin: "0 0 28px",
-                fontFamily: "var(--font-heading)",
-                fontSize: "clamp(40px, 10vw, 88px)",
-                fontWeight: 600,
-                color: "#FBF3D4",
-                lineHeight: 1.1,
-                letterSpacing: "0.02em",
-                textShadow: "0 2px 40px rgba(0,0,0,0.6)",
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                preload="auto"
+                loop
+                poster="/hero.jpg"
+                style={{
+                  position: "absolute", inset: 0,
+                  width: "100%", height: "100%",
+                  objectFit: "cover",
+                  zIndex: 1,
+                  filter: "brightness(1) contrast(1)",
+                }}
+              >
+                <source src="/bread-intro.mp4" type="video/mp4" />
+              </video>
+              <div style={{
+                position: "absolute", inset: 0, zIndex: 2,
+                background: "radial-gradient(ellipse at center, transparent 40%, rgba(29,29,31,0.6) 100%)",
                 pointerEvents: "none",
+              }} />
+              {/* Bold statement — top left */}
+              <div style={{
+                position: "relative", zIndex: 3,
+                paddingLeft: "clamp(28px, 8vw, 80px)",
+                paddingRight: "clamp(28px, 8vw, 80px)",
+                paddingTop: "clamp(80px, 18vh, 160px)",
               }}>
-                Same Routine.<br />Better Protein.
-              </p>
-              <button style={{
+                <p style={{
+                  margin: "0 0 16px",
+                  fontFamily: "var(--font-body)", fontSize: 10,
+                  fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
+                  color: "#FBF3D4", pointerEvents: "none",
+                }}>Cadieux</p>
+                <p style={{
+                  margin: 0,
+                  fontFamily: "var(--font-heading)",
+                  fontSize: "clamp(40px, 10vw, 88px)",
+                  fontWeight: 600,
+                  color: "#FBF3D4",
+                  lineHeight: 1.1,
+                  letterSpacing: "0.02em",
+                  textShadow: "0 2px 40px rgba(0,0,0,0.6)",
+                  pointerEvents: "none",
+                }}>
+                  Same Routine.<br />Better Protein.
+                </p>
+              </div>
+            </section>
+            {/* Shop Now — bottom right, outside masked section so it stays visible */}
+            <button
+              onClick={() => window.dispatchEvent(new Event("openShop"))}
+              style={{
+                position: "absolute", bottom: 48, right: "clamp(28px, 8vw, 80px)", zIndex: 4,
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                 letterSpacing: "0.4em", textTransform: "uppercase",
                 color: "#FBF3D4", background: "#024628",
                 border: "none", padding: "10px 24px", cursor: "pointer",
                 WebkitTapHighlightColor: "transparent",
               }}>Shop Now</button>
-            </div>
-          </section>
+          </div>
 
           {/* Phase 1→2 bridge: fades Phase 1 bottom to dark, matching Phase 2's video overlay */}
           <div style={{

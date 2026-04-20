@@ -21,6 +21,15 @@
 
 html {
   /* overflow-x: hidden here breaks position:sticky — do not add it */
+  /* Enable high-frequency display (120hz ProMotion) */
+  scroll-behavior: auto;
+}
+
+/* GPU compositing hint for all animated elements */
+video, canvas {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 body {
