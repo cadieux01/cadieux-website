@@ -386,7 +386,9 @@ export default function PageContent() {
               color: "#FBF3D4", background: "#024628",
               border: "none", padding: 18, cursor: "pointer",
               WebkitTapHighlightColor: "transparent",
-            }}>Shop Now</button>
+            }}
+            onClick={() => window.dispatchEvent(new Event("openShop"))}
+            >Shop Now</button>
           </section>
 
         </div>
