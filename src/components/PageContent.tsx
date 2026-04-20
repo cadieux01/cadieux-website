@@ -232,6 +232,19 @@ export default function PageContent() {
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
               background: "#1D1D1F",
             }}>
+              {/* Background video */}
+              <video
+                autoPlay muted playsInline loop
+                style={{
+                  position: "absolute", inset: 0,
+                  width: "100%", height: "100%",
+                  objectFit: "cover", zIndex: 0,
+                }}
+              >
+                <source src="/product-video-05.mp4" type="video/mp4" />
+              </video>
+              {/* Dark overlay */}
+              <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.62)", zIndex: 1, pointerEvents: "none" }} />
               {/* Shared grain overlay */}
               <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
 
@@ -253,7 +266,7 @@ export default function PageContent() {
                 return (
                   <div key={i} style={{
                     position: "absolute", inset: 0,
-                    background: CARD_BG[i % CARD_BG.length],
+                    background: "transparent",
                     opacity, zIndex: i,
                     willChange: "opacity",
                     pointerEvents: "none",
