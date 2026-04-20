@@ -105,7 +105,19 @@ const STORES: Record<string, { name: string; address: string }[]> = {
 
 function StoreContent() {
   const [selected, setSelected] = useState<string>("");
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const filtered = VIZAG_AREAS.filter(a =>
+    a.toLowerCase().includes(query.toLowerCase())
+  );
   const results = selected ? (STORES[selected] ?? []) : null;
+
+  function pick(area: string) {
+    setSelected(area);
+    setQuery(area);
+    setOpen(false);
+  }
 
   return (
     <>
@@ -116,76 +128,112 @@ function StoreContent() {
       }}>Find Cadieux</h1>
       <div style={{ maxWidth: 440 }}>
         <p style={{
-          margin: "0 0 24px",
+          margin: "0 0 16px",
           fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
           letterSpacing: "0.3em", textTransform: "uppercase",
           color: "rgba(251,243,212,0.5)",
         }}>Select your area in Vizag</p>
 
-        {/* Area list */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-          {VIZAG_AREAS.map((area) => (
-            <button
-              key={area}
-              onClick={() => setSelected(area)}
+        {/* Search bar */}
+        <div style={{ position: "relative" }}>
+          <div style={{
+            display: "flex", alignItems: "center",
+            border: "1px solid rgba(251,243,212,0.2)",
+            borderBottom: open ? "1px solid rgba(251,243,212,0.08)" : "1px solid rgba(251,243,212,0.2)",
+            background: "rgba(251,243,212,0.04)",
+            padding: "14px 16px",
+            cursor: "text",
+          }}
+            onClick={() => setOpen(true)}
+          >
+            <input
+              value={query}
+              onChange={e => { setQuery(e.target.value); setSelected(""); setOpen(true); }}
+              onFocus={() => setOpen(true)}
+              placeholder="Type or select an area…"
               style={{
-                background: "none", border: "none", cursor: "pointer",
-                borderBottom: "1px solid rgba(251,243,212,0.08)",
-                padding: "14px 0",
-                display: "flex", justifyContent: "space-between", alignItems: "center",
+                flex: 1, background: "none", border: "none", outline: "none",
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
-                letterSpacing: "0.35em", textTransform: "uppercase",
-                color: selected === area ? "#FBF3D4" : "rgba(251,243,212,0.45)",
-                textAlign: "left",
-                WebkitTapHighlightColor: "transparent",
-                transition: "color 0.2s",
+                letterSpacing: "0.3em", textTransform: "uppercase",
+                color: "#FBF3D4",
               }}
-            >
-              <span>{area}</span>
-              {selected === area && (
-                <span style={{ fontSize: 10, color: "#4369B2", letterSpacing: "0.3em" }}>
-                  SELECTED
-                </span>
-              )}
-            </button>
-          ))}
+            />
+            {/* Arrow icon */}
+            <span
+              onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+              style={{
+                cursor: "pointer", userSelect: "none",
+                color: "rgba(251,243,212,0.4)", fontSize: 14,
+                transform: open ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 0.2s",
+                display: "inline-block", lineHeight: 1,
+              }}
+            >▾</span>
+          </div>
+
+          {/* Dropdown list — 7 items visible, scrollable */}
+          {open && (
+            <div style={{
+              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
+              background: "#1a1a1c",
+              border: "1px solid rgba(251,243,212,0.12)",
+              borderTop: "none",
+              maxHeight: "calc(7 * 48px)",
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+            }}>
+              {filtered.length === 0 ? (
+                <div style={{
+                  padding: "14px 16px",
+                  fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
+                  letterSpacing: "0.3em", textTransform: "uppercase",
+                  color: "rgba(251,243,212,0.3)",
+                }}>No areas found</div>
+              ) : filtered.map(area => (
+                <button
+                  key={area}
+                  onMouseDown={e => { e.preventDefault(); pick(area); }}
+                  style={{
+                    display: "block", width: "100%", background: "none",
+                    border: "none", borderBottom: "1px solid rgba(251,243,212,0.06)",
+                    padding: "14px 16px", cursor: "pointer", textAlign: "left",
+                    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
+                    letterSpacing: "0.3em", textTransform: "uppercase",
+                    color: selected === area ? "#FBF3D4" : "rgba(251,243,212,0.55)",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >{area}</button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Results */}
-        {results !== null && (
-          <div style={{ marginTop: 36 }}>
+        {/* Result — shown only after selection */}
+        {selected && results !== null && (
+          <div style={{ marginTop: 40 }}>
             {results.length === 0 ? (
               <p style={{
                 margin: 0, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
                 letterSpacing: "0.3em", textTransform: "uppercase",
                 color: "rgba(251,243,212,0.35)",
-              }}>No stores found in this area yet.</p>
-            ) : (
-              <>
+              }}>No stores found in {selected} yet.</p>
+            ) : results.map((s, i) => (
+              <div key={i} style={{
+                borderTop: "1px solid rgba(251,243,212,0.1)",
+                paddingTop: 20,
+              }}>
                 <p style={{
-                  margin: "0 0 20px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
-                  letterSpacing: "0.4em", textTransform: "uppercase",
+                  margin: "0 0 8px", fontFamily: "var(--font-heading)",
+                  fontSize: "clamp(22px,5vw,32px)", fontWeight: 300,
+                  color: "#FBF3D4", letterSpacing: "0.01em",
+                }}>{s.name}</p>
+                <p style={{
+                  margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+                  letterSpacing: "0.25em", textTransform: "uppercase",
                   color: "rgba(251,243,212,0.4)",
-                }}>Stores near {selected}</p>
-                {results.map((s, i) => (
-                  <div key={i} style={{
-                    borderTop: "1px solid rgba(251,243,212,0.1)",
-                    paddingTop: 20, paddingBottom: 20,
-                  }}>
-                    <p style={{
-                      margin: "0 0 6px", fontFamily: "var(--font-heading)",
-                      fontSize: "clamp(20px,4vw,28px)", fontWeight: 300,
-                      color: "#FBF3D4", letterSpacing: "0.01em",
-                    }}>{s.name}</p>
-                    <p style={{
-                      margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
-                      letterSpacing: "0.25em", textTransform: "uppercase",
-                      color: "rgba(251,243,212,0.4)",
-                    }}>{s.address}</p>
-                  </div>
-                ))}
-              </>
-            )}
+                }}>{s.address}</p>
+              </div>
+            ))}
           </div>
         )}
       </div>
