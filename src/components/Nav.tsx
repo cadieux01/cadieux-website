@@ -24,14 +24,14 @@ function BlogsContent() {
       <h1 style={{
         margin: "0 0 64px", fontFamily: "var(--font-heading)",
         fontSize: "clamp(52px,12vw,96px)", fontWeight: 300,
-        color: "rgb(240,223,200)", letterSpacing: "0.02em", lineHeight: 1,
+        color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1,
       }}>Stories &amp; Bakes</h1>
       {posts.map((title, i) => (
         <div key={i} style={{ borderTop: "1px solid rgba(240,223,200,0.08)", paddingTop: 28, marginBottom: 36 }}>
           <p style={{
             margin: 0, fontFamily: "var(--font-heading)",
             fontSize: "clamp(20px,4vw,32px)", fontWeight: 300,
-            color: "rgba(240,223,200,0.75)", letterSpacing: "0.01em", lineHeight: 1.2,
+            color: "rgba(251,243,212,0.75)", letterSpacing: "0.01em", lineHeight: 1.2,
           }}>{title}</p>
         </div>
       ))}
@@ -45,12 +45,12 @@ function MakingContent() {
       <h1 style={{
         margin: "0 0 48px", fontFamily: "var(--font-heading)",
         fontSize: "clamp(52px,12vw,96px)", fontWeight: 300,
-        color: "rgb(240,223,200)", letterSpacing: "0.02em", lineHeight: 1,
+        color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1,
       }}>How It&apos;s Made</h1>
       <p style={{
         margin: 0, fontFamily: "var(--font-body)", fontSize: 11,
         fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase",
-        color: "rgb(200,144,58)", lineHeight: 2.2, maxWidth: 640,
+        color: "#4369B2", lineHeight: 2.2, maxWidth: 640,
       }}>
         Every loaf begins with slow fermentation — rye sourdough cultures
         developed over days, not hours. We cold-proof overnight, layer in
@@ -68,34 +68,34 @@ function StoreContent() {
       <h1 style={{
         margin: "0 0 48px", fontFamily: "var(--font-heading)",
         fontSize: "clamp(52px,12vw,96px)", fontWeight: 300,
-        color: "rgb(240,223,200)", letterSpacing: "0.02em", lineHeight: 1,
+        color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1,
       }}>Find Cadieux</h1>
       <div style={{ maxWidth: 400 }}>
         <p style={{
           margin: "0 0 24px",
           fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
           letterSpacing: "0.3em", textTransform: "uppercase",
-          color: "rgba(240,223,200,0.5)",
+          color: "rgba(251,243,212,0.5)",
         }}>Which area are you in?</p>
         <input
           type="text"
           placeholder="Enter your area"
           style={{
             display: "block", width: "100%", background: "none",
-            border: "none", borderBottom: "1px solid rgb(200,144,58)",
+            border: "none", borderBottom: "1px solid #4369B2",
             outline: "none", padding: "12px 0",
             fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
             letterSpacing: "0.3em", textTransform: "uppercase",
-            color: "rgb(240,223,200)",
+            color: "#FBF3D4",
           }}
         />
         <button style={{
           display: "block", width: "100%", marginTop: 24,
-          background: "rgb(200,144,58)", border: "none",
+          background: "#024628", border: "none",
           padding: 18, cursor: "pointer",
           fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
           letterSpacing: "0.4em", textTransform: "uppercase",
-          color: "rgb(6,4,2)", WebkitTapHighlightColor: "transparent",
+          color: "#FBF3D4", WebkitTapHighlightColor: "transparent",
         }}>Find</button>
       </div>
     </>
@@ -123,22 +123,22 @@ export default function Nav() {
           background: none; border: none; cursor: pointer; padding: 0;
           font-family: var(--font-body); font-size: 9px; font-weight: 200;
           letter-spacing: 0.45em; text-transform: uppercase;
-          color: rgba(240,223,200,0.5); transition: color 0.4s ease;
+          color: rgba(251,243,212,0.5); transition: color 0.4s ease;
         }
-        .nav-btn:hover { color: rgb(200,144,58); }
+        .nav-btn:hover { color: #4369B2; }
         .nav-btn.nav-active {
-          color: rgb(240,223,200); font-weight: 300; cursor: default;
+          color: #FBF3D4; font-weight: 300; cursor: default;
         }
         .nav-cadieux {
           background: none; border: none; padding: 0; display: block;
           font-family: var(--font-body); font-size: 9px; font-weight: 200;
           letter-spacing: 0.45em; text-transform: uppercase;
-          color: rgba(240,223,200,0.22); transition: color 0.4s ease;
+          color: rgba(251,243,212,0.22); transition: color 0.4s ease;
           margin-bottom: 10px; text-align: center;
         }
-        .nav-cadieux.is-close { color: rgb(200,144,58); cursor: pointer; }
-        .nav-cadieux.is-close:hover { color: rgb(240,223,200); }
-        input::placeholder { color: rgba(200,144,58,0.4); }
+        .nav-cadieux.is-close { color: #4369B2; cursor: pointer; }
+        .nav-cadieux.is-close:hover { color: #FBF3D4; }
+        input::placeholder { color: rgba(67,105,178,0.5); }
       `}</style>
 
       {/* Back button — top left when subpage open */}
@@ -151,7 +151,7 @@ export default function Nav() {
             display: "flex", alignItems: "center", gap: 8,
             fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
             letterSpacing: "0.35em", textTransform: "uppercase",
-            color: "rgb(200,144,58)",
+            color: "#4369B2",
             pointerEvents: "auto",
           }}
         >
@@ -192,7 +192,7 @@ export default function Nav() {
           key={id}
           style={{
             position: "fixed", inset: 0, zIndex: 99,
-            background: "rgb(6,4,2)",
+            background: "#1D1D1F",
             transform: active === id ? "translateY(0)" : "translateY(100vh)",
             transition: "transform 0.6s cubic-bezier(0.22,1,0.36,1)",
             pointerEvents: active === id ? "auto" : "none",

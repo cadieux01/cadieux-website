@@ -14,7 +14,7 @@ const qStyle: React.CSSProperties = {
   fontFamily: "var(--font-heading)",
   fontSize: "clamp(26px,6vw,44px)",
   fontWeight: 300,
-  color: "rgb(240,223,200)",
+  color: "#FBF3D4",
   letterSpacing: "0.04em",
   lineHeight: 1.2,
 };
@@ -23,7 +23,7 @@ const aStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: 13,
   lineHeight: 1.9,
-  color: "rgba(240,223,200,0.72)",
+  color: "rgba(251,243,212,0.8)",
   maxWidth: 300,
 };
 
@@ -222,7 +222,7 @@ export default function QASection() {
   const layer: React.CSSProperties = {
     position: "absolute", inset: 0,
     display: "flex", alignItems: "center", justifyContent: "center",
-    pointerEvents: "none",
+    pointerEvents: "none", zIndex: 3,
   };
   const block: React.CSSProperties = {
     width: "100%", textAlign: "center", padding: "0 32px",
@@ -233,11 +233,11 @@ export default function QASection() {
      path M 0 100 L 100 0 = bottom-left to top-right              */
   const SlashSVG = ({ svgRef, pathRef }: { svgRef: React.RefObject<SVGSVGElement>; pathRef: React.RefObject<SVGPathElement> }) => (
     <svg ref={svgRef as React.RefObject<SVGSVGElement>}
-      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 2, willChange: "opacity" }}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 3, willChange: "opacity" }}
       viewBox="0 0 100 100" preserveAspectRatio="none"
     >
       <path ref={pathRef} d="M 0 100 L 100 0"
-        fill="none" stroke="rgba(200,144,58,0.35)" strokeWidth="0.4"
+        fill="none" stroke="rgba(251,243,212,0.3)" strokeWidth="0.4"
         vectorEffect="non-scaling-stroke"
         style={{ willChange: "stroke-dashoffset" } as React.CSSProperties}
       />
@@ -250,12 +250,23 @@ export default function QASection() {
     <div ref={outerRef} style={{ position: "relative", height: "700vh", overflowX: "clip" }}>
       <div style={{
         position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
-        background: "linear-gradient(135deg,#6B2F00 0%,#C47A1A 40%,#F0A020 70%,#C47A1A 100%)",
+        background: "linear-gradient(135deg,#013820 0%,#024628 40%,#035c35 70%,#024628 100%)",
         backgroundSize: "300% 300%",
         animation: "qa4-glow 8s ease-in-out infinite alternate",
       }}>
+        {/* Background video */}
+        <video
+          autoPlay muted playsInline loop
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+        >
+          <source src="/product-video-04.mp4" type="video/mp4" />
+        </video>
+
+        {/* Dark overlay over video */}
+        <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.75)", zIndex: 1, pointerEvents: "none" }} />
+
         {/* Grain */}
-        <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.07, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.07, pointerEvents: "none", zIndex: 2 }} />
 
         {/* Slash lines */}
         <SlashSVG svgRef={svg1Ref} pathRef={p1Ref} />
@@ -291,31 +302,31 @@ export default function QASection() {
         <div style={layer}>
           <div ref={a3Ref} style={block}>
             <p style={aStyle}>Everyone. Every day. For anyone ready to take one quiet step toward a stronger, happier body — starting with what is on their plate.</p>
-            <div ref={dotRef} style={{ width: 6, height: 6, borderRadius: "50%", background: "rgb(200,144,58)", margin: "20px auto 0", opacity: 0, willChange: "opacity" }} />
+            <div ref={dotRef} style={{ width: 6, height: 6, borderRadius: "50%", background: "#4369B2", margin: "20px auto 0", opacity: 0, willChange: "opacity" }} />
           </div>
         </div>
 
         {/* Connector SVG — live diagonal lines between crossing transitions */}
-        <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 3, overflow: "visible" }}>
-          <line ref={ln1Ref} stroke="rgba(200,144,58,0.5)" strokeWidth="1" style={{ opacity: 0 }} />
-          <line ref={ln2Ref} stroke="rgba(200,144,58,0.5)" strokeWidth="1" style={{ opacity: 0 }} />
-          <line ref={ln3Ref} stroke="rgba(200,144,58,0.5)" strokeWidth="1" style={{ opacity: 0 }} />
-          <line ref={ln4Ref} stroke="rgba(200,144,58,0.5)" strokeWidth="1" style={{ opacity: 0 }} />
-          <line ref={ln5Ref} stroke="rgba(200,144,58,0.5)" strokeWidth="1" style={{ opacity: 0 }} />
-          <circle ref={ca1Ref} r="2" fill="rgba(200,144,58,0.8)" style={{ opacity: 0 }} />
-          <circle ref={cb1Ref} r="2" fill="rgba(200,144,58,0.8)" style={{ opacity: 0 }} />
-          <circle ref={ca2Ref} r="2" fill="rgba(200,144,58,0.8)" style={{ opacity: 0 }} />
-          <circle ref={cb2Ref} r="2" fill="rgba(200,144,58,0.8)" style={{ opacity: 0 }} />
-          <circle ref={ca3Ref} r="2" fill="rgba(200,144,58,0.8)" style={{ opacity: 0 }} />
-          <circle ref={cb3Ref} r="2" fill="rgba(200,144,58,0.8)" style={{ opacity: 0 }} />
-          <circle ref={ca4Ref} r="2" fill="rgba(200,144,58,0.8)" style={{ opacity: 0 }} />
-          <circle ref={cb4Ref} r="2" fill="rgba(200,144,58,0.8)" style={{ opacity: 0 }} />
-          <circle ref={ca5Ref} r="2" fill="rgba(200,144,58,0.8)" style={{ opacity: 0 }} />
-          <circle ref={cb5Ref} r="2" fill="rgba(200,144,58,0.8)" style={{ opacity: 0 }} />
+        <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 4, overflow: "visible" }}>
+          <line ref={ln1Ref} stroke="rgba(67,105,178,0.6)" strokeWidth="1" style={{ opacity: 0 }} />
+          <line ref={ln2Ref} stroke="rgba(67,105,178,0.6)" strokeWidth="1" style={{ opacity: 0 }} />
+          <line ref={ln3Ref} stroke="rgba(67,105,178,0.6)" strokeWidth="1" style={{ opacity: 0 }} />
+          <line ref={ln4Ref} stroke="rgba(67,105,178,0.6)" strokeWidth="1" style={{ opacity: 0 }} />
+          <line ref={ln5Ref} stroke="rgba(67,105,178,0.6)" strokeWidth="1" style={{ opacity: 0 }} />
+          <circle ref={ca1Ref} r="2" fill="rgba(67,105,178,0.9)" style={{ opacity: 0 }} />
+          <circle ref={cb1Ref} r="2" fill="rgba(67,105,178,0.9)" style={{ opacity: 0 }} />
+          <circle ref={ca2Ref} r="2" fill="rgba(67,105,178,0.9)" style={{ opacity: 0 }} />
+          <circle ref={cb2Ref} r="2" fill="rgba(67,105,178,0.9)" style={{ opacity: 0 }} />
+          <circle ref={ca3Ref} r="2" fill="rgba(67,105,178,0.9)" style={{ opacity: 0 }} />
+          <circle ref={cb3Ref} r="2" fill="rgba(67,105,178,0.9)" style={{ opacity: 0 }} />
+          <circle ref={ca4Ref} r="2" fill="rgba(67,105,178,0.9)" style={{ opacity: 0 }} />
+          <circle ref={cb4Ref} r="2" fill="rgba(67,105,178,0.9)" style={{ opacity: 0 }} />
+          <circle ref={ca5Ref} r="2" fill="rgba(67,105,178,0.9)" style={{ opacity: 0 }} />
+          <circle ref={cb5Ref} r="2" fill="rgba(67,105,178,0.9)" style={{ opacity: 0 }} />
         </svg>
 
         {/* Dark fade */}
-        <div ref={darkRef} style={{ position: "absolute", inset: 0, background: "rgb(6,4,2)", opacity: 0, pointerEvents: "none", zIndex: 4 }} />
+        <div ref={darkRef} style={{ position: "absolute", inset: 0, background: "#1D1D1F", opacity: 0, pointerEvents: "none", zIndex: 5 }} />
       </div>
     </div>
   );

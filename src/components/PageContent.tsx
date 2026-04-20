@@ -17,21 +17,15 @@ const GRAIN =
 const INGREDIENTS = [
   { name: "Whey Protein",          desc: "Builds lean muscle and speeds up recovery" },
   { name: "Oat Protein",           desc: "Sustained energy with every bite" },
-  { name: "Soya Protein",          desc: "Complete plant protein for daily strength" },
-  { name: "Wheat Protein",         desc: "Natural gluten structure for lasting fullness" },
-  { name: "Wheat Fibres",          desc: "Keeps your gut moving, naturally" },
+  { name: "Rye Sourdough Ferment", desc: "Ancient fermentation for better digestion" },
+  { name: "Linseeds",              desc: "Omega-3 powerhouse for heart and brain" },
+  { name: "Oat Bran",              desc: "Lowers cholesterol, feeds your gut bacteria" },
   { name: "Sunflower Seeds",       desc: "Rich in vitamin E and healthy fats" },
   { name: "Sesame Seeds",          desc: "Tiny seeds, massive mineral content" },
-  { name: "Linseeds",              desc: "Omega-3 powerhouse for heart and brain" },
-  { name: "Soya Flour",            desc: "Boosts protein density in every slice" },
-  { name: "Oat Bran",              desc: "Lowers cholesterol, feeds your gut bacteria" },
-  { name: "Iodised Salt",          desc: "Essential minerals, perfectly balanced" },
-  { name: "Rye Sourdough Ferment", desc: "Ancient fermentation for better digestion" },
   { name: "Barley Malt",           desc: "Natural sweetness with a low glycemic touch" },
-  { name: "Wholemeal Flour",       desc: "Full grain nutrition, nothing stripped away" },
 ];
 
-const CARD_BG = ["#0E0804", "#120A04", "#0A0804", "#140C06"];
+const CARD_BG = ["#1D1D1F", "#1F1F21", "#1B1B1D", "#212123"];
 
 /* ── Deterministic floating grain data ── */
 const GRAINS = Array.from({ length: 22 }, (_, i) => ({
@@ -99,17 +93,17 @@ export default function PageContent() {
   /* ── Per-card visibility from scroll progress ── */
   const cardVis = INGREDIENTS.map((_, i) => {
     const f = cardsP * N_C - i;
-    let opacity = 0, ty = 52;
+    let opacity = 0, tx = 80, ty = 80;
     if (f > -0.5 && f <= 0) {
       const t = ease(remap(f, -0.5, 0));
-      opacity = t; ty = (1 - t) * 52;
+      opacity = t; tx = (1 - t) * 80; ty = (1 - t) * 80;
     } else if (f > 0 && f <= 0.5) {
-      opacity = 1; ty = 0;
+      opacity = 1; tx = 0; ty = 0;
     } else if (f > 0.5 && f < 1.1) {
       const t = ease(remap(f, 0.5, 1.1));
-      opacity = 1 - t; ty = -t * 40;
+      opacity = 1 - t; tx = -t * 80; ty = -t * 80;
     }
-    return { opacity, ty };
+    return { opacity, tx, ty };
   });
 
   const activeCard = Math.round(clamp(cardsP * N_C - 0.5, 0, N_C - 1));
@@ -128,7 +122,7 @@ export default function PageContent() {
 
       `}</style>
 
-      <div style={{ position: "relative", background: "rgb(6,4,2)", overflowX: "clip" }}>
+      <div style={{ position: "relative", background: "#1D1D1F", overflowX: "clip" }}>
 
         {/* ── Floating grain layer ── */}
         <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
@@ -183,7 +177,7 @@ export default function PageContent() {
             </video>
             <div style={{
               position: "absolute", inset: 0, zIndex: 2,
-              background: "radial-gradient(ellipse at center, transparent 40%, rgba(6,4,2,0.6) 100%)",
+              background: "radial-gradient(ellipse at center, transparent 40%, rgba(29,29,31,0.6) 100%)",
               pointerEvents: "none",
             }} />
             {/* Bold statement + CTA — bottom */}
@@ -195,14 +189,14 @@ export default function PageContent() {
                 margin: "0 0 16px",
                 fontFamily: "var(--font-body)", fontSize: 10,
                 fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
-                color: "rgb(240,223,200)", pointerEvents: "none",
+                color: "#FBF3D4", pointerEvents: "none",
               }}>Cadieux</p>
               <p style={{
                 margin: "0 0 24px",
                 fontFamily: "var(--font-heading)",
                 fontSize: "clamp(40px, 10vw, 88px)",
                 fontWeight: 600,
-                color: "rgb(240,223,200)",
+                color: "#FBF3D4",
                 lineHeight: 1.1,
                 letterSpacing: "0.02em",
                 textShadow: "0 2px 40px rgba(0,0,0,0.6)",
@@ -213,7 +207,7 @@ export default function PageContent() {
               <button style={{
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                 letterSpacing: "0.4em", textTransform: "uppercase",
-                color: "rgb(6,4,2)", background: "rgb(240,223,200)",
+                color: "#FBF3D4", background: "#024628",
                 border: "none", padding: "16px 40px", cursor: "pointer",
                 WebkitTapHighlightColor: "transparent",
               }}>Shop Now</button>
@@ -224,7 +218,7 @@ export default function PageContent() {
               transform: "translateX(-50%)",
               fontFamily: "var(--font-body)", fontSize: 8,
               fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
-              color: "rgba(200,144,58,0.7)",
+              color: "rgba(67,105,178,0.7)",
               pointerEvents: "none",
             }}>Scroll</div>
           </section>
@@ -236,14 +230,26 @@ export default function PageContent() {
           <div ref={cardsOuterRef} style={{ position: "relative", height: `${N_C * 100}vh` }}>
             <div style={{
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
-              background: "#0E0804",
+              background: "#1D1D1F",
             }}>
               {/* Shared grain overlay */}
               <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
 
+              {/* Static heading */}
+              <p style={{
+                position: "absolute", top: "18%", left: 0, right: 0, zIndex: 20,
+                textAlign: "center", margin: 0,
+                fontFamily: "var(--font-heading)", fontSize: "clamp(28px,6vw,48px)", fontWeight: 300,
+                letterSpacing: "0.08em",
+                color: "#FBF3D4",
+                opacity: Math.max(0, 1 - clamp((cardsP - 0.7) / 0.3, 0, 1)) * 0.25,
+                pointerEvents: "none",
+                transition: "opacity 0.1s linear",
+              }}>Our Ingredients</p>
+
               {/* Cards */}
               {INGREDIENTS.map((ing, i) => {
-                const { opacity, ty } = cardVis[i];
+                const { opacity, tx, ty } = cardVis[i];
                 return (
                   <div key={i} style={{
                     position: "absolute", inset: 0,
@@ -255,31 +261,31 @@ export default function PageContent() {
                     <div style={{
                       position: "absolute", top: "50%", left: 0, right: 0,
                       padding: "0 clamp(28px,8vw,80px)",
-                      transform: `translateY(calc(-50% + ${ty}px))`,
+                      transform: `translateY(calc(-50% + ${ty}px)) translateX(${tx}px)`,
                       willChange: "transform", textAlign: "center",
                     }}>
                       {/* Amber rule */}
-                      <div style={{ width: 40, height: 1, background: "rgba(200,144,58,0.45)", margin: "0 auto 28px" }} />
+                      <div style={{ width: 40, height: 1, background: "rgba(2,70,40,0.6)", margin: "0 auto 28px" }} />
 
                       {/* Counter */}
                       <p style={{
                         margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 8,
                         fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
-                        color: "rgba(200,144,58,0.4)",
+                        color: "rgba(67,105,178,0.5)",
                       }}>{String(i + 1).padStart(2, "0")} — {String(N_C).padStart(2, "0")}</p>
 
                       {/* Name */}
                       <h2 style={{
                         margin: "0 0 22px", fontFamily: "var(--font-heading)",
                         fontSize: "clamp(44px, 11vw, 88px)", fontWeight: 300,
-                        color: "rgb(240,223,200)", letterSpacing: "0.01em", lineHeight: 1,
+                        color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1,
                       }}>{ing.name}</h2>
 
                       {/* Benefit */}
                       <p style={{
                         margin: 0, fontFamily: "var(--font-body)", fontSize: 9,
                         fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase",
-                        color: "rgb(200,144,58)", lineHeight: 1.9,
+                        color: "#4369B2", lineHeight: 1.9,
                       }}>{ing.desc}</p>
                     </div>
                   </div>
@@ -295,7 +301,7 @@ export default function PageContent() {
                 {INGREDIENTS.map((_, j) => (
                   <div key={j} style={{
                     width: activeCard === j ? 16 : 4, height: 1,
-                    background: activeCard === j ? "rgb(200,144,58)" : "rgba(200,144,58,0.22)",
+                    background: activeCard === j ? "#4369B2" : "rgba(67,105,178,0.25)",
                     transition: "width 0.4s cubic-bezier(.22,1,.36,1), background 0.4s",
                   }} />
                 ))}
@@ -314,20 +320,20 @@ export default function PageContent() {
             <p style={{
               margin: 0, fontFamily: "var(--font-heading)",
               fontSize: "clamp(52px, 16vw, 96px)", fontWeight: 300,
-              color: "rgb(240,223,200)", letterSpacing: "0.06em", lineHeight: 1,
+              color: "#FBF3D4", letterSpacing: "0.06em", lineHeight: 1,
             }}>Cadieux</p>
 
             <p style={{
               margin: "20px 0 0", fontFamily: "var(--font-body)", fontSize: 9,
               fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
-              color: "rgb(200,144,58)",
+              color: "#4369B2",
             }}>Same Bread. Better Built.</p>
 
             <button style={{
               display: "block", width: "100%", maxWidth: 320, marginTop: 28,
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
               letterSpacing: "0.4em", textTransform: "uppercase",
-              color: "rgb(6,4,2)", background: "rgb(240,223,200)",
+              color: "#FBF3D4", background: "#024628",
               border: "none", padding: 18, cursor: "pointer",
               WebkitTapHighlightColor: "transparent",
             }}>Shop Now</button>
