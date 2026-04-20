@@ -156,7 +156,11 @@ export default function PageContent() {
         <div style={{ position: "relative", zIndex: 1 }}>
 
           {/* ══ SECTION 1 — VIDEO ══ */}
-          <section style={{ position: "relative", height: "100dvh", overflow: "hidden" }}>
+          <section style={{
+            position: "relative", height: "100dvh", overflow: "hidden",
+            maskImage: "linear-gradient(to bottom, black 45%, transparent 88%)",
+            WebkitMaskImage: "linear-gradient(to bottom, black 45%, transparent 88%)",
+          }}>
             <video
               ref={videoRef}
               autoPlay
@@ -221,13 +225,14 @@ export default function PageContent() {
               color: "rgba(67,105,178,0.7)",
               pointerEvents: "none",
             }}>Scroll</div>
-            {/* Phase 1→2 blend */}
-            <div style={{
-              position: "absolute", bottom: 0, left: 0, right: 0,
-              height: "35vh", zIndex: 4, pointerEvents: "none",
-              background: "linear-gradient(to bottom, transparent, #013820)",
-            }} />
           </section>
+
+          {/* Phase 1→2 bridge: fades Phase 1 bottom to dark, matching Phase 2's video overlay */}
+          <div style={{
+            position: "relative", marginTop: "-35vh", height: "35vh",
+            zIndex: 2, pointerEvents: "none",
+            background: "linear-gradient(to bottom, transparent, #060402)",
+          }} />
 
           {/* ══ Q&A SECTION ══ */}
           <QASection />

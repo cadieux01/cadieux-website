@@ -264,6 +264,8 @@ export default function QASection() {
 
         {/* Dark overlay over video */}
         <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.75)", zIndex: 1, pointerEvents: "none" }} />
+        {/* Phase 1→2 top blend: hides Phase 2 start, fades in smoothly */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "30vh", background: "linear-gradient(to bottom, #060402, transparent)", zIndex: 6, pointerEvents: "none" }} />
 
         {/* Grain */}
         <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.07, pointerEvents: "none", zIndex: 2 }} />
