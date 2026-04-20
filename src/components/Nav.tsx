@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getLenis } from "@/lib/scroll";
 
 type Page = "blogs" | "making" | "store-locator" | "shop" | null;
 
@@ -20,6 +21,7 @@ const PRODUCTS = [
     protein: "7.2g protein per slice",
     weight: "240g net weight",
     desc: "Ancient grains, seeds, and five distinct protein sources — slow-fermented, cold-proofed, and baked to lock in structure.",
+    image: "/hero.jpg",
   },
   {
     name: "Plain High Protein Bread",
@@ -28,6 +30,7 @@ const PRODUCTS = [
     protein: "7.2g protein per slice",
     weight: "400g packet",
     desc: "Clean, everyday bread built for high protein without the fuss. Soft sandwich slices with no compromise on nutrition.",
+    image: "/grains.png",
   },
 ];
 
@@ -129,13 +132,31 @@ function ShopContent() {
         fontSize: "clamp(52px,12vw,96px)", fontWeight: 300,
         color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1,
       }}>Our Breads</h1>
-      <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
         {PRODUCTS.map((p, i) => (
           <div key={i} style={{
             borderTop: "1px solid rgba(240,223,200,0.1)",
-            paddingTop: 36,
+            paddingTop: 36, paddingBottom: 48,
             display: "flex", flexDirection: "column", gap: 16,
           }}>
+            {/* Product image */}
+            <div style={{
+              width: "100%", aspectRatio: "16/9",
+              overflow: "hidden", marginBottom: 8,
+              background: "rgba(255,255,255,0.04)",
+            }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.image}
+                alt={p.name}
+                style={{
+                  width: "100%", height: "100%",
+                  objectFit: "cover",
+                  display: "block",
+                  filter: "brightness(0.88) contrast(1.05)",
+                }}
+              />
+            </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <p style={{
                 margin: 0, fontFamily: "var(--font-heading)",
@@ -201,6 +222,8 @@ export default function Nav() {
     el.style.transition = "opacity 0.4s ease";
     el.style.opacity        = active ? "0" : "1";
     el.style.pointerEvents  = active ? "none" : "auto";
+    // Pause Lenis so overlays can scroll independently
+    if (active) getLenis()?.stop(); else getLenis()?.start();
   }, [active]);
 
   useEffect(() => {
@@ -292,6 +315,8 @@ export default function Nav() {
             transition: "transform 0.6s cubic-bezier(0.22,1,0.36,1)",
             pointerEvents: active === id ? "auto" : "none",
             overflowY: "auto",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch" as never,
           }}
         >
           {/* Grain overlay */}
