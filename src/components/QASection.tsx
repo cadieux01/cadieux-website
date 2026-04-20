@@ -101,7 +101,7 @@ export default function QASection() {
       const sy  = window.scrollY;
       const top = sy + outer.getBoundingClientRect().top;
       const raw = Math.min(Math.max((sy - top) / (outer.scrollHeight - window.innerHeight), 0), 1);
-      lpRef.current = lerp(lpRef.current, raw, 0.08);
+      lpRef.current = lerp(lpRef.current, raw, 0.15);
       const p = lpRef.current;
 
       /* Set a content block's opacity + diagonal offset */
@@ -136,9 +136,9 @@ export default function QASection() {
       /* A3 only enters, never exits — stays visible until dark covers it */
       { const eIn = ss(0.60, 0.67, p); set(a3Ref, eIn, lerp(80, 0, eIn)); }
 
-      /* Dot and dark — dark starts at 0.97 giving A3 ~200vh hold time */
-      if (dotRef.current)  dotRef.current.style.opacity  = String(ss(0.98, 1.00, p));
-      if (darkRef.current) darkRef.current.style.opacity = String(ss(0.97, 1.00, p) * 0.95);
+      /* Dot and dark — dark starts at 0.70 giving A3 ~1 scroll hold then fades in 1 scroll */
+      if (dotRef.current)  dotRef.current.style.opacity  = String(ss(0.84, 0.87, p));
+      if (darkRef.current) darkRef.current.style.opacity = String(ss(0.70, 0.87, p) * 0.95);
 
       /* Slash 1: draws 0.05-0.12, fades 0.19-0.25 */
       if (svg1Ref.current && p1Ref.current) {
@@ -259,7 +259,7 @@ export default function QASection() {
           autoPlay muted playsInline loop
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
         >
-          <source src="/product-video-4.mp4" type="video/mp4" />
+          <source src="/product-video-06.mp4" type="video/mp4" />
         </video>
 
         {/* Dark overlay over video */}
