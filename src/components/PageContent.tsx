@@ -256,12 +256,6 @@ export default function PageContent() {
               </video>
               {/* Dark overlay */}
               <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.62)", zIndex: 1, pointerEvents: "none" }} />
-              {/* Phase 2→3 top blend */}
-              <div style={{
-                position: "absolute", top: 0, left: 0, right: 0,
-                height: "25vh", zIndex: 12, pointerEvents: "none",
-                background: "linear-gradient(to bottom, #1D1D1F, transparent)",
-              }} />
               {/* Phase 3→4 bottom blend */}
               <div style={{
                 position: "absolute", bottom: 0, left: 0, right: 0,
