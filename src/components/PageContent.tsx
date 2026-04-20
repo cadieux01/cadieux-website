@@ -344,22 +344,35 @@ export default function PageContent() {
             minHeight: "100dvh", display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
             padding: "80px 28px", textAlign: "center", position: "relative",
+            overflow: "hidden",
           }}>
-            <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
+            {/* Background video */}
+            <video autoPlay muted playsInline loop style={{
+              position: "absolute", inset: 0, width: "100%", height: "100%",
+              objectFit: "cover", zIndex: 0,
+            }}>
+              <source src="/bread-making-01.mp4" type="video/mp4" />
+            </video>
+            {/* Dark overlay */}
+            <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.70)", zIndex: 1, pointerEvents: "none" }} />
+            <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 2 }} />
 
             <p style={{
+              position: "relative", zIndex: 3,
               margin: 0, fontFamily: "var(--font-heading)",
               fontSize: "clamp(52px, 16vw, 96px)", fontWeight: 300,
               color: "#FBF3D4", letterSpacing: "0.06em", lineHeight: 1,
             }}>Cadieux</p>
 
             <p style={{
+              position: "relative", zIndex: 3,
               margin: "20px 0 0", fontFamily: "var(--font-body)", fontSize: 9,
               fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
               color: "#4369B2",
             }}>Same Bread. Better Built.</p>
 
             <button style={{
+              position: "relative", zIndex: 3,
               display: "block", width: "100%", maxWidth: 320, marginTop: 28,
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
               letterSpacing: "0.4em", textTransform: "uppercase",
