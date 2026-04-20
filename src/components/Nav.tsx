@@ -156,7 +156,8 @@ function StoreContent() {
             <input
               value={query}
               onChange={e => { setQuery(e.target.value); setSelected(""); setOpen(true); }}
-              onFocus={() => setOpen(true)}
+              onFocus={() => { setQuery(""); setOpen(true); }}
+              onBlur={() => setTimeout(() => setOpen(false), 150)}
               placeholder="Type or select an area…"
               style={{
                 flex: 1, background: "none", border: "none", outline: "none",
@@ -169,8 +170,12 @@ function StoreContent() {
             <span
               onClick={e => {
                 e.stopPropagation();
-                if (!open) setQuery(""); // clear filter so all areas show
-                setOpen(o => !o);
+                if (open) {
+                  setOpen(false);
+                } else {
+                  setQuery(""); // always clear so all areas show on re-open
+                  setOpen(true);
+                }
               }}
               style={{
                 cursor: "pointer", userSelect: "none",
