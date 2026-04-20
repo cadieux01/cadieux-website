@@ -95,11 +95,18 @@ const VIZAG_AREAS = [
   "Kommadi",
   "Pendurthi",
   "Waltair Uplands",
+  "Chinna Waltair",
 ];
 
 const STORES: Record<string, { name: string; address: string }[]> = {
   Madhurawada: [
     { name: "Madhu Super Market", address: "Madhurawada, Visakhapatnam — Cadieux Stockist" },
+  ],
+  "MVP Colony": [
+    { name: "Sunny's Mart", address: "MVP Colony, Visakhapatnam — Cadieux Stockist" },
+  ],
+  "Chinna Waltair": [
+    { name: "Robin's Nutri Store", address: "Chinna Waltair, Visakhapatnam — Cadieux Stockist" },
   ],
 };
 
