@@ -259,7 +259,7 @@ export default function QASection() {
           autoPlay muted playsInline loop
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
         >
-          <source src="/product-video-04.mp4" type="video/mp4" />
+          <source src="/product-video-4.mp4" type="video/mp4" />
         </video>
 
         {/* Dark overlay over video */}
