@@ -232,6 +232,21 @@ export default function Nav() {
     return () => window.removeEventListener("openShop", handler);
   }, []);
 
+  // When overlay is open, intercept wheel events before Lenis sees them
+  // and redirect them to the active overlay div
+  useEffect(() => {
+    if (!active) return;
+    const wheelHandler = (e: WheelEvent) => {
+      const overlay = document.querySelector<HTMLElement>(`[data-overlay="${active}"]`);
+      if (!overlay) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      overlay.scrollTop += e.deltaY;
+    };
+    window.addEventListener("wheel", wheelHandler, { passive: false, capture: true });
+    return () => window.removeEventListener("wheel", wheelHandler, { capture: true });
+  }, [active]);
+
   const close = () => setActive(null);
 
   return (
@@ -308,6 +323,7 @@ export default function Nav() {
       {(["blogs", "making", "store-locator", "shop"] as Page[]).map((id) => (
         <div
           key={id}
+          data-overlay={id}
           style={{
             position: "fixed", inset: 0, zIndex: 99,
             background: "#1D1D1F",
