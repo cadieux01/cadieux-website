@@ -284,7 +284,7 @@ export default function PageContent() {
                       <p style={{
                         margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 8,
                         fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
-                        color: "rgba(67,105,178,0.5)",
+                        color: "rgba(255,255,255,0.4)",
                       }}>{String(i + 1).padStart(2, "0")} — {String(N_C).padStart(2, "0")}</p>
 
                       {/* Name */}
@@ -298,7 +298,7 @@ export default function PageContent() {
                       <p style={{
                         margin: 0, fontFamily: "var(--font-body)", fontSize: 9,
                         fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase",
-                        color: "#4369B2", lineHeight: 1.9,
+                        color: "rgba(255,255,255,0.7)", lineHeight: 1.9,
                       }}>{ing.desc}</p>
                     </div>
                   </div>
@@ -314,7 +314,7 @@ export default function PageContent() {
                 {INGREDIENTS.map((_, j) => (
                   <div key={j} style={{
                     width: activeCard === j ? 16 : 4, height: 1,
-                    background: activeCard === j ? "#4369B2" : "rgba(67,105,178,0.25)",
+                    background: activeCard === j ? "#ffffff" : "rgba(255,255,255,0.25)",
                     transition: "width 0.4s cubic-bezier(.22,1,.36,1), background 0.4s",
                   }} />
                 ))}
