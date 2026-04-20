@@ -158,6 +158,7 @@ export default function PageContent() {
           {/* ══ SECTION 1 — VIDEO ══ */}
           <section style={{
             position: "relative", height: "100dvh", overflow: "hidden",
+            display: "flex", flexDirection: "column", justifyContent: "flex-start",
             maskImage: "linear-gradient(to bottom, black 45%, transparent 88%)",
             WebkitMaskImage: "linear-gradient(to bottom, black 45%, transparent 88%)",
           }}>
@@ -184,10 +185,12 @@ export default function PageContent() {
               background: "radial-gradient(ellipse at center, transparent 40%, rgba(29,29,31,0.6) 100%)",
               pointerEvents: "none",
             }} />
-            {/* Bold statement + CTA — bottom */}
+            {/* Bold statement + CTA */}
             <div style={{
-              position: "absolute", bottom: 72, left: 0, right: 0, zIndex: 3,
-              padding: "0 clamp(28px, 8vw, 80px)",
+              position: "relative", zIndex: 3,
+              paddingLeft: "clamp(28px, 8vw, 80px)",
+              paddingRight: "clamp(28px, 8vw, 80px)",
+              paddingTop: "clamp(80px, 18vh, 160px)",
             }}>
               <p style={{
                 margin: "0 0 16px",
@@ -196,7 +199,7 @@ export default function PageContent() {
                 color: "#FBF3D4", pointerEvents: "none",
               }}>Cadieux</p>
               <p style={{
-                margin: "0 0 24px",
+                margin: "0 0 28px",
                 fontFamily: "var(--font-heading)",
                 fontSize: "clamp(40px, 10vw, 88px)",
                 fontWeight: 600,
@@ -212,19 +215,10 @@ export default function PageContent() {
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                 letterSpacing: "0.4em", textTransform: "uppercase",
                 color: "#FBF3D4", background: "#024628",
-                border: "none", padding: "16px 40px", cursor: "pointer",
+                border: "none", padding: "10px 24px", cursor: "pointer",
                 WebkitTapHighlightColor: "transparent",
               }}>Shop Now</button>
             </div>
-
-            <div style={{
-              position: "absolute", bottom: 32, left: "50%", zIndex: 3,
-              transform: "translateX(-50%)",
-              fontFamily: "var(--font-body)", fontSize: 8,
-              fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
-              color: "rgba(67,105,178,0.7)",
-              pointerEvents: "none",
-            }}>Scroll</div>
           </section>
 
           {/* Phase 1→2 bridge: fades Phase 1 bottom to dark, matching Phase 2's video overlay */}
@@ -236,6 +230,13 @@ export default function PageContent() {
 
           {/* ══ Q&A SECTION ══ */}
           <QASection />
+
+          {/* Phase 2→3 bridge */}
+          <div style={{
+            position: "relative", marginTop: "-28vh", height: "28vh",
+            zIndex: 50, pointerEvents: "none",
+            background: "linear-gradient(to bottom, #1D1D1F, transparent)",
+          }} />
 
           {/* ══ SECTION 4 — INGREDIENT CARDS (scroll-driven sticky) ══ */}
           <div ref={cardsOuterRef} style={{ position: "relative", height: `${N_C * 100}vh` }}>
