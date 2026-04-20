@@ -255,7 +255,7 @@ export default function PageContent() {
                 fontFamily: "var(--font-heading)", fontSize: "clamp(28px,6vw,48px)", fontWeight: 300,
                 letterSpacing: "0.08em",
                 color: "#FBF3D4",
-                opacity: Math.max(0, 1 - clamp((cardsP - 0.7) / 0.3, 0, 1)) * 0.25,
+                opacity: Math.max(0, 1 - clamp((cardsP - 0.7) / 0.3, 0, 1)) * 0.75,
                 pointerEvents: "none",
                 transition: "opacity 0.1s linear",
               }}>Our Ingredients</p>
