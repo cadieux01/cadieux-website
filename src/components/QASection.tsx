@@ -231,8 +231,8 @@ export default function QASection() {
 
   /* Diagonal slash SVG — viewBox 0 0 100 100, preserveAspectRatio none
      path M 0 100 L 100 0 = bottom-left to top-right              */
-  const SlashSVG = ({ svgRef, pathRef }: { svgRef: React.RefObject<SVGSVGElement | null>; pathRef: React.RefObject<SVGPathElement | null> }) => (
-    <svg ref={svgRef}
+  const SlashSVG = ({ svgRef, pathRef }: { svgRef: React.RefObject<SVGSVGElement>; pathRef: React.RefObject<SVGPathElement> }) => (
+    <svg ref={svgRef as React.RefObject<SVGSVGElement>}
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 2, willChange: "opacity" }}
       viewBox="0 0 100 100" preserveAspectRatio="none"
     >
