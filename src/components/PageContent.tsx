@@ -255,7 +255,7 @@ export default function PageContent() {
                 <source src="/product-video-05.mp4" type="video/mp4" />
               </video>
               {/* Dark overlay */}
-              <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.62)", zIndex: 1, pointerEvents: "none" }} />
+              <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.62)", zIndex: 0, pointerEvents: "none" }} />
               {/* Phase 3→4 bottom blend */}
               <div style={{
                 position: "absolute", bottom: 0, left: 0, right: 0,
