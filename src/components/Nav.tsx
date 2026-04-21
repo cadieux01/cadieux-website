@@ -34,13 +34,92 @@ const PRODUCTS = [
   },
 ];
 
+const BLOG_POSTS = [
+  {
+    title: "Why Protein Bread Is the Future of Everyday Eating",
+    brief: "Most people don't realise their bread is working against them. White bread spikes blood sugar, provides almost no protein, and leaves you hungry within hours. The future isn't eating less — it's eating smarter. Protein bread delivers what your body actually needs: sustained energy, muscle support, and real fullness. Cadieux is built on this idea. Every loaf is engineered to fuel your day without asking you to change your habits.",
+    body: `Most people grab bread without a second thought. It's familiar, convenient, and cheap. But the loaf sitting on most kitchen counters is doing very little for the person eating it.
+
+Standard white bread is mostly refined carbohydrates — stripped of fibre, protein, and nutrients during processing. It digests fast, spikes blood sugar, and leaves you hungry again within two hours. Over time, that cycle wears on your energy, your focus, and your body composition.
+
+Protein bread changes that equation entirely.
+
+When you replace empty carbohydrates with high-quality protein sources — whey, oat protein, seeds, and ancient grains — the same slice of bread becomes something functional. It slows digestion, feeds muscle tissue, supports your immune system, and keeps hunger at bay far longer.
+
+The shift doesn't require a new diet plan or a lifestyle overhaul. It just requires better bread.
+
+Cadieux was created for exactly this reason. We believe the most powerful health decisions are the quiet ones — the ones you make without thinking about it. Choosing Cadieux over ordinary bread is one of those decisions. Same routine. Better result. Every single day.`,
+  },
+  {
+    title: "The Ancient Grains We Swear By",
+    brief: "Long before modern wheat dominated our plates, humanity thrived on a diverse range of grains — each with its own nutritional fingerprint. Rye, oats, linseed, and sunflower seeds have been feeding people for thousands of years. Cadieux brings them back together, slow-fermented and cold-proofed, to create bread that carries the intelligence of centuries in every slice.",
+    body: `For most of human history, bread was made from whatever grains grew nearby — rye in northern Europe, spelt in the Mediterranean, millet across Africa and Asia. These grains weren't just calories. They were dense in fibre, minerals, and slow-digesting carbohydrates that kept communities strong through long winters and hard labour.
+
+Then came industrial agriculture. The focus shifted to yield and shelf life. Ancient grains were replaced by high-output wheat varieties, and the nutritional depth was lost in the process.
+
+At Cadieux, we've gone back.
+
+Rye sourdough ferment forms the base of every loaf. Rye has a lower glycaemic index than wheat, promotes better gut health, and carries a depth of flavour that modern bread simply can't replicate. The fermentation process — slow, cold, and carefully timed — breaks down phytic acid and makes nutrients more bioavailable.
+
+Linseeds bring omega-3 fatty acids that support heart health and brain function. Oat bran lowers LDL cholesterol and feeds beneficial gut bacteria. Sunflower seeds add vitamin E and healthy fats that protect cells from oxidative stress.
+
+These aren't ingredients we chose because they're trendy. They're ingredients that have proven themselves over thousands of years. We just brought them back together.`,
+  },
+  {
+    title: "What Happens to Your Body When You Switch to Better Bread",
+    brief: "The first week feels subtle. By week four, the difference is hard to ignore. Switching from refined bread to protein-rich, grain-dense bread changes how your body processes food, maintains energy, and builds tissue. Here's what the science says — and what our customers report feeling — when they make the swap.",
+    body: `Week one is usually the most surprising.
+
+People who switch to Cadieux from ordinary bread often notice they're not as hungry mid-morning. The slice they had at breakfast is still working — releasing energy slowly, keeping blood sugar stable, avoiding the sharp drop that normally sends them reaching for a snack by 10am.
+
+By week two, something else tends to shift. Digestion improves. The combination of oat bran, rye ferment, and linseeds feeds the gut microbiome in ways that refined bread simply doesn't. Bloating decreases. Regularity improves. The gut is getting what it needs.
+
+Weeks three and four bring the changes that matter most to anyone who trains or stays active. With 7.2g of protein per slice, Cadieux provides meaningful muscle support with every meal. Amino acids from whey and oat protein are available after a workout, supporting recovery without requiring a separate shake or supplement.
+
+The cumulative effect of better bread isn't dramatic. It isn't a transformation story. It's quieter than that — more energy in the afternoon, less hunger between meals, a body that's being consistently nourished rather than just filled.
+
+That's what switching to better bread feels like. Not a revolution. Just a better baseline, every single day.`,
+  },
+];
+
 /* ── Sub-page content ── */
 function BlogsContent() {
-  const posts = [
-    "Why Protein Bread Is the Future of Everyday Eating",
-    "The Ancient Grains We Swear By",
-    "What Happens to Your Body When You Switch to Better Bread",
-  ];
+  const [open, setOpen] = useState<number | null>(null);
+
+  if (open !== null) {
+    const post = BLOG_POSTS[open];
+    return (
+      <>
+        <button
+          onClick={() => setOpen(null)}
+          style={{
+            background: "none", border: "none", cursor: "pointer", padding: 0,
+            display: "flex", alignItems: "center", gap: 8, marginBottom: 48,
+            fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+            letterSpacing: "0.35em", textTransform: "uppercase",
+            color: "#4369B2", WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <span style={{ fontSize: 14 }}>←</span> All Stories
+        </button>
+        <h1 style={{
+          margin: "0 0 40px", fontFamily: "var(--font-heading)",
+          fontSize: "clamp(28px,7vw,56px)", fontWeight: 300,
+          color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.15,
+        }}>{post.title}</h1>
+        <div style={{ maxWidth: 600 }}>
+          {post.body.split("\n\n").map((para, i) => (
+            <p key={i} style={{
+              margin: "0 0 28px", fontFamily: "var(--font-body)",
+              fontSize: 13, fontWeight: 200, lineHeight: 1.9,
+              color: "rgba(251,243,212,0.7)",
+            }}>{para}</p>
+          ))}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <h1 style={{
@@ -48,13 +127,32 @@ function BlogsContent() {
         fontSize: "clamp(52px,12vw,96px)", fontWeight: 300,
         color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1,
       }}>Stories &amp; Bakes</h1>
-      {posts.map((title, i) => (
-        <div key={i} style={{ borderTop: "1px solid rgba(240,223,200,0.08)", paddingTop: 28, marginBottom: 36 }}>
+      {BLOG_POSTS.map((post, i) => (
+        <div
+          key={i}
+          onClick={() => setOpen(i)}
+          style={{
+            borderTop: "1px solid rgba(240,223,200,0.08)", paddingTop: 28, marginBottom: 36,
+            cursor: "pointer",
+          }}
+        >
           <p style={{
-            margin: 0, fontFamily: "var(--font-heading)",
+            margin: "0 0 12px", fontFamily: "var(--font-heading)",
             fontSize: "clamp(20px,4vw,32px)", fontWeight: 300,
-            color: "rgba(251,243,212,0.75)", letterSpacing: "0.01em", lineHeight: 1.2,
-          }}>{title}</p>
+            color: "rgba(251,243,212,0.85)", letterSpacing: "0.01em", lineHeight: 1.2,
+          }}>{post.title}</p>
+          <p style={{
+            margin: "0 0 14px", fontFamily: "var(--font-body)",
+            fontSize: 12, fontWeight: 200, lineHeight: 1.8,
+            color: "rgba(251,243,212,0.45)",
+            display: "-webkit-box", WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical" as never, overflow: "hidden",
+          }}>{post.brief}</p>
+          <span style={{
+            fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+            letterSpacing: "0.4em", textTransform: "uppercase",
+            color: "#4369B2",
+          }}>Read more →</span>
         </div>
       ))}
     </>
