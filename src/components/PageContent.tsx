@@ -203,14 +203,16 @@ export default function PageContent() {
                 paddingTop: "clamp(80px, 18vh, 160px)",
               }}>
                 <img
-                  src="/logo.svg"
+                  src="/logo-icon.png"
                   alt="Cadieux"
                   style={{
                     display: "block",
-                    width: "clamp(36px, 5.5vw, 54px)",
+                    width: "clamp(40px, 6vw, 60px)",
                     height: "auto",
                     marginBottom: 10,
                     pointerEvents: "none",
+                    filter: "invert(1) sepia(1) saturate(0.3) brightness(1.1)",
+                    mixBlendMode: "screen",
                   }}
                 />
                 <p style={{
