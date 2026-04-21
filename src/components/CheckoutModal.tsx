@@ -368,22 +368,22 @@ export default function CheckoutModal({
                 <div style={{ marginBottom: 22 }}>
                   <span style={labelSt}>Mobile Number *</span>
                   <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
-                    <input
-                      type="tel" inputMode="numeric" autoComplete="tel-national"
-                      value={"+91" + phone}
-                      onChange={e => {
-                        const raw = e.target.value.replace(/^\+91/, "");
-                        setPhone(raw.replace(/\D/g, "").slice(0, 10));
-                        setOtpError(""); setError("");
-                        if (otpVerified) { setOtpVerified(false); setOtpSent(false); }
-                      }}
-                      disabled={otpVerified}
-                      style={{ ...inputSt, flex: 1, opacity: otpVerified ? 0.55 : 1 }}
-                    />
+                    <div style={{ flex: 1, display: "flex", alignItems: "flex-end", ...inputSt, padding: 0, opacity: otpVerified ? 0.55 : 1 }}>
+                      <span style={{ padding: "10px 0 10px 12px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.5)", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
+                      <input
+                        type="tel" inputMode="numeric" autoComplete="tel-national"
+                        value={phone}
+                        onChange={e => {
+                          setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
+                          setOtpError(""); setError("");
+                        }}
+                        disabled={otpVerified}
+                        placeholder="10-digit number"
+                        style={{ flex: 1, background: "none", border: "none", outline: "none", padding: "10px 12px 10px 6px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4", letterSpacing: "0.05em" }}
+                      />
+                    </div>
                     {otpVerified ? (
-                      <span style={{ flexShrink: 0, marginBottom: 4, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "#4ade80" }}>
-                        ✓ Verified
-                      </span>
+                      <span style={{ flexShrink: 0, marginBottom: 4, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "#4ade80" }}>✓ Verified</span>
                     ) : (
                       <button
                         onClick={sendOtp}
