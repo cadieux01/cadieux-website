@@ -32,11 +32,6 @@ const SUB_WEEKS = [2, 3, 4, 6];
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
-const LINKS: { id: Page; label: string }[] = [
-  { id: "blogs",          label: "Blogs" },
-  { id: "making",         label: "Making" },
-  { id: "store-locator",  label: "Store Locator" },
-];
 
 const PRODUCTS = [
   {
@@ -1144,6 +1139,9 @@ export default function Nav() {
               {[
                 { label: "Explore Cadieux", action: () => { setMenuOpen(false); setActive("shop"); } },
                 { label: "Your Cart",       action: () => { setMenuOpen(false); setActive("cart"); } },
+                { label: "Blogs",           action: () => { setMenuOpen(false); setActive("blogs"); } },
+                { label: "Making",          action: () => { setMenuOpen(false); setActive("making"); } },
+                { label: "Store Locator",   action: () => { setMenuOpen(false); setActive("store-locator"); } },
                 { label: "Subscription",    action: () => setMenuSection("subscription") },
                 { label: "Your Orders",     action: () => setMenuSection("orders") },
                 { label: "Connect With Us", action: () => setMenuSection("connect") },
@@ -1159,6 +1157,9 @@ export default function Nav() {
                   {label}
                   {["Subscription","Your Orders","Connect With Us"].includes(label) && (
                     <span style={{ color: "rgba(240,223,200,0.3)", fontSize: 14 }}>›</span>
+                  )}
+                  {["Blogs","Making","Store Locator"].includes(label) && (
+                    <span style={{ color: "rgba(240,223,200,0.2)", fontSize: 14 }}>↗</span>
                   )}
                 </button>
               ))}
@@ -1288,63 +1289,6 @@ export default function Nav() {
         )}
       </button>
 
-      {/* Fixed nav bar */}
-      <nav style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "20px 28px 0", pointerEvents: "none",
-      }}>
-        {/* Left spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* Center links */}
-        <div style={{ display: "flex", alignItems: "center", gap: "clamp(24px,5vw,56px)" }}>
-          {active ? (
-            <span className="nav-btn nav-active">
-              {active === "cart" ? "Cart" : LINKS.find(l => l.id === active)?.label}
-            </span>
-          ) : (
-            LINKS.map(({ id, label }) => (
-              <button
-                key={id}
-                className="nav-btn"
-                onClick={() => setActive(id)}
-                style={{ pointerEvents: "auto" }}
-              >
-                {label}
-              </button>
-            ))
-          )}
-        </div>
-
-        {/* Right: cart icon */}
-        <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
-          <button
-            onClick={() => setActive("cart")}
-            style={{
-              pointerEvents: "auto", position: "relative",
-              background: "none", border: "none", cursor: "pointer", padding: 4,
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-              stroke="rgba(251,243,212,0.5)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-              <line x1="3" y1="6" x2="21" y2="6"/>
-              <path d="M16 10a4 4 0 0 1-8 0"/>
-            </svg>
-            {cartCount > 0 && (
-              <span style={{
-                position: "absolute", top: 0, right: 0,
-                background: "#024628", color: "#FBF3D4",
-                borderRadius: "50%", width: 15, height: 15,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 600,
-              }}>{cartCount}</span>
-            )}
-          </button>
-        </div>
-      </nav>
 
       {/* Sub-page overlays */}
       {(["blogs", "making", "store-locator", "shop", "cart"] as Page[]).map((id) => (
