@@ -694,7 +694,11 @@ function chip(selected: boolean) {
   };
 }
 
-function ShopContent({ onRequestCart }: { onRequestCart: (item: CartItem) => void }) {
+function ShopContent({ cartCount, onAddToCart, onViewCart }: {
+  cartCount: number;
+  onAddToCart: (item: CartItem) => void;
+  onViewCart: () => void;
+}) {
   const [qty,       setQty]       = useState([1, 1]);
   const [orderType, setOrderType] = useState<("once" | "sub")[]>(["once", "once"]);
   const [weeks,     setWeeks]     = useState<(number | null)[]>([null, null]);
@@ -803,30 +807,49 @@ function ShopContent({ onRequestCart }: { onRequestCart: (item: CartItem) => voi
               </div>
             )}
 
-            {/* ── Add to cart ── */}
-            <button
-              disabled={!canAdd(i)}
-              onClick={() => {
-                const item: CartItem = {
-                  productIndex: i, name: p.name, price: p.price, qty: qty[i],
-                  orderType: orderType[i],
-                  weeks: orderType[i] === "sub" ? weeks[i]! : undefined,
-                  day:   orderType[i] === "sub" ? day[i]   : undefined,
-                  time:  orderType[i] === "sub" ? time[i]  : undefined,
-                };
-                onRequestCart(item);
-              }}
-              style={{
-                alignSelf: "flex-start", marginTop: 12,
-                background: canAdd(i) ? "#024628" : "rgba(2,70,40,0.3)",
-                border: "none", padding: "14px 36px", cursor: canAdd(i) ? "pointer" : "default",
-                fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
-                letterSpacing: "0.4em", textTransform: "uppercase",
-                color: canAdd(i) ? "#FBF3D4" : "rgba(251,243,212,0.3)",
-                WebkitTapHighlightColor: "transparent",
-                transition: "background 0.3s, color 0.3s",
-              }}
-            >Add to Cart</button>
+            {/* ── Add to Cart + View Cart ── */}
+            <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+              <button
+                disabled={!canAdd(i)}
+                onClick={() => {
+                  const item: CartItem = {
+                    productIndex: i, name: p.name, price: p.price, qty: qty[i],
+                    orderType: orderType[i],
+                    weeks: orderType[i] === "sub" ? weeks[i]! : undefined,
+                    day:   orderType[i] === "sub" ? day[i]   : undefined,
+                    time:  orderType[i] === "sub" ? time[i]  : undefined,
+                  };
+                  onAddToCart(item);
+                }}
+                style={{
+                  flex: 1,
+                  background: canAdd(i) ? "#024628" : "rgba(2,70,40,0.3)",
+                  border: "none", padding: "14px 0", cursor: canAdd(i) ? "pointer" : "default",
+                  fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                  letterSpacing: "0.4em", textTransform: "uppercase",
+                  color: canAdd(i) ? "#FBF3D4" : "rgba(251,243,212,0.3)",
+                  WebkitTapHighlightColor: "transparent",
+                  transition: "background 0.3s, color 0.3s",
+                }}
+              >Add to Cart</button>
+              <button
+                disabled={cartCount === 0}
+                onClick={onViewCart}
+                style={{
+                  flex: 1,
+                  background: cartCount > 0 ? "#f0dfc8" : "transparent",
+                  border: cartCount > 0 ? "none" : "1px solid rgba(240,223,200,0.15)",
+                  padding: "14px 0", cursor: cartCount > 0 ? "pointer" : "default",
+                  fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                  letterSpacing: "0.4em", textTransform: "uppercase",
+                  color: cartCount > 0 ? "#080604" : "rgba(240,223,200,0.2)",
+                  WebkitTapHighlightColor: "transparent",
+                  transition: "background 0.3s, color 0.3s, border 0.3s",
+                }}
+              >
+                View Cart{cartCount > 0 ? ` (${cartCount})` : ""}
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -939,7 +962,6 @@ function CartContent({
 export default function Nav() {
   const [active,        setActive]       = useState<Page>(null);
   const [cart,          setCart]         = useState<CartItem[]>([]);
-  const [pendingItem,   setPendingItem]  = useState<CartItem | null>(null);
   const [checkoutOpen,  setCheckoutOpen] = useState(false);
 
   const cartTotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
@@ -954,7 +976,7 @@ export default function Nav() {
       }
       return [...prev, item];
     });
-    setActive("cart");
+    // No navigation — user uses View Cart button when ready
   }
 
   function updateQty(index: number, qty: number) {
@@ -1197,22 +1219,11 @@ export default function Nav() {
             {id === "blogs"          && <BlogsContent />}
             {id === "making"         && <MakingContent />}
             {id === "store-locator"  && <StoreContent />}
-            {id === "shop"           && <ShopContent onRequestCart={item => setPendingItem(item)} />}
+            {id === "shop"           && <ShopContent cartCount={cart.reduce((s,c)=>s+c.qty,0)} onAddToCart={addToCart} onViewCart={() => setCheckoutOpen(true)} />}
             {id === "cart"           && <CartContent cart={cart} onCheckout={() => setCheckoutOpen(true)} onUpdateQty={updateQty} onRemove={removeFromCart} />}
           </div>
         </div>
       ))}
-
-      {/* Login/OTP modal — rendered at Nav root so it escapes overlay transform stacking context */}
-      {pendingItem && (
-        <LoginModal
-          onSuccess={() => {
-            addToCart(pendingItem);
-            setPendingItem(null);
-          }}
-          onClose={() => setPendingItem(null)}
-        />
-      )}
 
       {/* Checkout modal */}
       {checkoutOpen && (

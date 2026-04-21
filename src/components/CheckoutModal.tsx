@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { useState, useEffect } from "react";
 
 export type CartItem = {
   productIndex: number;
@@ -14,7 +13,7 @@ export type CartItem = {
   time?: string;
 };
 
-type Step = "check" | "signin" | "otp" | "address" | "confirm" | "done";
+type Step = "form" | "payment" | "done";
 
 type Customer = {
   id?: string;
@@ -27,90 +26,30 @@ type Customer = {
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
-/* ── Shared styles ─────────────────────────────────────────────────────────── */
 const inputSt: React.CSSProperties = {
   display: "block", width: "100%", boxSizing: "border-box",
-  background: "rgba(251,243,212,0.05)", border: "1px solid rgba(251,243,212,0.15)",
-  padding: "14px 16px", outline: "none",
+  background: "transparent",
+  border: "none", borderBottom: "1px solid rgba(240,223,200,0.18)",
+  padding: "10px 0", outline: "none",
   fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200,
-  color: "#FBF3D4", letterSpacing: "0.05em",
+  color: "#FBF3D4", letterSpacing: "0.04em",
 };
 
 const labelSt: React.CSSProperties = {
-  display: "block", marginBottom: 8,
+  display: "block", marginBottom: 6,
   fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
-  letterSpacing: "0.35em", textTransform: "uppercase",
-  color: "rgba(251,243,212,0.45)",
+  letterSpacing: "0.4em", textTransform: "uppercase",
+  color: "rgba(200,144,58,0.65)",
 };
 
-function btn(variant: "green" | "cream" | "dim", disabled = false): React.CSSProperties {
-  const base: React.CSSProperties = {
-    display: "block", width: "100%",
-    border: "none", padding: "16px 0", cursor: disabled ? "default" : "pointer",
-    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
-    letterSpacing: "0.45em", textTransform: "uppercase",
-    WebkitTapHighlightColor: "transparent", transition: "background 0.2s",
-  };
-  if (variant === "cream")
-    return { ...base, background: disabled ? "rgba(240,223,200,0.5)" : "#f0dfc8", color: "#080604" };
-  if (variant === "dim")
-    return { ...base, background: "rgba(2,70,40,0.3)", color: "rgba(251,243,212,0.3)" };
-  return {
-    ...base,
-    background: disabled ? "rgba(2,70,40,0.35)" : "#024628",
-    color: disabled ? "rgba(251,243,212,0.35)" : "#FBF3D4",
-  };
-}
+const sectionHead: React.CSSProperties = {
+  margin: "0 0 20px",
+  fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+  letterSpacing: "0.5em", textTransform: "uppercase",
+  color: "rgba(240,223,200,0.28)",
+};
 
-/* ── 6-box OTP ─────────────────────────────────────────────────────────────── */
-function OtpBoxes({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
-
-  const handleChange = useCallback((i: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const digit = e.target.value.replace(/\D/g, "").slice(-1);
-    const arr = (value.padEnd(6, " ")).split("").slice(0, 6);
-    arr[i] = digit;
-    const joined = arr.join("").trimEnd();
-    onChange(joined);
-    if (digit && i < 5) refs.current[i + 1]?.focus();
-  }, [value, onChange]);
-
-  const handleKeyDown = useCallback((i: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !value[i] && i > 0) refs.current[i - 1]?.focus();
-  }, [value]);
-
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const digits = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    onChange(digits);
-    refs.current[Math.min(digits.length, 5)]?.focus();
-  }, [onChange]);
-
-  return (
-    <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 28 }}>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <input
-          key={i}
-          ref={el => { refs.current[i] = el; }}
-          type="text" inputMode="numeric"
-          autoComplete={i === 0 ? "one-time-code" : "off"}
-          maxLength={1} value={value[i] ?? ""}
-          onChange={e => handleChange(i, e)}
-          onKeyDown={e => handleKeyDown(i, e)}
-          onPaste={handlePaste}
-          style={{
-            width: 42, height: 52, background: "rgba(251,243,212,0.05)",
-            border: "1px solid rgba(251,243,212,0.18)", outline: "none",
-            textAlign: "center", fontFamily: "var(--font-body)",
-            fontWeight: 300, fontSize: 24, color: "#FBF3D4", caretColor: "#d4a857",
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-/* ── Main component ─────────────────────────────────────────────────────────── */
+/* ── Main component ─────────────────────────────────────────────────────── */
 export default function CheckoutModal({
   cart,
   total,
@@ -122,174 +61,201 @@ export default function CheckoutModal({
   onClose: () => void;
   onOrderPlaced: () => void;
 }) {
-  const [step, setStep] = useState<Step>("check");
+  const [step, setStep] = useState<Step>("form");
+
+  // Form fields
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  // otpToken no longer needed — Supabase tracks session server-side
-  const [otpCode, setOtpCode] = useState("");
-  const [address, setAddress] = useState("");
+  const [addressLine, setAddressLine] = useState("");
+  const [area, setArea] = useState("");
   const [city, setCity] = useState("");
+  const [pincode, setPincode] = useState("");
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [loading, setLoading] = useState(false);
+
+  // Loading states
+  const [submitting, setSubmitting] = useState(false);
+  const [orderLoading, setOrderLoading] = useState(false);
+
+  // Errors
   const [error, setError] = useState("");
   const [orderNum, setOrderNum] = useState("");
 
-  // ── On mount: check localStorage ──────────────────────────────────────────
+  /* ── Pre-fill on mount ─────────────────────────────────────────────────── */
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("cadieux_phone") : null;
-    if (!saved) { setStep("signin"); return; }
+    if (!saved) return;
     setPhone(saved);
+
+    // Auto-fill address from previous order
     fetch(`/api/checkout?phone=${encodeURIComponent(saved)}`)
       .then(r => r.json())
-      .then(data => {
-        if (data.customer) {
-          setCustomer(data.customer);
-          setName(data.customer.full_name ?? "");
-          setAddress(data.customer.delivery_address ?? "");
-          setCity(data.customer.city ?? "");
-          setStep("confirm");
-        } else {
-          setStep("address");
-        }
+      .then(d => {
+        if (!d.customer) return;
+        setCustomer(d.customer);
+        setName(d.customer.full_name ?? "");
+        setCity(d.customer.city ?? "");
+        prefillAddress(d.customer.delivery_address ?? "");
       })
-      .catch(() => setStep("signin"));
+      .catch(() => {});
   }, []);
 
-  // ── OTP flow (Supabase phone auth) ────────────────────────────────────────
-  async function sendOtp() {
-    if (!name.trim()) { setError("Please enter your name."); return; }
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length !== 10) { setError("Enter a valid 10-digit number."); return; }
-
-    const fullPhone = "+91" + digits;
-    console.log("[OTP] Sending to:", fullPhone);
-    setLoading(true); setError("");
-
-    const { data, error } = await supabase.auth.signInWithOtp({ phone: fullPhone });
-    console.log("[OTP] signInWithOtp response:", { data, error });
-
-    setLoading(false);
-    if (error) {
-      console.error("[OTP] Error:", error.message, error);
-      setError("Supabase error: " + error.message);
-      return;
+  function prefillAddress(raw: string) {
+    // stored as "AddressLine, Area, City - 530045"
+    const pincodeMatch = raw.match(/(\d{6})\s*$/);
+    if (pincodeMatch) {
+      setPincode(pincodeMatch[1]);
+      const withoutPincode = raw.replace(/[\s,–\-]+\d{6}\s*$/, "").trim();
+      const parts = withoutPincode.split(",").map(p => p.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        setAddressLine(parts[0]);
+        // middle parts = area (everything except first and last = city)
+        setArea(parts.slice(1, parts.length > 2 ? -1 : undefined).join(", "));
+      } else {
+        setAddressLine(withoutPincode);
+      }
+    } else {
+      setAddressLine(raw);
     }
-    setStep("otp");
   }
 
-  async function resendOtp() {
-    const fullPhone = "+91" + phone.replace(/\D/g, "");
-    console.log("[OTP] Resending to:", fullPhone);
-    setLoading(true); setError("");
+  /* ── Submit form → save to Supabase → payment step ─────────────────────── */
+  async function handleSubmit() {
+    setError("");
+    if (!name.trim())                             { setError("Please enter your name."); return; }
+    if (phone.replace(/\D/g,"").length !== 10)    { setError("Enter a valid 10-digit number."); return; }
+    if (!addressLine.trim())                      { setError("Please enter your delivery address."); return; }
+    if (!area.trim())                             { setError("Please enter your area / locality."); return; }
+    if (!city.trim())                             { setError("Please enter your city."); return; }
+    if (pincode.replace(/\D/g,"").length !== 6)  { setError("Enter a valid 6-digit pincode."); return; }
 
-    const { data, error } = await supabase.auth.signInWithOtp({ phone: fullPhone });
-    console.log("[OTP] resend response:", { data, error });
+    const fullAddress = `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
 
-    setLoading(false);
-    if (error) {
-      setError("Supabase error: " + error.message);
-      return;
-    }
-    setOtpCode("");
-  }
-
-  async function verifyOtp() {
-    const code = otpCode.replace(/\D/g, "");
-    if (code.length !== 6) { setError("Enter the 6-digit code."); return; }
-
-    const fullPhone = "+91" + phone.replace(/\D/g, "");
-    console.log("[OTP] Verifying:", { phone: fullPhone, token: code });
-    setLoading(true); setError("");
-
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone: fullPhone,
-      token: code,
-      type: "sms",
-    });
-    console.log("[OTP] verifyOtp response:", { data, error });
-
-    setLoading(false);
-    if (error) {
-      console.error("[OTP] Verify error:", error.message, error);
-      setError("Supabase error: " + error.message);
-      setOtpCode("");
-      return;
-    }
-    setStep("address");
-  }
-
-  // ── Save customer → confirm ────────────────────────────────────────────────
-  async function saveAddress() {
-    if (!address.trim() || !city.trim()) { setError("Please fill all fields."); return; }
-    setLoading(true); setError("");
+    setSubmitting(true);
     try {
       const res = await fetch("/api/checkout", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "save_customer",
-          full_name: name, phone: phone.replace(/\D/g, ""),
-          delivery_address: address, city,
+          full_name: name.trim(),
+          phone: phone.replace(/\D/g, ""),
+          delivery_address: fullAddress,
+          city: city.trim(),
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to save");
+      if (!res.ok) { setError(data.error ?? "Failed to save details."); return; }
       localStorage.setItem("cadieux_phone", phone.replace(/\D/g, ""));
       setCustomer(data.customer);
-      setEditing(false);
-      setStep("confirm");
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally { setLoading(false); }
+      setStep("payment");
+    } catch {
+      setError("Something went wrong. Try again.");
+    } finally { setSubmitting(false); }
   }
 
-  // ── Place order ────────────────────────────────────────────────────────────
-  async function placeOrder() {
-    const deliveryAddr = editing ? address : (customer?.delivery_address ?? address);
-    setLoading(true); setError("");
+  /* ── COD order ──────────────────────────────────────────────────────────── */
+  async function placeOrderCOD() {
+    const fullAddress = `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+    setOrderLoading(true); setError("");
     try {
       const res = await fetch("/api/checkout", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "place_order",
           customer_id: customer?.id,
-          delivery_address: deliveryAddr,
+          delivery_address: fullAddress,
           total_amount: total,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Order failed");
-      setOrderNum(data.order_id?.slice(0, 8).toUpperCase() ?? Math.random().toString(36).slice(2,10).toUpperCase());
+      if (!res.ok) { setError(data.error ?? "Order failed."); return; }
+      setOrderNum(data.order_id?.slice(0, 8).toUpperCase() ?? Math.random().toString(36).slice(2, 10).toUpperCase());
       setStep("done");
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally { setLoading(false); }
+    } catch {
+      setError("Something went wrong.");
+    } finally { setOrderLoading(false); }
   }
 
-  const masked = `+91 ••••• ${phone.replace(/\D/g, "").slice(-5)}`;
-  const displayAddress = customer?.delivery_address || address;
-  const displayCity = customer?.city || city;
-  const displayName = customer?.full_name || name;
+  /* ── Razorpay online payment ─────────────────────────────────────────────── */
+  async function payOnline() {
+    setOrderLoading(true); setError("");
+    try {
+      const res = await fetch("/api/create-order", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: total * 100 }),
+      });
+      if (!res.ok) {
+        setError("Online payment unavailable. Please use Cash on Delivery.");
+        return;
+      }
+      const { order_id } = await res.json();
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+      // Load Razorpay script
+      const loaded = await new Promise<boolean>(resolve => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((window as any).Razorpay) { resolve(true); return; }
+        const s = document.createElement("script");
+        s.src = "https://checkout.razorpay.com/v1/checkout.js";
+        s.onload = () => resolve(true);
+        s.onerror = () => resolve(false);
+        document.body.appendChild(s);
+      });
+
+      setOrderLoading(false);
+      if (!loaded) { setError("Failed to load payment gateway. Please use Cash on Delivery."); return; }
+
+      const fullAddress = `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: total * 100,
+        currency: "INR",
+        name: "Cadieux",
+        description: "Protein Bread",
+        order_id,
+        handler: async (response: { razorpay_payment_id: string }) => {
+          setOrderLoading(true);
+          const r = await fetch("/api/checkout", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "place_order",
+              customer_id: customer?.id,
+              delivery_address: fullAddress,
+              total_amount: total,
+            }),
+          });
+          const d = await r.json();
+          setOrderLoading(false);
+          console.log("[Payment] Success, Razorpay ID:", response.razorpay_payment_id);
+          setOrderNum(d.order_id?.slice(0, 8).toUpperCase() ?? "ONLINE");
+          setStep("done");
+        },
+        prefill: { name, contact: "+91" + phone.replace(/\D/g, "") },
+        theme: { color: "#024628" },
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      new (window as any).Razorpay(options).open();
+    } catch {
+      setError("Something went wrong.");
+      setOrderLoading(false);
+    }
+  }
+
+  const fullAddressDisplay = [addressLine, area, city, pincode].filter(Boolean).join(", ");
+
+  /* ── Render ─────────────────────────────────────────────────────────────── */
   return (
     <>
       <style>{`
-        @keyframes check-draw {
-          from { stroke-dashoffset: 80; opacity: 0; }
-          to   { stroke-dashoffset: 0;  opacity: 1; }
-        }
-        @keyframes circle-draw {
-          from { stroke-dashoffset: 220; }
-          to   { stroke-dashoffset: 0; }
-        }
+        @keyframes check-draw { from { stroke-dashoffset: 80; opacity: 0; } to { stroke-dashoffset: 0; opacity: 1; } }
+        @keyframes circle-draw { from { stroke-dashoffset: 220; } to { stroke-dashoffset: 0; } }
       `}</style>
 
       {/* Backdrop */}
       <div
         style={{
           position: "fixed", inset: 0, zIndex: 300,
-          background: "rgba(0,0,0,0.9)",
+          background: "rgba(0,0,0,0.92)",
           display: "flex", alignItems: "center", justifyContent: "center",
           padding: "16px",
         }}
@@ -298,51 +264,70 @@ export default function CheckoutModal({
         {/* Card */}
         <div style={{
           width: "100%", maxWidth: 480,
-          background: "#111",
+          background: "#0e0e0e",
           maxHeight: "92dvh", overflowY: "auto",
-          padding: "44px 36px 56px",
           position: "relative",
         }}>
           {/* Grain */}
-          <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
+          <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.04, pointerEvents: "none", zIndex: 0 }} />
 
           {/* Close */}
           {step !== "done" && (
             <button onClick={onClose} style={{
-              position: "absolute", top: 20, right: 20,
+              position: "absolute", top: 18, right: 18, zIndex: 10,
               background: "none", border: "none", cursor: "pointer",
-              color: "rgba(251,243,212,0.35)", fontSize: 20, lineHeight: 1,
+              color: "rgba(240,223,200,0.25)", fontSize: 18, lineHeight: 1,
               WebkitTapHighlightColor: "transparent",
             }}>✕</button>
           )}
 
-          <div style={{ position: "relative", zIndex: 1 }}>
+          <div style={{ position: "relative", zIndex: 1, padding: "40px 28px 52px" }}>
 
-            {/* ── LOADING CHECK ── */}
-            {step === "check" && (
-              <p style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(251,243,212,0.4)", textAlign: "center", padding: "40px 0" }}>
-                Loading…
-              </p>
-            )}
-
-            {/* ── SIGN IN ── */}
-            {step === "signin" && (
+            {/* ══ FORM STEP ══════════════════════════════════════════════════ */}
+            {step === "form" && (
               <>
-                <p style={{ margin: "0 0 4px", fontFamily: "var(--font-heading)", fontSize: "clamp(32px,8vw,48px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em", lineHeight: 1 }}>
-                  Cadieux
+                {/* Header */}
+                <p style={{ margin: "0 0 4px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,38px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em", lineHeight: 1 }}>
+                  Checkout
                 </p>
-                <p style={{ margin: "0 0 36px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.7)" }}>
-                  Enter your number to continue
+                <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>
+                  Fill in your details to place order
                 </p>
 
-                <label style={{ display: "block", marginBottom: 24 }}>
-                  <span style={labelSt}>Your Name</span>
-                  <input type="text" value={name} onChange={e => { setName(e.target.value); setError(""); }}
-                    placeholder="e.g. Arjun Sharma" autoComplete="name" style={inputSt} />
+                {/* Cart summary */}
+                <div style={{ marginBottom: 28 }}>
+                  <p style={sectionHead}>Your Order</p>
+                  {cart.map((item, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(240,223,200,0.07)", padding: "11px 0" }}>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.65)", letterSpacing: "0.03em" }}>
+                        {item.name} × {item.qty}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#FBF3D4" }}>₹{item.price * item.qty}</span>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid rgba(240,223,200,0.12)", paddingTop: 12, marginTop: 4 }}>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>Total (Incl. GST)</span>
+                    <span style={{ fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 300, color: "#FBF3D4" }}>₹{total}</span>
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid rgba(240,223,200,0.06)", marginBottom: 28 }} />
+                <p style={sectionHead}>Your Details</p>
+
+                {/* Full Name */}
+                <label style={{ display: "block", marginBottom: 22 }}>
+                  <span style={labelSt}>Full Name *</span>
+                  <input type="text" value={name}
+                    onChange={e => { setName(e.target.value); setError(""); }}
+                    placeholder="e.g. Arjun Sharma"
+                    autoComplete="name"
+                    style={inputSt}
+                  />
                 </label>
 
-                <label style={{ display: "block", marginBottom: 32 }}>
-                  <span style={labelSt}>Mobile Number</span>
+                {/* Mobile */}
+                <label style={{ display: "block", marginBottom: 22 }}>
+                  <span style={labelSt}>Mobile Number *</span>
                   <input
                     type="tel" inputMode="numeric" autoComplete="tel-national"
                     value={"+91" + phone}
@@ -351,197 +336,209 @@ export default function CheckoutModal({
                       setPhone(raw.replace(/\D/g, "").slice(0, 10));
                       setError("");
                     }}
-                    onFocus={e => { const l = e.target.value.length; e.target.setSelectionRange(l, l); }}
-                    placeholder="+91"
-                    style={{
-                      ...inputSt,
-                      border: "none",
-                      borderBottom: "1px solid #c8903a",
-                      background: "transparent",
-                      padding: "12px 0",
-                    }}
+                    style={inputSt}
                   />
                 </label>
 
-                {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}
-                <button onClick={sendOtp} disabled={loading} style={btn("cream", loading)}>
-                  {loading ? "Sending…" : "Send OTP"}
-                </button>
-              </>
-            )}
+                {/* Delivery Address */}
+                <label style={{ display: "block", marginBottom: 22 }}>
+                  <span style={labelSt}>Delivery Address *</span>
+                  <input type="text" value={addressLine}
+                    onChange={e => { setAddressLine(e.target.value); setError(""); }}
+                    placeholder="Flat no. / House no. / Building name"
+                    autoComplete="address-line1"
+                    style={inputSt}
+                  />
+                </label>
 
-            {/* ── OTP ── */}
-            {step === "otp" && (
-              <>
-                <p style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,40px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.1 }}>Verify</p>
-                <p style={{ margin: "0 0 32px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.25em", color: "rgba(251,243,212,0.4)" }}>
-                  6-digit code sent to {masked}
-                </p>
-                <OtpBoxes value={otpCode} onChange={setOtpCode} />
-                {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}
-                <button onClick={verifyOtp} disabled={loading || otpCode.replace(/\D/g,"").length < 6} style={btn("cream", loading || otpCode.replace(/\D/g,"").length < 6)}>
-                  {loading ? "Verifying…" : "Verify"}
-                </button>
-                <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between" }}>
-                  <button onClick={() => { setStep("signin"); setOtpCode(""); setError(""); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(251,243,212,0.35)", WebkitTapHighlightColor: "transparent" }}>
-                    ← Change number
-                  </button>
-                  <button onClick={resendOtp} disabled={loading} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#4369B2", WebkitTapHighlightColor: "transparent" }}>
-                    Resend code
-                  </button>
+                {/* Area */}
+                <label style={{ display: "block", marginBottom: 22 }}>
+                  <span style={labelSt}>Area / Locality *</span>
+                  <input type="text" value={area}
+                    onChange={e => { setArea(e.target.value); setError(""); }}
+                    placeholder="Street / Colony / Locality"
+                    autoComplete="address-line2"
+                    style={inputSt}
+                  />
+                </label>
+
+                {/* City + Pincode */}
+                <div style={{ display: "flex", gap: 16, marginBottom: 32 }}>
+                  <label style={{ flex: 1 }}>
+                    <span style={labelSt}>City *</span>
+                    <input type="text" value={city}
+                      onChange={e => { setCity(e.target.value); setError(""); }}
+                      placeholder="Visakhapatnam"
+                      autoComplete="address-level2"
+                      style={inputSt}
+                    />
+                  </label>
+                  <label style={{ flex: "0 0 110px" }}>
+                    <span style={labelSt}>Pincode *</span>
+                    <input type="text" inputMode="numeric" maxLength={6}
+                      value={pincode}
+                      onChange={e => { setPincode(e.target.value.replace(/\D/g,"").slice(0,6)); setError(""); }}
+                      placeholder="530045"
+                      autoComplete="postal-code"
+                      style={inputSt}
+                    />
+                  </label>
                 </div>
-              </>
-            )}
 
-            {/* ── ADDRESS ── */}
-            {step === "address" && (
-              <>
-                <p style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,40px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.1 }}>
-                  Delivery Details
-                </p>
-                <p style={{ margin: "0 0 32px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(212,168,87,0.75)" }}>
-                  Where should we deliver?
-                </p>
+                {error && (
+                  <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.04em" }}>
+                    {error}
+                  </p>
+                )}
 
-                <label style={{ display: "block", marginBottom: 20 }}>
-                  <span style={labelSt}>Full Name</span>
-                  <input type="text" value={name} onChange={e => { setName(e.target.value); setError(""); }}
-                    placeholder="e.g. Arjun Sharma" autoComplete="name" style={inputSt} />
-                </label>
-                <label style={{ display: "block", marginBottom: 20 }}>
-                  <span style={labelSt}>Delivery Address</span>
-                  <input type="text" value={address} onChange={e => { setAddress(e.target.value); setError(""); }}
-                    placeholder="Flat / Street / Area" autoComplete="street-address" style={inputSt} />
-                </label>
-                <label style={{ display: "block", marginBottom: 28 }}>
-                  <span style={labelSt}>City</span>
-                  <input type="text" value={city} onChange={e => { setCity(e.target.value); setError(""); }}
-                    placeholder="Visakhapatnam" autoComplete="address-level2" style={inputSt} />
-                </label>
-
-                {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}
-                <button onClick={saveAddress} disabled={loading} style={btn("green", loading)}>
-                  {loading ? "Saving…" : "Continue"}
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  style={{
+                    display: "block", width: "100%",
+                    background: submitting ? "rgba(240,223,200,0.5)" : "#f0dfc8",
+                    border: "none", padding: "17px 0",
+                    cursor: submitting ? "default" : "pointer",
+                    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                    letterSpacing: "0.45em", textTransform: "uppercase",
+                    color: "#080604",
+                    WebkitTapHighlightColor: "transparent",
+                    transition: "background 0.2s",
+                  }}
+                >
+                  {submitting ? "Saving…" : "Proceed to Payment"}
                 </button>
               </>
             )}
 
-            {/* ── CONFIRM ── */}
-            {step === "confirm" && !editing && (
+            {/* ══ PAYMENT STEP ═══════════════════════════════════════════════ */}
+            {step === "payment" && (
               <>
-                <p style={{ margin: "0 0 40px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,40px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.1 }}>
-                  Order Summary
+                <p style={{ margin: "0 0 4px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,38px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em" }}>
+                  Payment
+                </p>
+                <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>
+                  Choose how to pay
                 </p>
 
-                {/* Cart items */}
-                <div style={{ marginBottom: 28 }}>
-                  {cart.map((item, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(240,223,200,0.08)", padding: "16px 0" }}>
-                      <div>
-                        <p style={{ margin: "0 0 4px", fontFamily: "var(--font-heading)", fontSize: "clamp(16px,4vw,24px)", fontWeight: 300, color: "#FBF3D4" }}>{item.name}</p>
-                        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(251,243,212,0.4)" }}>
-                          Qty {item.qty} · ₹{item.price} each
-                        </p>
-                      </div>
-                      <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: "clamp(16px,4vw,24px)", fontWeight: 300, color: "#FBF3D4" }}>₹{item.price * item.qty}</p>
+                {/* Order summary card */}
+                <div style={{ background: "rgba(240,223,200,0.04)", border: "1px solid rgba(240,223,200,0.08)", padding: "16px 18px", marginBottom: 28 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                    <div>
+                      <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>Order Total</p>
+                      <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 300, color: "#FBF3D4" }}>₹{total}</p>
                     </div>
-                  ))}
-                </div>
-
-                {/* Total */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid rgba(240,223,200,0.15)", paddingTop: 20, marginBottom: 28 }}>
-                  <div>
-                    <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(251,243,212,0.5)" }}>Total</p>
-                    <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(251,243,212,0.3)" }}>Incl. GST</p>
                   </div>
-                  <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: "clamp(24px,6vw,36px)", fontWeight: 300, color: "#FBF3D4" }}>₹{total}</p>
+                  <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.03em" }}>
+                    {name} · +91 {phone.replace(/\D/g, "")}
+                  </p>
+                  <p style={{ margin: "4px 0 0", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.35)", letterSpacing: "0.03em", lineHeight: 1.6 }}>
+                    {fullAddressDisplay}
+                  </p>
                 </div>
 
-                {/* Delivery info */}
-                <div style={{ background: "rgba(251,243,212,0.04)", border: "1px solid rgba(251,243,212,0.1)", padding: "20px 20px", marginBottom: 32 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(251,243,212,0.45)" }}>Delivering to</span>
-                    <button onClick={() => { setEditing(true); }}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#4369B2", WebkitTapHighlightColor: "transparent" }}>
-                      Edit
-                    </button>
-                  </div>
-                  <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4", letterSpacing: "0.03em" }}>{displayName}</p>
-                  <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(251,243,212,0.6)", letterSpacing: "0.03em" }}>{displayAddress}</p>
-                  <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(251,243,212,0.4)", letterSpacing: "0.03em" }}>{displayCity}</p>
-                </div>
+                {error && (
+                  <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a" }}>
+                    {error}
+                  </p>
+                )}
 
-                {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}
-                <button onClick={placeOrder} disabled={loading} style={btn("cream", loading)}>
-                  {loading ? "Placing order…" : "Confirm Order"}
+                {/* Pay Online (Razorpay) */}
+                <button
+                  onClick={payOnline}
+                  disabled={orderLoading}
+                  style={{
+                    display: "block", width: "100%",
+                    background: orderLoading ? "rgba(2,70,40,0.35)" : "#024628",
+                    border: "none", padding: "18px 0", marginBottom: 10,
+                    cursor: orderLoading ? "default" : "pointer",
+                    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                    letterSpacing: "0.4em", textTransform: "uppercase",
+                    color: orderLoading ? "rgba(251,243,212,0.35)" : "#FBF3D4",
+                    WebkitTapHighlightColor: "transparent",
+                    transition: "background 0.2s",
+                  }}
+                >
+                  {orderLoading ? "Processing…" : "Pay Online"}
+                </button>
+                <p style={{ margin: "0 0 20px", textAlign: "center", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(240,223,200,0.22)", textTransform: "uppercase" }}>
+                  UPI · Cards · Net Banking · Wallets
+                </p>
+
+                {/* Cash on Delivery */}
+                <button
+                  onClick={placeOrderCOD}
+                  disabled={orderLoading}
+                  style={{
+                    display: "block", width: "100%",
+                    background: "transparent",
+                    border: "1px solid rgba(240,223,200,0.14)",
+                    padding: "17px 0",
+                    cursor: orderLoading ? "default" : "pointer",
+                    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                    letterSpacing: "0.4em", textTransform: "uppercase",
+                    color: orderLoading ? "rgba(240,223,200,0.2)" : "rgba(240,223,200,0.55)",
+                    WebkitTapHighlightColor: "transparent",
+                    transition: "border-color 0.2s",
+                  }}
+                >
+                  Cash on Delivery
+                </button>
+                <p style={{ margin: "8px 0 0", textAlign: "center", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(240,223,200,0.2)", textTransform: "uppercase" }}>
+                  Pay when it arrives
+                </p>
+
+                <button
+                  onClick={() => setStep("form")}
+                  style={{
+                    display: "block", width: "100%", background: "none", border: "none",
+                    cursor: "pointer", marginTop: 28,
+                    fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                    letterSpacing: "0.3em", textTransform: "uppercase",
+                    color: "rgba(240,223,200,0.22)",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  ← Edit Details
                 </button>
               </>
             )}
 
-            {/* ── CONFIRM (EDITING) ── */}
-            {step === "confirm" && editing && (
-              <>
-                <p style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,40px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.1 }}>
-                  Edit Address
-                </p>
-                <p style={{ margin: "0 0 32px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(212,168,87,0.75)" }}>
-                  Update your delivery details
-                </p>
-                <label style={{ display: "block", marginBottom: 20 }}>
-                  <span style={labelSt}>Full Name</span>
-                  <input type="text" value={name} onChange={e => setName(e.target.value)} style={inputSt} />
-                </label>
-                <label style={{ display: "block", marginBottom: 20 }}>
-                  <span style={labelSt}>Delivery Address</span>
-                  <input type="text" value={address} onChange={e => setAddress(e.target.value)} style={inputSt} />
-                </label>
-                <label style={{ display: "block", marginBottom: 28 }}>
-                  <span style={labelSt}>City</span>
-                  <input type="text" value={city} onChange={e => setCity(e.target.value)} style={inputSt} />
-                </label>
-                {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a" }}>{error}</p>}
-                <button onClick={saveAddress} disabled={loading} style={btn("green", loading)}>
-                  {loading ? "Saving…" : "Save & Continue"}
-                </button>
-                <button onClick={() => { setEditing(false); setError(""); }} style={{ ...btn("dim"), marginTop: 12 }}>
-                  Cancel
-                </button>
-              </>
-            )}
-
-            {/* ── DONE ── */}
+            {/* ══ DONE STEP ══════════════════════════════════════════════════ */}
             {step === "done" && (
               <div style={{ textAlign: "center", padding: "24px 0" }}>
-                {/* Animated checkmark */}
                 <svg width="72" height="72" viewBox="0 0 72 72" style={{ marginBottom: 28 }}>
-                  <circle
-                    cx="36" cy="36" r="34" fill="none"
-                    stroke="#024628" strokeWidth="2"
+                  <circle cx="36" cy="36" r="34" fill="none" stroke="#024628" strokeWidth="2"
                     strokeDasharray="220" strokeDashoffset="0"
                     style={{ animation: "circle-draw 0.5s ease forwards" }}
                   />
-                  <polyline
-                    points="22,37 32,47 52,26" fill="none"
+                  <polyline points="22,37 32,47 52,26" fill="none"
                     stroke="#FBF3D4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
                     strokeDasharray="80" strokeDashoffset="0"
                     style={{ animation: "check-draw 0.4s 0.4s ease forwards", opacity: 0 }}
                   />
                 </svg>
-
                 <p style={{ margin: "0 0 8px", fontFamily: "var(--font-heading)", fontSize: "clamp(32px,8vw,48px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em" }}>
                   Order Placed
                 </p>
-                <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(212,168,87,0.75)" }}>
+                <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.75)" }}>
                   Order #{orderNum}
                 </p>
-                <p style={{ margin: "0 0 40px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.06em", color: "rgba(251,243,212,0.45)", lineHeight: 1.7 }}>
+                <p style={{ margin: "0 0 40px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.06em", color: "rgba(240,223,200,0.45)", lineHeight: 1.7 }}>
                   Estimated delivery: 1–2 days<br />
                   We&apos;ll reach out on your number to confirm.
                 </p>
-
                 <button
-                  onClick={() => { onOrderPlaced(); }}
-                  style={btn("cream")}
+                  onClick={onOrderPlaced}
+                  style={{
+                    display: "block", width: "100%",
+                    background: "#f0dfc8", border: "none", padding: "17px 0",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                    letterSpacing: "0.45em", textTransform: "uppercase",
+                    color: "#080604",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
                 >
                   Back to Home
                 </button>
