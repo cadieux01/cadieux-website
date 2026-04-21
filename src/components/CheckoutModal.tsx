@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type CartItem = {
   productIndex: number;
@@ -124,7 +125,7 @@ export default function CheckoutModal({
   const [step, setStep] = useState<Step>("check");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [otpToken, setOtpToken] = useState("");
+  // otpToken no longer needed — Supabase tracks session server-side
   const [otpCode, setOtpCode] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
@@ -155,60 +156,67 @@ export default function CheckoutModal({
       .catch(() => setStep("signin"));
   }, []);
 
-  // ── OTP flow ───────────────────────────────────────────────────────────────
+  // ── OTP flow (Supabase phone auth) ────────────────────────────────────────
   async function sendOtp() {
     if (!name.trim()) { setError("Please enter your name."); return; }
     const digits = phone.replace(/\D/g, "");
     if (digits.length !== 10) { setError("Enter a valid 10-digit number."); return; }
+
+    const fullPhone = "+91" + digits;
+    console.log("[OTP] Sending to:", fullPhone);
     setLoading(true); setError("");
-    try {
-      const res = await fetch("/api/send-otp", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: digits }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to send OTP");
-      setOtpToken(data.token);
-      if (data.dev_otp) setOtpCode(data.dev_otp);
-      setStep("otp");
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally { setLoading(false); }
+
+    const { data, error } = await supabase.auth.signInWithOtp({ phone: fullPhone });
+    console.log("[OTP] signInWithOtp response:", { data, error });
+
+    setLoading(false);
+    if (error) {
+      console.error("[OTP] Error:", error.message, error);
+      setError("Supabase error: " + error.message);
+      return;
+    }
+    setStep("otp");
   }
 
   async function resendOtp() {
-    const digits = phone.replace(/\D/g, "");
+    const fullPhone = "+91" + phone.replace(/\D/g, "");
+    console.log("[OTP] Resending to:", fullPhone);
     setLoading(true); setError("");
-    try {
-      const res = await fetch("/api/send-otp", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: digits }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed");
-      setOtpToken(data.token);
-      setOtpCode("");
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally { setLoading(false); }
+
+    const { data, error } = await supabase.auth.signInWithOtp({ phone: fullPhone });
+    console.log("[OTP] resend response:", { data, error });
+
+    setLoading(false);
+    if (error) {
+      setError("Supabase error: " + error.message);
+      return;
+    }
+    setOtpCode("");
   }
 
   async function verifyOtp() {
     const code = otpCode.replace(/\D/g, "");
     if (code.length !== 6) { setError("Enter the 6-digit code."); return; }
+
+    const fullPhone = "+91" + phone.replace(/\D/g, "");
+    console.log("[OTP] Verifying:", { phone: fullPhone, token: code });
     setLoading(true); setError("");
-    try {
-      const res = await fetch("/api/verify-otp", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.replace(/\D/g, ""), otp: code, token: otpToken }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error("Invalid or expired code.");
-      setStep("address");
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Verification failed.");
+
+    const { data, error } = await supabase.auth.verifyOtp({
+      phone: fullPhone,
+      token: code,
+      type: "sms",
+    });
+    console.log("[OTP] verifyOtp response:", { data, error });
+
+    setLoading(false);
+    if (error) {
+      console.error("[OTP] Verify error:", error.message, error);
+      setError("Supabase error: " + error.message);
       setOtpCode("");
-    } finally { setLoading(false); }
+      return;
+    }
+    setStep("address");
   }
 
   // ── Save customer → confirm ────────────────────────────────────────────────
@@ -281,17 +289,18 @@ export default function CheckoutModal({
       <div
         style={{
           position: "fixed", inset: 0, zIndex: 300,
-          background: "rgba(6,4,2,0.75)",
-          display: "flex", alignItems: "flex-end", justifyContent: "center",
+          background: "rgba(0,0,0,0.9)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "16px",
         }}
         onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       >
-        {/* Sheet */}
+        {/* Card */}
         <div style={{
-          width: "100%", maxWidth: 520,
-          background: "#1D1D1F",
+          width: "100%", maxWidth: 480,
+          background: "#111",
           maxHeight: "92dvh", overflowY: "auto",
-          padding: "40px 32px 52px",
+          padding: "44px 36px 56px",
           position: "relative",
         }}>
           {/* Grain */}
@@ -319,20 +328,20 @@ export default function CheckoutModal({
             {/* ── SIGN IN ── */}
             {step === "signin" && (
               <>
-                <p style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,40px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.1 }}>
-                  Quick Sign In
+                <p style={{ margin: "0 0 4px", fontFamily: "var(--font-heading)", fontSize: "clamp(32px,8vw,48px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em", lineHeight: 1 }}>
+                  Cadieux
                 </p>
-                <p style={{ margin: "0 0 32px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(212,168,87,0.75)" }}>
+                <p style={{ margin: "0 0 36px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.7)" }}>
                   Enter your number to continue
                 </p>
 
-                <label style={{ display: "block", marginBottom: 20 }}>
+                <label style={{ display: "block", marginBottom: 24 }}>
                   <span style={labelSt}>Your Name</span>
                   <input type="text" value={name} onChange={e => { setName(e.target.value); setError(""); }}
                     placeholder="e.g. Arjun Sharma" autoComplete="name" style={inputSt} />
                 </label>
 
-                <label style={{ display: "block", marginBottom: 28 }}>
+                <label style={{ display: "block", marginBottom: 32 }}>
                   <span style={labelSt}>Mobile Number</span>
                   <input
                     type="tel" inputMode="numeric" autoComplete="tel-national"
@@ -344,12 +353,18 @@ export default function CheckoutModal({
                     }}
                     onFocus={e => { const l = e.target.value.length; e.target.setSelectionRange(l, l); }}
                     placeholder="+91"
-                    style={inputSt}
+                    style={{
+                      ...inputSt,
+                      border: "none",
+                      borderBottom: "1px solid #c8903a",
+                      background: "transparent",
+                      padding: "12px 0",
+                    }}
                   />
                 </label>
 
                 {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}
-                <button onClick={sendOtp} disabled={loading} style={btn("green", loading)}>
+                <button onClick={sendOtp} disabled={loading} style={btn("cream", loading)}>
                   {loading ? "Sending…" : "Send OTP"}
                 </button>
               </>
@@ -364,7 +379,7 @@ export default function CheckoutModal({
                 </p>
                 <OtpBoxes value={otpCode} onChange={setOtpCode} />
                 {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}
-                <button onClick={verifyOtp} disabled={loading || otpCode.replace(/\D/g,"").length < 6} style={btn("green", loading || otpCode.replace(/\D/g,"").length < 6)}>
+                <button onClick={verifyOtp} disabled={loading || otpCode.replace(/\D/g,"").length < 6} style={btn("cream", loading || otpCode.replace(/\D/g,"").length < 6)}>
                   {loading ? "Verifying…" : "Verify"}
                 </button>
                 <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between" }}>
@@ -458,7 +473,7 @@ export default function CheckoutModal({
 
                 {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}
                 <button onClick={placeOrder} disabled={loading} style={btn("cream", loading)}>
-                  {loading ? "Placing order…" : "Place Order"}
+                  {loading ? "Placing order…" : "Confirm Order"}
                 </button>
               </>
             )}

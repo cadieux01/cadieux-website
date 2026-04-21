@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getLenis } from "@/lib/scroll";
 import CheckoutModal from "./CheckoutModal";
+import { supabase } from "@/lib/supabase";
 
 type Page = "blogs" | "making" | "store-locator" | "shop" | "cart" | null;
 
@@ -31,7 +32,7 @@ const LINKS: { id: Page; label: string }[] = [
 
 const PRODUCTS = [
   {
-    name: "Multi-Grain Protein Bread",
+    name: "Core Element Protein Bread",
     tags: ["Multi Grains", "No Maida"],
     price: 140,
     protein: "7.2g protein per slice",
@@ -464,7 +465,7 @@ function LoginModal({
   const [name,    setName]    = useState("");
   const [phone,   setPhone]   = useState("");
   const [otp,     setOtp]     = useState("");
-  const [token,   setToken]   = useState("");
+  // token state removed — using Supabase auth
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
   const [resent,  setResent]  = useState(false);
@@ -473,63 +474,53 @@ function LoginModal({
     if (!name.trim()) { setError("Please enter your name."); return; }
     const digits = phone.replace(/\D/g, "");
     if (digits.length !== 10) { setError("Enter a valid 10-digit mobile number."); return; }
+    const fullPhone = "+91" + digits;
+    console.log("[LoginModal OTP] Sending to:", fullPhone);
     setError(""); setLoading(true);
-    try {
-      const res = await fetch("/api/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: digits }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to send OTP");
-      setToken(data.token);
-      setStep("otp");
-      setResent(false);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
-    } finally {
-      setLoading(false);
+    const { data, error } = await supabase.auth.signInWithOtp({ phone: fullPhone });
+    console.log("[LoginModal OTP] signInWithOtp response:", { data, error });
+    setLoading(false);
+    if (error) {
+      console.error("[LoginModal OTP] Error:", error.message, error);
+      setError("Supabase error: " + error.message);
+      return;
     }
+    setStep("otp");
+    setResent(false);
   }
 
   async function resendOtp() {
-    setOtp(""); setError(""); setResent(false); setLoading(true);
-    try {
-      const digits = phone.replace(/\D/g, "");
-      const res = await fetch("/api/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: digits }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to resend OTP");
-      setToken(data.token);
-      setResent(true);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
+    setOtp(""); setError(""); setResent(false);
+    const fullPhone = "+91" + phone.replace(/\D/g, "");
+    console.log("[LoginModal OTP] Resending to:", fullPhone);
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithOtp({ phone: fullPhone });
+    console.log("[LoginModal OTP] resend response:", { data, error });
+    setLoading(false);
+    if (error) {
+      console.error("[LoginModal OTP] Resend error:", error.message, error);
+      setError("Supabase error: " + error.message);
+      return;
     }
+    setResent(true);
   }
 
   async function verifyOtp() {
-    if (otp.replace(/\D/g, "").length !== 6) { setError("Enter the 6-digit code."); return; }
+    const code = otp.replace(/\D/g, "");
+    if (code.length !== 6) { setError("Enter the 6-digit code."); return; }
+    const fullPhone = "+91" + phone.replace(/\D/g, "");
+    console.log("[LoginModal OTP] Verifying:", { phone: fullPhone, token: code });
     setError(""); setLoading(true);
-    try {
-      const res = await fetch("/api/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.replace(/\D/g, ""), otp: otp.replace(/\D/g, ""), token }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error("Invalid or expired code. Try again.");
-      onSuccess(name.trim(), phone.replace(/\D/g, ""));
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Verification failed.");
+    const { data, error } = await supabase.auth.verifyOtp({ phone: fullPhone, token: code, type: "sms" });
+    console.log("[LoginModal OTP] verifyOtp response:", { data, error });
+    setLoading(false);
+    if (error) {
+      console.error("[LoginModal OTP] Verify error:", error.message, error);
+      setError("Supabase error: " + error.message);
       setOtp("");
-    } finally {
-      setLoading(false);
+      return;
     }
+    onSuccess(name.trim(), phone.replace(/\D/g, ""));
   }
 
   const masked = `+91 ••••• ${phone.replace(/\D/g, "").slice(-5)}`;
