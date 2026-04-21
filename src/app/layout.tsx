@@ -3,7 +3,7 @@ import { Cormorant_Garamond, Jost } from "next/font/google";
 import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
 import CustomCursor from "@/components/CustomCursor";
-import Nav from "@/components/Nav";
+import NavGate from "@/components/NavGate";
 import { CartProvider } from "@/context/CartContext";
 
 const cormorant = Cormorant_Garamond({
@@ -36,7 +36,7 @@ export default function RootLayout({
         <CartProvider>
           <SmoothScroll />
           <CustomCursor />
-          <Nav />
+          <NavGate />
           {children}
         </CartProvider>
       </body>
