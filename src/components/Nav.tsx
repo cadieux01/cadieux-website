@@ -31,6 +31,29 @@ export default function Nav() {
   const [menuSection, setMenuSection] = useState<"main" | "orders" | "subscription" | "connect">("main");
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Restore menu state from localStorage on mount — so reload keeps the menu open
+  useEffect(() => {
+    try {
+      const savedOpen = localStorage.getItem("cadieux_menu_open");
+      const savedSection = localStorage.getItem("cadieux_menu_section");
+      if (savedOpen === "1" && isHome) setMenuOpen(true);
+      if (savedSection === "main" || savedSection === "orders" || savedSection === "subscription" || savedSection === "connect") {
+        setMenuSection(savedSection);
+      }
+    } catch { /* ignore */ }
+    setHydrated(true);
+  }, [isHome]);
+
+  // Persist menu state
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem("cadieux_menu_open", menuOpen ? "1" : "0");
+      localStorage.setItem("cadieux_menu_section", menuSection);
+    } catch { /* ignore */ }
+  }, [menuOpen, menuSection, hydrated]);
 
   // Fetch orders (used on mount + when opening orders section)
   const fetchOrders = useCallback(async (showLoading: boolean) => {
@@ -59,11 +82,19 @@ export default function Nav() {
   }, [checkoutOpen, fetchOrders]);
 
   function openMenu() {
-    setMenuSection("main");
     setMenuOpen(true);
+    setMenuSection("main");
     // Refresh in background — orders already cached from mount/prior opens
     fetchOrders(orders.length === 0);
   }
+
+  // Refresh orders if menu was restored already on "orders" section
+  useEffect(() => {
+    if (hydrated && menuOpen && menuSection === "orders") {
+      fetchOrders(orders.length === 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
 
   function nav(path: string) {
     setMenuOpen(false);
