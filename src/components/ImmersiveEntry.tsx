@@ -139,6 +139,18 @@ export default function ImmersiveEntry() {
           opacity: pkOp,
           pointerEvents: pkOp > 0.5 ? "auto" : "none",
         }}>
+          <img
+            src="/logo-icon.png"
+            alt="Cadieux"
+            style={{
+              display: "block",
+              margin: "0 auto 16px",
+              width: isMobile ? "clamp(36px, 7vw, 52px)" : "clamp(44px, 5vw, 60px)",
+              height: "auto",
+              pointerEvents: "none",
+              filter: "invert(1) sepia(0.4) saturate(0.8) brightness(0.95)",
+            }}
+          />
           <div style={{
             fontFamily: "var(--font-heading)",
             fontSize: isMobile ? "clamp(52px, 15vw, 88px)" : "clamp(54px, 8.5vw, 118px)",

@@ -386,6 +386,19 @@ export default function PageContent() {
             <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.70)", zIndex: 1, pointerEvents: "none" }} />
             <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 2 }} />
 
+            <img
+              src="/logo-icon.png"
+              alt="Cadieux"
+              style={{
+                position: "relative", zIndex: 3,
+                display: "block",
+                width: "clamp(40px, 6vw, 56px)",
+                height: "auto",
+                marginBottom: 14,
+                pointerEvents: "none",
+                filter: "invert(1) sepia(0.4) saturate(0.8) brightness(0.95)",
+              }}
+            />
             <p style={{
               position: "relative", zIndex: 3,
               margin: 0, fontFamily: "var(--font-heading)",
