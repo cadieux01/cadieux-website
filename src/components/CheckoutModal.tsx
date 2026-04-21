@@ -368,7 +368,7 @@ export default function CheckoutModal({
                 <div style={{ marginBottom: 22 }}>
                   <span style={labelSt}>Mobile Number *</span>
                   <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
-                    <div style={{ flex: 1, display: "flex", alignItems: "flex-end", ...inputSt, padding: 0, opacity: otpVerified ? 0.55 : 1 }}>
+                    <div style={{ flex: 1, display: "flex", alignItems: "flex-end", ...inputSt, padding: 0 }}>
                       <span style={{ padding: "10px 0 10px 12px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.5)", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
                       <input
                         type="tel" inputMode="numeric" autoComplete="tel-national"
@@ -377,13 +377,18 @@ export default function CheckoutModal({
                           setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
                           setOtpError(""); setError("");
                         }}
-                        disabled={otpVerified}
                         placeholder="10-digit number"
                         style={{ flex: 1, background: "none", border: "none", outline: "none", padding: "10px 12px 10px 6px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4", letterSpacing: "0.05em" }}
                       />
                     </div>
                     {otpVerified ? (
-                      <span style={{ flexShrink: 0, marginBottom: 4, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "#4ade80" }}>✓ Verified</span>
+                      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, marginBottom: 2 }}>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "#4ade80" }}>✓ Verified</span>
+                        <button
+                          onClick={() => { setOtpVerified(false); setOtpSent(false); setOtpCode(""); setOtpError(""); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)", WebkitTapHighlightColor: "transparent" }}
+                        >Edit</button>
+                      </div>
                     ) : (
                       <button
                         onClick={sendOtp}
