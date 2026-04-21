@@ -3,7 +3,22 @@
 import { useState, useEffect } from "react";
 import { getLenis } from "@/lib/scroll";
 
-type Page = "blogs" | "making" | "store-locator" | "shop" | null;
+type Page = "blogs" | "making" | "store-locator" | "shop" | "cart" | null;
+
+type CartItem = {
+  productIndex: number;
+  name: string;
+  price: number;
+  qty: number;
+  orderType: "once" | "sub";
+  weeks?: number;
+  day?: string;
+  time?: string;
+};
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const TIMES = ["7 – 9 am", "9 – 11 am", "12 – 2 pm", "5 – 7 pm", "7 – 9 pm"];
+const SUB_WEEKS = [2, 3, 4, 6];
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
@@ -436,7 +451,35 @@ function StoreContent() {
   );
 }
 
-function ShopContent() {
+function chip(selected: boolean) {
+  return {
+    fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+    letterSpacing: "0.25em", textTransform: "uppercase" as const,
+    padding: "8px 18px", cursor: "pointer", border: "none",
+    background: selected ? "#024628" : "rgba(251,243,212,0.07)",
+    color: selected ? "#FBF3D4" : "rgba(251,243,212,0.5)",
+    WebkitTapHighlightColor: "transparent",
+    transition: "background 0.2s, color 0.2s",
+  };
+}
+
+function ShopContent({ onAddToCart }: { onAddToCart: (item: CartItem) => void }) {
+  const [qty,       setQty]       = useState([1, 1]);
+  const [orderType, setOrderType] = useState<("once" | "sub")[]>(["once", "once"]);
+  const [weeks,     setWeeks]     = useState<(number | null)[]>([null, null]);
+  const [day,       setDay]       = useState(["", ""]);
+  const [time,      setTime]      = useState(["", ""]);
+
+  function canAdd(i: number) {
+    if (qty[i] < 1) return false;
+    if (orderType[i] === "once") return true;
+    return weeks[i] !== null && day[i] !== "" && time[i] !== "";
+  }
+
+  function update<T>(arr: T[], i: number, val: T): T[] {
+    return arr.map((v, j) => (j === i ? val : v));
+  }
+
   return (
     <>
       <h1 style={{
@@ -448,75 +491,102 @@ function ShopContent() {
         {PRODUCTS.map((p, i) => (
           <div key={i} style={{
             borderTop: "1px solid rgba(240,223,200,0.1)",
-            paddingTop: 36, paddingBottom: 48,
+            paddingTop: 36, paddingBottom: 56,
             display: "flex", flexDirection: "column", gap: 16,
           }}>
-            {/* Product image */}
-            <div style={{
-              width: "100%", aspectRatio: "16/9",
-              overflow: "hidden", marginBottom: 8,
-              background: "rgba(255,255,255,0.04)",
-            }}>
+            {/* Image */}
+            <div style={{ width: "100%", aspectRatio: "16/9", overflow: "hidden", marginBottom: 8, background: "rgba(255,255,255,0.04)" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={p.image}
-                alt={p.name}
-                style={{
-                  width: "100%", height: "100%",
-                  objectFit: "cover",
-                  display: "block",
-                  filter: "brightness(0.88) contrast(1.05)",
-                }}
-              />
+              <img src={p.image} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: "brightness(0.88) contrast(1.05)" }} />
             </div>
+
+            {/* Name + price */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <p style={{
-                margin: 0, fontFamily: "var(--font-heading)",
-                fontSize: "clamp(22px,5vw,38px)", fontWeight: 300,
-                color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1.2,
-                maxWidth: "65%",
-              }}>{p.name}</p>
-              <p style={{
-                margin: 0, fontFamily: "var(--font-heading)",
-                fontSize: "clamp(28px,6vw,44px)", fontWeight: 300,
-                color: "#FBF3D4", letterSpacing: "0.02em",
-              }}>₹{p.price}</p>
+              <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: "clamp(22px,5vw,38px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1.2, maxWidth: "65%" }}>{p.name}</p>
+              <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: "clamp(28px,6vw,44px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em" }}>₹{p.price}</p>
             </div>
+
+            {/* Tags */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {p.tags.map((tag, j) => (
-                <span key={j} style={{
-                  fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
-                  letterSpacing: "0.4em", textTransform: "uppercase",
-                  color: "rgba(251,243,212,0.5)",
-                  border: "1px solid rgba(251,243,212,0.15)",
-                  padding: "6px 14px",
-                }}>{tag}</span>
+                <span key={j} style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(251,243,212,0.5)", border: "1px solid rgba(251,243,212,0.15)", padding: "6px 14px" }}>{tag}</span>
               ))}
             </div>
+
+            {/* Specs */}
             <div style={{ display: "flex", gap: 32 }}>
-              <p style={{
-                margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
-                letterSpacing: "0.3em", textTransform: "uppercase",
-                color: "rgba(251,243,212,0.45)",
-              }}>{p.protein}</p>
-              <p style={{
-                margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
-                letterSpacing: "0.3em", textTransform: "uppercase",
-                color: "rgba(251,243,212,0.45)",
-              }}>{p.weight}</p>
+              <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(251,243,212,0.45)" }}>{p.protein}</p>
+              <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(251,243,212,0.45)" }}>{p.weight}</p>
             </div>
-            <p style={{
-              margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200,
-              lineHeight: 1.8, color: "rgba(251,243,212,0.55)", maxWidth: 480,
-            }}>{p.desc}</p>
-            <button style={{
-              alignSelf: "flex-start", marginTop: 8,
-              background: "#024628", border: "none",
-              padding: "12px 32px", cursor: "pointer",
-              fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
-              letterSpacing: "0.4em", textTransform: "uppercase",
-              color: "#FBF3D4", WebkitTapHighlightColor: "transparent",
-            }}>Add to Cart</button>
+            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, lineHeight: 1.8, color: "rgba(251,243,212,0.55)", maxWidth: 480 }}>{p.desc}</p>
+
+            {/* ── Quantity ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 8 }}>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(251,243,212,0.4)" }}>Qty</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid rgba(251,243,212,0.15)" }}>
+                <button onClick={() => setQty(q => update(q, i, Math.max(1, q[i] - 1)))} style={{ ...chip(false), padding: "8px 16px", fontSize: 16, lineHeight: 1 }}>−</button>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#FBF3D4", width: 36, textAlign: "center" }}>{qty[i]}</span>
+                <button onClick={() => setQty(q => update(q, i, q[i] + 1))} style={{ ...chip(false), padding: "8px 16px", fontSize: 16, lineHeight: 1 }}>+</button>
+              </div>
+            </div>
+
+            {/* ── Order type ── */}
+            <div style={{ display: "flex", gap: 0, marginTop: 4 }}>
+              <button onClick={() => { setOrderType(t => update(t, i, "once")); setWeeks(w => update(w, i, null)); setDay(d => update(d, i, "")); setTime(t => update(t, i, "")); }} style={{ ...chip(orderType[i] === "once"), borderRight: "1px solid rgba(251,243,212,0.08)" }}>One Time</button>
+              <button onClick={() => setOrderType(t => update(t, i, "sub"))} style={chip(orderType[i] === "sub")}>Subscribe</button>
+            </div>
+
+            {/* ── Subscription: weeks ── */}
+            {orderType[i] === "sub" && (
+              <div>
+                <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(251,243,212,0.4)" }}>Delivery every</p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {SUB_WEEKS.map(w => (
+                    <button key={w} onClick={() => { setWeeks(wk => update(wk, i, w)); setDay(d => update(d, i, "")); setTime(t => update(t, i, "")); }} style={chip(weeks[i] === w)}>{w} Weeks</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Subscription: day ── */}
+            {orderType[i] === "sub" && weeks[i] !== null && (
+              <div>
+                <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(251,243,212,0.4)" }}>Delivery day</p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {DAYS.map(d => (
+                    <button key={d} onClick={() => { setDay(dy => update(dy, i, d)); setTime(t => update(t, i, "")); }} style={chip(day[i] === d)}>{d}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Subscription: time ── */}
+            {orderType[i] === "sub" && weeks[i] !== null && day[i] !== "" && (
+              <div>
+                <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(251,243,212,0.4)" }}>Delivery time</p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {TIMES.map(t => (
+                    <button key={t} onClick={() => setTime(tm => update(tm, i, t))} style={chip(time[i] === t)}>{t}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Add to cart ── */}
+            <button
+              disabled={!canAdd(i)}
+              onClick={() => onAddToCart({ productIndex: i, name: p.name, price: p.price, qty: qty[i], orderType: orderType[i], weeks: orderType[i] === "sub" ? weeks[i]! : undefined, day: orderType[i] === "sub" ? day[i] : undefined, time: orderType[i] === "sub" ? time[i] : undefined })}
+              style={{
+                alignSelf: "flex-start", marginTop: 12,
+                background: canAdd(i) ? "#024628" : "rgba(2,70,40,0.3)",
+                border: "none", padding: "14px 36px", cursor: canAdd(i) ? "pointer" : "default",
+                fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                letterSpacing: "0.4em", textTransform: "uppercase",
+                color: canAdd(i) ? "#FBF3D4" : "rgba(251,243,212,0.3)",
+                WebkitTapHighlightColor: "transparent",
+                transition: "background 0.3s, color 0.3s",
+              }}
+            >Add to Cart</button>
           </div>
         ))}
       </div>
@@ -524,9 +594,133 @@ function ShopContent() {
   );
 }
 
+function CartContent({
+  cart,
+  onCheckout,
+  onUpdateQty,
+  onRemove,
+}: {
+  cart: CartItem[];
+  onCheckout: () => void;
+  onUpdateQty: (index: number, qty: number) => void;
+  onRemove: (index: number) => void;
+}) {
+  const total = cart.reduce((s, item) => s + item.price * item.qty, 0);
+  return (
+    <>
+      <h1 style={{ margin: "0 0 48px", fontFamily: "var(--font-heading)", fontSize: "clamp(52px,12vw,96px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1 }}>Your Cart</h1>
+      {cart.length === 0 ? (
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(251,243,212,0.4)", letterSpacing: "0.1em" }}>Your cart is empty.</p>
+      ) : (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {cart.map((item, i) => (
+              <div key={i} style={{ borderTop: "1px solid rgba(240,223,200,0.08)", padding: "28px 0", display: "flex", flexDirection: "column", gap: 12 }}>
+
+                {/* Name + price row */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: "clamp(18px,4vw,28px)", fontWeight: 300, color: "#FBF3D4", lineHeight: 1.2, maxWidth: "70%" }}>{item.name}</p>
+                  <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: "clamp(18px,4vw,28px)", fontWeight: 300, color: "#FBF3D4" }}>₹{item.price * item.qty}</p>
+                </div>
+
+                {/* Subscription badge */}
+                {item.orderType === "sub" && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#4369B2", border: "1px solid rgba(67,105,178,0.3)", padding: "4px 12px" }}>Subscription</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(251,243,212,0.35)", padding: "4px 0" }}>
+                      Every {item.weeks}w · {item.day} · {item.time}
+                    </span>
+                  </div>
+                )}
+
+                {/* Qty editor + delete */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  {/* Qty stepper */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid rgba(251,243,212,0.15)" }}>
+                    <button
+                      onClick={() => onUpdateQty(i, Math.max(1, item.qty - 1))}
+                      style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}
+                    >−</button>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#FBF3D4", width: 34, textAlign: "center" }}>{item.qty}</span>
+                    <button
+                      onClick={() => onUpdateQty(i, item.qty + 1)}
+                      style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}
+                    >+</button>
+                  </div>
+
+                  {/* Unit price */}
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "rgba(251,243,212,0.35)", textTransform: "uppercase" }}>
+                    ₹{item.price} each
+                  </span>
+
+                  {/* Remove */}
+                  <button
+                    onClick={() => onRemove(i)}
+                    style={{
+                      background: "none", border: "1px solid rgba(251,243,212,0.1)", cursor: "pointer",
+                      padding: "7px 14px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                      letterSpacing: "0.3em", textTransform: "uppercase",
+                      color: "rgba(251,243,212,0.35)", WebkitTapHighlightColor: "transparent",
+                      transition: "color 0.2s, border-color 0.2s",
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#e05a5a"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(224,90,90,0.4)"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(251,243,212,0.35)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(251,243,212,0.1)"; }}
+                  >Remove</button>
+                </div>
+
+              </div>
+            ))}
+          </div>
+          <div style={{ borderTop: "1px solid rgba(240,223,200,0.15)", paddingTop: 28, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(251,243,212,0.5)" }}>Total</p>
+              <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(251,243,212,0.3)" }}>Incl. GST</p>
+            </div>
+            <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: "clamp(28px,6vw,42px)", fontWeight: 300, color: "#FBF3D4" }}>₹{total}</p>
+          </div>
+          <button
+            onClick={onCheckout}
+            style={{
+              display: "block", width: "100%", marginTop: 32,
+              background: "#024628", border: "none", padding: "18px 0", cursor: "pointer",
+              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+              letterSpacing: "0.45em", textTransform: "uppercase",
+              color: "#FBF3D4", WebkitTapHighlightColor: "transparent",
+            }}
+          >Proceed to Checkout</button>
+        </>
+      )}
+    </>
+  );
+}
+
 /* ── Nav ── */
 export default function Nav() {
   const [active, setActive] = useState<Page>(null);
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  function addToCart(item: CartItem) {
+    setCart(prev => {
+      const idx = prev.findIndex(c => c.productIndex === item.productIndex && c.orderType === item.orderType);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], qty: updated[idx].qty + item.qty };
+        return updated;
+      }
+      return [...prev, item];
+    });
+    setActive("cart");
+  }
+
+  function updateQty(index: number, qty: number) {
+    setCart(prev => prev.map((item, i) => i === index ? { ...item, qty } : item));
+  }
+
+  function removeFromCart(index: number) {
+    setCart(prev => prev.filter((_, i) => i !== index));
+  }
+
+  const cartCount = cart.reduce((s, c) => s + c.qty, 0);
 
   useEffect(() => {
     const el = document.getElementById("main-page");
@@ -635,6 +829,39 @@ export default function Nav() {
         </button>
       )}
 
+      {/* Cart FAB — bottom right, always visible once items added */}
+      {cartCount > 0 && (
+        <button
+          onClick={() => setActive("cart")}
+          style={{
+            position: "fixed", bottom: 32, right: 28, zIndex: 101,
+            width: 56, height: 56, borderRadius: "50%",
+            background: "#024628", border: "none", cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: 2, boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+            WebkitTapHighlightColor: "transparent",
+            transition: "transform 0.2s, box-shadow 0.2s",
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
+        >
+          {/* Cart bag icon */}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FBF3D4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <path d="M16 10a4 4 0 0 1-8 0"/>
+          </svg>
+          {/* Count badge */}
+          <span style={{
+            position: "absolute", top: 4, right: 4,
+            background: "#FBF3D4", color: "#024628",
+            borderRadius: "50%", width: 18, height: 18,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, letterSpacing: 0,
+          }}>{cartCount}</span>
+        </button>
+      )}
+
       {/* Fixed nav bar */}
       <nav style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
@@ -644,7 +871,7 @@ export default function Nav() {
         <div style={{ display: "flex", alignItems: "center", gap: "clamp(24px,5vw,56px)" }}>
           {active ? (
             <span className="nav-btn nav-active">
-              {LINKS.find(l => l.id === active)?.label}
+              {active === "cart" ? "Cart" : LINKS.find(l => l.id === active)?.label}
             </span>
           ) : (
             LINKS.map(({ id, label }) => (
@@ -662,7 +889,7 @@ export default function Nav() {
       </nav>
 
       {/* Sub-page overlays */}
-      {(["blogs", "making", "store-locator", "shop"] as Page[]).map((id) => (
+      {(["blogs", "making", "store-locator", "shop", "cart"] as Page[]).map((id) => (
         <div
           key={id}
           data-overlay={id}
@@ -689,7 +916,8 @@ export default function Nav() {
             {id === "blogs"          && <BlogsContent />}
             {id === "making"         && <MakingContent />}
             {id === "store-locator"  && <StoreContent />}
-            {id === "shop"           && <ShopContent />}
+            {id === "shop"           && <ShopContent onAddToCart={addToCart} />}
+            {id === "cart"           && <CartContent cart={cart} onCheckout={() => alert("Checkout coming soon!")} onUpdateQty={updateQty} onRemove={removeFromCart} />}
           </div>
         </div>
       ))}

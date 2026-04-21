@@ -240,7 +240,7 @@ export default function PageContent() {
             <button
               onClick={() => window.dispatchEvent(new Event("openShop"))}
               style={{
-                position: "absolute", bottom: 48, right: "clamp(28px, 8vw, 80px)", zIndex: 4,
+                position: "absolute", bottom: 48, left: "clamp(28px, 8vw, 80px)", zIndex: 4,
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                 letterSpacing: "0.4em", textTransform: "uppercase",
                 color: "#FBF3D4", background: "#024628",
@@ -392,9 +392,9 @@ export default function PageContent() {
               style={{
                 position: "relative", zIndex: 3,
                 display: "block",
-                width: "clamp(40px, 6vw, 56px)",
+                width: "clamp(52px, 16vw, 96px)",
                 height: "auto",
-                marginBottom: 14,
+                marginBottom: 16,
                 pointerEvents: "none",
                 filter: "invert(1) sepia(0.4) saturate(0.8) brightness(0.95)",
               }}
