@@ -2,17 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-
-export type CartItem = {
-  productIndex: number;
-  name: string;
-  price: number;
-  qty: number;
-  orderType: "once" | "sub";
-  weeks?: number;
-  day?: string;
-  time?: string;
-};
+export type { CartItem } from "@/lib/data";
 
 type Step = "form" | "payment" | "done";
 type FormMode = "returning" | "edit" | "fresh";

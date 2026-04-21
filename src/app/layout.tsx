@@ -4,6 +4,7 @@ import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
 import CustomCursor from "@/components/CustomCursor";
 import Nav from "@/components/Nav";
+import { CartProvider } from "@/context/CartContext";
 
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
@@ -32,10 +33,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${cormorant.variable} ${jost.variable}`}>
       <body className="font-body">
-        <SmoothScroll />
-        <CustomCursor />
-        <Nav />
-        {children}
+        <CartProvider>
+          <SmoothScroll />
+          <CustomCursor />
+          <Nav />
+          {children}
+        </CartProvider>
       </body>
     </html>
   );

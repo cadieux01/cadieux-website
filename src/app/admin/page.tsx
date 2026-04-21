@@ -272,15 +272,16 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                {orders.map((o) => {
+                {orders.map((o, i) => {
                   const status = (o.status ?? "pending").toLowerCase();
                   const normalized = (STATUS_OPTIONS.find((s) => s.toLowerCase() === status) ?? "Pending") as Status;
+                  const displayNumber = String(orders.length - i).padStart(5, "0");
                   return (
                     <tr
                       key={o.id}
                       style={{ borderTop: "1px solid rgba(245, 158, 11, 0.12)" }}
                     >
-                      <Td mono>{o.id.slice(0, 8)}</Td>
+                      <Td mono>{displayNumber}</Td>
                       <Td>{o.customers?.full_name ?? "—"}</Td>
                       <Td>{o.customers?.phone ?? "—"}</Td>
                       <Td>{o.delivery_address ?? "—"}</Td>
