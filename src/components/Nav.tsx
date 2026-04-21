@@ -1105,14 +1105,14 @@ export default function Nav() {
         style={{
           position: "fixed", top: 20, left: 20, zIndex: 210,
           background: "none", border: "none", cursor: "pointer", padding: 8,
-          display: "flex", flexDirection: "column", gap: 5,
+          display: "flex", flexDirection: "column", gap: 7,
           WebkitTapHighlightColor: "transparent",
         }}
         aria-label="Menu"
       >
         {[0,1,2].map(i => (
           <span key={i} style={{
-            display: "block", width: 22, height: 1,
+            display: "block", width: 32, height: 2,
             background: menuOpen ? "rgba(240,223,200,0.6)" : "rgba(240,223,200,0.45)",
             transition: "background 0.3s",
           }} />
