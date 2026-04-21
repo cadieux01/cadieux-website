@@ -202,6 +202,17 @@ export default function PageContent() {
                 paddingRight: "clamp(28px, 8vw, 80px)",
                 paddingTop: "clamp(80px, 18vh, 160px)",
               }}>
+                <img
+                  src="/logo.svg"
+                  alt="Cadieux"
+                  style={{
+                    display: "block",
+                    width: "clamp(36px, 5.5vw, 54px)",
+                    height: "auto",
+                    marginBottom: 10,
+                    pointerEvents: "none",
+                  }}
+                />
                 <p style={{
                   margin: "0 0 16px",
                   fontFamily: "var(--font-body)", fontSize: 10,

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Circle orb on left -->
+  <circle cx="68" cy="100" r="22" stroke="#FBF3D4" stroke-width="7" fill="none"/>
+
+  <!-- Top inner stroke: from top of circle going up-left -->
+  <path d="M 60 80 C 58 62 68 45 85 36 C 102 27 122 30 135 44"
+        stroke="#FBF3D4" stroke-width="7" fill="none" stroke-linecap="round"/>
+
+  <!-- Top outer curl: sweeps right then loops back -->
+  <path d="M 78 79 C 95 62 120 52 145 58 C 162 63 170 78 165 94 C 160 108 146 115 132 112"
+        stroke="#FBF3D4" stroke-width="7" fill="none" stroke-linecap="round"/>
+
+  <!-- Bottom inner stroke: from bottom of circle going down-left -->
+  <path d="M 60 120 C 58 138 68 155 85 164 C 102 173 122 170 135 156"
+        stroke="#FBF3D4" stroke-width="7" fill="none" stroke-linecap="round"/>
+
+  <!-- Bottom outer curl: sweeps right then loops back -->
+  <path d="M 78 121 C 95 138 120 148 145 142 C 162 137 170 122 165 106 C 160 92 146 85 132 88"
+        stroke="#FBF3D4" stroke-width="7" fill="none" stroke-linecap="round"/>
+</svg>
