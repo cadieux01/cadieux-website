@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type CartItem = {
   productIndex: number;
@@ -66,6 +67,9 @@ export default function CheckoutModal({
   // Form fields
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpVerified, setOtpVerified] = useState(false);
   const [addressLine, setAddressLine] = useState("");
   const [area, setArea] = useState("");
   const [city, setCity] = useState("");
@@ -73,11 +77,14 @@ export default function CheckoutModal({
   const [customer, setCustomer] = useState<Customer | null>(null);
 
   // Loading states
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [orderLoading, setOrderLoading] = useState(false);
 
   // Errors
   const [error, setError] = useState("");
+  const [otpError, setOtpError] = useState("");
   const [orderNum, setOrderNum] = useState("");
 
   /* ── Pre-fill on mount ─────────────────────────────────────────────────── */
@@ -85,6 +92,10 @@ export default function CheckoutModal({
     const saved = typeof window !== "undefined" ? localStorage.getItem("cadieux_phone") : null;
     if (!saved) return;
     setPhone(saved);
+
+    // Skip OTP if already verified this session
+    const sessionPhone = sessionStorage.getItem("cadieux_verified_phone");
+    if (sessionPhone === saved) setOtpVerified(true);
 
     // Auto-fill address from previous order
     fetch(`/api/checkout?phone=${encodeURIComponent(saved)}`)
@@ -118,11 +129,39 @@ export default function CheckoutModal({
     }
   }
 
+  /* ── OTP ───────────────────────────────────────────────────────────────── */
+  async function sendOtp() {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length !== 10) { setOtpError("Enter a valid 10-digit number."); return; }
+    setSendingOtp(true); setOtpError("");
+    const { error } = await supabase.auth.signInWithOtp({ phone: "+91" + digits });
+    setSendingOtp(false);
+    if (error) { setOtpError("Error: " + error.message); return; }
+    setOtpSent(true);
+    setOtpCode("");
+  }
+
+  async function verifyOtp() {
+    if (otpCode.replace(/\D/g, "").length !== 6) { setOtpError("Enter the 6-digit code."); return; }
+    setVerifyingOtp(true); setOtpError("");
+    const { error } = await supabase.auth.verifyOtp({
+      phone: "+91" + phone.replace(/\D/g, ""),
+      token: otpCode.replace(/\D/g, ""),
+      type: "sms",
+    });
+    setVerifyingOtp(false);
+    if (error) { setOtpError("Invalid code. Try again."); setOtpCode(""); return; }
+    setOtpVerified(true);
+    setOtpSent(false);
+    sessionStorage.setItem("cadieux_verified_phone", phone.replace(/\D/g, ""));
+  }
+
   /* ── Submit form → save to Supabase → payment step ─────────────────────── */
   async function handleSubmit() {
     setError("");
     if (!name.trim())                             { setError("Please enter your name."); return; }
     if (phone.replace(/\D/g,"").length !== 10)    { setError("Enter a valid 10-digit number."); return; }
+    if (!otpVerified)                             { setError("Please verify your phone number."); return; }
     if (!addressLine.trim())                      { setError("Please enter your delivery address."); return; }
     if (!area.trim())                             { setError("Please enter your area / locality."); return; }
     if (!city.trim())                             { setError("Please enter your city."); return; }
@@ -325,20 +364,91 @@ export default function CheckoutModal({
                   />
                 </label>
 
-                {/* Mobile */}
-                <label style={{ display: "block", marginBottom: 22 }}>
+                {/* Mobile + OTP */}
+                <div style={{ marginBottom: 22 }}>
                   <span style={labelSt}>Mobile Number *</span>
-                  <input
-                    type="tel" inputMode="numeric" autoComplete="tel-national"
-                    value={"+91" + phone}
-                    onChange={e => {
-                      const raw = e.target.value.replace(/^\+91/, "");
-                      setPhone(raw.replace(/\D/g, "").slice(0, 10));
-                      setError("");
-                    }}
-                    style={inputSt}
-                  />
-                </label>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+                    <input
+                      type="tel" inputMode="numeric" autoComplete="tel-national"
+                      value={"+91" + phone}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/^\+91/, "");
+                        setPhone(raw.replace(/\D/g, "").slice(0, 10));
+                        setOtpError(""); setError("");
+                        if (otpVerified) { setOtpVerified(false); setOtpSent(false); }
+                      }}
+                      disabled={otpVerified}
+                      style={{ ...inputSt, flex: 1, opacity: otpVerified ? 0.55 : 1 }}
+                    />
+                    {otpVerified ? (
+                      <span style={{ flexShrink: 0, marginBottom: 4, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "#4ade80" }}>
+                        ✓ Verified
+                      </span>
+                    ) : (
+                      <button
+                        onClick={sendOtp}
+                        disabled={sendingOtp || phone.replace(/\D/g,"").length < 10}
+                        style={{
+                          flexShrink: 0, marginBottom: 2,
+                          background: "none",
+                          border: "1px solid rgba(200,144,58,0.45)",
+                          padding: "7px 14px",
+                          cursor: (sendingOtp || phone.replace(/\D/g,"").length < 10) ? "default" : "pointer",
+                          fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                          letterSpacing: "0.3em", textTransform: "uppercase",
+                          color: (sendingOtp || phone.replace(/\D/g,"").length < 10) ? "rgba(200,144,58,0.3)" : "rgba(200,144,58,0.85)",
+                          WebkitTapHighlightColor: "transparent",
+                        }}
+                      >
+                        {sendingOtp ? "Sending…" : otpSent ? "Resend" : "Send OTP"}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* OTP input — single column, appears below phone after Send OTP */}
+                  {otpSent && !otpVerified && (
+                    <div style={{ marginTop: 14 }}>
+                      <span style={{ ...labelSt, marginBottom: 8 }}>Enter OTP *</span>
+                      <input
+                        type="text" inputMode="numeric" autoComplete="one-time-code"
+                        maxLength={6}
+                        value={otpCode}
+                        onChange={e => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(""); }}
+                        placeholder="6-digit code"
+                        style={{
+                          ...inputSt,
+                          letterSpacing: "0.4em",
+                          fontSize: 18,
+                          borderBottomColor: "rgba(200,144,58,0.45)",
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        onClick={verifyOtp}
+                        disabled={verifyingOtp || otpCode.replace(/\D/g,"").length < 6}
+                        style={{
+                          marginTop: 12,
+                          display: "block", width: "100%",
+                          background: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "rgba(240,223,200,0.12)" : "#f0dfc8",
+                          border: "none", padding: "13px 0",
+                          cursor: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "default" : "pointer",
+                          fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                          letterSpacing: "0.4em", textTransform: "uppercase",
+                          color: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "rgba(8,6,4,0.35)" : "#080604",
+                          WebkitTapHighlightColor: "transparent",
+                        }}
+                      >
+                        {verifyingOtp ? "Verifying…" : "Verify"}
+                      </button>
+                    </div>
+                  )}
+
+                  {otpError && (
+                    <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.04em" }}>
+                      {otpError}
+                    </p>
+                  )}
+                </div>
 
                 {/* Delivery Address */}
                 <label style={{ display: "block", marginBottom: 22 }}>
