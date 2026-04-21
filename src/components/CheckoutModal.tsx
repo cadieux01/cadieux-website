@@ -15,6 +15,7 @@ export type CartItem = {
 };
 
 type Step = "form" | "payment" | "done";
+type FormMode = "returning" | "edit" | "fresh";
 
 type Customer = {
   id?: string;
@@ -63,6 +64,7 @@ export default function CheckoutModal({
   onOrderPlaced: () => void;
 }) {
   const [step, setStep] = useState<Step>("form");
+  const [formMode, setFormMode] = useState<FormMode>("fresh");
 
   // Form fields
   const [name, setName] = useState("");
@@ -75,6 +77,7 @@ export default function CheckoutModal({
   const [city, setCity] = useState("");
   const [pincode, setPincode] = useState("");
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [savedCustomer, setSavedCustomer] = useState<Customer | null>(null);
 
   // Loading states
   const [sendingOtp, setSendingOtp] = useState(false);
@@ -97,15 +100,18 @@ export default function CheckoutModal({
     const sessionPhone = sessionStorage.getItem("cadieux_verified_phone");
     if (sessionPhone === saved) setOtpVerified(true);
 
-    // Auto-fill address from previous order
+    // Load previous customer details
     fetch(`/api/checkout?phone=${encodeURIComponent(saved)}`)
       .then(r => r.json())
       .then(d => {
         if (!d.customer) return;
-        setCustomer(d.customer);
-        setName(d.customer.full_name ?? "");
-        setCity(d.customer.city ?? "");
-        prefillAddress(d.customer.delivery_address ?? "");
+        const c = d.customer as Customer;
+        setSavedCustomer(c);
+        setCustomer(c);
+        setName(c.full_name ?? "");
+        setCity(c.city ?? "");
+        prefillAddress(c.delivery_address ?? "");
+        setFormMode("returning");
       })
       .catch(() => {});
   }, []);
@@ -330,7 +336,7 @@ export default function CheckoutModal({
                   Checkout
                 </p>
                 <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>
-                  Fill in your details to place order
+                  {formMode === "returning" ? "Welcome back" : "Fill in your details to place order"}
                 </p>
 
                 {/* Cart summary */}
@@ -351,178 +357,298 @@ export default function CheckoutModal({
                 </div>
 
                 <div style={{ borderTop: "1px solid rgba(240,223,200,0.06)", marginBottom: 28 }} />
-                <p style={sectionHead}>Your Details</p>
 
-                {/* Full Name */}
-                <label style={{ display: "block", marginBottom: 22 }}>
-                  <span style={labelSt}>Full Name *</span>
-                  <input type="text" value={name}
-                    onChange={e => { setName(e.target.value); setError(""); }}
-                    placeholder="e.g. Arjun Sharma"
-                    autoComplete="name"
-                    style={inputSt}
-                  />
-                </label>
+                {/* ── RETURNING CUSTOMER CARD ──────────────────────────────── */}
+                {formMode === "returning" && savedCustomer && (
+                  <>
+                    <p style={sectionHead}>Saved Details</p>
 
-                {/* Mobile + OTP */}
-                <div style={{ marginBottom: 22 }}>
-                  <span style={labelSt}>Mobile Number *</span>
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
-                    <div style={{ flex: 1, display: "flex", alignItems: "flex-end", ...inputSt, padding: 0 }}>
-                      <span style={{ padding: "10px 0 10px 12px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.5)", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
-                      <input
-                        type="tel" inputMode="numeric" autoComplete="tel-national"
-                        value={phone}
-                        onChange={e => {
-                          setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
-                          setOtpError(""); setError("");
-                        }}
-                        placeholder="10-digit number"
-                        style={{ flex: 1, background: "none", border: "none", outline: "none", padding: "10px 12px 10px 6px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4", letterSpacing: "0.05em" }}
-                      />
+                    {/* Details card */}
+                    <div style={{
+                      background: "rgba(240,223,200,0.04)",
+                      border: "1px solid rgba(240,223,200,0.1)",
+                      padding: "18px 20px",
+                      marginBottom: 16,
+                    }}>
+                      <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4", letterSpacing: "0.04em" }}>
+                        {savedCustomer.full_name}
+                      </p>
+                      <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.55)", letterSpacing: "0.04em" }}>
+                        +91 {savedCustomer.phone}
+                      </p>
+                      {savedCustomer.delivery_address && (
+                        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.4)", letterSpacing: "0.03em", lineHeight: 1.65 }}>
+                          {savedCustomer.delivery_address}
+                        </p>
+                      )}
                     </div>
-                    {otpVerified ? (
-                      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, marginBottom: 2 }}>
-                        <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "#4ade80" }}>✓ Verified</span>
-                        <button
-                          onClick={() => { setOtpVerified(false); setOtpSent(false); setOtpCode(""); setOtpError(""); }}
-                          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)", WebkitTapHighlightColor: "transparent" }}
-                        >Edit</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={sendOtp}
-                        disabled={sendingOtp || phone.replace(/\D/g,"").length < 10}
-                        style={{
-                          flexShrink: 0, marginBottom: 2,
-                          background: "none",
-                          border: "1px solid rgba(200,144,58,0.45)",
-                          padding: "7px 14px",
-                          cursor: (sendingOtp || phone.replace(/\D/g,"").length < 10) ? "default" : "pointer",
-                          fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
-                          letterSpacing: "0.3em", textTransform: "uppercase",
-                          color: (sendingOtp || phone.replace(/\D/g,"").length < 10) ? "rgba(200,144,58,0.3)" : "rgba(200,144,58,0.85)",
-                          WebkitTapHighlightColor: "transparent",
-                        }}
-                      >
-                        {sendingOtp ? "Sending…" : otpSent ? "Resend" : "Send OTP"}
-                      </button>
+
+                    {error && (
+                      <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.04em" }}>
+                        {error}
+                      </p>
                     )}
-                  </div>
 
-                  {/* OTP input — single column, appears below phone after Send OTP */}
-                  {otpSent && !otpVerified && (
-                    <div style={{ marginTop: 14 }}>
-                      <span style={{ ...labelSt, marginBottom: 8 }}>Enter OTP *</span>
-                      <input
-                        type="text" inputMode="numeric" autoComplete="one-time-code"
-                        maxLength={6}
-                        value={otpCode}
-                        onChange={e => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(""); }}
-                        placeholder="6-digit code"
-                        style={{
-                          ...inputSt,
-                          letterSpacing: "0.4em",
-                          fontSize: 18,
-                          borderBottomColor: "rgba(200,144,58,0.45)",
-                        }}
-                        autoFocus
-                      />
-                      <button
-                        onClick={verifyOtp}
-                        disabled={verifyingOtp || otpCode.replace(/\D/g,"").length < 6}
-                        style={{
-                          marginTop: 12,
-                          display: "block", width: "100%",
-                          background: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "rgba(240,223,200,0.12)" : "#f0dfc8",
-                          border: "none", padding: "13px 0",
-                          cursor: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "default" : "pointer",
-                          fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
-                          letterSpacing: "0.4em", textTransform: "uppercase",
-                          color: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "rgba(8,6,4,0.35)" : "#080604",
-                          WebkitTapHighlightColor: "transparent",
-                        }}
-                      >
-                        {verifyingOtp ? "Verifying…" : "Verify"}
-                      </button>
+                    {/* Proceed with saved details */}
+                    <button
+                      onClick={() => { setError(""); setStep("payment"); }}
+                      style={{
+                        display: "block", width: "100%",
+                        background: "#f0dfc8", border: "none", padding: "17px 0",
+                        cursor: "pointer",
+                        fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                        letterSpacing: "0.45em", textTransform: "uppercase",
+                        color: "#080604",
+                        WebkitTapHighlightColor: "transparent",
+                        marginBottom: 10,
+                      }}
+                    >
+                      Proceed to Payment
+                    </button>
+
+                    {/* Edit saved details */}
+                    <button
+                      onClick={() => { setFormMode("edit"); setError(""); }}
+                      style={{
+                        display: "block", width: "100%",
+                        background: "transparent",
+                        border: "1px solid rgba(240,223,200,0.14)",
+                        padding: "15px 0",
+                        cursor: "pointer",
+                        fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                        letterSpacing: "0.4em", textTransform: "uppercase",
+                        color: "rgba(240,223,200,0.55)",
+                        WebkitTapHighlightColor: "transparent",
+                        marginBottom: 28,
+                      }}
+                    >
+                      Edit Details
+                    </button>
+
+                    {/* Divider + fresh start */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+                      <div style={{ flex: 1, height: 1, background: "rgba(240,223,200,0.07)" }} />
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(240,223,200,0.25)" }}>or</span>
+                      <div style={{ flex: 1, height: 1, background: "rgba(240,223,200,0.07)" }} />
                     </div>
-                  )}
 
-                  {otpError && (
-                    <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.04em" }}>
-                      {otpError}
-                    </p>
-                  )}
-                </div>
-
-                {/* Delivery Address */}
-                <label style={{ display: "block", marginBottom: 22 }}>
-                  <span style={labelSt}>Delivery Address *</span>
-                  <input type="text" value={addressLine}
-                    onChange={e => { setAddressLine(e.target.value); setError(""); }}
-                    placeholder="Flat no. / House no. / Building name"
-                    autoComplete="address-line1"
-                    style={inputSt}
-                  />
-                </label>
-
-                {/* Area */}
-                <label style={{ display: "block", marginBottom: 22 }}>
-                  <span style={labelSt}>Area / Locality *</span>
-                  <input type="text" value={area}
-                    onChange={e => { setArea(e.target.value); setError(""); }}
-                    placeholder="Street / Colony / Locality"
-                    autoComplete="address-line2"
-                    style={inputSt}
-                  />
-                </label>
-
-                {/* City + Pincode */}
-                <div style={{ display: "flex", gap: 16, marginBottom: 32 }}>
-                  <label style={{ flex: 1 }}>
-                    <span style={labelSt}>City *</span>
-                    <input type="text" value={city}
-                      onChange={e => { setCity(e.target.value); setError(""); }}
-                      placeholder="Visakhapatnam"
-                      autoComplete="address-level2"
-                      style={inputSt}
-                    />
-                  </label>
-                  <label style={{ flex: "0 0 110px" }}>
-                    <span style={labelSt}>Pincode *</span>
-                    <input type="text" inputMode="numeric" maxLength={6}
-                      value={pincode}
-                      onChange={e => { setPincode(e.target.value.replace(/\D/g,"").slice(0,6)); setError(""); }}
-                      placeholder="530045"
-                      autoComplete="postal-code"
-                      style={inputSt}
-                    />
-                  </label>
-                </div>
-
-                {error && (
-                  <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.04em" }}>
-                    {error}
-                  </p>
+                    <button
+                      onClick={() => {
+                        setFormMode("fresh");
+                        setName(""); setPhone(""); setAddressLine(""); setArea(""); setCity(""); setPincode("");
+                        setOtpVerified(false); setOtpSent(false); setOtpCode(""); setOtpError("");
+                        setCustomer(null); setError("");
+                      }}
+                      style={{
+                        display: "block", width: "100%",
+                        background: "none", border: "none",
+                        cursor: "pointer", padding: "10px 0",
+                        fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                        letterSpacing: "0.35em", textTransform: "uppercase",
+                        color: "rgba(200,144,58,0.5)",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                    >
+                      Order with a Different Number
+                    </button>
+                  </>
                 )}
 
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  style={{
-                    display: "block", width: "100%",
-                    background: submitting ? "rgba(240,223,200,0.5)" : "#f0dfc8",
-                    border: "none", padding: "17px 0",
-                    cursor: submitting ? "default" : "pointer",
-                    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
-                    letterSpacing: "0.45em", textTransform: "uppercase",
-                    color: "#080604",
-                    WebkitTapHighlightColor: "transparent",
-                    transition: "background 0.2s",
-                  }}
-                >
-                  {submitting ? "Saving…" : "Proceed to Payment"}
-                </button>
+                {/* ── EDIT / FRESH FORM ────────────────────────────────────── */}
+                {(formMode === "edit" || formMode === "fresh") && (
+                  <>
+                    <p style={sectionHead}>Your Details</p>
+
+                    {/* Full Name */}
+                    <label style={{ display: "block", marginBottom: 22 }}>
+                      <span style={labelSt}>Full Name *</span>
+                      <input type="text" value={name}
+                        onChange={e => { setName(e.target.value); setError(""); }}
+                        placeholder="e.g. Arjun Sharma"
+                        autoComplete="name"
+                        style={inputSt}
+                      />
+                    </label>
+
+                    {/* Mobile + OTP */}
+                    <div style={{ marginBottom: 22 }}>
+                      <span style={labelSt}>Mobile Number *</span>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+                        <div style={{ flex: 1, display: "flex", alignItems: "flex-end", ...inputSt, padding: 0 }}>
+                          <span style={{ padding: "10px 0 10px 12px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.5)", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
+                          <input
+                            type="tel" inputMode="numeric" autoComplete="tel-national"
+                            value={phone}
+                            onChange={e => {
+                              setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
+                              setOtpError(""); setError("");
+                              if (otpVerified) { setOtpVerified(false); setOtpSent(false); setOtpCode(""); }
+                            }}
+                            placeholder="10-digit number"
+                            style={{ flex: 1, background: "none", border: "none", outline: "none", padding: "10px 12px 10px 6px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4", letterSpacing: "0.05em" }}
+                          />
+                        </div>
+                        {otpVerified ? (
+                          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, marginBottom: 2 }}>
+                            <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "#4ade80" }}>✓ Verified</span>
+                            <button
+                              onClick={() => { setOtpVerified(false); setOtpSent(false); setOtpCode(""); setOtpError(""); }}
+                              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)", WebkitTapHighlightColor: "transparent" }}
+                            >Edit</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={sendOtp}
+                            disabled={sendingOtp || phone.replace(/\D/g,"").length < 10}
+                            style={{
+                              flexShrink: 0, marginBottom: 2,
+                              background: "none",
+                              border: "1px solid rgba(200,144,58,0.45)",
+                              padding: "7px 14px",
+                              cursor: (sendingOtp || phone.replace(/\D/g,"").length < 10) ? "default" : "pointer",
+                              fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                              letterSpacing: "0.3em", textTransform: "uppercase",
+                              color: (sendingOtp || phone.replace(/\D/g,"").length < 10) ? "rgba(200,144,58,0.3)" : "rgba(200,144,58,0.85)",
+                              WebkitTapHighlightColor: "transparent",
+                            }}
+                          >
+                            {sendingOtp ? "Sending…" : otpSent ? "Resend" : "Send OTP"}
+                          </button>
+                        )}
+                      </div>
+
+                      {otpSent && !otpVerified && (
+                        <div style={{ marginTop: 14 }}>
+                          <span style={{ ...labelSt, marginBottom: 8 }}>Enter OTP *</span>
+                          <input
+                            type="text" inputMode="numeric" autoComplete="one-time-code"
+                            maxLength={6}
+                            value={otpCode}
+                            onChange={e => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(""); }}
+                            placeholder="6-digit code"
+                            style={{ ...inputSt, letterSpacing: "0.4em", fontSize: 18, borderBottomColor: "rgba(200,144,58,0.45)" }}
+                            autoFocus
+                          />
+                          <button
+                            onClick={verifyOtp}
+                            disabled={verifyingOtp || otpCode.replace(/\D/g,"").length < 6}
+                            style={{
+                              marginTop: 12, display: "block", width: "100%",
+                              background: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "rgba(240,223,200,0.12)" : "#f0dfc8",
+                              border: "none", padding: "13px 0",
+                              cursor: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "default" : "pointer",
+                              fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                              letterSpacing: "0.4em", textTransform: "uppercase",
+                              color: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "rgba(8,6,4,0.35)" : "#080604",
+                              WebkitTapHighlightColor: "transparent",
+                            }}
+                          >
+                            {verifyingOtp ? "Verifying…" : "Verify"}
+                          </button>
+                        </div>
+                      )}
+
+                      {otpError && (
+                        <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.04em" }}>
+                          {otpError}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Delivery Address */}
+                    <label style={{ display: "block", marginBottom: 22 }}>
+                      <span style={labelSt}>Delivery Address *</span>
+                      <input type="text" value={addressLine}
+                        onChange={e => { setAddressLine(e.target.value); setError(""); }}
+                        placeholder="Flat no. / House no. / Building name"
+                        autoComplete="address-line1"
+                        style={inputSt}
+                      />
+                    </label>
+
+                    {/* Area */}
+                    <label style={{ display: "block", marginBottom: 22 }}>
+                      <span style={labelSt}>Area / Locality *</span>
+                      <input type="text" value={area}
+                        onChange={e => { setArea(e.target.value); setError(""); }}
+                        placeholder="Street / Colony / Locality"
+                        autoComplete="address-line2"
+                        style={inputSt}
+                      />
+                    </label>
+
+                    {/* City + Pincode */}
+                    <div style={{ display: "flex", gap: 16, marginBottom: 32 }}>
+                      <label style={{ flex: 1 }}>
+                        <span style={labelSt}>City *</span>
+                        <input type="text" value={city}
+                          onChange={e => { setCity(e.target.value); setError(""); }}
+                          placeholder="Visakhapatnam"
+                          autoComplete="address-level2"
+                          style={inputSt}
+                        />
+                      </label>
+                      <label style={{ flex: "0 0 110px" }}>
+                        <span style={labelSt}>Pincode *</span>
+                        <input type="text" inputMode="numeric" maxLength={6}
+                          value={pincode}
+                          onChange={e => { setPincode(e.target.value.replace(/\D/g,"").slice(0,6)); setError(""); }}
+                          placeholder="530045"
+                          autoComplete="postal-code"
+                          style={inputSt}
+                        />
+                      </label>
+                    </div>
+
+                    {error && (
+                      <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.04em" }}>
+                        {error}
+                      </p>
+                    )}
+
+                    <button
+                      onClick={handleSubmit}
+                      disabled={submitting}
+                      style={{
+                        display: "block", width: "100%",
+                        background: submitting ? "rgba(240,223,200,0.5)" : "#f0dfc8",
+                        border: "none", padding: "17px 0",
+                        cursor: submitting ? "default" : "pointer",
+                        fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                        letterSpacing: "0.45em", textTransform: "uppercase",
+                        color: "#080604",
+                        WebkitTapHighlightColor: "transparent",
+                        transition: "background 0.2s",
+                      }}
+                    >
+                      {submitting ? "Saving…" : "Proceed to Payment"}
+                    </button>
+
+                    {/* Back to saved details if editing */}
+                    {savedCustomer && (
+                      <button
+                        onClick={() => {
+                          setFormMode("returning");
+                          setName(savedCustomer.full_name ?? "");
+                          setPhone(savedCustomer.phone ?? "");
+                          setCustomer(savedCustomer);
+                          prefillAddress(savedCustomer.delivery_address ?? "");
+                          setOtpVerified(true); setOtpSent(false); setOtpCode(""); setOtpError(""); setError("");
+                        }}
+                        style={{
+                          display: "block", width: "100%", background: "none", border: "none",
+                          cursor: "pointer", marginTop: 18,
+                          fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                          letterSpacing: "0.3em", textTransform: "uppercase",
+                          color: "rgba(240,223,200,0.22)",
+                          WebkitTapHighlightColor: "transparent",
+                        }}
+                      >
+                        ← Back
+                      </button>
+                    )}
+                  </>
+                )}
               </>
             )}
 
