@@ -41,6 +41,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${cormorant.variable} ${jost.variable}`}>
+      <head>
+        {/* Preload hero video so navigating back to home plays instantly */}
+        <link rel="preload" as="video" href="/bread-intro.mp4" type="video/mp4" />
+        <link rel="preload" as="image" href="/hero.jpg" />
+      </head>
       <body className="font-body">
         <CartProvider>
           <SmoothScroll />

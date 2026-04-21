@@ -53,7 +53,15 @@ export default function PageContent() {
     const v = videoRef.current;
     if (!v) return;
     v.muted = true;
-    v.play().catch(() => {});
+    // Attempt immediate playback; if metadata isn't ready, retry on canplay
+    const tryPlay = () => v.play().catch(() => {});
+    tryPlay();
+    v.addEventListener("canplay", tryPlay, { once: true });
+    v.addEventListener("loadeddata", tryPlay, { once: true });
+    return () => {
+      v.removeEventListener("canplay", tryPlay);
+      v.removeEventListener("loadeddata", tryPlay);
+    };
   }, []);
 
   /* ── Scroll-driven card progress ── */
