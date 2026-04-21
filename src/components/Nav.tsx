@@ -12,8 +12,6 @@ type Order = {
   total_amount: number;
   delivery_address: string;
   status: string;
-  order_type?: string;
-  weeks?: number;
   created_at: string;
 };
 
@@ -1197,21 +1195,8 @@ export default function Nav() {
             <>
               <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
               <p style={{ margin: "0 0 24px", fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Subscription</p>
-              {(() => {
-                const subs = orders.filter(o => o.order_type === "sub" || o.weeks);
-                if (ordersLoading) return <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(240,223,200,0.3)" }}>Loading…</p>;
-                if (subs.length === 0) return <p style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>No active subscriptions. Subscribe to a loaf plan from the shop.</p>;
-                return subs.map(s => (
-                  <div key={s.id} style={{ borderBottom: "1px solid rgba(240,223,200,0.07)", padding: "14px 0" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.7)" }}>{s.weeks ? `${s.weeks}-Week Plan` : "Subscription"}</span>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "#FBF3D4" }}>₹{s.total_amount}</span>
-                    </div>
-                    <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.5)" }}>Delivering to: {s.delivery_address}</p>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: s.status === "pending" ? "rgba(200,144,58,0.6)" : "rgba(74,222,128,0.7)" }}>{s.status}</span>
-                  </div>
-                ));
-              })()}
+              {ordersLoading && <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(240,223,200,0.3)" }}>Loading…</p>}
+              {!ordersLoading && <p style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>Subscription plans coming soon. Use the shop to set up recurring deliveries.</p>}
             </>
           )}
 

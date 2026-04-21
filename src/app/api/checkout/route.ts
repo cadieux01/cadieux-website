@@ -20,11 +20,13 @@ export async function GET(req: NextRequest) {
   if (!customer) return NextResponse.json({ customer: null });
 
   // Get all orders
-  const { data: orders } = await sb
+  const { data: orders, error: ordersErr } = await sb
     .from("orders")
-    .select("id, total_amount, delivery_address, status, order_type, weeks, created_at")
+    .select("id, total_amount, delivery_address, status, created_at")
     .eq("customer_id", customer.id)
     .order("created_at", { ascending: false });
+
+  if (ordersErr) console.error("[orders fetch]", ordersErr.message);
 
   const lastOrder = orders?.[0];
 
