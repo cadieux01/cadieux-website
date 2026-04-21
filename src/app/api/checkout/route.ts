@@ -19,17 +19,18 @@ export async function GET(req: NextRequest) {
 
   if (!customer) return NextResponse.json({ customer: null });
 
-  // Get most recent delivery address from orders
-  const { data: lastOrder } = await sb
+  // Get all orders
+  const { data: orders } = await sb
     .from("orders")
-    .select("delivery_address")
+    .select("id, total_amount, delivery_address, status, order_type, weeks, created_at")
     .eq("customer_id", customer.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: false });
+
+  const lastOrder = orders?.[0];
 
   return NextResponse.json({
     customer: { ...customer, delivery_address: lastOrder?.delivery_address ?? "" },
+    orders: orders ?? [],
   });
 }
 
