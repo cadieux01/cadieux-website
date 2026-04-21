@@ -1122,7 +1122,7 @@ export default function Nav() {
       {/* ── Menu widget ── */}
       <div style={{
         position: "fixed", top: 0, left: 0, zIndex: 205,
-        width: "min(320px, 88vw)", height: "100dvh",
+        width: "min(360px, 92vw)", height: "100dvh",
         background: "#0a0a0a",
         transform: menuOpen ? "translateX(0)" : "translateX(-100%)",
         transition: "transform 0.45s cubic-bezier(0.22,1,0.36,1)",
@@ -1147,20 +1147,14 @@ export default function Nav() {
                 { label: "Connect With Us", action: () => setMenuSection("connect") },
               ].map(({ label, action }) => (
                 <button key={label} onClick={action} style={{
-                  background: "none", border: "none", cursor: "pointer", padding: "16px 0",
+                  background: "none", border: "none", cursor: "pointer", padding: "18px 0",
                   textAlign: "left", borderBottom: "1px solid rgba(240,223,200,0.06)",
-                  fontFamily: "var(--font-heading)", fontSize: "clamp(18px,4vw,24px)", fontWeight: 300,
+                  fontFamily: "var(--font-heading)", fontSize: "clamp(22px,5vw,32px)", fontWeight: 300,
                   color: "#FBF3D4", letterSpacing: "0.03em",
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  display: "block", width: "100%",
                   WebkitTapHighlightColor: "transparent",
                 }}>
                   {label}
-                  {["Subscription","Your Orders","Connect With Us"].includes(label) && (
-                    <span style={{ color: "rgba(240,223,200,0.3)", fontSize: 14 }}>›</span>
-                  )}
-                  {["Blogs","Making","Store Locator"].includes(label) && (
-                    <span style={{ color: "rgba(240,223,200,0.2)", fontSize: 14 }}>↗</span>
-                  )}
                 </button>
               ))}
             </>
