@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Jost } from "next/font/google";
 import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
@@ -23,6 +23,15 @@ const jost = Jost({
 export const metadata: Metadata = {
   title: "Cadieux",
   description: "Same Bread. Better Built.",
+};
+
+// Prevent iOS Safari from auto-zooming on input focus
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
