@@ -451,6 +451,248 @@ function StoreContent() {
   );
 }
 
+/* ── OTP Login Modal ── */
+function LoginModal({
+  onSuccess,
+  onClose,
+}: {
+  onSuccess: (name: string, phone: string) => void;
+  onClose: () => void;
+}) {
+  const [step,    setStep]    = useState<"phone" | "otp">("phone");
+  const [name,    setName]    = useState("");
+  const [phone,   setPhone]   = useState("");
+  const [otp,     setOtp]     = useState("");
+  const [token,   setToken]   = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+  const [resent,  setResent]  = useState(false);
+
+  async function sendOtp() {
+    if (!name.trim()) { setError("Please enter your name."); return; }
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length !== 10) { setError("Enter a valid 10-digit mobile number."); return; }
+    setError(""); setLoading(true);
+    try {
+      const res = await fetch("/api/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: digits }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to send OTP");
+      setToken(data.token);
+      setStep("otp");
+      setResent(false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resendOtp() {
+    setOtp(""); setError(""); setResent(false); setLoading(true);
+    try {
+      const digits = phone.replace(/\D/g, "");
+      const res = await fetch("/api/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: digits }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to resend OTP");
+      setToken(data.token);
+      setResent(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyOtp() {
+    if (otp.replace(/\D/g, "").length !== 6) { setError("Enter the 6-digit code."); return; }
+    setError(""); setLoading(true);
+    try {
+      const res = await fetch("/api/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.replace(/\D/g, ""), otp: otp.replace(/\D/g, ""), token }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error("Invalid or expired code. Try again.");
+      onSuccess(name.trim(), phone.replace(/\D/g, ""));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Verification failed.");
+      setOtp("");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const masked = `+91 ••••• ${phone.replace(/\D/g, "").slice(-5)}`;
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(6,4,2,0.82)",
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        width: "100%", maxWidth: 520,
+        background: "#1D1D1F",
+        padding: "40px 32px 48px",
+        position: "relative",
+      }}>
+        {/* Grain */}
+        <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
+
+        {/* Close */}
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute", top: 20, right: 20, background: "none", border: "none",
+            cursor: "pointer", color: "rgba(251,243,212,0.35)", fontSize: 20, lineHeight: 1,
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >✕</button>
+
+        <div style={{ position: "relative", zIndex: 1 }}>
+
+          {step === "phone" ? (
+            <>
+              <p style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,40px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.1 }}>
+                Sign in
+              </p>
+              <p style={{ margin: "0 0 36px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(251,243,212,0.4)" }}>
+                We&apos;ll send a one-time code to your number
+              </p>
+
+              {/* Name */}
+              <label style={{ display: "block", marginBottom: 20 }}>
+                <span style={{ display: "block", marginBottom: 8, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(251,243,212,0.45)" }}>Your Name</span>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => { setName(e.target.value); setError(""); }}
+                  placeholder="e.g. Arjun Sharma"
+                  autoComplete="name"
+                  style={{
+                    display: "block", width: "100%", boxSizing: "border-box",
+                    background: "rgba(251,243,212,0.05)", border: "1px solid rgba(251,243,212,0.15)",
+                    padding: "14px 16px", outline: "none",
+                    fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200,
+                    color: "#FBF3D4", letterSpacing: "0.05em",
+                  }}
+                />
+              </label>
+
+              {/* Phone */}
+              <label style={{ display: "block", marginBottom: 28 }}>
+                <span style={{ display: "block", marginBottom: 8, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(251,243,212,0.45)" }}>Mobile Number</span>
+                <div style={{ display: "flex", alignItems: "center", border: "1px solid rgba(251,243,212,0.15)", background: "rgba(251,243,212,0.05)" }}>
+                  <span style={{ padding: "14px 14px 14px 16px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(251,243,212,0.5)", letterSpacing: "0.03em", borderRight: "1px solid rgba(251,243,212,0.1)" }}>+91</span>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={e => { setPhone(e.target.value.replace(/[^\d]/g, "").slice(0, 10)); setError(""); }}
+                    placeholder="98765 43210"
+                    autoComplete="tel-national"
+                    inputMode="numeric"
+                    style={{
+                      flex: 1, background: "none", border: "none", outline: "none",
+                      padding: "14px 16px",
+                      fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200,
+                      color: "#FBF3D4", letterSpacing: "0.08em",
+                    }}
+                  />
+                </div>
+              </label>
+
+              {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}
+
+              <button
+                onClick={sendOtp}
+                disabled={loading}
+                style={{
+                  display: "block", width: "100%",
+                  background: loading ? "rgba(2,70,40,0.4)" : "#024628",
+                  border: "none", padding: "16px 0", cursor: loading ? "default" : "pointer",
+                  fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                  letterSpacing: "0.45em", textTransform: "uppercase",
+                  color: loading ? "rgba(251,243,212,0.4)" : "#FBF3D4",
+                  WebkitTapHighlightColor: "transparent",
+                  transition: "background 0.2s",
+                }}
+              >{loading ? "Sending…" : "Generate OTP"}</button>
+            </>
+          ) : (
+            <>
+              <p style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,40px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.1 }}>
+                Verify
+              </p>
+              <p style={{ margin: "0 0 36px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.25em", color: "rgba(251,243,212,0.4)" }}>
+                6-digit code sent to {masked}
+              </p>
+              {resent && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "#4369B2" }}>Code resent.</p>}
+
+              {/* OTP input */}
+              <label style={{ display: "block", marginBottom: 28 }}>
+                <span style={{ display: "block", marginBottom: 8, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(251,243,212,0.45)" }}>Verification Code</span>
+                <input
+                  type="text"
+                  value={otp}
+                  onChange={e => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+                  placeholder="• • • • • •"
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  style={{
+                    display: "block", width: "100%", boxSizing: "border-box",
+                    background: "rgba(251,243,212,0.05)", border: "1px solid rgba(251,243,212,0.15)",
+                    padding: "16px 20px", outline: "none",
+                    fontFamily: "monospace", fontSize: 24, fontWeight: 300,
+                    color: "#FBF3D4", letterSpacing: "0.5em", textAlign: "center",
+                  }}
+                />
+              </label>
+
+              {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}
+
+              <button
+                onClick={verifyOtp}
+                disabled={loading || otp.length < 6}
+                style={{
+                  display: "block", width: "100%",
+                  background: (loading || otp.length < 6) ? "rgba(2,70,40,0.35)" : "#024628",
+                  border: "none", padding: "16px 0",
+                  cursor: (loading || otp.length < 6) ? "default" : "pointer",
+                  fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                  letterSpacing: "0.45em", textTransform: "uppercase",
+                  color: (loading || otp.length < 6) ? "rgba(251,243,212,0.35)" : "#FBF3D4",
+                  WebkitTapHighlightColor: "transparent",
+                  transition: "background 0.2s",
+                }}
+              >{loading ? "Verifying…" : "Confirm & Continue"}</button>
+
+              <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between" }}>
+                <button onClick={() => { setStep("phone"); setOtp(""); setError(""); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(251,243,212,0.35)", WebkitTapHighlightColor: "transparent" }}>
+                  ← Change number
+                </button>
+                <button onClick={resendOtp} disabled={loading} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#4369B2", WebkitTapHighlightColor: "transparent" }}>
+                  Resend code
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function chip(selected: boolean) {
   return {
     fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
@@ -469,6 +711,7 @@ function ShopContent({ onAddToCart }: { onAddToCart: (item: CartItem) => void })
   const [weeks,     setWeeks]     = useState<(number | null)[]>([null, null]);
   const [day,       setDay]       = useState(["", ""]);
   const [time,      setTime]      = useState(["", ""]);
+  const [pendingItem, setPendingItem] = useState<CartItem | null>(null);
 
   function canAdd(i: number) {
     if (qty[i] < 1) return false;
@@ -575,7 +818,16 @@ function ShopContent({ onAddToCart }: { onAddToCart: (item: CartItem) => void })
             {/* ── Add to cart ── */}
             <button
               disabled={!canAdd(i)}
-              onClick={() => onAddToCart({ productIndex: i, name: p.name, price: p.price, qty: qty[i], orderType: orderType[i], weeks: orderType[i] === "sub" ? weeks[i]! : undefined, day: orderType[i] === "sub" ? day[i] : undefined, time: orderType[i] === "sub" ? time[i] : undefined })}
+              onClick={() => {
+                const item: CartItem = {
+                  productIndex: i, name: p.name, price: p.price, qty: qty[i],
+                  orderType: orderType[i],
+                  weeks: orderType[i] === "sub" ? weeks[i]! : undefined,
+                  day:   orderType[i] === "sub" ? day[i]   : undefined,
+                  time:  orderType[i] === "sub" ? time[i]  : undefined,
+                };
+                setPendingItem(item);
+              }}
               style={{
                 alignSelf: "flex-start", marginTop: 12,
                 background: canAdd(i) ? "#024628" : "rgba(2,70,40,0.3)",
@@ -590,6 +842,17 @@ function ShopContent({ onAddToCart }: { onAddToCart: (item: CartItem) => void })
           </div>
         ))}
       </div>
+
+      {/* Login modal — appears when pendingItem is set */}
+      {pendingItem && (
+        <LoginModal
+          onSuccess={() => {
+            onAddToCart(pendingItem);
+            setPendingItem(null);
+          }}
+          onClose={() => setPendingItem(null)}
+        />
+      )}
     </>
   );
 }
@@ -829,29 +1092,31 @@ export default function Nav() {
         </button>
       )}
 
-      {/* Cart FAB — bottom right, always visible once items added */}
-      {cartCount > 0 && (
-        <button
-          onClick={() => setActive("cart")}
-          style={{
-            position: "fixed", bottom: 32, right: 28, zIndex: 101,
-            width: 56, height: 56, borderRadius: "50%",
-            background: "#024628", border: "none", cursor: "pointer",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            gap: 2, boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
-            WebkitTapHighlightColor: "transparent",
-            transition: "transform 0.2s, box-shadow 0.2s",
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
-        >
-          {/* Cart bag icon */}
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FBF3D4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-            <line x1="3" y1="6" x2="21" y2="6"/>
-            <path d="M16 10a4 4 0 0 1-8 0"/>
-          </svg>
-          {/* Count badge */}
+      {/* Cart FAB — always visible bottom right */}
+      <button
+        onClick={() => setActive("cart")}
+        style={{
+          position: "fixed", bottom: 32, right: 28, zIndex: 101,
+          width: 56, height: 56, borderRadius: "50%",
+          background: cartCount > 0 ? "#024628" : "rgba(2,70,40,0.45)",
+          border: cartCount > 0 ? "none" : "1px solid rgba(251,243,212,0.15)",
+          cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: cartCount > 0 ? "0 4px 24px rgba(0,0,0,0.5)" : "0 2px 12px rgba(0,0,0,0.3)",
+          WebkitTapHighlightColor: "transparent",
+          transition: "transform 0.2s, box-shadow 0.2s, background 0.3s",
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
+      >
+        {/* Cart bag icon */}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FBF3D4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <path d="M16 10a4 4 0 0 1-8 0"/>
+        </svg>
+        {/* Count badge — only when items exist */}
+        {cartCount > 0 && (
           <span style={{
             position: "absolute", top: 4, right: 4,
             background: "#FBF3D4", color: "#024628",
@@ -859,8 +1124,8 @@ export default function Nav() {
             display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, letterSpacing: 0,
           }}>{cartCount}</span>
-        </button>
-      )}
+        )}
+      </button>
 
       {/* Fixed nav bar */}
       <nav style={{

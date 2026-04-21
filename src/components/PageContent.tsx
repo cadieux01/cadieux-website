@@ -392,9 +392,9 @@ export default function PageContent() {
               style={{
                 position: "relative", zIndex: 3,
                 display: "block",
-                width: "clamp(52px, 16vw, 96px)",
+                width: "clamp(72px, 18vw, 120px)",
                 height: "auto",
-                marginBottom: 16,
+                marginBottom: 20,
                 pointerEvents: "none",
                 filter: "invert(1) sepia(0.4) saturate(0.8) brightness(0.95)",
               }}

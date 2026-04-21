@@ -130,12 +130,12 @@ export default function ImmersiveEntry() {
         <div style={{
           position: "absolute",
           bottom: isMobile ? "7%" : "9%",
-          left: "50%",
-          transform: `translateX(-50%) translateY(${pkY}px)`,
-          textAlign: "center" as const,
+          left: isMobile ? "28px" : "50%",
+          transform: isMobile ? `translateY(${pkY}px)` : `translateX(-50%) translateY(${pkY}px)`,
+          textAlign: isMobile ? "left" as const : "center" as const,
           zIndex: 10,
-          width: isMobile ? "100vw" : "auto",
-          padding: isMobile ? "0 28px" : "0",
+          width: isMobile ? "calc(100vw - 120px)" : "auto",
+          padding: "0",
           opacity: pkOp,
           pointerEvents: pkOp > 0.5 ? "auto" : "none",
         }}>
@@ -144,7 +144,7 @@ export default function ImmersiveEntry() {
             alt="Cadieux"
             style={{
               display: "block",
-              margin: "0 auto 16px",
+              margin: isMobile ? "0 0 16px" : "0 auto 16px",
               width: isMobile ? "clamp(36px, 7vw, 52px)" : "clamp(44px, 5vw, 60px)",
               height: "auto",
               pointerEvents: "none",
@@ -174,7 +174,7 @@ export default function ImmersiveEntry() {
           </div>
           <button style={{
             display: "block",
-            width: isMobile ? "100%" : "auto",
+            width: "auto",
             fontFamily: "var(--font-body)",
             fontSize: isMobile ? 11 : 10,
             fontWeight: 300,
@@ -182,7 +182,7 @@ export default function ImmersiveEntry() {
             textTransform: "uppercase" as const,
             color: "#080604",
             background: "#f0dfc8",
-            padding: isMobile ? "18px 0" : "17px 54px",
+            padding: isMobile ? "18px 40px" : "17px 54px",
             border: "none",
             cursor: "pointer",
             WebkitTapHighlightColor: "transparent",
