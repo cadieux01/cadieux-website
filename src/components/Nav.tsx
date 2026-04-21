@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getLenis } from "@/lib/scroll";
+import CheckoutModal from "./CheckoutModal";
 
 type Page = "blogs" | "making" | "store-locator" | "shop" | "cart" | null;
 
@@ -948,9 +949,12 @@ function CartContent({
 
 /* ── Nav ── */
 export default function Nav() {
-  const [active,       setActive]      = useState<Page>(null);
-  const [cart,         setCart]        = useState<CartItem[]>([]);
-  const [pendingItem,  setPendingItem] = useState<CartItem | null>(null);
+  const [active,        setActive]       = useState<Page>(null);
+  const [cart,          setCart]         = useState<CartItem[]>([]);
+  const [pendingItem,   setPendingItem]  = useState<CartItem | null>(null);
+  const [checkoutOpen,  setCheckoutOpen] = useState(false);
+
+  const cartTotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
 
   function addToCart(item: CartItem) {
     setCart(prev => {
@@ -986,6 +990,8 @@ export default function Nav() {
   }, [active]);
 
   useEffect(() => {
+    // Auto-open shop if navigated to /shop route
+    if (window.location.pathname === "/shop") setActive("shop");
     const handler = () => setActive("shop");
     window.addEventListener("openShop", handler);
     return () => window.removeEventListener("openShop", handler);
@@ -1120,9 +1126,13 @@ export default function Nav() {
       {/* Fixed nav bar */}
       <nav style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
-        display: "flex", flexDirection: "column", alignItems: "center",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "20px 28px 0", pointerEvents: "none",
       }}>
+        {/* Left spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Center links */}
         <div style={{ display: "flex", alignItems: "center", gap: "clamp(24px,5vw,56px)" }}>
           {active ? (
             <span className="nav-btn nav-active">
@@ -1140,6 +1150,34 @@ export default function Nav() {
               </button>
             ))
           )}
+        </div>
+
+        {/* Right: cart icon */}
+        <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={() => setActive("cart")}
+            style={{
+              pointerEvents: "auto", position: "relative",
+              background: "none", border: "none", cursor: "pointer", padding: 4,
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="rgba(251,243,212,0.5)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <path d="M16 10a4 4 0 0 1-8 0"/>
+            </svg>
+            {cartCount > 0 && (
+              <span style={{
+                position: "absolute", top: 0, right: 0,
+                background: "#024628", color: "#FBF3D4",
+                borderRadius: "50%", width: 15, height: 15,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 600,
+              }}>{cartCount}</span>
+            )}
+          </button>
         </div>
       </nav>
 
@@ -1172,7 +1210,7 @@ export default function Nav() {
             {id === "making"         && <MakingContent />}
             {id === "store-locator"  && <StoreContent />}
             {id === "shop"           && <ShopContent onRequestCart={item => setPendingItem(item)} />}
-            {id === "cart"           && <CartContent cart={cart} onCheckout={() => alert("Checkout coming soon!")} onUpdateQty={updateQty} onRemove={removeFromCart} />}
+            {id === "cart"           && <CartContent cart={cart} onCheckout={() => setCheckoutOpen(true)} onUpdateQty={updateQty} onRemove={removeFromCart} />}
           </div>
         </div>
       ))}
@@ -1185,6 +1223,20 @@ export default function Nav() {
             setPendingItem(null);
           }}
           onClose={() => setPendingItem(null)}
+        />
+      )}
+
+      {/* Checkout modal */}
+      {checkoutOpen && (
+        <CheckoutModal
+          cart={cart}
+          total={cartTotal}
+          onClose={() => setCheckoutOpen(false)}
+          onOrderPlaced={() => {
+            setCart([]);
+            setCheckoutOpen(false);
+            setActive(null);
+          }}
         />
       )}
     </>

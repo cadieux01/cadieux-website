@@ -172,7 +172,9 @@ export default function ImmersiveEntry() {
           }}>
             Same Bread. Better Built.
           </div>
-          <button style={{
+          <button
+            onClick={() => window.dispatchEvent(new Event("openShop"))}
+            style={{
             display: "block",
             width: "auto",
             fontFamily: "var(--font-body)",
