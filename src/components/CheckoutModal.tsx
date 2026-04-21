@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import type { CartItem } from "@/lib/data";
 export type { CartItem } from "@/lib/data";
 
 type Step = "form" | "payment" | "done";
