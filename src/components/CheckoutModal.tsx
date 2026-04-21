@@ -334,14 +334,18 @@ export default function CheckoutModal({
 
                 <label style={{ display: "block", marginBottom: 28 }}>
                   <span style={labelSt}>Mobile Number</span>
-                  <div style={{ display: "flex", alignItems: "center", border: "1px solid rgba(251,243,212,0.15)", background: "rgba(251,243,212,0.05)" }}>
-                    <span style={{ padding: "14px 14px 14px 16px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(251,243,212,0.5)", borderRight: "1px solid rgba(251,243,212,0.1)" }}>+91</span>
-                    <input type="tel" value={phone} inputMode="numeric"
-                      onChange={e => { setPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }}
-                      placeholder="98765 43210" autoComplete="tel-national"
-                      style={{ flex: 1, background: "none", border: "none", outline: "none", padding: "14px 16px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4", letterSpacing: "0.08em" }}
-                    />
-                  </div>
+                  <input
+                    type="tel" inputMode="numeric" autoComplete="tel-national"
+                    value={"+91" + phone}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/^\+91/, "");
+                      setPhone(raw.replace(/\D/g, "").slice(0, 10));
+                      setError("");
+                    }}
+                    onFocus={e => { const l = e.target.value.length; e.target.setSelectionRange(l, l); }}
+                    placeholder="+91"
+                    style={inputSt}
+                  />
                 </label>
 
                 {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}

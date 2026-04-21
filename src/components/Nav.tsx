@@ -594,23 +594,20 @@ function LoginModal({
               {/* Phone */}
               <label style={{ display: "block", marginBottom: 28 }}>
                 <span style={{ display: "block", marginBottom: 8, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(251,243,212,0.45)" }}>Mobile Number</span>
-                <div style={{ display: "flex", alignItems: "center", border: "1px solid rgba(251,243,212,0.15)", background: "rgba(251,243,212,0.05)" }}>
-                  <span style={{ padding: "14px 14px 14px 16px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(251,243,212,0.5)", letterSpacing: "0.03em", borderRight: "1px solid rgba(251,243,212,0.1)" }}>+91</span>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={e => { setPhone(e.target.value.replace(/[^\d]/g, "").slice(0, 10)); setError(""); }}
-                    placeholder="98765 43210"
-                    autoComplete="tel-national"
-                    inputMode="numeric"
-                    style={{
-                      flex: 1, background: "none", border: "none", outline: "none",
-                      padding: "14px 16px",
-                      fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200,
-                      color: "#FBF3D4", letterSpacing: "0.08em",
-                    }}
-                  />
-                </div>
+                <input
+                  type="tel" inputMode="numeric" autoComplete="tel-national"
+                  value={"+91" + phone}
+                  onChange={e => { setPhone(e.target.value.replace(/^\+91/, "").replace(/[^\d]/g, "").slice(0, 10)); setError(""); }}
+                  onFocus={e => { const l = e.target.value.length; e.target.setSelectionRange(l, l); }}
+                  placeholder="+91"
+                  style={{
+                    display: "block", width: "100%", boxSizing: "border-box",
+                    background: "rgba(251,243,212,0.05)", border: "1px solid rgba(251,243,212,0.15)",
+                    padding: "14px 16px", outline: "none",
+                    fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200,
+                    color: "#FBF3D4", letterSpacing: "0.08em",
+                  }}
+                />
               </label>
 
               {error && <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "#e05a5a", letterSpacing: "0.05em" }}>{error}</p>}
