@@ -210,21 +210,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   return (
     <div className="relative z-10 min-h-screen">
       <header
-        className="flex items-center justify-between px-8 py-6"
+        className="flex items-center justify-end px-8 py-6"
         style={{ borderBottom: "1px solid rgba(245, 158, 11, 0.15)" }}
       >
-        <h1
-          className="uppercase"
-          style={{
-            fontFamily: "var(--font-heading)",
-            fontSize: "1.75rem",
-            letterSpacing: "0.25em",
-            color: "#fbf3d4",
-            fontWeight: 300,
-          }}
-        >
-          Cadieux Admin
-        </h1>
         <div className="flex items-center gap-6">
           <div
             className="flex items-center gap-2"
