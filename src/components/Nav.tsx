@@ -159,25 +159,106 @@ function BlogsContent() {
   );
 }
 
+const PROCESS_STEPS = [
+  {
+    num: "01",
+    tag: "Mixing",
+    tagColor: "#d0d8ff",
+    title: "Spiral Blend",
+    highlight: "4 min slow · 15–18 min fast",
+    desc: "Every ingredient is placed in the bowl before the first rotation begins. We use a hook attachment and build structure in two stages — low speed to bind, high speed to develop the gluten network fully.",
+  },
+  {
+    num: "02",
+    tag: "Dough Temp",
+    tagColor: "#f5e6c8",
+    title: "Temperature Control",
+    highlight: "24°C – 26°C",
+    desc: "Dough temperature is checked before and after every mix. Staying within this window ensures the fermentation that follows runs at the right pace — not too fast, never sluggish.",
+  },
+  {
+    num: "03",
+    tag: "Fermentation",
+    tagColor: "#c8e6d0",
+    title: "Bulk Rest",
+    highlight: "~15 minutes",
+    desc: "After mixing, the dough is left undisturbed at room temperature. This short bulk ferment allows the gluten to relax and the cultures to begin their work quietly.",
+  },
+  {
+    num: "04",
+    tag: "Scale",
+    tagColor: "#d0d8ff",
+    title: "Precise Portioning",
+    highlight: "500 – 600 g per loaf",
+    desc: "Each portion is weighed and placed into moulds. Consistency here means consistency in crust, crumb, and protein distribution — every loaf performs the same way.",
+  },
+  {
+    num: "05",
+    tag: "Proofing",
+    tagColor: "#c8e6d0",
+    title: "Final Proof",
+    highlight: "50–60 min · 32°C / 75% RH",
+    desc: "Loaves proof in a controlled environment — warm, humid, and uninterrupted. This final rise develops the open crumb and the flavour complexity that distinguishes slow bread from fast bread.",
+  },
+  {
+    num: "06",
+    tag: "Bake",
+    tagColor: "#f5d0d0",
+    title: "Falling Temperature Bake",
+    highlight: "230°C → 210°C over 50–60 min",
+    desc: "We start hot to set the crust, then reduce by 20°C every ten minutes. The gradual fall drives moisture out slowly, locking in structure without sacrificing the tender interior.",
+  },
+];
+
 function MakingContent() {
   return (
     <>
       <h1 style={{
-        margin: "0 0 48px", fontFamily: "var(--font-heading)",
+        margin: "0 0 16px", fontFamily: "var(--font-heading)",
         fontSize: "clamp(52px,12vw,96px)", fontWeight: 300,
         color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1,
       }}>How It&apos;s Made</h1>
       <p style={{
-        margin: 0, fontFamily: "var(--font-body)", fontSize: 11,
+        margin: "0 0 56px", fontFamily: "var(--font-body)", fontSize: 11,
         fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase",
-        color: "#4369B2", lineHeight: 2.2, maxWidth: 640,
-      }}>
-        Every loaf begins with slow fermentation — rye sourdough cultures
-        developed over days, not hours. We cold-proof overnight, layer in
-        five distinct protein sources, and bake at precise temperatures to
-        lock in structure without sacrificing crust. Nothing is rushed.
-        Nothing is stripped away.
-      </p>
+        color: "#4369B2", lineHeight: 2.2,
+      }}>Six steps. No shortcuts.</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        {PROCESS_STEPS.map((step, i) => (
+          <div key={i} style={{
+            borderTop: "1px solid rgba(240,223,200,0.08)",
+            paddingTop: 32, paddingBottom: 40,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <span style={{
+                fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+                letterSpacing: "0.3em", color: "rgba(251,243,212,0.3)",
+              }}>{step.num}</span>
+              <span style={{
+                fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 400,
+                letterSpacing: "0.2em", textTransform: "uppercase",
+                color: "rgba(30,30,30,0.85)", background: step.tagColor,
+                padding: "3px 10px", borderRadius: 20,
+              }}>{step.tag}</span>
+            </div>
+            <p style={{
+              margin: "0 0 8px", fontFamily: "var(--font-heading)",
+              fontSize: "clamp(22px,5vw,38px)", fontWeight: 300,
+              color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1.1,
+            }}>{step.title}</p>
+            <p style={{
+              margin: "0 0 16px", fontFamily: "var(--font-body)",
+              fontSize: 13, fontWeight: 300, letterSpacing: "0.05em",
+              color: "#4369B2",
+            }}>{step.highlight}</p>
+            <p style={{
+              margin: 0, fontFamily: "var(--font-body)",
+              fontSize: 12, fontWeight: 200, lineHeight: 1.85,
+              color: "rgba(251,243,212,0.45)", maxWidth: 520,
+            }}>{step.desc}</p>
+          </div>
+        ))}
+      </div>
     </>
   );
 }
