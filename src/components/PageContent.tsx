@@ -60,20 +60,30 @@ export default function PageContent() {
   useEffect(() => {
     let rafId: number;
     let last = -1;
+    // Cache layout values — only recalculate on resize, not every frame
+    let cachedTop = 0, cachedH = 0, cachedWh = 0;
+    const measure = () => {
+      const el = cardsOuterRef.current;
+      if (!el) return;
+      cachedTop = window.scrollY + el.getBoundingClientRect().top;
+      cachedH   = el.scrollHeight;
+      cachedWh  = window.innerHeight;
+    };
+    measure();
+    window.addEventListener("resize", measure, { passive: true });
+
     const tick = () => {
       rafId = requestAnimationFrame(tick);
       const sy = window.scrollY;
       if (sy === last) return;
       last = sy;
-      const el = cardsOuterRef.current;
-      if (!el) return;
-      const top = sy + el.getBoundingClientRect().top;
-      const h   = el.scrollHeight;
-      const wh  = window.innerHeight;
-      setCardsP(clamp((sy - top) / (h - wh), 0, 1));
+      setCardsP(clamp((sy - cachedTop) / (cachedH - cachedWh), 0, 1));
     };
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", measure);
+    };
   }, []);
 
   /* ── Grains — opacity boost on viewport entry ── */
@@ -140,7 +150,6 @@ export default function PageContent() {
                 objectFit: "cover",
                 opacity: g.op,
                 mixBlendMode: "screen",
-                willChange: "transform",
                 animationName: g.anim,
                 animationDuration: `${g.dur}s`,
                 animationDelay: `${-g.delay}s`,
