@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import SplitText from "@/components/SplitText";
@@ -16,6 +17,7 @@ const GRAIN_URI =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
 export default function ImmersiveEntry() {
+  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const progressRef  = useRef(0);
   const [progress, setProgress] = useState(0);
@@ -173,7 +175,7 @@ export default function ImmersiveEntry() {
             Same Bread. Better Built.
           </div>
           <button
-            onClick={() => window.dispatchEvent(new Event("openShop"))}
+            onClick={() => router.push("/shop")}
             style={{
             display: "block",
             width: "auto",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import QASection from "./QASection";
 
 /* ── Helpers ── */
@@ -43,6 +44,7 @@ const GRAINS = Array.from({ length: 22 }, (_, i) => ({
 const N_C = INGREDIENTS.length;
 
 export default function PageContent() {
+  const router = useRouter();
   const grainRefs     = useRef<(HTMLImageElement | null)[]>([]);
   const cardsOuterRef = useRef<HTMLDivElement>(null);
   const videoRef      = useRef<HTMLVideoElement>(null);
@@ -238,7 +240,7 @@ export default function PageContent() {
             </section>
             {/* Shop Now — bottom right, outside masked section so it stays visible */}
             <button
-              onClick={() => window.dispatchEvent(new Event("openShop"))}
+              onClick={() => router.push("/shop")}
               style={{
                 position: "absolute", bottom: 48, left: "clamp(28px, 8vw, 80px)", zIndex: 4,
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
@@ -422,7 +424,7 @@ export default function PageContent() {
               border: "none", padding: 18, cursor: "pointer",
               WebkitTapHighlightColor: "transparent",
             }}
-            onClick={() => window.dispatchEvent(new Event("openShop"))}
+            onClick={() => router.push("/shop")}
             >Shop Now</button>
           </section>
 
