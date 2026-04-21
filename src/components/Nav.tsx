@@ -705,13 +705,12 @@ function chip(selected: boolean) {
   };
 }
 
-function ShopContent({ onAddToCart }: { onAddToCart: (item: CartItem) => void }) {
+function ShopContent({ onRequestCart }: { onRequestCart: (item: CartItem) => void }) {
   const [qty,       setQty]       = useState([1, 1]);
   const [orderType, setOrderType] = useState<("once" | "sub")[]>(["once", "once"]);
   const [weeks,     setWeeks]     = useState<(number | null)[]>([null, null]);
   const [day,       setDay]       = useState(["", ""]);
   const [time,      setTime]      = useState(["", ""]);
-  const [pendingItem, setPendingItem] = useState<CartItem | null>(null);
 
   function canAdd(i: number) {
     if (qty[i] < 1) return false;
@@ -826,7 +825,7 @@ function ShopContent({ onAddToCart }: { onAddToCart: (item: CartItem) => void })
                   day:   orderType[i] === "sub" ? day[i]   : undefined,
                   time:  orderType[i] === "sub" ? time[i]  : undefined,
                 };
-                setPendingItem(item);
+                onRequestCart(item);
               }}
               style={{
                 alignSelf: "flex-start", marginTop: 12,
@@ -843,16 +842,6 @@ function ShopContent({ onAddToCart }: { onAddToCart: (item: CartItem) => void })
         ))}
       </div>
 
-      {/* Login modal — appears when pendingItem is set */}
-      {pendingItem && (
-        <LoginModal
-          onSuccess={() => {
-            onAddToCart(pendingItem);
-            setPendingItem(null);
-          }}
-          onClose={() => setPendingItem(null)}
-        />
-      )}
     </>
   );
 }
@@ -959,8 +948,9 @@ function CartContent({
 
 /* ── Nav ── */
 export default function Nav() {
-  const [active, setActive] = useState<Page>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [active,       setActive]      = useState<Page>(null);
+  const [cart,         setCart]        = useState<CartItem[]>([]);
+  const [pendingItem,  setPendingItem] = useState<CartItem | null>(null);
 
   function addToCart(item: CartItem) {
     setCart(prev => {
@@ -1181,11 +1171,22 @@ export default function Nav() {
             {id === "blogs"          && <BlogsContent />}
             {id === "making"         && <MakingContent />}
             {id === "store-locator"  && <StoreContent />}
-            {id === "shop"           && <ShopContent onAddToCart={addToCart} />}
+            {id === "shop"           && <ShopContent onRequestCart={item => setPendingItem(item)} />}
             {id === "cart"           && <CartContent cart={cart} onCheckout={() => alert("Checkout coming soon!")} onUpdateQty={updateQty} onRemove={removeFromCart} />}
           </div>
         </div>
       ))}
+
+      {/* Login/OTP modal — rendered at Nav root so it escapes overlay transform stacking context */}
+      {pendingItem && (
+        <LoginModal
+          onSuccess={() => {
+            addToCart(pendingItem);
+            setPendingItem(null);
+          }}
+          onClose={() => setPendingItem(null)}
+        />
+      )}
     </>
   );
 }
