@@ -425,3 +425,227 @@ function StatusBadge({
     </div>
   );
 }
+
+function splitAddressAndPincode(address: string | null | undefined): { base: string; pincode: string } {
+  const text = (address ?? "").trim();
+  if (!text) return { base: "", pincode: "" };
+  const m = text.match(/^(.*?)[\s,-]*(\d{6})\s*$/);
+  if (m) return { base: m[1].replace(/[\s,-]+$/, "").trim(), pincode: m[2] };
+  return { base: text, pincode: "" };
+}
+
+function EditCustomerModal({
+  order,
+  onClose,
+  onSaved,
+}: {
+  order: Order;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const initial = splitAddressAndPincode(order.delivery_address);
+  const [fullName, setFullName] = useState(order.customers?.full_name ?? "");
+  const [phone, setPhone] = useState(order.customers?.phone ?? "");
+  const [address, setAddress] = useState(initial.base);
+  const [city, setCity] = useState(order.customers?.city ?? "");
+  const [pincode, setPincode] = useState(initial.pincode);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const customerId = order.customer_id;
+
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!customerId) {
+      setError("Missing customer id for this order.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+
+    const newDeliveryAddress = pincode.trim()
+      ? `${address.trim()} - ${pincode.trim()}`
+      : address.trim();
+
+    const { error: custErr } = await supabase
+      .from("customers")
+      .update({
+        full_name: fullName.trim() || null,
+        phone: phone.trim() || null,
+        city: city.trim() || null,
+      })
+      .eq("id", customerId);
+
+    if (custErr) {
+      setSaving(false);
+      setError(custErr.message || "Failed to update customer");
+      return;
+    }
+
+    const { error: orderErr } = await supabase
+      .from("orders")
+      .update({ delivery_address: newDeliveryAddress })
+      .eq("id", order.id);
+
+    if (orderErr) {
+      setSaving(false);
+      setError(orderErr.message || "Failed to update order address");
+      return;
+    }
+
+    const message = `Hi ${fullName.trim() || "Customer"}! 📋 Your Cadieux account details have been updated by our team.\n\nName: ${fullName.trim()}\nAddress: ${address.trim()}, ${city.trim()} - ${pincode.trim()}\n\nIf you did not request this change please contact us immediately. Thank you! 🍞`;
+
+    if (phone.trim()) {
+      try {
+        await fetch("/api/send-whatsapp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: phone.trim(), message }),
+        });
+      } catch {
+        // silent fail — DB already updated
+      }
+    }
+
+    setSaving(false);
+    onSaved();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+      onClick={onClose}
+    >
+      <form
+        onSubmit={handleSave}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md flex flex-col gap-4 p-8 relative"
+        style={{
+          background: "rgb(6,4,2)",
+          border: "1px solid rgba(245, 158, 11, 0.45)",
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <h2
+            className="uppercase"
+            style={{
+              fontFamily: "var(--font-heading)",
+              fontSize: "1.25rem",
+              letterSpacing: "0.25em",
+              color: "#fbf3d4",
+              fontWeight: 300,
+            }}
+          >
+            Edit Customer
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              color: "rgba(245, 158, 11, 0.7)",
+              background: "transparent",
+              border: "none",
+              fontSize: "1.25rem",
+              cursor: "pointer",
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        <Field label="Full Name" value={fullName} onChange={setFullName} />
+        <Field label="Phone Number" value={phone} onChange={setPhone} />
+        <Field label="Delivery Address" value={address} onChange={setAddress} multiline />
+        <Field label="City" value={city} onChange={setCity} />
+        <Field label="Pincode" value={pincode} onChange={setPincode} />
+
+        {error && (
+          <p style={{ color: "#ef4444", fontFamily: "var(--font-body)", fontSize: "0.75rem" }}>
+            {error}
+          </p>
+        )}
+
+        <div className="flex items-center gap-3 pt-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 px-4 py-3 uppercase"
+            style={{
+              border: "1px solid #f59e0b",
+              color: "#f59e0b",
+              fontFamily: "var(--font-body)",
+              fontSize: "0.7rem",
+              letterSpacing: "0.25em",
+              background: "transparent",
+              cursor: saving ? "not-allowed" : "pointer",
+              opacity: saving ? 0.5 : 1,
+            }}
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 px-4 py-3 uppercase"
+            style={{
+              border: "1px solid rgba(192,200,206,0.25)",
+              color: "rgba(192,200,206,0.7)",
+              fontFamily: "var(--font-body)",
+              fontSize: "0.7rem",
+              letterSpacing: "0.25em",
+              background: "transparent",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  multiline?: boolean;
+}) {
+  const common = {
+    className: "w-full px-3 py-2 bg-transparent outline-none",
+    style: {
+      border: "1px solid rgba(245, 158, 11, 0.35)",
+      color: "#fbf3d4",
+      fontFamily: "var(--font-body)",
+      fontSize: "0.85rem",
+      letterSpacing: "0.03em",
+    } as React.CSSProperties,
+    value,
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(e.target.value),
+  };
+  return (
+    <label className="flex flex-col gap-1">
+      <span
+        className="uppercase"
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: "0.6rem",
+          letterSpacing: "0.25em",
+          color: "rgba(245,158,11,0.75)",
+        }}
+      >
+        {label}
+      </span>
+      {multiline ? <textarea rows={2} {...common} /> : <input type="text" {...common} />}
+    </label>
+  );
+}
