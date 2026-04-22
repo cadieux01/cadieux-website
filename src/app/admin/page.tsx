@@ -23,6 +23,18 @@ type Order = {
 const STATUS_OPTIONS = ["Pending", "Confirmed", "Dispatched", "Delivered"] as const;
 type Status = (typeof STATUS_OPTIONS)[number];
 
+function buildStatusMessage(name: string, status: Status): string | null {
+  const n = name || "Customer";
+  switch (status) {
+    case "Confirmed":  return `Hi ${n}! ✅ Your Cadieux order has been confirmed! We are preparing your fresh bread. 🍞`;
+    case "Dispatched": return `Hi ${n}! 🚚 Your Cadieux order is on the way! Our delivery partner will reach you soon.`;
+    case "Delivered":  return `Hi ${n}! 🎉 Your Cadieux order has been delivered! Enjoy your fresh bread. Thank you for choosing Cadieux. 🍞`;
+    default: return null;
+  }
+}
+
+type SendState = "idle" | "sending" | "sent" | "error";
+
 const SESSION_KEY = "cadieux_admin_auth";
 const PASSWORD = "cadieux2024";
 
@@ -144,6 +156,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [sendStates, setSendStates] = useState<Record<string, SendState>>({});
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -193,24 +206,41 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       return;
     }
 
+    // Automated WhatsApp on status change
+    await sendWhatsAppFor(order, newStatus);
+  };
+
+  const sendWhatsAppFor = async (order: Order, status: Status) => {
     const phone = order.customers?.phone;
     const name = order.customers?.full_name ?? "Customer";
-    const messages: Record<string, string> = {
-      Confirmed:  `Hi ${name}! ✅ Your Cadieux order has been confirmed! We are preparing your fresh bread. 🍞`,
-      Dispatched: `Hi ${name}! 🚚 Your Cadieux order is on the way! Our delivery partner will reach you soon.`,
-      Delivered:  `Hi ${name}! 🎉 Your Cadieux order has been delivered! Enjoy your fresh bread. Thank you for choosing Cadieux. 🍞`,
-    };
-    const message = messages[newStatus];
-    if (phone && message) {
-      try {
-        await fetch("/api/send-whatsapp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone, message }),
+    const message = buildStatusMessage(name, status);
+    if (!phone || !message) return;
+
+    setSendStates((s) => ({ ...s, [order.id]: "sending" }));
+    try {
+      const res = await fetch("/api/send-whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, message }),
+      });
+      if (!res.ok) throw new Error("send failed");
+      setSendStates((s) => ({ ...s, [order.id]: "sent" }));
+      setTimeout(() => {
+        setSendStates((s) => {
+          if (s[order.id] !== "sent") return s;
+          const { [order.id]: _, ...rest } = s;
+          return rest;
         });
-      } catch {
-        // silent fail — status already updated in DB
-      }
+      }, 2500);
+    } catch {
+      setSendStates((s) => ({ ...s, [order.id]: "error" }));
+      setTimeout(() => {
+        setSendStates((s) => {
+          if (s[order.id] !== "error") return s;
+          const { [order.id]: _, ...rest } = s;
+          return rest;
+        });
+      }, 3000);
     }
   };
 
@@ -287,6 +317,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                   <Th>City</Th>
                   <Th>Total</Th>
                   <Th>Status</Th>
+                  <Th>WhatsApp</Th>
                   <Th>Date</Th>
                 </tr>
               </thead>
@@ -331,6 +362,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                         <StatusBadge
                           value={normalized}
                           onChange={(next) => updateStatus(o, next)}
+                        />
+                      </Td>
+                      <Td>
+                        <SendWhatsAppButton
+                          state={sendStates[o.id] ?? "idle"}
+                          disabled={!o.customers?.phone || normalized === "Pending"}
+                          onClick={() => sendWhatsAppFor(o, normalized)}
                         />
                       </Td>
                       <Td>
@@ -423,6 +461,51 @@ function StatusBadge({
         ))}
       </select>
     </div>
+  );
+}
+
+function SendWhatsAppButton({
+  state,
+  disabled,
+  onClick,
+}: {
+  state: SendState;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const label = state === "sending" ? "Sending…" : state === "sent" ? "Sent ✓" : state === "error" ? "Failed" : "Send";
+  const color =
+    state === "sent" ? "#22c55e" :
+    state === "error" ? "#ef4444" :
+    state === "sending" ? "rgba(245,158,11,0.5)" :
+    "#25D366";
+  const borderColor =
+    state === "sent" ? "rgba(34,197,94,0.6)" :
+    state === "error" ? "rgba(239,68,68,0.6)" :
+    state === "sending" ? "rgba(245,158,11,0.3)" :
+    "rgba(37,211,102,0.55)";
+  return (
+    <button
+      type="button"
+      disabled={disabled || state === "sending"}
+      onClick={onClick}
+      className="inline-flex items-center gap-1 uppercase"
+      style={{
+        border: `1px solid ${borderColor}`,
+        color,
+        fontFamily: "var(--font-body)",
+        fontSize: "0.6rem",
+        letterSpacing: "0.2em",
+        padding: "4px 10px",
+        background: "transparent",
+        cursor: disabled || state === "sending" ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.35 : 1,
+      }}
+      title={disabled ? "No phone or status is Pending" : "Send WhatsApp message for current status"}
+    >
+      <span aria-hidden>💬</span>
+      {label}
+    </button>
   );
 }
 
