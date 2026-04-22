@@ -143,6 +143,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -300,7 +301,28 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                       style={{ borderTop: "1px solid rgba(245, 158, 11, 0.12)" }}
                     >
                       <Td mono>{displayNumber}</Td>
-                      <Td>{o.customers?.full_name ?? "—"}</Td>
+                      <Td>
+                        <div className="inline-flex items-center gap-2">
+                          <span>{o.customers?.full_name ?? "—"}</span>
+                          <button
+                            onClick={() => setEditingOrder(o)}
+                            title="Edit customer"
+                            className="uppercase"
+                            style={{
+                              border: "1px solid rgba(245, 158, 11, 0.45)",
+                              color: "#f59e0b",
+                              fontFamily: "var(--font-body)",
+                              fontSize: "0.55rem",
+                              letterSpacing: "0.2em",
+                              padding: "2px 8px",
+                              background: "transparent",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </Td>
                       <Td>{o.customers?.phone ?? "—"}</Td>
                       <Td>{o.delivery_address ?? "—"}</Td>
                       <Td>{o.customers?.city ?? "—"}</Td>
@@ -328,6 +350,17 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           </div>
         )}
       </section>
+
+      {editingOrder && (
+        <EditCustomerModal
+          order={editingOrder}
+          onClose={() => setEditingOrder(null)}
+          onSaved={() => {
+            setEditingOrder(null);
+            fetchOrders();
+          }}
+        />
+      )}
     </div>
   );
 }
