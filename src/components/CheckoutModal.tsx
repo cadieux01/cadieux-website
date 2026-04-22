@@ -188,6 +188,26 @@ export default function CheckoutModal({
     } finally { setSubmitting(false); }
   }
 
+  /* ── Send WhatsApp order confirmation ─────────────────────────────────── */
+  async function sendOrderWhatsApp(orderId: string, fullAddress: string) {
+    const shortId = orderId.slice(0, 8).toUpperCase();
+    const message =
+      `Hi ${name.trim() || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
+      `Order ID: ${shortId}\n` +
+      `Total: ₹${total}\n` +
+      `Delivery to: ${fullAddress}, ${city.trim()}\n\n` +
+      `We will confirm your order shortly. Thank you for choosing Cadieux!`;
+    try {
+      await fetch("/api/send-whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.replace(/\D/g, ""), message }),
+      });
+    } catch {
+      /* silent — order already placed */
+    }
+  }
+
   /* ── COD order ──────────────────────────────────────────────────────────── */
   async function placeOrderCOD() {
     const fullAddress = `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
@@ -204,7 +224,9 @@ export default function CheckoutModal({
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Order failed."); return; }
-      setOrderNum(data.order_id?.slice(0, 8).toUpperCase() ?? Math.random().toString(36).slice(2, 10).toUpperCase());
+      const oid = data.order_id ?? "";
+      setOrderNum(oid.slice(0, 8).toUpperCase() || Math.random().toString(36).slice(2, 10).toUpperCase());
+      if (oid) sendOrderWhatsApp(oid, fullAddress);
       setStep("done");
     } catch {
       setError("Something went wrong.");
@@ -262,7 +284,9 @@ export default function CheckoutModal({
           const d = await r.json();
           setOrderLoading(false);
           console.log("[Payment] Success, Razorpay ID:", response.razorpay_payment_id);
-          setOrderNum(d.order_id?.slice(0, 8).toUpperCase() ?? "ONLINE");
+          const oid = d.order_id ?? "";
+          setOrderNum(oid.slice(0, 8).toUpperCase() || "ONLINE");
+          if (oid) sendOrderWhatsApp(oid, fullAddress);
           setStep("done");
         },
         prefill: { name, contact: "+91" + phone.replace(/\D/g, "") },
