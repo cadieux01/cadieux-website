@@ -16,7 +16,8 @@ function normalizePhone(raw: string): string {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const phone = String(body.phone ?? "");
+  // Accept "phone" or "to" for flexibility
+  const phone = String(body.phone ?? body.to ?? "");
   const message = String(body.message ?? "");
 
   if (!phone || !message) {

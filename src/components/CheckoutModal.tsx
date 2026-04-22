@@ -385,14 +385,14 @@ export default function CheckoutModal({
                       padding: "18px 20px",
                       marginBottom: 16,
                     }}>
-                      <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4", letterSpacing: "0.04em" }}>
+                      <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 17, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>
                         {savedCustomer.full_name}
                       </p>
-                      <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.55)", letterSpacing: "0.04em" }}>
+                      <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(240,223,200,0.65)", letterSpacing: "0.04em" }}>
                         +91 {savedCustomer.phone}
                       </p>
                       {savedCustomer.delivery_address && (
-                        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.4)", letterSpacing: "0.03em", lineHeight: 1.65 }}>
+                        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.03em", lineHeight: 1.7 }}>
                           {savedCustomer.delivery_address}
                         </p>
                       )}
