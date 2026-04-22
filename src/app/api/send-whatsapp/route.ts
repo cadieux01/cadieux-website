@@ -24,11 +24,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing phone or message" }, { status: 400 });
   }
 
-  if (!ACCOUNT_SID || !AUTH_TOKEN) {
-    console.warn("[send-whatsapp] Twilio env vars missing; skipping send.");
-    return NextResponse.json({ ok: true, skipped: true });
-  }
-
   const to = normalizePhone(phone);
   const auth = Buffer.from(`${ACCOUNT_SID}:${AUTH_TOKEN}`).toString("base64");
   const url = `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Messages.json`;
