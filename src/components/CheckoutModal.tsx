@@ -189,19 +189,21 @@ export default function CheckoutModal({
   }
 
   /* ── Send WhatsApp order confirmation ─────────────────────────────────── */
-  async function sendOrderWhatsApp(orderId: string, fullAddress: string) {
+  async function sendOrderWhatsApp(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string) {
     const shortId = orderId.slice(0, 8).toUpperCase();
+    const resolvedPhone = customerPhone.replace(/\D/g, "");
+    if (!resolvedPhone) return;
     const message =
-      `Hi ${name.trim() || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
+      `Hi ${customerName || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
       `Order ID: ${shortId}\n` +
       `Total: ₹${total}\n` +
-      `Delivery to: ${fullAddress}, ${city.trim()}\n\n` +
+      `Delivery to: ${deliveryAddress}\n\n` +
       `We will confirm your order shortly. Thank you for choosing Cadieux!`;
     try {
       await fetch("/api/send-whatsapp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.replace(/\D/g, ""), message }),
+        body: JSON.stringify({ phone: resolvedPhone, message }),
       });
     } catch {
       /* silent — order already placed */
@@ -210,7 +212,14 @@ export default function CheckoutModal({
 
   /* ── COD order ──────────────────────────────────────────────────────────── */
   async function placeOrderCOD() {
-    const fullAddress = `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+    // For returning customers using saved details, use savedCustomer data directly
+    const isReturning = formMode === "returning" && savedCustomer;
+    const fullAddress = isReturning
+      ? (savedCustomer!.delivery_address ?? "")
+      : `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+    const customerPhone = isReturning ? (savedCustomer!.phone ?? "") : phone;
+    const customerName  = isReturning ? (savedCustomer!.full_name ?? "") : name.trim();
+
     setOrderLoading(true); setError("");
     try {
       const res = await fetch("/api/checkout", {
@@ -226,7 +235,7 @@ export default function CheckoutModal({
       if (!res.ok) { setError(data.error ?? "Order failed."); return; }
       const oid = data.order_id ?? "";
       setOrderNum(oid.slice(0, 8).toUpperCase() || Math.random().toString(36).slice(2, 10).toUpperCase());
-      if (oid) sendOrderWhatsApp(oid, fullAddress);
+      if (oid) sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
       setStep("done");
     } catch {
       setError("Something went wrong.");
@@ -261,7 +270,12 @@ export default function CheckoutModal({
       setOrderLoading(false);
       if (!loaded) { setError("Failed to load payment gateway. Please use Cash on Delivery."); return; }
 
-      const fullAddress = `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+      const isReturning = formMode === "returning" && savedCustomer;
+      const fullAddress = isReturning
+        ? (savedCustomer!.delivery_address ?? "")
+        : `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+      const customerPhone = isReturning ? (savedCustomer!.phone ?? "") : phone;
+      const customerName  = isReturning ? (savedCustomer!.full_name ?? "") : name.trim();
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
@@ -286,10 +300,10 @@ export default function CheckoutModal({
           console.log("[Payment] Success, Razorpay ID:", response.razorpay_payment_id);
           const oid = d.order_id ?? "";
           setOrderNum(oid.slice(0, 8).toUpperCase() || "ONLINE");
-          if (oid) sendOrderWhatsApp(oid, fullAddress);
+          if (oid) sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
           setStep("done");
         },
-        prefill: { name, contact: "+91" + phone.replace(/\D/g, "") },
+        prefill: { name: customerName, contact: "+91" + customerPhone.replace(/\D/g, "") },
         theme: { color: "#024628" },
       };
 

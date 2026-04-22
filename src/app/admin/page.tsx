@@ -194,13 +194,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
     const phone = order.customers?.phone;
     const name = order.customers?.full_name ?? "Customer";
-    if (phone && (newStatus === "Confirmed" || newStatus === "Dispatched" || newStatus === "Delivered")) {
-      const message =
-        newStatus === "Confirmed"
-          ? `Hi ${name}! ✅ Your Cadieux order has been confirmed! We are preparing your fresh bread. 🍞`
-          : newStatus === "Dispatched"
-          ? `Hi ${name}! 🚚 Your Cadieux order is on the way! Our delivery partner will reach you soon.`
-          : `Hi ${name}! 🎉 Your Cadieux order has been delivered! Enjoy your fresh bread. Thank you for choosing Cadieux. 🍞`;
+    const messages: Record<string, string> = {
+      Confirmed:  `Hi ${name}! ✅ Your Cadieux order has been confirmed! We are preparing your fresh bread. 🍞`,
+      Dispatched: `Hi ${name}! 🚚 Your Cadieux order is on the way! Our delivery partner will reach you soon.`,
+      Delivered:  `Hi ${name}! 🎉 Your Cadieux order has been delivered! Enjoy your fresh bread. Thank you for choosing Cadieux. 🍞`,
+    };
+    const message = messages[newStatus];
+    if (phone && message) {
       try {
         await fetch("/api/send-whatsapp", {
           method: "POST",
