@@ -206,8 +206,24 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       return;
     }
 
-    // Automated WhatsApp on status change
+    // Automated SMS (primary) + WhatsApp (secondary) on status change
+    sendSMSFor(order, newStatus);
     await sendWhatsAppFor(order, newStatus);
+  };
+
+  const sendSMSFor = async (order: Order, status: Status) => {
+    const phone = order.customers?.phone;
+    const name = order.customers?.full_name ?? "Customer";
+    if (!phone || !["Confirmed", "Dispatched", "Delivered"].includes(status)) return;
+    try {
+      await fetch("/api/send-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "status_change", phone, name, orderId: order.id, status }),
+      });
+    } catch {
+      /* silent */
+    }
   };
 
   const sendWhatsAppFor = async (order: Order, status: Status) => {
@@ -579,6 +595,23 @@ function EditCustomerModal({
     const message = `Hi ${fullName.trim() || "Customer"}! 📋 Your Cadieux account details have been updated by our team.\n\nName: ${fullName.trim()}\nAddress: ${address.trim()}, ${city.trim()} - ${pincode.trim()}\n\nIf you did not request this change please contact us immediately. Thank you! 🍞`;
 
     if (phone.trim()) {
+      const editedAddress = `${address.trim()}, ${city.trim()} - ${pincode.trim()}`;
+      // SMS — primary
+      try {
+        await fetch("/api/send-sms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "customer_edit",
+            phone: phone.trim(),
+            name: fullName.trim() || "Customer",
+            address: editedAddress,
+          }),
+        });
+      } catch {
+        /* silent */
+      }
+      // WhatsApp — secondary bonus
       try {
         await fetch("/api/send-whatsapp", {
           method: "POST",
@@ -586,7 +619,7 @@ function EditCustomerModal({
           body: JSON.stringify({ phone: phone.trim(), message }),
         });
       } catch {
-        // silent fail — DB already updated
+        /* silent */
       }
     }
 

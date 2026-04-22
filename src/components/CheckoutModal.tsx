@@ -188,7 +188,29 @@ export default function CheckoutModal({
     } finally { setSubmitting(false); }
   }
 
-  /* ── Send WhatsApp order confirmation ─────────────────────────────────── */
+  /* ── Send SMS order confirmation (primary) ────────────────────────────── */
+  async function sendOrderSMS(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string) {
+    const resolvedPhone = customerPhone.replace(/\D/g, "");
+    if (!resolvedPhone) return;
+    try {
+      await fetch("/api/send-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "order_placed",
+          phone: resolvedPhone,
+          name: customerName || "Customer",
+          orderId,
+          total,
+          address: deliveryAddress,
+        }),
+      });
+    } catch {
+      /* silent — order already placed */
+    }
+  }
+
+  /* ── Send WhatsApp order confirmation (secondary bonus) ────────────────── */
   async function sendOrderWhatsApp(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string) {
     const shortId = orderId.slice(0, 8).toUpperCase();
     const resolvedPhone = customerPhone.replace(/\D/g, "");
@@ -235,7 +257,10 @@ export default function CheckoutModal({
       if (!res.ok) { setError(data.error ?? "Order failed."); return; }
       const oid = data.order_id ?? "";
       setOrderNum(oid.slice(0, 8).toUpperCase() || Math.random().toString(36).slice(2, 10).toUpperCase());
-      if (oid) sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
+      if (oid) {
+        sendOrderSMS(oid, fullAddress, customerPhone, customerName);
+        sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
+      }
       setStep("done");
     } catch {
       setError("Something went wrong.");
@@ -300,7 +325,10 @@ export default function CheckoutModal({
           console.log("[Payment] Success, Razorpay ID:", response.razorpay_payment_id);
           const oid = d.order_id ?? "";
           setOrderNum(oid.slice(0, 8).toUpperCase() || "ONLINE");
-          if (oid) sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
+          if (oid) {
+            sendOrderSMS(oid, fullAddress, customerPhone, customerName);
+            sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
+          }
           setStep("done");
         },
         prefill: { name: customerName, contact: "+91" + customerPhone.replace(/\D/g, "") },
