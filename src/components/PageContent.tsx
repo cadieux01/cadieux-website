@@ -326,14 +326,8 @@ export default function PageContent() {
           {/* ══ Q&A SECTION ══ */}
           <QASection />
 
-          {/* Phase 2→3 bridge */}
-          <div style={{
-            position: "relative", marginTop: "-28vh", height: "28vh",
-            zIndex: 50, pointerEvents: "none",
-            background: "linear-gradient(to bottom, #1D1D1F, transparent)",
-          }} />
-
           {/* ══ SECTION 4 — INGREDIENT CARDS (scroll-driven sticky) ══ */}
+          {/* Phase 2 ends with its own dark #1D1D1F fade — Phase 3 starts directly after, no bridge needed */}
           <div ref={cardsOuterRef} style={{ position: "relative", height: `${N_C * 100}vh` }}>
             <div style={{
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
@@ -534,19 +528,14 @@ export default function PageContent() {
             </div>
           </div>
 
-          {/* Phase 3.5→4 bridge */}
-          <div style={{
-            position: "relative", marginTop: 0, height: "20vh",
-            zIndex: 2, pointerEvents: "none",
-            background: "linear-gradient(to bottom, #060402, transparent)",
-          }} />
-
           {/* ══ SECTION 5 — CLOSING CTA ══ */}
+          {/* Dissolve zone: pull up 40vh and fade top from Phase 4's bg for a crossfade */}
           <section style={{
             minHeight: "100dvh", display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
             padding: "80px 28px", textAlign: "center", position: "relative",
             overflow: "hidden",
+            marginTop: "-40vh", zIndex: 3,
           }}>
             {/* Background video */}
             <video autoPlay muted playsInline loop style={{
@@ -557,6 +546,8 @@ export default function PageContent() {
             </video>
             {/* Dark overlay */}
             <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.70)", zIndex: 1, pointerEvents: "none" }} />
+            {/* Dissolve: top fade from Phase 4's bg → transparent, blending the two sections */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "40vh", background: "linear-gradient(to bottom, #1D1D1F, transparent)", zIndex: 3, pointerEvents: "none" }} />
             <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 2 }} />
 
             <img
