@@ -4,6 +4,7 @@ import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
 import CustomCursor from "@/components/CustomCursor";
 import NavGate from "@/components/NavGate";
+import SiteMusic from "@/components/SiteMusic";
 import { CartProvider } from "@/context/CartContext";
 
 const cormorant = Cormorant_Garamond({
@@ -51,6 +52,7 @@ export default function RootLayout({
           <SmoothScroll />
           <CustomCursor />
           <NavGate />
+          <SiteMusic />
           {children}
         </CartProvider>
       </body>

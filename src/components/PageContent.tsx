@@ -285,7 +285,7 @@ export default function PageContent() {
                   alt="Cadieux"
                   style={{
                     display: "block",
-                    width: "clamp(40px, 6vw, 60px)",
+                    width: "clamp(42px, 6vw, 62px)",
                     height: "auto",
                     marginBottom: 10,
                     pointerEvents: "none",

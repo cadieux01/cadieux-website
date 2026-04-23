@@ -24,20 +24,20 @@ const inputSt: React.CSSProperties = {
   background: "transparent",
   border: "none", borderBottom: "1px solid rgba(240,223,200,0.18)",
   padding: "10px 0", outline: "none",
-  fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200,
+  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
   color: "#FBF3D4", letterSpacing: "0.04em",
 };
 
 const labelSt: React.CSSProperties = {
   display: "block", marginBottom: 6,
-  fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+  fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
   letterSpacing: "0.4em", textTransform: "uppercase",
   color: "rgba(200,144,58,0.65)",
 };
 
 const sectionHead: React.CSSProperties = {
   margin: "0 0 20px",
-  fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+  fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
   letterSpacing: "0.5em", textTransform: "uppercase",
   color: "rgba(240,223,200,0.28)",
 };
@@ -378,7 +378,7 @@ export default function CheckoutModal({
             <button onClick={onClose} style={{
               position: "absolute", top: 18, right: 18, zIndex: 10,
               background: "none", border: "none", cursor: "pointer",
-              color: "rgba(240,223,200,0.25)", fontSize: 18, lineHeight: 1,
+              color: "rgba(240,223,200,0.25)", fontSize: 19, lineHeight: 1,
               WebkitTapHighlightColor: "transparent",
             }}>✕</button>
           )}
@@ -389,10 +389,10 @@ export default function CheckoutModal({
             {step === "form" && (
               <>
                 {/* Header */}
-                <p style={{ margin: "0 0 4px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,38px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em", lineHeight: 1 }}>
+                <p style={{ margin: "0 0 4px", fontFamily: "var(--font-heading)", fontSize: "clamp(29px,7vw,39px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em", lineHeight: 1 }}>
                   Checkout
                 </p>
-                <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>
+                <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>
                   {formMode === "returning" ? "Welcome back" : "Fill in your details to place order"}
                 </p>
 
@@ -401,15 +401,15 @@ export default function CheckoutModal({
                   <p style={sectionHead}>Your Order</p>
                   {cart.map((item, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(240,223,200,0.07)", padding: "11px 0" }}>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.65)", letterSpacing: "0.03em" }}>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.65)", letterSpacing: "0.03em" }}>
                         {item.name} × {item.qty}
                       </span>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#FBF3D4" }}>₹{item.price * item.qty}</span>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4" }}>₹{item.price * item.qty}</span>
                     </div>
                   ))}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid rgba(240,223,200,0.12)", paddingTop: 12, marginTop: 4 }}>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>Total (Incl. GST)</span>
-                    <span style={{ fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 300, color: "#FBF3D4" }}>₹{total}</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>Total (Incl. GST)</span>
+                    <span style={{ fontFamily: "var(--font-heading)", fontSize: 27, fontWeight: 300, color: "#FBF3D4" }}>₹{total}</span>
                   </div>
                 </div>
 
@@ -427,21 +427,21 @@ export default function CheckoutModal({
                       padding: "18px 20px",
                       marginBottom: 16,
                     }}>
-                      <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 17, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>
+                      <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 18, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>
                         {savedCustomer.full_name}
                       </p>
-                      <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(240,223,200,0.65)", letterSpacing: "0.04em" }}>
+                      <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(240,223,200,0.65)", letterSpacing: "0.04em" }}>
                         +91 {savedCustomer.phone}
                       </p>
                       {savedCustomer.delivery_address && (
-                        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.03em", lineHeight: 1.7 }}>
+                        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.03em", lineHeight: 1.7 }}>
                           {savedCustomer.delivery_address}
                         </p>
                       )}
                     </div>
 
                     {error && (
-                      <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.04em" }}>
+                      <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, color: "#e05a5a", letterSpacing: "0.04em" }}>
                         {error}
                       </p>
                     )}
@@ -453,7 +453,7 @@ export default function CheckoutModal({
                         display: "block", width: "100%",
                         background: "#f0dfc8", border: "none", padding: "17px 0",
                         cursor: "pointer",
-                        fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                        fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300,
                         letterSpacing: "0.45em", textTransform: "uppercase",
                         color: "#080604",
                         WebkitTapHighlightColor: "transparent",
@@ -472,7 +472,7 @@ export default function CheckoutModal({
                         border: "1px solid rgba(240,223,200,0.14)",
                         padding: "15px 0",
                         cursor: "pointer",
-                        fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                        fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300,
                         letterSpacing: "0.4em", textTransform: "uppercase",
                         color: "rgba(240,223,200,0.55)",
                         WebkitTapHighlightColor: "transparent",
@@ -485,7 +485,7 @@ export default function CheckoutModal({
                     {/* Divider + fresh start */}
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
                       <div style={{ flex: 1, height: 1, background: "rgba(240,223,200,0.07)" }} />
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(240,223,200,0.25)" }}>or</span>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(240,223,200,0.25)" }}>or</span>
                       <div style={{ flex: 1, height: 1, background: "rgba(240,223,200,0.07)" }} />
                     </div>
 
@@ -500,7 +500,7 @@ export default function CheckoutModal({
                         display: "block", width: "100%",
                         background: "none", border: "none",
                         cursor: "pointer", padding: "10px 0",
-                        fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                        fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
                         letterSpacing: "0.35em", textTransform: "uppercase",
                         color: "rgba(200,144,58,0.5)",
                         WebkitTapHighlightColor: "transparent",
@@ -532,7 +532,7 @@ export default function CheckoutModal({
                       <span style={labelSt}>Mobile Number *</span>
                       <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
                         <div style={{ flex: 1, display: "flex", alignItems: "flex-end", ...inputSt, padding: 0 }}>
-                          <span style={{ padding: "10px 0 10px 12px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.5)", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
+                          <span style={{ padding: "10px 0 10px 12px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.5)", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
                           <input
                             type="tel" inputMode="numeric" autoComplete="tel-national"
                             value={phone}
@@ -542,15 +542,15 @@ export default function CheckoutModal({
                               if (otpVerified) { setOtpVerified(false); setOtpSent(false); setOtpCode(""); }
                             }}
                             placeholder="10-digit number"
-                            style={{ flex: 1, background: "none", border: "none", outline: "none", padding: "10px 12px 10px 6px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4", letterSpacing: "0.05em" }}
+                            style={{ flex: 1, background: "none", border: "none", outline: "none", padding: "10px 12px 10px 6px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#FBF3D4", letterSpacing: "0.05em" }}
                           />
                         </div>
                         {otpVerified ? (
                           <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, marginBottom: 2 }}>
-                            <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "#4ade80" }}>✓ Verified</span>
+                            <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.2em", color: "#4ade80" }}>✓ Verified</span>
                             <button
                               onClick={() => { setOtpVerified(false); setOtpSent(false); setOtpCode(""); setOtpError(""); }}
-                              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)", WebkitTapHighlightColor: "transparent" }}
+                              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)", WebkitTapHighlightColor: "transparent" }}
                             >Edit</button>
                           </div>
                         ) : (
@@ -563,7 +563,7 @@ export default function CheckoutModal({
                               border: "1px solid rgba(200,144,58,0.45)",
                               padding: "7px 14px",
                               cursor: (sendingOtp || phone.replace(/\D/g,"").length < 10) ? "default" : "pointer",
-                              fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                              fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
                               letterSpacing: "0.3em", textTransform: "uppercase",
                               color: (sendingOtp || phone.replace(/\D/g,"").length < 10) ? "rgba(200,144,58,0.3)" : "rgba(200,144,58,0.85)",
                               WebkitTapHighlightColor: "transparent",
@@ -583,7 +583,7 @@ export default function CheckoutModal({
                             value={otpCode}
                             onChange={e => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(""); }}
                             placeholder="6-digit code"
-                            style={{ ...inputSt, letterSpacing: "0.4em", fontSize: 18, borderBottomColor: "rgba(200,144,58,0.45)" }}
+                            style={{ ...inputSt, letterSpacing: "0.4em", fontSize: 19, borderBottomColor: "rgba(200,144,58,0.45)" }}
                             autoFocus
                           />
                           <button
@@ -594,7 +594,7 @@ export default function CheckoutModal({
                               background: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "rgba(240,223,200,0.12)" : "#f0dfc8",
                               border: "none", padding: "13px 0",
                               cursor: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "default" : "pointer",
-                              fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                               letterSpacing: "0.4em", textTransform: "uppercase",
                               color: (verifyingOtp || otpCode.replace(/\D/g,"").length < 6) ? "rgba(8,6,4,0.35)" : "#080604",
                               WebkitTapHighlightColor: "transparent",
@@ -606,7 +606,7 @@ export default function CheckoutModal({
                       )}
 
                       {otpError && (
-                        <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.04em" }}>
+                        <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "#e05a5a", letterSpacing: "0.04em" }}>
                           {otpError}
                         </p>
                       )}
@@ -658,7 +658,7 @@ export default function CheckoutModal({
                     </div>
 
                     {error && (
-                      <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a", letterSpacing: "0.04em" }}>
+                      <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 12, color: "#e05a5a", letterSpacing: "0.04em" }}>
                         {error}
                       </p>
                     )}
@@ -671,7 +671,7 @@ export default function CheckoutModal({
                         background: submitting ? "rgba(240,223,200,0.5)" : "#f0dfc8",
                         border: "none", padding: "17px 0",
                         cursor: submitting ? "default" : "pointer",
-                        fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                        fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300,
                         letterSpacing: "0.45em", textTransform: "uppercase",
                         color: "#080604",
                         WebkitTapHighlightColor: "transparent",
@@ -695,7 +695,7 @@ export default function CheckoutModal({
                         style={{
                           display: "block", width: "100%", background: "none", border: "none",
                           cursor: "pointer", marginTop: 18,
-                          fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                          fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
                           letterSpacing: "0.3em", textTransform: "uppercase",
                           color: "rgba(240,223,200,0.22)",
                           WebkitTapHighlightColor: "transparent",
@@ -712,10 +712,10 @@ export default function CheckoutModal({
             {/* ══ PAYMENT STEP ═══════════════════════════════════════════════ */}
             {step === "payment" && (
               <>
-                <p style={{ margin: "0 0 4px", fontFamily: "var(--font-heading)", fontSize: "clamp(28px,7vw,38px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em" }}>
+                <p style={{ margin: "0 0 4px", fontFamily: "var(--font-heading)", fontSize: "clamp(29px,7vw,39px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em" }}>
                   Payment
                 </p>
-                <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>
+                <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>
                   Choose how to pay
                 </p>
 
@@ -723,20 +723,20 @@ export default function CheckoutModal({
                 <div style={{ background: "rgba(240,223,200,0.04)", border: "1px solid rgba(240,223,200,0.08)", padding: "16px 18px", marginBottom: 28 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                     <div>
-                      <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>Order Total</p>
-                      <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 300, color: "#FBF3D4" }}>₹{total}</p>
+                      <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>Order Total</p>
+                      <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: 29, fontWeight: 300, color: "#FBF3D4" }}>₹{total}</p>
                     </div>
                   </div>
-                  <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.03em" }}>
+                  <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.03em" }}>
                     {name} · +91 {phone.replace(/\D/g, "")}
                   </p>
-                  <p style={{ margin: "4px 0 0", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.35)", letterSpacing: "0.03em", lineHeight: 1.6 }}>
+                  <p style={{ margin: "4px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.35)", letterSpacing: "0.03em", lineHeight: 1.6 }}>
                     {fullAddressDisplay}
                   </p>
                 </div>
 
                 {error && (
-                  <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, color: "#e05a5a" }}>
+                  <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 12, color: "#e05a5a" }}>
                     {error}
                   </p>
                 )}
@@ -750,7 +750,7 @@ export default function CheckoutModal({
                     background: orderLoading ? "rgba(2,70,40,0.35)" : "#024628",
                     border: "none", padding: "18px 0", marginBottom: 10,
                     cursor: orderLoading ? "default" : "pointer",
-                    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                    fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300,
                     letterSpacing: "0.4em", textTransform: "uppercase",
                     color: orderLoading ? "rgba(251,243,212,0.35)" : "#FBF3D4",
                     WebkitTapHighlightColor: "transparent",
@@ -759,7 +759,7 @@ export default function CheckoutModal({
                 >
                   {orderLoading ? "Processing…" : "Pay Online"}
                 </button>
-                <p style={{ margin: "0 0 20px", textAlign: "center", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(240,223,200,0.22)", textTransform: "uppercase" }}>
+                <p style={{ margin: "0 0 20px", textAlign: "center", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(240,223,200,0.22)", textTransform: "uppercase" }}>
                   UPI · Cards · Net Banking · Wallets
                 </p>
 
@@ -773,7 +773,7 @@ export default function CheckoutModal({
                     border: "1px solid rgba(240,223,200,0.14)",
                     padding: "17px 0",
                     cursor: orderLoading ? "default" : "pointer",
-                    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                    fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300,
                     letterSpacing: "0.4em", textTransform: "uppercase",
                     color: orderLoading ? "rgba(240,223,200,0.2)" : "rgba(240,223,200,0.55)",
                     WebkitTapHighlightColor: "transparent",
@@ -782,7 +782,7 @@ export default function CheckoutModal({
                 >
                   Cash on Delivery
                 </button>
-                <p style={{ margin: "8px 0 0", textAlign: "center", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(240,223,200,0.2)", textTransform: "uppercase" }}>
+                <p style={{ margin: "8px 0 0", textAlign: "center", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(240,223,200,0.2)", textTransform: "uppercase" }}>
                   Pay when it arrives
                 </p>
 
@@ -791,7 +791,7 @@ export default function CheckoutModal({
                   style={{
                     display: "block", width: "100%", background: "none", border: "none",
                     cursor: "pointer", marginTop: 28,
-                    fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+                    fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
                     letterSpacing: "0.3em", textTransform: "uppercase",
                     color: "rgba(240,223,200,0.22)",
                     WebkitTapHighlightColor: "transparent",
@@ -816,13 +816,13 @@ export default function CheckoutModal({
                     style={{ animation: "check-draw 0.4s 0.4s ease forwards", opacity: 0 }}
                   />
                 </svg>
-                <p style={{ margin: "0 0 8px", fontFamily: "var(--font-heading)", fontSize: "clamp(32px,8vw,48px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em" }}>
+                <p style={{ margin: "0 0 8px", fontFamily: "var(--font-heading)", fontSize: "clamp(33px,8vw,49px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em" }}>
                   Order Placed
                 </p>
-                <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.75)" }}>
+                <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.75)" }}>
                   Order #{orderNum}
                 </p>
-                <p style={{ margin: "0 0 40px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.06em", color: "rgba(240,223,200,0.45)", lineHeight: 1.7 }}>
+                <p style={{ margin: "0 0 40px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.06em", color: "rgba(240,223,200,0.45)", lineHeight: 1.7 }}>
                   Estimated delivery: 1–2 days<br />
                   We&apos;ll reach out on your number to confirm.
                 </p>
@@ -832,7 +832,7 @@ export default function CheckoutModal({
                     display: "block", width: "100%",
                     background: "#f0dfc8", border: "none", padding: "17px 0",
                     cursor: "pointer",
-                    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                    fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300,
                     letterSpacing: "0.45em", textTransform: "uppercase",
                     color: "#080604",
                     WebkitTapHighlightColor: "transparent",
