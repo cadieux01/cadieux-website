@@ -338,8 +338,8 @@ export default function PageContent() {
           <QASection />
 
           {/* ══ SECTION 4 — INGREDIENT CARDS (scroll-driven sticky) ══ */}
-          {/* Dissolve from Phase 2: pull up 40vh + top gradient fading from Phase 2's dark */}
-          <div ref={cardsOuterRef} style={{ position: "relative", height: `${N_C * 100}vh`, marginTop: "-40vh", zIndex: 3 }}>
+          {/* Slow overlap with Phase 2 — same pattern as Phase 3→4 (pull up 100vh, no coating) */}
+          <div ref={cardsOuterRef} style={{ position: "relative", height: `${N_C * 100}vh`, marginTop: "-100vh", zIndex: 3 }}>
             <div style={{
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
               background: "#1D1D1F",
@@ -357,8 +357,6 @@ export default function PageContent() {
               </video>
               {/* Dark overlay */}
               <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.62)", zIndex: 0, pointerEvents: "none" }} />
-              {/* Dissolve: top fade from Phase 2's dark → transparent */}
-              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "40vh", background: "linear-gradient(to bottom, #1D1D1F, transparent)", zIndex: 11, pointerEvents: "none" }} />
               {/* Shared grain overlay */}
               <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
 
@@ -542,13 +540,13 @@ export default function PageContent() {
           </div>
 
           {/* ══ SECTION 5 — CLOSING CTA ══ */}
-          {/* Dissolve zone: pull up 40vh and fade top from Phase 4's bg for a crossfade */}
+          {/* Slow overlap — same pattern as Phase 2→3 and Phase 3→4 (pull up 100vh, no coating) */}
           <section style={{
             minHeight: "100dvh", display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
             padding: "80px 28px", textAlign: "center", position: "relative",
             overflow: "hidden",
-            marginTop: "-40vh", zIndex: 3,
+            marginTop: "-100vh", zIndex: 3,
           }}>
             {/* Background video */}
             <video ref={playOnEnter} muted playsInline loop preload="auto" style={{
@@ -559,8 +557,6 @@ export default function PageContent() {
             </video>
             {/* Dark overlay */}
             <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.70)", zIndex: 1, pointerEvents: "none" }} />
-            {/* Dissolve: top fade from Phase 4's bg → transparent, blending the two sections */}
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "40vh", background: "linear-gradient(to bottom, #1D1D1F, transparent)", zIndex: 3, pointerEvents: "none" }} />
             <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 2 }} />
 
             <img
