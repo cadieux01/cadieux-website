@@ -431,7 +431,8 @@ export default function PageContent() {
 
 
           {/* ══ SECTION 4.5 — PHASE 3.5: WHY PROTEIN (sticky scroll-driven) ══ */}
-          <div ref={proteinOuterRef} style={{ position: "relative", height: `${N_P * 100}vh` }}>
+          {/* Pull up 100vh so Phase 4's sticky begins exactly as Phase 3's cards finish fading — no dead zone */}
+          <div ref={proteinOuterRef} style={{ position: "relative", height: `${N_P * 100}vh`, marginTop: "-100vh", zIndex: 3 }}>
             <div style={{
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
               background: "#1D1D1F",
