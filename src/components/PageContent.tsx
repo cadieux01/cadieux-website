@@ -435,12 +435,6 @@ export default function PageContent() {
             </div>
           </div>
 
-          {/* Phase 3→3.5 bridge */}
-          <div style={{
-            position: "relative", marginTop: "-20vh", height: "20vh",
-            zIndex: 2, pointerEvents: "none",
-            background: "linear-gradient(to bottom, #1D1D1F, #060402)",
-          }} />
 
           {/* ══ SECTION 4.5 — PHASE 3.5: WHY PROTEIN (sticky scroll-driven) ══ */}
           <div ref={proteinOuterRef} style={{ position: "relative", height: `${N_P * 100}vh` }}>
