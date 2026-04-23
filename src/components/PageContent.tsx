@@ -327,15 +327,11 @@ export default function PageContent() {
               }}>Shop Now</button>
           </div>
 
-          {/* Phase 1→2 bridge: fades Phase 1 bottom to dark, matching Phase 2's video overlay */}
-          <div style={{
-            position: "relative", marginTop: "-35vh", height: "35vh",
-            zIndex: 2, pointerEvents: "none",
-            background: "linear-gradient(to bottom, transparent, #060402)",
-          }} />
-
           {/* ══ Q&A SECTION ══ */}
-          <QASection />
+          {/* Slow overlap with Phase 1 — same pattern as Phase 3→4 (pull up 100vh, no coating) */}
+          <div style={{ position: "relative", marginTop: "-100vh", zIndex: 3 }}>
+            <QASection />
+          </div>
 
           {/* ══ SECTION 4 — INGREDIENT CARDS (scroll-driven sticky) ══ */}
           {/* Slow overlap with Phase 2 — same pattern as Phase 3→4 (pull up 100vh, no coating) */}
