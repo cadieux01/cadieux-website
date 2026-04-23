@@ -456,7 +456,7 @@ export default function PageContent() {
                 { n: "02", title: "Keeps You Full", desc: "Protein is the most satiating nutrient there is. A protein-rich breakfast steadies hunger for hours — fewer cravings, less snacking." },
                 { n: "03", title: "Lasting Energy", desc: "Slow-digesting protein keeps blood sugar steady, replacing mid-morning crashes with hours of clean, even focus." },
                 { n: "04", title: "Stronger Immunity", desc: "Antibodies, enzymes and hormones are all built from protein — the quiet foundation of a body that holds up through busy weeks." },
-                { n: "05", title: "Healthier Skin & Hair", desc: "Collagen and keratin — the building blocks of skin, hair and nails — are proteins. Steady intake is what keeps them looking alive." },
+                { n: "05", title: "Sharper Mind", desc: "Proteins form the neurotransmitters — dopamine, serotonin, norepinephrine — that shape your mood, focus and memory every single day."  },
               ].map((b) => (
                 <div key={b.n} style={{ textAlign: "left" }}>
                   <p style={{
