@@ -140,11 +140,11 @@ export default function Nav() {
         display: "flex", flexDirection: "column",
       }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.05, pointerEvents: "none" }} />
-        <div style={{ position: "relative", zIndex: 1, padding: "72px 28px 48px", flex: 1, display: "flex", flexDirection: "column" }}>
+        <div style={{ position: "relative", zIndex: 1, padding: "100px 28px 48px", flex: 1, display: "flex", flexDirection: "column" }}>
 
           {menuSection === "main" && (
             <>
-              <p style={{ margin: "0 0 40px", fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)" }}>Menu</p>
+              <p style={{ margin: "0 0 40px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)" }}>Menu</p>
               {[
                 { label: "Explore Cadieux", action: () => nav("/shop") },
                 { label: "Your Cart",       action: () => nav("/cart") },
@@ -158,7 +158,7 @@ export default function Nav() {
                 <button key={label} onClick={action} style={{
                   background: "none", border: "none", cursor: "pointer", padding: "18px 0",
                   textAlign: "left", borderBottom: "1px solid rgba(240,223,200,0.06)",
-                  fontFamily: "var(--font-heading)", fontSize: "clamp(22px,5vw,32px)", fontWeight: 300,
+                  fontFamily: "var(--font-heading)", fontSize: "clamp(26px,5vw,36px)", fontWeight: 300,
                   color: "#FBF3D4", letterSpacing: "0.03em",
                   display: "block", width: "100%",
                   WebkitTapHighlightColor: "transparent",
@@ -172,25 +172,25 @@ export default function Nav() {
           {/* ── Your Orders ── */}
           {menuSection === "orders" && (
             <>
-              <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
+              <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Your Orders</p>
-                <button onClick={() => fetchOrders(true)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>↻ Refresh</button>
+                <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Your Orders</p>
+                <button onClick={() => fetchOrders(true)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>↻ Refresh</button>
               </div>
-              {ordersLoading && orders.length === 0 && <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(240,223,200,0.3)", letterSpacing: "0.1em" }}>Loading…</p>}
+              {ordersLoading && orders.length === 0 && <p style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "rgba(240,223,200,0.3)", letterSpacing: "0.1em" }}>Loading…</p>}
               {!ordersLoading && orders.length === 0 && (
-                <p style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>No orders yet. Add something to your cart to get started.</p>
+                <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>No orders yet. Add something to your cart to get started.</p>
               )}
               {orders.map((o, i) => (
                 <div key={o.id} style={{ borderBottom: "1px solid rgba(240,223,200,0.07)", padding: "14px 0" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.7)" }}>#{String(orders.length - i).padStart(6, "0")}</span>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "#FBF3D4" }}>₹{o.total_amount}</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.7)" }}>#{String(orders.length - i).padStart(6, "0")}</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "#FBF3D4" }}>₹{o.total_amount}</span>
                   </div>
-                  <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.02em" }}>{o.delivery_address}</p>
+                  <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.02em" }}>{o.delivery_address}</p>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: o.status === "pending" ? "rgba(200,144,58,0.6)" : "rgba(74,222,128,0.7)" }}>{o.status}</span>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, color: "rgba(240,223,200,0.25)" }}>{new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: o.status === "pending" ? "rgba(200,144,58,0.6)" : "rgba(74,222,128,0.7)" }}>{o.status}</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.25)" }}>{new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
                   </div>
                 </div>
               ))}
@@ -200,17 +200,17 @@ export default function Nav() {
           {/* ── Subscription ── */}
           {menuSection === "subscription" && (
             <>
-              <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
-              <p style={{ margin: "0 0 24px", fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Subscription</p>
-              <p style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>Subscription plans coming soon. Use the shop to set up recurring deliveries.</p>
+              <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
+              <p style={{ margin: "0 0 24px", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Subscription</p>
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>Subscription plans coming soon. Use the shop to set up recurring deliveries.</p>
             </>
           )}
 
           {/* ── Connect With Us ── */}
           {menuSection === "connect" && (
             <>
-              <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
-              <p style={{ margin: "0 0 32px", fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Connect</p>
+              <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
+              <p style={{ margin: "0 0 32px", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Connect</p>
               {[
                 { label: "Instagram", value: "@cadieux.in",     href: "https://instagram.com/cadieux.in" },
                 { label: "WhatsApp",  value: "+91 98765 43210", href: "https://wa.me/919876543210" },
@@ -218,8 +218,8 @@ export default function Nav() {
                 { label: "Phone",     value: "+91 98765 43210", href: "tel:+919876543210" },
               ].map(({ label, value, href }) => (
                 <a key={label} href={href} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderBottom: "1px solid rgba(240,223,200,0.06)", textDecoration: "none" }}>
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)" }}>{label}</span>
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.7)", letterSpacing: "0.04em" }}>{value}</span>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)" }}>{label}</span>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(240,223,200,0.7)", letterSpacing: "0.04em" }}>{value}</span>
                 </a>
               ))}
             </>
