@@ -56,8 +56,8 @@ export default function PageContent() {
   const grainRefs     = useRef<(HTMLImageElement | null)[]>([]);
   const cardsOuterRef = useRef<HTMLDivElement>(null);
   const videoRef      = useRef<HTMLVideoElement>(null);
-  const proteinCardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const [visibleProtein, setVisibleProtein] = useState<Set<number>>(new Set());
+  const proteinOuterRef = useRef<HTMLDivElement>(null);
+  const [proteinP, setProteinP] = useState(0);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -106,31 +106,33 @@ export default function PageContent() {
     };
   }, []);
 
-  /* ── Protein benefit cards — fade in on scroll (RAF polling, Lenis-safe) ── */
+  /* ── Protein benefits — scroll-driven sticky progress (same pattern as ingredients) ── */
   useEffect(() => {
     let rafId: number;
-    let lastY = -1;
+    let last = -1;
+    let cachedTop = 0, cachedH = 0, cachedWh = 0;
+    const measure = () => {
+      const el = proteinOuterRef.current;
+      if (!el) return;
+      cachedTop = window.scrollY + el.getBoundingClientRect().top;
+      cachedH   = el.scrollHeight;
+      cachedWh  = window.innerHeight;
+    };
+    measure();
+    window.addEventListener("resize", measure, { passive: true });
+
     const tick = () => {
       rafId = requestAnimationFrame(tick);
       const sy = window.scrollY;
-      if (sy === lastY) return;
-      lastY = sy;
-      const trigger = window.innerHeight * 0.85;
-      setVisibleProtein(prev => {
-        let changed = false;
-        const next = new Set(prev);
-        proteinCardRefs.current.forEach((el, i) => {
-          if (!el || next.has(i)) return;
-          if (el.getBoundingClientRect().top < trigger) {
-            next.add(i);
-            changed = true;
-          }
-        });
-        return changed ? next : prev;
-      });
+      if (sy === last) return;
+      last = sy;
+      setProteinP(clamp((sy - cachedTop) / (cachedH - cachedWh), 0, 1));
     };
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", measure);
+    };
   }, []);
 
   /* ── Grains — opacity boost on viewport entry ── */
@@ -164,6 +166,24 @@ export default function PageContent() {
   });
 
   const activeCard = Math.round(clamp(cardsP * N_C - 0.5, 0, N_C - 1));
+
+  /* ── Per-protein-card visibility from scroll progress ── */
+  const N_P = PROTEIN_BENEFITS.length;
+  const proteinVis = PROTEIN_BENEFITS.map((_, i) => {
+    const f = proteinP * N_P - i;
+    let opacity = 0, tx = 80, ty = 80;
+    if (f > -0.5 && f <= 0) {
+      const t = ease(remap(f, -0.5, 0));
+      opacity = t; tx = (1 - t) * 80; ty = (1 - t) * 80;
+    } else if (f > 0 && f <= 0.5) {
+      opacity = 1; tx = 0; ty = 0;
+    } else if (f > 0.5 && f < 1.1) {
+      const t = ease(remap(f, 0.5, 1.1));
+      opacity = 1 - t; tx = -t * 80; ty = -t * 80;
+    }
+    return { opacity, tx, ty };
+  });
+  const activeProtein = Math.round(clamp(proteinP * N_P - 0.5, 0, N_P - 1));
 
   return (
     <>
@@ -422,107 +442,108 @@ export default function PageContent() {
             background: "linear-gradient(to bottom, #1D1D1F, #060402)",
           }} />
 
-          {/* ══ SECTION 4.5 — PHASE 3.5: WHY PROTEIN ══ */}
-          <section style={{
-            position: "relative", minHeight: "100dvh",
-            background: "#060402", padding: "clamp(80px,12vh,140px) clamp(28px,8vw,80px)",
-            overflow: "hidden",
-          }}>
-            {/* Background video */}
-            <video
-              autoPlay muted playsInline loop
-              style={{
-                position: "absolute", inset: 0,
-                width: "100%", height: "100%",
-                objectFit: "cover", zIndex: 0,
-              }}
-            >
-              <source src="/bread-eating-01.mp4" type="video/mp4" />
-            </video>
-            {/* Dark overlay for readability */}
-            <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.72)", zIndex: 1, pointerEvents: "none" }} />
-            {/* Grain overlay */}
-            <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 1 }} />
-
-            {/* Eyebrow */}
-            <p style={{
-              position: "relative", zIndex: 2,
-              margin: "0 0 24px", textAlign: "center",
-              fontFamily: "var(--font-body)", fontSize: 9,
-              fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
-              color: "rgba(255,255,255,0.45)",
-            }}>The Protein Advantage</p>
-
-            {/* Headline */}
-            <h2 style={{
-              position: "relative", zIndex: 2,
-              margin: "0 auto 20px", textAlign: "center", maxWidth: 900,
-              fontFamily: "var(--font-heading)",
-              fontSize: "clamp(40px, 8vw, 72px)", fontWeight: 300,
-              color: "#FBF3D4", letterSpacing: "0.04em", lineHeight: 1.05,
-            }}>Protein isn&apos;t just for athletes.</h2>
-
-            {/* Subhead */}
-            <p style={{
-              position: "relative", zIndex: 2,
-              margin: "0 auto clamp(56px,8vh,88px)", textAlign: "center", maxWidth: 640,
-              fontFamily: "var(--font-body)", fontSize: "clamp(13px, 1.6vw, 15px)",
-              fontWeight: 300, letterSpacing: "0.04em", lineHeight: 1.7,
-              color: "rgba(255,255,255,0.72)",
-            }}>
-              Your body rebuilds itself every day — and it uses protein to do it. Cadieux bakes that essential into every slice.
-            </p>
-
-            {/* Amber rule */}
+          {/* ══ SECTION 4.5 — PHASE 3.5: WHY PROTEIN (sticky scroll-driven) ══ */}
+          <div ref={proteinOuterRef} style={{ position: "relative", height: `${N_P * 100}vh` }}>
             <div style={{
-              position: "relative", zIndex: 2,
-              width: 40, height: 1, background: "rgba(2,70,40,0.8)",
-              margin: "0 auto clamp(48px,6vh,72px)",
-            }} />
-
-            {/* Benefits grid */}
-            <div style={{
-              position: "relative", zIndex: 2,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-              gap: "clamp(32px, 4vw, 56px)",
-              maxWidth: 1100, margin: "0 auto",
+              position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
+              background: "#060402",
             }}>
+              {/* Background video */}
+              <video
+                autoPlay muted playsInline loop
+                style={{
+                  position: "absolute", inset: 0,
+                  width: "100%", height: "100%",
+                  objectFit: "cover", zIndex: 0,
+                }}
+              >
+                <source src="/bread-eating-01.mp4" type="video/mp4" />
+              </video>
+              {/* Dark overlay */}
+              <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.65)", zIndex: 0, pointerEvents: "none" }} />
+              {/* Bottom blend to closing section */}
+              <div style={{
+                position: "absolute", bottom: 0, left: 0, right: 0,
+                height: "25vh", zIndex: 12, pointerEvents: "none",
+                background: "linear-gradient(to bottom, transparent, #060402)",
+              }} />
+              {/* Shared grain overlay */}
+              <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
+
+              {/* Static heading */}
+              <p style={{
+                position: "absolute", top: "18%", left: 0, right: 0, zIndex: 20,
+                textAlign: "center", margin: 0,
+                fontFamily: "var(--font-heading)", fontSize: "clamp(28px,6vw,48px)", fontWeight: 300,
+                letterSpacing: "0.08em",
+                color: "#FBF3D4",
+                opacity: Math.max(0, 1 - clamp((proteinP - 0.7) / 0.3, 0, 1)) * 0.75,
+                pointerEvents: "none",
+                transition: "opacity 0.1s linear",
+              }}>Protein isn&apos;t just for athletes</p>
+
+              {/* Cards */}
               {PROTEIN_BENEFITS.map((b, i) => {
-                const visible = visibleProtein.has(i);
+                const { opacity, tx, ty } = proteinVis[i];
                 return (
-                  <div
-                    key={b.n}
-                    ref={el => { proteinCardRefs.current[i] = el; }}
-                    data-idx={i}
-                    style={{
-                      textAlign: "left",
-                      opacity: visible ? 1 : 0,
-                      transform: visible ? "translateY(0)" : "translateY(28px)",
-                      transition: `opacity 0.9s cubic-bezier(.22,1,.36,1) ${i * 0.08}s, transform 0.9s cubic-bezier(.22,1,.36,1) ${i * 0.08}s`,
-                      willChange: "opacity, transform",
-                    }}
-                  >
-                    <p style={{
-                      margin: "0 0 18px", fontFamily: "var(--font-body)", fontSize: 8,
-                      fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
-                      color: "rgba(255,255,255,0.35)",
-                    }}>{b.n}</p>
-                    <h3 style={{
-                      margin: "0 0 14px", fontFamily: "var(--font-heading)",
-                      fontSize: "clamp(26px, 3vw, 34px)", fontWeight: 300,
-                      color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.15,
-                    }}>{b.title}</h3>
-                    <p style={{
-                      margin: 0, fontFamily: "var(--font-body)", fontSize: 13,
-                      fontWeight: 300, letterSpacing: "0.02em", lineHeight: 1.75,
-                      color: "rgba(255,255,255,0.6)",
-                    }}>{b.desc}</p>
+                  <div key={b.n} style={{
+                    position: "absolute", inset: 0,
+                    background: "transparent",
+                    opacity, zIndex: i,
+                    willChange: "opacity",
+                    pointerEvents: "none",
+                  }}>
+                    <div style={{
+                      position: "absolute", top: "50%", left: 0, right: 0,
+                      padding: "0 clamp(28px,8vw,80px)",
+                      transform: `translateY(calc(-50% + ${ty}px)) translateX(${tx}px)`,
+                      willChange: "transform", textAlign: "center",
+                    }}>
+                      {/* Amber rule */}
+                      <div style={{ width: 40, height: 1, background: "rgba(2,70,40,0.6)", margin: "0 auto 28px" }} />
+
+                      {/* Counter */}
+                      <p style={{
+                        margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 8,
+                        fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
+                        color: "rgba(255,255,255,0.4)",
+                      }}>{b.n} — {String(N_P).padStart(2, "0")}</p>
+
+                      {/* Title */}
+                      <h2 style={{
+                        margin: "0 0 22px", fontFamily: "var(--font-heading)",
+                        fontSize: "clamp(44px, 11vw, 88px)", fontWeight: 300,
+                        color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1,
+                      }}>{b.title}</h2>
+
+                      {/* Description */}
+                      <p style={{
+                        margin: "0 auto", maxWidth: 560,
+                        fontFamily: "var(--font-body)", fontSize: "clamp(13px,1.5vw,15px)",
+                        fontWeight: 300, letterSpacing: "0.04em", lineHeight: 1.7,
+                        color: "rgba(255,255,255,0.8)",
+                      }}>{b.desc}</p>
+                    </div>
                   </div>
                 );
               })}
+
+              {/* Progress indicator */}
+              <div style={{
+                position: "absolute", bottom: 28, left: "50%",
+                transform: "translateX(-50%)", display: "flex", gap: 6,
+                alignItems: "center", zIndex: 20, pointerEvents: "none",
+              }}>
+                {PROTEIN_BENEFITS.map((_, j) => (
+                  <div key={j} style={{
+                    width: activeProtein === j ? 16 : 4, height: 1,
+                    background: activeProtein === j ? "#ffffff" : "rgba(255,255,255,0.25)",
+                    transition: "width 0.4s cubic-bezier(.22,1,.36,1), background 0.4s",
+                  }} />
+                ))}
+              </div>
             </div>
-          </section>
+          </div>
 
           {/* Phase 3.5→4 bridge */}
           <div style={{
