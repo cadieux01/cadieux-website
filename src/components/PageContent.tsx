@@ -437,7 +437,7 @@ export default function PageContent() {
                 objectFit: "cover", zIndex: 0,
               }}
             >
-              <source src="/body-builder-01.mp4" type="video/mp4" />
+              <source src="/bread-eating-01.mp4" type="video/mp4" />
             </video>
             {/* Dark overlay for readability */}
             <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.72)", zIndex: 1, pointerEvents: "none" }} />
