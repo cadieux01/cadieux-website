@@ -28,6 +28,14 @@ const INGREDIENTS = [
 
 const CARD_BG = ["#1D1D1F", "#1F1F21", "#1B1B1D", "#212123"];
 
+const PROTEIN_BENEFITS = [
+  { n: "01", title: "Everyday Strength",  desc: "From carrying groceries to climbing stairs, protein keeps the muscles you rely on every day from quietly wasting away as you age." },
+  { n: "02", title: "Keeps You Full",     desc: "Protein is the most satiating nutrient there is. A protein-rich breakfast steadies hunger for hours — fewer cravings, less snacking." },
+  { n: "03", title: "Lasting Energy",     desc: "Slow-digesting protein keeps blood sugar steady, replacing mid-morning crashes with hours of clean, even focus." },
+  { n: "04", title: "Stronger Immunity",  desc: "Antibodies, enzymes and hormones are all built from protein — the quiet foundation of a body that holds up through busy weeks." },
+  { n: "05", title: "Sharper Mind",       desc: "Proteins form the neurotransmitters — dopamine, serotonin, norepinephrine — that shape your mood, focus and memory every single day." },
+];
+
 /* ── Deterministic floating grain data ── */
 const GRAINS = Array.from({ length: 22 }, (_, i) => ({
   id:    i,
@@ -48,6 +56,8 @@ export default function PageContent() {
   const grainRefs     = useRef<(HTMLImageElement | null)[]>([]);
   const cardsOuterRef = useRef<HTMLDivElement>(null);
   const videoRef      = useRef<HTMLVideoElement>(null);
+  const proteinCardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [visibleProtein, setVisibleProtein] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const v = videoRef.current;
@@ -94,6 +104,33 @@ export default function PageContent() {
       cancelAnimationFrame(rafId);
       window.removeEventListener("resize", measure);
     };
+  }, []);
+
+  /* ── Protein benefit cards — fade in on scroll (RAF polling, Lenis-safe) ── */
+  useEffect(() => {
+    let rafId: number;
+    let lastY = -1;
+    const tick = () => {
+      rafId = requestAnimationFrame(tick);
+      const sy = window.scrollY;
+      if (sy === lastY) return;
+      lastY = sy;
+      const trigger = window.innerHeight * 0.85;
+      setVisibleProtein(prev => {
+        let changed = false;
+        const next = new Set(prev);
+        proteinCardRefs.current.forEach((el, i) => {
+          if (!el || next.has(i)) return;
+          if (el.getBoundingClientRect().top < trigger) {
+            next.add(i);
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, []);
 
   /* ── Grains — opacity boost on viewport entry ── */
@@ -451,31 +488,39 @@ export default function PageContent() {
               gap: "clamp(32px, 4vw, 56px)",
               maxWidth: 1100, margin: "0 auto",
             }}>
-              {[
-                { n: "01", title: "Everyday Strength", desc: "From carrying groceries to climbing stairs, protein keeps the muscles you rely on every day from quietly wasting away as you age." },
-                { n: "02", title: "Keeps You Full", desc: "Protein is the most satiating nutrient there is. A protein-rich breakfast steadies hunger for hours — fewer cravings, less snacking." },
-                { n: "03", title: "Lasting Energy", desc: "Slow-digesting protein keeps blood sugar steady, replacing mid-morning crashes with hours of clean, even focus." },
-                { n: "04", title: "Stronger Immunity", desc: "Antibodies, enzymes and hormones are all built from protein — the quiet foundation of a body that holds up through busy weeks." },
-                { n: "05", title: "Sharper Mind", desc: "Proteins form the neurotransmitters — dopamine, serotonin, norepinephrine — that shape your mood, focus and memory every single day."  },
-              ].map((b) => (
-                <div key={b.n} style={{ textAlign: "left" }}>
-                  <p style={{
-                    margin: "0 0 18px", fontFamily: "var(--font-body)", fontSize: 8,
-                    fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
-                    color: "rgba(255,255,255,0.35)",
-                  }}>{b.n}</p>
-                  <h3 style={{
-                    margin: "0 0 14px", fontFamily: "var(--font-heading)",
-                    fontSize: "clamp(26px, 3vw, 34px)", fontWeight: 300,
-                    color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.15,
-                  }}>{b.title}</h3>
-                  <p style={{
-                    margin: 0, fontFamily: "var(--font-body)", fontSize: 13,
-                    fontWeight: 300, letterSpacing: "0.02em", lineHeight: 1.75,
-                    color: "rgba(255,255,255,0.6)",
-                  }}>{b.desc}</p>
-                </div>
-              ))}
+              {PROTEIN_BENEFITS.map((b, i) => {
+                const visible = visibleProtein.has(i);
+                return (
+                  <div
+                    key={b.n}
+                    ref={el => { proteinCardRefs.current[i] = el; }}
+                    data-idx={i}
+                    style={{
+                      textAlign: "left",
+                      opacity: visible ? 1 : 0,
+                      transform: visible ? "translateY(0)" : "translateY(28px)",
+                      transition: `opacity 0.9s cubic-bezier(.22,1,.36,1) ${i * 0.08}s, transform 0.9s cubic-bezier(.22,1,.36,1) ${i * 0.08}s`,
+                      willChange: "opacity, transform",
+                    }}
+                  >
+                    <p style={{
+                      margin: "0 0 18px", fontFamily: "var(--font-body)", fontSize: 8,
+                      fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
+                      color: "rgba(255,255,255,0.35)",
+                    }}>{b.n}</p>
+                    <h3 style={{
+                      margin: "0 0 14px", fontFamily: "var(--font-heading)",
+                      fontSize: "clamp(26px, 3vw, 34px)", fontWeight: 300,
+                      color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.15,
+                    }}>{b.title}</h3>
+                    <p style={{
+                      margin: 0, fontFamily: "var(--font-body)", fontSize: 13,
+                      fontWeight: 300, letterSpacing: "0.02em", lineHeight: 1.75,
+                      color: "rgba(255,255,255,0.6)",
+                    }}>{b.desc}</p>
+                  </div>
+                );
+              })}
             </div>
           </section>
 
