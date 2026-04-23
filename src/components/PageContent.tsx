@@ -352,12 +352,6 @@ export default function PageContent() {
               </video>
               {/* Dark overlay */}
               <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.62)", zIndex: 0, pointerEvents: "none" }} />
-              {/* Phase 3→4 bottom blend */}
-              <div style={{
-                position: "absolute", bottom: 0, left: 0, right: 0,
-                height: "25vh", zIndex: 12, pointerEvents: "none",
-                background: "linear-gradient(to bottom, transparent, #1D1D1F)",
-              }} />
               {/* Shared grain overlay */}
               <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
 
@@ -440,7 +434,7 @@ export default function PageContent() {
           <div ref={proteinOuterRef} style={{ position: "relative", height: `${N_P * 100}vh` }}>
             <div style={{
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
-              background: "#060402",
+              background: "#1D1D1F",
             }}>
               {/* Background video */}
               <video
@@ -453,13 +447,13 @@ export default function PageContent() {
               >
                 <source src="/bread-eating-01.mp4" type="video/mp4" />
               </video>
-              {/* Dark overlay */}
-              <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.65)", zIndex: 0, pointerEvents: "none" }} />
+              {/* Dark overlay — matched to Phase 3 */}
+              <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.62)", zIndex: 0, pointerEvents: "none" }} />
               {/* Bottom blend to closing section */}
               <div style={{
                 position: "absolute", bottom: 0, left: 0, right: 0,
                 height: "25vh", zIndex: 12, pointerEvents: "none",
-                background: "linear-gradient(to bottom, transparent, #060402)",
+                background: "linear-gradient(to bottom, transparent, #1D1D1F)",
               }} />
               {/* Shared grain overlay */}
               <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
