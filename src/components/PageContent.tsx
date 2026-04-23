@@ -10,6 +10,17 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const remap = (v: number, lo: number, hi: number) => clamp((v - lo) / (hi - lo), 0, 1);
 const ease  = (t: number) => t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
 
+/* Lazy-play a video the instant any pixel enters the viewport (no delay). */
+const playOnEnter = (el: HTMLVideoElement | null) => {
+  if (!el || typeof IntersectionObserver === "undefined") return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) el.play().catch(() => {});
+    });
+  }, { threshold: 0 });
+  io.observe(el);
+};
+
 /* ── SVG grain texture ── */
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
@@ -327,15 +338,15 @@ export default function PageContent() {
           <QASection />
 
           {/* ══ SECTION 4 — INGREDIENT CARDS (scroll-driven sticky) ══ */}
-          {/* Phase 2 ends with its own dark #1D1D1F fade — Phase 3 starts directly after, no bridge needed */}
-          <div ref={cardsOuterRef} style={{ position: "relative", height: `${N_C * 100}vh` }}>
+          {/* Dissolve from Phase 2: pull up 40vh + top gradient fading from Phase 2's dark */}
+          <div ref={cardsOuterRef} style={{ position: "relative", height: `${N_C * 100}vh`, marginTop: "-40vh", zIndex: 3 }}>
             <div style={{
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
               background: "#1D1D1F",
             }}>
-              {/* Background video */}
+              {/* Background video — lazy play on enter */}
               <video
-                autoPlay muted playsInline loop
+                ref={playOnEnter} muted playsInline loop preload="auto"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
@@ -346,6 +357,8 @@ export default function PageContent() {
               </video>
               {/* Dark overlay */}
               <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.62)", zIndex: 0, pointerEvents: "none" }} />
+              {/* Dissolve: top fade from Phase 2's dark → transparent */}
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "40vh", background: "linear-gradient(to bottom, #1D1D1F, transparent)", zIndex: 11, pointerEvents: "none" }} />
               {/* Shared grain overlay */}
               <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
 
@@ -431,9 +444,9 @@ export default function PageContent() {
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
               background: "#1D1D1F",
             }}>
-              {/* Background video */}
+              {/* Background video — lazy play on enter */}
               <video
-                autoPlay muted playsInline loop
+                ref={playOnEnter} muted playsInline loop preload="auto"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
@@ -538,7 +551,7 @@ export default function PageContent() {
             marginTop: "-40vh", zIndex: 3,
           }}>
             {/* Background video */}
-            <video autoPlay muted playsInline loop style={{
+            <video ref={playOnEnter} muted playsInline loop preload="auto" style={{
               position: "absolute", inset: 0, width: "100%", height: "100%",
               objectFit: "cover", zIndex: 0,
             }}>

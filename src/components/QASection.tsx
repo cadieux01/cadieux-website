@@ -256,9 +256,16 @@ export default function QASection() {
         willChange: "transform",
         transform: "translateZ(0)",
       }}>
-        {/* Background video */}
+        {/* Background video — lazy play on enter */}
         <video
-          autoPlay muted playsInline loop
+          ref={(el) => {
+            if (!el || typeof IntersectionObserver === "undefined") return;
+            const io = new IntersectionObserver((entries) => {
+              entries.forEach((e) => { if (e.isIntersecting) el.play().catch(() => {}); });
+            }, { threshold: 0 });
+            io.observe(el);
+          }}
+          muted playsInline loop preload="auto"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
         >
           <source src="/product-video-06.mp4" type="video/mp4" />
