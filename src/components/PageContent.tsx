@@ -391,6 +391,19 @@ export default function PageContent() {
             background: "#060402", padding: "clamp(80px,12vh,140px) clamp(28px,8vw,80px)",
             overflow: "hidden",
           }}>
+            {/* Background video */}
+            <video
+              autoPlay muted playsInline loop
+              style={{
+                position: "absolute", inset: 0,
+                width: "100%", height: "100%",
+                objectFit: "cover", zIndex: 0,
+              }}
+            >
+              <source src="/body-builder-01.mp4" type="video/mp4" />
+            </video>
+            {/* Dark overlay for readability */}
+            <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.72)", zIndex: 1, pointerEvents: "none" }} />
             {/* Grain overlay */}
             <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 1 }} />
 
@@ -410,17 +423,17 @@ export default function PageContent() {
               fontFamily: "var(--font-heading)",
               fontSize: "clamp(40px, 8vw, 72px)", fontWeight: 300,
               color: "#FBF3D4", letterSpacing: "0.04em", lineHeight: 1.05,
-            }}>Protein builds a stronger you.</h2>
+            }}>Protein isn&apos;t just for athletes.</h2>
 
             {/* Subhead */}
             <p style={{
               position: "relative", zIndex: 2,
-              margin: "0 auto clamp(56px,8vh,88px)", textAlign: "center", maxWidth: 620,
+              margin: "0 auto clamp(56px,8vh,88px)", textAlign: "center", maxWidth: 640,
               fontFamily: "var(--font-body)", fontSize: "clamp(13px, 1.6vw, 15px)",
               fontWeight: 300, letterSpacing: "0.04em", lineHeight: 1.7,
-              color: "rgba(255,255,255,0.65)",
+              color: "rgba(255,255,255,0.72)",
             }}>
-              Every slice of Cadieux is engineered to fuel your body with clean, slow-digesting protein — so every bite does more than fill you up.
+              Whether you lift weights or lift your kids, your body rebuilds itself every single day — and it uses protein to do it. Cadieux quietly bakes that essential into every slice, so your daily bread does more than fill you up.
             </p>
 
             {/* Amber rule */}
@@ -439,10 +452,10 @@ export default function PageContent() {
               maxWidth: 1100, margin: "0 auto",
             }}>
               {[
-                { n: "01", title: "Lean Muscle", desc: "Protein supplies the amino acids your body uses to build and maintain lean muscle, day after day." },
-                { n: "02", title: "Faster Recovery", desc: "After effort, protein repairs microtears in muscle tissue — so you bounce back stronger, sooner." },
-                { n: "03", title: "Lasting Energy", desc: "Slow-digesting protein keeps blood sugar steady, replacing crashes with hours of clean, even fuel." },
-                { n: "04", title: "Stronger Immunity", desc: "Antibodies, enzymes and hormones are built from protein — the quiet foundation of a resilient body." },
+                { n: "01", title: "Everyday Strength", desc: "From carrying groceries to climbing stairs, protein keeps the muscles you rely on every day from quietly wasting away as you age." },
+                { n: "02", title: "Keeps You Full", desc: "Protein is the most satiating nutrient there is. A protein-rich breakfast steadies hunger for hours — fewer cravings, less snacking." },
+                { n: "03", title: "Lasting Energy", desc: "Slow-digesting protein keeps blood sugar steady, replacing mid-morning crashes with hours of clean, even focus." },
+                { n: "04", title: "Stronger Immunity", desc: "Antibodies, enzymes and hormones are all built from protein — the quiet foundation of a body that holds up through busy weeks." },
               ].map((b) => (
                 <div key={b.n} style={{ textAlign: "left" }}>
                   <p style={{
