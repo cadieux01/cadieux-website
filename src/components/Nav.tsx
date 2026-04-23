@@ -146,14 +146,13 @@ export default function Nav() {
             <>
               <p style={{ margin: "0 0 40px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)" }}>Menu</p>
               {[
-                { label: "Explore Cadieux", action: () => nav("/shop") },
-                { label: "Your Cart",       action: () => nav("/cart") },
-                { label: "Blogs",           action: () => nav("/blogs") },
-                { label: "Making",          action: () => nav("/making") },
-                { label: "Store Locator",   action: () => nav("/store-locator") },
-                { label: "Subscription",    action: () => setMenuSection("subscription") },
-                { label: "Your Orders",     action: () => { setMenuSection("orders"); fetchOrders(orders.length === 0); } },
-                { label: "Connect With Us", action: () => setMenuSection("connect") },
+                { label: "Products of Cadieux", action: () => nav("/shop") },
+                { label: "Orders",              action: () => { setMenuSection("orders"); fetchOrders(orders.length === 0); } },
+                { label: "Cart",                action: () => nav("/cart") },
+                { label: "Subscription",        action: () => setMenuSection("subscription") },
+                { label: "How We Bake",         action: () => nav("/making") },
+                { label: "Blogs",               action: () => nav("/blogs") },
+                { label: "Connect with Cadieux", action: () => setMenuSection("connect") },
               ].map(({ label, action }) => (
                 <button key={label} onClick={action} style={{
                   background: "none", border: "none", cursor: "pointer", padding: "18px 0",
@@ -174,7 +173,7 @@ export default function Nav() {
             <>
               <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Your Orders</p>
+                <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Orders</p>
                 <button onClick={() => fetchOrders(true)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>↻ Refresh</button>
               </div>
               {ordersLoading && orders.length === 0 && <p style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "rgba(240,223,200,0.3)", letterSpacing: "0.1em" }}>Loading…</p>}
