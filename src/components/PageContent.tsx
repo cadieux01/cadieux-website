@@ -433,7 +433,7 @@ export default function PageContent() {
               fontWeight: 300, letterSpacing: "0.04em", lineHeight: 1.7,
               color: "rgba(255,255,255,0.72)",
             }}>
-              Whether you lift weights or lift your kids, your body rebuilds itself every single day — and it uses protein to do it. Cadieux quietly bakes that essential into every slice, so your daily bread does more than fill you up.
+              Your body rebuilds itself every day — and it uses protein to do it. Cadieux bakes that essential into every slice.
             </p>
 
             {/* Amber rule */}
@@ -456,6 +456,7 @@ export default function PageContent() {
                 { n: "02", title: "Keeps You Full", desc: "Protein is the most satiating nutrient there is. A protein-rich breakfast steadies hunger for hours — fewer cravings, less snacking." },
                 { n: "03", title: "Lasting Energy", desc: "Slow-digesting protein keeps blood sugar steady, replacing mid-morning crashes with hours of clean, even focus." },
                 { n: "04", title: "Stronger Immunity", desc: "Antibodies, enzymes and hormones are all built from protein — the quiet foundation of a body that holds up through busy weeks." },
+                { n: "05", title: "Healthier Skin & Hair", desc: "Collagen and keratin — the building blocks of skin, hair and nails — are proteins. Steady intake is what keeps them looking alive." },
               ].map((b) => (
                 <div key={b.n} style={{ textAlign: "left" }}>
                   <p style={{
