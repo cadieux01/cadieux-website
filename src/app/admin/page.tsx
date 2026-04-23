@@ -104,8 +104,15 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
         className="w-full max-w-sm flex flex-col gap-4"
       >
         <h1
-          className="text-center text-[2rem] tracking-[0.25em] uppercase"
-          style={{ fontFamily: "var(--font-heading)", color: "#fbf3d4", fontWeight: 300 }}
+          className="text-center uppercase"
+          style={{
+            fontFamily: "var(--font-heading)",
+            color: "#fbf3d4",
+            fontWeight: 300,
+            fontSize: "clamp(2.75rem, 7vw, 4.5rem)",
+            letterSpacing: "0.2em",
+            lineHeight: 1,
+          }}
         >
           Cadieux Admin
         </h1>

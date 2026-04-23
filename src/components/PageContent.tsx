@@ -378,6 +378,100 @@ export default function PageContent() {
             </div>
           </div>
 
+          {/* Phase 3→3.5 bridge */}
+          <div style={{
+            position: "relative", marginTop: "-20vh", height: "20vh",
+            zIndex: 2, pointerEvents: "none",
+            background: "linear-gradient(to bottom, #1D1D1F, #060402)",
+          }} />
+
+          {/* ══ SECTION 4.5 — PHASE 3.5: WHY PROTEIN ══ */}
+          <section style={{
+            position: "relative", minHeight: "100dvh",
+            background: "#060402", padding: "clamp(80px,12vh,140px) clamp(28px,8vw,80px)",
+            overflow: "hidden",
+          }}>
+            {/* Grain overlay */}
+            <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 1 }} />
+
+            {/* Eyebrow */}
+            <p style={{
+              position: "relative", zIndex: 2,
+              margin: "0 0 24px", textAlign: "center",
+              fontFamily: "var(--font-body)", fontSize: 9,
+              fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
+              color: "rgba(255,255,255,0.45)",
+            }}>The Protein Advantage</p>
+
+            {/* Headline */}
+            <h2 style={{
+              position: "relative", zIndex: 2,
+              margin: "0 auto 20px", textAlign: "center", maxWidth: 900,
+              fontFamily: "var(--font-heading)",
+              fontSize: "clamp(40px, 8vw, 72px)", fontWeight: 300,
+              color: "#FBF3D4", letterSpacing: "0.04em", lineHeight: 1.05,
+            }}>Protein builds a stronger you.</h2>
+
+            {/* Subhead */}
+            <p style={{
+              position: "relative", zIndex: 2,
+              margin: "0 auto clamp(56px,8vh,88px)", textAlign: "center", maxWidth: 620,
+              fontFamily: "var(--font-body)", fontSize: "clamp(13px, 1.6vw, 15px)",
+              fontWeight: 300, letterSpacing: "0.04em", lineHeight: 1.7,
+              color: "rgba(255,255,255,0.65)",
+            }}>
+              Every slice of Cadieux is engineered to fuel your body with clean, slow-digesting protein — so every bite does more than fill you up.
+            </p>
+
+            {/* Amber rule */}
+            <div style={{
+              position: "relative", zIndex: 2,
+              width: 40, height: 1, background: "rgba(2,70,40,0.8)",
+              margin: "0 auto clamp(48px,6vh,72px)",
+            }} />
+
+            {/* Benefits grid */}
+            <div style={{
+              position: "relative", zIndex: 2,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gap: "clamp(32px, 4vw, 56px)",
+              maxWidth: 1100, margin: "0 auto",
+            }}>
+              {[
+                { n: "01", title: "Lean Muscle", desc: "Protein supplies the amino acids your body uses to build and maintain lean muscle, day after day." },
+                { n: "02", title: "Faster Recovery", desc: "After effort, protein repairs microtears in muscle tissue — so you bounce back stronger, sooner." },
+                { n: "03", title: "Lasting Energy", desc: "Slow-digesting protein keeps blood sugar steady, replacing crashes with hours of clean, even fuel." },
+                { n: "04", title: "Stronger Immunity", desc: "Antibodies, enzymes and hormones are built from protein — the quiet foundation of a resilient body." },
+              ].map((b) => (
+                <div key={b.n} style={{ textAlign: "left" }}>
+                  <p style={{
+                    margin: "0 0 18px", fontFamily: "var(--font-body)", fontSize: 8,
+                    fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
+                    color: "rgba(255,255,255,0.35)",
+                  }}>{b.n}</p>
+                  <h3 style={{
+                    margin: "0 0 14px", fontFamily: "var(--font-heading)",
+                    fontSize: "clamp(26px, 3vw, 34px)", fontWeight: 300,
+                    color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1.15,
+                  }}>{b.title}</h3>
+                  <p style={{
+                    margin: 0, fontFamily: "var(--font-body)", fontSize: 13,
+                    fontWeight: 300, letterSpacing: "0.02em", lineHeight: 1.75,
+                    color: "rgba(255,255,255,0.6)",
+                  }}>{b.desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Phase 3.5→4 bridge */}
+          <div style={{
+            position: "relative", marginTop: 0, height: "20vh",
+            zIndex: 2, pointerEvents: "none",
+            background: "linear-gradient(to bottom, #060402, transparent)",
+          }} />
+
           {/* ══ SECTION 5 — CLOSING CTA ══ */}
           <section style={{
             minHeight: "100dvh", display: "flex", flexDirection: "column",
