@@ -168,7 +168,7 @@ export default function ProductCard({
             background: "linear-gradient(145deg, #1a1508, #0d0b06)",
           }}
         >
-          {/* PREMIUM badge */}
+          {/* Test Reports badge */}
           <div
             style={{
               position: "absolute",
@@ -187,9 +187,13 @@ export default function ProductCard({
               borderRadius: 4,
               opacity: 0,
               animation: "pc-slideUp 0.6s ease 0.3s forwards",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
             }}
           >
-            Quality Protein
+            <span>Test Reports</span>
+            <span aria-hidden="true" style={{ fontSize: 10, lineHeight: 1 }}>✓</span>
           </div>
 
           {/* Floating particles */}
