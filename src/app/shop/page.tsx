@@ -63,9 +63,9 @@ export default function ShopPage() {
             />
             <ProductCard
               productIndex={1}
-              name="Plain High Protein Bread"
-              tag="Everyday"
-              title="High Protein"
+              name="Protein Bread Plain"
+              tag="Protein Bread"
+              title="Plain"
               subtitle="Clean sandwich bread built for protein without the fuss. Soft slices, no compromise."
               price={110}
               stats={[
