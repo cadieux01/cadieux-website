@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import CheckoutModal from "./CheckoutModal";
 import { useCart } from "@/context/CartContext";
+import { PRODUCTS } from "@/lib/data";
 
 type Order = {
   id: string;
@@ -28,7 +29,7 @@ export default function Nav() {
   } = useCart();
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuSection, setMenuSection] = useState<"main" | "orders" | "subscription" | "connect">("main");
+  const [menuSection, setMenuSection] = useState<"main" | "orders" | "subscription" | "connect" | "reports">("main");
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -39,7 +40,7 @@ export default function Nav() {
       const savedOpen = localStorage.getItem("cadieux_menu_open");
       const savedSection = localStorage.getItem("cadieux_menu_section");
       if (savedOpen === "1" && isHome) setMenuOpen(true);
-      if (savedSection === "main" || savedSection === "orders" || savedSection === "subscription" || savedSection === "connect") {
+      if (savedSection === "main" || savedSection === "orders" || savedSection === "subscription" || savedSection === "connect" || savedSection === "reports") {
         setMenuSection(savedSection);
       }
     } catch { /* ignore */ }
@@ -152,6 +153,7 @@ export default function Nav() {
                 { label: "Subscription",        action: () => setMenuSection("subscription") },
                 { label: "How We Bake",         action: () => nav("/making") },
                 { label: "Blogs",               action: () => nav("/blogs") },
+                { label: "Reports",             action: () => setMenuSection("reports") },
                 { label: "Connect with Cadieux", action: () => setMenuSection("connect") },
               ].map(({ label, action }) => (
                 <button key={label} onClick={action} style={{
@@ -202,6 +204,31 @@ export default function Nav() {
               <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
               <p style={{ margin: "0 0 24px", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Subscription</p>
               <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>Subscription plans coming soon. Use the shop to set up recurring deliveries.</p>
+            </>
+          )}
+
+          {/* ── Reports ── */}
+          {menuSection === "reports" && (
+            <>
+              <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
+              <p style={{ margin: "0 0 10px", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Reports</p>
+              <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.45)", lineHeight: 1.6, letterSpacing: "0.02em" }}>Independent test reports for each loaf.</p>
+              {PRODUCTS.map((p) => (
+                <button
+                  key={p.slug}
+                  onClick={() => nav(`/shop/${p.slug}/reports`)}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer", padding: "18px 0",
+                    textAlign: "left", borderBottom: "1px solid rgba(240,223,200,0.06)",
+                    display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12,
+                    width: "100%",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span style={{ fontFamily: "var(--font-heading)", fontSize: 24, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.03em" }}>{p.title}</span>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)" }}>View →</span>
+                </button>
+              ))}
             </>
           )}
 
