@@ -76,8 +76,40 @@ export default function ShopPage() {
             />
           </div>
         </div>
+
+        <div
+          className="shop-swipe-hint"
+          style={{
+            margin: "40px 0 0",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 12,
+            fontFamily: "var(--font-body)",
+            fontSize: 10,
+            fontWeight: 300,
+            letterSpacing: "0.45em",
+            textTransform: "uppercase",
+            color: "rgba(201, 169, 110, 0.65)",
+          }}
+        >
+          <span className="shop-swipe-arrow" style={{ fontSize: 14, color: "rgb(201, 169, 110)", display: "inline-block" }}>←</span>
+          <span>Swipe to explore</span>
+          <span className="shop-swipe-arrow shop-swipe-arrow-right" style={{ fontSize: 14, color: "rgb(201, 169, 110)", display: "inline-block" }}>→</span>
+        </div>
+
         <style jsx>{`
           .shop-scroll::-webkit-scrollbar { display: none; }
+          @keyframes shopSwipeLeft {
+            0%, 100% { transform: translateX(0); opacity: 0.55; }
+            50% { transform: translateX(-6px); opacity: 1; }
+          }
+          @keyframes shopSwipeRight {
+            0%, 100% { transform: translateX(0); opacity: 0.55; }
+            50% { transform: translateX(6px); opacity: 1; }
+          }
+          .shop-swipe-arrow { animation: shopSwipeLeft 1.8s ease-in-out infinite; }
+          .shop-swipe-arrow-right { animation: shopSwipeRight 1.8s ease-in-out infinite; }
         `}</style>
       </div>
     </div>
