@@ -189,7 +189,7 @@ export default function ProductCard({
               animation: "pc-slideUp 0.6s ease 0.3s forwards",
             }}
           >
-            Premium
+            Quality Protein
           </div>
 
           {/* Floating particles */}
