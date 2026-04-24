@@ -376,13 +376,19 @@ export default function ProductDetailPage() {
             }}
           >
             {detail.testReports.map((r) => (
-              <div
+              <Link
                 key={r.metric}
+                href={`/shop/${slug}/reports`}
                 style={{
+                  display: "block",
+                  textDecoration: "none",
+                  color: "inherit",
                   padding: "26px 22px",
                   background: "rgba(10,8,5,0.45)",
                   border: "0.5px solid rgba(201,169,110,0.22)",
                   borderRadius: 10,
+                  cursor: "pointer",
+                  transition: "border-color 0.25s ease, background 0.25s ease",
                 }}
               >
                 <div
@@ -423,8 +429,32 @@ export default function ProductDetailPage() {
                     {r.note}
                   </div>
                 )}
-              </div>
+              </Link>
             ))}
+          </div>
+
+          <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-start" }}>
+            <Link
+              href={`/shop/${slug}/reports`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "14px 24px",
+                border: "1px solid #c9a96e",
+                color: "#FBF3D4",
+                fontFamily: "var(--font-body)",
+                fontSize: 11,
+                fontWeight: 500,
+                letterSpacing: "0.35em",
+                textTransform: "uppercase",
+                borderRadius: 4,
+                textDecoration: "none",
+                background: "rgba(201,169,110,0.08)",
+              }}
+            >
+              View Reports <span aria-hidden="true">→</span>
+            </Link>
           </div>
         </Section>
 

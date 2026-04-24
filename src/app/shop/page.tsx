@@ -55,7 +55,7 @@ export default function ShopPage() {
               subtitle={p.subtitle}
               price={p.price}
               stats={p.stats}
-              media={PRODUCT_DETAILS[p.slug as ProductSlug].media[0]}
+              media={PRODUCT_DETAILS[p.slug as ProductSlug].media}
             />
           ))}
         </div>
