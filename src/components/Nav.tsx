@@ -140,7 +140,7 @@ export default function Nav() {
         display: "flex", flexDirection: "column",
       }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.05, pointerEvents: "none" }} />
-        <div style={{ position: "relative", zIndex: 1, padding: "100px 28px 48px", flex: 1, display: "flex", flexDirection: "column" }}>
+        <div style={{ position: "relative", zIndex: 1, padding: "100px 28px 96px", flexShrink: 0, display: "flex", flexDirection: "column" }}>
 
           {menuSection === "main" && (
             <>
