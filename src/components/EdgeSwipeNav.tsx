@@ -23,6 +23,23 @@ export default function EdgeSwipeNav() {
     let startTime = 0;
     let origin: null | "left" | "right" = null;
 
+    // If the touch started on (or inside) an element that itself scrolls
+    // horizontally — like a product-tile gallery or the PDP media swiper —
+    // the user is swiping content, not the page. Don't hijack it as a
+    // history.back() / forward().
+    const startedOnHScroller = (target: EventTarget | null) => {
+      let el = target as HTMLElement | null;
+      while (el && el !== document.body) {
+        const cs = window.getComputedStyle(el);
+        const ox = cs.overflowX;
+        if ((ox === "auto" || ox === "scroll") && el.scrollWidth > el.clientWidth + 1) {
+          return true;
+        }
+        el = el.parentElement;
+      }
+      return false;
+    };
+
     const onStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) {
         origin = null;
@@ -33,9 +50,14 @@ export default function EdgeSwipeNav() {
       startY = t.clientY;
       startTime = Date.now();
 
-      if (startX <= EDGE) origin = "left";
-      else if (startX >= window.innerWidth - EDGE) origin = "right";
-      else origin = null;
+      let candidate: null | "left" | "right" = null;
+      if (startX <= EDGE) candidate = "left";
+      else if (startX >= window.innerWidth - EDGE) candidate = "right";
+
+      if (candidate && startedOnHScroller(e.target)) {
+        candidate = null;
+      }
+      origin = candidate;
     };
 
     const onEnd = (e: TouchEvent) => {
