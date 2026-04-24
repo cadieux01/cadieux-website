@@ -26,39 +26,59 @@ export default function ShopPage() {
           Our Breads
         </h1>
 
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 360px))",
-          gap: 32,
-          justifyContent: "center",
-        }}>
-          <ProductCard
-            productIndex={0}
-            name="Core Element Protein Bread"
-            tag="Core Element"
-            title="Protein Bread"
-            subtitle="Ancient grains, seeds, whey protein. Baked to lock in structure."
-            price={140}
-            stats={[
-              { target: 7, suffix: "g", label: "Protein/slice" },
-              { target: 6, suffix: "g", label: "Fiber/slice" },
-              { target: 14, label: "Ingredients" },
-            ]}
-          />
-          <ProductCard
-            productIndex={1}
-            name="Plain High Protein Bread"
-            tag="Everyday"
-            title="High Protein"
-            subtitle="Clean sandwich bread built for protein without the fuss. Soft slices, no compromise."
-            price={110}
-            stats={[
-              { target: 7, suffix: "g", label: "Protein/slice" },
-              { target: 10, label: "Slices" },
-              { target: 400, suffix: "g", label: "Net Weight" },
-            ]}
-          />
+        <div
+          style={{
+            overflowX: "auto",
+            overflowY: "visible",
+            overscrollBehaviorInline: "contain",
+            scrollSnapType: "x mandatory",
+            WebkitOverflowScrolling: "touch",
+            marginLeft: "calc(-1 * clamp(28px, 8vw, 120px))",
+            marginRight: "calc(-1 * clamp(28px, 8vw, 120px))",
+            scrollbarWidth: "none",
+          }}
+          className="shop-scroll"
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 24,
+              padding: "12px calc(50vw - min(160px, 42.5vw))",
+              width: "max-content",
+              alignItems: "flex-start",
+            }}
+          >
+            <ProductCard
+              productIndex={0}
+              name="Core Element Protein Bread"
+              tag="Core Element"
+              title="Protein Bread"
+              subtitle="Ancient grains, seeds, whey protein. Baked to lock in structure."
+              price={140}
+              stats={[
+                { target: 7, suffix: "g", label: "Protein/slice" },
+                { target: 6, suffix: "g", label: "Fiber/slice" },
+                { target: 14, label: "Ingredients" },
+              ]}
+            />
+            <ProductCard
+              productIndex={1}
+              name="Plain High Protein Bread"
+              tag="Everyday"
+              title="High Protein"
+              subtitle="Clean sandwich bread built for protein without the fuss. Soft slices, no compromise."
+              price={110}
+              stats={[
+                { target: 7, suffix: "g", label: "Protein/slice" },
+                { target: 10, label: "Slices" },
+                { target: 400, suffix: "g", label: "Net Weight" },
+              ]}
+            />
+          </div>
         </div>
+        <style jsx>{`
+          .shop-scroll::-webkit-scrollbar { display: none; }
+        `}</style>
       </div>
     </div>
   );

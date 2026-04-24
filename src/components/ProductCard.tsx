@@ -103,7 +103,7 @@ export default function ProductCard({
   ];
 
   return (
-    <div style={{ perspective: 1200 }}>
+    <div style={{ perspective: 1200, width: "min(320px, 85vw)", flexShrink: 0, scrollSnapAlign: "center" }}>
       <style>{`
         @keyframes pc-slideUp {
           from { opacity: 0; transform: translateY(12px); }
@@ -134,8 +134,8 @@ export default function ProductCard({
         onMouseLeave={handleLeave}
         style={{
           position: "relative",
-          width: 360,
-          maxWidth: "100%",
+          width: "100%",
+          maxWidth: 360,
           background: "#0a0805",
           border: "0.5px solid rgba(201,169,110,0.25)",
           borderRadius: 16,
