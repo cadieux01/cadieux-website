@@ -13,26 +13,133 @@ export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export const TIMES = ["7 – 9 am", "9 – 11 am", "12 – 2 pm", "5 – 7 pm", "7 – 9 pm"];
 export const SUB_WEEKS = [2, 3, 4, 6];
 
+export type ProductStat = { target: number; suffix?: string; label: string };
+
 export const PRODUCTS = [
   {
-    name: "Core Element Protein Bread",
+    slug: "multigrain",
+    name: "Protein Bread Multigrain",
+    tag: "Protein Bread",
+    title: "Multigrain",
     tags: ["Multi Grains", "No Maida"],
     price: 140,
     protein: "7.2g protein per slice",
     weight: "240g net weight",
+    subtitle: "Ancient grains, seeds, whey protein. Baked to lock in structure.",
     desc: "Ancient grains, seeds, and five distinct protein sources — slow-fermented, cold-proofed, and baked to lock in structure.",
     image: "/hero.jpg",
+    stats: [
+      { target: 7, suffix: "g", label: "Protein/slice" },
+      { target: 6, suffix: "g", label: "Fiber/slice" },
+      { target: 14, label: "Ingredients" },
+    ] as ProductStat[],
   },
   {
-    name: "Plain High Protein Bread",
+    slug: "plain",
+    name: "Protein Bread Plain",
+    tag: "Protein Bread",
+    title: "Plain",
     tags: ["Sandwich Bread", "10 Slices"],
     price: 110,
     protein: "7.2g protein per slice",
     weight: "400g packet",
+    subtitle: "Clean sandwich bread built for protein without the fuss. Soft slices, no compromise.",
     desc: "Clean, everyday bread built for high protein without the fuss. Soft sandwich slices with no compromise on nutrition.",
     image: "/grains.png",
+    stats: [
+      { target: 7, suffix: "g", label: "Protein/slice" },
+      { target: 10, label: "Slices" },
+      { target: 400, suffix: "g", label: "Net Weight" },
+    ] as ProductStat[],
   },
 ];
+
+export type ProductSlug = "multigrain" | "plain";
+
+export type ProductMedia = { type: "video" | "image"; src: string; alt?: string };
+export type ProductIngredient = { name: string; role: string };
+export type ProductTestReport = { metric: string; value: string; note?: string };
+export type ProductReview = { name: string; rating: number; date: string; body: string };
+
+export type ProductDetail = {
+  description: string[];
+  media: ProductMedia[];
+  ingredients: ProductIngredient[];
+  testReports: ProductTestReport[];
+  reviews: ProductReview[];
+};
+
+export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
+  multigrain: {
+    description: [
+      "Our multigrain loaf is the full expression of Cadieux: ancient rye sourdough, oats, linseed, sunflower seeds, and five distinct protein sources — brought together in one slow, careful bake.",
+      "Every batch is cold-proofed overnight, then baked on a falling temperature curve that locks in a tight, even crumb. The result is a dense, nourishing slice that holds structure under anything you put on it.",
+      "Seven grams of protein per slice. Six grams of fiber. No maida, no refined sugar, no shortcuts.",
+    ],
+    media: [
+      { type: "video", src: "/product-video-05.mp4", alt: "Multigrain bread close-up" },
+      { type: "video", src: "/bread-making-01.mp4", alt: "Bread being made" },
+      { type: "image", src: "/hero.jpg", alt: "Multigrain loaf hero" },
+      { type: "image", src: "/grains.png", alt: "Grains and seeds" },
+    ],
+    ingredients: [
+      { name: "Rye sourdough ferment", role: "Base structure & gut-friendly acids" },
+      { name: "Whole wheat flour", role: "Core body of the loaf" },
+      { name: "Oat bran", role: "Soluble fiber, lowers LDL cholesterol" },
+      { name: "Linseed (flax)", role: "Omega-3 fatty acids for heart and brain" },
+      { name: "Sunflower seeds", role: "Vitamin E and healthy fats" },
+      { name: "Whey protein isolate", role: "Fast-release amino acids" },
+      { name: "Soy protein", role: "Slow-release plant protein" },
+      { name: "Sea salt", role: "Controls fermentation, lifts flavour" },
+    ],
+    testReports: [
+      { metric: "Protein per slice", value: "7.2 g", note: "FSSAI-accredited lab · Mar 2026" },
+      { metric: "Dietary fiber per slice", value: "6.1 g", note: "FSSAI-accredited lab · Mar 2026" },
+      { metric: "Added sugar", value: "0 g", note: "Verified — no refined sugar added" },
+      { metric: "Glycaemic index", value: "Low (54)", note: "Independent GI testing · 2026" },
+    ],
+    reviews: [
+      { name: "Anjali R.", rating: 5, date: "Apr 2026", body: "Replaced our daily bread with this three weeks ago. Mornings feel different — no mid-morning crash, kids actually ask for seconds." },
+      { name: "Harish N.", rating: 5, date: "Apr 2026", body: "Dense, hearty, and holds up to everything. I train 5 days a week and the protein math just works. Great texture." },
+      { name: "Meera K.", rating: 4, date: "Mar 2026", body: "Love the flavour and the seeds. Slightly darker than I expected but that turned out to be a good thing." },
+      { name: "Vikram S.", rating: 5, date: "Mar 2026", body: "You can tell this is made carefully. Smells like real bread, not a factory. Worth every rupee." },
+    ],
+  },
+  plain: {
+    description: [
+      "Plain is the everyday Cadieux — a soft, clean sandwich loaf that happens to carry serious protein.",
+      "Same careful process as our multigrain, just a milder crumb built for daily use: toast, sandwiches, kids' lunches, late-night eggs.",
+      "Seven grams of protein per slice. Ten slices per loaf. Nothing hidden.",
+    ],
+    media: [
+      { type: "video", src: "/product-video-06.mp4", alt: "Plain protein bread close-up" },
+      { type: "video", src: "/bread-eating-01.mp4", alt: "Bread being enjoyed" },
+      { type: "image", src: "/grains.png", alt: "Grains used" },
+      { type: "image", src: "/hero.jpg", alt: "Loaf hero shot" },
+    ],
+    ingredients: [
+      { name: "Whole wheat flour", role: "Primary flour — no maida" },
+      { name: "Whey protein isolate", role: "7g of protein per slice, clean taste" },
+      { name: "Rye sourdough starter", role: "Slow fermentation, better digestion" },
+      { name: "Oat flour", role: "Soft crumb, soluble fiber" },
+      { name: "Cold-pressed sunflower oil", role: "Keeps slices tender" },
+      { name: "Honey (trace)", role: "Balances ferment — no refined sugar" },
+      { name: "Sea salt", role: "Structure and flavour" },
+    ],
+    testReports: [
+      { metric: "Protein per slice", value: "7.1 g", note: "FSSAI-accredited lab · Mar 2026" },
+      { metric: "Net weight", value: "400 g", note: "Per packet · verified on line" },
+      { metric: "Added sugar", value: "0 g", note: "Trace honey for ferment only" },
+      { metric: "Slices per loaf", value: "10", note: "Precision-cut on every bake" },
+    ],
+    reviews: [
+      { name: "Deepa M.", rating: 5, date: "Apr 2026", body: "Finally a sandwich bread that's actually nourishing. Toasts beautifully, holds butter, and doesn't fall apart." },
+      { name: "Arjun T.", rating: 5, date: "Apr 2026", body: "Kids don't even notice it's healthier. That's the win. Subscribed for weekly delivery." },
+      { name: "Priya L.", rating: 4, date: "Mar 2026", body: "Soft, clean, and the protein hits. Wish the loaf was slightly bigger but quality is top-notch." },
+      { name: "Rohit B.", rating: 5, date: "Mar 2026", body: "Gym bag essential. Two slices post-workout and I'm set. Tastes way better than powder toast." },
+    ],
+  },
+};
 
 export const BLOG_POSTS = [
   {
