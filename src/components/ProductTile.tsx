@@ -36,10 +36,10 @@ export default function ProductTile({ slug, tag, title, subtitle, price, stats, 
       }}
     >
       <div
+        className="tile-media"
         style={{
           position: "relative",
           width: "100%",
-          aspectRatio: "4 / 5",
           background: "#1a1510",
           overflow: "hidden",
         }}
@@ -108,7 +108,7 @@ export default function ProductTile({ slug, tag, title, subtitle, price, stats, 
         </div>
       </div>
 
-      <div style={{ padding: "18px 20px 20px" }}>
+      <div className="tile-body">
         <div
           style={{
             fontFamily: "var(--font-body)",
@@ -123,10 +123,10 @@ export default function ProductTile({ slug, tag, title, subtitle, price, stats, 
           {tag}
         </div>
         <h3
+          className="tile-title"
           style={{
             margin: 0,
             fontFamily: "var(--font-heading)",
-            fontSize: 28,
             fontWeight: 400,
             color: "#f5f0e8",
             letterSpacing: "0.01em",
@@ -226,6 +226,29 @@ export default function ProductTile({ slug, tag, title, subtitle, price, stats, 
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        .tile-media {
+          aspect-ratio: 16 / 11;
+        }
+        .tile-body {
+          padding: 16px 16px 18px;
+        }
+        .tile-title {
+          font-size: 22px;
+        }
+        @media (min-width: 640px) {
+          .tile-media {
+            aspect-ratio: 4 / 5;
+          }
+          .tile-body {
+            padding: 18px 20px 20px;
+          }
+          .tile-title {
+            font-size: 28px;
+          }
+        }
+      `}</style>
     </Link>
   );
 }

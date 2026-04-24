@@ -17,7 +17,7 @@ const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
 const DIVIDER_STYLE: React.CSSProperties = {
   height: 1,
   background: "rgba(201, 169, 110, 0.15)",
-  margin: "72px 0",
+  margin: "48px 0",
   border: 0,
 };
 
@@ -87,7 +87,7 @@ export default function ProductDetailPage() {
         style={{
           position: "relative",
           zIndex: 1,
-          padding: "96px clamp(20px,5vw,64px) 140px",
+          padding: "72px clamp(18px,5vw,64px) 80px",
           maxWidth: 1200,
           margin: "0 auto",
         }}
@@ -470,13 +470,19 @@ export default function ProductDetailPage() {
         .pdp-top {
           display: grid;
           grid-template-columns: 1fr;
-          gap: 40px;
+          gap: 32px;
           align-items: start;
+        }
+        :global(.pdp-main-media) {
+          aspect-ratio: 1 / 1;
         }
         @media (min-width: 900px) {
           .pdp-top {
             grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
             gap: 56px;
+          }
+          :global(.pdp-main-media) {
+            aspect-ratio: 4 / 5;
           }
         }
       `}</style>
@@ -498,10 +504,10 @@ function Gallery({
   return (
     <div style={{ minWidth: 0 }}>
       <div
+        className="pdp-main-media"
         style={{
           position: "relative",
           width: "100%",
-          aspectRatio: "4 / 5",
           background: "#1a1510",
           borderRadius: 14,
           overflow: "hidden",

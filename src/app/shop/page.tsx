@@ -22,16 +22,16 @@ export default function ShopPage() {
         <span style={{ fontSize: 14 }}>←</span> Cadieux
       </Link>
 
-      <div style={{ position: "relative", zIndex: 1, padding: "100px clamp(24px,6vw,80px) 120px", maxWidth: 1200, margin: "0 auto" }}>
-        <h1 style={{ margin: "0 0 16px", fontFamily: "var(--font-heading)", fontSize: "clamp(44px,9vw,80px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1 }}>
+      <div style={{ position: "relative", zIndex: 1, padding: "72px clamp(18px,5vw,80px) 80px", maxWidth: 1200, margin: "0 auto" }}>
+        <h1 style={{ margin: "0 0 12px", fontFamily: "var(--font-heading)", fontSize: "clamp(34px,8vw,80px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1 }}>
           Our Breads
         </h1>
         <p style={{
-          margin: "0 0 48px",
+          margin: "0 0 28px",
           fontFamily: "var(--font-body)",
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: 300,
-          lineHeight: 1.6,
+          lineHeight: 1.55,
           color: "rgba(251, 243, 212, 0.55)",
           maxWidth: 520,
         }}>
@@ -41,8 +41,8 @@ export default function ShopPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: 24,
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 16,
             alignItems: "stretch",
           }}
         >
