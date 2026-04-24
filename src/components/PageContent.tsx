@@ -10,14 +10,30 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const remap = (v: number, lo: number, hi: number) => clamp((v - lo) / (hi - lo), 0, 1);
 const ease  = (t: number) => t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
 
-/* Lazy-play a video the instant any pixel enters the viewport (no delay). */
+/* Lazy-play a video the instant any pixel enters the viewport, and keep
+   retrying until the element actually has enough data to play. Needed on
+   mobile Safari/Chrome — a too-early play() rejects silently and leaves
+   the video paused over its backgroundColor (the "blank background" bug). */
 const playOnEnter = (el: HTMLVideoElement | null) => {
-  if (!el || typeof IntersectionObserver === "undefined") return;
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach((e) => {
-      if (e.isIntersecting) el.play().catch(() => {});
-    });
-  }, { threshold: 0 });
+  if (!el) return;
+  // Defensive — React sets these from attributes, but re-asserting avoids
+  // hydration races on iOS where muted reverts and play() then needs a gesture.
+  el.muted = true;
+
+  const tryPlay = () => { void el.play().catch(() => {}); };
+
+  // Retry whenever the browser signals it has enough buffer.
+  el.addEventListener("canplay", tryPlay);
+  el.addEventListener("loadeddata", tryPlay);
+
+  // Kick once now in case the element is already visible + ready.
+  tryPlay();
+
+  if (typeof IntersectionObserver === "undefined") return;
+  const io = new IntersectionObserver(
+    (entries) => entries.forEach((e) => { if (e.isIntersecting) tryPlay(); }),
+    { threshold: 0 }
+  );
   io.observe(el);
 };
 
@@ -346,7 +362,7 @@ export default function PageContent() {
             }}>
               {/* Background video — lazy play on enter */}
               <video
-                ref={playOnEnter} muted playsInline loop preload="auto"
+                ref={playOnEnter} autoPlay muted playsInline loop preload="auto"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
@@ -445,7 +461,7 @@ export default function PageContent() {
             }}>
               {/* Background video — lazy play on enter */}
               <video
-                ref={playOnEnter} muted playsInline loop preload="auto"
+                ref={playOnEnter} autoPlay muted playsInline loop preload="auto"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
@@ -551,7 +567,7 @@ export default function PageContent() {
             marginTop: "-100vh", zIndex: 3,
           }}>
             {/* Background video */}
-            <video ref={playOnEnter} muted playsInline loop preload="auto" style={{
+            <video ref={playOnEnter} autoPlay muted playsInline loop preload="auto" style={{
               position: "absolute", inset: 0, width: "100%", height: "100%",
               objectFit: "cover", zIndex: 0, backgroundColor: "#060402",
             }}>
