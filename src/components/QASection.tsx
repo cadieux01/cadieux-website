@@ -266,7 +266,7 @@ export default function QASection() {
             io.observe(el);
           }}
           muted playsInline loop preload="auto"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0, backgroundColor: "#060402" }}
         >
           <source src="/product-video-06.mp4" type="video/mp4" />
         </video>

@@ -257,13 +257,13 @@ export default function PageContent() {
                 playsInline
                 preload="auto"
                 loop
-                poster="/hero.jpg"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
                   objectFit: "cover",
                   zIndex: 1,
                   filter: "brightness(1) contrast(1)",
+                  backgroundColor: "#060402",
                 }}
               >
                 <source src="/bread-intro.mp4" type="video/mp4" />
@@ -351,6 +351,7 @@ export default function PageContent() {
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
                   objectFit: "cover", zIndex: 0,
+                  backgroundColor: "#1D1D1F",
                 }}
               >
                 <source src="/product-video-05.mp4" type="video/mp4" />
@@ -449,6 +450,7 @@ export default function PageContent() {
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
                   objectFit: "cover", zIndex: 0,
+                  backgroundColor: "#1D1D1F",
                 }}
               >
                 <source src="/bread-eating-01.mp4" type="video/mp4" />
@@ -551,7 +553,7 @@ export default function PageContent() {
             {/* Background video */}
             <video ref={playOnEnter} muted playsInline loop preload="auto" style={{
               position: "absolute", inset: 0, width: "100%", height: "100%",
-              objectFit: "cover", zIndex: 0,
+              objectFit: "cover", zIndex: 0, backgroundColor: "#060402",
             }}>
               <source src="/bread-making-01.mp4" type="video/mp4" />
             </video>

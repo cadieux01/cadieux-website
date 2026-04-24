@@ -43,6 +43,7 @@ export default function VideoIntro({ onDone }: { onDone: () => void }) {
           width: "100%",
           height: "100%",
           objectFit: "cover",
+          backgroundColor: "#060402",
         }}
       />
 
