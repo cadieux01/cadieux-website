@@ -50,9 +50,9 @@ export default function ShopPage() {
           >
             <ProductCard
               productIndex={0}
-              name="Core Element Protein Bread"
-              tag="Core Element"
-              title="Protein Bread"
+              name="Protein Bread Multigrain"
+              tag="Protein Bread"
+              title="Multigrain"
               subtitle="Ancient grains, seeds, whey protein. Baked to lock in structure."
               price={140}
               stats={[
