@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   PRODUCTS,
   PRODUCT_DETAILS,
@@ -43,7 +43,6 @@ export default function ProductDetailPage() {
   }
 
   const productIndex = PRODUCTS.findIndex((p) => p.slug === slug);
-  const media = detail.media[activeMedia] ?? detail.media[0];
 
   const handleAdd = () => {
     addToCart({
@@ -94,7 +93,7 @@ export default function ProductDetailPage() {
       >
         {/* Top fold: gallery + info */}
         <div className="pdp-top">
-          <Gallery media={detail.media} active={activeMedia} onSelect={setActiveMedia} current={media} />
+          <Gallery media={detail.media} active={activeMedia} onSelect={setActiveMedia} />
 
           <div style={{ minWidth: 0 }}>
             <div
@@ -459,13 +458,29 @@ function Gallery({
   media,
   active,
   onSelect,
-  current,
 }: {
   media: ProductMedia[];
   active: number;
   onSelect: (i: number) => void;
-  current: ProductMedia;
 }) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  const handleScroll = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const idx = Math.round(el.scrollLeft / el.clientWidth);
+    if (idx !== active) onSelect(idx);
+  };
+
+  const goTo = (i: number) => {
+    const el = scrollerRef.current;
+    if (!el) {
+      onSelect(i);
+      return;
+    }
+    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+  };
+
   return (
     <div style={{ minWidth: 0 }}>
       <div
@@ -479,37 +494,124 @@ function Gallery({
           border: "0.5px solid rgba(201,169,110,0.18)",
         }}
       >
-        {current.type === "video" ? (
-          <video
-            key={current.src}
-            src={current.src}
-            autoPlay
-            muted
-            loop
-            playsInline
+        <div
+          ref={scrollerRef}
+          onScroll={handleScroll}
+          className="pdp-scroller"
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            overflowX: "auto",
+            overflowY: "hidden",
+            scrollSnapType: "x mandatory",
+            scrollbarWidth: "none",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {media.map((m, i) => (
+            <div
+              key={i}
+              style={{
+                flex: "0 0 100%",
+                width: "100%",
+                height: "100%",
+                scrollSnapAlign: "center",
+                position: "relative",
+                background: "#1a1510",
+              }}
+            >
+              {m.type === "video" ? (
+                <video
+                  src={m.src}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    backgroundColor: "#1a1510",
+                    display: "block",
+                    pointerEvents: "none",
+                  }}
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={m.src}
+                  alt={m.alt || "Product image"}
+                  draggable={false}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    display: "block",
+                    pointerEvents: "none",
+                    userSelect: "none",
+                  }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Swipe hint — only on first item */}
+        {media.length > 1 && active === 0 && (
+          <div
             style={{
               position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              backgroundColor: "#1a1510",
+              top: 14,
+              left: 14,
+              fontFamily: "var(--font-body)",
+              fontSize: 9,
+              fontWeight: 500,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "rgba(245,240,232,0.75)",
+              padding: "6px 12px",
+              background: "rgba(10,8,5,0.6)",
+              border: "0.5px solid rgba(245,240,232,0.22)",
+              borderRadius: 4,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              backdropFilter: "blur(4px)",
+              pointerEvents: "none",
             }}
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={current.src}
-            src={current.src}
-            alt={current.alt || "Product image"}
+          >
+            Swipe <span aria-hidden="true">→</span>
+          </div>
+        )}
+
+        {/* Dot indicators */}
+        {media.length > 1 && (
+          <div
             style={{
               position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
+              bottom: 12,
+              left: 0,
+              right: 0,
+              display: "flex",
+              justifyContent: "center",
+              gap: 6,
+              pointerEvents: "none",
             }}
-          />
+          >
+            {media.map((_, i) => (
+              <span
+                key={i}
+                style={{
+                  width: i === active ? 20 : 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: i === active ? "#c9a96e" : "rgba(245,240,232,0.45)",
+                  transition: "all 0.25s ease",
+                }}
+              />
+            ))}
+          </div>
         )}
       </div>
 
@@ -525,7 +627,7 @@ function Gallery({
         {media.map((m, i) => (
           <button
             key={i}
-            onClick={() => onSelect(i)}
+            onClick={() => goTo(i)}
             style={{
               flex: "0 0 auto",
               width: 74,
@@ -559,6 +661,12 @@ function Gallery({
           </button>
         ))}
       </div>
+
+      <style jsx>{`
+        .pdp-scroller::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 }
