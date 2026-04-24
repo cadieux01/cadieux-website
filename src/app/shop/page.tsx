@@ -26,8 +26,38 @@ export default function ShopPage() {
           Our Breads
         </h1>
 
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <ProductCard />
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 360px))",
+          gap: 32,
+          justifyContent: "center",
+        }}>
+          <ProductCard
+            productIndex={0}
+            name="Core Element Protein Bread"
+            tag="Core Element"
+            title="Protein Bread"
+            subtitle="Ancient grains, seeds, whey protein. Baked to lock in structure."
+            price={140}
+            stats={[
+              { target: 7, suffix: "g", label: "Protein/slice" },
+              { target: 6, suffix: "g", label: "Fiber/slice" },
+              { target: 14, label: "Ingredients" },
+            ]}
+          />
+          <ProductCard
+            productIndex={1}
+            name="Plain High Protein Bread"
+            tag="Everyday"
+            title="High Protein"
+            subtitle="Clean sandwich bread built for protein without the fuss. Soft slices, no compromise."
+            price={110}
+            stats={[
+              { target: 7, suffix: "g", label: "Protein/slice" },
+              { target: 10, label: "Slices" },
+              { target: 400, suffix: "g", label: "Net Weight" },
+            ]}
+          />
         </div>
       </div>
     </div>

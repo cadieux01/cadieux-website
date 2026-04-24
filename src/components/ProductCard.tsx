@@ -31,15 +31,36 @@ function useCountUp(target: number, duration = 800, delay = 0) {
   return value;
 }
 
-export default function ProductCard() {
+export type ProductCardStat = { target: number; suffix?: string; label: string };
+
+export type ProductCardProps = {
+  productIndex: number;
+  name: string;
+  tag: string;
+  title: string;
+  subtitle: string;
+  price: number;
+  stats: [ProductCardStat, ProductCardStat, ProductCardStat];
+};
+
+export default function ProductCard({
+  productIndex,
+  name,
+  tag,
+  title,
+  subtitle,
+  price,
+  stats,
+}: ProductCardProps) {
   const { addToCart } = useCart();
   const cardRef = useRef<HTMLDivElement>(null);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [hovered, setHovered] = useState(false);
 
-  const protein = useCountUp(7);
-  const fiber = useCountUp(6);
-  const ingredients = useCountUp(14);
+  const s0 = useCountUp(stats[0].target);
+  const s1 = useCountUp(stats[1].target);
+  const s2 = useCountUp(stats[2].target);
+  const statValues = [s0, s1, s2];
 
   function handleMove(e: React.MouseEvent<HTMLDivElement>) {
     const el = cardRef.current;
@@ -57,9 +78,9 @@ export default function ProductCard() {
 
   function handleAdd() {
     const item: CartItem = {
-      productIndex: 0,
-      name: "Core Element Protein Bread",
-      price: 140,
+      productIndex,
+      name,
+      price,
       qty: 1,
       orderType: "once",
     };
@@ -300,7 +321,7 @@ export default function ProductCard() {
               animation: "pc-slideUp 0.6s ease 0.2s forwards",
             }}
           >
-            Core Element
+            {tag}
           </div>
 
           <div
@@ -315,7 +336,7 @@ export default function ProductCard() {
               animation: "pc-slideUp 0.6s ease 0.3s forwards",
             }}
           >
-            Protein Bread
+            {title}
           </div>
 
           <div
@@ -330,7 +351,7 @@ export default function ProductCard() {
               animation: "pc-slideUp 0.6s ease 0.4s forwards",
             }}
           >
-            Ancient grains, seeds, whey protein. Baked to lock in structure.
+            {subtitle}
           </div>
 
           {/* Stats */}
@@ -345,11 +366,10 @@ export default function ProductCard() {
               animation: "pc-slideUp 0.6s ease 0.5s forwards",
             }}
           >
-            {[
-              { v: `${protein}g`, l: "Protein/slice" },
-              { v: `${fiber}g`, l: "Fiber/slice" },
-              { v: `${ingredients}`, l: "Ingredients" },
-            ].map((s, i) => (
+            {stats.map((s, i) => ({
+              v: `${statValues[i]}${s.suffix ?? ""}`,
+              l: s.label,
+            })).map((s, i) => (
               <div
                 key={i}
                 style={{
@@ -405,7 +425,7 @@ export default function ProductCard() {
               }}
             >
               <span style={{ fontSize: 18, color: "#8a7a5a", marginRight: 2 }}>₹</span>
-              140
+              {price}
             </div>
 
             <button
