@@ -366,81 +366,16 @@ export default function ProductDetailPage() {
 
         <hr style={DIVIDER_STYLE} />
 
-        {/* Test reports */}
+        {/* Test reports — no preview data; customer opens the dedicated page to see the real reports. */}
         <Section label="Independently tested" title="Test Reports">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 18,
-            }}
-          >
-            {detail.testReports.map((r) => (
-              <Link
-                key={r.metric}
-                href={`/shop/${slug}/reports`}
-                style={{
-                  display: "block",
-                  textDecoration: "none",
-                  color: "inherit",
-                  padding: "26px 22px",
-                  background: "rgba(10,8,5,0.45)",
-                  border: "0.5px solid rgba(201,169,110,0.22)",
-                  borderRadius: 10,
-                  cursor: "pointer",
-                  transition: "border-color 0.25s ease, background 0.25s ease",
-                }}
-              >
-                <div
-                  style={{
-                    fontFamily: "var(--font-body)",
-                    fontSize: 9,
-                    fontWeight: 500,
-                    letterSpacing: "0.3em",
-                    textTransform: "uppercase",
-                    color: "rgba(201,169,110,0.7)",
-                    marginBottom: 14,
-                  }}
-                >
-                  {r.metric}
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-heading)",
-                    fontSize: 38,
-                    fontWeight: 500,
-                    color: "#FBF3D4",
-                    lineHeight: 1,
-                    marginBottom: 12,
-                  }}
-                >
-                  {r.value}
-                </div>
-                {r.note && (
-                  <div
-                    style={{
-                      fontFamily: "var(--font-body)",
-                      fontSize: 11,
-                      fontWeight: 300,
-                      color: "rgba(245,240,232,0.45)",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {r.note}
-                  </div>
-                )}
-              </Link>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-start" }}>
+          <div style={{ display: "flex", justifyContent: "flex-start" }}>
             <Link
               href={`/shop/${slug}/reports`}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 10,
-                padding: "14px 24px",
+                padding: "16px 28px",
                 border: "1px solid #c9a96e",
                 color: "#FBF3D4",
                 fontFamily: "var(--font-body)",
