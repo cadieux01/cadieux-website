@@ -12,15 +12,15 @@ const ss = (e0: number, e1: number, x: number) => {
 const QAS = [
   {
     q: "Why do you need protein?",
-    a: "Protein is the foundation of every cell in your body. It repairs muscle, powers your immune system, and keeps you full for longer — without the crash.",
+    a: "Your body is built from protein. Without enough, it quietly takes from itself. With enough, it builds — every single day.",
   },
   {
     q: "Why we exist?",
-    a: "For the people quietly choosing better. Cadieux exists for anyone ready to take a single honest step toward a stronger, lighter, more capable body — through the one thing they were going to eat anyway. No hype. No reinvention. Just the upgrade hidden inside the everyday.",
+    a: "For everyone choosing a stronger, healthier body without making it a project. Cadieux is that choice — baked into the bread you were already going to eat.",
   },
   {
     q: "Why protein bread?",
-    a: "Most bread works against you. Cadieux works for you. Each slice delivers 7g of protein and 6g of fibre, made from real seeds and ancient grains — no Maida, no compromise. Just fuel that builds your muscles and keeps your gut thriving.",
+    a: "Most bread takes from your body. Cadieux gives back — 7g protein and 6g fibre a slice, from real seeds and ancient grains. Same morning. Better fuel.",
   },
 ];
 
