@@ -16,7 +16,7 @@ const QAS = [
   },
   {
     q: "Why we exist?",
-    a: "For anyone wanting to feel strong and clear — without giving up the food they hold dear. Cadieux is the quiet choice in your day, the upgrade in the bread you'd eat anyway.",
+    a: "We exist to make strength simple. Same bread, better built — real grains, honest protein, no shortcuts. A quiet daily ritual for anyone choosing to grow stronger, sharper, steadier — without giving up the food they hold dear.",
   },
   {
     q: "Why protein bread?",
