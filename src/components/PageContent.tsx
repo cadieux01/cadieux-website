@@ -7,8 +7,6 @@ import QASection from "./QASection";
 /* ── Helpers ── */
 const sr    = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const remap = (v: number, lo: number, hi: number) => clamp((v - lo) / (hi - lo), 0, 1);
-const ease  = (t: number) => t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
 
 /* Lazy-play a video the instant any pixel enters the viewport, and keep
    retrying until the element actually has enough data to play. Needed on
@@ -174,23 +172,7 @@ export default function PageContent() {
     return () => io.disconnect();
   }, []);
 
-  /* ── Per-protein-card visibility from scroll progress ── */
   const N_P = PROTEIN_BENEFITS.length;
-  const proteinVis = PROTEIN_BENEFITS.map((_, i) => {
-    const f = proteinP * N_P - i;
-    let opacity = 0, tx = 80, ty = 80;
-    if (f > -0.5 && f <= 0) {
-      const t = ease(remap(f, -0.5, 0));
-      opacity = t; tx = (1 - t) * 80; ty = (1 - t) * 80;
-    } else if (f > 0 && f <= 0.5) {
-      opacity = 1; tx = 0; ty = 0;
-    } else if (f > 0.5 && f < 1.1) {
-      const t = ease(remap(f, 0.5, 1.1));
-      opacity = 1 - t; tx = -t * 80; ty = -t * 80;
-    }
-    return { opacity, tx, ty };
-  });
-  const activeProtein = Math.round(clamp(proteinP * N_P - 0.5, 0, N_P - 1));
 
   return (
     <>
@@ -495,77 +477,94 @@ export default function PageContent() {
               {/* Shared grain overlay */}
               <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
 
-              {/* Static heading */}
-              <p style={{
-                position: "absolute", top: "18%", left: 0, right: 0, zIndex: 20,
-                textAlign: "center", margin: 0,
-                fontFamily: "var(--font-heading)", fontSize: "clamp(28px,6vw,48px)", fontWeight: 300,
-                letterSpacing: "0.08em",
-                color: "#FBF3D4",
-                opacity: Math.max(0, 1 - clamp((proteinP - 0.7) / 0.3, 0, 1)) * 0.75,
-                pointerEvents: "none",
-                transition: "opacity 0.1s linear",
-              }}>Protein isn&apos;t just for athletes</p>
-
-              {/* Cards */}
-              {PROTEIN_BENEFITS.map((b, i) => {
-                const { opacity, tx, ty } = proteinVis[i];
-                return (
-                  <div key={b.n} style={{
-                    position: "absolute", inset: 0,
-                    background: "transparent",
-                    opacity, zIndex: i,
-                    willChange: "opacity",
-                    pointerEvents: "none",
-                  }}>
-                    <div style={{
-                      position: "absolute", top: "50%", left: 0, right: 0,
-                      padding: "0 clamp(28px,8vw,80px)",
-                      transform: `translateY(calc(-50% + ${ty}px)) translateX(${tx}px)`,
-                      willChange: "transform", textAlign: "center",
-                    }}>
-                      {/* Amber rule */}
-                      <div style={{ width: 40, height: 1, background: "rgba(2,70,40,0.6)", margin: "0 auto 28px" }} />
-
-                      {/* Counter */}
-                      <p style={{
-                        margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 8,
-                        fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase",
-                        color: "rgba(255,255,255,0.4)",
-                      }}>{b.n} — {String(N_P).padStart(2, "0")}</p>
-
-                      {/* Title */}
-                      <h2 style={{
-                        margin: "0 0 22px", fontFamily: "var(--font-heading)",
-                        fontSize: "clamp(44px, 11vw, 88px)", fontWeight: 300,
-                        color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1,
-                      }}>{b.title}</h2>
-
-                      {/* Description */}
-                      <p style={{
-                        margin: "0 auto", maxWidth: 560,
-                        fontFamily: "var(--font-body)", fontSize: "clamp(13px,1.5vw,15px)",
-                        fontWeight: 300, letterSpacing: "0.04em", lineHeight: 1.7,
-                        color: "rgba(255,255,255,0.8)",
-                      }}>{b.desc}</p>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Progress indicator */}
+              {/* Timeline content — heading + connector line + 5 benefits,
+                  same pattern as the ingredients section. */}
               <div style={{
-                position: "absolute", bottom: 28, left: "50%",
-                transform: "translateX(-50%)", display: "flex", gap: 6,
-                alignItems: "center", zIndex: 20, pointerEvents: "none",
+                position: "absolute", inset: 0, zIndex: 20,
+                display: "flex", flexDirection: "column", alignItems: "center",
+                padding: "8vh 24px 5vh",
+                pointerEvents: "none",
               }}>
-                {PROTEIN_BENEFITS.map((_, j) => (
-                  <div key={j} style={{
-                    width: activeProtein === j ? 16 : 4, height: 1,
-                    background: activeProtein === j ? "#ffffff" : "rgba(255,255,255,0.25)",
-                    transition: "width 0.4s cubic-bezier(.22,1,.36,1), background 0.4s",
+                {/* Heading */}
+                <h2 style={{
+                  margin: 0, textAlign: "center",
+                  fontFamily: "var(--font-heading)",
+                  fontSize: "clamp(28px,6vw,44px)", fontWeight: 300,
+                  letterSpacing: "0.04em", color: "#FBF3D4", lineHeight: 1.1,
+                }}>Protein isn&apos;t just for athletes</h2>
+
+                {/* Timeline rail */}
+                <div style={{
+                  position: "relative", flex: 1, width: "100%",
+                  maxWidth: 520, marginTop: "3.5vh",
+                }}>
+                  {/* Dim full-length backbone */}
+                  <div style={{
+                    position: "absolute", left: 28, top: 0, bottom: 0,
+                    width: 1, background: "rgba(251,243,212,0.12)",
                   }} />
-                ))}
+                  {/* Gold revealed line — settles by 82% of section so the
+                      last benefit has dwell time before Section 5 takes over. */}
+                  <div style={{
+                    position: "absolute", left: 28, top: 0,
+                    height: `${clamp(proteinP / 0.82, 0, 1) * 100}%`,
+                    width: 1, background: "#c9a96e",
+                    boxShadow: "0 0 8px rgba(201,169,110,0.45)",
+                    willChange: "height",
+                  }} />
+
+                  {/* Benefit rows, evenly distributed top-to-bottom */}
+                  <div style={{
+                    position: "relative", height: "100%",
+                    display: "flex", flexDirection: "column",
+                    justifyContent: "space-between",
+                  }}>
+                    {PROTEIN_BENEFITS.map((b, i) => {
+                      const stepP = clamp(proteinP / 0.82, 0, 1);
+                      const dotAt = (i + 0.5) / N_P;
+                      const reached = stepP >= dotAt;
+                      const reveal = clamp((stepP - (i / N_P)) * N_P * 1.2, 0, 1);
+                      return (
+                        <div key={b.n} style={{
+                          display: "flex", alignItems: "flex-start", gap: 18,
+                        }}>
+                          {/* Dot */}
+                          <div style={{
+                            position: "relative",
+                            flex: "0 0 auto",
+                            width: 13, height: 13, marginTop: 7, marginLeft: 22,
+                            borderRadius: 99,
+                            background: reached ? "#c9a96e" : "rgba(251,243,212,0.18)",
+                            boxShadow: reached ? "0 0 10px rgba(201,169,110,0.55)" : "none",
+                            border: "2px solid #1D1D1F",
+                            transition: "background 0.25s ease, box-shadow 0.25s ease",
+                          }} />
+                          {/* Title + body */}
+                          <div style={{
+                            flex: 1, minWidth: 0,
+                            opacity: 0.22 + reveal * 0.78,
+                            transform: `translateX(${(1 - reveal) * 8}px)`,
+                            transition: "opacity 0.2s linear, transform 0.25s ease",
+                          }}>
+                            <p style={{
+                              margin: 0,
+                              fontFamily: "var(--font-heading)",
+                              fontSize: "clamp(20px, 5vw, 30px)", fontWeight: 300,
+                              color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1.15,
+                            }}>{b.title}</p>
+                            <p style={{
+                              margin: "6px 0 0",
+                              fontFamily: "var(--font-body)",
+                              fontSize: 11, fontWeight: 300,
+                              letterSpacing: "0.05em",
+                              color: "rgba(251,243,212,0.6)", lineHeight: 1.6,
+                            }}>{b.desc}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
