@@ -15,6 +15,10 @@ const QAS = [
     a: "Protein is the foundation of every cell in your body. It repairs muscle, powers your immune system, and keeps you full for longer — without the crash.",
   },
   {
+    q: "Why we exist?",
+    a: "For the people quietly choosing better. Cadieux exists for anyone ready to take a single honest step toward a stronger, lighter, more capable body — through the one thing they were going to eat anyway. No hype. No reinvention. Just the upgrade hidden inside the everyday.",
+  },
+  {
     q: "Why protein bread?",
     a: "Most bread works against you. Cadieux works for you. Each slice delivers 7g of protein and 6g of fibre, made from real seeds and ancient grains — no Maida, no compromise. Just fuel that builds your muscles and keeps your gut thriving.",
   },
