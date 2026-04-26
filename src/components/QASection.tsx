@@ -24,11 +24,14 @@ const QAS = [
   },
 ];
 
-/* Each Q&A occupies half of the scroll range. Generated from QAS so
-   adding/removing a question doesn't require touching this table.    */
+/* Quick transitions for the early Q&As, then a long dwell tail on the
+   last one so its answer can finish typing before Phase 3 covers it.
+   STEP is the fraction of total progress allotted to each non-final
+   slice; the final slice owns everything after the last STEP boundary. */
+const STEP = 0.17;
 const SLICES: Array<{ enter: number; exit: number }> = QAS.map((_, i) => ({
-  enter: i / QAS.length,
-  exit: (i + 1) / QAS.length,
+  enter: i * STEP,
+  exit: i === QAS.length - 1 ? 1 : (i + 1) * STEP,
 }));
 
 /* Per-word stagger for the answer reveal. ~80ms keeps a sentence
@@ -106,10 +109,11 @@ export default function QASection() {
         setActive(idx);
       }
 
-      /* Dark overlay — fades in over the last ~10 % so Phase 3 has a
-         clean lead-in. The Q&A itself stays on screen until then. */
+      /* Dark overlay — fades in over the last 100vh of scroll, lined up
+         with Phase 3's -100vh overlap so the Q&A is fully readable
+         until the lead-in begins. */
       if (darkRef.current) {
-        darkRef.current.style.opacity = String(ss(0.92, 1.0, p) * 0.95);
+        darkRef.current.style.opacity = String(ss(0.83, 1.0, p) * 0.95);
       }
     };
 
@@ -138,9 +142,10 @@ export default function QASection() {
   });
 
   return (
-    /* 350vh outer = ~83vh of scroll per Q&A so a single trackpad swipe
-       advances to the next question. Tail keeps the dark fade clean. */
-    <div ref={outerRef} style={{ position: "relative", height: "350vh", overflowX: "clip" }}>
+    /* 600vh outer = ~85vh per early Q&A (one trackpad swipe advances)
+       plus a long tail on the final answer so its word-by-word typing
+       can complete before Phase 3 begins overlapping from below. */
+    <div ref={outerRef} style={{ position: "relative", height: "600vh", overflowX: "clip" }}>
       <div
         style={{
           position: "sticky",
