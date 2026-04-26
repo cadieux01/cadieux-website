@@ -12,7 +12,7 @@ const ss = (e0: number, e1: number, x: number) => {
 const QAS = [
   {
     q: "Why do you need protein?",
-    a: "Protein holds your body together — muscles that move you, skin and hair that show up, hormones that steady you, immunity that guards you. Run short, and the body breaks itself down to keep going. Eat enough — every part stays intact.",
+    a: "Protein holds your body together — muscles that move you, hormones that steady you, immunity that guards you, and **blood sugar it keeps in check**. Run short, and the body breaks itself down to keep going. Eat enough — every part stays intact.",
   },
   {
     q: "Why we exist?",
@@ -118,7 +118,24 @@ export default function QASection() {
   }, []);
 
   const current = QAS[active];
-  const words = current.a.split(/\s+/);
+  // Words wrapped in **double asterisks** render bold (used to emphasise key
+  // promises like "blood sugar it keeps in check"). Closing markers may
+  // appear before trailing punctuation — e.g. "check**." — so we strip
+  // every "**" anywhere in the word and toggle a running bold flag.
+  let boldOpen = false;
+  const words = current.a.split(/\s+/).map(w => {
+    let text = w;
+    let isBold = boldOpen;
+    while (text.includes("**")) {
+      const idx = text.indexOf("**");
+      text = text.slice(0, idx) + text.slice(idx + 2);
+      boldOpen = !boldOpen;
+      // A word that contains a marker is bold (covers both the opening
+      // word like "**blood" and the closing word like "check**.").
+      isBold = true;
+    }
+    return { text, bold: isBold };
+  });
 
   return (
     /* 700vh outer = 600vh of scroll, plus a tail so the dark fade can
@@ -202,7 +219,7 @@ export default function QASection() {
 
           {/* Answer — word by word. Each word is its own span with a
               staggered delay so the sentence types out left → right.  */}
-          <p style={aStyle} aria-label={current.a}>
+          <p style={aStyle} aria-label={current.a.replace(/\*\*/g, "")}>
             {words.map((w, i) => (
               <span
                 key={i}
@@ -214,9 +231,11 @@ export default function QASection() {
                   animation: `qa-word-in ${WORD_FADE_MS}ms cubic-bezier(0.19,1,0.22,1) forwards`,
                   animationDelay: `${400 + i * WORD_STAGGER_MS}ms`,
                   whiteSpace: "pre",
+                  fontWeight: w.bold ? 600 : undefined,
+                  color: w.bold ? "#FBF3D4" : undefined,
                 }}
               >
-                {w}
+                {w.text}
                 {i < words.length - 1 ? " " : ""}
               </span>
             ))}
