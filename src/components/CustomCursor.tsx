@@ -20,12 +20,23 @@ export default function CustomCursor() {
     const outer = outerRef.current
     if (!inner || !outer) return
 
+    // Batch inner cursor writes through rAF — coalesces mousemove flurries
+    // (browsers can fire >120/sec on 120Hz pointers) into one paint per frame.
+    let pendingX = 0
+    let pendingY = 0
+    let rafId = 0
+    const flush = () => {
+      rafId = 0
+      inner.style.left = `${pendingX}px`
+      inner.style.top = `${pendingY}px`
+    }
+
     const onMouseMove = (e: MouseEvent) => {
       const { clientX: x, clientY: y } = e
-
+      pendingX = x
+      pendingY = y
       setVisible(true)
-      inner.style.left = `${x}px`
-      inner.style.top = `${y}px`
+      if (!rafId) rafId = requestAnimationFrame(flush)
 
       gsap.to(outer, {
         left: x,
@@ -56,25 +67,33 @@ export default function CustomCursor() {
       })
     }
 
+    let currentClickables: NodeListOf<Element> | Element[] = []
     const addClickableListeners = () => {
       const clickables = document.querySelectorAll('button, a, [data-char]')
       clickables.forEach((el) => {
         el.addEventListener('mouseenter', onMouseEnter)
         el.addEventListener('mouseleave', onMouseLeave)
       })
+      currentClickables = clickables
       return clickables
     }
 
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('click', onClick)
-    const clickables = addClickableListeners()
+    addClickableListeners()
 
+    // Debounce MutationObserver re-binding — every DOM mutation re-querying
+    // `button, a, [data-char]` was a per-frame cost during heavy renders.
+    let debounceId: number | undefined
     const observer = new MutationObserver(() => {
-      clickables.forEach((el) => {
-        el.removeEventListener('mouseenter', onMouseEnter)
-        el.removeEventListener('mouseleave', onMouseLeave)
-      })
-      addClickableListeners()
+      if (debounceId !== undefined) window.clearTimeout(debounceId)
+      debounceId = window.setTimeout(() => {
+        currentClickables.forEach((el) => {
+          el.removeEventListener('mouseenter', onMouseEnter)
+          el.removeEventListener('mouseleave', onMouseLeave)
+        })
+        addClickableListeners()
+      }, 250)
     })
 
     observer.observe(document.body, { childList: true, subtree: true })
@@ -82,11 +101,13 @@ export default function CustomCursor() {
     return () => {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('click', onClick)
-      clickables.forEach((el) => {
+      currentClickables.forEach((el) => {
         el.removeEventListener('mouseenter', onMouseEnter)
         el.removeEventListener('mouseleave', onMouseLeave)
       })
       observer.disconnect()
+      if (debounceId !== undefined) window.clearTimeout(debounceId)
+      if (rafId) cancelAnimationFrame(rafId)
     }
   }, [isTouchDevice])
 

@@ -8,10 +8,10 @@ import QASection from "./QASection";
 const sr    = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/* Lazy-play a video the instant any pixel enters the viewport, and keep
-   retrying until the element actually has enough data to play. Needed on
-   mobile Safari/Chrome — a too-early play() rejects silently and leaves
-   the video paused over its backgroundColor (the "blank background" bug). */
+/* Lazy-play a video when any pixel enters the viewport, and pause it the
+   moment it's fully off-screen so a 5-video page doesn't decode all of them
+   at once. Mobile Safari/Chrome can also reject too-early play()s silently —
+   we retry on canplay/loadeddata to fix the "blank background" bug. */
 const playOnEnter = (el: HTMLVideoElement | null) => {
   if (!el) return;
   // Defensive — React sets these from attributes, but re-asserting avoids
@@ -29,7 +29,10 @@ const playOnEnter = (el: HTMLVideoElement | null) => {
 
   if (typeof IntersectionObserver === "undefined") return;
   const io = new IntersectionObserver(
-    (entries) => entries.forEach((e) => { if (e.isIntersecting) tryPlay(); }),
+    (entries) => entries.forEach((e) => {
+      if (e.isIntersecting) tryPlay();
+      else if (!el.paused) el.pause();
+    }),
     { threshold: 0 }
   );
   io.observe(el);
@@ -233,14 +236,13 @@ export default function PageContent() {
                 autoPlay
                 muted
                 playsInline
-                preload="auto"
+                preload="metadata"
                 loop
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
                   objectFit: "cover",
                   zIndex: 1,
-                  filter: "brightness(1) contrast(1)",
                   backgroundColor: "#060402",
                 }}
               >
@@ -324,7 +326,7 @@ export default function PageContent() {
             }}>
               {/* Background video — lazy play on enter */}
               <video
-                ref={playOnEnter} autoPlay muted playsInline loop preload="auto"
+                ref={playOnEnter} autoPlay muted playsInline loop preload="metadata"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
@@ -376,14 +378,21 @@ export default function PageContent() {
                     by ~82% of the scroll, leaving ~18% (~100vh) of "all-
                     revealed" view before the Phase 4 screen begins.
                   */}
-                  {/* Gold revealed line — height grows from 0 → 100% over [0, REVEAL_END] */}
+                  {/* Gold revealed line — full-height parent, child scales
+                      via transform (compositor-only, no layout). */}
                   <div style={{
                     position: "absolute", left: 28, top: 0,
-                    height: `${clamp(cardsP / 0.82, 0, 1) * 100}%`,
-                    width: 1, background: "#c9a96e",
-                    boxShadow: "0 0 8px rgba(201,169,110,0.45)",
-                    willChange: "height",
-                  }} />
+                    height: "100%", width: 1, pointerEvents: "none",
+                  }}>
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      background: "#c9a96e",
+                      boxShadow: "0 0 8px rgba(201,169,110,0.45)",
+                      transformOrigin: "top",
+                      transform: `scaleY(${clamp(cardsP / 0.82, 0, 1)})`,
+                      willChange: "transform",
+                    }} />
+                  </div>
 
                   {/* 6 ingredient rows, evenly distributed top-to-bottom */}
                   <div style={{
@@ -456,7 +465,7 @@ export default function PageContent() {
             }}>
               {/* Background video — lazy play on enter */}
               <video
-                ref={playOnEnter} autoPlay muted playsInline loop preload="auto"
+                ref={playOnEnter} autoPlay muted playsInline loop preload="metadata"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
@@ -503,15 +512,21 @@ export default function PageContent() {
                     position: "absolute", left: 28, top: 0, bottom: 0,
                     width: 1, background: "rgba(251,243,212,0.12)",
                   }} />
-                  {/* Gold revealed line — settles by 82% of section so the
-                      last benefit has dwell time before Section 5 takes over. */}
+                  {/* Gold revealed line — full-height parent, child scales
+                      via transform (compositor-only, no layout). */}
                   <div style={{
                     position: "absolute", left: 28, top: 0,
-                    height: `${clamp(proteinP / 0.82, 0, 1) * 100}%`,
-                    width: 1, background: "#c9a96e",
-                    boxShadow: "0 0 8px rgba(201,169,110,0.45)",
-                    willChange: "height",
-                  }} />
+                    height: "100%", width: 1, pointerEvents: "none",
+                  }}>
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      background: "#c9a96e",
+                      boxShadow: "0 0 8px rgba(201,169,110,0.45)",
+                      transformOrigin: "top",
+                      transform: `scaleY(${clamp(proteinP / 0.82, 0, 1)})`,
+                      willChange: "transform",
+                    }} />
+                  </div>
 
                   {/* Benefit rows, evenly distributed top-to-bottom */}
                   <div style={{
@@ -580,7 +595,7 @@ export default function PageContent() {
             zIndex: 3,
           }}>
             {/* Background video */}
-            <video ref={playOnEnter} autoPlay muted playsInline loop preload="auto" style={{
+            <video ref={playOnEnter} autoPlay muted playsInline loop preload="metadata" style={{
               position: "absolute", inset: 0, width: "100%", height: "100%",
               objectFit: "cover", zIndex: 0, backgroundColor: "#060402",
             }}>

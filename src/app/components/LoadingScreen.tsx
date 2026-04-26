@@ -30,12 +30,16 @@ const SESSION_KEY = "cadieux_intro_played";
  */
 export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  // If we've already played the intro this session, mount in the
-  // already-faded state and dismiss synchronously on first effect.
-  // EXCEPT: a hard reload (browser refresh) should always replay the intro,
-  // so we clear the flag in that case before reading it.
-  const [skip] = useState(() => {
-    if (typeof window === "undefined") return false;
+  // SSR-safe: always render the loading div on first frame so server and
+  // client markup match (avoids hydration mismatch warnings). The "already
+  // played this session" check happens in useEffect; if true, we dismiss
+  // immediately by calling onComplete and unmount via the parent.
+  const [fading, setFading] = useState(false);
+  const dismissedRef = useRef(false);
+
+  useEffect(() => {
+    // Hard reload always replays the intro — clear the flag first so the
+    // sessionStorage read below returns false.
     try {
       const navEntry = performance.getEntriesByType("navigation")[0] as
         | PerformanceNavigationTiming
@@ -44,16 +48,20 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
         window.sessionStorage.removeItem(SESSION_KEY);
       }
     } catch {
-      /* perf API unavailable — fall through to read */
+      /* perf API unavailable */
     }
-    return window.sessionStorage.getItem(SESSION_KEY) === "1";
-  });
-  const [fading, setFading] = useState(skip);
-  const dismissedRef = useRef(false);
 
-  useEffect(() => {
-    // Already played this session — dismiss immediately, no flicker.
-    if (skip) {
+    let alreadyPlayed = false;
+    try {
+      alreadyPlayed = window.sessionStorage.getItem(SESSION_KEY) === "1";
+    } catch {
+      /* Safari private mode etc. */
+    }
+
+    // Already played this session — dismiss immediately so the parent
+    // unmounts us on the next render. No fade, no video play.
+    if (alreadyPlayed) {
+      dismissedRef.current = true;
       onComplete();
       return;
     }
@@ -100,11 +108,7 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
       v.removeEventListener("error", onError);
       window.clearTimeout(fallback);
     };
-  }, [skip, onComplete]);
-
-  // If we're skipping the intro, render nothing — no element, no fade,
-  // no second flash of the video.
-  if (skip) return null;
+  }, [onComplete]);
 
   return (
     <div

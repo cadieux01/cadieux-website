@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  PHONE_COOKIE_NAME,
+  normalizePhone,
+  verifyPhoneCookie,
+} from "@/lib/phone-cookie";
 
 // Service role bypasses RLS. Anon key used as fallback (requires permissive RLS policies).
 const sb = createClient(
@@ -74,6 +79,34 @@ export async function POST(req: NextRequest) {
     const { customer_id, delivery_address, total_amount } = body;
     if (!delivery_address || !total_amount) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    }
+
+    // Server-side OTP enforcement: cookie must be present, valid, unexpired,
+    // and its phone must match the customer's stored phone.
+    const cookieValue = req.cookies.get(PHONE_COOKIE_NAME)?.value;
+    const verified = verifyPhoneCookie(cookieValue);
+    if (!verified) {
+      return NextResponse.json(
+        { error: "Phone verification required." },
+        { status: 401 }
+      );
+    }
+
+    if (!customer_id) {
+      return NextResponse.json({ error: "Missing customer." }, { status: 400 });
+    }
+
+    const { data: cust } = await sb
+      .from("customers")
+      .select("id, phone")
+      .eq("id", customer_id)
+      .maybeSingle();
+
+    if (!cust || normalizePhone(cust.phone) !== verified.phone) {
+      return NextResponse.json(
+        { error: "Phone verification mismatch." },
+        { status: 401 }
+      );
     }
 
     const { data: order, error } = await sb

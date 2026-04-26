@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import type { CartItem } from "@/lib/data";
 export type { CartItem } from "@/lib/data";
 
@@ -126,31 +125,55 @@ export default function CheckoutModal({
     }
   }
 
-  /* ── OTP ───────────────────────────────────────────────────────────────── */
+  /* ── OTP (Twilio Verify via /api/verify/*) ─────────────────────────────── */
   async function sendOtp() {
     const digits = phone.replace(/\D/g, "");
     if (digits.length !== 10) { setOtpError("Enter a valid 10-digit number."); return; }
     setSendingOtp(true); setOtpError("");
-    const { error } = await supabase.auth.signInWithOtp({ phone: "+91" + digits });
-    setSendingOtp(false);
-    if (error) { setOtpError("Error: " + error.message); return; }
-    setOtpSent(true);
-    setOtpCode("");
+    try {
+      const res = await fetch("/api/verify/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: digits }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setOtpError(data.error ?? "Failed to send code. Try again.");
+        return;
+      }
+      setOtpSent(true);
+      setOtpCode("");
+    } catch {
+      setOtpError("Network error. Try again.");
+    } finally {
+      setSendingOtp(false);
+    }
   }
 
   async function verifyOtp() {
-    if (otpCode.replace(/\D/g, "").length !== 6) { setOtpError("Enter the 6-digit code."); return; }
+    const code = otpCode.replace(/\D/g, "");
+    if (code.length !== 6) { setOtpError("Enter the 6-digit code."); return; }
     setVerifyingOtp(true); setOtpError("");
-    const { error } = await supabase.auth.verifyOtp({
-      phone: "+91" + phone.replace(/\D/g, ""),
-      token: otpCode.replace(/\D/g, ""),
-      type: "sms",
-    });
-    setVerifyingOtp(false);
-    if (error) { setOtpError("Invalid code. Try again."); setOtpCode(""); return; }
-    setOtpVerified(true);
-    setOtpSent(false);
-    sessionStorage.setItem("cadieux_verified_phone", phone.replace(/\D/g, ""));
+    try {
+      const res = await fetch("/api/verify/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.replace(/\D/g, ""), code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setOtpError(data.error ?? "Invalid code. Try again.");
+        setOtpCode("");
+        return;
+      }
+      setOtpVerified(true);
+      setOtpSent(false);
+      sessionStorage.setItem("cadieux_verified_phone", phone.replace(/\D/g, ""));
+    } catch {
+      setOtpError("Network error. Try again.");
+    } finally {
+      setVerifyingOtp(false);
+    }
   }
 
   /* ── Submit form → save to Supabase → payment step ─────────────────────── */

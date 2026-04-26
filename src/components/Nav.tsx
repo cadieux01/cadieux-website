@@ -89,13 +89,13 @@ export default function Nav() {
     fetchOrders(orders.length === 0);
   }
 
-  // Refresh orders if menu was restored already on "orders" section
+  // Refresh orders if menu was restored already on "orders" section.
+  // fetchOrders is memoised with useCallback above so this is stable.
   useEffect(() => {
     if (hydrated && menuOpen && menuSection === "orders") {
       fetchOrders(orders.length === 0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  }, [hydrated, menuOpen, menuSection, orders.length, fetchOrders]);
 
   function nav(path: string) {
     setMenuOpen(false);

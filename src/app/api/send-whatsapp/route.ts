@@ -41,12 +41,13 @@ export async function POST(req: NextRequest) {
         Body: message,
       }).toString(),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({} as Record<string, unknown>));
     if (!res.ok) {
       console.error("Twilio WhatsApp error:", data);
-      return NextResponse.json({ error: data.message ?? "Twilio send failed" }, { status: 502 });
+      const msg = (data as { message?: string }).message ?? "Twilio send failed";
+      return NextResponse.json({ error: msg }, { status: 502 });
     }
-    return NextResponse.json({ ok: true, sid: data.sid });
+    return NextResponse.json({ ok: true, sid: (data as { sid?: string }).sid });
   } catch (err) {
     console.error("send-whatsapp error:", err);
     return NextResponse.json({ error: "Failed to send WhatsApp" }, { status: 500 });

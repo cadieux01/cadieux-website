@@ -217,3 +217,20 @@ body {
 .immersive-breathe {
   animation: immersiveBreathe 1.7s ease-in-out infinite;
 }
+
+/* Respect user motion preferences. Strips the heaviest animations and
+   forces a default cursor — content remains fully usable. Per-component
+   scroll-driven reveals are still allowed (they're tied to scroll, not
+   time) but ambient looping animations are stilled. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  body { cursor: auto; }
+  .immersive-breathe { animation: none; }
+}

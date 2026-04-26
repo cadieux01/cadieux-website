@@ -171,7 +171,10 @@ export default function QASection() {
             tryPlay();
             if (typeof IntersectionObserver === "undefined") return;
             const io = new IntersectionObserver(
-              (entries) => entries.forEach((e) => { if (e.isIntersecting) tryPlay(); }),
+              (entries) => entries.forEach((e) => {
+                if (e.isIntersecting) tryPlay();
+                else if (!el.paused) el.pause();
+              }),
               { threshold: 0 }
             );
             io.observe(el);
@@ -180,7 +183,7 @@ export default function QASection() {
           muted
           playsInline
           loop
-          preload="auto"
+          preload="metadata"
           style={{
             position: "absolute", inset: 0, width: "100%", height: "100%",
             objectFit: "cover", zIndex: 0, backgroundColor: "#060402",
