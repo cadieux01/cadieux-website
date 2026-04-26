@@ -24,11 +24,12 @@ const QAS = [
   },
 ];
 
-/* Quick transitions for the early Q&As, then a long dwell tail on the
-   last one so its answer can finish typing before Phase 3 covers it.
-   STEP is the fraction of total progress allotted to each non-final
-   slice; the final slice owns everything after the last STEP boundary. */
-const STEP = 0.17;
+/* Quick transitions for the early Q&As, then a short dwell tail on the
+   last one so its answer can finish typing — but only ONE more swipe
+   advances to Phase 3 (no extra dead scroll after typing). STEP is the
+   fraction of total progress allotted to each non-final slice; the
+   final slice owns everything after the last STEP boundary. */
+const STEP = 0.23;
 const SLICES: Array<{ enter: number; exit: number }> = QAS.map((_, i) => ({
   enter: i * STEP,
   exit: i === QAS.length - 1 ? 1 : (i + 1) * STEP,
@@ -113,7 +114,7 @@ export default function QASection() {
          with Phase 3's -100vh overlap so the Q&A is fully readable
          until the lead-in begins. */
       if (darkRef.current) {
-        darkRef.current.style.opacity = String(ss(0.83, 1.0, p) * 0.95);
+        darkRef.current.style.opacity = String(ss(0.73, 1.0, p) * 0.95);
       }
     };
 
@@ -142,10 +143,10 @@ export default function QASection() {
   });
 
   return (
-    /* 600vh outer = ~85vh per early Q&A (one trackpad swipe advances)
-       plus a long tail on the final answer so its word-by-word typing
-       can complete before Phase 3 begins overlapping from below. */
-    <div ref={outerRef} style={{ position: "relative", height: "600vh", overflowX: "clip" }}>
+    /* 470vh outer = ~85vh per early Q&A (one trackpad swipe advances)
+       plus ~100vh tail on the final answer — enough for typing to land
+       and a single more swipe to bring in Phase 3, no dead scroll. */
+    <div ref={outerRef} style={{ position: "relative", height: "470vh", overflowX: "clip" }}>
       <div
         style={{
           position: "sticky",
