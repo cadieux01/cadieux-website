@@ -138,9 +138,9 @@ export default function QASection() {
   });
 
   return (
-    /* 700vh outer = 600vh of scroll, plus a tail so the dark fade can
-       complete cleanly before Phase 3 takes over. */
-    <div ref={outerRef} style={{ position: "relative", height: "700vh", overflowX: "clip" }}>
+    /* 350vh outer = ~83vh of scroll per Q&A so a single trackpad swipe
+       advances to the next question. Tail keeps the dark fade clean. */
+    <div ref={outerRef} style={{ position: "relative", height: "350vh", overflowX: "clip" }}>
       <div
         style={{
           position: "sticky",
