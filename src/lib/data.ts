@@ -31,7 +31,7 @@ export const PRODUCTS = [
     stats: [
       { target: 7, suffix: "g", label: "Protein/slice" },
       { target: 6, suffix: "g", label: "Fiber/slice" },
-      { target: 14, label: "Ingredients" },
+      { target: 240, suffix: "g", label: "Net weight" },
     ] as ProductStat[],
   },
   {
