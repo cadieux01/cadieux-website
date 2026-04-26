@@ -12,7 +12,7 @@ const ss = (e0: number, e1: number, x: number) => {
 const QAS = [
   {
     q: "Why do you need protein?",
-    a: "Your body is built from protein. Without enough, it quietly takes from itself. With enough, it builds — every single day.",
+    a: "Protein holds your body together — muscles that move you, skin and hair that show up, hormones that steady you, immunity that guards you. Run short, and the body breaks itself down to keep going. Eat enough — every part stays intact.",
   },
   {
     q: "Why we exist?",
