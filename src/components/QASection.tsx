@@ -16,7 +16,7 @@ const QAS = [
   },
   {
     q: "Why we exist?",
-    a: "For everyone choosing a stronger, healthier body without making it a project. Cadieux is that choice — baked into the bread you were already going to eat.",
+    a: "For anyone wanting to feel strong and clear — without giving up the food they hold dear. Cadieux is the quiet choice in your day, the upgrade in the bread you'd eat anyway.",
   },
   {
     q: "Why protein bread?",
