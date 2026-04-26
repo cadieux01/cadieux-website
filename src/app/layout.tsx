@@ -42,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${cormorant.variable} ${jost.variable}`}>
+    <html lang="en" className={`${cormorant.variable} ${jost.variable}`} suppressHydrationWarning>
       <head>
         {/* Preload intro video so the loading screen has data immediately */}
         <link rel="preload" as="video" href="/logo-intro.mp4" type="video/mp4" />
@@ -50,7 +50,7 @@ export default function RootLayout({
         <link rel="preload" as="video" href="/bread-intro.mp4" type="video/mp4" />
         <link rel="preload" as="image" href="/hero.jpg" />
       </head>
-      <body className="font-body">
+      <body className="font-body" suppressHydrationWarning>
         <CartProvider>
           <SmoothScroll />
           <CustomCursor />
