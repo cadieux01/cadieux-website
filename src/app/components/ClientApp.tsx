@@ -18,10 +18,12 @@ export default function ClientApp() {
     window.scrollTo(0, 0);
   }, []);
 
+  // Mount PageContent only after the intro finishes so Phase 1's video
+  // doesn't decode + play invisibly under the LoadingScreen for 4s.
   return (
     <div id="main-page">
       {!introDone && <LoadingScreen onComplete={() => setIntroDone(true)} />}
-      <PageContent />
+      {introDone && <PageContent />}
     </div>
   );
 }
