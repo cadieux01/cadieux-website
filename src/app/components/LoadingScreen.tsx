@@ -32,8 +32,20 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   // If we've already played the intro this session, mount in the
   // already-faded state and dismiss synchronously on first effect.
+  // EXCEPT: a hard reload (browser refresh) should always replay the intro,
+  // so we clear the flag in that case before reading it.
   const [skip] = useState(() => {
     if (typeof window === "undefined") return false;
+    try {
+      const navEntry = performance.getEntriesByType("navigation")[0] as
+        | PerformanceNavigationTiming
+        | undefined;
+      if (navEntry && navEntry.type === "reload") {
+        window.sessionStorage.removeItem(SESSION_KEY);
+      }
+    } catch {
+      /* perf API unavailable — fall through to read */
+    }
     return window.sessionStorage.getItem(SESSION_KEY) === "1";
   });
   const [fading, setFading] = useState(skip);
