@@ -52,11 +52,11 @@ const INGREDIENTS = [
 const CARD_BG = ["#1D1D1F", "#1F1F21", "#1B1B1D", "#212123"];
 
 const PROTEIN_BENEFITS = [
-  { n: "01", title: "Everyday Strength",  desc: "From carrying groceries to climbing stairs, protein keeps the muscles you rely on every day from quietly wasting away as you age." },
-  { n: "02", title: "Keeps You Full",     desc: "Protein is the most satiating nutrient there is. A protein-rich breakfast steadies hunger for hours — fewer cravings, less snacking." },
-  { n: "03", title: "Lasting Energy",     desc: "Slow-digesting protein keeps blood sugar steady, replacing mid-morning crashes with hours of clean, even focus." },
-  { n: "04", title: "Stronger Immunity",  desc: "Antibodies, enzymes and hormones are all built from protein — the quiet foundation of a body that holds up through busy weeks." },
-  { n: "05", title: "Sharper Mind",       desc: "Proteins form the neurotransmitters — dopamine, serotonin, norepinephrine — that shape your mood, focus and memory every single day." },
+  { n: "01", title: "Everyday Strength",  desc: "Holds your muscles together as you age." },
+  { n: "02", title: "Keeps You Full",     desc: "Steadies hunger for hours, no cravings." },
+  { n: "03", title: "Lasting Energy",     desc: "Keeps blood sugar steady, no crashes." },
+  { n: "04", title: "Stronger Immunity",  desc: "Builds antibodies, enzymes, hormones." },
+  { n: "05", title: "Sharper Mind",       desc: "Powers focus, mood and memory daily." },
 ];
 
 /* ── Deterministic floating grain data ── */
@@ -570,13 +570,14 @@ export default function PageContent() {
           </div>
 
           {/* ══ SECTION 5 — CLOSING CTA ══ */}
-          {/* Slow overlap — same pattern as Phase 2→3 and Phase 3→4 (pull up 100vh, no coating) */}
+          {/* No overlap on this boundary — Phase 4's bottom benefits (Sharper
+              Mind) need full dwell time before the CTA scrolls in. */}
           <section style={{
             minHeight: "100dvh", display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
             padding: "80px 28px", textAlign: "center", position: "relative",
             overflow: "hidden",
-            marginTop: "-100vh", zIndex: 3,
+            zIndex: 3,
           }}>
             {/* Background video */}
             <video ref={playOnEnter} autoPlay muted playsInline loop preload="auto" style={{
