@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ScrollReveal from "@/components/ScrollReveal";
 import { useCart } from "@/context/CartContext";
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
@@ -36,9 +37,11 @@ export default function CartPage() {
       </Link>
 
       <div style={{ position: "relative", zIndex: 1, padding: "100px clamp(28px,8vw,120px) 120px" }}>
-        <h1 style={{ margin: "0 0 48px", fontFamily: "var(--font-heading)", fontSize: "clamp(52px,12vw,96px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1 }}>
-          Your Cart
-        </h1>
+        <ScrollReveal>
+          <h1 data-stagger style={{ margin: "0 0 48px", fontFamily: "var(--font-heading)", fontSize: "clamp(52px,12vw,96px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1 }}>
+            Your Cart
+          </h1>
+        </ScrollReveal>
 
         {cart.length === 0 ? (
           <div>
