@@ -593,6 +593,7 @@ export default function PageContent() {
             padding: "80px 28px", textAlign: "center", position: "relative",
             overflow: "hidden",
             zIndex: 3,
+            backgroundColor: "#060402",
           }}>
             {/* Background video */}
             <video ref={playOnEnter} autoPlay muted playsInline loop preload="metadata" style={{

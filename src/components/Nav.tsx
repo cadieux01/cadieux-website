@@ -157,9 +157,9 @@ export default function Nav() {
                 { label: "Connect with Cadieux", action: () => setMenuSection("connect") },
               ].map(({ label, action }) => (
                 <button key={label} onClick={action} style={{
-                  background: "none", border: "none", cursor: "pointer", padding: "18px 0",
+                  background: "none", border: "none", cursor: "pointer", padding: "12px 0",
                   textAlign: "left", borderBottom: "1px solid rgba(240,223,200,0.06)",
-                  fontFamily: "var(--font-heading)", fontSize: "clamp(26px,5vw,36px)", fontWeight: 300,
+                  fontFamily: "var(--font-heading)", fontSize: "clamp(16px,2.6vw,20px)", fontWeight: 300,
                   color: "#FBF3D4", letterSpacing: "0.03em",
                   display: "block", width: "100%",
                   WebkitTapHighlightColor: "transparent",
