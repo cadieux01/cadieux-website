@@ -44,6 +44,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${cormorant.variable} ${jost.variable}`}>
       <head>
+        {/* Preload intro video so the loading screen has data immediately */}
+        <link rel="preload" as="video" href="/logo-intro.mp4" type="video/mp4" />
         {/* Preload hero video so navigating back to home plays instantly */}
         <link rel="preload" as="video" href="/bread-intro.mp4" type="video/mp4" />
         <link rel="preload" as="image" href="/hero.jpg" />

@@ -1,101 +1,126 @@
 "use client";
 
-import { useRef } from "react";
-import { useGSAP } from "@gsap/react";
-import gsap from "gsap";
-import SplitText from "@/components/SplitTextLazy";
+import { useEffect, useRef, useState } from "react";
 
 interface LoadingScreenProps {
   onComplete: () => void;
 }
 
+const FALLBACK_MS = 6000;
+// Bump above the actual video length (4s) so onEnded wins the race in
+// the normal case. Fallback only fires if the video stalled or never
+// started playing.
+
+const SESSION_KEY = "cadieux_intro_played";
+
+/**
+ * LoadingScreen — full-viewport intro video, plays ONCE per session.
+ *
+ * Plays /logo-intro.mp4 once, then fades out and calls onComplete.
+ *
+ * Robustness:
+ *   • Once-per-session: a sessionStorage flag prevents the intro from
+ *     replaying on dev Strict-Mode re-mounts, on internal navigation
+ *     back to home, and on hot reloads. Cleared when the tab closes.
+ *   • iOS Safari: muted + playsInline so autoplay works inline (no fullscreen).
+ *   • If the browser blocks autoplay or the file 404s / fails to decode,
+ *     a fallback dismisses the screen so the site is never blocked.
+ *   • `onError` short-circuits to dismiss immediately on hard failures.
+ *   • Idempotent: the dismiss path runs at most once per mount.
+ */
 export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const wordRef = useRef<HTMLDivElement>(null);
-  const lineRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  // If we've already played the intro this session, mount in the
+  // already-faded state and dismiss synchronously on first effect.
+  const [skip] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem(SESSION_KEY) === "1";
+  });
+  const [fading, setFading] = useState(skip);
+  const dismissedRef = useRef(false);
 
-  useGSAP(
-    () => {
-      const tl = gsap.timeline({
-        onComplete: () => {
-          gsap.to(containerRef.current, {
-            opacity: 0,
-            duration: 0.5,
-            ease: "power2.inOut",
-            onComplete: () => {
-              onComplete();
-            },
-          });
-        },
-      });
+  useEffect(() => {
+    // Already played this session — dismiss immediately, no flicker.
+    if (skip) {
+      onComplete();
+      return;
+    }
 
-      // Word container fades in
-      tl.to(wordRef.current, { opacity: 1, duration: 0.1 }, 0);
+    const v = videoRef.current;
 
-      // Hold for SplitText entrance animation to play
-      tl.to({}, { duration: 0.8 });
+    const dismiss = () => {
+      if (dismissedRef.current) return;
+      dismissedRef.current = true;
+      try {
+        window.sessionStorage.setItem(SESSION_KEY, "1");
+      } catch {
+        /* Safari private mode etc. — non-fatal */
+      }
+      setFading(true);
+      // Match the 0.5s opacity transition below.
+      window.setTimeout(onComplete, 500);
+    };
 
-      // Underline draws in
-      tl.to(
-        lineRef.current,
-        {
-          width: "120px",
-          duration: 0.4,
-          ease: "power2.out",
-        },
-        "-=0.1"
-      );
+    if (!v) {
+      dismiss();
+      return;
+    }
 
-      // Hold after line appears
-      tl.to({}, { duration: 0.6 });
-    },
-    { scope: containerRef }
-  );
+    // Re-assert muted (iOS Safari sometimes flips it during hydration races,
+    // which then makes play() require a user gesture).
+    v.muted = true;
+    void v.play().catch(() => {
+      /* fallback timer below covers autoplay-block */
+    });
+
+    const onEnded = () => dismiss();
+    const onError = () => dismiss();
+    v.addEventListener("ended", onEnded);
+    v.addEventListener("error", onError);
+
+    // If after FALLBACK_MS the video hasn't started or has no data, bail.
+    const fallback = window.setTimeout(() => {
+      if (v.currentTime === 0 || v.readyState < 2) dismiss();
+    }, FALLBACK_MS);
+
+    return () => {
+      v.removeEventListener("ended", onEnded);
+      v.removeEventListener("error", onError);
+      window.clearTimeout(fallback);
+    };
+  }, [skip, onComplete]);
+
+  // If we're skipping the intro, render nothing — no element, no fade,
+  // no second flash of the video.
+  if (skip) return null;
 
   return (
     <div
-      ref={containerRef}
       style={{
         position: "fixed",
         inset: 0,
         zIndex: 1000,
-        backgroundColor: "#1d1d1f",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "1.2rem",
+        backgroundColor: "#000",
+        opacity: fading ? 0 : 1,
+        transition: "opacity 0.5s ease",
+        pointerEvents: fading ? "none" : "auto",
       }}
     >
-      {/* Word */}
-      <div
-        ref={wordRef}
+      <video
+        ref={videoRef}
+        src="/logo-intro.mp4"
+        autoPlay
+        muted
+        playsInline
+        preload="auto"
         style={{
-          fontFamily: "var(--font-heading)",
-          fontWeight: 300,
-          fontSize: "clamp(3rem, 8vw, 6rem)",
-          letterSpacing: "0.4em",
-          color: "#fbf3d4",
-          paddingRight: "0.4em",
-          opacity: 0,
-        }}
-      >
-        <SplitText
-          text="CADIEUX"
-          repelStrength={100}
-          repelRadius={160}
-          staggerDelay={0.06}
-          animateEntrance={true}
-        />
-      </div>
-
-      {/* Animated underline */}
-      <div
-        ref={lineRef}
-        style={{
-          width: 0,
-          height: "1px",
-          backgroundColor: "#436cb4",
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          backgroundColor: "#000",
+          display: "block",
         }}
       />
     </div>
