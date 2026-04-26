@@ -18,20 +18,14 @@ const QAS = [
     q: "Why protein bread?",
     a: "Most bread works against you. Cadieux works for you. Each slice delivers 7g of protein and 6g of fibre, made from real seeds and ancient grains — no Maida, no compromise. Just fuel that builds your muscles and keeps your gut thriving.",
   },
-  {
-    q: "Who is this for?",
-    a: "Everyone. Every day. For anyone ready to take one quiet step toward a stronger, happier body — starting with what is on their plate.",
-  },
 ];
 
-/* Each Q&A occupies a 1/3 slice of the 600vh scroll range.
-   Boundaries are chosen with a small lead-in so the swap feels prompt
-   when the user starts scrolling into the next slice.                 */
-const SLICES: Array<{ enter: number; exit: number }> = [
-  { enter: 0.00, exit: 0.34 },
-  { enter: 0.34, exit: 0.67 },
-  { enter: 0.67, exit: 1.00 },
-];
+/* Each Q&A occupies half of the scroll range. Generated from QAS so
+   adding/removing a question doesn't require touching this table.    */
+const SLICES: Array<{ enter: number; exit: number }> = QAS.map((_, i) => ({
+  enter: i / QAS.length,
+  exit: (i + 1) / QAS.length,
+}));
 
 /* Per-word stagger for the answer reveal. ~80ms keeps a sentence
    readable but unhurried — a 30-word answer types in ~2.4 s.         */
