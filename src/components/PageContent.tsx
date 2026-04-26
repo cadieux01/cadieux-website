@@ -384,10 +384,20 @@ export default function PageContent() {
                     position: "absolute", left: 28, top: 0, bottom: 0,
                     width: 1, background: "rgba(251,243,212,0.12)",
                   }} />
-                  {/* Gold revealed line — height grows from 0 → 100% with cardsP */}
+                  {/*
+                    The line + every ingredient must be fully active BEFORE
+                    Phase 4 takes over (Phase 4 starts overlapping at the very
+                    end of this section due to its -100vh marginTop). To give
+                    Barley Malt — the last ingredient — proper dwell time on
+                    screen before being covered, we map all reveals into the
+                    first REVEAL_END portion of cardsP. Everything is settled
+                    by ~82% of the scroll, leaving ~18% (~100vh) of "all-
+                    revealed" view before the Phase 4 screen begins.
+                  */}
+                  {/* Gold revealed line — height grows from 0 → 100% over [0, REVEAL_END] */}
                   <div style={{
                     position: "absolute", left: 28, top: 0,
-                    height: `${clamp(cardsP, 0, 1) * 100}%`,
+                    height: `${clamp(cardsP / 0.82, 0, 1) * 100}%`,
                     width: 1, background: "#c9a96e",
                     boxShadow: "0 0 8px rgba(201,169,110,0.45)",
                     willChange: "height",
@@ -400,14 +410,14 @@ export default function PageContent() {
                     justifyContent: "space-between",
                   }}>
                     {INGREDIENTS.map((ing, i) => {
-                      // Each ingredient occupies one slot on the timeline.
-                      // It's "reached" when the line passes its dot — the dot's
-                      // vertical centre sits at (i + 0.5)/N_C of the rail.
+                      // Reveals are scoped to the first 82% of cardsP so
+                      // Barley Malt is fully active before Phase 4 takes over.
+                      const stepP = clamp(cardsP / 0.82, 0, 1);
                       const dotAt = (i + 0.5) / N_C;
-                      const reached = cardsP >= dotAt;
+                      const reached = stepP >= dotAt;
                       // Soft text reveal that begins shortly before the line
                       // arrives so the row never appears empty.
-                      const reveal = clamp((cardsP - (i / N_C)) * N_C * 1.2, 0, 1);
+                      const reveal = clamp((stepP - (i / N_C)) * N_C * 1.2, 0, 1);
                       return (
                         <div key={i} style={{
                           display: "flex", alignItems: "flex-start", gap: 18,
