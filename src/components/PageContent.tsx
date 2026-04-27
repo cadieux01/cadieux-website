@@ -375,10 +375,11 @@ export default function PageContent() {
                   position: "relative", flex: 1, width: "100%",
                   maxWidth: 520, marginTop: "3.5vh",
                 }}>
-                  {/* Dim full-length backbone */}
+                  {/* Dim full-length backbone — centered through the column */}
                   <div style={{
-                    position: "absolute", left: 28, top: 0, bottom: 0,
-                    width: 1, background: "rgba(251,243,212,0.12)",
+                    position: "absolute", left: "50%", top: 0, bottom: 0,
+                    width: 1, marginLeft: -0.5,
+                    background: "rgba(251,243,212,0.12)",
                   }} />
                   {/*
                     The line + every ingredient must be fully active BEFORE
@@ -390,11 +391,11 @@ export default function PageContent() {
                     by ~82% of the scroll, leaving ~18% (~100vh) of "all-
                     revealed" view before the Phase 4 screen begins.
                   */}
-                  {/* Gold revealed line — full-height parent, child scales
-                      via transform (compositor-only, no layout). */}
+                  {/* Gold revealed line — centered, full-height parent, child
+                      scales via transform (compositor-only, no layout). */}
                   <div style={{
-                    position: "absolute", left: 28, top: 0,
-                    height: "100%", width: 1, pointerEvents: "none",
+                    position: "absolute", left: "50%", top: 0,
+                    height: "100%", width: 1, marginLeft: -0.5, pointerEvents: "none",
                   }}>
                     <div style={{
                       position: "absolute", inset: 0,
@@ -416,48 +417,39 @@ export default function PageContent() {
                       // Reveals are scoped to the first 82% of cardsP so
                       // Barley Malt is fully active before Phase 4 takes over.
                       const stepP = clamp(cardsP / 0.82, 0, 1);
-                      const dotAt = (i + 0.5) / N_C;
-                      const reached = stepP >= dotAt;
-                      // Soft text reveal that begins shortly before the line
-                      // arrives so the row never appears empty.
+                      const reachAt = (i + 0.5) / N_C;
+                      const reached = stepP >= reachAt;
                       const reveal = clamp((stepP - (i / N_C)) * N_C * 1.2, 0, 1);
                       return (
                         <div key={i} style={{
-                          display: "flex", alignItems: "flex-start", gap: 18,
-                          paddingLeft: 0,
+                          textAlign: "center",
+                          opacity: 0.22 + reveal * 0.78,
+                          transform: `translateY(${(1 - reveal) * 6}px)`,
+                          transition: "opacity 0.25s ease, transform 0.25s ease",
                         }}>
-                          {/* Dot */}
-                          <div style={{
+                          <p style={{
+                            margin: 0, display: "inline-block",
+                            padding: "0 14px", background: "#1D1D1F",
                             position: "relative",
-                            flex: "0 0 auto",
-                            width: 13, height: 13, marginTop: 7, marginLeft: 22,
-                            borderRadius: 99,
-                            background: reached ? "#c9a96e" : "rgba(251,243,212,0.18)",
-                            boxShadow: reached ? "0 0 10px rgba(201,169,110,0.55)" : "none",
-                            border: "2px solid #1D1D1F",
-                            transition: "background 0.25s ease, box-shadow 0.25s ease",
-                          }} />
-                          {/* Name + desc */}
-                          <div style={{
-                            flex: 1, minWidth: 0,
-                            opacity: 0.22 + reveal * 0.78,
-                            transform: `translateX(${(1 - reveal) * 8}px)`,
-                            transition: "opacity 0.2s linear, transform 0.25s ease",
-                          }}>
-                            <p style={{
-                              margin: 0,
-                              fontFamily: "var(--font-heading)",
-                              fontSize: "clamp(20px, 5vw, 30px)", fontWeight: 300,
-                              color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1.15,
-                            }}>{ing.name}</p>
-                            <p style={{
-                              margin: "6px 0 0",
-                              fontFamily: "var(--font-body)",
-                              fontSize: 11, fontWeight: 300,
-                              letterSpacing: "0.18em", textTransform: "uppercase",
-                              color: "rgba(251,243,212,0.55)", lineHeight: 1.6,
-                            }}>{ing.desc}</p>
-                          </div>
+                            fontFamily: "var(--font-heading)",
+                            fontSize: "clamp(20px, 5vw, 30px)", fontWeight: 300,
+                            color: reached ? "#FBF3D4" : "rgba(251,243,212,0.55)",
+                            letterSpacing: "0.01em", lineHeight: 1.15,
+                            textShadow: reached
+                              ? "0 0 18px rgba(201,169,110,0.55), 0 0 36px rgba(201,169,110,0.25)"
+                              : "none",
+                            transition: "color 0.45s ease, text-shadow 0.45s ease",
+                          }}>{ing.name}</p>
+                          <p style={{
+                            margin: "8px 0 0",
+                            fontFamily: "var(--font-body)",
+                            fontSize: 11, fontWeight: 300,
+                            letterSpacing: "0.18em", textTransform: "uppercase",
+                            color: reached ? "rgba(251,243,212,0.75)" : "rgba(251,243,212,0.32)",
+                            lineHeight: 1.6,
+                            textShadow: reached ? "0 0 14px rgba(201,169,110,0.28)" : "none",
+                            transition: "color 0.45s ease, text-shadow 0.45s ease",
+                          }}>{ing.desc}</p>
                         </div>
                       );
                     })}
@@ -514,21 +506,26 @@ export default function PageContent() {
                   letterSpacing: "0.04em", color: "#FBF3D4", lineHeight: 1.1,
                 }}>Protein isn&apos;t just for athletes</h2>
 
-                {/* Timeline rail */}
+                {/* Timeline rail — line is centered & extends to the very
+                    top of the sticky so it visually bridges Phase 3's line
+                    at the boundary. */}
                 <div style={{
                   position: "relative", flex: 1, width: "100%",
                   maxWidth: 520, marginTop: "3.5vh",
                 }}>
-                  {/* Dim full-length backbone */}
+                  {/* Dim full-length backbone — extends above into heading
+                      and below to bottom of sticky to bridge Phase 3. */}
                   <div style={{
-                    position: "absolute", left: 28, top: 0, bottom: 0,
-                    width: 1, background: "rgba(251,243,212,0.12)",
+                    position: "absolute", left: "50%",
+                    top: "-15vh", bottom: "-5vh",
+                    width: 1, marginLeft: -0.5,
+                    background: "rgba(251,243,212,0.12)",
                   }} />
-                  {/* Gold revealed line — full-height parent, child scales
-                      via transform (compositor-only, no layout). */}
+                  {/* Gold revealed line — centered, scales via transform. */}
                   <div style={{
-                    position: "absolute", left: 28, top: 0,
-                    height: "100%", width: 1, pointerEvents: "none",
+                    position: "absolute", left: "50%",
+                    top: "-15vh", bottom: "-5vh",
+                    width: 1, marginLeft: -0.5, pointerEvents: "none",
                   }}>
                     <div style={{
                       position: "absolute", inset: 0,
@@ -548,45 +545,42 @@ export default function PageContent() {
                   }}>
                     {PROTEIN_BENEFITS.map((b, i) => {
                       const stepP = clamp(proteinP / 0.82, 0, 1);
-                      const dotAt = (i + 0.5) / N_P;
-                      const reached = stepP >= dotAt;
+                      const reachAt = (i + 0.5) / N_P;
+                      const reached = stepP >= reachAt;
                       const reveal = clamp((stepP - (i / N_P)) * N_P * 1.2, 0, 1);
                       return (
                         <div key={b.n} style={{
-                          display: "flex", alignItems: "flex-start", gap: 18,
+                          textAlign: "center",
+                          opacity: 0.22 + reveal * 0.78,
+                          transform: `translateY(${(1 - reveal) * 6}px)`,
+                          transition: "opacity 0.25s ease, transform 0.25s ease",
                         }}>
-                          {/* Dot */}
-                          <div style={{
+                          <p style={{
+                            margin: 0, display: "inline-block",
+                            padding: "0 14px",
+                            background: "rgba(29,29,31,0.55)",
+                            backdropFilter: "blur(4px)",
+                            WebkitBackdropFilter: "blur(4px)",
                             position: "relative",
-                            flex: "0 0 auto",
-                            width: 13, height: 13, marginTop: 7, marginLeft: 22,
-                            borderRadius: 99,
-                            background: reached ? "#c9a96e" : "rgba(251,243,212,0.18)",
-                            boxShadow: reached ? "0 0 10px rgba(201,169,110,0.55)" : "none",
-                            border: "2px solid #1D1D1F",
-                            transition: "background 0.25s ease, box-shadow 0.25s ease",
-                          }} />
-                          {/* Title + body */}
-                          <div style={{
-                            flex: 1, minWidth: 0,
-                            opacity: 0.22 + reveal * 0.78,
-                            transform: `translateX(${(1 - reveal) * 8}px)`,
-                            transition: "opacity 0.2s linear, transform 0.25s ease",
-                          }}>
-                            <p style={{
-                              margin: 0,
-                              fontFamily: "var(--font-heading)",
-                              fontSize: "clamp(20px, 5vw, 30px)", fontWeight: 300,
-                              color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1.15,
-                            }}>{b.title}</p>
-                            <p style={{
-                              margin: "6px 0 0",
-                              fontFamily: "var(--font-body)",
-                              fontSize: 11, fontWeight: 300,
-                              letterSpacing: "0.05em",
-                              color: "rgba(251,243,212,0.6)", lineHeight: 1.6,
-                            }}>{b.desc}</p>
-                          </div>
+                            fontFamily: "var(--font-heading)",
+                            fontSize: "clamp(20px, 5vw, 30px)", fontWeight: 300,
+                            color: reached ? "#FBF3D4" : "rgba(251,243,212,0.55)",
+                            letterSpacing: "0.01em", lineHeight: 1.15,
+                            textShadow: reached
+                              ? "0 0 18px rgba(201,169,110,0.55), 0 0 36px rgba(201,169,110,0.25)"
+                              : "none",
+                            transition: "color 0.45s ease, text-shadow 0.45s ease",
+                          }}>{b.title}</p>
+                          <p style={{
+                            margin: "8px 0 0",
+                            fontFamily: "var(--font-body)",
+                            fontSize: 11, fontWeight: 300,
+                            letterSpacing: "0.05em",
+                            color: reached ? "rgba(251,243,212,0.8)" : "rgba(251,243,212,0.4)",
+                            lineHeight: 1.6,
+                            textShadow: reached ? "0 0 14px rgba(201,169,110,0.28)" : "none",
+                            transition: "color 0.45s ease, text-shadow 0.45s ease",
+                          }}>{b.desc}</p>
                         </div>
                       );
                     })}
@@ -666,13 +660,6 @@ export default function PageContent() {
               display: "flex", flexDirection: "column", alignItems: "center", gap: 14,
               textAlign: "center",
             }}>
-              <p style={{
-                margin: 0,
-                fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
-                letterSpacing: "0.45em", textTransform: "uppercase",
-                color: "rgba(251,243,212,0.5)",
-              }}>Cadieux Pvt. Ltd.</p>
-
               <p style={{
                 margin: 0,
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
