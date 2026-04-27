@@ -12,9 +12,11 @@ const AREA_NAMES = Object.keys(RETAILERS);
 const GOLD = "201,169,110";
 
 // Universal Google Maps directions URL — opens the Maps app on iOS/Android
-// when installed, otherwise google.com/maps in the browser.
-function navigateTo(lat: number, lng: number) {
-  const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+// when installed, otherwise google.com/maps in the browser. Uses a name +
+// address query so Google geocodes the actual storefront (no guessed coords).
+function navigateTo(name: string, address: string) {
+  const dest = encodeURIComponent(`${name}, ${address}`);
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
@@ -174,7 +176,7 @@ export default function StoreLocatorPage() {
                             }}>
                               <button
                                 type="button"
-                                onClick={() => navigateTo(r.lat, r.lng)}
+                                onClick={() => navigateTo(r.name, r.address)}
                                 aria-label={`${isMobile ? "Open in Google Maps" : "Get directions"} to ${r.name}`}
                                 className="cdx-locator-btn"
                                 style={{
