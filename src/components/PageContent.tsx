@@ -253,6 +253,18 @@ export default function PageContent() {
                 background: "radial-gradient(ellipse at center, transparent 40%, rgba(29,29,31,0.6) 100%)",
                 pointerEvents: "none",
               }} />
+              {/* Top-center brand wordmark */}
+              <p style={{
+                position: "absolute", top: 28, left: 0, right: 0,
+                margin: 0, zIndex: 4,
+                textAlign: "center",
+                fontFamily: "var(--font-heading)",
+                fontSize: 18, fontWeight: 300,
+                letterSpacing: "0.55em", textTransform: "uppercase",
+                color: "#FBF3D4",
+                pointerEvents: "none",
+                textShadow: "0 1px 12px rgba(0,0,0,0.5)",
+              }}>Cadieux</p>
               {/* Bold statement — top left */}
               <div style={{
                 position: "relative", zIndex: 3,
@@ -644,6 +656,48 @@ export default function PageContent() {
             }}
             onClick={() => router.push("/shop")}
             >Shop Now</button>
+
+            {/* ── Brand / Company / Manufacturing footer ── */}
+            <div style={{
+              position: "relative", zIndex: 3,
+              marginTop: 64, paddingTop: 28,
+              borderTop: "1px solid rgba(251,243,212,0.12)",
+              maxWidth: 520, width: "100%",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 14,
+              textAlign: "center",
+            }}>
+              <p style={{
+                margin: 0,
+                fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
+                letterSpacing: "0.45em", textTransform: "uppercase",
+                color: "rgba(251,243,212,0.5)",
+              }}>Cadieux Foods Pvt. Ltd.</p>
+
+              <p style={{
+                margin: 0,
+                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
+                letterSpacing: "0.04em", lineHeight: 1.7,
+                color: "rgba(251,243,212,0.6)",
+                maxWidth: 380,
+              }}>
+                <span style={{ display: "block", fontSize: 9, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)", marginBottom: 6 }}>Manufactured at</span>
+                D.no. 13/18, Plot 78, P.M Palem,<br />
+                Revenue Ward 4, Visakhapatnam — 530041
+              </p>
+
+              <a
+                href="https://instagram.com/cadieuxindia"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                  letterSpacing: "0.3em", textTransform: "uppercase",
+                  color: "#C8903A", textDecoration: "none",
+                  borderBottom: "1px solid rgba(200,144,58,0.4)",
+                  paddingBottom: 2,
+                }}
+              >@cadieuxindia</a>
+            </div>
           </section>
 
         </div>
