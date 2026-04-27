@@ -253,18 +253,18 @@ export default function PageContent() {
                 background: "radial-gradient(ellipse at center, transparent 40%, rgba(29,29,31,0.6) 100%)",
                 pointerEvents: "none",
               }} />
-              {/* Top-center brand wordmark */}
+              {/* Top-center company wordmark */}
               <p style={{
                 position: "absolute", top: 28, left: 0, right: 0,
                 margin: 0, zIndex: 4,
                 textAlign: "center",
                 fontFamily: "var(--font-heading)",
                 fontSize: 18, fontWeight: 300,
-                letterSpacing: "0.55em", textTransform: "uppercase",
+                letterSpacing: "0.45em", textTransform: "uppercase",
                 color: "#FBF3D4",
                 pointerEvents: "none",
                 textShadow: "0 1px 12px rgba(0,0,0,0.5)",
-              }}>Cadieux</p>
+              }}>Core Element</p>
               {/* Bold statement — top left */}
               <div style={{
                 position: "relative", zIndex: 3,
@@ -634,9 +634,9 @@ export default function PageContent() {
             <p style={{
               position: "relative", zIndex: 3,
               margin: 0, fontFamily: "var(--font-heading)",
-              fontSize: "clamp(52px, 16vw, 96px)", fontWeight: 300,
-              color: "#FBF3D4", letterSpacing: "0.06em", lineHeight: 1,
-            }}>Cadieux</p>
+              fontSize: "clamp(40px, 13vw, 84px)", fontWeight: 300,
+              color: "#FBF3D4", letterSpacing: "0.05em", lineHeight: 1.05,
+            }}>Core Element</p>
 
             <p style={{
               position: "relative", zIndex: 3,
@@ -671,7 +671,7 @@ export default function PageContent() {
                 fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
                 letterSpacing: "0.45em", textTransform: "uppercase",
                 color: "rgba(251,243,212,0.5)",
-              }}>Cadieux Foods Pvt. Ltd.</p>
+              }}>Cadieux Pvt. Ltd.</p>
 
               <p style={{
                 margin: 0,
