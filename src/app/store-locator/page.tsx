@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
 import { RETAILERS } from "@/lib/data";
@@ -24,11 +24,44 @@ export default function StoreLocatorPage() {
   // First area expanded by default; null = all collapsed.
   const [expanded, setExpanded] = useState<string | null>(AREA_NAMES[0] ?? null);
   const [isMobile, setIsMobile] = useState(false);
+  const [query, setQuery] = useState("");
+
+  // Refs to each area row, keyed by area name — used for smooth scroll on expand/match.
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Detect mobile after mount to avoid hydration mismatch.
   useEffect(() => {
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
   }, []);
+
+  // Filtered areas: empty query → all; otherwise case-insensitive substring on name.
+  const filteredAreas = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return AREA_NAMES;
+    return AREA_NAMES.filter((a) => a.toLowerCase().includes(q));
+  }, [query]);
+
+  // Smooth-scroll an area into view (next frame so layout settles after expand).
+  function scrollToArea(area: string) {
+    requestAnimationFrame(() => {
+      rowRefs.current[area]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  // When the query narrows to exactly one area, auto-expand + scroll to it.
+  useEffect(() => {
+    if (query.trim() && filteredAreas.length === 1) {
+      const only = filteredAreas[0];
+      setExpanded(only);
+      scrollToArea(only);
+    }
+  }, [query, filteredAreas]);
+
+  function handleHeaderClick(area: string) {
+    const willOpen = expanded !== area;
+    setExpanded(willOpen ? area : null);
+    if (willOpen) scrollToArea(area);
+  }
 
   return (
     <div style={{ minHeight: "100dvh", background: "rgb(6,4,2)", position: "relative", overflowX: "clip" }}>
@@ -58,7 +91,7 @@ export default function StoreLocatorPage() {
         </ScrollReveal>
 
         <p style={{
-          margin: "0 0 36px",
+          margin: "0 0 28px",
           fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
           letterSpacing: "0.3em", textTransform: "uppercase",
           color: "rgba(251,243,212,0.5)",
@@ -66,20 +99,65 @@ export default function StoreLocatorPage() {
           Stores we supply across Vizag
         </p>
 
+        {/* Search bar */}
+        <div style={{ position: "relative", marginBottom: 24 }}>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search area"
+            aria-label="Search area"
+            style={{
+              width: "100%",
+              background: "#0a0805",
+              border: `0.5px solid rgba(${GOLD},0.45)`,
+              borderRadius: 12,
+              padding: "14px 44px 14px 18px",
+              color: "#f5f0e8",
+              fontFamily: "var(--font-body)",
+              fontSize: 14, fontWeight: 300,
+              letterSpacing: "0.04em",
+              outline: "none",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              style={{
+                position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                background: "transparent", border: "none", cursor: "pointer",
+                color: `rgba(${GOLD},0.85)`,
+                fontSize: 18, lineHeight: 1, padding: 8,
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >×</button>
+          )}
+        </div>
+
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {AREA_NAMES.map((area) => {
+          {filteredAreas.length === 0 && (
+            <p style={{
+              fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300,
+              color: "rgba(240,223,200,0.4)", letterSpacing: "0.04em",
+              padding: "12px 4px",
+            }}>No areas match &ldquo;{query}&rdquo;.</p>
+          )}
+          {filteredAreas.map((area) => {
             const retailers = RETAILERS[area];
             const isOpen = expanded === area;
             const panelId = `area-panel-${area.replace(/[^a-z0-9]+/gi, "-")}`;
             return (
-              <div key={area}>
+              <div key={area} ref={(el) => { rowRefs.current[area] = el; }}>
                 {/* Area header */}
                 <button
                   type="button"
                   aria-expanded={isOpen}
                   aria-controls={panelId}
                   aria-label={`${area}, ${retailers.length} stores, ${isOpen ? "collapse" : "expand"}`}
-                  onClick={() => setExpanded(isOpen ? null : area)}
+                  onClick={() => handleHeaderClick(area)}
                   style={{
                     width: "100%",
                     display: "flex", alignItems: "center", gap: 12,
@@ -241,6 +319,8 @@ export default function StoreLocatorPage() {
           outline: 2px solid rgba(${GOLD},0.9);
           outline-offset: 2px;
         }
+        input::placeholder { color: rgba(240,223,200,0.3); }
+        input:focus { border-color: rgba(${GOLD},0.85) !important; }
       `}</style>
     </div>
   );
