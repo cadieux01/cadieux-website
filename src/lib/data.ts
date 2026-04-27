@@ -277,3 +277,45 @@ export const STORES: Record<string, { name: string; address: string }[]> = {
     { name: "Robin's Nutri Store", address: "Chinna Waltair, Visakhapatnam — Store we supply" },
   ],
 };
+
+export type Retailer = {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  phone: string;
+  hours: string;
+};
+
+// Areas + the supermarkets / retailers under each. Used by /store-locator.
+// Phone numbers are placeholders — replace with real outlet numbers.
+export const RETAILERS: Record<string, Retailer[]> = {
+  "Madhurawada / P.M. Palem": [
+    { name: "Ratnadeep Supermarket", address: "Madhurawada Main Road, Visakhapatnam", lat: 17.7900, lng: 83.3700, phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM" },
+    { name: "More Supermarket",      address: "P.M. Palem, Visakhapatnam",            lat: 17.7833, lng: 83.3489, phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+    { name: "Spencer's",             address: "Madhurawada, Visakhapatnam",           lat: 17.7910, lng: 83.3650, phone: "+91 891 XXXXXXX", hours: "9 AM – 9 PM"  },
+  ],
+  "MVP Colony": [
+    { name: "Reliance Smart",  address: "MVP Colony, Visakhapatnam", lat: 17.7411, lng: 83.3300, phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM" },
+    { name: "Spencer's Hyper", address: "MVP Colony, Visakhapatnam", lat: 17.7400, lng: 83.3320, phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM" },
+    { name: "Q-Mart",          address: "MVP Colony, Visakhapatnam", lat: 17.7440, lng: 83.3280, phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+  ],
+  "Dwaraka Nagar": [
+    { name: "Spencer's Daily", address: "Dwaraka Nagar, Visakhapatnam", lat: 17.7280, lng: 83.3050, phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM" },
+    { name: "Heritage Fresh",  address: "Dwaraka Nagar, Visakhapatnam", lat: 17.7300, lng: 83.3030, phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+    { name: "Karachi Bakery",  address: "Dwaraka Nagar, Visakhapatnam", lat: 17.7250, lng: 83.3070, phone: "+91 891 XXXXXXX", hours: "9 AM – 9 PM"  },
+  ],
+  "Gajuwaka": [
+    { name: "Reliance Smart",   address: "Gajuwaka, Visakhapatnam", lat: 17.6800, lng: 83.2050, phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM"  },
+    { name: "More Supermarket", address: "Gajuwaka, Visakhapatnam", lat: 17.6850, lng: 83.2100, phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM"  },
+    { name: "Vishal Mega Mart", address: "Gajuwaka, Visakhapatnam", lat: 17.6780, lng: 83.2030, phone: "+91 891 XXXXXXX", hours: "10 AM – 10 PM" },
+  ],
+  "Siripuram": [
+    { name: "Q-Mart",         address: "Siripuram, Visakhapatnam", lat: 17.7150, lng: 83.3200, phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+    { name: "Heritage Fresh", address: "Siripuram, Visakhapatnam", lat: 17.7180, lng: 83.3220, phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+  ],
+  "Seethammadhara": [
+    { name: "Ratnadeep", address: "Seethammadhara, Visakhapatnam", lat: 17.7350, lng: 83.3380, phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM" },
+    { name: "Spencer's", address: "Seethammadhara, Visakhapatnam", lat: 17.7370, lng: 83.3400, phone: "+91 891 XXXXXXX", hours: "9 AM – 9 PM"  },
+  ],
+};
