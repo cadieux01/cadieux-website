@@ -428,27 +428,27 @@ export default function PageContent() {
                           transition: "opacity 0.25s ease, transform 0.25s ease",
                         }}>
                           <p style={{
-                            margin: 0, display: "inline-block",
-                            padding: "0 14px", background: "#1D1D1F",
-                            position: "relative",
+                            margin: 0,
                             fontFamily: "var(--font-heading)",
                             fontSize: "clamp(20px, 5vw, 30px)", fontWeight: 300,
-                            color: reached ? "#FBF3D4" : "rgba(251,243,212,0.55)",
+                            color: reached ? "#FFF8E0" : "rgba(251,243,212,0.55)",
                             letterSpacing: "0.01em", lineHeight: 1.15,
                             textShadow: reached
-                              ? "0 0 18px rgba(201,169,110,0.55), 0 0 36px rgba(201,169,110,0.25)"
+                              ? "0 0 8px rgba(255,222,160,0.95), 0 0 22px rgba(201,169,110,0.9), 0 0 48px rgba(201,169,110,0.55), 0 0 90px rgba(201,169,110,0.3)"
                               : "none",
-                            transition: "color 0.45s ease, text-shadow 0.45s ease",
+                            transition: "color 0.5s ease, text-shadow 0.5s ease",
                           }}>{ing.name}</p>
                           <p style={{
-                            margin: "8px 0 0",
+                            margin: "10px 0 0",
                             fontFamily: "var(--font-body)",
                             fontSize: 11, fontWeight: 300,
                             letterSpacing: "0.18em", textTransform: "uppercase",
-                            color: reached ? "rgba(251,243,212,0.75)" : "rgba(251,243,212,0.32)",
+                            color: reached ? "#FFF8E0" : "rgba(251,243,212,0.32)",
                             lineHeight: 1.6,
-                            textShadow: reached ? "0 0 14px rgba(201,169,110,0.28)" : "none",
-                            transition: "color 0.45s ease, text-shadow 0.45s ease",
+                            textShadow: reached
+                              ? "0 0 8px rgba(255,222,160,0.85), 0 0 18px rgba(201,169,110,0.7), 0 0 36px rgba(201,169,110,0.4)"
+                              : "none",
+                            transition: "color 0.5s ease, text-shadow 0.5s ease",
                           }}>{ing.desc}</p>
                         </div>
                       );
@@ -556,30 +556,27 @@ export default function PageContent() {
                           transition: "opacity 0.25s ease, transform 0.25s ease",
                         }}>
                           <p style={{
-                            margin: 0, display: "inline-block",
-                            padding: "0 14px",
-                            background: "rgba(29,29,31,0.55)",
-                            backdropFilter: "blur(4px)",
-                            WebkitBackdropFilter: "blur(4px)",
-                            position: "relative",
+                            margin: 0,
                             fontFamily: "var(--font-heading)",
                             fontSize: "clamp(20px, 5vw, 30px)", fontWeight: 300,
-                            color: reached ? "#FBF3D4" : "rgba(251,243,212,0.55)",
+                            color: reached ? "#FFF8E0" : "rgba(251,243,212,0.55)",
                             letterSpacing: "0.01em", lineHeight: 1.15,
                             textShadow: reached
-                              ? "0 0 18px rgba(201,169,110,0.55), 0 0 36px rgba(201,169,110,0.25)"
+                              ? "0 0 8px rgba(255,222,160,0.95), 0 0 22px rgba(201,169,110,0.9), 0 0 48px rgba(201,169,110,0.55), 0 0 90px rgba(201,169,110,0.3)"
                               : "none",
-                            transition: "color 0.45s ease, text-shadow 0.45s ease",
+                            transition: "color 0.5s ease, text-shadow 0.5s ease",
                           }}>{b.title}</p>
                           <p style={{
-                            margin: "8px 0 0",
+                            margin: "10px 0 0",
                             fontFamily: "var(--font-body)",
                             fontSize: 11, fontWeight: 300,
                             letterSpacing: "0.05em",
-                            color: reached ? "rgba(251,243,212,0.8)" : "rgba(251,243,212,0.4)",
+                            color: reached ? "#FFF8E0" : "rgba(251,243,212,0.4)",
                             lineHeight: 1.6,
-                            textShadow: reached ? "0 0 14px rgba(201,169,110,0.28)" : "none",
-                            transition: "color 0.45s ease, text-shadow 0.45s ease",
+                            textShadow: reached
+                              ? "0 0 8px rgba(255,222,160,0.85), 0 0 18px rgba(201,169,110,0.7), 0 0 36px rgba(201,169,110,0.4)"
+                              : "none",
+                            transition: "color 0.5s ease, text-shadow 0.5s ease",
                           }}>{b.desc}</p>
                         </div>
                       );

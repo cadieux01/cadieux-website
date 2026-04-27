@@ -56,7 +56,7 @@ export default function Nav() {
   const isHome = pathname === "/";
 
   const {
-    cart, cartTotal, cartCount,
+    cart, cartTotal,
     clearCart,
     checkoutOpen, openCheckout, closeCheckout,
   } = useCart();
@@ -543,41 +543,6 @@ export default function Nav() {
           position: "fixed", inset: 0, zIndex: 204,
           background: "rgba(0,0,0,0.55)",
         }} />
-      )}
-
-      {/* Cart FAB (home only — sub-pages have their own nav) */}
-      {isHome && (
-        <button
-          onClick={() => router.push("/cart")}
-          style={{
-            position: "fixed", bottom: 32, right: 28, zIndex: 101,
-            width: 56, height: 56, borderRadius: "50%",
-            background: cartCount > 0 ? "#024628" : "rgba(2,70,40,0.45)",
-            border: cartCount > 0 ? "none" : "1px solid rgba(251,243,212,0.15)",
-            cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: cartCount > 0 ? "0 4px 24px rgba(0,0,0,0.5)" : "0 2px 12px rgba(0,0,0,0.3)",
-            WebkitTapHighlightColor: "transparent",
-            transition: "transform 0.2s, box-shadow 0.2s, background 0.3s",
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FBF3D4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-            <line x1="3" y1="6" x2="21" y2="6"/>
-            <path d="M16 10a4 4 0 0 1-8 0"/>
-          </svg>
-          {cartCount > 0 && (
-            <span style={{
-              position: "absolute", top: 4, right: 4,
-              background: "#FBF3D4", color: "#024628",
-              borderRadius: "50%", width: 18, height: 18,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, letterSpacing: 0,
-            }}>{cartCount}</span>
-          )}
-        </button>
       )}
 
       {/* Checkout modal */}
