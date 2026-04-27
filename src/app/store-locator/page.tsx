@@ -132,9 +132,7 @@ export default function StoreLocatorPage() {
           <input
             type="text"
             value={picked && !query ? picked : query}
-            onChange={(e) => { setPicked(null); setQuery(e.target.value); setDropdownOpen(true); }}
-            onFocus={() => setDropdownOpen(true)}
-            onClick={() => setDropdownOpen(true)}
+            onChange={(e) => { setPicked(null); setQuery(e.target.value); setDropdownOpen(e.target.value.trim().length > 0); }}
             placeholder="Search area"
             aria-label="Search area"
             aria-expanded={dropdownOpen}
