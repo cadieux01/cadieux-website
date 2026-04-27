@@ -322,7 +322,7 @@ export default function Nav() {
               <>
                 <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
                 <p style={{ margin: "0 0 10px", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Store Locator</p>
-                <p style={{ margin: "0 0 22px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.45)", lineHeight: 1.6, letterSpacing: "0.02em" }}>Find a Cadieux stockist near you.</p>
+                <p style={{ margin: "0 0 22px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.45)", lineHeight: 1.6, letterSpacing: "0.02em" }}>Find a store near you that stocks Cadieux.</p>
 
                 {/* Dropdown trigger */}
                 <button
@@ -374,6 +374,14 @@ export default function Nav() {
                       }}
                     />
 
+                    {/* Scrollable list — swipe-friendly on touch */}
+                    <div style={{
+                      maxHeight: 280,
+                      overflowY: "auto",
+                      WebkitOverflowScrolling: "touch",
+                      touchAction: "pan-y",
+                      overscrollBehavior: "contain",
+                    }}>
                     {/* When searching: shop hits then any extra matching areas. Else: full area list */}
                     {q ? (() => {
                       const coveredAreas = new Set(matchingShops.map(h => h.area));
@@ -437,7 +445,7 @@ export default function Nav() {
                         </>
                       );
                     })() : (
-                      <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                      <>
                         {matchingAreas.map(area => (
                           <button
                             key={area}
@@ -464,8 +472,9 @@ export default function Nav() {
                             </span>
                           </button>
                         ))}
-                      </div>
+                      </>
                     )}
+                    </div>
                   </div>
                 )}
 
@@ -474,14 +483,14 @@ export default function Nav() {
                 {/* Shops shown ONLY after the user picks an area or shop */}
                 {visibleShops.length === 0 ? (
                   locatorArea ? (
-                    <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>No Cadieux stockist in {locatorArea} yet — we&apos;re expanding fast.</p>
+                    <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>No stores we supply in {locatorArea} yet — we&apos;re expanding fast.</p>
                   ) : (
-                    <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>Pick a location to see the stockists in that area.</p>
+                    <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>Pick a location to see the stores we supply in that area.</p>
                   )
                 ) : (
                   <>
                     <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>
-                      {locatorStore ? "Stockist" : locatorArea}
+                      {locatorStore ? "Store we supply" : locatorArea}
                     </p>
                     {visibleShops.map(({ area, store }) => (
                       <div key={`${area}-${store.name}`} style={{ borderBottom: "1px solid rgba(240,223,200,0.07)", padding: "14px 0" }}>

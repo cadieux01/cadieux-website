@@ -268,12 +268,12 @@ export const VIZAG_AREAS = [
 
 export const STORES: Record<string, { name: string; address: string }[]> = {
   Madhurawada: [
-    { name: "Madhu Super Market", address: "Madhurawada, Visakhapatnam — Cadieux Stockist" },
+    { name: "Madhu Super Market", address: "Madhurawada, Visakhapatnam — Store we supply" },
   ],
   "MVP Colony": [
-    { name: "Sunny's Mart", address: "MVP Colony, Visakhapatnam — Cadieux Stockist" },
+    { name: "Sunny's Mart", address: "MVP Colony, Visakhapatnam — Store we supply" },
   ],
   "Chinna Waltair": [
-    { name: "Robin's Nutri Store", address: "Chinna Waltair, Visakhapatnam — Cadieux Stockist" },
+    { name: "Robin's Nutri Store", address: "Chinna Waltair, Visakhapatnam — Store we supply" },
   ],
 };
