@@ -34,6 +34,11 @@ export default function Nav() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
+  // Store locator state
+  const [locatorSearch, setLocatorSearch] = useState("");
+  const [locatorArea, setLocatorArea] = useState<string | null>(null);
+  const [locatorDropdownOpen, setLocatorDropdownOpen] = useState(false);
+
   // Restore menu state from localStorage on mount — so reload keeps the menu open
   useEffect(() => {
     try {
@@ -234,32 +239,142 @@ export default function Nav() {
           )}
 
           {/* ── Store Locator ── */}
-          {menuSection === "locator" && (
-            <>
-              <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
-              <p style={{ margin: "0 0 10px", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Store Locator</p>
-              <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.45)", lineHeight: 1.6, letterSpacing: "0.02em" }}>Cadieux stockists across Visakhapatnam.</p>
-              {Object.entries(STORES).map(([area, list]) => (
-                <div key={area} style={{ marginBottom: 22 }}>
-                  <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>{area}</p>
-                  {list.map((s) => (
-                    <div key={s.name} style={{ borderBottom: "1px solid rgba(240,223,200,0.07)", padding: "14px 0" }}>
-                      <p style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.03em" }}>{s.name}</p>
-                      <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.55)", lineHeight: 1.6 }}>{s.address}</p>
-                      <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${s.name}, ${s.address}`)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ display: "inline-block", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.75)", textDecoration: "none", borderBottom: "1px solid rgba(200,144,58,0.4)", paddingBottom: 2 }}
+          {menuSection === "locator" && (() => {
+            const q = locatorSearch.trim().toLowerCase();
+            const allAreas = Object.keys(STORES);
+            const filteredAreas = q
+              ? allAreas.filter(area =>
+                  area.toLowerCase().includes(q) ||
+                  STORES[area].some(s => s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q))
+                )
+              : allAreas;
+            const searchHits: { area: string; store: { name: string; address: string } }[] = q
+              ? allAreas.flatMap(area =>
+                  STORES[area]
+                    .filter(s => area.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q))
+                    .map(store => ({ area, store }))
+                )
+              : [];
+            const visibleStores = q
+              ? searchHits
+              : (locatorArea ? STORES[locatorArea].map(store => ({ area: locatorArea, store })) : []);
+
+            return (
+              <>
+                <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
+                <p style={{ margin: "0 0 10px", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Store Locator</p>
+                <p style={{ margin: "0 0 22px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.45)", lineHeight: 1.6, letterSpacing: "0.02em" }}>Find a Cadieux stockist near you.</p>
+
+                {/* Search bar */}
+                <input
+                  type="text"
+                  value={locatorSearch}
+                  onChange={e => setLocatorSearch(e.target.value)}
+                  placeholder="Search area or store…"
+                  aria-label="Search store locator"
+                  style={{
+                    width: "100%", boxSizing: "border-box",
+                    background: "rgba(240,223,200,0.04)",
+                    border: "1px solid rgba(240,223,200,0.12)",
+                    borderRadius: 4,
+                    padding: "12px 14px",
+                    fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
+                    color: "#FBF3D4", letterSpacing: "0.02em",
+                    outline: "none",
+                    marginBottom: 14,
+                  }}
+                />
+
+                {/* Location dropdown */}
+                <button
+                  onClick={() => setLocatorDropdownOpen(o => !o)}
+                  aria-expanded={locatorDropdownOpen}
+                  style={{
+                    width: "100%", boxSizing: "border-box",
+                    background: "rgba(240,223,200,0.04)",
+                    border: "1px solid rgba(240,223,200,0.12)",
+                    borderRadius: 4,
+                    padding: "12px 14px",
+                    cursor: "pointer", textAlign: "left",
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
+                    color: locatorArea ? "#FBF3D4" : "rgba(240,223,200,0.5)",
+                    letterSpacing: "0.02em",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span>{locatorArea ?? "Select location"}</span>
+                  <span style={{ color: "rgba(200,144,58,0.7)", fontSize: 12, transform: locatorDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▾</span>
+                </button>
+
+                {locatorDropdownOpen && (
+                  <div style={{
+                    border: "1px solid rgba(240,223,200,0.10)",
+                    borderTop: "none",
+                    borderRadius: "0 0 4px 4px",
+                    overflow: "hidden",
+                    marginBottom: 18,
+                  }}>
+                    {filteredAreas.length === 0 && (
+                      <p style={{ margin: 0, padding: "14px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.4)" }}>No matching locations.</p>
+                    )}
+                    {filteredAreas.map(area => (
+                      <button
+                        key={area}
+                        onClick={() => { setLocatorArea(area); setLocatorDropdownOpen(false); setLocatorSearch(""); }}
+                        style={{
+                          width: "100%", display: "block", textAlign: "left",
+                          background: locatorArea === area ? "rgba(200,144,58,0.08)" : "transparent",
+                          border: "none", cursor: "pointer",
+                          padding: "12px 14px",
+                          borderBottom: "1px solid rgba(240,223,200,0.06)",
+                          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
+                          color: "#FBF3D4", letterSpacing: "0.02em",
+                          WebkitTapHighlightColor: "transparent",
+                        }}
                       >
-                        Get Directions →
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </>
-          )}
+                        {area}
+                        <span style={{ marginLeft: 8, fontSize: 11, color: "rgba(200,144,58,0.55)", letterSpacing: "0.2em" }}>
+                          ({STORES[area].length})
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {!locatorDropdownOpen && <div style={{ marginBottom: 18 }} />}
+
+                {/* Store results */}
+                {visibleStores.length === 0 && !q && !locatorArea && (
+                  <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>Pick a location above to see stockists in that area.</p>
+                )}
+                {visibleStores.length === 0 && q && (
+                  <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>No stockists match “{locatorSearch}”.</p>
+                )}
+                {visibleStores.length > 0 && (
+                  <>
+                    <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>
+                      {q ? `${visibleStores.length} result${visibleStores.length === 1 ? "" : "s"}` : locatorArea}
+                    </p>
+                    {visibleStores.map(({ area, store }) => (
+                      <div key={`${area}-${store.name}`} style={{ borderBottom: "1px solid rgba(240,223,200,0.07)", padding: "14px 0" }}>
+                        <p style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.03em" }}>{store.name}</p>
+                        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.55)", lineHeight: 1.6 }}>{store.address}</p>
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${store.name}, ${store.address}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: "inline-block", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.75)", textDecoration: "none", borderBottom: "1px solid rgba(200,144,58,0.4)", paddingBottom: 2 }}
+                        >
+                          Get Directions →
+                        </a>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </>
+            );
+          })()}
 
           {/* ── Connect With Us ── */}
           {menuSection === "connect" && (
