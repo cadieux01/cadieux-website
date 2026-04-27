@@ -48,21 +48,30 @@ export default function StoreLocatorPage() {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [dropdownOpen]);
 
-  // Dropdown options filtered by query.
-  const dropdownAreas = useMemo(() => {
+  // Unified prediction list: areas + stores, filtered by query.
+  type Prediction =
+    | { kind: "area"; area: string; label: string; sub: string }
+    | { kind: "store"; area: string; label: string; sub: string };
+
+  const predictions = useMemo<Prediction[]>(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return AREA_NAMES;
-    return AREA_NAMES.filter((a) => a.toLowerCase().includes(q));
+    const items: Prediction[] = [];
+    for (const area of AREA_NAMES) {
+      if (!q || area.toLowerCase().includes(q)) {
+        items.push({ kind: "area", area, label: area, sub: `${RETAILERS[area].length} stores` });
+      }
+      for (const r of RETAILERS[area]) {
+        if (q && (r.name.toLowerCase().includes(q) || r.address.toLowerCase().includes(q))) {
+          items.push({ kind: "store", area, label: r.name, sub: area });
+        }
+      }
+    }
+    return items;
   }, [query]);
 
-  // Areas to actually render below the search bar — only when user has typed
-  // OR picked something. Empty otherwise (per request).
-  const visibleAreas = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (picked) return [picked];
-    if (!q) return [];
-    return AREA_NAMES.filter((a) => a.toLowerCase().includes(q));
-  }, [query, picked]);
+  // Accordion area card only renders for the picked area — never auto-shown
+  // while typing. The dropdown is the only prediction surface during typing.
+  const visibleAreas = useMemo(() => (picked ? [picked] : []), [picked]);
 
   function scrollToArea(area: string) {
     requestAnimationFrame(() => {
@@ -187,23 +196,24 @@ export default function StoreLocatorPage() {
                 boxShadow: "0 12px 32px rgba(0,0,0,0.55)",
               }}
             >
-              {dropdownAreas.length === 0 && (
+              {predictions.length === 0 && (
                 <p style={{
                   margin: 0, padding: "14px 18px",
                   fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300,
                   color: "rgba(240,223,200,0.4)", letterSpacing: "0.04em",
-                }}>No areas match &ldquo;{query}&rdquo;.</p>
+                }}>No matches for &ldquo;{query}&rdquo;.</p>
               )}
-              {dropdownAreas.map((area) => (
+              {predictions.map((p, i) => (
                 <button
-                  key={area}
+                  key={`${p.kind}-${p.area}-${p.label}-${i}`}
                   type="button"
                   role="option"
-                  aria-selected={picked === area}
-                  onClick={() => pickArea(area)}
+                  aria-selected={picked === p.area && p.kind === "area"}
+                  onClick={() => pickArea(p.area)}
                   className="cdx-area-option"
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 12,
                     width: "100%",
                     background: "transparent", border: "none", cursor: "pointer",
                     padding: "12px 18px",
@@ -214,12 +224,26 @@ export default function StoreLocatorPage() {
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  <span>{area}</span>
+                  <span style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    minWidth: 0, flex: 1,
+                  }}>
+                    <span aria-hidden="true" style={{
+                      fontSize: 11,
+                      color: `rgba(${GOLD},0.7)`,
+                      flexShrink: 0,
+                      width: 14, textAlign: "center",
+                    }}>{p.kind === "area" ? "◆" : "◦"}</span>
+                    <span style={{
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>{p.label}</span>
+                  </span>
                   <span style={{
                     fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
                     color: "#8a7a5a",
                     letterSpacing: "0.18em", textTransform: "uppercase",
-                  }}>{RETAILERS[area].length} stores</span>
+                    flexShrink: 0,
+                  }}>{p.sub}</span>
                 </button>
               ))}
             </div>
