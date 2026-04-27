@@ -21,41 +21,69 @@ function navigateTo(name: string, address: string) {
 }
 
 export default function StoreLocatorPage() {
-  // First area expanded by default; null = all collapsed.
-  const [expanded, setExpanded] = useState<string | null>(AREA_NAMES[0] ?? null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<string | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Refs to each area row, keyed by area name — used for smooth scroll on expand/match.
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const wrapRef = useRef<HTMLDivElement | null>(null);
 
   // Detect mobile after mount to avoid hydration mismatch.
   useEffect(() => {
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
   }, []);
 
-  // Filtered areas: empty query → all; otherwise case-insensitive substring on name.
-  const filteredAreas = useMemo(() => {
+  // Close dropdown when clicking outside the search wrapper.
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [dropdownOpen]);
+
+  // Dropdown options filtered by query.
+  const dropdownAreas = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return AREA_NAMES;
     return AREA_NAMES.filter((a) => a.toLowerCase().includes(q));
   }, [query]);
 
-  // Smooth-scroll an area into view (next frame so layout settles after expand).
+  // Areas to actually render below the search bar — only when user has typed
+  // OR picked something. Empty otherwise (per request).
+  const visibleAreas = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (picked) return [picked];
+    if (!q) return [];
+    return AREA_NAMES.filter((a) => a.toLowerCase().includes(q));
+  }, [query, picked]);
+
   function scrollToArea(area: string) {
     requestAnimationFrame(() => {
       rowRefs.current[area]?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
-  // When the query narrows to exactly one area, auto-expand + scroll to it.
-  useEffect(() => {
-    if (query.trim() && filteredAreas.length === 1) {
-      const only = filteredAreas[0];
-      setExpanded(only);
-      scrollToArea(only);
-    }
-  }, [query, filteredAreas]);
+  function pickArea(area: string) {
+    setPicked(area);
+    setQuery("");
+    setExpanded(area);
+    setDropdownOpen(false);
+    scrollToArea(area);
+  }
+
+  function clearAll() {
+    setQuery("");
+    setPicked(null);
+    setExpanded(null);
+    setDropdownOpen(false);
+  }
 
   function handleHeaderClick(area: string) {
     const willOpen = expanded !== area;
@@ -99,14 +127,18 @@ export default function StoreLocatorPage() {
           Stores we supply across Vizag
         </p>
 
-        {/* Search bar */}
-        <div style={{ position: "relative", marginBottom: 24 }}>
+        {/* Search bar + dropdown */}
+        <div ref={wrapRef} style={{ position: "relative", marginBottom: 24 }}>
           <input
             type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={picked && !query ? picked : query}
+            onChange={(e) => { setPicked(null); setQuery(e.target.value); setDropdownOpen(true); }}
+            onFocus={() => setDropdownOpen(true)}
+            onClick={() => setDropdownOpen(true)}
             placeholder="Search area"
             aria-label="Search area"
+            aria-expanded={dropdownOpen}
+            aria-controls="area-dropdown"
             style={{
               width: "100%",
               background: "#0a0805",
@@ -121,31 +153,83 @@ export default function StoreLocatorPage() {
               WebkitTapHighlightColor: "transparent",
             }}
           />
-          {query && (
+          {(query || picked) && (
             <button
               type="button"
-              onClick={() => setQuery("")}
-              aria-label="Clear search"
+              onClick={clearAll}
+              aria-label="Clear selection"
               style={{
-                position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                position: "absolute", right: 10, top: 22, transform: "translateY(-50%)",
                 background: "transparent", border: "none", cursor: "pointer",
                 color: `rgba(${GOLD},0.85)`,
                 fontSize: 18, lineHeight: 1, padding: 8,
                 WebkitTapHighlightColor: "transparent",
+                zIndex: 2,
               }}
             >×</button>
+          )}
+
+          {/* Scrollable dropdown */}
+          {dropdownOpen && (
+            <div
+              id="area-dropdown"
+              role="listbox"
+              className="cdx-area-dropdown"
+              style={{
+                position: "absolute", left: 0, right: 0, top: "calc(100% + 6px)",
+                background: "#0a0805",
+                border: `0.5px solid rgba(${GOLD},0.45)`,
+                borderRadius: 12,
+                maxHeight: 240,
+                overflowY: "auto",
+                WebkitOverflowScrolling: "touch",
+                overscrollBehavior: "contain",
+                touchAction: "pan-y",
+                zIndex: 5,
+                boxShadow: "0 12px 32px rgba(0,0,0,0.55)",
+              }}
+            >
+              {dropdownAreas.length === 0 && (
+                <p style={{
+                  margin: 0, padding: "14px 18px",
+                  fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300,
+                  color: "rgba(240,223,200,0.4)", letterSpacing: "0.04em",
+                }}>No areas match &ldquo;{query}&rdquo;.</p>
+              )}
+              {dropdownAreas.map((area) => (
+                <button
+                  key={area}
+                  type="button"
+                  role="option"
+                  aria-selected={picked === area}
+                  onClick={() => pickArea(area)}
+                  className="cdx-area-option"
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    width: "100%",
+                    background: "transparent", border: "none", cursor: "pointer",
+                    padding: "12px 18px",
+                    textAlign: "left",
+                    color: "#f5f0e8",
+                    fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 300,
+                    letterSpacing: "0.02em",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span>{area}</span>
+                  <span style={{
+                    fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                    color: "#8a7a5a",
+                    letterSpacing: "0.18em", textTransform: "uppercase",
+                  }}>{RETAILERS[area].length} stores</span>
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {filteredAreas.length === 0 && (
-            <p style={{
-              fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300,
-              color: "rgba(240,223,200,0.4)", letterSpacing: "0.04em",
-              padding: "12px 4px",
-            }}>No areas match &ldquo;{query}&rdquo;.</p>
-          )}
-          {filteredAreas.map((area) => {
+          {visibleAreas.map((area) => {
             const retailers = RETAILERS[area];
             const isOpen = expanded === area;
             const panelId = `area-panel-${area.replace(/[^a-z0-9]+/gi, "-")}`;
@@ -321,6 +405,12 @@ export default function StoreLocatorPage() {
         }
         input::placeholder { color: rgba(240,223,200,0.3); }
         input:focus { border-color: rgba(${GOLD},0.85) !important; }
+        .cdx-area-option:hover { background: rgba(${GOLD},0.08) !important; }
+        .cdx-area-option:focus-visible { outline: 2px solid rgba(${GOLD},0.7); outline-offset: -2px; }
+        .cdx-area-dropdown::-webkit-scrollbar { width: 6px; }
+        .cdx-area-dropdown::-webkit-scrollbar-track { background: transparent; }
+        .cdx-area-dropdown::-webkit-scrollbar-thumb { background: rgba(${GOLD},0.4); border-radius: 3px; }
+        .cdx-area-dropdown { scrollbar-width: thin; scrollbar-color: rgba(${GOLD},0.4) transparent; }
       `}</style>
     </div>
   );
