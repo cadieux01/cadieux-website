@@ -384,16 +384,19 @@ export default function PageContent() {
                   */}
                   {Array.from({ length: N_C - 1 }, (_, i) => {
                     const stepP = clamp(cardsP / 0.82, 0, 1);
-                    const startPct = (i / (N_C - 1)) * 100;
-                    const endPct = ((i + 1) / (N_C - 1)) * 100;
+                    // Segments span between consecutive row CENTERS, which sit
+                    // at (i + 0.5)/N — same coordinates the rows themselves
+                    // are absolutely positioned at below.
+                    const startPct = ((i + 0.5) / N_C) * 100;
+                    const endPct = ((i + 1.5) / N_C) * 100;
                     const reachStart = (i + 0.5) / N_C;
                     const reachEnd = (i + 1.5) / N_C;
                     const segP = clamp((stepP - reachStart) / (reachEnd - reachStart), 0, 1);
                     return (
                       <div key={`seg-${i}`} style={{
                         position: "absolute", left: "50%", marginLeft: -0.5,
-                        top: `calc(${startPct}% + 36px)`,
-                        bottom: `calc(${100 - endPct}% + 36px)`,
+                        top: `calc(${startPct}% + 44px)`,
+                        bottom: `calc(${100 - endPct}% + 44px)`,
                         width: 1, pointerEvents: "none",
                       }}>
                         {/* Dim backbone */}
@@ -414,11 +417,11 @@ export default function PageContent() {
                     );
                   })}
 
-                  {/* 6 ingredient rows, evenly distributed top-to-bottom */}
+                  {/* 6 ingredient rows — absolutely positioned with their
+                      CENTERS at (i + 0.5)/N_C so they line up exactly with the
+                      gaps between line segments. */}
                   <div style={{
                     position: "relative", height: "100%",
-                    display: "flex", flexDirection: "column",
-                    justifyContent: "space-between",
                   }}>
                     {INGREDIENTS.map((ing, i) => {
                       // Reveals are scoped to the first 82% of cardsP so
@@ -429,9 +432,12 @@ export default function PageContent() {
                       const reveal = clamp((stepP - (i / N_C)) * N_C * 1.2, 0, 1);
                       return (
                         <div key={i} style={{
+                          position: "absolute",
+                          top: `${reachAt * 100}%`,
+                          left: 0, right: 0,
                           textAlign: "center",
                           opacity: 0.22 + reveal * 0.78,
-                          transform: `translateY(${(1 - reveal) * 6}px)`,
+                          transform: `translate(0, calc(-50% + ${(1 - reveal) * 6}px))`,
                           transition: "opacity 0.25s ease, transform 0.25s ease",
                         }}>
                           <p style={{
@@ -530,11 +536,13 @@ export default function PageContent() {
                   {(() => {
                     const stepP = clamp(proteinP / 0.82, 0, 1);
                     const bridgeP = clamp(stepP / (0.5 / N_P), 0, 1);
+                    // Bridge ends 44px above the FIRST row's center
+                    // (which sits at (0.5/N_P)*100% of the rail).
                     return (
                       <div style={{
                         position: "absolute", left: "50%", marginLeft: -0.5,
                         top: "-15vh",
-                        height: "calc(15vh - 36px)",
+                        bottom: `calc(${(1 - 0.5 / N_P) * 100}% + 44px)`,
                         width: 1, pointerEvents: "none",
                       }}>
                         <div style={{
@@ -556,16 +564,19 @@ export default function PageContent() {
                       consecutive benefit rows. Line never passes through text. */}
                   {Array.from({ length: N_P - 1 }, (_, i) => {
                     const stepP = clamp(proteinP / 0.82, 0, 1);
-                    const startPct = (i / (N_P - 1)) * 100;
-                    const endPct = ((i + 1) / (N_P - 1)) * 100;
+                    // Segments span between consecutive row CENTERS, which
+                    // sit at (i + 0.5)/N_P — same coordinates the rows
+                    // themselves are absolutely positioned at below.
+                    const startPct = ((i + 0.5) / N_P) * 100;
+                    const endPct = ((i + 1.5) / N_P) * 100;
                     const reachStart = (i + 0.5) / N_P;
                     const reachEnd = (i + 1.5) / N_P;
                     const segP = clamp((stepP - reachStart) / (reachEnd - reachStart), 0, 1);
                     return (
                       <div key={`pseg-${i}`} style={{
                         position: "absolute", left: "50%", marginLeft: -0.5,
-                        top: `calc(${startPct}% + 36px)`,
-                        bottom: `calc(${100 - endPct}% + 36px)`,
+                        top: `calc(${startPct}% + 44px)`,
+                        bottom: `calc(${100 - endPct}% + 44px)`,
                         width: 1, pointerEvents: "none",
                       }}>
                         <div style={{
@@ -584,11 +595,11 @@ export default function PageContent() {
                     );
                   })}
 
-                  {/* Benefit rows, evenly distributed top-to-bottom */}
+                  {/* Benefit rows — absolutely positioned with their CENTERS
+                      at (i + 0.5)/N_P so they line up exactly with the gaps
+                      between line segments. */}
                   <div style={{
                     position: "relative", height: "100%",
-                    display: "flex", flexDirection: "column",
-                    justifyContent: "space-between",
                   }}>
                     {PROTEIN_BENEFITS.map((b, i) => {
                       const stepP = clamp(proteinP / 0.82, 0, 1);
@@ -597,9 +608,12 @@ export default function PageContent() {
                       const reveal = clamp((stepP - (i / N_P)) * N_P * 1.2, 0, 1);
                       return (
                         <div key={b.n} style={{
+                          position: "absolute",
+                          top: `${reachAt * 100}%`,
+                          left: 0, right: 0,
                           textAlign: "center",
                           opacity: 0.22 + reveal * 0.78,
-                          transform: `translateY(${(1 - reveal) * 6}px)`,
+                          transform: `translate(0, calc(-50% + ${(1 - reveal) * 6}px))`,
                           transition: "opacity 0.25s ease, transform 0.25s ease",
                         }}>
                           <p style={{
