@@ -37,6 +37,7 @@ export default function Nav() {
   // Store locator state
   const [locatorSearch, setLocatorSearch] = useState("");
   const [locatorArea, setLocatorArea] = useState<string | null>(null);
+  const [locatorStore, setLocatorStore] = useState<string | null>(null);
   const [locatorDropdownOpen, setLocatorDropdownOpen] = useState(false);
 
   // Restore menu state from localStorage on mount — so reload keeps the menu open
@@ -242,22 +243,32 @@ export default function Nav() {
           {menuSection === "locator" && (() => {
             const q = locatorSearch.trim().toLowerCase();
             const allAreas = Object.keys(STORES);
-            const filteredAreas = q
-              ? allAreas.filter(area =>
-                  area.toLowerCase().includes(q) ||
-                  STORES[area].some(s => s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q))
-                )
-              : allAreas;
-            const searchHits: { area: string; store: { name: string; address: string } }[] = q
-              ? allAreas.flatMap(area =>
-                  STORES[area]
-                    .filter(s => area.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q))
-                    .map(store => ({ area, store }))
+            const allShops: { area: string; store: { name: string; address: string } }[] =
+              allAreas.flatMap(area => STORES[area].map(store => ({ area, store })));
+            const matchingShops = q
+              ? allShops.filter(({ area, store }) =>
+                  store.name.toLowerCase().includes(q) ||
+                  store.address.toLowerCase().includes(q) ||
+                  area.toLowerCase().includes(q)
                 )
               : [];
-            const visibleStores = q
-              ? searchHits
+            const matchingAreas = q
+              ? allAreas.filter(area => area.toLowerCase().includes(q))
+              : allAreas;
+
+            // Resolve currently displayed shop list (only after a selection):
+            const selectedShopHit = locatorStore
+              ? allShops.find(s => s.store.name === locatorStore) ?? null
+              : null;
+            const visibleShops = selectedShopHit
+              ? [selectedShopHit]
               : (locatorArea ? STORES[locatorArea].map(store => ({ area: locatorArea, store })) : []);
+
+            const triggerLabel = locatorStore
+              ? locatorStore
+              : locatorArea
+                ? locatorArea
+                : "Select location";
 
             return (
               <>
@@ -265,27 +276,7 @@ export default function Nav() {
                 <p style={{ margin: "0 0 10px", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Store Locator</p>
                 <p style={{ margin: "0 0 22px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.45)", lineHeight: 1.6, letterSpacing: "0.02em" }}>Find a Cadieux stockist near you.</p>
 
-                {/* Search bar */}
-                <input
-                  type="text"
-                  value={locatorSearch}
-                  onChange={e => setLocatorSearch(e.target.value)}
-                  placeholder="Search area or store…"
-                  aria-label="Search store locator"
-                  style={{
-                    width: "100%", boxSizing: "border-box",
-                    background: "rgba(240,223,200,0.04)",
-                    border: "1px solid rgba(240,223,200,0.12)",
-                    borderRadius: 4,
-                    padding: "12px 14px",
-                    fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
-                    color: "#FBF3D4", letterSpacing: "0.02em",
-                    outline: "none",
-                    marginBottom: 14,
-                  }}
-                />
-
-                {/* Location dropdown */}
+                {/* Dropdown trigger */}
                 <button
                   onClick={() => setLocatorDropdownOpen(o => !o)}
                   aria-expanded={locatorDropdownOpen}
@@ -293,72 +284,127 @@ export default function Nav() {
                     width: "100%", boxSizing: "border-box",
                     background: "rgba(240,223,200,0.04)",
                     border: "1px solid rgba(240,223,200,0.12)",
-                    borderRadius: 4,
+                    borderRadius: locatorDropdownOpen ? "4px 4px 0 0" : 4,
                     padding: "12px 14px",
                     cursor: "pointer", textAlign: "left",
                     display: "flex", justifyContent: "space-between", alignItems: "center",
                     fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
-                    color: locatorArea ? "#FBF3D4" : "rgba(240,223,200,0.5)",
+                    color: (locatorArea || locatorStore) ? "#FBF3D4" : "rgba(240,223,200,0.5)",
                     letterSpacing: "0.02em",
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  <span>{locatorArea ?? "Select location"}</span>
-                  <span style={{ color: "rgba(200,144,58,0.7)", fontSize: 12, transform: locatorDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▾</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{triggerLabel}</span>
+                  <span style={{ color: "rgba(200,144,58,0.7)", fontSize: 12, transform: locatorDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s", flexShrink: 0, marginLeft: 8 }}>▾</span>
                 </button>
 
+                {/* Dropdown panel — contains the search column + the list */}
                 {locatorDropdownOpen && (
                   <div style={{
-                    border: "1px solid rgba(240,223,200,0.10)",
+                    border: "1px solid rgba(240,223,200,0.12)",
                     borderTop: "none",
                     borderRadius: "0 0 4px 4px",
                     overflow: "hidden",
-                    marginBottom: 18,
                   }}>
-                    {filteredAreas.length === 0 && (
-                      <p style={{ margin: 0, padding: "14px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.4)" }}>No matching locations.</p>
+                    {/* Search column inside dropdown */}
+                    <input
+                      type="text"
+                      autoFocus
+                      value={locatorSearch}
+                      onChange={e => setLocatorSearch(e.target.value)}
+                      placeholder="Search area or shop…"
+                      aria-label="Search store locator"
+                      style={{
+                        width: "100%", boxSizing: "border-box",
+                        background: "rgba(0,0,0,0.25)",
+                        border: "none",
+                        borderBottom: "1px solid rgba(240,223,200,0.10)",
+                        padding: "12px 14px",
+                        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
+                        color: "#FBF3D4", letterSpacing: "0.02em",
+                        outline: "none",
+                      }}
+                    />
+
+                    {/* List: shops (with area below) when searching, else areas */}
+                    {q ? (
+                      matchingShops.length === 0 ? (
+                        <p style={{ margin: 0, padding: "14px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.4)" }}>No shops match “{locatorSearch}”.</p>
+                      ) : (
+                        matchingShops.map(({ area, store }) => (
+                          <button
+                            key={`${area}-${store.name}`}
+                            onClick={() => {
+                              setLocatorArea(area);
+                              setLocatorStore(store.name);
+                              setLocatorDropdownOpen(false);
+                              setLocatorSearch("");
+                            }}
+                            style={{
+                              width: "100%", display: "block", textAlign: "left",
+                              background: "transparent",
+                              border: "none", cursor: "pointer",
+                              padding: "12px 14px",
+                              borderBottom: "1px solid rgba(240,223,200,0.06)",
+                              WebkitTapHighlightColor: "transparent",
+                            }}
+                          >
+                            <span style={{ display: "block", fontFamily: "var(--font-heading)", fontSize: 16, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em" }}>{store.name}</span>
+                            <span style={{ display: "block", marginTop: 4, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)" }}>{area}</span>
+                          </button>
+                        ))
+                      )
+                    ) : (
+                      matchingAreas.length === 0 ? (
+                        <p style={{ margin: 0, padding: "14px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.4)" }}>No matching locations.</p>
+                      ) : (
+                        matchingAreas.map(area => (
+                          <button
+                            key={area}
+                            onClick={() => {
+                              setLocatorArea(area);
+                              setLocatorStore(null);
+                              setLocatorDropdownOpen(false);
+                              setLocatorSearch("");
+                            }}
+                            style={{
+                              width: "100%", display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                              background: locatorArea === area && !locatorStore ? "rgba(200,144,58,0.08)" : "transparent",
+                              border: "none", cursor: "pointer",
+                              padding: "12px 14px",
+                              borderBottom: "1px solid rgba(240,223,200,0.06)",
+                              fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
+                              color: "#FBF3D4", letterSpacing: "0.02em",
+                              WebkitTapHighlightColor: "transparent",
+                            }}
+                          >
+                            <span>{area}</span>
+                            <span style={{ fontSize: 11, color: "rgba(200,144,58,0.55)", letterSpacing: "0.2em" }}>
+                              {STORES[area].length}
+                            </span>
+                          </button>
+                        ))
+                      )
                     )}
-                    {filteredAreas.map(area => (
-                      <button
-                        key={area}
-                        onClick={() => { setLocatorArea(area); setLocatorDropdownOpen(false); setLocatorSearch(""); }}
-                        style={{
-                          width: "100%", display: "block", textAlign: "left",
-                          background: locatorArea === area ? "rgba(200,144,58,0.08)" : "transparent",
-                          border: "none", cursor: "pointer",
-                          padding: "12px 14px",
-                          borderBottom: "1px solid rgba(240,223,200,0.06)",
-                          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
-                          color: "#FBF3D4", letterSpacing: "0.02em",
-                          WebkitTapHighlightColor: "transparent",
-                        }}
-                      >
-                        {area}
-                        <span style={{ marginLeft: 8, fontSize: 11, color: "rgba(200,144,58,0.55)", letterSpacing: "0.2em" }}>
-                          ({STORES[area].length})
-                        </span>
-                      </button>
-                    ))}
                   </div>
                 )}
 
-                {!locatorDropdownOpen && <div style={{ marginBottom: 18 }} />}
+                <div style={{ marginBottom: 18 }} />
 
-                {/* Store results */}
-                {visibleStores.length === 0 && !q && !locatorArea && (
-                  <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>Pick a location above to see stockists in that area.</p>
-                )}
-                {visibleStores.length === 0 && q && (
-                  <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>No stockists match “{locatorSearch}”.</p>
-                )}
-                {visibleStores.length > 0 && (
+                {/* Shops shown ONLY after the user picks an area or shop */}
+                {visibleShops.length === 0 ? (
+                  <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>Pick a location to see the stockists in that area.</p>
+                ) : (
                   <>
                     <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>
-                      {q ? `${visibleStores.length} result${visibleStores.length === 1 ? "" : "s"}` : locatorArea}
+                      {locatorStore ? "Stockist" : locatorArea}
                     </p>
-                    {visibleStores.map(({ area, store }) => (
+                    {visibleShops.map(({ area, store }) => (
                       <div key={`${area}-${store.name}`} style={{ borderBottom: "1px solid rgba(240,223,200,0.07)", padding: "14px 0" }}>
-                        <p style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.03em" }}>{store.name}</p>
+                        <p style={{ margin: "0 0 4px", fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.03em" }}>{store.name}</p>
+                        {locatorStore && (
+                          <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)" }}>{area}</p>
+                        )}
                         <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.55)", lineHeight: 1.6 }}>{store.address}</p>
                         <a
                           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${store.name}, ${store.address}`)}`}
