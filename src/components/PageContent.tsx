@@ -526,42 +526,11 @@ export default function PageContent() {
                   position: "relative", flex: 1, width: "100%",
                   maxWidth: 520, marginTop: "3.5vh",
                 }}>
-                  {/*
-                    Bridge segment — sits ABOVE the first benefit row, in the
-                    gap between Phase 3's last sentence and Phase 4's first
-                    sentence. Fills as Phase 4 enters so the connection from
-                    Phase 3 reads as continuous (with a clean break around
-                    each sentence's text).
-                  */}
-                  {(() => {
-                    const stepP = clamp(proteinP / 0.82, 0, 1);
-                    const bridgeP = clamp(stepP / (0.5 / N_P), 0, 1);
-                    // Bridge ends 44px above the FIRST row's center
-                    // (which sits at (0.5/N_P)*100% of the rail).
-                    return (
-                      <div style={{
-                        position: "absolute", left: "50%", marginLeft: -0.5,
-                        top: "-15vh",
-                        bottom: `calc(${(1 - 0.5 / N_P) * 100}% + 44px)`,
-                        width: 1, pointerEvents: "none",
-                      }}>
-                        <div style={{
-                          position: "absolute", inset: 0,
-                          background: "rgba(251,243,212,0.12)",
-                        }} />
-                        <div style={{
-                          position: "absolute", inset: 0,
-                          background: "#c9a96e",
-                          boxShadow: "0 0 8px rgba(201,169,110,0.45)",
-                          transformOrigin: "top",
-                          transform: `scaleY(${bridgeP})`,
-                          willChange: "transform",
-                        }} />
-                      </div>
-                    );
-                  })()}
                   {/* Inter-row segments — one in the gap between each pair of
-                      consecutive benefit rows. Line never passes through text. */}
+                      consecutive benefit rows. Line never passes through text.
+                      No bridge to Phase 3: the heading "Protein isn't just for
+                      athletes" stands as Phase 4's intro and must not be
+                      crossed by any line. */}
                   {Array.from({ length: N_P - 1 }, (_, i) => {
                     const stepP = clamp(proteinP / 0.82, 0, 1);
                     // Segments span between consecutive row CENTERS, which
