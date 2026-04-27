@@ -375,37 +375,44 @@ export default function PageContent() {
                   position: "relative", flex: 1, width: "100%",
                   maxWidth: 520, marginTop: "3.5vh",
                 }}>
-                  {/* Dim full-length backbone — centered through the column */}
-                  <div style={{
-                    position: "absolute", left: "50%", top: 0, bottom: 0,
-                    width: 1, marginLeft: -0.5,
-                    background: "rgba(251,243,212,0.12)",
-                  }} />
                   {/*
-                    The line + every ingredient must be fully active BEFORE
-                    Phase 4 takes over (Phase 4 starts overlapping at the very
-                    end of this section due to its -100vh marginTop). To give
-                    Barley Malt — the last ingredient — proper dwell time on
-                    screen before being covered, we map all reveals into the
-                    first REVEAL_END portion of cardsP. Everything is settled
-                    by ~82% of the scroll, leaving ~18% (~100vh) of "all-
-                    revealed" view before the Phase 4 screen begins.
+                    Connector line — split into N_C-1 segments, each living in
+                    the gap *between* two consecutive ingredient rows. The line
+                    never passes through any text. Reveals are scoped to the
+                    first 82% of cardsP so the last ingredient is fully active
+                    before Phase 4 takes over.
                   */}
-                  {/* Gold revealed line — centered, full-height parent, child
-                      scales via transform (compositor-only, no layout). */}
-                  <div style={{
-                    position: "absolute", left: "50%", top: 0,
-                    height: "100%", width: 1, marginLeft: -0.5, pointerEvents: "none",
-                  }}>
-                    <div style={{
-                      position: "absolute", inset: 0,
-                      background: "#c9a96e",
-                      boxShadow: "0 0 8px rgba(201,169,110,0.45)",
-                      transformOrigin: "top",
-                      transform: `scaleY(${clamp(cardsP / 0.82, 0, 1)})`,
-                      willChange: "transform",
-                    }} />
-                  </div>
+                  {Array.from({ length: N_C - 1 }, (_, i) => {
+                    const stepP = clamp(cardsP / 0.82, 0, 1);
+                    const startPct = (i / (N_C - 1)) * 100;
+                    const endPct = ((i + 1) / (N_C - 1)) * 100;
+                    const reachStart = (i + 0.5) / N_C;
+                    const reachEnd = (i + 1.5) / N_C;
+                    const segP = clamp((stepP - reachStart) / (reachEnd - reachStart), 0, 1);
+                    return (
+                      <div key={`seg-${i}`} style={{
+                        position: "absolute", left: "50%", marginLeft: -0.5,
+                        top: `calc(${startPct}% + 36px)`,
+                        bottom: `calc(${100 - endPct}% + 36px)`,
+                        width: 1, pointerEvents: "none",
+                      }}>
+                        {/* Dim backbone */}
+                        <div style={{
+                          position: "absolute", inset: 0,
+                          background: "rgba(251,243,212,0.12)",
+                        }} />
+                        {/* Gold fill — scales within this segment */}
+                        <div style={{
+                          position: "absolute", inset: 0,
+                          background: "#c9a96e",
+                          boxShadow: "0 0 8px rgba(201,169,110,0.45)",
+                          transformOrigin: "top",
+                          transform: `scaleY(${segP})`,
+                          willChange: "transform",
+                        }} />
+                      </div>
+                    );
+                  })}
 
                   {/* 6 ingredient rows, evenly distributed top-to-bottom */}
                   <div style={{
@@ -513,29 +520,69 @@ export default function PageContent() {
                   position: "relative", flex: 1, width: "100%",
                   maxWidth: 520, marginTop: "3.5vh",
                 }}>
-                  {/* Dim full-length backbone — extends above into heading
-                      and below to bottom of sticky to bridge Phase 3. */}
-                  <div style={{
-                    position: "absolute", left: "50%",
-                    top: "-15vh", bottom: "-5vh",
-                    width: 1, marginLeft: -0.5,
-                    background: "rgba(251,243,212,0.12)",
-                  }} />
-                  {/* Gold revealed line — centered, scales via transform. */}
-                  <div style={{
-                    position: "absolute", left: "50%",
-                    top: "-15vh", bottom: "-5vh",
-                    width: 1, marginLeft: -0.5, pointerEvents: "none",
-                  }}>
-                    <div style={{
-                      position: "absolute", inset: 0,
-                      background: "#c9a96e",
-                      boxShadow: "0 0 8px rgba(201,169,110,0.45)",
-                      transformOrigin: "top",
-                      transform: `scaleY(${clamp(proteinP / 0.82, 0, 1)})`,
-                      willChange: "transform",
-                    }} />
-                  </div>
+                  {/*
+                    Bridge segment — sits ABOVE the first benefit row, in the
+                    gap between Phase 3's last sentence and Phase 4's first
+                    sentence. Fills as Phase 4 enters so the connection from
+                    Phase 3 reads as continuous (with a clean break around
+                    each sentence's text).
+                  */}
+                  {(() => {
+                    const stepP = clamp(proteinP / 0.82, 0, 1);
+                    const bridgeP = clamp(stepP / (0.5 / N_P), 0, 1);
+                    return (
+                      <div style={{
+                        position: "absolute", left: "50%", marginLeft: -0.5,
+                        top: "-15vh",
+                        height: "calc(15vh - 36px)",
+                        width: 1, pointerEvents: "none",
+                      }}>
+                        <div style={{
+                          position: "absolute", inset: 0,
+                          background: "rgba(251,243,212,0.12)",
+                        }} />
+                        <div style={{
+                          position: "absolute", inset: 0,
+                          background: "#c9a96e",
+                          boxShadow: "0 0 8px rgba(201,169,110,0.45)",
+                          transformOrigin: "top",
+                          transform: `scaleY(${bridgeP})`,
+                          willChange: "transform",
+                        }} />
+                      </div>
+                    );
+                  })()}
+                  {/* Inter-row segments — one in the gap between each pair of
+                      consecutive benefit rows. Line never passes through text. */}
+                  {Array.from({ length: N_P - 1 }, (_, i) => {
+                    const stepP = clamp(proteinP / 0.82, 0, 1);
+                    const startPct = (i / (N_P - 1)) * 100;
+                    const endPct = ((i + 1) / (N_P - 1)) * 100;
+                    const reachStart = (i + 0.5) / N_P;
+                    const reachEnd = (i + 1.5) / N_P;
+                    const segP = clamp((stepP - reachStart) / (reachEnd - reachStart), 0, 1);
+                    return (
+                      <div key={`pseg-${i}`} style={{
+                        position: "absolute", left: "50%", marginLeft: -0.5,
+                        top: `calc(${startPct}% + 36px)`,
+                        bottom: `calc(${100 - endPct}% + 36px)`,
+                        width: 1, pointerEvents: "none",
+                      }}>
+                        <div style={{
+                          position: "absolute", inset: 0,
+                          background: "rgba(251,243,212,0.12)",
+                        }} />
+                        <div style={{
+                          position: "absolute", inset: 0,
+                          background: "#c9a96e",
+                          boxShadow: "0 0 8px rgba(201,169,110,0.45)",
+                          transformOrigin: "top",
+                          transform: `scaleY(${segP})`,
+                          willChange: "transform",
+                        }} />
+                      </div>
+                    );
+                  })}
 
                   {/* Benefit rows, evenly distributed top-to-bottom */}
                   <div style={{
