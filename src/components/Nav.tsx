@@ -29,7 +29,7 @@ export default function Nav() {
   } = useCart();
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuSection, setMenuSection] = useState<"main" | "orders" | "subscription" | "connect" | "reports">("main");
+  const [menuSection, setMenuSection] = useState<"main" | "orders" | "subscription" | "connect" | "reports" | "locator">("main");
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -40,7 +40,7 @@ export default function Nav() {
       const savedOpen = localStorage.getItem("cadieux_menu_open");
       const savedSection = localStorage.getItem("cadieux_menu_section");
       if (savedOpen === "1" && isHome) setMenuOpen(true);
-      if (savedSection === "main" || savedSection === "orders" || savedSection === "subscription" || savedSection === "connect" || savedSection === "reports") {
+      if (savedSection === "main" || savedSection === "orders" || savedSection === "subscription" || savedSection === "connect" || savedSection === "reports" || savedSection === "locator") {
         setMenuSection(savedSection);
       }
     } catch { /* ignore */ }
@@ -154,6 +154,7 @@ export default function Nav() {
                 { label: "How We Bake",         action: () => nav("/making") },
                 { label: "Blogs",               action: () => nav("/blogs") },
                 { label: "Reports",             action: () => setMenuSection("reports") },
+                { label: "Store Locator",       action: () => setMenuSection("locator") },
                 { label: "Connect with Cadieux", action: () => setMenuSection("connect") },
               ].map(({ label, action }) => (
                 <button key={label} onClick={action} style={{
@@ -228,6 +229,32 @@ export default function Nav() {
                   <span style={{ fontFamily: "var(--font-heading)", fontSize: 24, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.03em" }}>{p.title}</span>
                   <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)" }}>View →</span>
                 </button>
+              ))}
+            </>
+          )}
+
+          {/* ── Store Locator ── */}
+          {menuSection === "locator" && (
+            <>
+              <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
+              <p style={{ margin: "0 0 10px", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Store Locator</p>
+              <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.45)", lineHeight: 1.6, letterSpacing: "0.02em" }}>Visit our bakery — fresh loaves out of the oven daily.</p>
+              {[
+                {
+                  name: "Cadieux Bakery — Bengaluru",
+                  address: "12, Lavelle Road, Ashok Nagar, Bengaluru 560001",
+                  hours: "Tue–Sun · 8:00 — 20:00",
+                  phone: "+91 98765 43210",
+                  mapsUrl: "https://www.google.com/maps/search/?api=1&query=12+Lavelle+Road+Ashok+Nagar+Bengaluru+560001",
+                },
+              ].map((s) => (
+                <div key={s.name} style={{ borderBottom: "1px solid rgba(240,223,200,0.07)", padding: "18px 0" }}>
+                  <p style={{ margin: "0 0 8px", fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.03em" }}>{s.name}</p>
+                  <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.55)", lineHeight: 1.6 }}>{s.address}</p>
+                  <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)" }}>{s.hours}</p>
+                  <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.5)" }}>{s.phone}</p>
+                  <a href={s.mapsUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.75)", textDecoration: "none", borderBottom: "1px solid rgba(200,144,58,0.4)", paddingBottom: 2 }}>Get Directions →</a>
+                </div>
               ))}
             </>
           )}
