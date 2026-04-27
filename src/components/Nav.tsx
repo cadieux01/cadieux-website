@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import CheckoutModal from "./CheckoutModal";
 import { useCart } from "@/context/CartContext";
-import { PRODUCTS } from "@/lib/data";
+import { PRODUCTS, STORES } from "@/lib/data";
 
 type Order = {
   id: string;
@@ -238,22 +238,24 @@ export default function Nav() {
             <>
               <button onClick={() => setMenuSection("main")} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 0 28px", textAlign: "left", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)", WebkitTapHighlightColor: "transparent" }}>← Back</button>
               <p style={{ margin: "0 0 10px", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>Store Locator</p>
-              <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.45)", lineHeight: 1.6, letterSpacing: "0.02em" }}>Visit our bakery — fresh loaves out of the oven daily.</p>
-              {[
-                {
-                  name: "Cadieux Bakery — Bengaluru",
-                  address: "12, Lavelle Road, Ashok Nagar, Bengaluru 560001",
-                  hours: "Tue–Sun · 8:00 — 20:00",
-                  phone: "+91 98765 43210",
-                  mapsUrl: "https://www.google.com/maps/search/?api=1&query=12+Lavelle+Road+Ashok+Nagar+Bengaluru+560001",
-                },
-              ].map((s) => (
-                <div key={s.name} style={{ borderBottom: "1px solid rgba(240,223,200,0.07)", padding: "18px 0" }}>
-                  <p style={{ margin: "0 0 8px", fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.03em" }}>{s.name}</p>
-                  <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.55)", lineHeight: 1.6 }}>{s.address}</p>
-                  <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)" }}>{s.hours}</p>
-                  <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.5)" }}>{s.phone}</p>
-                  <a href={s.mapsUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.75)", textDecoration: "none", borderBottom: "1px solid rgba(200,144,58,0.4)", paddingBottom: 2 }}>Get Directions →</a>
+              <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.45)", lineHeight: 1.6, letterSpacing: "0.02em" }}>Cadieux stockists across Visakhapatnam.</p>
+              {Object.entries(STORES).map(([area, list]) => (
+                <div key={area} style={{ marginBottom: 22 }}>
+                  <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(200,144,58,0.6)" }}>{area}</p>
+                  {list.map((s) => (
+                    <div key={s.name} style={{ borderBottom: "1px solid rgba(240,223,200,0.07)", padding: "14px 0" }}>
+                      <p style={{ margin: "0 0 6px", fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.03em" }}>{s.name}</p>
+                      <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.55)", lineHeight: 1.6 }}>{s.address}</p>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${s.name}, ${s.address}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: "inline-block", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.75)", textDecoration: "none", borderBottom: "1px solid rgba(200,144,58,0.4)", paddingBottom: 2 }}
+                      >
+                        Get Directions →
+                      </a>
+                    </div>
+                  ))}
                 </div>
               ))}
             </>
