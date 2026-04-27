@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import CheckoutModal from "./CheckoutModal";
 import { useCart } from "@/context/CartContext";
@@ -72,6 +72,27 @@ export default function Nav() {
   const [locatorArea, setLocatorArea] = useState<string | null>(null);
   const [locatorStore, setLocatorStore] = useState<string | null>(null);
   const [locatorDropdownOpen, setLocatorDropdownOpen] = useState(false);
+  const visibleShopsRef = useRef<HTMLDivElement | null>(null);
+
+  // When the user picks an area or shop, smooth-scroll the result section
+  // into view so the picked shops aren't hidden below the fold.
+  useEffect(() => {
+    if (!locatorArea && !locatorStore) return;
+    const node = visibleShopsRef.current;
+    if (!node) return;
+    // Defer to the next frame so the panel layout is settled before scrolling.
+    const id = requestAnimationFrame(() => {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [locatorArea, locatorStore]);
+
+  function clearLocatorSelection() {
+    setLocatorArea(null);
+    setLocatorStore(null);
+    setLocatorSearch("");
+    setLocatorDropdownOpen(false);
+  }
 
   // Restore menu state from localStorage on mount — so reload keeps the menu open
   useEffect(() => {
@@ -325,26 +346,51 @@ export default function Nav() {
                 <p style={{ margin: "0 0 22px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.45)", lineHeight: 1.6, letterSpacing: "0.02em" }}>Find a store near you that stocks Cadieux.</p>
 
                 {/* Dropdown trigger */}
-                <button
-                  onClick={() => setLocatorDropdownOpen(o => !o)}
-                  aria-expanded={locatorDropdownOpen}
-                  style={{
-                    width: "100%", boxSizing: "border-box",
-                    background: "rgba(240,223,200,0.04)",
-                    border: "1px solid rgba(240,223,200,0.12)",
-                    borderRadius: locatorDropdownOpen ? "4px 4px 0 0" : 4,
-                    padding: "12px 14px",
-                    cursor: "pointer", textAlign: "left",
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                    fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
-                    color: (locatorArea || locatorStore) ? "#FBF3D4" : "rgba(240,223,200,0.5)",
-                    letterSpacing: "0.02em",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{triggerLabel}</span>
-                  <span style={{ color: "rgba(200,144,58,0.7)", fontSize: 12, transform: locatorDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s", flexShrink: 0, marginLeft: 8 }}>▾</span>
-                </button>
+                <div style={{ position: "relative" }}>
+                  <button
+                    onClick={() => setLocatorDropdownOpen(o => !o)}
+                    aria-expanded={locatorDropdownOpen}
+                    style={{
+                      width: "100%", boxSizing: "border-box",
+                      background: "rgba(240,223,200,0.04)",
+                      border: "1px solid rgba(240,223,200,0.12)",
+                      borderRadius: locatorDropdownOpen ? "4px 4px 0 0" : 4,
+                      padding: "12px 14px",
+                      paddingRight: (locatorArea || locatorStore) ? 64 : 36,
+                      cursor: "pointer", textAlign: "left",
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
+                      color: (locatorArea || locatorStore) ? "#FBF3D4" : "rgba(240,223,200,0.5)",
+                      letterSpacing: "0.02em",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{triggerLabel}</span>
+                    <span style={{ color: "rgba(200,144,58,0.7)", fontSize: 12, transform: locatorDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s", flexShrink: 0, marginLeft: 8 }}>▾</span>
+                  </button>
+                  {(locatorArea || locatorStore) && (
+                    <button
+                      type="button"
+                      aria-label="Clear selection"
+                      onClick={(e) => { e.stopPropagation(); clearLocatorSelection(); }}
+                      style={{
+                        position: "absolute",
+                        top: "50%", right: 36,
+                        transform: "translateY(-50%)",
+                        width: 22, height: 22,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "rgba(240,223,200,0.06)",
+                        border: "1px solid rgba(240,223,200,0.18)",
+                        borderRadius: "50%",
+                        color: "rgba(240,223,200,0.7)",
+                        fontSize: 12, lineHeight: 1,
+                        cursor: "pointer",
+                        WebkitTapHighlightColor: "transparent",
+                        padding: 0,
+                      }}
+                    >×</button>
+                  )}
+                </div>
 
                 {/* Dropdown panel — contains the search column + the list */}
                 {locatorDropdownOpen && (
@@ -444,7 +490,13 @@ export default function Nav() {
                           ))}
                         </>
                       );
-                    })() : (
+                    })() : (locatorArea || locatorStore) ? (
+                      // A selection already exists — don't auto-list every area again.
+                      // Wait for the user to type a query before showing results.
+                      <p style={{ margin: 0, padding: "14px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.4)", letterSpacing: "0.02em" }}>
+                        Type to search another area or shop.
+                      </p>
+                    ) : (
                       <>
                         {matchingAreas.map(area => (
                           <button
@@ -481,6 +533,7 @@ export default function Nav() {
                 <div style={{ marginBottom: 18 }} />
 
                 {/* Shops shown ONLY after the user picks an area or shop */}
+                <div ref={visibleShopsRef} style={{ scrollMarginTop: 80 }}>
                 {visibleShops.length === 0 ? (
                   locatorArea ? (
                     <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>No stores we supply in {locatorArea} yet — we&apos;re expanding fast.</p>
@@ -511,6 +564,7 @@ export default function Nav() {
                     ))}
                   </>
                 )}
+                </div>
               </>
             );
           })()}
