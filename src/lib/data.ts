@@ -244,17 +244,26 @@ export const PROCESS_STEPS = [
 ];
 
 export const VIZAG_AREAS = [
+  "Akkayyapalem",
+  "Asilmetta",
+  "Beach Road",
   "Bheemunipatnam",
   "Chinna Waltair",
+  "Daba Gardens",
   "Dwaraka Nagar",
   "Gajuwaka",
+  "Jagadamba Junction",
   "Kommadi",
+  "Maddilapalem",
   "Madhurawada",
   "MVP Colony",
+  "NAD Junction",
   "Pendurthi",
   "Rushikonda",
+  "Sagar Nagar",
   "Seethammadhara",
   "Waltair Uplands",
+  "Yendada",
 ];
 
 export const STORES: Record<string, { name: string; address: string }[]> = {
