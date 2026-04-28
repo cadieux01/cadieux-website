@@ -5,8 +5,14 @@ export type CartItem = {
   qty: number;
   orderType: "once" | "sub";
   weeks?: number;
+  // Single-day subscription (legacy / one-day pick)
   day?: string;
   time?: string;
+  // Multi-day subscription metadata (new wizard)
+  days?: string[];
+  slotMode?: "same" | "custom";
+  slot?: string | null;
+  slotsByDay?: Record<string, string> | null;
 };
 
 export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];

@@ -61,20 +61,48 @@ export default function CartPage() {
                   </div>
 
                   {item.orderType === "sub" && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#4369B2", border: "1px solid rgba(67,105,178,0.3)", padding: "4px 12px" }}>Subscription</span>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(251,243,212,0.35)", padding: "4px 0" }}>Every {item.weeks}w · {item.day} · {item.time}</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#4369B2", border: "1px solid rgba(67,105,178,0.3)", padding: "4px 12px" }}>Subscription</span>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(251,243,212,0.35)", padding: "4px 0" }}>
+                          {item.weeks} {item.weeks === 1 ? "week" : "weeks"}
+                          {item.days && item.days.length > 0 ? ` · ${item.days.length} ${item.days.length === 1 ? "day" : "days"}/wk` : ""}
+                        </span>
+                      </div>
+                      {item.slotMode === "custom" && item.slotsByDay ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingLeft: 2 }}>
+                          {(item.days || []).map((label) => (
+                            <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, color: "rgba(251,243,212,0.55)", letterSpacing: "0.05em" }}>
+                              <span>{label}</span>
+                              <span>{item.slotsByDay![label.toLowerCase().slice(0, 3)] || "—"}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, color: "rgba(251,243,212,0.55)", letterSpacing: "0.05em" }}>
+                          {(item.days || (item.day ? [item.day] : [])).join(", ")}
+                          {item.slot || item.time ? ` · ${item.slot || item.time}` : ""}
+                        </div>
+                      )}
                     </div>
                   )}
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid rgba(251,243,212,0.15)" }}>
-                      <button onClick={() => updateQty(i, Math.max(1, item.qty - 1))} style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}>−</button>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#FBF3D4", width: 34, textAlign: "center" }}>{item.qty}</span>
-                      <button onClick={() => updateQty(i, item.qty + 1)} style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}>+</button>
-                    </div>
+                    {item.orderType === "sub" ? (
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.25em", color: "rgba(251,243,212,0.35)", textTransform: "uppercase" }}>
+                        Full plan
+                      </span>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid rgba(251,243,212,0.15)" }}>
+                        <button onClick={() => updateQty(i, Math.max(1, item.qty - 1))} style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}>−</button>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#FBF3D4", width: 34, textAlign: "center" }}>{item.qty}</span>
+                        <button onClick={() => updateQty(i, item.qty + 1)} style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}>+</button>
+                      </div>
+                    )}
 
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "rgba(251,243,212,0.35)", textTransform: "uppercase" }}>₹{item.price} each</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "rgba(251,243,212,0.35)", textTransform: "uppercase" }}>
+                      {item.orderType === "sub" ? `₹${item.price} total` : `₹${item.price} each`}
+                    </span>
 
                     <button
                       onClick={() => removeFromCart(i)}

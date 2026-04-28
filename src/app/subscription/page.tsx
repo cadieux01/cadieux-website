@@ -4,6 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PRODUCTS } from "@/lib/data";
+import { useCart } from "@/context/CartContext";
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
@@ -11,8 +12,6 @@ const GOLD = "201,169,110";
 
 type Step = "intro" | "weeks" | "days" | "time-mode" | "time" | "summary";
 type SlotMode = "same" | "custom";
-
-const PENDING_SUB_KEY = "cadieux_pending_subscription";
 
 const WEEK_OPTIONS = [
   { weeks: 1, label: "1 Week", sub: "Single trial run" },
@@ -56,6 +55,11 @@ function SubscriptionInner() {
   const searchParams = useSearchParams();
   const slug = searchParams.get("slug");
   const product = useMemo(() => PRODUCTS.find((p) => p.slug === slug) || null, [slug]);
+  const productIndex = useMemo(
+    () => PRODUCTS.findIndex((p) => p.slug === slug),
+    [slug]
+  );
+  const { addToCart } = useCart();
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Swap the bread variant in-place. The URL slug drives `product`, so total
@@ -90,23 +94,25 @@ function SubscriptionInner() {
     setTimeDayIndex(0);
   }
 
-  function addToCartAndRegister() {
-    if (!product || !weeks) return;
-    const payload = {
-      bread_slug: product.slug,
-      bread_name: product.title,
-      bread_price: product.price,
+  function addSubscriptionToCart() {
+    if (!product || !weeks || productIndex < 0) return;
+    const dayLabelList = days
+      .map((k) => DAYS.find((d) => d.key === k)?.label || "")
+      .filter(Boolean);
+    addToCart({
+      productIndex,
+      name: `${product.name} — Subscription`,
+      // Treat the whole subscription as a single line item priced at total.
+      price: total,
+      qty: 1,
+      orderType: "sub",
       weeks,
-      days,
-      slot_mode: slotMode,
+      days: dayLabelList,
+      slotMode: slotMode || undefined,
       slot: slotMode === "same" ? slot : null,
-      slots_by_day: slotMode === "custom" ? slotsByDay : null,
-      total,
-    };
-    try {
-      sessionStorage.setItem(PENDING_SUB_KEY, JSON.stringify(payload));
-    } catch { /* ignore quota errors */ }
-    router.push("/subscription/register");
+      slotsByDay: slotMode === "custom" ? slotsByDay : null,
+    });
+    router.push("/cart");
   }
 
   // After picking days, branch: 1 day → straight to single picker, 2+ days → ask
@@ -548,7 +554,7 @@ function SubscriptionInner() {
             )}
             <button
               type="button"
-              onClick={addToCartAndRegister}
+              onClick={addSubscriptionToCart}
               style={{
                 marginTop: 16,
                 width: "100%",

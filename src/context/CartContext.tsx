@@ -39,6 +39,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   function addToCart(item: CartItem) {
     setCart(prev => {
+      // Subscriptions are unique per schedule — always append a new line
+      // so two different subscription configs aren't merged together.
+      if (item.orderType === "sub") {
+        return [...prev, item];
+      }
       const idx = prev.findIndex(
         c => c.productIndex === item.productIndex && c.orderType === item.orderType
       );
