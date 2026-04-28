@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PRODUCTS } from "@/lib/data";
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
@@ -50,9 +50,18 @@ export default function SubscriptionPage() {
 }
 
 function SubscriptionInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const slug = searchParams.get("slug");
   const product = useMemo(() => PRODUCTS.find((p) => p.slug === slug) || null, [slug]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Swap the bread variant in-place. The URL slug drives `product`, so total
+  // updates automatically once the route re-renders.
+  function pickBread(nextSlug: string) {
+    setPickerOpen(false);
+    router.replace(`/subscription?slug=${nextSlug}`);
+  }
 
   // If a product was passed in via query, jump straight into the wizard.
   const [step, setStep] = useState<Step>(product ? "weeks" : "intro");
@@ -139,31 +148,60 @@ function SubscriptionInner() {
 
         {/* Variant header — shown when a product was passed via query */}
         {product && step !== "intro" && (
-          <div style={{
-            display: "flex", justifyContent: "space-between", alignItems: "baseline",
-            padding: "14px 16px",
-            background: "#0a0805",
-            border: `0.5px solid rgba(${GOLD},0.35)`,
-            borderRadius: 12,
-            marginBottom: 22,
-            gap: 12,
-          }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 400, color: "#FBF3D4", letterSpacing: "0.01em" }}>
-                {product.title}
-              </div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.25em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)`, marginTop: 4 }}>
-                ₹{product.price} per loaf
-              </div>
-            </div>
-            <Link href={`/shop/${product.slug}`} style={{
-              fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
-              letterSpacing: "0.3em", textTransform: "uppercase",
-              color: "rgba(240,223,200,0.5)", textDecoration: "none",
-              flexShrink: 0,
+          <div style={{ marginBottom: 22 }}>
+            <div style={{
+              display: "flex", justifyContent: "space-between", alignItems: "baseline",
+              padding: "14px 16px",
+              background: "#0a0805",
+              border: `0.5px solid rgba(${GOLD},${pickerOpen ? 0.6 : 0.35})`,
+              borderRadius: 12,
+              gap: 12,
+              transition: "border-color 200ms ease",
             }}>
-              Change →
-            </Link>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 400, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+                  {product.title}
+                </div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.25em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)`, marginTop: 4 }}>
+                  ₹{product.price} per loaf
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPickerOpen((v) => !v)}
+                aria-expanded={pickerOpen}
+                style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  padding: 4,
+                  fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
+                  letterSpacing: "0.3em", textTransform: "uppercase",
+                  color: pickerOpen ? `rgba(${GOLD},0.95)` : "rgba(240,223,200,0.5)",
+                  flexShrink: 0,
+                  transition: "color 200ms ease",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                {pickerOpen ? "Close ×" : "Change →"}
+              </button>
+            </div>
+
+            {/* Inline bread picker — opens under the header */}
+            {pickerOpen && (
+              <div style={{
+                marginTop: 10,
+                display: "flex", flexDirection: "column", gap: 8,
+              }}>
+                {PRODUCTS.map((p) => (
+                  <OptionRow
+                    key={p.slug}
+                    selected={product.slug === p.slug}
+                    onClick={() => pickBread(p.slug)}
+                    title={p.title}
+                    sub={`₹${p.price} per loaf · ${p.tag}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
