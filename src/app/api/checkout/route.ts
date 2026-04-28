@@ -6,17 +6,26 @@ import {
   verifyPhoneCookie,
 } from "@/lib/phone-cookie";
 
-// Service role bypasses RLS. Anon key used as fallback (requires permissive RLS policies).
-const sb = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://placeholder.supabase.co",
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "placeholder"
+// Server-only admin client. Uses the service role key, which bypasses RLS
+// entirely — all writes from this route succeed regardless of table policies.
+// SUPABASE_SERVICE_ROLE_KEY must be set in .env.local AND in the Vercel
+// Production environment, otherwise this route will throw at request time.
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
 );
 
 export async function GET(req: NextRequest) {
   const phone = req.nextUrl.searchParams.get("phone");
   if (!phone) return NextResponse.json({ customer: null });
 
-  const { data: customer } = await sb
+  const { data: customer } = await supabaseAdmin
     .from("customers")
     .select("id, full_name, phone, city")
     .eq("phone", phone)
@@ -25,7 +34,7 @@ export async function GET(req: NextRequest) {
   if (!customer) return NextResponse.json({ customer: null });
 
   // Get all orders
-  const { data: orders, error: ordersErr } = await sb
+  const { data: orders, error: ordersErr } = await supabaseAdmin
     .from("orders")
     .select("id, total_amount, delivery_address, status, created_at")
     .eq("customer_id", customer.id)
@@ -50,7 +59,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
-    const { data: existing } = await sb
+    const { data: existing } = await supabaseAdmin
       .from("customers")
       .select("id")
       .eq("phone", phone)
@@ -58,15 +67,31 @@ export async function POST(req: NextRequest) {
 
     let customerId: string;
     if (existing) {
-      await sb.from("customers").update({ full_name, city }).eq("id", existing.id);
+      const { error: updateErr } = await supabaseAdmin
+        .from("customers")
+        .update({ full_name, city })
+        .eq("id", existing.id);
+      if (updateErr) {
+        console.error("❌ Customer update failed:", updateErr);
+        return NextResponse.json(
+          { error: "Failed to update customer", details: updateErr.message },
+          { status: 500 }
+        );
+      }
       customerId = existing.id;
     } else {
-      const { data: newCust, error } = await sb
+      const { data: newCust, error } = await supabaseAdmin
         .from("customers")
         .insert({ full_name, phone, city })
         .select("id")
         .single();
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        console.error("❌ Customer insert failed:", error);
+        return NextResponse.json(
+          { error: "Failed to create customer", details: error.message },
+          { status: 500 }
+        );
+      }
       customerId = newCust.id;
     }
 
@@ -96,26 +121,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing customer." }, { status: 400 });
     }
 
-    const { data: cust } = await sb
+    const { data: cust } = await supabaseAdmin
       .from("customers")
       .select("id, phone")
       .eq("id", customer_id)
       .maybeSingle();
 
     if (!cust || normalizePhone(cust.phone) !== verified.phone) {
+      console.warn("⚠️  place_order phone mismatch", {
+        customer_id,
+        cust_phone: cust?.phone,
+        verified_phone: verified.phone,
+      });
       return NextResponse.json(
         { error: "Phone verification mismatch." },
         { status: 401 }
       );
     }
 
-    const { data: order, error } = await sb
+    const { data: order, error } = await supabaseAdmin
       .from("orders")
       .insert({ customer_id, total_amount, delivery_address, status: "pending" })
       .select("id")
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("❌ Order insert failed:", error);
+      return NextResponse.json(
+        { error: "Failed to create order", details: error.message },
+        { status: 500 }
+      );
+    }
+
+    console.log("✅ Order created:", { order_id: order.id, customer_id, total_amount });
     return NextResponse.json({ order_id: order.id });
   }
 
