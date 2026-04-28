@@ -165,21 +165,32 @@ export default function QASection() {
           ref={(el) => {
             if (!el) return;
             el.muted = true;
-            const tryPlay = () => { void el.play().catch(() => {}); };
+            let shouldPlay = false;
+            const tryPlay = () => {
+              if (!shouldPlay) return;
+              void el.play().catch(() => {});
+            };
             el.addEventListener("canplay", tryPlay);
             el.addEventListener("loadeddata", tryPlay);
-            tryPlay();
-            if (typeof IntersectionObserver === "undefined") return;
+            if (typeof IntersectionObserver === "undefined") {
+              shouldPlay = true;
+              tryPlay();
+              return;
+            }
             const io = new IntersectionObserver(
               (entries) => entries.forEach((e) => {
-                if (e.isIntersecting) tryPlay();
-                else if (!el.paused) el.pause();
+                if (e.isIntersecting) {
+                  shouldPlay = true;
+                  tryPlay();
+                } else {
+                  shouldPlay = false;
+                  if (!el.paused) el.pause();
+                }
               }),
               { threshold: 0 }
             );
             io.observe(el);
           }}
-          autoPlay
           muted
           playsInline
           loop

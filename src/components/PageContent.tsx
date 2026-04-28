@@ -11,31 +11,71 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 /* Lazy-play a video when any pixel enters the viewport, and pause it the
    moment it's fully off-screen so a 5-video page doesn't decode all of them
    at once. Mobile Safari/Chrome can also reject too-early play()s silently —
-   we retry on canplay/loadeddata to fix the "blank background" bug. */
+   we retry on canplay/loadeddata to fix the "blank background" bug.
+
+   Performance notes:
+   • We do NOT kick play() unconditionally on mount — that previously caused
+     5 simultaneous H.264 decoders to spin up on home and starved input/scroll
+     responsiveness for the first 1-2s. The IntersectionObserver fires its
+     initial callback right away, so the in-view video gets its play() with
+     no perceptible delay; the others stay paused until scrolled to.
+   • A second IO with a 600px rootMargin warms up `preload="none"` videos
+     just before they enter view — so the user still sees a frame as they
+     scroll past, without paying for metadata fetches on initial paint. */
 const playOnEnter = (el: HTMLVideoElement | null) => {
   if (!el) return;
   // Defensive — React sets these from attributes, but re-asserting avoids
   // hydration races on iOS where muted reverts and play() then needs a gesture.
   el.muted = true;
 
-  const tryPlay = () => { void el.play().catch(() => {}); };
+  // shouldPlay is the source of truth for whether this video is currently
+  // in the viewport. canplay/loadeddata fire after warm-up loads complete,
+  // but we only want to actually play() if the video is still on-screen.
+  let shouldPlay = false;
+  const tryPlay = () => {
+    if (!shouldPlay) return;
+    void el.play().catch(() => {});
+  };
 
   // Retry whenever the browser signals it has enough buffer.
   el.addEventListener("canplay", tryPlay);
   el.addEventListener("loadeddata", tryPlay);
 
-  // Kick once now in case the element is already visible + ready.
-  tryPlay();
+  if (typeof IntersectionObserver === "undefined") {
+    // Server-rendered or ancient browser — fall back to immediate play.
+    shouldPlay = true;
+    tryPlay();
+    return;
+  }
 
-  if (typeof IntersectionObserver === "undefined") return;
-  const io = new IntersectionObserver(
+  // Warm preload before the video reaches the viewport so the first frame
+  // is ready by the time the user scrolls to it.
+  const warmIo = new IntersectionObserver(
     (entries) => entries.forEach((e) => {
-      if (e.isIntersecting) tryPlay();
-      else if (!el.paused) el.pause();
+      if (e.isIntersecting && el.preload !== "auto") {
+        el.preload = "metadata";
+        try { el.load(); } catch { /* noop */ }
+        warmIo.disconnect();
+      }
+    }),
+    { rootMargin: "600px 0px" }
+  );
+  warmIo.observe(el);
+
+  // Play/pause based on actual visibility.
+  const playIo = new IntersectionObserver(
+    (entries) => entries.forEach((e) => {
+      if (e.isIntersecting) {
+        shouldPlay = true;
+        tryPlay();
+      } else {
+        shouldPlay = false;
+        if (!el.paused) el.pause();
+      }
     }),
     { threshold: 0 }
   );
-  io.observe(el);
+  playIo.observe(el);
 };
 
 /* ── SVG grain texture ── */
@@ -89,14 +129,29 @@ export default function PageContent() {
     const v = videoRef.current;
     if (!v) return;
     v.muted = true;
-    // Attempt immediate playback; if metadata isn't ready, retry on canplay
-    const tryPlay = () => v.play().catch(() => {});
+    // Hero video is in viewport on first paint — play immediately.
+    // IO below pauses it when scrolled past so it stops decoding offscreen.
+    let inView = true;
+    const tryPlay = () => { if (inView) v.play().catch(() => {}); };
     tryPlay();
     v.addEventListener("canplay", tryPlay, { once: true });
     v.addEventListener("loadeddata", tryPlay, { once: true });
+    let io: IntersectionObserver | null = null;
+    if (typeof IntersectionObserver !== "undefined") {
+      io = new IntersectionObserver(
+        (entries) => entries.forEach((e) => {
+          inView = e.isIntersecting;
+          if (inView) tryPlay();
+          else if (!v.paused) v.pause();
+        }),
+        { threshold: 0 }
+      );
+      io.observe(v);
+    }
     return () => {
       v.removeEventListener("canplay", tryPlay);
       v.removeEventListener("loadeddata", tryPlay);
+      if (io) io.disconnect();
     };
   }, []);
 
@@ -336,9 +391,11 @@ export default function PageContent() {
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
               background: "#1D1D1F",
             }}>
-              {/* Background video — lazy play on enter */}
+              {/* Background video — lazy play on enter (preload="none" so it
+                  doesn't compete with the hero video for bandwidth/decode on
+                  first paint; playOnEnter warms it 600px before viewport) */}
               <video
-                ref={playOnEnter} autoPlay muted playsInline loop preload="metadata"
+                ref={playOnEnter} muted playsInline loop preload="none"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
@@ -480,9 +537,11 @@ export default function PageContent() {
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
               background: "#1D1D1F",
             }}>
-              {/* Background video — lazy play on enter */}
+              {/* Background video — lazy play on enter (preload="none" so it
+                  doesn't compete with the hero video for bandwidth/decode on
+                  first paint; playOnEnter warms it 600px before viewport) */}
               <video
-                ref={playOnEnter} autoPlay muted playsInline loop preload="metadata"
+                ref={playOnEnter} muted playsInline loop preload="none"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
@@ -628,8 +687,10 @@ export default function PageContent() {
             zIndex: 3,
             backgroundColor: "#060402",
           }}>
-            {/* Background video */}
-            <video ref={playOnEnter} autoPlay muted playsInline loop preload="metadata" style={{
+            {/* Background video — preload="none" because this is the deepest
+                section with the largest video (15.6 MB); we don't want it
+                fetching metadata on first paint. */}
+            <video ref={playOnEnter} muted playsInline loop preload="none" style={{
               position: "absolute", inset: 0, width: "100%", height: "100%",
               objectFit: "cover", zIndex: 0, backgroundColor: "#060402",
             }}>

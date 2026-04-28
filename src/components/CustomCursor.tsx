@@ -31,6 +31,13 @@ export default function CustomCursor() {
       inner.style.top = `${pendingY}px`
     }
 
+    // gsap.quickTo creates the tween ONCE and reuses it. Replaces the prior
+    // per-mousemove gsap.to() which allocated a fresh tween up to 120/sec on
+    // 120Hz pointers — that allocation pressure was a major contributor to
+    // input lag and dropped frames during scroll.
+    const outerX = gsap.quickTo(outer, 'left', { duration: 0.15, ease: 'power2.out' })
+    const outerY = gsap.quickTo(outer, 'top', { duration: 0.15, ease: 'power2.out' })
+
     const onMouseMove = (e: MouseEvent) => {
       const { clientX: x, clientY: y } = e
       pendingX = x
@@ -38,12 +45,8 @@ export default function CustomCursor() {
       setVisible(true)
       if (!rafId) rafId = requestAnimationFrame(flush)
 
-      gsap.to(outer, {
-        left: x,
-        top: y,
-        duration: 0.15,
-        ease: 'power2.out',
-      })
+      outerX(x)
+      outerY(y)
     }
 
     const onMouseEnter = () => {
