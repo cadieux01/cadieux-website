@@ -72,7 +72,8 @@ CREATE TABLE reviews (
   rating        SMALLINT,                   -- 1..5; NULL allowed for general feedback
   body          TEXT NOT NULL,
   likes_count   INTEGER NOT NULL DEFAULT 0,
-  created_at    TIMESTAMPTZ DEFAULT now()
+  created_at    TIMESTAMPTZ DEFAULT now(),
+  edited_at     TIMESTAMPTZ
 );
 CREATE INDEX reviews_product_slug_idx ON reviews(product_slug);
 CREATE INDEX reviews_created_at_idx   ON reviews(created_at DESC);
@@ -85,7 +86,8 @@ CREATE TABLE review_replies (
   is_admin     BOOLEAN NOT NULL DEFAULT false,
   body         TEXT NOT NULL,
   likes_count  INTEGER NOT NULL DEFAULT 0,
-  created_at   TIMESTAMPTZ DEFAULT now()
+  created_at   TIMESTAMPTZ DEFAULT now(),
+  edited_at    TIMESTAMPTZ
 );
 CREATE INDEX review_replies_review_id_idx ON review_replies(review_id);
 

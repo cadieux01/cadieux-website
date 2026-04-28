@@ -10,6 +10,7 @@ type Reply = {
   body: string;
   likes_count: number;
   created_at: string;
+  edited_at: string | null;
 };
 
 type Review = {
@@ -20,6 +21,7 @@ type Review = {
   body: string;
   likes_count: number;
   created_at: string;
+  edited_at: string | null;
   replies: Reply[];
 };
 
@@ -91,20 +93,34 @@ export default function ReviewSection({ productSlug, scope }: Props) {
   // localStorage-tracked likes
   const [likedReviews, setLikedReviews] = useState<Record<string, boolean>>({});
   const [likedReplies, setLikedReplies] = useState<Record<string, boolean>>({});
+  // localStorage-tracked ownership (this device posted these)
+  const [mineReviews, setMineReviews] = useState<Record<string, boolean>>({});
+  const [mineReplies, setMineReplies] = useState<Record<string, boolean>>({});
+  // edit state
+  const [editingReview, setEditingReview] = useState<string | null>(null);
+  const [editReviewBody, setEditReviewBody] = useState("");
+  const [editingReply, setEditingReply] = useState<string | null>(null);
+  const [editReplyBody, setEditReplyBody] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
       const r: Record<string, boolean> = {};
       const rp: Record<string, boolean> = {};
+      const mr: Record<string, boolean> = {};
+      const mrp: Record<string, boolean> = {};
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (!k) continue;
         if (k.startsWith("liked-review-")) r[k.slice("liked-review-".length)] = true;
         else if (k.startsWith("liked-reply-")) rp[k.slice("liked-reply-".length)] = true;
+        else if (k.startsWith("mine-review-")) mr[k.slice("mine-review-".length)] = true;
+        else if (k.startsWith("mine-reply-")) mrp[k.slice("mine-reply-".length)] = true;
       }
       setLikedReviews(r);
       setLikedReplies(rp);
+      setMineReviews(mr);
+      setMineReplies(mrp);
     } catch {}
   }, []);
 
@@ -159,6 +175,8 @@ export default function ReviewSection({ productSlug, scope }: Props) {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Failed");
       setReviews((prev) => [j.review, ...prev]);
+      try { localStorage.setItem(`mine-review-${j.review.id}`, "1"); } catch {}
+      setMineReviews((p) => ({ ...p, [j.review.id]: true }));
       setName("");
       setBody("");
       setRating(0);
@@ -184,6 +202,8 @@ export default function ReviewSection({ productSlug, scope }: Props) {
       setReviews((prev) =>
         prev.map((rev) => (rev.id === reviewId ? { ...rev, replies: [...rev.replies, j.reply] } : rev))
       );
+      try { localStorage.setItem(`mine-reply-${j.reply.id}`, "1"); } catch {}
+      setMineReplies((p) => ({ ...p, [j.reply.id]: true }));
       setReplyName((p) => ({ ...p, [reviewId]: "" }));
       setReplyBody((p) => ({ ...p, [reviewId]: "" }));
       setOpenReply((p) => ({ ...p, [reviewId]: false }));
@@ -212,6 +232,67 @@ export default function ReviewSection({ productSlug, scope }: Props) {
     );
     try { localStorage.setItem(`liked-reply-${replyId}`, "1"); } catch {}
     try { await fetch(`/api/reviews/${reviewId}/replies/${replyId}/like`, { method: "POST" }); } catch {}
+  };
+
+  const startEditReview = (rev: Review) => {
+    setEditingReview(rev.id);
+    setEditReviewBody(rev.body);
+  };
+
+  const saveEditReview = async (reviewId: string) => {
+    const newBody = editReviewBody.trim();
+    if (!newBody) return;
+    try {
+      const r = await fetch(`/api/reviews/${reviewId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: newBody }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Failed");
+      setReviews((prev) =>
+        prev.map((rev) => (rev.id === reviewId ? { ...rev, body: j.review.body, edited_at: j.review.edited_at } : rev))
+      );
+      setEditingReview(null);
+      setEditReviewBody("");
+    } catch (e: any) {
+      alert(e?.message ?? "Failed to edit");
+    }
+  };
+
+  const startEditReply = (rp: Reply) => {
+    setEditingReply(rp.id);
+    setEditReplyBody(rp.body);
+  };
+
+  const saveEditReply = async (reviewId: string, replyId: string) => {
+    const newBody = editReplyBody.trim();
+    if (!newBody) return;
+    try {
+      const r = await fetch(`/api/reviews/${reviewId}/replies/${replyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: newBody }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Failed");
+      setReviews((prev) =>
+        prev.map((rev) =>
+          rev.id === reviewId
+            ? {
+                ...rev,
+                replies: rev.replies.map((rp) =>
+                  rp.id === replyId ? { ...rp, body: j.reply.body, edited_at: j.reply.edited_at } : rp
+                ),
+              }
+            : rev
+        )
+      );
+      setEditingReply(null);
+      setEditReplyBody("");
+    } catch (e: any) {
+      alert(e?.message ?? "Failed to edit");
+    }
   };
 
   const ratedCount = reviews.filter((r) => r.rating != null).length;
@@ -297,19 +378,43 @@ export default function ReviewSection({ productSlug, scope }: Props) {
                     <span style={pillStyle}>{rev.product_slug}</span>
                   )}
                 </div>
-                <div style={dateStyle}>{formatDate(rev.created_at)}</div>
+                <div style={dateStyle}>
+                  {formatDate(rev.created_at)}
+                  {rev.edited_at && <span style={editedTagStyle}> (edited)</span>}
+                </div>
               </div>
-              <p style={bodyStyle}>{rev.body}</p>
+              {editingReview === rev.id ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <textarea
+                    value={editReviewBody}
+                    onChange={(e) => setEditReviewBody(e.target.value)}
+                    maxLength={1000}
+                    rows={3}
+                    style={{ ...inputStyle, resize: "vertical" }}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => saveEditReview(rev.id)} style={btnPrimary}>Save</button>
+                    <button onClick={() => { setEditingReview(null); setEditReviewBody(""); }} style={textBtn}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <p style={bodyStyle}>{rev.body}</p>
+              )}
 
-              <div style={{ display: "flex", gap: 14, marginTop: 14, alignItems: "center" }}>
-                <button onClick={() => likeReview(rev.id)} disabled={!!likedReviews[rev.id]} style={iconBtn} aria-label="Like">
-                  <Heart filled={!!likedReviews[rev.id]} />
-                  <span>{rev.likes_count}</span>
-                </button>
-                <button onClick={() => setOpenReply((p) => ({ ...p, [rev.id]: !p[rev.id] }))} style={textBtn}>
-                  Reply
-                </button>
-              </div>
+              {editingReview !== rev.id && (
+                <div style={{ display: "flex", gap: 14, marginTop: 14, alignItems: "center" }}>
+                  <button onClick={() => likeReview(rev.id)} disabled={!!likedReviews[rev.id]} style={iconBtn} aria-label="Like">
+                    <Heart filled={!!likedReviews[rev.id]} />
+                    <span>{rev.likes_count}</span>
+                  </button>
+                  <button onClick={() => setOpenReply((p) => ({ ...p, [rev.id]: !p[rev.id] }))} style={textBtn}>
+                    Reply
+                  </button>
+                  {mineReviews[rev.id] && (
+                    <button onClick={() => startEditReview(rev)} style={textBtn}>Edit</button>
+                  )}
+                </div>
+              )}
 
               {openReply[rev.id] && (
                 <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
@@ -339,13 +444,39 @@ export default function ReviewSection({ productSlug, scope }: Props) {
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
                         <span style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 500, color: "#FBF3D4" }}>{rp.author_name}</span>
                         {rp.is_admin && <span style={adminPill}>Cadieux Team</span>}
-                        <span style={{ ...dateStyle, fontSize: 9 }}>{formatDate(rp.created_at)}</span>
+                        <span style={{ ...dateStyle, fontSize: 9 }}>
+                          {formatDate(rp.created_at)}
+                          {rp.edited_at && <span style={editedTagStyle}> (edited)</span>}
+                        </span>
                       </div>
-                      <p style={{ ...bodyStyle, fontSize: 12 }}>{rp.body}</p>
-                      <button onClick={() => likeReply(rev.id, rp.id)} disabled={!!likedReplies[rp.id]} style={{ ...iconBtn, marginTop: 6 }} aria-label="Like reply">
-                        <Heart filled={!!likedReplies[rp.id]} />
-                        <span>{rp.likes_count}</span>
-                      </button>
+                      {editingReply === rp.id ? (
+                        <div style={{ display: "grid", gap: 6 }}>
+                          <textarea
+                            value={editReplyBody}
+                            onChange={(e) => setEditReplyBody(e.target.value)}
+                            maxLength={1000}
+                            rows={2}
+                            style={{ ...inputStyle, resize: "vertical" }}
+                          />
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={() => saveEditReply(rev.id, rp.id)} style={btnPrimary}>Save</button>
+                            <button onClick={() => { setEditingReply(null); setEditReplyBody(""); }} style={textBtn}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p style={{ ...bodyStyle, fontSize: 12 }}>{rp.body}</p>
+                      )}
+                      {editingReply !== rp.id && (
+                        <div style={{ display: "flex", gap: 12, marginTop: 6, alignItems: "center" }}>
+                          <button onClick={() => likeReply(rev.id, rp.id)} disabled={!!likedReplies[rp.id]} style={iconBtn} aria-label="Like reply">
+                            <Heart filled={!!likedReplies[rp.id]} />
+                            <span>{rp.likes_count}</span>
+                          </button>
+                          {mineReplies[rp.id] && (
+                            <button onClick={() => startEditReply(rp)} style={textBtn}>Edit</button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -399,6 +530,14 @@ const cardStyle: React.CSSProperties = {
   background: "rgba(10,8,5,0.4)",
   border: "0.5px solid rgba(201,169,110,0.14)",
   borderRadius: 10,
+};
+
+const editedTagStyle: React.CSSProperties = {
+  marginLeft: 4,
+  textTransform: "none",
+  letterSpacing: "0.05em",
+  color: "rgba(245,240,232,0.4)",
+  fontStyle: "italic",
 };
 
 const dateStyle: React.CSSProperties = {
