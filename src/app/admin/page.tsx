@@ -20,6 +20,25 @@ type Order = {
   customers?: Customer | null;
 };
 
+type Subscription = {
+  id: string;
+  bread_slug: string | null;
+  bread_name: string | null;
+  bread_price: number | null;
+  weeks: number | null;
+  days: string[] | null;
+  slot_mode: string | null;
+  slot: string | null;
+  slots_by_day: Record<string, string> | null;
+  total: number | null;
+  status: string | null;
+  created_at: string;
+};
+
+const DAY_LABELS: Record<string, string> = {
+  mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun",
+};
+
 const STATUS_OPTIONS = ["Pending", "Confirmed", "Dispatched", "Delivered"] as const;
 type Status = (typeof STATUS_OPTIONS)[number];
 
@@ -160,6 +179,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
 
 function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -176,8 +196,19 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     setLoading(false);
   }, []);
 
+  const fetchSubscriptions = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select("id, bread_slug, bread_name, bread_price, weeks, days, slot_mode, slot, slots_by_day, total, status, created_at")
+      .order("created_at", { ascending: false });
+    if (!error && data) {
+      setSubscriptions(data as unknown as Subscription[]);
+    }
+  }, []);
+
   useEffect(() => {
     fetchOrders();
+    fetchSubscriptions();
 
     const channel = supabase
       .channel("orders-admin")
@@ -188,6 +219,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           fetchOrders();
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "subscriptions" },
+        () => {
+          fetchSubscriptions();
+        }
+      )
       .subscribe((status) => {
         setConnected(status === "SUBSCRIBED");
       });
@@ -195,7 +233,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchOrders]);
+  }, [fetchOrders, fetchSubscriptions]);
 
   const updateStatus = async (order: Order, newStatus: Status) => {
     const prev = orders;
@@ -412,6 +450,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         )}
       </section>
 
+      <SubscriptionsSection
+        subscriptions={subscriptions}
+        onChanged={fetchSubscriptions}
+      />
+
       {editingOrder && (
         <EditCustomerModal
           order={editingOrder}
@@ -424,6 +467,114 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       )}
     </div>
   );
+}
+
+function SubscriptionsSection({
+  subscriptions,
+  onChanged,
+}: {
+  subscriptions: Subscription[];
+  onChanged: () => void;
+}) {
+  const updateStatus = async (id: string, next: Status) => {
+    const { error } = await supabase
+      .from("subscriptions")
+      .update({ status: next.toLowerCase() })
+      .eq("id", id);
+    if (!error) onChanged();
+  };
+
+  return (
+    <section className="px-8 pb-12" style={{ borderTop: "1px solid rgba(245, 158, 11, 0.15)", paddingTop: "2rem" }}>
+      <h2
+        className="uppercase mb-6"
+        style={{
+          fontFamily: "var(--font-heading)",
+          fontSize: "1.25rem",
+          letterSpacing: "0.3em",
+          color: "#fbf3d4",
+          fontWeight: 300,
+        }}
+      >
+        Subscriptions
+      </h2>
+      {subscriptions.length === 0 ? (
+        <p style={{ color: "rgba(192,200,206,0.5)", fontFamily: "var(--font-body)", fontSize: "0.85rem" }}>
+          No subscriptions yet.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table
+            className="w-full border-collapse"
+            style={{ fontFamily: "var(--font-body)", fontSize: "0.8rem", color: "#fbf3d4" }}
+          >
+            <thead>
+              <tr style={{ color: "rgba(245,158,11,0.8)", letterSpacing: "0.2em", textTransform: "uppercase", fontSize: "0.65rem" }}>
+                <Th>Sub ID</Th>
+                <Th>Bread</Th>
+                <Th>Weeks</Th>
+                <Th>Days</Th>
+                <Th>Timings</Th>
+                <Th>Total</Th>
+                <Th>Status</Th>
+                <Th>Date</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {subscriptions.map((s, i) => {
+                const status = (s.status ?? "pending").toLowerCase();
+                const normalized = (STATUS_OPTIONS.find((o) => o.toLowerCase() === status) ?? "Pending") as Status;
+                const displayNumber = String(subscriptions.length - i).padStart(5, "0");
+                const dayList = (s.days ?? []).map((k) => DAY_LABELS[k] ?? k).join(", ");
+                const timings = formatTimings(s);
+                return (
+                  <tr key={s.id} style={{ borderTop: "1px solid rgba(245, 158, 11, 0.12)" }}>
+                    <Td mono>{displayNumber}</Td>
+                    <Td>
+                      {s.bread_name ?? "—"}
+                      {s.bread_price != null && (
+                        <span style={{ color: "rgba(192,200,206,0.5)", marginLeft: 6, fontSize: "0.7rem" }}>
+                          · ₹{s.bread_price}
+                        </span>
+                      )}
+                    </Td>
+                    <Td>{s.weeks ?? "—"}</Td>
+                    <Td>{dayList || "—"}</Td>
+                    <Td>{timings}</Td>
+                    <Td>₹{Number(s.total ?? 0).toFixed(2)}</Td>
+                    <Td>
+                      <StatusBadge value={normalized} onChange={(next) => updateStatus(s.id, next)} />
+                    </Td>
+                    <Td>
+                      {new Date(s.created_at).toLocaleString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function formatTimings(s: Subscription): string {
+  if (s.slot_mode === "same") return s.slot ?? "—";
+  if (s.slot_mode === "custom" && s.slots_by_day) {
+    const parts = (s.days ?? []).map((k) => {
+      const t = s.slots_by_day?.[k];
+      return t ? `${DAY_LABELS[k] ?? k}: ${t}` : null;
+    }).filter(Boolean);
+    return parts.length > 0 ? parts.join(" · ") : "—";
+  }
+  return "—";
 }
 
 function Th({ children }: { children: React.ReactNode }) {

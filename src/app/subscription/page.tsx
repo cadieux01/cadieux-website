@@ -4,6 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PRODUCTS } from "@/lib/data";
+import { supabase } from "@/lib/supabase";
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
@@ -11,6 +12,7 @@ const GOLD = "201,169,110";
 
 type Step = "intro" | "weeks" | "days" | "time-mode" | "time" | "summary";
 type SlotMode = "same" | "custom";
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 const WEEK_OPTIONS = [
   { weeks: 1, label: "1 Week", sub: "Single trial run" },
@@ -73,6 +75,8 @@ function SubscriptionInner() {
   const [slotsByDay, setSlotsByDay] = useState<Record<string, string>>({});
   const [slotMode, setSlotMode] = useState<SlotMode | null>(null);
   const [timeDayIndex, setTimeDayIndex] = useState(0);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   function toggleDay(key: string) {
     setDays((prev) => (prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]));
@@ -86,6 +90,33 @@ function SubscriptionInner() {
     setSlotsByDay({});
     setSlotMode(null);
     setTimeDayIndex(0);
+    setSaveState("idle");
+    setSaveError(null);
+  }
+
+  async function confirmSubscription() {
+    if (!product || !weeks) return;
+    setSaveState("saving");
+    setSaveError(null);
+    const payload = {
+      bread_slug: product.slug,
+      bread_name: product.title,
+      bread_price: product.price,
+      weeks,
+      days,
+      slot_mode: slotMode,
+      slot: slotMode === "same" ? slot : null,
+      slots_by_day: slotMode === "custom" ? slotsByDay : null,
+      total,
+      status: "pending",
+    };
+    const { error } = await supabase.from("subscriptions").insert(payload);
+    if (error) {
+      setSaveError(error.message || "Could not save subscription");
+      setSaveState("error");
+      return;
+    }
+    setSaveState("saved");
   }
 
   // After picking days, branch: 1 day → straight to single picker, 2+ days → ask
@@ -527,25 +558,48 @@ function SubscriptionInner() {
             )}
             <button
               type="button"
-              onClick={() => alert("Subscription saved. We'll be in touch.")}
+              onClick={confirmSubscription}
+              disabled={saveState === "saving" || saveState === "saved"}
               style={{
                 marginTop: 16,
                 width: "100%",
-                background: `rgba(${GOLD},0.18)`,
-                border: `1px solid rgba(${GOLD},0.75)`,
+                background: saveState === "saved" ? "rgba(34,197,94,0.18)" : `rgba(${GOLD},0.18)`,
+                border: `1px solid ${saveState === "saved" ? "rgba(34,197,94,0.75)" : `rgba(${GOLD},0.75)`}`,
                 borderRadius: 10,
                 padding: "16px 18px",
                 fontFamily: "var(--font-body)",
                 fontSize: 11, fontWeight: 400,
                 letterSpacing: "0.3em", textTransform: "uppercase",
-                color: "#FBF3D4",
-                cursor: "pointer",
-                transition: "background 200ms ease, border-color 200ms ease",
+                color: saveState === "saved" ? "#bbf7d0" : "#FBF3D4",
+                cursor: saveState === "saving" || saveState === "saved" ? "default" : "pointer",
+                transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
                 WebkitTapHighlightColor: "transparent",
               }}
             >
-              Confirm subscription
+              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved ✓" : "Confirm subscription"}
             </button>
+            {saveError && (
+              <p style={{
+                marginTop: 12,
+                fontFamily: "var(--font-body)",
+                fontSize: 11,
+                color: "#fca5a5",
+                letterSpacing: "0.04em",
+              }}>
+                {saveError}
+              </p>
+            )}
+            {saveState === "saved" && (
+              <p style={{
+                marginTop: 10,
+                fontFamily: "var(--font-body)",
+                fontSize: 11,
+                color: "rgba(240,223,200,0.55)",
+                letterSpacing: "0.04em",
+              }}>
+                We&apos;ll be in touch shortly to confirm your delivery schedule.
+              </p>
+            )}
             <button
               type="button"
               onClick={reset}

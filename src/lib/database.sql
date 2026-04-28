@@ -43,8 +43,25 @@ CREATE TABLE store_locations (
   active     BOOLEAN DEFAULT true
 );
 
+-- Subscriptions (recurring bread deliveries)
+CREATE TABLE subscriptions (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bread_slug    TEXT,
+  bread_name    TEXT,
+  bread_price   DECIMAL(10, 2),
+  weeks         INT,
+  days          TEXT[],          -- e.g. {'mon','wed','fri'}
+  slot_mode     TEXT,            -- 'same' | 'custom'
+  slot          TEXT,            -- set when slot_mode = 'same'
+  slots_by_day  JSONB,           -- set when slot_mode = 'custom', e.g. {"mon":"6:00 – 8:00 AM"}
+  total         DECIMAL(10, 2),
+  status        TEXT DEFAULT 'pending',
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+
 -- Enable Row Level Security
 ALTER TABLE customers       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blog_posts      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE store_locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subscriptions   ENABLE ROW LEVEL SECURITY;
