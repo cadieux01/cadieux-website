@@ -9,7 +9,8 @@ const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
 
 const GOLD = "201,169,110";
 
-type Step = "intro" | "weeks" | "days" | "time" | "summary";
+type Step = "intro" | "weeks" | "days" | "time-mode" | "time" | "summary";
+type SlotMode = "same" | "custom";
 
 const WEEK_OPTIONS = [
   { weeks: 1, label: "1 Week", sub: "Single trial run" },
@@ -57,7 +58,12 @@ function SubscriptionInner() {
   const [step, setStep] = useState<Step>(product ? "weeks" : "intro");
   const [weeks, setWeeks] = useState<number | null>(null);
   const [days, setDays] = useState<string[]>([]);
+  // Same-window-for-all-days mode
   const [slot, setSlot] = useState<string | null>(null);
+  // Per-day-window mode: { mon: "6:00 – 8:00 AM", wed: "8:00 – 10:00 AM", ... }
+  const [slotsByDay, setSlotsByDay] = useState<Record<string, string>>({});
+  const [slotMode, setSlotMode] = useState<SlotMode | null>(null);
+  const [timeDayIndex, setTimeDayIndex] = useState(0);
 
   function toggleDay(key: string) {
     setDays((prev) => (prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]));
@@ -68,9 +74,38 @@ function SubscriptionInner() {
     setWeeks(null);
     setDays([]);
     setSlot(null);
+    setSlotsByDay({});
+    setSlotMode(null);
+    setTimeDayIndex(0);
   }
 
-  const stepIndex = { intro: 0, weeks: 1, days: 2, time: 3, summary: 4 }[step];
+  // After picking days, branch: 1 day → straight to single picker, 2+ days → ask
+  // whether to apply one window to all days or pick per-day.
+  function continueFromDays() {
+    if (days.length > 1) {
+      setStep("time-mode");
+    } else {
+      setSlotMode("same");
+      setStep("time");
+    }
+  }
+
+  // Time-step "Back" needs to know whether we came from time-mode or days.
+  function backFromTime() {
+    if (slotMode === "custom" && timeDayIndex > 0) {
+      setTimeDayIndex(timeDayIndex - 1);
+      return;
+    }
+    if (days.length > 1) {
+      setStep("time-mode");
+    } else {
+      setStep("days");
+    }
+  }
+
+  // "time-mode" and "time" share progress-dot index 3 — the user thinks of
+  // "picking time" as one phase regardless of mode.
+  const stepIndex = { intro: 0, weeks: 1, days: 2, "time-mode": 3, time: 3, summary: 4 }[step];
 
   const dayLabels = days
     .map((k) => DAYS.find((d) => d.key === k)?.label || "")
@@ -254,7 +289,7 @@ function SubscriptionInner() {
             <button
               type="button"
               disabled={days.length === 0}
-              onClick={() => setStep("time")}
+              onClick={continueFromDays}
               className="cdx-sub-next"
               style={{
                 marginTop: 16,
@@ -277,12 +312,44 @@ function SubscriptionInner() {
           </Section>
         )}
 
-        {/* STEP 3 — TIME */}
-        {step === "time" && (
+        {/* STEP 3a — TIME MODE (only when 2+ days are picked) */}
+        {step === "time-mode" && (
+          <Section
+            title="Same time, or per day?"
+            sub={`You picked ${days.length} delivery days`}
+            onBack={() => setStep("days")}
+          >
+            <OptionRow
+              selected={slotMode === "same"}
+              onClick={() => {
+                setSlotMode("same");
+                setSlotsByDay({});
+                setTimeDayIndex(0);
+                setStep("time");
+              }}
+              title="Same window for all days"
+              sub="One 2-hour slot applies to every delivery"
+            />
+            <OptionRow
+              selected={slotMode === "custom"}
+              onClick={() => {
+                setSlotMode("custom");
+                setSlot(null);
+                setTimeDayIndex(0);
+                setStep("time");
+              }}
+              title="Customize per day"
+              sub="Pick a different 2-hour slot for each day"
+            />
+          </Section>
+        )}
+
+        {/* STEP 3b — TIME (single picker, or per-day depending on slotMode) */}
+        {step === "time" && slotMode === "same" && (
           <Section
             title="Pick a delivery window"
             sub="Each slot is a 2-hour period"
-            onBack={() => setStep("days")}
+            onBack={backFromTime}
           >
             {SLOTS.map((s) => (
               <OptionRow
@@ -296,6 +363,38 @@ function SubscriptionInner() {
           </Section>
         )}
 
+        {step === "time" && slotMode === "custom" && (() => {
+          const dayKey = days[timeDayIndex];
+          const dayLabel = DAYS.find((d) => d.key === dayKey)?.label || "";
+          const isLast = timeDayIndex === days.length - 1;
+          const currentSlot = slotsByDay[dayKey] || null;
+          return (
+            <Section
+              title={`Window for ${dayLabel}`}
+              sub={`Day ${timeDayIndex + 1} of ${days.length}`}
+              onBack={backFromTime}
+            >
+              {SLOTS.map((s) => (
+                <OptionRow
+                  key={s}
+                  selected={currentSlot === s}
+                  onClick={() => {
+                    const next = { ...slotsByDay, [dayKey]: s };
+                    setSlotsByDay(next);
+                    if (isLast) {
+                      setStep("summary");
+                    } else {
+                      setTimeDayIndex(timeDayIndex + 1);
+                    }
+                  }}
+                  title={s}
+                  sub="2-hour window"
+                />
+              ))}
+            </Section>
+          );
+        })()}
+
         {/* STEP 4 — SUMMARY */}
         {step === "summary" && (
           <Section
@@ -306,7 +405,33 @@ function SubscriptionInner() {
             {product && <SummaryRow label="Bread" value={`${product.title} · ₹${product.price}`} />}
             <SummaryRow label="Duration" value={`${weeks} ${weeks === 1 ? "week" : "weeks"}`} />
             <SummaryRow label="Days" value={dayLabels.join(", ")} />
-            <SummaryRow label="Window" value={slot || ""} />
+            {slotMode === "custom" ? (
+              <div style={{
+                display: "flex", flexDirection: "column",
+                padding: "14px 0",
+                borderBottom: "1px solid rgba(240,223,200,0.08)",
+                gap: 10,
+              }}>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
+                  Windows
+                </span>
+                {days.map((k) => {
+                  const label = DAYS.find((d) => d.key === k)?.label || "";
+                  return (
+                    <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300, color: "rgba(240,223,200,0.65)", letterSpacing: "0.04em" }}>
+                        {label}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#f5f0e8", letterSpacing: "0.02em" }}>
+                        {slotsByDay[k] || "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <SummaryRow label="Window" value={slot || ""} />
+            )}
             {product && (
               <div style={{
                 marginTop: 8,
