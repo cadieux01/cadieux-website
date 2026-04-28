@@ -37,6 +37,7 @@ export default function VideoIntro({ onDone }: { onDone: () => void }) {
         autoPlay
         muted
         playsInline
+        preload="metadata"
         style={{
           position: "absolute",
           inset: 0,

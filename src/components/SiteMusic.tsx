@@ -45,7 +45,7 @@ export default function SiteMusic() {
 
   return (
     <>
-      <audio ref={audioRef} src="/background-music.mp3" loop preload="auto" />
+      <audio ref={audioRef} src="/background-music.mp3" loop preload="none" />
       <button
         onClick={() => setMuted(m => !m)}
         aria-label={muted ? "Unmute music" : "Mute music"}

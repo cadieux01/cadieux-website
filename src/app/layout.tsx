@@ -46,9 +46,10 @@ export default function RootLayout({
       <head>
         {/* Preload only the loading-screen video — it gates first paint.
             Other section videos load on their own with preload="metadata"
-            so we don't blow the network budget on first visit. */}
+            so we don't blow the network budget on first visit.
+            hero.jpg is 3.2 MB and only used on /shop/[slug] — load it on
+            demand there, not on every visit. */}
         <link rel="preload" as="video" href="/logo-intro.mp4" type="video/mp4" />
-        <link rel="preload" as="image" href="/hero.jpg" />
       </head>
       <body className="font-body" suppressHydrationWarning>
         <CartProvider>
