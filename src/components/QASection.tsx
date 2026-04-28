@@ -261,21 +261,6 @@ export default function QASection() {
             ))}
           </p>
 
-          {/* Slice indicator dots — quiet hint that there are more Q&As. */}
-          <div style={{ display: "flex", gap: 8, marginTop: 36 }}>
-            {QAS.map((_, i) => (
-              <span
-                key={i}
-                style={{
-                  width: i === active ? 18 : 6,
-                  height: 6,
-                  borderRadius: 999,
-                  background: i === active ? "#c9a96e" : "rgba(251,243,212,0.35)",
-                  transition: "all 0.4s cubic-bezier(0.19,1,0.22,1)",
-                }}
-              />
-            ))}
-          </div>
         </div>
 
         {/* Dark fade out → Phase 3 */}
