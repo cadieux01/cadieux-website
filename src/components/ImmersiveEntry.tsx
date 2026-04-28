@@ -114,20 +114,6 @@ export default function ImmersiveEntry() {
           </div>
         )}
 
-        {/* Mobile progress dots */}
-        {isMobile && (
-          <div style={{ position: "absolute", bottom: 28, right: 20, zIndex: 10,
-            display: "flex", flexDirection: "column" as const, gap: 6, pointerEvents: "none" }}>
-            {[0, 1, 2].map(i => (
-              <div key={i} style={{
-                width: 3, height: 3, borderRadius: "50%",
-                background: si === i ? "#c8903a" : "rgba(200,144,58,0.25)",
-                transition: "background 0.4s",
-              }} />
-            ))}
-          </div>
-        )}
-
         {/* Packshot overlay */}
         <div style={{
           position: "absolute",
