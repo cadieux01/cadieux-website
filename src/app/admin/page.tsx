@@ -1107,10 +1107,13 @@ function FeedbackSection({ reviews, onChanged }: { reviews: Review[]; onChanged:
         method: "DELETE",
         headers: { "x-admin-token": adminToken },
       });
-      if (!r.ok) throw new Error("delete failed");
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${r.status}`);
+      }
       onChanged();
-    } catch (e) {
-      alert("Failed to delete review");
+    } catch (e: any) {
+      alert(`Failed to delete review: ${e?.message ?? e}`);
     } finally {
       setBusy((b) => ({ ...b, [id]: false }));
     }
@@ -1123,10 +1126,13 @@ function FeedbackSection({ reviews, onChanged }: { reviews: Review[]; onChanged:
         method: "DELETE",
         headers: { "x-admin-token": adminToken },
       });
-      if (!r.ok) throw new Error("delete failed");
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${r.status}`);
+      }
       onChanged();
-    } catch {
-      alert("Failed to delete reply");
+    } catch (e: any) {
+      alert(`Failed to delete reply: ${e?.message ?? e}`);
     }
   };
 
