@@ -96,6 +96,7 @@ export default function Nav() {
             { label: "Subscription",        action: () => nav("/subscription") },
             { label: "How We Bake",         action: () => nav("/making") },
             { label: "Blogs",               action: () => nav("/blogs") },
+            { label: "Feedback & Reviews",  action: () => nav("/feedback") },
             { label: "Reports",             action: () => nav("/reports") },
             { label: "Store Locator",       action: () => nav("/store-locator") },
             { label: "Connect with Cadieux", action: () => nav("/connect") },

@@ -65,14 +65,11 @@ export type ProductSlug = "multigrain" | "plain";
 export type ProductMedia = { type: "video" | "image"; src: string; alt?: string };
 export type ProductIngredient = { name: string; role: string };
 export type ProductTestReport = { metric: string; value: string; note?: string };
-export type ProductReview = { name: string; rating: number; date: string; body: string };
-
 export type ProductDetail = {
   description: string[];
   media: ProductMedia[];
   ingredients: ProductIngredient[];
   testReports: ProductTestReport[];
-  reviews: ProductReview[];
 };
 
 export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
@@ -104,12 +101,6 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
       { metric: "Added sugar", value: "0 g", note: "Verified — no refined sugar added" },
       { metric: "Glycaemic index", value: "Low (54)", note: "Independent GI testing · 2026" },
     ],
-    reviews: [
-      { name: "Anjali R.", rating: 5, date: "Apr 2026", body: "Replaced our daily bread with this three weeks ago. Mornings feel different — no mid-morning crash, kids actually ask for seconds." },
-      { name: "Harish N.", rating: 5, date: "Apr 2026", body: "Dense, hearty, and holds up to everything. I train 5 days a week and the protein math just works. Great texture." },
-      { name: "Meera K.", rating: 4, date: "Mar 2026", body: "Love the flavour and the seeds. Slightly darker than I expected but that turned out to be a good thing." },
-      { name: "Vikram S.", rating: 5, date: "Mar 2026", body: "You can tell this is made carefully. Smells like real bread, not a factory. Worth every rupee." },
-    ],
   },
   plain: {
     description: [
@@ -137,12 +128,6 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
       { metric: "Net weight", value: "400 g", note: "Per packet · verified on line" },
       { metric: "Added sugar", value: "0 g", note: "Trace honey for ferment only" },
       { metric: "Slices per loaf", value: "10", note: "Precision-cut on every bake" },
-    ],
-    reviews: [
-      { name: "Deepa M.", rating: 5, date: "Apr 2026", body: "Finally a sandwich bread that's actually nourishing. Toasts beautifully, holds butter, and doesn't fall apart." },
-      { name: "Arjun T.", rating: 5, date: "Apr 2026", body: "Kids don't even notice it's healthier. That's the win. Subscribed for weekly delivery." },
-      { name: "Priya L.", rating: 4, date: "Mar 2026", body: "Soft, clean, and the protein hits. Wish the loaf was slightly bigger but quality is top-notch." },
-      { name: "Rohit B.", rating: 5, date: "Mar 2026", body: "Gym bag essential. Two slices post-workout and I'm set. Tastes way better than powder toast." },
     ],
   },
 };

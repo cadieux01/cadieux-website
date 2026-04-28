@@ -64,9 +64,40 @@ CREATE TABLE subscriptions (
   created_at        TIMESTAMPTZ DEFAULT now()
 );
 
+-- Reviews (per-product or general feedback)
+CREATE TABLE reviews (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_slug  TEXT,                       -- 'multigrain' | 'plain' | NULL (general feedback)
+  author_name   TEXT NOT NULL,
+  rating        SMALLINT,                   -- 1..5; NULL allowed for general feedback
+  body          TEXT NOT NULL,
+  likes_count   INTEGER NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX reviews_product_slug_idx ON reviews(product_slug);
+CREATE INDEX reviews_created_at_idx   ON reviews(created_at DESC);
+
+-- Replies under each review (one level deep, anyone can post)
+CREATE TABLE review_replies (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  review_id    UUID NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  author_name  TEXT NOT NULL,
+  is_admin     BOOLEAN NOT NULL DEFAULT false,
+  body         TEXT NOT NULL,
+  likes_count  INTEGER NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX review_replies_review_id_idx ON review_replies(review_id);
+
 -- Enable Row Level Security
 ALTER TABLE customers       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blog_posts      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE store_locations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reviews         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE review_replies  ENABLE ROW LEVEL SECURITY;
+
+-- Public read access for reviews + replies; all writes go via service-role API routes
+CREATE POLICY "reviews public read" ON reviews        FOR SELECT USING (true);
+CREATE POLICY "replies public read" ON review_replies FOR SELECT USING (true);

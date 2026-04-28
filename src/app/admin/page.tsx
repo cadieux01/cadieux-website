@@ -40,7 +40,28 @@ type Subscription = {
   created_at: string;
 };
 
-type Section = "orders" | "subscriptions";
+type Section = "orders" | "subscriptions" | "feedback";
+
+type Reply = {
+  id: string;
+  review_id: string;
+  author_name: string;
+  is_admin: boolean;
+  body: string;
+  likes_count: number;
+  created_at: string;
+};
+
+type Review = {
+  id: string;
+  product_slug: string | null;
+  author_name: string;
+  rating: number | null;
+  body: string;
+  likes_count: number;
+  created_at: string;
+  replies: Reply[];
+};
 
 const DAY_LABELS: Record<string, string> = {
   mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun",
@@ -187,6 +208,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
 function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -215,9 +237,20 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
   }, []);
 
+  const fetchReviews = useCallback(async () => {
+    try {
+      const r = await fetch("/api/reviews", { cache: "no-store" });
+      const j = await r.json();
+      if (r.ok) setReviews(j.reviews ?? []);
+    } catch {
+      /* silent */
+    }
+  }, []);
+
   useEffect(() => {
     fetchOrders();
     fetchSubscriptions();
+    fetchReviews();
 
     const channel = supabase
       .channel("orders-admin")
@@ -235,6 +268,20 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           fetchSubscriptions();
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reviews" },
+        () => {
+          fetchReviews();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "review_replies" },
+        () => {
+          fetchReviews();
+        }
+      )
       .subscribe((status) => {
         setConnected(status === "SUBSCRIBED");
       });
@@ -242,7 +289,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchOrders, fetchSubscriptions]);
+  }, [fetchOrders, fetchSubscriptions, fetchReviews]);
 
   const updateStatus = async (order: Order, newStatus: Status) => {
     const prev = orders;
@@ -418,6 +465,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             {([
               { key: "orders", label: "General Payments" },
               { key: "subscriptions", label: "Subscriptions" },
+              { key: "feedback", label: "Feedback" },
             ] as { key: Section; label: string }[]).map(({ key, label }) => (
               <button
                 key={key}
@@ -562,6 +610,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           subscriptions={subscriptions}
           onChanged={fetchSubscriptions}
         />
+      )}
+
+      {section === "feedback" && (
+        <FeedbackSection reviews={reviews} onChanged={fetchReviews} />
       )}
 
       {editingOrder && (
@@ -1038,5 +1090,222 @@ function Field({
       </span>
       {multiline ? <textarea rows={2} {...common} /> : <input type="text" {...common} />}
     </label>
+  );
+}
+
+function FeedbackSection({ reviews, onChanged }: { reviews: Review[]; onChanged: () => void }) {
+  const [replyDraft, setReplyDraft] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+
+  const adminToken = PASSWORD;
+
+  const deleteReview = async (id: string) => {
+    if (!confirm("Delete this review and all its replies?")) return;
+    setBusy((b) => ({ ...b, [id]: true }));
+    try {
+      const r = await fetch(`/api/reviews/${id}`, {
+        method: "DELETE",
+        headers: { "x-admin-token": adminToken },
+      });
+      if (!r.ok) throw new Error("delete failed");
+      onChanged();
+    } catch (e) {
+      alert("Failed to delete review");
+    } finally {
+      setBusy((b) => ({ ...b, [id]: false }));
+    }
+  };
+
+  const deleteReply = async (reviewId: string, replyId: string) => {
+    if (!confirm("Delete this reply?")) return;
+    try {
+      const r = await fetch(`/api/reviews/${reviewId}/replies/${replyId}`, {
+        method: "DELETE",
+        headers: { "x-admin-token": adminToken },
+      });
+      if (!r.ok) throw new Error("delete failed");
+      onChanged();
+    } catch {
+      alert("Failed to delete reply");
+    }
+  };
+
+  const submitReply = async (reviewId: string) => {
+    const body = (replyDraft[reviewId] ?? "").trim();
+    if (!body) return;
+    setBusy((b) => ({ ...b, [`reply-${reviewId}`]: true }));
+    try {
+      const r = await fetch(`/api/reviews/${reviewId}/replies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+        body: JSON.stringify({ author_name: "Cadieux", body, is_admin: true }),
+      });
+      if (!r.ok) throw new Error("post failed");
+      setReplyDraft((d) => ({ ...d, [reviewId]: "" }));
+      onChanged();
+    } catch {
+      alert("Failed to post reply");
+    } finally {
+      setBusy((b) => ({ ...b, [`reply-${reviewId}`]: false }));
+    }
+  };
+
+  return (
+    <section className="px-8 py-8">
+      <h2
+        className="uppercase mb-6"
+        style={{
+          fontFamily: "var(--font-heading)",
+          fontSize: "1.25rem",
+          letterSpacing: "0.3em",
+          color: "#fbf3d4",
+          fontWeight: 300,
+        }}
+      >
+        Feedback
+      </h2>
+      {reviews.length === 0 ? (
+        <p style={{ color: "rgba(192,200,206,0.5)", fontFamily: "var(--font-body)", fontSize: "0.85rem" }}>
+          No feedback yet.
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {reviews.map((rev) => (
+            <div
+              key={rev.id}
+              style={{
+                padding: 18,
+                background: "rgba(10,8,5,0.5)",
+                border: "1px solid rgba(245,158,11,0.18)",
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <strong style={{ color: "#fbf3d4", fontFamily: "var(--font-heading)", fontSize: "1rem", fontWeight: 500 }}>{rev.author_name}</strong>
+                  {rev.product_slug && (
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: "0.6rem", letterSpacing: "0.25em", textTransform: "uppercase", color: "#c9a96e", border: "1px solid rgba(201,169,110,0.4)", borderRadius: 99, padding: "2px 8px" }}>
+                      {rev.product_slug}
+                    </span>
+                  )}
+                  {rev.rating != null && (
+                    <span style={{ color: "#c9a96e", fontFamily: "var(--font-body)", fontSize: "0.85rem" }}>
+                      {"★".repeat(rev.rating)}{"☆".repeat(5 - rev.rating)}
+                    </span>
+                  )}
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: "0.7rem", color: "rgba(192,200,206,0.5)" }}>
+                    ♥ {rev.likes_count}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: "0.7rem", color: "rgba(192,200,206,0.5)" }}>
+                    {new Date(rev.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                  <button
+                    onClick={() => deleteReview(rev.id)}
+                    disabled={busy[rev.id]}
+                    className="uppercase"
+                    style={{
+                      border: "1px solid rgba(239,68,68,0.5)",
+                      color: "#ef4444",
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.6rem",
+                      letterSpacing: "0.2em",
+                      padding: "4px 10px",
+                      background: "transparent",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <p style={{ margin: 0, color: "rgba(251,243,212,0.85)", fontFamily: "var(--font-body)", fontSize: "0.85rem", lineHeight: 1.6 }}>
+                {rev.body}
+              </p>
+
+              {rev.replies.length > 0 && (
+                <div style={{ marginTop: 12, paddingLeft: 14, borderLeft: "1px solid rgba(245,158,11,0.2)", display: "flex", flexDirection: "column", gap: 8 }}>
+                  {rev.replies.map((rp) => (
+                    <div key={rp.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 2 }}>
+                          <strong style={{ color: "#fbf3d4", fontFamily: "var(--font-heading)", fontSize: "0.85rem" }}>{rp.author_name}</strong>
+                          {rp.is_admin && (
+                            <span style={{ fontFamily: "var(--font-body)", fontSize: "0.55rem", letterSpacing: "0.25em", textTransform: "uppercase", color: "#FBF3D4", background: "rgba(201,169,110,0.22)", border: "1px solid rgba(201,169,110,0.5)", borderRadius: 99, padding: "1px 7px" }}>
+                              Cadieux Team
+                            </span>
+                          )}
+                          <span style={{ fontFamily: "var(--font-body)", fontSize: "0.65rem", color: "rgba(192,200,206,0.4)" }}>
+                            ♥ {rp.likes_count}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, color: "rgba(251,243,212,0.78)", fontFamily: "var(--font-body)", fontSize: "0.78rem", lineHeight: 1.55 }}>
+                          {rp.body}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => deleteReply(rev.id, rp.id)}
+                        className="uppercase"
+                        style={{
+                          border: "1px solid rgba(239,68,68,0.4)",
+                          color: "#ef4444",
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.55rem",
+                          letterSpacing: "0.2em",
+                          padding: "2px 8px",
+                          background: "transparent",
+                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <textarea
+                  value={replyDraft[rev.id] ?? ""}
+                  onChange={(e) => setReplyDraft((d) => ({ ...d, [rev.id]: e.target.value }))}
+                  placeholder="Reply as Cadieux..."
+                  rows={2}
+                  style={{
+                    flex: 1,
+                    padding: "8px 10px",
+                    background: "rgba(6,4,2,0.6)",
+                    border: "1px solid rgba(245,158,11,0.25)",
+                    borderRadius: 4,
+                    color: "#fbf3d4",
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.8rem",
+                    resize: "vertical",
+                  }}
+                />
+                <button
+                  onClick={() => submitReply(rev.id)}
+                  disabled={busy[`reply-${rev.id}`]}
+                  className="uppercase"
+                  style={{
+                    border: "1px solid rgba(245,158,11,0.5)",
+                    color: "#f59e0b",
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.65rem",
+                    letterSpacing: "0.25em",
+                    padding: "8px 14px",
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  Reply
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

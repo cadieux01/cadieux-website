@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { notFound, useParams, useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   PRODUCTS,
   PRODUCT_DETAILS,
   type ProductSlug,
   type ProductMedia,
-  type ProductReview,
 } from "@/lib/data";
 import { useCart } from "@/context/CartContext";
+import ReviewSection from "@/components/ReviewSection";
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
@@ -32,12 +32,6 @@ export default function ProductDetailPage() {
   const [added, setAdded] = useState(false);
   const { addToCart } = useCart();
   const router = useRouter();
-
-  const avgRating = useMemo(() => {
-    if (!detail) return 0;
-    const sum = detail.reviews.reduce((a, r) => a + r.rating, 0);
-    return sum / detail.reviews.length;
-  }, [detail]);
 
   if (!slug || !product || !detail) {
     notFound();
@@ -404,37 +398,7 @@ export default function ProductDetailPage() {
 
         {/* Reviews */}
         <Section label="What customers say" title="Customer Reviews">
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32, flexWrap: "wrap" }}>
-            <Stars rating={avgRating} size={18} />
-            <div
-              style={{
-                fontFamily: "var(--font-heading)",
-                fontSize: 22,
-                color: "#FBF3D4",
-                fontWeight: 500,
-              }}
-            >
-              {avgRating.toFixed(1)}
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: 11,
-                fontWeight: 300,
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                color: "rgba(245,240,232,0.5)",
-              }}
-            >
-              {detail.reviews.length} verified reviews
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {detail.reviews.map((rev, i) => (
-              <ReviewRow key={i} review={rev} />
-            ))}
-          </div>
+          <ReviewSection productSlug={slug} scope="product" />
         </Section>
       </div>
 
@@ -713,67 +677,4 @@ function Section({ label, title, children }: { label: string; title: string; chi
   );
 }
 
-function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
-  return (
-    <div style={{ display: "inline-flex", gap: 2, color: "#c9a96e", fontSize: size, lineHeight: 1 }}>
-      {[0, 1, 2, 3, 4].map((i) => (
-        <span key={i} style={{ opacity: rating >= i + 1 ? 1 : rating >= i + 0.5 ? 0.7 : 0.25 }}>
-          ★
-        </span>
-      ))}
-    </div>
-  );
-}
 
-function ReviewRow({ review }: { review: ProductReview }) {
-  return (
-    <div
-      style={{
-        padding: "22px 22px",
-        background: "rgba(10,8,5,0.4)",
-        border: "0.5px solid rgba(201,169,110,0.14)",
-        borderRadius: 10,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              fontFamily: "var(--font-heading)",
-              fontSize: 17,
-              fontWeight: 500,
-              color: "#FBF3D4",
-            }}
-          >
-            {review.name}
-          </div>
-          <Stars rating={review.rating} />
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 10,
-            fontWeight: 300,
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-            color: "rgba(245,240,232,0.4)",
-          }}
-        >
-          {review.date}
-        </div>
-      </div>
-      <p
-        style={{
-          margin: 0,
-          fontFamily: "var(--font-body)",
-          fontSize: 13,
-          lineHeight: 1.7,
-          fontWeight: 300,
-          color: "rgba(251, 243, 212, 0.72)",
-        }}
-      >
-        {review.body}
-      </p>
-    </div>
-  );
-}
