@@ -393,11 +393,34 @@ function SubscriptionInner() {
               <OptionRow
                 key={s}
                 selected={slot === s}
-                onClick={() => { setSlot(s); setStep("summary"); }}
+                onClick={() => setSlot(s)}
                 title={s}
                 sub="2-hour window"
               />
             ))}
+            <button
+              type="button"
+              disabled={!slot}
+              onClick={() => setStep("summary")}
+              className="cdx-sub-next"
+              style={{
+                marginTop: 16,
+                width: "100%",
+                background: !slot ? "transparent" : `rgba(${GOLD},0.12)`,
+                border: `1px solid rgba(${GOLD},${!slot ? 0.25 : 0.65})`,
+                borderRadius: 10,
+                padding: "14px 18px",
+                fontFamily: "var(--font-body)",
+                fontSize: 11, fontWeight: 400,
+                letterSpacing: "0.3em", textTransform: "uppercase",
+                color: !slot ? "rgba(240,223,200,0.3)" : `rgba(${GOLD},0.95)`,
+                cursor: !slot ? "not-allowed" : "pointer",
+                transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              Continue →
+            </button>
           </Section>
         )}
 
@@ -416,19 +439,37 @@ function SubscriptionInner() {
                 <OptionRow
                   key={s}
                   selected={currentSlot === s}
-                  onClick={() => {
-                    const next = { ...slotsByDay, [dayKey]: s };
-                    setSlotsByDay(next);
-                    if (isLast) {
-                      setStep("summary");
-                    } else {
-                      setTimeDayIndex(timeDayIndex + 1);
-                    }
-                  }}
+                  onClick={() => setSlotsByDay({ ...slotsByDay, [dayKey]: s })}
                   title={s}
                   sub="2-hour window"
                 />
               ))}
+              <button
+                type="button"
+                disabled={!currentSlot}
+                onClick={() => {
+                  if (isLast) setStep("summary");
+                  else setTimeDayIndex(timeDayIndex + 1);
+                }}
+                className="cdx-sub-next"
+                style={{
+                  marginTop: 16,
+                  width: "100%",
+                  background: !currentSlot ? "transparent" : `rgba(${GOLD},0.12)`,
+                  border: `1px solid rgba(${GOLD},${!currentSlot ? 0.25 : 0.65})`,
+                  borderRadius: 10,
+                  padding: "14px 18px",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 11, fontWeight: 400,
+                  letterSpacing: "0.3em", textTransform: "uppercase",
+                  color: !currentSlot ? "rgba(240,223,200,0.3)" : `rgba(${GOLD},0.95)`,
+                  cursor: !currentSlot ? "not-allowed" : "pointer",
+                  transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                {isLast ? "Review →" : `Next: ${DAYS.find((d) => d.key === days[timeDayIndex + 1])?.label || ""} →`}
+              </button>
             </Section>
           );
         })()}
