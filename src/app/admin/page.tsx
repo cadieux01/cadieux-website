@@ -31,9 +31,16 @@ type Subscription = {
   slot: string | null;
   slots_by_day: Record<string, string> | null;
   total: number | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_address: string | null;
+  customer_city: string | null;
+  customer_pincode: string | null;
   status: string | null;
   created_at: string;
 };
+
+type Section = "orders" | "subscriptions";
 
 const DAY_LABELS: Record<string, string> = {
   mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun",
@@ -184,6 +191,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [loading, setLoading] = useState(true);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [sendStates, setSendStates] = useState<Record<string, SendState>>({});
+  const [section, setSection] = useState<Section>("orders");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -199,7 +208,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const fetchSubscriptions = useCallback(async () => {
     const { data, error } = await supabase
       .from("subscriptions")
-      .select("id, bread_slug, bread_name, bread_price, weeks, days, slot_mode, slot, slots_by_day, total, status, created_at")
+      .select("id, bread_slug, bread_name, bread_price, weeks, days, slot_mode, slot, slots_by_day, total, customer_name, customer_phone, customer_address, customer_city, customer_pincode, status, created_at")
       .order("created_at", { ascending: false });
     if (!error && data) {
       setSubscriptions(data as unknown as Subscription[]);
@@ -311,18 +320,41 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         className="flex items-center justify-between px-8 py-6"
         style={{ borderBottom: "1px solid rgba(245, 158, 11, 0.15)" }}
       >
-        <h1
-          className="uppercase"
-          style={{
-            fontFamily: "var(--font-heading)",
-            fontSize: "1.75rem",
-            letterSpacing: "0.3em",
-            color: "#fbf3d4",
-            fontWeight: 300,
-          }}
-        >
-          Admin
-        </h1>
+        <div className="flex items-center gap-5">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Menu"
+            style={{
+              display: "flex", flexDirection: "column", gap: 5,
+              background: "transparent", border: "none", padding: 6,
+              cursor: "pointer",
+            }}
+          >
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                style={{
+                  display: "block", width: 24, height: 2,
+                  background: menuOpen ? "rgba(245,158,11,0.9)" : "rgba(245,158,11,0.55)",
+                  transition: "background 200ms ease",
+                }}
+              />
+            ))}
+          </button>
+          <h1
+            className="uppercase"
+            style={{
+              fontFamily: "var(--font-heading)",
+              fontSize: "1.75rem",
+              letterSpacing: "0.3em",
+              color: "#fbf3d4",
+              fontWeight: 300,
+            }}
+          >
+            Admin
+          </h1>
+        </div>
         <div className="flex items-center gap-6">
           <div
             className="flex items-center gap-2"
@@ -354,7 +386,81 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         </div>
       </header>
 
+      {menuOpen && (
+        <>
+          <div
+            onClick={() => setMenuOpen(false)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 30,
+              background: "rgba(0,0,0,0.55)",
+            }}
+          />
+          <nav
+            style={{
+              position: "fixed", top: 0, left: 0, zIndex: 40,
+              width: "min(280px, 80vw)", height: "100vh",
+              background: "rgb(6,4,2)",
+              borderRight: "1px solid rgba(245, 158, 11, 0.2)",
+              padding: "100px 24px 24px",
+              display: "flex", flexDirection: "column", gap: 4,
+            }}
+          >
+            <p
+              className="uppercase"
+              style={{
+                fontFamily: "var(--font-body)", fontSize: "0.6rem",
+                letterSpacing: "0.3em", color: "rgba(245,158,11,0.55)",
+                marginBottom: 14,
+              }}
+            >
+              Dashboard
+            </p>
+            {([
+              { key: "orders", label: "General Payments" },
+              { key: "subscriptions", label: "Subscriptions" },
+            ] as { key: Section; label: string }[]).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => { setSection(key); setMenuOpen(false); }}
+                className="uppercase"
+                style={{
+                  textAlign: "left",
+                  padding: "12px 0",
+                  borderBottom: "1px solid rgba(245, 158, 11, 0.1)",
+                  background: "transparent",
+                  border: "none",
+                  borderBottomStyle: "solid",
+                  borderBottomWidth: 1,
+                  borderBottomColor: "rgba(245, 158, 11, 0.1)",
+                  color: section === key ? "#fbf3d4" : "rgba(251,243,212,0.5)",
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.8rem",
+                  letterSpacing: "0.2em",
+                  cursor: "pointer",
+                  transition: "color 200ms ease",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        </>
+      )}
+
+      {section === "orders" && (
       <section className="px-8 py-8">
+        <h2
+          className="uppercase mb-6"
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontSize: "1.25rem",
+            letterSpacing: "0.3em",
+            color: "#fbf3d4",
+            fontWeight: 300,
+          }}
+        >
+          General Payments
+        </h2>
         {loading ? (
           <p style={{ color: "rgba(192,200,206,0.5)", fontFamily: "var(--font-body)", fontSize: "0.85rem" }}>
             Loading orders…
@@ -449,11 +555,14 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           </div>
         )}
       </section>
+      )}
 
-      <SubscriptionsSection
-        subscriptions={subscriptions}
-        onChanged={fetchSubscriptions}
-      />
+      {section === "subscriptions" && (
+        <SubscriptionsSection
+          subscriptions={subscriptions}
+          onChanged={fetchSubscriptions}
+        />
+      )}
 
       {editingOrder && (
         <EditCustomerModal
@@ -485,7 +594,7 @@ function SubscriptionsSection({
   };
 
   return (
-    <section className="px-8 pb-12" style={{ borderTop: "1px solid rgba(245, 158, 11, 0.15)", paddingTop: "2rem" }}>
+    <section className="px-8 py-8">
       <h2
         className="uppercase mb-6"
         style={{
@@ -511,6 +620,9 @@ function SubscriptionsSection({
             <thead>
               <tr style={{ color: "rgba(245,158,11,0.8)", letterSpacing: "0.2em", textTransform: "uppercase", fontSize: "0.65rem" }}>
                 <Th>Sub ID</Th>
+                <Th>Customer</Th>
+                <Th>Phone</Th>
+                <Th>Address</Th>
                 <Th>Bread</Th>
                 <Th>Weeks</Th>
                 <Th>Days</Th>
@@ -527,9 +639,14 @@ function SubscriptionsSection({
                 const displayNumber = String(subscriptions.length - i).padStart(5, "0");
                 const dayList = (s.days ?? []).map((k) => DAY_LABELS[k] ?? k).join(", ");
                 const timings = formatTimings(s);
+                const fullAddress = [s.customer_address, s.customer_city, s.customer_pincode]
+                  .filter(Boolean).join(", ");
                 return (
                   <tr key={s.id} style={{ borderTop: "1px solid rgba(245, 158, 11, 0.12)" }}>
                     <Td mono>{displayNumber}</Td>
+                    <Td>{s.customer_name ?? "—"}</Td>
+                    <Td>{s.customer_phone ?? "—"}</Td>
+                    <Td>{fullAddress || "—"}</Td>
                     <Td>
                       {s.bread_name ?? "—"}
                       {s.bread_price != null && (

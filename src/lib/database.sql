@@ -45,18 +45,23 @@ CREATE TABLE store_locations (
 
 -- Subscriptions (recurring bread deliveries)
 CREATE TABLE subscriptions (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  bread_slug    TEXT,
-  bread_name    TEXT,
-  bread_price   DECIMAL(10, 2),
-  weeks         INT,
-  days          TEXT[],          -- e.g. {'mon','wed','fri'}
-  slot_mode     TEXT,            -- 'same' | 'custom'
-  slot          TEXT,            -- set when slot_mode = 'same'
-  slots_by_day  JSONB,           -- set when slot_mode = 'custom', e.g. {"mon":"6:00 – 8:00 AM"}
-  total         DECIMAL(10, 2),
-  status        TEXT DEFAULT 'pending',
-  created_at    TIMESTAMPTZ DEFAULT now()
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bread_slug        TEXT,
+  bread_name        TEXT,
+  bread_price       DECIMAL(10, 2),
+  weeks             INT,
+  days              TEXT[],          -- e.g. {'mon','wed','fri'}
+  slot_mode         TEXT,            -- 'same' | 'custom'
+  slot              TEXT,            -- set when slot_mode = 'same'
+  slots_by_day      JSONB,           -- set when slot_mode = 'custom', e.g. {"mon":"6:00 – 8:00 AM"}
+  total             DECIMAL(10, 2),
+  customer_name     TEXT,
+  customer_phone    TEXT,
+  customer_address  TEXT,
+  customer_city     TEXT,
+  customer_pincode  TEXT,
+  status            TEXT DEFAULT 'pending',
+  created_at        TIMESTAMPTZ DEFAULT now()
 );
 
 -- Enable Row Level Security
