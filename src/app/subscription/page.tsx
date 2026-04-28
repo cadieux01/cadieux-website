@@ -408,7 +408,7 @@ function SubscriptionInner() {
           const currentSlot = slotsByDay[dayKey] || null;
           return (
             <Section
-              title={`Window for ${dayLabel}`}
+              title={`Timings for ${dayLabel}`}
               sub={`Day ${timeDayIndex + 1} of ${days.length}`}
               onBack={backFromTime}
             >
@@ -451,7 +451,7 @@ function SubscriptionInner() {
                 gap: 10,
               }}>
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
-                  Windows
+                  Timings
                 </span>
                 {days.map((k) => {
                   const label = DAYS.find((d) => d.key === k)?.label || "";
@@ -468,7 +468,7 @@ function SubscriptionInner() {
                 })}
               </div>
             ) : (
-              <SummaryRow label="Window" value={slot || ""} />
+              <SummaryRow label="Timings" value={slot || ""} />
             )}
             {product && (
               <div style={{
