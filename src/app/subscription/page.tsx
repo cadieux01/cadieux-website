@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { PRODUCTS } from "@/lib/data";
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
@@ -39,7 +41,20 @@ const SLOTS = [
 ];
 
 export default function SubscriptionPage() {
-  const [step, setStep] = useState<Step>("intro");
+  return (
+    <Suspense fallback={null}>
+      <SubscriptionInner />
+    </Suspense>
+  );
+}
+
+function SubscriptionInner() {
+  const searchParams = useSearchParams();
+  const slug = searchParams.get("slug");
+  const product = useMemo(() => PRODUCTS.find((p) => p.slug === slug) || null, [slug]);
+
+  // If a product was passed in via query, jump straight into the wizard.
+  const [step, setStep] = useState<Step>(product ? "weeks" : "intro");
   const [weeks, setWeeks] = useState<number | null>(null);
   const [days, setDays] = useState<string[]>([]);
   const [slot, setSlot] = useState<string | null>(null);
@@ -49,7 +64,7 @@ export default function SubscriptionPage() {
   }
 
   function reset() {
-    setStep("intro");
+    setStep(product ? "weeks" : "intro");
     setWeeks(null);
     setDays([]);
     setSlot(null);
@@ -60,6 +75,10 @@ export default function SubscriptionPage() {
   const dayLabels = days
     .map((k) => DAYS.find((d) => d.key === k)?.label || "")
     .filter(Boolean);
+
+  // Running total: variant price × delivery days per week × number of weeks.
+  const total = product && weeks ? product.price * days.length * weeks : 0;
+  const perWeek = product ? product.price * days.length : 0;
 
   return (
     <div style={{ minHeight: "100dvh", background: "rgb(6,4,2)", position: "relative", overflowX: "clip" }}>
@@ -80,8 +99,38 @@ export default function SubscriptionPage() {
           Subscription
         </h1>
         <p style={{ margin: "0 0 28px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(251,243,212,0.5)" }}>
-          Recurring deliveries
+          {product ? product.tag : "Recurring deliveries"}
         </p>
+
+        {/* Variant header — shown when a product was passed via query */}
+        {product && step !== "intro" && (
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "baseline",
+            padding: "14px 16px",
+            background: "#0a0805",
+            border: `0.5px solid rgba(${GOLD},0.35)`,
+            borderRadius: 12,
+            marginBottom: 22,
+            gap: 12,
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 400, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+                {product.title}
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.25em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)`, marginTop: 4 }}>
+                ₹{product.price} per loaf
+              </div>
+            </div>
+            <Link href={`/shop/${product.slug}`} style={{
+              fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
+              letterSpacing: "0.3em", textTransform: "uppercase",
+              color: "rgba(240,223,200,0.5)", textDecoration: "none",
+              flexShrink: 0,
+            }}>
+              Change →
+            </Link>
+          </div>
+        )}
 
         {/* Progress dots */}
         {step !== "intro" && (
@@ -135,7 +184,7 @@ export default function SubscriptionPage() {
           <Section
             title="How many weeks?"
             sub="Pick a subscription length"
-            onBack={() => setStep("intro")}
+            onBack={() => setStep(product ? "intro" : "intro")}
           >
             {WEEK_OPTIONS.map(({ weeks: w, label, sub }) => (
               <OptionRow
@@ -169,13 +218,46 @@ export default function SubscriptionPage() {
                 />
               );
             })}
+
+            {/* Running total — only when a product was passed in */}
+            {product && (
+              <div style={{
+                marginTop: 10,
+                padding: "16px 18px",
+                background: `rgba(${GOLD},0.08)`,
+                border: `1px solid rgba(${GOLD},0.45)`,
+                borderRadius: 12,
+                display: "flex", flexDirection: "column", gap: 6,
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: `rgba(${GOLD},0.75)` }}>
+                    Per week
+                  </span>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#f5f0e8" }}>
+                    ₹{perWeek}
+                    <span style={{ color: "rgba(240,223,200,0.45)", fontSize: 10, marginLeft: 6, letterSpacing: "0.1em" }}>
+                      {days.length > 0 ? `(${days.length} × ₹${product.price})` : ""}
+                    </span>
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 10, borderTop: "1px dashed rgba(240,223,200,0.12)" }}>
+                  <span style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 400, letterSpacing: "0.05em", color: "#FBF3D4", textTransform: "uppercase" }}>
+                    Total ({weeks} {weeks === 1 ? "wk" : "wks"})
+                  </span>
+                  <span style={{ fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 500, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+                    ₹{total}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <button
               type="button"
               disabled={days.length === 0}
               onClick={() => setStep("time")}
               className="cdx-sub-next"
               style={{
-                marginTop: 20,
+                marginTop: 16,
                 width: "100%",
                 background: days.length === 0 ? "transparent" : `rgba(${GOLD},0.12)`,
                 border: `1px solid rgba(${GOLD},${days.length === 0 ? 0.25 : 0.65})`,
@@ -221,14 +303,29 @@ export default function SubscriptionPage() {
             sub="Confirm your subscription"
             onBack={() => setStep("time")}
           >
+            {product && <SummaryRow label="Bread" value={`${product.title} · ₹${product.price}`} />}
             <SummaryRow label="Duration" value={`${weeks} ${weeks === 1 ? "week" : "weeks"}`} />
             <SummaryRow label="Days" value={dayLabels.join(", ")} />
             <SummaryRow label="Window" value={slot || ""} />
+            {product && (
+              <div style={{
+                marginTop: 8,
+                display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                padding: "16px 0",
+              }}>
+                <span style={{ fontFamily: "var(--font-heading)", fontSize: 16, fontWeight: 400, letterSpacing: "0.05em", color: "#FBF3D4", textTransform: "uppercase" }}>
+                  Total
+                </span>
+                <span style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 500, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+                  ₹{total}
+                </span>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => alert("Subscription saved. We'll be in touch.")}
               style={{
-                marginTop: 24,
+                marginTop: 16,
                 width: "100%",
                 background: `rgba(${GOLD},0.18)`,
                 border: `1px solid rgba(${GOLD},0.75)`,

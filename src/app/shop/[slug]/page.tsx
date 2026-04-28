@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { notFound, useParams } from "next/navigation";
+import { notFound, useParams, useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import {
   PRODUCTS,
@@ -31,6 +31,7 @@ export default function ProductDetailPage() {
   const [orderType, setOrderType] = useState<"once" | "sub">("once");
   const [added, setAdded] = useState(false);
   const { addToCart } = useCart();
+  const router = useRouter();
 
   const avgRating = useMemo(() => {
     if (!detail) return 0;
@@ -45,6 +46,13 @@ export default function ProductDetailPage() {
   const productIndex = PRODUCTS.findIndex((p) => p.slug === slug);
 
   const handleAdd = () => {
+    // Subscribe flow: open the subscription wizard for this variant instead of
+    // dropping it straight into the cart — the user picks weeks/days/window
+    // there and we compute the running total from the variant price.
+    if (orderType === "sub") {
+      router.push(`/subscription?slug=${product.slug}`);
+      return;
+    }
     addToCart({
       productIndex,
       name: product.name,
@@ -256,7 +264,7 @@ export default function ProductDetailPage() {
                   transition: "background 0.3s ease",
                 }}
               >
-                {added ? "Added ✓" : "Add to Cart"}
+                {added ? "Added ✓" : orderType === "sub" ? "Set Up Subscription" : "Add to Cart"}
               </button>
               <Link
                 href="/cart"
