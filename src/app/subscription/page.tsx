@@ -134,27 +134,35 @@ function SubscriptionInner() {
   // week iff its weekday index is strictly after the order weekday; otherwise
   // it slips to next week. Days delivering before next Monday are bucketed
   // into "current week" so users see what's still reachable this week.
-  const dayMeta = useMemo<Record<string, { date: string; thisWeek: boolean }>>(() => {
+  const dayMeta = useMemo<Record<string, { thisWeekDate: string | null; nextWeekDate: string }>>(() => {
     const today = new Date();
     const orderIdx = (today.getDay() + 6) % 7; // Mon=0..Sun=6
     const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const daysUntilNextMonday = 7 - orderIdx; // 1..7
-    const out: Record<string, { date: string; thisWeek: boolean }> = {};
+    const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    const out: Record<string, { thisWeekDate: string | null; nextWeekDate: string }> = {};
     DAYS.forEach(({ key }, dayIdx) => {
+      // First-delivery delta under the existing week-1 rule.
       let delta = (dayIdx - orderIdx + 7) % 7;
       if (delta === 0) delta = 7;
-      const d = new Date(anchor);
-      d.setDate(anchor.getDate() + delta);
+
+      const firstDate = new Date(anchor);
+      firstDate.setDate(anchor.getDate() + delta);
+
+      // Next-week date = next Monday + dayIdx, regardless of where the
+      // first-delivery falls. Always shown in the next-week list.
+      const nextWeekDate = new Date(anchor);
+      nextWeekDate.setDate(anchor.getDate() + daysUntilNextMonday + dayIdx);
+
       out[key] = {
-        date: d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
-        thisWeek: delta < daysUntilNextMonday,
+        thisWeekDate: delta < daysUntilNextMonday ? fmt(firstDate) : null,
+        nextWeekDate: fmt(nextWeekDate),
       };
     });
     return out;
   }, []);
 
-  const thisWeekDays = useMemo(() => DAYS.filter((d) => dayMeta[d.key]?.thisWeek), [dayMeta]);
-  const nextWeekDays = useMemo(() => DAYS.filter((d) => !dayMeta[d.key]?.thisWeek), [dayMeta]);
+  const thisWeekDays = useMemo(() => DAYS.filter((d) => dayMeta[d.key]?.thisWeekDate), [dayMeta]);
 
   function reset() {
     setStep(product ? "weeks" : "intro");
@@ -480,36 +488,34 @@ function SubscriptionInner() {
               const meta = dayMeta[key];
               return (
                 <OptionRow
-                  key={key}
+                  key={`tw-${key}`}
                   selected={active}
                   onClick={() => toggleDay(key)}
-                  title={`${label} · ${meta.date}`}
+                  title={`${label} · ${meta.thisWeekDate}`}
                   sub={active ? "Selected · this week" : "Starts this week"}
                   multi
                 />
               );
             })}
 
-            {nextWeekDays.length > 0 && (
-              <div style={{
-                marginTop: 12, marginBottom: 4,
-                fontFamily: "var(--font-body)",
-                fontSize: 10, fontWeight: 300,
-                letterSpacing: "0.3em", textTransform: "uppercase",
-                color: "rgba(240,223,200,0.5)",
-              }}>
-                Starts next week
-              </div>
-            )}
-            {nextWeekDays.map(({ key, label }) => {
+            <div style={{
+              marginTop: 12, marginBottom: 4,
+              fontFamily: "var(--font-body)",
+              fontSize: 10, fontWeight: 300,
+              letterSpacing: "0.3em", textTransform: "uppercase",
+              color: "rgba(240,223,200,0.5)",
+            }}>
+              Starts next week
+            </div>
+            {DAYS.map(({ key, label }) => {
               const active = days.includes(key);
               const meta = dayMeta[key];
               return (
                 <OptionRow
-                  key={key}
+                  key={`nw-${key}`}
                   selected={active}
                   onClick={() => toggleDay(key)}
-                  title={`${label} · ${meta.date}`}
+                  title={`${label} · ${meta.nextWeekDate}`}
                   sub={active ? "Selected · next week" : "Starts next week"}
                   multi
                 />
