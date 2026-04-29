@@ -136,7 +136,10 @@ function SubscriptionInner() {
       .finally(() => setHubLoading(false));
   }, [product, step]);
   const [weeks, setWeeks] = useState<number | null>(null);
-  const [days, setDays] = useState<string[]>([]);
+  // Per-week day selections. Different weeks can have different days.
+  const [daysByWeek, setDaysByWeek] = useState<Record<number, string[]>>({});
+  // 1-based pointer into the per-week picker.
+  const [currentWeek, setCurrentWeek] = useState<number>(1);
   // Same-window-for-all-days mode
   const [slot, setSlot] = useState<string | null>(null);
   // Per-day-window mode: { mon: "6:00 – 8:00 AM", wed: "8:00 – 10:00 AM", ... }
@@ -144,9 +147,28 @@ function SubscriptionInner() {
   const [slotMode, setSlotMode] = useState<SlotMode | null>(null);
   const [timeDayIndex, setTimeDayIndex] = useState(0);
 
-  function toggleDay(key: string) {
-    setDays((prev) => (prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]));
+  function toggleDayForWeek(week: number, key: string) {
+    setDaysByWeek((prev) => {
+      const list = prev[week] ?? [];
+      const next = list.includes(key) ? list.filter((d) => d !== key) : [...list, key];
+      return { ...prev, [week]: next };
+    });
   }
+
+  // Flat union of all selected day keys across every week (used by legacy
+  // time-mode / per-day-slot / summary paths that don't care about per-week
+  // breakdown).
+  const allDayKeys = useMemo(() => {
+    const set = new Set<string>();
+    Object.values(daysByWeek).forEach((arr) => arr.forEach((k) => set.add(k)));
+    // Preserve canonical Mon..Sun order so legacy UIs read consistently.
+    return DAYS.map((d) => d.key).filter((k) => set.has(k));
+  }, [daysByWeek]);
+
+  const totalDayCount = useMemo(
+    () => Object.values(daysByWeek).reduce((a, b) => a + b.length, 0),
+    [daysByWeek]
+  );
 
   // First-delivery date + which calendar week (current/next) each weekday
   // resolves to under the same week-1 rule applied at checkout
@@ -154,13 +176,17 @@ function SubscriptionInner() {
   // week iff its weekday index is strictly after the order weekday; otherwise
   // it slips to next week. Days delivering before next Monday are bucketed
   // into "current week" so users see what's still reachable this week.
-  const dayMeta = useMemo<Record<string, { thisWeekDate: string | null; nextWeekDate: string }>>(() => {
+  const dayMeta = useMemo<Record<string, {
+    thisWeekDate: string | null;
+    nextWeekDate: string;
+    firstDate: Date; // concrete Date for this day under week-1 rule
+  }>>(() => {
     const today = new Date();
     const orderIdx = (today.getDay() + 6) % 7; // Mon=0..Sun=6
     const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const daysUntilNextMonday = 7 - orderIdx; // 1..7
     const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-    const out: Record<string, { thisWeekDate: string | null; nextWeekDate: string }> = {};
+    const out: Record<string, { thisWeekDate: string | null; nextWeekDate: string; firstDate: Date }> = {};
     DAYS.forEach(({ key }, dayIdx) => {
       // First-delivery delta under the existing week-1 rule.
       let delta = (dayIdx - orderIdx + 7) % 7;
@@ -177,12 +203,22 @@ function SubscriptionInner() {
       out[key] = {
         thisWeekDate: delta < daysUntilNextMonday ? fmt(firstDate) : null,
         nextWeekDate: fmt(nextWeekDate),
+        firstDate,
       };
     });
     return out;
   }, []);
 
   const thisWeekDays = useMemo(() => DAYS.filter((d) => dayMeta[d.key]?.thisWeekDate), [dayMeta]);
+
+  // Concrete delivery date for a given (day, subscription-week). Week 1 uses
+  // the existing week-1 rule date; subsequent weeks step by 7 days.
+  function dateForWeek(key: string, week: number): Date {
+    const base = dayMeta[key].firstDate;
+    const d = new Date(base);
+    d.setDate(base.getDate() + (week - 1) * 7);
+    return d;
+  }
 
   // Per-delivery overrides keyed by `${week}-${day_key}`. When the user opens
   // the customize step we autogenerate rows from days/weeks; this object lets
@@ -192,21 +228,16 @@ function SubscriptionInner() {
     Record<string, { slot?: string | null; skipped?: boolean }>
   >({});
 
-  // Concrete delivery calendar derived from the current days/weeks selection.
-  // Same week-1 rule used in src/lib/subscription-dates.ts.
+  // Concrete delivery calendar derived from the per-week selections. Each
+  // subscription week may have a different set of days; weeks 2..N step 7 days
+  // from each day's week-1 rule date.
   const deliveryRows: DeliveryRow[] = useMemo(() => {
-    if (!weeks || days.length === 0) return [];
-    const today = new Date();
-    const orderIdx = (today.getDay() + 6) % 7; // Mon=0..Sun=6
-    const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (!weeks || totalDayCount === 0) return [];
     const rows: Omit<DeliveryRow, "sequence">[] = [];
-    for (const dayKey of days) {
-      const dayIdx = DAYS.findIndex((d) => d.key === dayKey);
-      let delta = (dayIdx - orderIdx + 7) % 7;
-      if (delta === 0) delta = 7;
-      for (let w = 1; w <= weeks; w++) {
-        const date = new Date(anchor);
-        date.setDate(anchor.getDate() + delta + (w - 1) * 7);
+    for (let w = 1; w <= weeks; w++) {
+      const list = daysByWeek[w] ?? [];
+      for (const dayKey of list) {
+        const date = dateForWeek(dayKey, w);
         const defaultSlot = slotMode === "same" ? slot : slotsByDay[dayKey] ?? null;
         const override = deliveryOverrides[`${w}-${dayKey}`] ?? {};
         rows.push({
@@ -220,7 +251,9 @@ function SubscriptionInner() {
     }
     rows.sort((a, b) => a.date.getTime() - b.date.getTime());
     return rows.map((r, i) => ({ ...r, sequence: i + 1 }));
-  }, [weeks, days, slotMode, slot, slotsByDay, deliveryOverrides]);
+    // dayMeta is captured by dateForWeek; including it keeps things stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeks, daysByWeek, totalDayCount, slotMode, slot, slotsByDay, deliveryOverrides, dayMeta]);
 
   function setDeliveryOverride(week: number, dayKey: string, patch: { slot?: string | null; skipped?: boolean }) {
     const k = `${week}-${dayKey}`;
@@ -230,7 +263,8 @@ function SubscriptionInner() {
   function reset() {
     setStep(product ? "weeks" : "intro");
     setWeeks(null);
-    setDays([]);
+    setDaysByWeek({});
+    setCurrentWeek(1);
     setSlot(null);
     setSlotsByDay({});
     setSlotMode(null);
@@ -240,17 +274,19 @@ function SubscriptionInner() {
 
   function addSubscriptionToCart() {
     if (!product || !weeks || productIndex < 0) return;
-    const dayLabelList = days
+    const dayLabelList = allDayKeys
       .map((k) => DAYS.find((d) => d.key === k)?.label || "")
       .filter(Boolean);
-    const cartDeliveries = deliveryRows.map((r) => ({
-      sequence: r.sequence,
-      week_number: r.week_number,
-      day_key: r.day_key,
-      delivery_date: isoDate(r.date),
-      slot: r.slot,
-      skipped: r.skipped,
-    }));
+    const cartDeliveries = deliveryRows
+      .filter((r) => !r.skipped)
+      .map((r, i) => ({
+        sequence: i + 1,
+        week_number: r.week_number,
+        day_key: r.day_key,
+        delivery_date: isoDate(r.date),
+        slot: r.slot,
+        skipped: false,
+      }));
     addToCart({
       productIndex,
       name: `${product.name} — Subscription`,
@@ -268,33 +304,27 @@ function SubscriptionInner() {
     router.push("/cart");
   }
 
-  // After picking days, jump straight to address+payment via the global
-  // CheckoutModal. We assign a default slot so the cart line item is complete;
-  // per-delivery slot tweaks are handled later from admin / the timeline view.
+  // After picking per-week days, jump straight to address+payment via the
+  // global CheckoutModal. We assign a default slot so the cart line item is
+  // complete; per-delivery slot tweaks are handled later from admin / the
+  // timeline view.
   function continueFromDays() {
     if (!product || !weeks || productIndex < 0) return;
 
     const defaultSlot = SLOTS[0];
-    const dayLabelList = days
+    const dayLabelList = allDayKeys
       .map((k) => DAYS.find((d) => d.key === k)?.label || "")
       .filter(Boolean);
 
-    // Concrete delivery calendar (week-1 rule). Mirrors the deliveryRows memo
-    // but runs synchronously so we can hand a complete cart item to the modal.
-    const today = new Date();
-    const orderIdx = (today.getDay() + 6) % 7;
-    const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    // Flatten daysByWeek into concrete delivery rows.
     const rows: Array<{ week_number: number; day_key: string; date: Date }> = [];
-    for (const dayKey of days) {
-      const dayIdx = DAYS.findIndex((d) => d.key === dayKey);
-      let delta = (dayIdx - orderIdx + 7) % 7;
-      if (delta === 0) delta = 7;
-      for (let w = 1; w <= weeks; w++) {
-        const date = new Date(anchor);
-        date.setDate(anchor.getDate() + delta + (w - 1) * 7);
-        rows.push({ week_number: w, day_key: dayKey, date });
+    for (let w = 1; w <= weeks; w++) {
+      const list = daysByWeek[w] ?? [];
+      for (const dayKey of list) {
+        rows.push({ week_number: w, day_key: dayKey, date: dateForWeek(dayKey, w) });
       }
     }
+    if (rows.length === 0) return;
     rows.sort((a, b) => a.date.getTime() - b.date.getTime());
     const cartDeliveries = rows.map((r, i) => ({
       sequence: i + 1,
@@ -333,7 +363,7 @@ function SubscriptionInner() {
       setTimeDayIndex(timeDayIndex - 1);
       return;
     }
-    if (days.length > 1) {
+    if (allDayKeys.length > 1) {
       setStep("time-mode");
     } else {
       setStep("days");
@@ -344,16 +374,17 @@ function SubscriptionInner() {
   // "picking time" as one phase regardless of mode.
   const stepIndex = { intro: 0, weeks: 1, days: 2, "time-mode": 3, time: 3, customize: 4, summary: 5 }[step];
 
-  const dayLabels = days
+  const dayLabels = allDayKeys
     .map((k) => DAYS.find((d) => d.key === k)?.label || "")
     .filter(Boolean);
 
   // Running total: variant price × number of active (non-skipped) deliveries.
   const activeDeliveryCount = deliveryRows.length > 0
     ? deliveryRows.filter((r) => !r.skipped).length
-    : (days.length * (weeks ?? 0));
+    : totalDayCount;
   const total = product ? product.price * activeDeliveryCount : 0;
-  const perWeek = product ? product.price * days.length : 0;
+  const currentWeekDayCount = (daysByWeek[currentWeek] ?? []).length;
+  const perWeek = product ? product.price * currentWeekDayCount : 0;
 
   return (
     <div style={{ minHeight: "100dvh", background: "rgb(6,4,2)", position: "relative", overflowX: "clip" }}>
@@ -585,7 +616,17 @@ function SubscriptionInner() {
               <OptionRow
                 key={w}
                 selected={weeks === w}
-                onClick={() => { setWeeks(w); setStep("days"); }}
+                onClick={() => {
+                  setWeeks(w);
+                  setCurrentWeek(1);
+                  // Trim out-of-range week selections if user shortens.
+                  setDaysByWeek((prev) => {
+                    const next: Record<number, string[]> = {};
+                    for (let i = 1; i <= w; i++) if (prev[i]) next[i] = prev[i];
+                    return next;
+                  });
+                  setStep("days");
+                }}
                 title={label}
                 sub={sub}
               />
@@ -593,126 +634,204 @@ function SubscriptionInner() {
           </Section>
         )}
 
-        {/* STEP 2 — DAYS */}
-        {step === "days" && (
-          <Section
-            title="Which days?"
-            sub={`Delivery days across all ${weeks} ${weeks === 1 ? "week" : "weeks"}`}
-            onBack={() => setStep("weeks")}
-          >
-            {thisWeekDays.length > 0 && (
-              <div style={{
-                marginTop: 4, marginBottom: 4,
-                fontFamily: "var(--font-body)",
-                fontSize: 10, fontWeight: 300,
-                letterSpacing: "0.3em", textTransform: "uppercase",
-                color: `rgba(${GOLD},0.75)`,
-              }}>
-                Available this week
-              </div>
-            )}
-            {thisWeekDays.map(({ key, label }) => {
-              const active = days.includes(key);
-              const meta = dayMeta[key];
-              return (
-                <OptionRow
-                  key={`tw-${key}`}
-                  selected={active}
-                  onClick={() => toggleDay(key)}
-                  title={`${label} · ${meta.thisWeekDate}`}
-                  sub={active ? "Selected · this week" : "Starts this week"}
-                  multi
-                />
-              );
-            })}
-
-            <div style={{
-              marginTop: 12, marginBottom: 4,
-              fontFamily: "var(--font-body)",
-              fontSize: 10, fontWeight: 300,
-              letterSpacing: "0.3em", textTransform: "uppercase",
-              color: "rgba(240,223,200,0.5)",
-            }}>
-              Starts next week
-            </div>
-            {DAYS.map(({ key, label }) => {
-              const active = days.includes(key);
-              const meta = dayMeta[key];
-              return (
-                <OptionRow
-                  key={`nw-${key}`}
-                  selected={active}
-                  onClick={() => toggleDay(key)}
-                  title={`${label} · ${meta.nextWeekDate}`}
-                  sub={active ? "Selected · next week" : "Starts next week"}
-                  multi
-                />
-              );
-            })}
-
-            {/* Running total — only when a product was passed in */}
-            {product && (
-              <div style={{
-                marginTop: 10,
-                padding: "16px 18px",
-                background: `rgba(${GOLD},0.08)`,
-                border: `1px solid rgba(${GOLD},0.45)`,
-                borderRadius: 12,
-                display: "flex", flexDirection: "column", gap: 6,
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: `rgba(${GOLD},0.75)` }}>
-                    Per week
-                  </span>
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#f5f0e8" }}>
-                    ₹{perWeek}
-                    <span style={{ color: "rgba(240,223,200,0.45)", fontSize: 10, marginLeft: 6, letterSpacing: "0.1em" }}>
-                      {days.length > 0 ? `(${days.length} × ₹${product.price})` : ""}
-                    </span>
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 10, borderTop: "1px dashed rgba(240,223,200,0.12)" }}>
-                  <span style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 400, letterSpacing: "0.05em", color: "#FBF3D4", textTransform: "uppercase" }}>
-                    Total ({weeks} {weeks === 1 ? "wk" : "wks"})
-                  </span>
-                  <span style={{ fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 500, color: "#FBF3D4", letterSpacing: "0.01em" }}>
-                    ₹{total}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <button
-              type="button"
-              disabled={days.length === 0}
-              onClick={continueFromDays}
-              className="cdx-sub-next"
-              style={{
-                marginTop: 16,
-                width: "100%",
-                background: days.length === 0 ? "transparent" : `rgba(${GOLD},0.12)`,
-                border: `1px solid rgba(${GOLD},${days.length === 0 ? 0.25 : 0.65})`,
-                borderRadius: 10,
-                padding: "14px 18px",
-                fontFamily: "var(--font-body)",
-                fontSize: 11, fontWeight: 400,
-                letterSpacing: "0.3em", textTransform: "uppercase",
-                color: days.length === 0 ? "rgba(240,223,200,0.3)" : `rgba(${GOLD},0.95)`,
-                cursor: days.length === 0 ? "not-allowed" : "pointer",
-                transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
-                WebkitTapHighlightColor: "transparent",
+        {/* STEP 2 — DAYS (per-week picker) */}
+        {step === "days" && weeks && (() => {
+          const selectedThisWeek = daysByWeek[currentWeek] ?? [];
+          const isFirstWeek = currentWeek === 1;
+          const isLastWeek = currentWeek === weeks;
+          const fmtForWeek = (key: string) =>
+            formatDeliveryDate(dateForWeek(key, currentWeek));
+          return (
+            <Section
+              title={`Week ${currentWeek} of ${weeks} — pick days`}
+              sub={
+                isFirstWeek
+                  ? "These first deliveries land this week or next"
+                  : `Delivery week #${currentWeek}`
+              }
+              onBack={() => {
+                if (currentWeek > 1) setCurrentWeek(currentWeek - 1);
+                else setStep("weeks");
               }}
             >
-              Continue {days.length > 0 && `· ${days.length} ${days.length === 1 ? "day" : "days"}`} →
-            </button>
-          </Section>
-        )}
+              {isFirstWeek && thisWeekDays.length > 0 && (
+                <>
+                  <div style={{
+                    marginTop: 4, marginBottom: 4,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10, fontWeight: 300,
+                    letterSpacing: "0.3em", textTransform: "uppercase",
+                    color: `rgba(${GOLD},0.75)`,
+                  }}>
+                    Available this week
+                  </div>
+                  {thisWeekDays.map(({ key, label }) => {
+                    const active = selectedThisWeek.includes(key);
+                    const meta = dayMeta[key];
+                    return (
+                      <OptionRow
+                        key={`tw-${key}`}
+                        selected={active}
+                        onClick={() => toggleDayForWeek(currentWeek, key)}
+                        title={`${label} · ${meta.thisWeekDate}`}
+                        sub={active ? "Selected · this week" : "Starts this week"}
+                        multi
+                      />
+                    );
+                  })}
+                  <div style={{
+                    marginTop: 12, marginBottom: 4,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10, fontWeight: 300,
+                    letterSpacing: "0.3em", textTransform: "uppercase",
+                    color: "rgba(240,223,200,0.5)",
+                  }}>
+                    Starts next week
+                  </div>
+                </>
+              )}
+
+              {/* Remaining days. For week 1, only days that didn't fit in
+                  the current calendar week — they slip to next week. For
+                  weeks 2+, all 7 days with their concrete date for that
+                  subscription-week. */}
+              {(isFirstWeek
+                ? DAYS.filter((d) => !dayMeta[d.key]?.thisWeekDate)
+                : DAYS
+              ).map(({ key, label }) => {
+                const active = selectedThisWeek.includes(key);
+                const dateLabel = isFirstWeek
+                  ? dayMeta[key].nextWeekDate
+                  : fmtForWeek(key);
+                const subLabel = isFirstWeek
+                  ? (active ? "Selected · next week" : "Starts next week")
+                  : (active ? `Selected · week ${currentWeek}` : `Week ${currentWeek}`);
+                return (
+                  <OptionRow
+                    key={`w${currentWeek}-${key}`}
+                    selected={active}
+                    onClick={() => toggleDayForWeek(currentWeek, key)}
+                    title={`${label} · ${dateLabel}`}
+                    sub={subLabel}
+                    multi
+                  />
+                );
+              })}
+
+              {/* Running total */}
+              {product && (
+                <div style={{
+                  marginTop: 10,
+                  padding: "16px 18px",
+                  background: `rgba(${GOLD},0.08)`,
+                  border: `1px solid rgba(${GOLD},0.45)`,
+                  borderRadius: 12,
+                  display: "flex", flexDirection: "column", gap: 6,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: `rgba(${GOLD},0.75)` }}>
+                      Week {currentWeek}
+                    </span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#f5f0e8" }}>
+                      ₹{perWeek}
+                      <span style={{ color: "rgba(240,223,200,0.45)", fontSize: 10, marginLeft: 6, letterSpacing: "0.1em" }}>
+                        {currentWeekDayCount > 0 ? `(${currentWeekDayCount} × ₹${product.price})` : ""}
+                      </span>
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 10, borderTop: "1px dashed rgba(240,223,200,0.12)" }}>
+                    <span style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 400, letterSpacing: "0.05em", color: "#FBF3D4", textTransform: "uppercase" }}>
+                      Total ({totalDayCount} {totalDayCount === 1 ? "delivery" : "deliveries"})
+                    </span>
+                    <span style={{ fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 500, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+                      ₹{total}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Primary action: next week → or checkout if last */}
+              {!isLastWeek ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentWeek(currentWeek + 1)}
+                  className="cdx-sub-next"
+                  style={{
+                    marginTop: 16,
+                    width: "100%",
+                    background: `rgba(${GOLD},0.12)`,
+                    border: `1px solid rgba(${GOLD},0.65)`,
+                    borderRadius: 10,
+                    padding: "14px 18px",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 11, fontWeight: 400,
+                    letterSpacing: "0.3em", textTransform: "uppercase",
+                    color: `rgba(${GOLD},0.95)`,
+                    cursor: "pointer",
+                    transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  Go to Week {currentWeek + 1} →
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={totalDayCount === 0}
+                  onClick={continueFromDays}
+                  className="cdx-sub-next"
+                  style={{
+                    marginTop: 16,
+                    width: "100%",
+                    background: totalDayCount === 0 ? "transparent" : `rgba(${GOLD},0.12)`,
+                    border: `1px solid rgba(${GOLD},${totalDayCount === 0 ? 0.25 : 0.65})`,
+                    borderRadius: 10,
+                    padding: "14px 18px",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 11, fontWeight: 400,
+                    letterSpacing: "0.3em", textTransform: "uppercase",
+                    color: totalDayCount === 0 ? "rgba(240,223,200,0.3)" : `rgba(${GOLD},0.95)`,
+                    cursor: totalDayCount === 0 ? "not-allowed" : "pointer",
+                    transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  Continue {totalDayCount > 0 && `· ${totalDayCount} ${totalDayCount === 1 ? "delivery" : "deliveries"}`} →
+                </button>
+              )}
+
+              {/* Secondary: jump back through earlier weeks */}
+              {currentWeek > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentWeek(currentWeek - 1)}
+                  style={{
+                    marginTop: 8,
+                    width: "100%",
+                    background: "transparent",
+                    border: "1px solid rgba(240,223,200,0.15)",
+                    borderRadius: 10,
+                    padding: "10px 18px",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10, fontWeight: 300,
+                    letterSpacing: "0.3em", textTransform: "uppercase",
+                    color: "rgba(240,223,200,0.55)",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  ← Week {currentWeek - 1}
+                </button>
+              )}
+            </Section>
+          );
+        })()}
 
         {/* STEP 3a — TIME MODE (only when 2+ days are picked) */}
         {step === "time-mode" && (
           <Section
             title="Same time, or per day?"
-            sub={`You picked ${days.length} delivery days`}
+            sub={`You picked ${allDayKeys.length} delivery days`}
             onBack={() => setStep("days")}
           >
             <OptionRow
@@ -783,14 +902,14 @@ function SubscriptionInner() {
         )}
 
         {step === "time" && slotMode === "custom" && (() => {
-          const dayKey = days[timeDayIndex];
+          const dayKey = allDayKeys[timeDayIndex];
           const dayLabel = DAYS.find((d) => d.key === dayKey)?.label || "";
-          const isLast = timeDayIndex === days.length - 1;
+          const isLast = timeDayIndex === allDayKeys.length - 1;
           const currentSlot = slotsByDay[dayKey] || null;
           return (
             <Section
               title={`Timings for ${dayLabel}`}
-              sub={`Day ${timeDayIndex + 1} of ${days.length}`}
+              sub={`Day ${timeDayIndex + 1} of ${allDayKeys.length}`}
               onBack={backFromTime}
             >
               {SLOTS.map((s) => (
@@ -826,7 +945,7 @@ function SubscriptionInner() {
                   WebkitTapHighlightColor: "transparent",
                 }}
               >
-                {isLast ? "Review →" : `Next: ${DAYS.find((d) => d.key === days[timeDayIndex + 1])?.label || ""} →`}
+                {isLast ? "Review →" : `Next: ${DAYS.find((d) => d.key === allDayKeys[timeDayIndex + 1])?.label || ""} →`}
               </button>
             </Section>
           );
@@ -980,7 +1099,7 @@ function SubscriptionInner() {
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
                   Timings
                 </span>
-                {days.map((k) => {
+                {allDayKeys.map((k) => {
                   const label = DAYS.find((d) => d.key === k)?.label || "";
                   return (
                     <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
