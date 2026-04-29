@@ -141,6 +141,11 @@ function SubscriptionInner() {
   const [daysByWeek, setDaysByWeek] = useState<Record<number, string[]>>({});
   // 1-based pointer into the per-week picker.
   const [currentWeek, setCurrentWeek] = useState<number>(1);
+  // Week-1 only: progressive disclosure of days that fall in the next
+  // calendar week. Hidden by default so a 1-Week subscriber sees only the
+  // current calendar week's available days. Reveals when "+ Next week" is
+  // pressed.
+  const [showNextWeekDays, setShowNextWeekDays] = useState<boolean>(false);
   // Same-window-for-all-days mode
   const [slot, setSlot] = useState<string | null>(null);
   // Per-day-window mode: { mon: "6:00 – 8:00 AM", wed: "8:00 – 10:00 AM", ... }
@@ -680,44 +685,73 @@ function SubscriptionInner() {
                       />
                     );
                   })}
-                  <div style={{
-                    marginTop: 12, marginBottom: 4,
-                    fontFamily: "var(--font-body)",
-                    fontSize: 10, fontWeight: 300,
-                    letterSpacing: "0.3em", textTransform: "uppercase",
-                    color: "rgba(240,223,200,0.5)",
-                  }}>
-                    Starts next week
-                  </div>
                 </>
               )}
 
-              {/* Remaining days. For week 1, only days that didn't fit in
-                  the current calendar week — they slip to the following
-                  week. For weeks 2+, all 7 days with their concrete date
-                  for that subscription-week. */}
-              {(isFirstWeek
-                ? DAYS.filter((d) => !dayMeta[d.key]?.thisWeekDate)
-                : DAYS
-              ).map(({ key, label }) => {
-                const active = selectedThisWeek.includes(key);
-                const dateLabel = isFirstWeek
-                  ? dayMeta[key].nextWeekDate
-                  : fmtForWeek(key);
-                const subLabel = isFirstWeek
-                  ? (active ? "Selected · next week" : "Starts next week")
-                  : (active ? "Selected · next week" : "Next week");
-                return (
-                  <OptionRow
-                    key={`w${currentWeek}-${key}`}
-                    selected={active}
-                    onClick={() => toggleDayForWeek(currentWeek, key)}
-                    title={`${label} · ${dateLabel}`}
-                    sub={subLabel}
-                    multi
-                  />
-                );
-              })}
+              {/* Week 1: next-week days are hidden behind a "+ Next week"
+                  toggle so a 1-Week subscriber sees only the current
+                  calendar week by default. Weeks 2+ always show all 7 days.
+              */}
+              {isFirstWeek && !showNextWeekDays && (
+                <button
+                  type="button"
+                  onClick={() => setShowNextWeekDays(true)}
+                  style={{
+                    marginTop: 12,
+                    width: "100%",
+                    background: "transparent",
+                    border: "1px dashed rgba(240,223,200,0.25)",
+                    borderRadius: 10,
+                    padding: "12px 18px",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 11, fontWeight: 300,
+                    letterSpacing: "0.3em", textTransform: "uppercase",
+                    color: "rgba(240,223,200,0.7)",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  + Next week
+                </button>
+              )}
+
+              {(!isFirstWeek || showNextWeekDays) && (
+                <>
+                  {isFirstWeek && (
+                    <div style={{
+                      marginTop: 12, marginBottom: 4,
+                      fontFamily: "var(--font-body)",
+                      fontSize: 10, fontWeight: 300,
+                      letterSpacing: "0.3em", textTransform: "uppercase",
+                      color: "rgba(240,223,200,0.5)",
+                    }}>
+                      Starts next week
+                    </div>
+                  )}
+                  {(isFirstWeek
+                    ? DAYS.filter((d) => !dayMeta[d.key]?.thisWeekDate)
+                    : DAYS
+                  ).map(({ key, label }) => {
+                    const active = selectedThisWeek.includes(key);
+                    const dateLabel = isFirstWeek
+                      ? dayMeta[key].nextWeekDate
+                      : fmtForWeek(key);
+                    const subLabel = isFirstWeek
+                      ? (active ? "Selected · next week" : "Starts next week")
+                      : (active ? "Selected · next week" : "Next week");
+                    return (
+                      <OptionRow
+                        key={`w${currentWeek}-${key}`}
+                        selected={active}
+                        onClick={() => toggleDayForWeek(currentWeek, key)}
+                        title={`${label} · ${dateLabel}`}
+                        sub={subLabel}
+                        multi
+                      />
+                    );
+                  })}
+                </>
+              )}
 
               {/* Running total */}
               {product && (
