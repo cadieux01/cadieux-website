@@ -64,6 +64,24 @@ CREATE TABLE subscriptions (
   created_at        TIMESTAMPTZ DEFAULT now()
 );
 
+-- Per-delivery rows for a subscription. Generated on subscription creation,
+-- one row per (week × day). Status moves Pending → Confirmed → Dispatched → Delivered.
+CREATE TABLE subscription_deliveries (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subscription_id   UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+  sequence          INT NOT NULL,        -- 1..N across the whole plan
+  week_number       INT NOT NULL,        -- 1..weeks
+  day_key           TEXT NOT NULL,       -- 'mon'|'tue'|...
+  slot              TEXT,                -- '6:00 – 8:00 AM'
+  delivery_date     DATE NOT NULL,       -- concrete calendar date computed at creation
+  status            TEXT NOT NULL DEFAULT 'pending',
+  status_updated_at TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX subscription_deliveries_sub_id_idx
+  ON subscription_deliveries(subscription_id, sequence);
+ALTER TABLE subscription_deliveries ENABLE ROW LEVEL SECURITY;
+
 -- Reviews (per-product or general feedback)
 CREATE TABLE reviews (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

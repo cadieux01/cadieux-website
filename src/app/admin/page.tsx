@@ -270,6 +270,15 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "subscription_deliveries" },
+        (payload) => {
+          window.dispatchEvent(
+            new CustomEvent("cadieux:delivery-changed", { detail: payload })
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "reviews" },
         () => {
           fetchReviews();
@@ -637,6 +646,9 @@ function SubscriptionsSection({
   subscriptions: Subscription[];
   onChanged: () => void;
 }) {
+  const [openSubId, setOpenSubId] = useState<string | null>(null);
+  const openSub = openSubId ? subscriptions.find((s) => s.id === openSubId) ?? null : null;
+
   const updateStatus = async (id: string, next: Status) => {
     const { error } = await supabase
       .from("subscriptions")
@@ -682,6 +694,7 @@ function SubscriptionsSection({
                 <Th>Total</Th>
                 <Th>Status</Th>
                 <Th>Date</Th>
+                <Th>Track</Th>
               </tr>
             </thead>
             <tbody>
@@ -723,6 +736,25 @@ function SubscriptionsSection({
                         minute: "2-digit",
                       })}
                     </Td>
+                    <Td>
+                      <button
+                        type="button"
+                        onClick={() => setOpenSubId(s.id)}
+                        style={{
+                          background: "transparent",
+                          border: "1px solid rgba(245,158,11,0.45)",
+                          color: "#f59e0b",
+                          padding: "4px 10px",
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.65rem",
+                          letterSpacing: "0.18em",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Open
+                      </button>
+                    </Td>
                   </tr>
                 );
               })}
@@ -730,7 +762,243 @@ function SubscriptionsSection({
           </table>
         </div>
       )}
+
+      {openSub && (
+        <SubscriptionDrawer
+          subscription={openSub}
+          onClose={() => setOpenSubId(null)}
+        />
+      )}
     </section>
+  );
+}
+
+type AdminDelivery = {
+  id: string;
+  subscription_id: string;
+  sequence: number;
+  week_number: number;
+  day_key: string;
+  slot: string | null;
+  delivery_date: string;
+  status: string;
+  status_updated_at: string | null;
+};
+
+function SubscriptionDrawer({
+  subscription,
+  onClose,
+}: {
+  subscription: Subscription;
+  onClose: () => void;
+}) {
+  const [deliveries, setDeliveries] = useState<AdminDelivery[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const adminToken = PASSWORD;
+
+  const fetchDeliveries = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/subscriptions/${subscription.id}/deliveries`, {
+        headers: { "x-admin-token": adminToken },
+        cache: "no-store",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(j.error ?? `HTTP ${r.status}`);
+        return;
+      }
+      setDeliveries(j.deliveries ?? []);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [subscription.id, adminToken]);
+
+  useEffect(() => {
+    fetchDeliveries();
+  }, [fetchDeliveries]);
+
+  // Re-fetch when realtime fires for this subscription's deliveries.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ new?: { subscription_id?: string }; old?: { subscription_id?: string } }>;
+      const sid = ce.detail?.new?.subscription_id ?? ce.detail?.old?.subscription_id;
+      if (!sid || sid === subscription.id) fetchDeliveries();
+    };
+    window.addEventListener("cadieux:delivery-changed", handler);
+    return () => window.removeEventListener("cadieux:delivery-changed", handler);
+  }, [subscription.id, fetchDeliveries]);
+
+  const updateDeliveryStatus = async (deliveryId: string, next: string) => {
+    const prev = deliveries;
+    setDeliveries((curr) =>
+      curr.map((d) => (d.id === deliveryId ? { ...d, status: next } : d))
+    );
+    try {
+      const r = await fetch(
+        `/api/subscriptions/${subscription.id}/deliveries/${deliveryId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+          body: JSON.stringify({ status: next }),
+        }
+      );
+      if (!r.ok) {
+        setDeliveries(prev);
+        const j = await r.json().catch(() => ({}));
+        alert(`Failed to update: ${j.error ?? r.status}`);
+      } else {
+        fetchDeliveries();
+      }
+    } catch {
+      setDeliveries(prev);
+    }
+  };
+
+  const overallStatus = (subscription.status ?? "pending").toLowerCase();
+  const overallNorm = (STATUS_OPTIONS.find((o) => o.toLowerCase() === overallStatus) ?? "Pending") as Status;
+
+  const updateOverall = async (next: Status) => {
+    await supabase
+      .from("subscriptions")
+      .update({ status: next.toLowerCase() })
+      .eq("id", subscription.id);
+  };
+
+  const dayList = (subscription.days ?? []).map((k) => DAY_LABELS[k] ?? k).join(", ");
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        background: "rgba(0,0,0,0.7)",
+        display: "flex", justifyContent: "flex-end",
+      }}
+    >
+      <div style={{
+        width: "min(560px, 100%)",
+        height: "100dvh",
+        background: "#0e0e0e",
+        borderLeft: "1px solid rgba(245,158,11,0.25)",
+        overflowY: "auto",
+        padding: "28px 28px 60px",
+        color: "#fbf3d4",
+        fontFamily: "var(--font-body)",
+      }}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+          <div>
+            <p style={{ margin: 0, fontSize: "0.65rem", letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(245,158,11,0.75)" }}>
+              Subscription
+            </p>
+            <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: "1.5rem", fontWeight: 300, letterSpacing: "0.04em" }}>
+              {subscription.bread_name ?? "—"}
+            </p>
+            <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "rgba(251,243,212,0.55)" }}>
+              {subscription.customer_name ?? "—"} · {subscription.customer_phone ?? "—"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: "transparent", border: "none",
+              color: "rgba(251,243,212,0.55)",
+              fontSize: 18, cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Overall status + summary */}
+        <div style={{
+          background: "rgba(245,158,11,0.06)",
+          border: "1px solid rgba(245,158,11,0.2)",
+          padding: "14px 16px",
+          marginBottom: 22,
+          display: "flex", flexDirection: "column", gap: 8,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: "0.6rem", letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(245,158,11,0.7)" }}>
+              Overall status
+            </span>
+            <StatusBadge value={overallNorm} onChange={updateOverall} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem" }}>
+            <span style={{ color: "rgba(251,243,212,0.5)" }}>Plan</span>
+            <span>{subscription.weeks ?? 0} wks · {dayList || "—"}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem" }}>
+            <span style={{ color: "rgba(251,243,212,0.5)" }}>Total</span>
+            <span>₹{Number(subscription.total ?? 0).toFixed(2)}</span>
+          </div>
+          {subscription.customer_address && (
+            <div style={{ fontSize: "0.75rem", color: "rgba(251,243,212,0.45)", lineHeight: 1.5 }}>
+              {[subscription.customer_address, subscription.customer_city, subscription.customer_pincode].filter(Boolean).join(", ")}
+            </div>
+          )}
+        </div>
+
+        <p style={{ margin: "0 0 14px", fontSize: "0.6rem", letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(245,158,11,0.75)" }}>
+          Deliveries · {deliveries.length}
+        </p>
+
+        {loading && <p style={{ color: "rgba(251,243,212,0.45)" }}>Loading…</p>}
+        {error && <p style={{ color: "#e05a5a" }}>Error: {error}</p>}
+
+        {/* Vertical timeline with editable status */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {deliveries.map((d) => {
+            const dayLabel = DAY_LABELS[d.day_key] ?? d.day_key;
+            const status = d.status.toLowerCase();
+            const norm = (STATUS_OPTIONS.find((o) => o.toLowerCase() === status) ?? "Pending") as Status;
+            return (
+              <div
+                key={d.id}
+                style={{
+                  border: "1px solid rgba(245,158,11,0.2)",
+                  background: "rgba(245,158,11,0.03)",
+                  padding: "12px 14px",
+                  display: "flex", flexDirection: "column", gap: 6,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: "0.65rem", letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(245,158,11,0.75)" }}>
+                    #{d.sequence} · Week {d.week_number} · {dayLabel}
+                  </span>
+                  <StatusBadge
+                    value={norm}
+                    onChange={(next) => updateDeliveryStatus(d.id, next.toLowerCase())}
+                  />
+                </div>
+                <div style={{ fontSize: "0.85rem", color: "#fbf3d4" }}>
+                  {new Date(d.delivery_date + "T00:00:00").toLocaleDateString("en-IN", {
+                    weekday: "short", day: "numeric", month: "short", year: "numeric",
+                  })}
+                  {d.slot && <span style={{ color: "rgba(251,243,212,0.5)" }}> · {d.slot}</span>}
+                </div>
+                {d.status_updated_at && (
+                  <div style={{ fontSize: "0.65rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(251,243,212,0.35)" }}>
+                    Updated · {new Date(d.status_updated_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {!loading && deliveries.length === 0 && (
+            <p style={{ color: "rgba(251,243,212,0.45)", fontSize: "0.78rem" }}>
+              No deliveries scheduled.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

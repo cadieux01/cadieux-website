@@ -1,8 +1,30 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { CartItem } from "@/lib/data";
+import { PRODUCTS, type CartItem } from "@/lib/data";
 export type { CartItem } from "@/lib/data";
+
+// Wizard stores day labels like "Monday"/"Tuesday"; subscription_deliveries
+// stores 3-letter lowercase keys. Map by case-insensitive prefix.
+const DAY_LABEL_TO_KEY: Record<string, string> = {
+  mon: "mon", tue: "tue", wed: "wed", thu: "thu",
+  fri: "fri", sat: "sat", sun: "sun",
+};
+function dayLabelToKey(label: string): string | null {
+  const k = label.trim().toLowerCase().slice(0, 3);
+  return DAY_LABEL_TO_KEY[k] ?? null;
+}
+
+// Best-effort split of "Line, Area, City - 530045" into { city, pincode }.
+// Returns empty strings when the format doesn't match.
+function extractCityPincode(full: string): { city: string; pincode: string } {
+  const pinMatch = full.match(/(\d{6})\s*$/);
+  const pincode = pinMatch?.[1] ?? "";
+  const withoutPin = full.replace(/[\s,–\-]+\d{6}\s*$/, "").trim();
+  const parts = withoutPin.split(",").map((p) => p.trim()).filter(Boolean);
+  const city = parts.length >= 2 ? parts[parts.length - 1] : "";
+  return { city, pincode };
+}
 
 type Step = "form" | "payment" | "done";
 type FormMode = "returning" | "edit" | "fresh";
@@ -255,6 +277,63 @@ export default function CheckoutModal({
     }
   }
 
+  /* ── Submit subscription rows (one per sub line item) ─────────────────── */
+  async function submitSubscriptions(
+    fullAddress: string,
+    customerName: string,
+    customerPhone: string,
+    customerCity: string,
+    customerPincode: string,
+  ) {
+    const subItems = cart.filter((i) => i.orderType === "sub");
+    if (subItems.length === 0 || !customer?.id) return;
+
+    for (const item of subItems) {
+      const product = PRODUCTS[item.productIndex];
+      if (!product || !item.weeks) continue;
+
+      const dayKeys = (item.days ?? [])
+        .map(dayLabelToKey)
+        .filter((k): k is string => Boolean(k));
+
+      let slotsByDayKey: Record<string, string> | null = null;
+      if (item.slotsByDay) {
+        slotsByDayKey = {};
+        for (const [label, slotVal] of Object.entries(item.slotsByDay)) {
+          const k = dayLabelToKey(label);
+          if (k) slotsByDayKey[k] = slotVal;
+        }
+      }
+
+      try {
+        await fetch("/api/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "place_subscription",
+            customer_id: customer.id,
+            bread_slug: product.slug,
+            bread_name: product.name,
+            bread_price: product.price,
+            weeks: item.weeks,
+            days: dayKeys,
+            slot_mode: item.slotMode ?? "same",
+            slot: item.slot ?? null,
+            slots_by_day: slotsByDayKey,
+            total: item.price,
+            customer_name: customerName,
+            customer_phone: customerPhone,
+            customer_address: fullAddress,
+            customer_city: customerCity,
+            customer_pincode: customerPincode,
+          }),
+        });
+      } catch (e) {
+        console.error("place_subscription failed:", e);
+      }
+    }
+  }
+
   /* ── COD order ──────────────────────────────────────────────────────────── */
   async function placeOrderCOD() {
     // For returning customers using saved details, use savedCustomer data directly
@@ -284,6 +363,8 @@ export default function CheckoutModal({
         sendOrderSMS(oid, fullAddress, customerPhone, customerName);
         sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
       }
+      const { city: subCity, pincode: subPincode } = extractCityPincode(fullAddress);
+      await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);
       setStep("done");
     } catch {
       setError("Something went wrong.");
@@ -352,6 +433,8 @@ export default function CheckoutModal({
             sendOrderSMS(oid, fullAddress, customerPhone, customerName);
             sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
           }
+          const { city: subCity, pincode: subPincode } = extractCityPincode(fullAddress);
+          await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);
           setStep("done");
         },
         prefill: { name: customerName, contact: "+91" + customerPhone.replace(/\D/g, "") },

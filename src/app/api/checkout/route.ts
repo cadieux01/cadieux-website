@@ -5,6 +5,7 @@ import {
   normalizePhone,
   verifyPhoneCookie,
 } from "@/lib/phone-cookie";
+import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -155,6 +156,125 @@ export async function POST(req: NextRequest) {
 
     console.log("✅ Order created:", { order_id: order.id, customer_id, total_amount });
     return NextResponse.json({ order_id: order.id });
+  }
+
+  if (body.action === "place_subscription") {
+    const cookieValue = req.cookies.get(PHONE_COOKIE_NAME)?.value;
+    const verified = verifyPhoneCookie(cookieValue);
+    if (!verified) {
+      return NextResponse.json(
+        { error: "Phone verification required." },
+        { status: 401 }
+      );
+    }
+
+    const {
+      customer_id,
+      bread_slug,
+      bread_name,
+      bread_price,
+      weeks,
+      days,
+      slot_mode,
+      slot,
+      slots_by_day,
+      total,
+      customer_name,
+      customer_phone,
+      customer_address,
+      customer_city,
+      customer_pincode,
+    } = body;
+
+    if (!customer_id) {
+      return NextResponse.json({ error: "Missing customer." }, { status: 400 });
+    }
+    if (!bread_slug || !weeks || !Array.isArray(days) || days.length === 0) {
+      return NextResponse.json({ error: "Invalid subscription payload." }, { status: 400 });
+    }
+
+    const { data: cust } = await supabaseAdmin
+      .from("customers")
+      .select("id, phone")
+      .eq("id", customer_id)
+      .maybeSingle();
+
+    if (!cust || normalizePhone(cust.phone) !== verified.phone) {
+      return NextResponse.json(
+        { error: "Phone verification mismatch." },
+        { status: 401 }
+      );
+    }
+
+    const dayKeys = (days as string[])
+      .map((d) => d.toLowerCase())
+      .filter((d): d is DayKey => (DAY_KEYS as readonly string[]).includes(d));
+    if (dayKeys.length === 0) {
+      return NextResponse.json({ error: "No valid delivery days." }, { status: 400 });
+    }
+
+    const { data: sub, error: subErr } = await supabaseAdmin
+      .from("subscriptions")
+      .insert({
+        bread_slug,
+        bread_name,
+        bread_price,
+        weeks,
+        days: dayKeys,
+        slot_mode,
+        slot: slot_mode === "same" ? slot : null,
+        slots_by_day: slot_mode === "custom" ? slots_by_day : null,
+        total,
+        customer_name,
+        customer_phone,
+        customer_address,
+        customer_city,
+        customer_pincode,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (subErr || !sub) {
+      console.error("❌ Subscription insert failed:", subErr);
+      return NextResponse.json(
+        { error: "Failed to create subscription", details: subErr?.message },
+        { status: 500 }
+      );
+    }
+
+    const generated = generateDeliveries(new Date(), dayKeys, Number(weeks));
+    const deliveryRows = generated.map((d) => {
+      const slotForDay =
+        slot_mode === "same"
+          ? slot
+          : (slots_by_day && (slots_by_day as Record<string, string>)[d.day_key]) ?? null;
+      return {
+        subscription_id: sub.id,
+        sequence: d.sequence,
+        week_number: d.week_number,
+        day_key: d.day_key,
+        slot: slotForDay,
+        delivery_date: d.delivery_date.toISOString().slice(0, 10),
+        status: "pending",
+      };
+    });
+
+    if (deliveryRows.length > 0) {
+      const { error: delErr } = await supabaseAdmin
+        .from("subscription_deliveries")
+        .insert(deliveryRows);
+      if (delErr) {
+        console.error("❌ Delivery insert failed:", delErr);
+        return NextResponse.json(
+          { error: "Failed to create deliveries", details: delErr.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    console.log("✅ Subscription created:", { subscription_id: sub.id, deliveries: deliveryRows.length });
+    return NextResponse.json({ subscription_id: sub.id, deliveries: deliveryRows.length });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

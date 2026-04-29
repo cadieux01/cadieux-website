@@ -1,10 +1,32 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PRODUCTS } from "@/lib/data";
 import { useCart } from "@/context/CartContext";
+
+type HubSub = {
+  id: string;
+  bread_name: string | null;
+  weeks: number | null;
+  days: string[] | null;
+  total: number | null;
+  status: string | null;
+  next_delivery_date: string | null;
+};
+
+function formatHubDate(iso: string | null): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
@@ -71,6 +93,28 @@ function SubscriptionInner() {
 
   // If a product was passed in via query, jump straight into the wizard.
   const [step, setStep] = useState<Step>(product ? "weeks" : "intro");
+  const [hubSubs, setHubSubs] = useState<HubSub[] | null>(null);
+  const [hubLoading, setHubLoading] = useState(false);
+  const [startPickerOpen, setStartPickerOpen] = useState(false);
+
+  // Hub: load this customer's subscriptions when we're on the intro step
+  // without a slug. We identify the user by their saved phone (set after a
+  // verified order; same convention as /orders).
+  useEffect(() => {
+    if (product || step !== "intro") return;
+    if (typeof window === "undefined") return;
+    const phone = localStorage.getItem("cadieux_phone");
+    if (!phone) {
+      setHubSubs([]);
+      return;
+    }
+    setHubLoading(true);
+    fetch(`/api/subscriptions?phone=${encodeURIComponent(phone)}`)
+      .then((r) => r.json())
+      .then((d) => setHubSubs(d.subscriptions ?? []))
+      .catch(() => setHubSubs([]))
+      .finally(() => setHubLoading(false));
+  }, [product, step]);
   const [weeks, setWeeks] = useState<number | null>(null);
   const [days, setDays] = useState<string[]>([]);
   // Same-window-for-all-days mode
@@ -249,33 +293,120 @@ function SubscriptionInner() {
           </div>
         )}
 
-        {/* INTRO */}
+        {/* INTRO / HUB — shown when no product slug is in the URL */}
         {step === "intro" && (
           <>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(240,223,200,0.55)", lineHeight: 1.7, margin: "0 0 28px" }}>
-              Cadieux loaves at your door, fresh on the days that suit you. Pick a duration, choose your delivery days, and lock in a 2-hour window.
+            {/* Existing subscriptions */}
+            {hubLoading && (
+              <p style={{ margin: "0 0 24px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>
+                Loading…
+              </p>
+            )}
+
+            {!hubLoading && hubSubs && hubSubs.length > 0 && (
+              <div style={{ marginBottom: 32 }}>
+                <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.4em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
+                  Your subscriptions
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {hubSubs.map((s) => (
+                    <Link
+                      key={s.id}
+                      href={`/subscription/${s.id}`}
+                      style={{
+                        textDecoration: "none",
+                        background: "#0a0805",
+                        border: `1px solid rgba(${GOLD},0.35)`,
+                        borderRadius: 12,
+                        padding: "16px 18px",
+                        display: "flex", flexDirection: "column", gap: 8,
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                        <span style={{ fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 400, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+                          {s.bread_name ?? "Subscription"}
+                        </span>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
+                          {(s.status ?? "pending").toUpperCase()}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, color: "rgba(240,223,200,0.6)", letterSpacing: "0.04em" }}>
+                          {s.weeks} {s.weeks === 1 ? "wk" : "wks"} · {(s.days ?? []).length} {(s.days ?? []).length === 1 ? "day" : "days"}/wk
+                        </span>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300, color: "#f5f0e8" }}>
+                          ₹{s.total ?? 0}
+                        </span>
+                      </div>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(240,223,200,0.4)" }}>
+                        Next delivery · {formatHubDate(s.next_delivery_date)}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Start a new plan */}
+            <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.4em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
+              {hubSubs && hubSubs.length > 0 ? "Add another" : "Get started"}
             </p>
-            <button
-              type="button"
-              onClick={() => setStep("weeks")}
-              className="cdx-sub-cta"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 10,
-                background: `rgba(${GOLD},0.1)`,
-                border: `1px solid rgba(${GOLD},0.6)`,
-                borderRadius: 10,
-                padding: "14px 28px",
-                fontFamily: "var(--font-body)",
-                fontSize: 11, fontWeight: 400,
-                letterSpacing: "0.3em", textTransform: "uppercase",
-                color: `rgba(${GOLD},0.95)`,
-                cursor: "pointer",
-                transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              Subscribe <span aria-hidden="true">→</span>
-            </button>
+
+            {!startPickerOpen ? (
+              <button
+                type="button"
+                onClick={() => setStartPickerOpen(true)}
+                className="cdx-sub-cta"
+                style={{
+                  width: "100%", textAlign: "left",
+                  background: `rgba(${GOLD},0.08)`,
+                  border: `1px dashed rgba(${GOLD},0.55)`,
+                  borderRadius: 12,
+                  padding: "20px 20px",
+                  display: "flex", flexDirection: "column", gap: 6,
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                  transition: "background 200ms ease, border-color 200ms ease",
+                }}
+              >
+                <span style={{ fontFamily: "var(--font-heading)", fontSize: 19, fontWeight: 400, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+                  Start a new plan
+                </span>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, color: "rgba(240,223,200,0.55)", letterSpacing: "0.04em" }}>
+                  Pick a bread, duration, days, and time slots.
+                </span>
+              </button>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(240,223,200,0.4)" }}>
+                  Choose a bread
+                </p>
+                {PRODUCTS.map((p) => (
+                  <OptionRow
+                    key={p.slug}
+                    selected={false}
+                    onClick={() => router.replace(`/subscription?slug=${p.slug}`)}
+                    title={p.title}
+                    sub={`₹${p.price} per loaf · ${p.tag}`}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setStartPickerOpen(false)}
+                  style={{
+                    background: "transparent", border: "none", cursor: "pointer",
+                    padding: "8px 0",
+                    fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                    letterSpacing: "0.3em", textTransform: "uppercase",
+                    color: "rgba(240,223,200,0.45)",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </>
         )}
 
