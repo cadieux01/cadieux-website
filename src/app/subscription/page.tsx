@@ -128,24 +128,33 @@ function SubscriptionInner() {
     setDays((prev) => (prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]));
   }
 
-  // First-delivery date for each weekday using the same week-1 rule applied at
-  // checkout (see src/lib/subscription-dates.ts): a chosen day delivers this
-  // calendar week iff its weekday index is strictly after the order weekday;
-  // otherwise it slips to next week.
-  const dayDateLabels = useMemo<Record<string, string>>(() => {
+  // First-delivery date + which calendar week (current/next) each weekday
+  // resolves to under the same week-1 rule applied at checkout
+  // (see src/lib/subscription-dates.ts): a chosen day delivers this calendar
+  // week iff its weekday index is strictly after the order weekday; otherwise
+  // it slips to next week. Days delivering before next Monday are bucketed
+  // into "current week" so users see what's still reachable this week.
+  const dayMeta = useMemo<Record<string, { date: string; thisWeek: boolean }>>(() => {
     const today = new Date();
     const orderIdx = (today.getDay() + 6) % 7; // Mon=0..Sun=6
     const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const out: Record<string, string> = {};
+    const daysUntilNextMonday = 7 - orderIdx; // 1..7
+    const out: Record<string, { date: string; thisWeek: boolean }> = {};
     DAYS.forEach(({ key }, dayIdx) => {
       let delta = (dayIdx - orderIdx + 7) % 7;
       if (delta === 0) delta = 7;
       const d = new Date(anchor);
       d.setDate(anchor.getDate() + delta);
-      out[key] = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+      out[key] = {
+        date: d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+        thisWeek: delta < daysUntilNextMonday,
+      };
     });
     return out;
   }, []);
+
+  const thisWeekDays = useMemo(() => DAYS.filter((d) => dayMeta[d.key]?.thisWeek), [dayMeta]);
+  const nextWeekDays = useMemo(() => DAYS.filter((d) => !dayMeta[d.key]?.thisWeek), [dayMeta]);
 
   function reset() {
     setStep(product ? "weeks" : "intro");
@@ -455,16 +464,53 @@ function SubscriptionInner() {
             sub={`Delivery days across all ${weeks} ${weeks === 1 ? "week" : "weeks"}`}
             onBack={() => setStep("weeks")}
           >
-            {DAYS.map(({ key, label }) => {
+            {thisWeekDays.length > 0 && (
+              <div style={{
+                marginTop: 4, marginBottom: 4,
+                fontFamily: "var(--font-body)",
+                fontSize: 10, fontWeight: 300,
+                letterSpacing: "0.3em", textTransform: "uppercase",
+                color: `rgba(${GOLD},0.75)`,
+              }}>
+                Available this week
+              </div>
+            )}
+            {thisWeekDays.map(({ key, label }) => {
               const active = days.includes(key);
-              const dateLabel = dayDateLabels[key];
+              const meta = dayMeta[key];
               return (
                 <OptionRow
                   key={key}
                   selected={active}
                   onClick={() => toggleDay(key)}
-                  title={`${label} · ${dateLabel}`}
-                  sub={active ? "Selected · first delivery" : "First delivery"}
+                  title={`${label} · ${meta.date}`}
+                  sub={active ? "Selected · this week" : "Starts this week"}
+                  multi
+                />
+              );
+            })}
+
+            {nextWeekDays.length > 0 && (
+              <div style={{
+                marginTop: 12, marginBottom: 4,
+                fontFamily: "var(--font-body)",
+                fontSize: 10, fontWeight: 300,
+                letterSpacing: "0.3em", textTransform: "uppercase",
+                color: "rgba(240,223,200,0.5)",
+              }}>
+                Starts next week
+              </div>
+            )}
+            {nextWeekDays.map(({ key, label }) => {
+              const active = days.includes(key);
+              const meta = dayMeta[key];
+              return (
+                <OptionRow
+                  key={key}
+                  selected={active}
+                  onClick={() => toggleDay(key)}
+                  title={`${label} · ${meta.date}`}
+                  sub={active ? "Selected · next week" : "Starts next week"}
                   multi
                 />
               );
