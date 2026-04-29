@@ -141,11 +141,11 @@ function SubscriptionInner() {
   const [daysByWeek, setDaysByWeek] = useState<Record<number, string[]>>({});
   // 1-based pointer into the per-week picker.
   const [currentWeek, setCurrentWeek] = useState<number>(1);
-  // Week-1 only: progressive disclosure of days that fall in the next
-  // calendar week. Hidden by default so a 1-Week subscriber sees only the
-  // current calendar week's available days. Reveals when "+ Next week" is
-  // pressed.
-  const [showNextWeekDays, setShowNextWeekDays] = useState<boolean>(false);
+  // Week-1 only: which calendar half is being picked. The week-1 page is
+  // split into two sub-pages — "current" shows days in the current calendar
+  // week, "next" shows days that slip to the following calendar week.
+  // Weeks 2+ ignore this flag.
+  const [weekStage, setWeekStage] = useState<"current" | "next">("current");
   // Same-window-for-all-days mode
   const [slot, setSlot] = useState<string | null>(null);
   // Per-day-window mode: { mon: "6:00 – 8:00 AM", wed: "8:00 – 10:00 AM", ... }
@@ -625,6 +625,7 @@ function SubscriptionInner() {
                 onClick={() => {
                   setWeeks(w);
                   setCurrentWeek(1);
+                  setWeekStage("current");
                   // Trim out-of-range week selections if user shortens.
                   setDaysByWeek((prev) => {
                     const next: Record<number, string[]> = {};
@@ -640,118 +641,93 @@ function SubscriptionInner() {
           </Section>
         )}
 
-        {/* STEP 2 — DAYS (per-week picker) */}
+        {/* STEP 2 — DAYS (per-week picker, week 1 split into two sub-pages) */}
         {step === "days" && weeks && (() => {
           const selectedThisWeek = daysByWeek[currentWeek] ?? [];
           const isFirstWeek = currentWeek === 1;
           const isLastWeek = currentWeek === weeks;
+          // If there are no days available in the current calendar week
+          // (e.g. ordering on Sunday), the "current" sub-page would be empty,
+          // so collapse straight into "next".
+          const effectiveStage: "current" | "next" =
+            isFirstWeek && thisWeekDays.length === 0 ? "next" : weekStage;
+          const onCurrentSubpage = isFirstWeek && effectiveStage === "current";
+          const onNextSubpage = isFirstWeek && effectiveStage === "next";
+          const nextWeekDaysList = DAYS.filter(
+            (d) => !dayMeta[d.key]?.thisWeekDate
+          );
           const fmtForWeek = (key: string) =>
             formatDeliveryDate(dateForWeek(key, currentWeek));
           return (
             <Section
-              title={`Week ${currentWeek} of ${weeks} — pick days`}
+              title={
+                onCurrentSubpage
+                  ? "Pick days for this week"
+                  : onNextSubpage
+                  ? "Pick days for next week"
+                  : `Week ${currentWeek} of ${weeks} — pick days`
+              }
               sub={
-                isFirstWeek
-                  ? "These first deliveries land this week or next week"
+                onCurrentSubpage
+                  ? "Available this week"
+                  : onNextSubpage
+                  ? "These start next week"
                   : "Pick days for next week"
               }
               onBack={() => {
-                if (currentWeek > 1) setCurrentWeek(currentWeek - 1);
-                else setStep("weeks");
+                if (onNextSubpage && thisWeekDays.length > 0) {
+                  setWeekStage("current");
+                } else if (currentWeek > 1) {
+                  setCurrentWeek(currentWeek - 1);
+                  // Coming back into week 1 lands on the next sub-page.
+                  if (currentWeek - 1 === 1) setWeekStage("next");
+                } else {
+                  setStep("weeks");
+                }
               }}
             >
-              {isFirstWeek && thisWeekDays.length > 0 && (
-                <>
-                  <div style={{
-                    marginTop: 4, marginBottom: 4,
-                    fontFamily: "var(--font-body)",
-                    fontSize: 10, fontWeight: 300,
-                    letterSpacing: "0.3em", textTransform: "uppercase",
-                    color: `rgba(${GOLD},0.75)`,
-                  }}>
-                    Available this week
-                  </div>
-                  {thisWeekDays.map(({ key, label }) => {
-                    const active = selectedThisWeek.includes(key);
-                    const meta = dayMeta[key];
-                    return (
-                      <OptionRow
-                        key={`tw-${key}`}
-                        selected={active}
-                        onClick={() => toggleDayForWeek(currentWeek, key)}
-                        title={`${label} · ${meta.thisWeekDate}`}
-                        sub={active ? "Selected · this week" : "Starts this week"}
-                        multi
-                      />
-                    );
-                  })}
-                </>
-              )}
+              {onCurrentSubpage && thisWeekDays.map(({ key, label }) => {
+                const active = selectedThisWeek.includes(key);
+                const meta = dayMeta[key];
+                return (
+                  <OptionRow
+                    key={`tw-${key}`}
+                    selected={active}
+                    onClick={() => toggleDayForWeek(currentWeek, key)}
+                    title={`${label} · ${meta.thisWeekDate}`}
+                    sub={active ? "Selected · this week" : "Starts this week"}
+                    multi
+                  />
+                );
+              })}
 
-              {/* Week 1: next-week days are hidden behind a "+ Next week"
-                  toggle so a 1-Week subscriber sees only the current
-                  calendar week by default. Weeks 2+ always show all 7 days.
-              */}
-              {isFirstWeek && !showNextWeekDays && (
-                <button
-                  type="button"
-                  onClick={() => setShowNextWeekDays(true)}
-                  style={{
-                    marginTop: 12,
-                    width: "100%",
-                    background: "transparent",
-                    border: "1px dashed rgba(240,223,200,0.25)",
-                    borderRadius: 10,
-                    padding: "12px 18px",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 11, fontWeight: 300,
-                    letterSpacing: "0.3em", textTransform: "uppercase",
-                    color: "rgba(240,223,200,0.7)",
-                    cursor: "pointer",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  + Next week
-                </button>
-              )}
+              {onNextSubpage && nextWeekDaysList.map(({ key, label }) => {
+                const active = selectedThisWeek.includes(key);
+                return (
+                  <OptionRow
+                    key={`nw-${key}`}
+                    selected={active}
+                    onClick={() => toggleDayForWeek(currentWeek, key)}
+                    title={`${label} · ${dayMeta[key].nextWeekDate}`}
+                    sub={active ? "Selected · next week" : "Starts next week"}
+                    multi
+                  />
+                );
+              })}
 
-              {(!isFirstWeek || showNextWeekDays) && (
-                <>
-                  {isFirstWeek && (
-                    <div style={{
-                      marginTop: 12, marginBottom: 4,
-                      fontFamily: "var(--font-body)",
-                      fontSize: 10, fontWeight: 300,
-                      letterSpacing: "0.3em", textTransform: "uppercase",
-                      color: "rgba(240,223,200,0.5)",
-                    }}>
-                      Starts next week
-                    </div>
-                  )}
-                  {(isFirstWeek
-                    ? DAYS.filter((d) => !dayMeta[d.key]?.thisWeekDate)
-                    : DAYS
-                  ).map(({ key, label }) => {
-                    const active = selectedThisWeek.includes(key);
-                    const dateLabel = isFirstWeek
-                      ? dayMeta[key].nextWeekDate
-                      : fmtForWeek(key);
-                    const subLabel = isFirstWeek
-                      ? (active ? "Selected · next week" : "Starts next week")
-                      : (active ? "Selected · next week" : "Next week");
-                    return (
-                      <OptionRow
-                        key={`w${currentWeek}-${key}`}
-                        selected={active}
-                        onClick={() => toggleDayForWeek(currentWeek, key)}
-                        title={`${label} · ${dateLabel}`}
-                        sub={subLabel}
-                        multi
-                      />
-                    );
-                  })}
-                </>
-              )}
+              {!isFirstWeek && DAYS.map(({ key, label }) => {
+                const active = selectedThisWeek.includes(key);
+                return (
+                  <OptionRow
+                    key={`w${currentWeek}-${key}`}
+                    selected={active}
+                    onClick={() => toggleDayForWeek(currentWeek, key)}
+                    title={`${label} · ${fmtForWeek(key)}`}
+                    sub={active ? "Selected · next week" : "Next week"}
+                    multi
+                  />
+                );
+              })}
 
               {/* Running total */}
               {product && (
@@ -785,61 +761,63 @@ function SubscriptionInner() {
                 </div>
               )}
 
-              {/* Primary action: next week → or checkout if last */}
-              {!isLastWeek ? (
-                <button
-                  type="button"
-                  onClick={() => setCurrentWeek(currentWeek + 1)}
-                  className="cdx-sub-next"
-                  style={{
-                    marginTop: 16,
-                    width: "100%",
-                    background: `rgba(${GOLD},0.12)`,
-                    border: `1px solid rgba(${GOLD},0.65)`,
-                    borderRadius: 10,
-                    padding: "14px 18px",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 11, fontWeight: 400,
-                    letterSpacing: "0.3em", textTransform: "uppercase",
-                    color: `rgba(${GOLD},0.95)`,
-                    cursor: "pointer",
-                    transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  Go to next week →
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={totalDayCount === 0}
-                  onClick={continueFromDays}
-                  className="cdx-sub-next"
-                  style={{
-                    marginTop: 16,
-                    width: "100%",
-                    background: totalDayCount === 0 ? "transparent" : `rgba(${GOLD},0.12)`,
-                    border: `1px solid rgba(${GOLD},${totalDayCount === 0 ? 0.25 : 0.65})`,
-                    borderRadius: 10,
-                    padding: "14px 18px",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 11, fontWeight: 400,
-                    letterSpacing: "0.3em", textTransform: "uppercase",
-                    color: totalDayCount === 0 ? "rgba(240,223,200,0.3)" : `rgba(${GOLD},0.95)`,
-                    cursor: totalDayCount === 0 ? "not-allowed" : "pointer",
-                    transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  Continue {totalDayCount > 0 && `· ${totalDayCount} ${totalDayCount === 1 ? "delivery" : "deliveries"}`} →
-                </button>
-              )}
+              {/* Primary action: advances through sub-pages then weeks then
+                  to checkout. Final-page label switches to "Continue ·". */}
+              {(() => {
+                const isFinalDayPage =
+                  isLastWeek && (!isFirstWeek || effectiveStage === "next");
+                const handleForward = () => {
+                  if (onCurrentSubpage) {
+                    setWeekStage("next");
+                  } else if (isFinalDayPage) {
+                    continueFromDays();
+                  } else {
+                    setCurrentWeek(currentWeek + 1);
+                    setWeekStage("current");
+                  }
+                };
+                const disabled = isFinalDayPage && totalDayCount === 0;
+                return (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={handleForward}
+                    className="cdx-sub-next"
+                    style={{
+                      marginTop: 16,
+                      width: "100%",
+                      background: disabled ? "transparent" : `rgba(${GOLD},0.12)`,
+                      border: `1px solid rgba(${GOLD},${disabled ? 0.25 : 0.65})`,
+                      borderRadius: 10,
+                      padding: "14px 18px",
+                      fontFamily: "var(--font-body)",
+                      fontSize: 11, fontWeight: 400,
+                      letterSpacing: "0.3em", textTransform: "uppercase",
+                      color: disabled ? "rgba(240,223,200,0.3)" : `rgba(${GOLD},0.95)`,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >
+                    {isFinalDayPage
+                      ? `Continue ${totalDayCount > 0 ? `· ${totalDayCount} ${totalDayCount === 1 ? "delivery" : "deliveries"}` : ""} →`
+                      : "Go to next week →"}
+                  </button>
+                );
+              })()}
 
-              {/* Secondary: jump back through earlier weeks */}
-              {currentWeek > 1 && (
+              {/* Secondary: step back through sub-pages / earlier weeks */}
+              {(currentWeek > 1 || onNextSubpage) && (
                 <button
                   type="button"
-                  onClick={() => setCurrentWeek(currentWeek - 1)}
+                  onClick={() => {
+                    if (onNextSubpage && thisWeekDays.length > 0) {
+                      setWeekStage("current");
+                    } else if (currentWeek > 1) {
+                      setCurrentWeek(currentWeek - 1);
+                      if (currentWeek - 1 === 1) setWeekStage("next");
+                    }
+                  }}
                   style={{
                     marginTop: 8,
                     width: "100%",
