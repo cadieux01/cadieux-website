@@ -128,6 +128,25 @@ function SubscriptionInner() {
     setDays((prev) => (prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]));
   }
 
+  // First-delivery date for each weekday using the same week-1 rule applied at
+  // checkout (see src/lib/subscription-dates.ts): a chosen day delivers this
+  // calendar week iff its weekday index is strictly after the order weekday;
+  // otherwise it slips to next week.
+  const dayDateLabels = useMemo<Record<string, string>>(() => {
+    const today = new Date();
+    const orderIdx = (today.getDay() + 6) % 7; // Mon=0..Sun=6
+    const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const out: Record<string, string> = {};
+    DAYS.forEach(({ key }, dayIdx) => {
+      let delta = (dayIdx - orderIdx + 7) % 7;
+      if (delta === 0) delta = 7;
+      const d = new Date(anchor);
+      d.setDate(anchor.getDate() + delta);
+      out[key] = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    });
+    return out;
+  }, []);
+
   function reset() {
     setStep(product ? "weeks" : "intro");
     setWeeks(null);
@@ -438,13 +457,14 @@ function SubscriptionInner() {
           >
             {DAYS.map(({ key, label }) => {
               const active = days.includes(key);
+              const dateLabel = dayDateLabels[key];
               return (
                 <OptionRow
                   key={key}
                   selected={active}
                   onClick={() => toggleDay(key)}
-                  title={label}
-                  sub={active ? "Selected" : "Tap to select"}
+                  title={`${label} · ${dateLabel}`}
+                  sub={active ? "Selected · first delivery" : "First delivery"}
                   multi
                 />
               );
