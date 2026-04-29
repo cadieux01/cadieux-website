@@ -54,18 +54,6 @@ function formatDeliveryDate(d: Date): string {
   return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 }
 
-// "1st", "2nd", "3rd", "4th", ... — used for week labels in the picker so
-// users see "2nd week" rather than "next week" or "Week 2".
-function ordinal(n: number): string {
-  const v = n % 100;
-  if (v >= 11 && v <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1: return `${n}st`;
-    case 2: return `${n}nd`;
-    case 3: return `${n}rd`;
-    default: return `${n}th`;
-  }
-}
 type SlotMode = "same" | "custom";
 
 const WEEK_OPTIONS = [
@@ -656,11 +644,11 @@ function SubscriptionInner() {
             formatDeliveryDate(dateForWeek(key, currentWeek));
           return (
             <Section
-              title={`${ordinal(currentWeek)} week of ${weeks} — pick days`}
+              title={`Week ${currentWeek} of ${weeks} — pick days`}
               sub={
                 isFirstWeek
-                  ? "These first deliveries land this week or 2nd week"
-                  : `${ordinal(currentWeek)} delivery week`
+                  ? "These first deliveries land this week or next week"
+                  : "Pick days for next week"
               }
               onBack={() => {
                 if (currentWeek > 1) setCurrentWeek(currentWeek - 1);
@@ -699,15 +687,15 @@ function SubscriptionInner() {
                     letterSpacing: "0.3em", textTransform: "uppercase",
                     color: "rgba(240,223,200,0.5)",
                   }}>
-                    Starts 2nd week
+                    Starts next week
                   </div>
                 </>
               )}
 
               {/* Remaining days. For week 1, only days that didn't fit in
-                  the current calendar week — they slip to the 2nd week. For
-                  weeks 2+, all 7 days with their concrete date for that
-                  subscription-week. */}
+                  the current calendar week — they slip to the following
+                  week. For weeks 2+, all 7 days with their concrete date
+                  for that subscription-week. */}
               {(isFirstWeek
                 ? DAYS.filter((d) => !dayMeta[d.key]?.thisWeekDate)
                 : DAYS
@@ -717,8 +705,8 @@ function SubscriptionInner() {
                   ? dayMeta[key].nextWeekDate
                   : fmtForWeek(key);
                 const subLabel = isFirstWeek
-                  ? (active ? "Selected · 2nd week" : "Starts 2nd week")
-                  : (active ? `Selected · ${ordinal(currentWeek)} week` : `${ordinal(currentWeek)} week`);
+                  ? (active ? "Selected · next week" : "Starts next week")
+                  : (active ? "Selected · next week" : "Next week");
                 return (
                   <OptionRow
                     key={`w${currentWeek}-${key}`}
@@ -743,7 +731,7 @@ function SubscriptionInner() {
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: `rgba(${GOLD},0.75)` }}>
-                      {ordinal(currentWeek)} week
+                      Week {currentWeek}
                     </span>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#f5f0e8" }}>
                       ₹{perWeek}
@@ -785,7 +773,7 @@ function SubscriptionInner() {
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  Go to {ordinal(currentWeek + 1)} week →
+                  Go to next week →
                 </button>
               ) : (
                 <button
@@ -833,7 +821,7 @@ function SubscriptionInner() {
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  ← {ordinal(currentWeek - 1)} week
+                  ← Previous week
                 </button>
               )}
             </Section>
