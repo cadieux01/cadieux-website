@@ -101,7 +101,7 @@ function SubscriptionInner() {
     () => PRODUCTS.findIndex((p) => p.slug === slug),
     [slug]
   );
-  const { addToCart } = useCart();
+  const { addToCart, openCheckout } = useCart();
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Swap the bread variant in-place. The URL slug drives `product`, so total
@@ -268,15 +268,63 @@ function SubscriptionInner() {
     router.push("/cart");
   }
 
-  // After picking days, branch: 1 day → straight to single picker, 2+ days → ask
-  // whether to apply one window to all days or pick per-day.
+  // After picking days, jump straight to address+payment via the global
+  // CheckoutModal. We assign a default slot so the cart line item is complete;
+  // per-delivery slot tweaks are handled later from admin / the timeline view.
   function continueFromDays() {
-    if (days.length > 1) {
-      setStep("time-mode");
-    } else {
-      setSlotMode("same");
-      setStep("time");
+    if (!product || !weeks || productIndex < 0) return;
+
+    const defaultSlot = SLOTS[0];
+    const dayLabelList = days
+      .map((k) => DAYS.find((d) => d.key === k)?.label || "")
+      .filter(Boolean);
+
+    // Concrete delivery calendar (week-1 rule). Mirrors the deliveryRows memo
+    // but runs synchronously so we can hand a complete cart item to the modal.
+    const today = new Date();
+    const orderIdx = (today.getDay() + 6) % 7;
+    const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const rows: Array<{ week_number: number; day_key: string; date: Date }> = [];
+    for (const dayKey of days) {
+      const dayIdx = DAYS.findIndex((d) => d.key === dayKey);
+      let delta = (dayIdx - orderIdx + 7) % 7;
+      if (delta === 0) delta = 7;
+      for (let w = 1; w <= weeks; w++) {
+        const date = new Date(anchor);
+        date.setDate(anchor.getDate() + delta + (w - 1) * 7);
+        rows.push({ week_number: w, day_key: dayKey, date });
+      }
     }
+    rows.sort((a, b) => a.date.getTime() - b.date.getTime());
+    const cartDeliveries = rows.map((r, i) => ({
+      sequence: i + 1,
+      week_number: r.week_number,
+      day_key: r.day_key,
+      delivery_date: isoDate(r.date),
+      slot: defaultSlot,
+      skipped: false,
+    }));
+
+    const totalCalc = product.price * cartDeliveries.length;
+
+    setSlotMode("same");
+    setSlot(defaultSlot);
+
+    addToCart({
+      productIndex,
+      name: `${product.name} — Subscription`,
+      price: totalCalc,
+      qty: 1,
+      orderType: "sub",
+      weeks,
+      days: dayLabelList,
+      slotMode: "same",
+      slot: defaultSlot,
+      slotsByDay: null,
+      deliveries: cartDeliveries,
+    });
+
+    openCheckout();
   }
 
   // Time-step "Back" needs to know whether we came from time-mode or days.
@@ -498,7 +546,11 @@ function SubscriptionInner() {
                   <OptionRow
                     key={p.slug}
                     selected={false}
-                    onClick={() => router.replace(`/subscription?slug=${p.slug}`)}
+                    onClick={() => {
+                      router.replace(`/subscription?slug=${p.slug}`);
+                      setStartPickerOpen(false);
+                      setStep("weeks");
+                    }}
                     title={p.title}
                     sub={`₹${p.price} per loaf · ${p.tag}`}
                   />
