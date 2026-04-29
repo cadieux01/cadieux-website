@@ -326,6 +326,10 @@ export default function CheckoutModal({
             customer_address: fullAddress,
             customer_city: customerCity,
             customer_pincode: customerPincode,
+            // Optional explicit per-delivery list from the wizard's customize
+            // step. When present the API uses it as the source of truth and
+            // skips server-side date generation.
+            deliveries: item.deliveries ?? null,
           }),
         });
       } catch (e) {

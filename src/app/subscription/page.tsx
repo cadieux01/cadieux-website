@@ -32,7 +32,27 @@ const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
 
 const GOLD = "201,169,110";
 
-type Step = "intro" | "weeks" | "days" | "time-mode" | "time" | "summary";
+type Step = "intro" | "weeks" | "days" | "time-mode" | "time" | "customize" | "summary";
+
+type DeliveryRow = {
+  sequence: number;
+  week_number: number;
+  day_key: string;
+  date: Date;          // concrete calendar date
+  slot: string | null; // per-delivery slot (defaults from slotMode)
+  skipped: boolean;
+};
+
+function isoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function formatDeliveryDate(d: Date): string {
+  return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+}
 type SlotMode = "same" | "custom";
 
 const WEEK_OPTIONS = [
@@ -164,6 +184,49 @@ function SubscriptionInner() {
 
   const thisWeekDays = useMemo(() => DAYS.filter((d) => dayMeta[d.key]?.thisWeekDate), [dayMeta]);
 
+  // Per-delivery overrides keyed by `${week}-${day_key}`. When the user opens
+  // the customize step we autogenerate rows from days/weeks; this object lets
+  // them override slot or skip individual deliveries without losing edits when
+  // they navigate back and forth.
+  const [deliveryOverrides, setDeliveryOverrides] = useState<
+    Record<string, { slot?: string | null; skipped?: boolean }>
+  >({});
+
+  // Concrete delivery calendar derived from the current days/weeks selection.
+  // Same week-1 rule used in src/lib/subscription-dates.ts.
+  const deliveryRows: DeliveryRow[] = useMemo(() => {
+    if (!weeks || days.length === 0) return [];
+    const today = new Date();
+    const orderIdx = (today.getDay() + 6) % 7; // Mon=0..Sun=6
+    const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const rows: Omit<DeliveryRow, "sequence">[] = [];
+    for (const dayKey of days) {
+      const dayIdx = DAYS.findIndex((d) => d.key === dayKey);
+      let delta = (dayIdx - orderIdx + 7) % 7;
+      if (delta === 0) delta = 7;
+      for (let w = 1; w <= weeks; w++) {
+        const date = new Date(anchor);
+        date.setDate(anchor.getDate() + delta + (w - 1) * 7);
+        const defaultSlot = slotMode === "same" ? slot : slotsByDay[dayKey] ?? null;
+        const override = deliveryOverrides[`${w}-${dayKey}`] ?? {};
+        rows.push({
+          week_number: w,
+          day_key: dayKey,
+          date,
+          slot: override.slot !== undefined ? override.slot : defaultSlot,
+          skipped: override.skipped ?? false,
+        });
+      }
+    }
+    rows.sort((a, b) => a.date.getTime() - b.date.getTime());
+    return rows.map((r, i) => ({ ...r, sequence: i + 1 }));
+  }, [weeks, days, slotMode, slot, slotsByDay, deliveryOverrides]);
+
+  function setDeliveryOverride(week: number, dayKey: string, patch: { slot?: string | null; skipped?: boolean }) {
+    const k = `${week}-${dayKey}`;
+    setDeliveryOverrides((prev) => ({ ...prev, [k]: { ...(prev[k] ?? {}), ...patch } }));
+  }
+
   function reset() {
     setStep(product ? "weeks" : "intro");
     setWeeks(null);
@@ -172,6 +235,7 @@ function SubscriptionInner() {
     setSlotsByDay({});
     setSlotMode(null);
     setTimeDayIndex(0);
+    setDeliveryOverrides({});
   }
 
   function addSubscriptionToCart() {
@@ -179,6 +243,14 @@ function SubscriptionInner() {
     const dayLabelList = days
       .map((k) => DAYS.find((d) => d.key === k)?.label || "")
       .filter(Boolean);
+    const cartDeliveries = deliveryRows.map((r) => ({
+      sequence: r.sequence,
+      week_number: r.week_number,
+      day_key: r.day_key,
+      delivery_date: isoDate(r.date),
+      slot: r.slot,
+      skipped: r.skipped,
+    }));
     addToCart({
       productIndex,
       name: `${product.name} — Subscription`,
@@ -191,6 +263,7 @@ function SubscriptionInner() {
       slotMode: slotMode || undefined,
       slot: slotMode === "same" ? slot : null,
       slotsByDay: slotMode === "custom" ? slotsByDay : null,
+      deliveries: cartDeliveries,
     });
     router.push("/cart");
   }
@@ -221,14 +294,17 @@ function SubscriptionInner() {
 
   // "time-mode" and "time" share progress-dot index 3 — the user thinks of
   // "picking time" as one phase regardless of mode.
-  const stepIndex = { intro: 0, weeks: 1, days: 2, "time-mode": 3, time: 3, summary: 4 }[step];
+  const stepIndex = { intro: 0, weeks: 1, days: 2, "time-mode": 3, time: 3, customize: 4, summary: 5 }[step];
 
   const dayLabels = days
     .map((k) => DAYS.find((d) => d.key === k)?.label || "")
     .filter(Boolean);
 
-  // Running total: variant price × delivery days per week × number of weeks.
-  const total = product && weeks ? product.price * days.length * weeks : 0;
+  // Running total: variant price × number of active (non-skipped) deliveries.
+  const activeDeliveryCount = deliveryRows.length > 0
+    ? deliveryRows.filter((r) => !r.skipped).length
+    : (days.length * (weeks ?? 0));
+  const total = product ? product.price * activeDeliveryCount : 0;
   const perWeek = product ? product.price * days.length : 0;
 
   return (
@@ -631,7 +707,7 @@ function SubscriptionInner() {
             <button
               type="button"
               disabled={!slot}
-              onClick={() => setStep("summary")}
+              onClick={() => setStep("customize")}
               className="cdx-sub-next"
               style={{
                 marginTop: 16,
@@ -678,7 +754,7 @@ function SubscriptionInner() {
                 type="button"
                 disabled={!currentSlot}
                 onClick={() => {
-                  if (isLast) setStep("summary");
+                  if (isLast) setStep("customize");
                   else setTimeDayIndex(timeDayIndex + 1);
                 }}
                 className="cdx-sub-next"
@@ -704,12 +780,140 @@ function SubscriptionInner() {
           );
         })()}
 
-        {/* STEP 4 — SUMMARY */}
+        {/* STEP 4 — CUSTOMIZE EACH DELIVERY */}
+        {step === "customize" && (
+          <Section
+            title="Customize each delivery"
+            sub={`${activeDeliveryCount} of ${deliveryRows.length} deliveries active`}
+            onBack={() => setStep("time")}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {deliveryRows.map((r) => {
+                const k = `${r.week_number}-${r.day_key}`;
+                const dayLabel = DAYS.find((d) => d.key === r.day_key)?.label || "";
+                return (
+                  <div
+                    key={k}
+                    style={{
+                      border: `1px solid rgba(${GOLD},${r.skipped ? 0.18 : 0.4})`,
+                      borderRadius: 12,
+                      padding: "14px 16px",
+                      background: r.skipped ? "transparent" : "#0a0805",
+                      opacity: r.skipped ? 0.55 : 1,
+                      display: "flex", flexDirection: "column", gap: 10,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                        <span style={{ fontFamily: "var(--font-heading)", fontSize: 16, fontWeight: 400, color: "#f5f0e8", letterSpacing: "0.01em" }}>
+                          #{r.sequence} · {formatDeliveryDate(r.date)}
+                        </span>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.22em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
+                          Week {r.week_number} · {dayLabel}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDeliveryOverride(r.week_number, r.day_key, { skipped: !r.skipped })}
+                        style={{
+                          flexShrink: 0,
+                          background: r.skipped ? `rgba(${GOLD},0.18)` : "transparent",
+                          border: `1px solid rgba(${GOLD},${r.skipped ? 0.65 : 0.35})`,
+                          borderRadius: 8,
+                          padding: "6px 12px",
+                          fontFamily: "var(--font-body)",
+                          fontSize: 10, fontWeight: 400,
+                          letterSpacing: "0.2em", textTransform: "uppercase",
+                          color: r.skipped ? `rgba(${GOLD},0.95)` : "rgba(240,223,200,0.65)",
+                          cursor: "pointer",
+                          WebkitTapHighlightColor: "transparent",
+                        }}
+                      >
+                        {r.skipped ? "Restore" : "Skip"}
+                      </button>
+                    </div>
+
+                    {!r.skipped && (
+                      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(240,223,200,0.5)" }}>
+                          Slot
+                        </span>
+                        <select
+                          value={r.slot ?? ""}
+                          onChange={(e) => setDeliveryOverride(r.week_number, r.day_key, { slot: e.target.value || null })}
+                          style={{
+                            background: "#0a0805",
+                            border: `1px solid rgba(${GOLD},0.35)`,
+                            borderRadius: 8,
+                            padding: "8px 10px",
+                            fontFamily: "var(--font-body)",
+                            fontSize: 13,
+                            color: "#f5f0e8",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value="">— Pick a slot —</option>
+                          {SLOTS.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {product && (
+              <div style={{
+                marginTop: 16,
+                padding: "14px 18px",
+                background: `rgba(${GOLD},0.08)`,
+                border: `1px solid rgba(${GOLD},0.45)`,
+                borderRadius: 12,
+                display: "flex", justifyContent: "space-between", alignItems: "baseline",
+              }}>
+                <span style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 400, letterSpacing: "0.05em", color: "#FBF3D4", textTransform: "uppercase" }}>
+                  Total ({activeDeliveryCount} {activeDeliveryCount === 1 ? "delivery" : "deliveries"})
+                </span>
+                <span style={{ fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 500, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+                  ₹{total}
+                </span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={activeDeliveryCount === 0}
+              onClick={() => setStep("summary")}
+              className="cdx-sub-next"
+              style={{
+                marginTop: 16,
+                width: "100%",
+                background: activeDeliveryCount === 0 ? "transparent" : `rgba(${GOLD},0.12)`,
+                border: `1px solid rgba(${GOLD},${activeDeliveryCount === 0 ? 0.25 : 0.65})`,
+                borderRadius: 10,
+                padding: "14px 18px",
+                fontFamily: "var(--font-body)",
+                fontSize: 11, fontWeight: 400,
+                letterSpacing: "0.3em", textTransform: "uppercase",
+                color: activeDeliveryCount === 0 ? "rgba(240,223,200,0.3)" : `rgba(${GOLD},0.95)`,
+                cursor: activeDeliveryCount === 0 ? "not-allowed" : "pointer",
+                transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              Review →
+            </button>
+          </Section>
+        )}
+
+        {/* STEP 5 — SUMMARY */}
         {step === "summary" && (
           <Section
             title="Review"
             sub="Confirm your subscription"
-            onBack={() => setStep("time")}
+            onBack={() => setStep("customize")}
           >
             {product && <SummaryRow label="Bread" value={`${product.title} · ₹${product.price}`} />}
             <SummaryRow label="Duration" value={`${weeks} ${weeks === 1 ? "week" : "weeks"}`} />

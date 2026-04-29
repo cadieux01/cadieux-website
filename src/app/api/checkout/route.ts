@@ -243,22 +243,61 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const generated = generateDeliveries(new Date(), dayKeys, Number(weeks));
-    const deliveryRows = generated.map((d) => {
-      const slotForDay =
-        slot_mode === "same"
-          ? slot
-          : (slots_by_day && (slots_by_day as Record<string, string>)[d.day_key]) ?? null;
-      return {
-        subscription_id: sub.id,
-        sequence: d.sequence,
-        week_number: d.week_number,
-        day_key: d.day_key,
-        slot: slotForDay,
-        delivery_date: d.delivery_date.toISOString().slice(0, 10),
-        status: "pending",
-      };
-    });
+    // If the wizard supplied an explicit per-delivery list, honor it. Skipped
+    // entries are dropped entirely, and provided dates/slots win over the
+    // server-side calendar generator.
+    type ClientDelivery = {
+      sequence: number;
+      week_number: number;
+      day_key: string;
+      delivery_date: string;
+      slot: string | null;
+      skipped: boolean;
+    };
+    const clientDeliveries = Array.isArray(body.deliveries)
+      ? (body.deliveries as ClientDelivery[]).filter((d) => d && !d.skipped)
+      : null;
+
+    let deliveryRows: Array<{
+      subscription_id: string;
+      sequence: number;
+      week_number: number;
+      day_key: string;
+      slot: string | null;
+      delivery_date: string;
+      status: string;
+    }>;
+
+    if (clientDeliveries && clientDeliveries.length > 0) {
+      deliveryRows = clientDeliveries
+        .sort((a, b) => a.delivery_date.localeCompare(b.delivery_date))
+        .map((d, i) => ({
+          subscription_id: sub.id,
+          sequence: i + 1,
+          week_number: Number(d.week_number) || 1,
+          day_key: String(d.day_key).toLowerCase(),
+          slot: d.slot ?? null,
+          delivery_date: d.delivery_date,
+          status: "pending",
+        }));
+    } else {
+      const generated = generateDeliveries(new Date(), dayKeys, Number(weeks));
+      deliveryRows = generated.map((d) => {
+        const slotForDay =
+          slot_mode === "same"
+            ? slot
+            : (slots_by_day && (slots_by_day as Record<string, string>)[d.day_key]) ?? null;
+        return {
+          subscription_id: sub.id,
+          sequence: d.sequence,
+          week_number: d.week_number,
+          day_key: d.day_key,
+          slot: slotForDay,
+          delivery_date: d.delivery_date.toISOString().slice(0, 10),
+          status: "pending",
+        };
+      });
+    }
 
     if (deliveryRows.length > 0) {
       const { error: delErr } = await supabaseAdmin

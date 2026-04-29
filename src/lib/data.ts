@@ -13,6 +13,16 @@ export type CartItem = {
   slotMode?: "same" | "custom";
   slot?: string | null;
   slotsByDay?: Record<string, string> | null;
+  // Per-delivery overrides — when present, used as the source of truth for
+  // both display and DB insertion (overrides server-side date generation).
+  deliveries?: Array<{
+    sequence: number;
+    week_number: number;
+    day_key: string;
+    delivery_date: string; // yyyy-mm-dd
+    slot: string | null;
+    skipped: boolean;
+  }> | null;
 };
 
 export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
