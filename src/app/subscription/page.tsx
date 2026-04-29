@@ -653,9 +653,8 @@ function SubscriptionInner() {
             isFirstWeek && thisWeekDays.length === 0 ? "next" : weekStage;
           const onCurrentSubpage = isFirstWeek && effectiveStage === "current";
           const onNextSubpage = isFirstWeek && effectiveStage === "next";
-          const nextWeekDaysList = DAYS.filter(
-            (d) => !dayMeta[d.key]?.thisWeekDate
-          );
+          // Next-week sub-page lists all 7 days with their next-week date.
+          const nextWeekDaysList = DAYS;
           const fmtForWeek = (key: string) =>
             formatDeliveryDate(dateForWeek(key, currentWeek));
           return (
