@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizePhone } from "@/lib/phone-cookie";
 import { sendOTP } from "@/lib/msg91";
-import { generateCode, setOtp } from "@/lib/otp-store";
+import { clearOtp, generateCode, setOtp } from "@/lib/otp-store";
 
 // In-memory rate limiter — 5 sends per phone per 15 min.
 // Single-instance only; on serverless cold starts the window resets.
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
 
   const result = await sendOTP(to, code);
   if (!result.ok) {
+    clearOtp(to);
     console.error("MSG91 OTP send failed:", result.error);
     return NextResponse.json(
       { ok: false, error: result.error || "Failed to send code." },

@@ -29,6 +29,10 @@ export function setOtp(phone: string, code: string): void {
   store.set(phone, { code, expires: Date.now() + TTL_MS, attempts: 0 });
 }
 
+export function clearOtp(phone: string): void {
+  store.delete(phone);
+}
+
 export function checkOtp(phone: string, code: string): { ok: boolean; reason?: string } {
   const entry = store.get(phone);
   if (!entry) return { ok: false, reason: "No code issued. Request a new one." };
