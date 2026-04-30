@@ -54,6 +54,17 @@ function formatDeliveryDate(d: Date): string {
   return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 }
 
+function ordinal(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+}
+
 type SlotMode = "same" | "custom";
 
 const WEEK_OPTIONS = [
@@ -148,7 +159,6 @@ function SubscriptionInner() {
   // split into two sub-pages — "current" shows days in the current calendar
   // week, "next" shows days that slip to the following calendar week.
   // Weeks 2+ ignore this flag.
-  const [weekStage, setWeekStage] = useState<"current" | "next">("current");
   // Same-window-for-all-days mode
   const [slot, setSlot] = useState<string | null>(null);
   // Per-day-window mode: { mon: "6:00 – 8:00 AM", wed: "8:00 – 10:00 AM", ... }
@@ -189,13 +199,14 @@ function SubscriptionInner() {
     thisWeekDate: string | null;
     nextWeekDate: string;
     firstDate: Date; // concrete Date for this day under week-1 rule
+    nextWeekDateRaw: Date; // concrete Date for this day in next calendar week
   }>>(() => {
     const today = new Date();
     const orderIdx = (today.getDay() + 6) % 7; // Mon=0..Sun=6
     const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const daysUntilNextMonday = 7 - orderIdx; // 1..7
     const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-    const out: Record<string, { thisWeekDate: string | null; nextWeekDate: string; firstDate: Date }> = {};
+    const out: Record<string, { thisWeekDate: string | null; nextWeekDate: string; firstDate: Date; nextWeekDateRaw: Date }> = {};
     DAYS.forEach(({ key }, dayIdx) => {
       // First-delivery delta under the existing week-1 rule.
       let delta = (dayIdx - orderIdx + 7) % 7;
@@ -206,13 +217,14 @@ function SubscriptionInner() {
 
       // Next-week date = next Monday + dayIdx, regardless of where the
       // first-delivery falls. Always shown in the next-week list.
-      const nextWeekDate = new Date(anchor);
-      nextWeekDate.setDate(anchor.getDate() + daysUntilNextMonday + dayIdx);
+      const nextWeekDateRaw = new Date(anchor);
+      nextWeekDateRaw.setDate(anchor.getDate() + daysUntilNextMonday + dayIdx);
 
       out[key] = {
         thisWeekDate: delta < daysUntilNextMonday ? fmt(firstDate) : null,
-        nextWeekDate: fmt(nextWeekDate),
+        nextWeekDate: fmt(nextWeekDateRaw),
         firstDate,
+        nextWeekDateRaw,
       };
     });
     return out;
@@ -223,9 +235,22 @@ function SubscriptionInner() {
   // Concrete delivery date for a given (day, subscription-week). Week 1 uses
   // the existing week-1 rule date; subsequent weeks step by 7 days.
   function dateForWeek(key: string, week: number): Date {
-    const base = dayMeta[key].firstDate;
-    const d = new Date(base);
-    d.setDate(base.getDate() + (week - 1) * 7);
+    const meta = dayMeta[key];
+    // Edge case: ordering on Sunday (or any day where nothing more is
+    // deliverable in the current calendar week) — Week 1 lives in the next
+    // calendar week, and weeks step from there.
+    if (thisWeekDays.length === 0) {
+      const d = new Date(meta.nextWeekDateRaw);
+      d.setDate(meta.nextWeekDateRaw.getDate() + (week - 1) * 7);
+      return d;
+    }
+    // Normal case: Week 1 uses the week-1 rule date (only meaningful for
+    // days available this calendar week). Weeks 2+ are anchored on the day's
+    // date in the following calendar week and stepped by 7 from there, so
+    // Week 2 always lands in the next calendar week.
+    if (week <= 1) return new Date(meta.firstDate);
+    const d = new Date(meta.nextWeekDateRaw);
+    d.setDate(meta.nextWeekDateRaw.getDate() + (week - 2) * 7);
     return d;
   }
 
@@ -239,11 +264,16 @@ function SubscriptionInner() {
 
   // Concrete delivery calendar derived from the per-week selections. Each
   // subscription week may have a different set of days; weeks 2..N step 7 days
-  // from each day's week-1 rule date.
+  // from each day's week-1 rule date. We iterate every week with picks so the
+  // user can swipe forward up to MAX_NAV_WEEKS and have those picks count.
   const deliveryRows: DeliveryRow[] = useMemo(() => {
     if (!weeks || totalDayCount === 0) return [];
     const rows: Omit<DeliveryRow, "sequence">[] = [];
-    for (let w = 1; w <= weeks; w++) {
+    const weeksWithPicks = Object.keys(daysByWeek)
+      .map(Number)
+      .filter((w) => (daysByWeek[w] ?? []).length > 0)
+      .sort((a, b) => a - b);
+    for (const w of weeksWithPicks) {
       const list = daysByWeek[w] ?? [];
       for (const dayKey of list) {
         const date = dateForWeek(dayKey, w);
@@ -325,9 +355,15 @@ function SubscriptionInner() {
       .map((k) => DAYS.find((d) => d.key === k)?.label || "")
       .filter(Boolean);
 
-    // Flatten daysByWeek into concrete delivery rows.
+    // Flatten daysByWeek into concrete delivery rows. We honour every week
+    // that has picks (up to MAX_NAV_WEEKS = 12), so swiping past the
+    // initially-selected duration still produces real deliveries.
     const rows: Array<{ week_number: number; day_key: string; date: Date }> = [];
-    for (let w = 1; w <= weeks; w++) {
+    const weeksWithPicks = Object.keys(daysByWeek)
+      .map(Number)
+      .filter((w) => (daysByWeek[w] ?? []).length > 0)
+      .sort((a, b) => a - b);
+    for (const w of weeksWithPicks) {
       const list = daysByWeek[w] ?? [];
       for (const dayKey of list) {
         rows.push({ week_number: w, day_key: dayKey, date: dateForWeek(dayKey, w) });
@@ -345,6 +381,9 @@ function SubscriptionInner() {
     }));
 
     const totalCalc = product.price * cartDeliveries.length;
+    const effectiveWeeks = weeksWithPicks.length > 0
+      ? Math.max(weeks, weeksWithPicks[weeksWithPicks.length - 1])
+      : weeks;
 
     setSlotMode("same");
     setSlot(defaultSlot);
@@ -355,7 +394,7 @@ function SubscriptionInner() {
       price: totalCalc,
       qty: 1,
       orderType: "sub",
-      weeks,
+      weeks: effectiveWeeks,
       days: dayLabelList,
       slotMode: "same",
       slot: defaultSlot,
@@ -718,7 +757,6 @@ function SubscriptionInner() {
                 onClick={() => {
                   setWeeks(w);
                   setCurrentWeek(1);
-                  setWeekStage("current");
                   // Trim out-of-range week selections if user shortens.
                   setDaysByWeek((prev) => {
                     const next: Record<number, string[]> = {};
@@ -734,80 +772,42 @@ function SubscriptionInner() {
           </Section>
         )}
 
-        {/* STEP 2 — DAYS (per-week picker, week 1 split into two sub-pages) */}
+        {/* STEP 2 — DAYS (one page per subscription week) */}
         {step === "days" && weeks && (() => {
           const selectedThisWeek = daysByWeek[currentWeek] ?? [];
           const isFirstWeek = currentWeek === 1;
-          const isLastWeek = currentWeek === weeks;
-          // If there are no days available in the current calendar week
-          // (e.g. ordering on Sunday), the "current" sub-page would be empty,
-          // so collapse straight into "next".
-          const effectiveStage: "current" | "next" =
-            isFirstWeek && thisWeekDays.length === 0 ? "next" : weekStage;
-          const onCurrentSubpage = isFirstWeek && effectiveStage === "current";
-          const onNextSubpage = isFirstWeek && effectiveStage === "next";
-          // Next-week sub-page lists all 7 days with their next-week date.
-          const nextWeekDaysList = DAYS;
+          const noDaysThisCal = thisWeekDays.length === 0;
+          // Week 1 lists only days deliverable this calendar week (unless
+          // there are none — then it falls back to the full 7-day list,
+          // which dateForWeek dates into next calendar week).
+          const dayList = isFirstWeek && !noDaysThisCal ? thisWeekDays : DAYS;
           const fmtForWeek = (key: string) =>
             formatDeliveryDate(dateForWeek(key, currentWeek));
+          const titleForWeek = (w: number) => {
+            if (w === 1) return "Available this week";
+            if (w === 2) return "Next week";
+            return `${ordinal(w)} week`;
+          };
+          const subForWeek = (w: number) => {
+            if (w === 1) return noDaysThisCal
+              ? "Your first deliveries land next week"
+              : "Pick days available this week";
+            if (w === 2) return "Pick days for next week";
+            return `Pick days for the ${ordinal(w)} week`;
+          };
           return (
             <Section
-              title={
-                onCurrentSubpage
-                  ? "Available this week"
-                  : onNextSubpage
-                  ? "Pick days for next week"
-                  : `Week ${currentWeek} of ${weeks} — pick days`
-              }
-              sub={
-                onCurrentSubpage
-                  ? "Pick days available this week"
-                  : onNextSubpage
-                  ? "These start next week"
-                  : "Pick days for next week"
-              }
+              title={titleForWeek(currentWeek)}
+              sub={subForWeek(currentWeek)}
               onBack={() => {
-                if (onNextSubpage && thisWeekDays.length > 0) {
-                  setWeekStage("current");
-                } else if (currentWeek > 1) {
+                if (currentWeek > 1) {
                   setCurrentWeek(currentWeek - 1);
-                  // Coming back into week 1 lands on the next sub-page.
-                  if (currentWeek - 1 === 1) setWeekStage("next");
                 } else {
                   setStep("weeks");
                 }
               }}
             >
-              {onCurrentSubpage && thisWeekDays.map(({ key, label }) => {
-                const active = selectedThisWeek.includes(key);
-                const meta = dayMeta[key];
-                return (
-                  <OptionRow
-                    key={`tw-${key}`}
-                    selected={active}
-                    onClick={() => toggleDayForWeek(currentWeek, key)}
-                    title={`${label} · ${meta.thisWeekDate}`}
-                    sub={active ? "Selected · this week" : "Starts this week"}
-                    multi
-                  />
-                );
-              })}
-
-              {onNextSubpage && nextWeekDaysList.map(({ key, label }) => {
-                const active = selectedThisWeek.includes(key);
-                return (
-                  <OptionRow
-                    key={`nw-${key}`}
-                    selected={active}
-                    onClick={() => toggleDayForWeek(currentWeek, key)}
-                    title={`${label} · ${dayMeta[key].nextWeekDate}`}
-                    sub={active ? "Selected · next week" : "Starts next week"}
-                    multi
-                  />
-                );
-              })}
-
-              {!isFirstWeek && DAYS.map(({ key, label }) => {
+              {dayList.map(({ key, label }) => {
                 const active = selectedThisWeek.includes(key);
                 return (
                   <OptionRow
@@ -815,7 +815,7 @@ function SubscriptionInner() {
                     selected={active}
                     onClick={() => toggleDayForWeek(currentWeek, key)}
                     title={`${label} · ${fmtForWeek(key)}`}
-                    sub={active ? "Selected · next week" : "Next week"}
+                    sub={active ? `Selected · ${titleForWeek(currentWeek).toLowerCase()}` : titleForWeek(currentWeek)}
                     multi
                   />
                 );
@@ -853,22 +853,17 @@ function SubscriptionInner() {
                 </div>
               )}
 
-              {/* Primary action: advances through sub-pages then weeks then
-                  to checkout. Final-page label switches to "Continue ·". */}
+              {/* Primary action: always advances week-by-week (up to 12) so
+                  the user can swipe through future weeks regardless of the
+                  duration they originally picked. A separate Continue button
+                  below finalises the plan. */}
               {(() => {
-                const isFinalDayPage =
-                  isLastWeek && (!isFirstWeek || effectiveStage === "next");
+                const MAX_NAV_WEEKS = 12;
+                const atMaxWeek = currentWeek >= MAX_NAV_WEEKS;
                 const handleForward = () => {
-                  if (onCurrentSubpage) {
-                    setWeekStage("next");
-                  } else if (isFinalDayPage) {
-                    continueFromDays();
-                  } else {
-                    setCurrentWeek(currentWeek + 1);
-                    setWeekStage("current");
-                  }
+                  if (!atMaxWeek) setCurrentWeek(currentWeek + 1);
                 };
-                const disabled = isFinalDayPage && totalDayCount === 0;
+                const disabled = atMaxWeek;
                 return (
                   <button
                     type="button"
@@ -891,24 +886,46 @@ function SubscriptionInner() {
                       WebkitTapHighlightColor: "transparent",
                     }}
                   >
-                    {isFinalDayPage
-                      ? `Continue ${totalDayCount > 0 ? `· ${totalDayCount} ${totalDayCount === 1 ? "delivery" : "deliveries"}` : ""} →`
-                      : "Go to next week →"}
+                    {atMaxWeek
+                      ? "Last week"
+                      : currentWeek === 1
+                      ? "Go to next week →"
+                      : `Go to ${ordinal(currentWeek + 1)} week →`}
                   </button>
                 );
               })()}
 
-              {/* Secondary: step back through sub-pages / earlier weeks */}
-              {(currentWeek > 1 || onNextSubpage) && (
+              {/* Continue: finalise the plan with whatever has been picked
+                  across all weeks. Available from any week. */}
+              {totalDayCount > 0 && (
+                <button
+                  type="button"
+                  onClick={continueFromDays}
+                  style={{
+                    marginTop: 10,
+                    width: "100%",
+                    background: `rgba(${GOLD},0.22)`,
+                    border: `1px solid rgba(${GOLD},0.85)`,
+                    borderRadius: 10,
+                    padding: "14px 18px",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 11, fontWeight: 500,
+                    letterSpacing: "0.3em", textTransform: "uppercase",
+                    color: "#FBF3D4",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  Continue · {totalDayCount} {totalDayCount === 1 ? "delivery" : "deliveries"} →
+                </button>
+              )}
+
+              {/* Secondary: step back to the previous week */}
+              {currentWeek > 1 && (
                 <button
                   type="button"
                   onClick={() => {
-                    if (onNextSubpage && thisWeekDays.length > 0) {
-                      setWeekStage("current");
-                    } else if (currentWeek > 1) {
-                      setCurrentWeek(currentWeek - 1);
-                      if (currentWeek - 1 === 1) setWeekStage("next");
-                    }
+                    setCurrentWeek(currentWeek - 1);
                   }}
                   style={{
                     marginTop: 8,
