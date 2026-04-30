@@ -278,19 +278,24 @@ export default function CheckoutModal({
   }
 
   /* ── Submit subscription rows (one per sub line item) ─────────────────── */
+  // Returns the count of subscription items that FAILED to persist. The caller
+  // uses this to surface a visible warning when, for example, the
+  // `subscriptions` table is missing from Supabase — otherwise sub bookings
+  // silently disappear and never show up under "Track your subscription".
   async function submitSubscriptions(
     fullAddress: string,
     customerName: string,
     customerPhone: string,
     customerCity: string,
     customerPincode: string,
-  ) {
+  ): Promise<number> {
     const subItems = cart.filter((i) => i.orderType === "sub");
-    if (subItems.length === 0 || !customer?.id) return;
+    if (subItems.length === 0 || !customer?.id) return 0;
 
+    let failed = 0;
     for (const item of subItems) {
       const product = PRODUCTS[item.productIndex];
-      if (!product || !item.weeks) continue;
+      if (!product || !item.weeks) { failed++; continue; }
 
       const dayKeys = (item.days ?? [])
         .map(dayLabelToKey)
@@ -306,7 +311,7 @@ export default function CheckoutModal({
       }
 
       try {
-        await fetch("/api/checkout", {
+        const res = await fetch("/api/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -332,10 +337,17 @@ export default function CheckoutModal({
             deliveries: item.deliveries ?? null,
           }),
         });
+        if (!res.ok) {
+          failed++;
+          const body = await res.json().catch(() => ({}));
+          console.error("place_subscription failed:", res.status, body);
+        }
       } catch (e) {
+        failed++;
         console.error("place_subscription failed:", e);
       }
     }
+    return failed;
   }
 
   /* ── COD order ──────────────────────────────────────────────────────────── */
@@ -368,7 +380,13 @@ export default function CheckoutModal({
         sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
       }
       const { city: subCity, pincode: subPincode } = extractCityPincode(fullAddress);
-      await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);
+      const subFailed = await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);
+      if (subFailed > 0) {
+        setError(
+          `Order placed, but ${subFailed} subscription${subFailed > 1 ? "s" : ""} couldn't be tracked. They won't appear under "Track your subscription" until the subscriptions table is set up. Contact support.`
+        );
+        return;
+      }
       setStep("done");
     } catch {
       setError("Something went wrong.");
@@ -438,7 +456,13 @@ export default function CheckoutModal({
             sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
           }
           const { city: subCity, pincode: subPincode } = extractCityPincode(fullAddress);
-          await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);
+          const subFailed = await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);
+          if (subFailed > 0) {
+            setError(
+              `Payment received, but ${subFailed} subscription${subFailed > 1 ? "s" : ""} couldn't be tracked. They won't appear under "Track your subscription" until the subscriptions table is set up. Contact support.`
+            );
+            return;
+          }
           setStep("done");
         },
         prefill: { name: customerName, contact: "+91" + customerPhone.replace(/\D/g, "") },
