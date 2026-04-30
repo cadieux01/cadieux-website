@@ -117,9 +117,9 @@ function SubscriptionInner() {
   const [hubSubs, setHubSubs] = useState<HubSub[] | null>(null);
   const [hubLoading, setHubLoading] = useState(false);
   const [startPickerOpen, setStartPickerOpen] = useState(false);
-  // Hub view: "menu" shows the two top-level options, "track" reveals the
-  // existing-subscriptions list.
-  const [hubMode, setHubMode] = useState<"menu" | "track">("menu");
+  // Hub view: "menu" shows the three top-level options, "track" reveals
+  // active subscriptions, "past" shows completed/cancelled ones.
+  const [hubMode, setHubMode] = useState<"menu" | "track" | "past">("menu");
 
   // Hub: load this customer's subscriptions when we're on the intro step
   // without a slug. We identify the user by their saved phone (set after a
@@ -546,84 +546,125 @@ function SubscriptionInner() {
                     See your active plans and live delivery status.
                   </span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setHubMode("past")}
+                  className="cdx-sub-cta"
+                  style={{
+                    width: "100%", textAlign: "left",
+                    background: "#0a0805",
+                    border: "1px solid rgba(240,223,200,0.18)",
+                    borderRadius: 12,
+                    padding: "20px 20px",
+                    display: "flex", flexDirection: "column", gap: 6,
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                    transition: "background 200ms ease, border-color 200ms ease",
+                  }}
+                >
+                  <span style={{ fontFamily: "var(--font-heading)", fontSize: 19, fontWeight: 400, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+                    Past subscriptions
+                  </span>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, color: "rgba(240,223,200,0.55)", letterSpacing: "0.04em" }}>
+                    Review your completed and cancelled plans.
+                  </span>
+                </button>
               </div>
             )}
 
-            {/* Track view: show the existing-subscriptions list */}
-            {hubMode === "track" && !startPickerOpen && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setHubMode("menu")}
-                  style={{
-                    background: "transparent", border: "none", cursor: "pointer",
-                    padding: "0 0 14px",
-                    fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
-                    letterSpacing: "0.3em", textTransform: "uppercase",
-                    color: "rgba(240,223,200,0.55)",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  ← Back
-                </button>
+            {/* Track / Past views: show subscriptions list filtered by mode */}
+            {(hubMode === "track" || hubMode === "past") && !startPickerOpen && (() => {
+              const isPastView = hubMode === "past";
+              const isPastStatus = (st: string | null) => {
+                const s = (st ?? "pending").toLowerCase();
+                return s === "delivered" || s === "cancelled";
+              };
+              const filtered = (hubSubs ?? []).filter((s) =>
+                isPastView ? isPastStatus(s.status) : !isPastStatus(s.status)
+              );
+              const heading = isPastView ? "Past subscriptions" : "Your subscriptions";
+              const emptyMsg = isPastView
+                ? "No past plans yet."
+                : "No active plans yet.";
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setHubMode("menu")}
+                    style={{
+                      background: "transparent", border: "none", cursor: "pointer",
+                      padding: "0 0 14px",
+                      fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                      letterSpacing: "0.3em", textTransform: "uppercase",
+                      color: "rgba(240,223,200,0.55)",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >
+                    ← Back
+                  </button>
 
-                <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.4em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
-                  Your subscriptions
-                </p>
-
-                {hubLoading && (
-                  <p style={{ margin: "0 0 24px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>
-                    Loading…
+                  <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.4em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
+                    {heading}
                   </p>
-                )}
 
-                {!hubLoading && hubSubs && hubSubs.length === 0 && (
-                  <p style={{ margin: "0 0 24px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300, color: "rgba(240,223,200,0.5)" }}>
-                    No active plans yet.
-                  </p>
-                )}
+                  {hubLoading && (
+                    <p style={{ margin: "0 0 24px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>
+                      Loading…
+                    </p>
+                  )}
 
-                {!hubLoading && hubSubs && hubSubs.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {hubSubs.map((s) => (
-                      <Link
-                        key={s.id}
-                        href={`/subscription/${s.id}`}
-                        style={{
-                          textDecoration: "none",
-                          background: "#0a0805",
-                          border: `1px solid rgba(${GOLD},0.35)`,
-                          borderRadius: 12,
-                          padding: "16px 18px",
-                          display: "flex", flexDirection: "column", gap: 8,
-                          WebkitTapHighlightColor: "transparent",
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-                          <span style={{ fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 400, color: "#FBF3D4", letterSpacing: "0.01em" }}>
-                            {s.bread_name ?? "Subscription"}
-                          </span>
-                          <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
-                            {(s.status ?? "pending").toUpperCase()}
-                          </span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-                          <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, color: "rgba(240,223,200,0.6)", letterSpacing: "0.04em" }}>
-                            {s.weeks} {s.weeks === 1 ? "wk" : "wks"} · {(s.days ?? []).length} {(s.days ?? []).length === 1 ? "day" : "days"}/wk
-                          </span>
-                          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300, color: "#f5f0e8" }}>
-                            ₹{s.total ?? 0}
-                          </span>
-                        </div>
-                        <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(240,223,200,0.4)" }}>
-                          Next delivery · {formatHubDate(s.next_delivery_date)}
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+                  {!hubLoading && filtered.length === 0 && (
+                    <p style={{ margin: "0 0 24px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300, color: "rgba(240,223,200,0.5)" }}>
+                      {emptyMsg}
+                    </p>
+                  )}
+
+                  {!hubLoading && filtered.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {filtered.map((s) => (
+                        <Link
+                          key={s.id}
+                          href={`/subscription/${s.id}`}
+                          style={{
+                            textDecoration: "none",
+                            background: "#0a0805",
+                            border: `1px solid rgba(${GOLD},${isPastView ? 0.2 : 0.35})`,
+                            borderRadius: 12,
+                            padding: "16px 18px",
+                            display: "flex", flexDirection: "column", gap: 8,
+                            opacity: isPastView ? 0.85 : 1,
+                            WebkitTapHighlightColor: "transparent",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                            <span style={{ fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 400, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+                              {s.bread_name ?? "Subscription"}
+                            </span>
+                            <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
+                              {(s.status ?? "pending").toUpperCase()}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                            <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, color: "rgba(240,223,200,0.6)", letterSpacing: "0.04em" }}>
+                              {s.weeks} {s.weeks === 1 ? "wk" : "wks"} · {(s.days ?? []).length} {(s.days ?? []).length === 1 ? "day" : "days"}/wk
+                            </span>
+                            <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300, color: "#f5f0e8" }}>
+                              ₹{s.total ?? 0}
+                            </span>
+                          </div>
+                          {!isPastView && (
+                            <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(240,223,200,0.4)" }}>
+                              Next delivery · {formatHubDate(s.next_delivery_date)}
+                            </div>
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {/* Bread picker (shared) — opened from "Start a new plan" */}
             {startPickerOpen && (
