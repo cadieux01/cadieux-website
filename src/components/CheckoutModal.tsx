@@ -461,6 +461,11 @@ export default function CheckoutModal({
       <style>{`
         @keyframes check-draw { from { stroke-dashoffset: 80; opacity: 0; } to { stroke-dashoffset: 0; opacity: 1; } }
         @keyframes circle-draw { from { stroke-dashoffset: 220; } to { stroke-dashoffset: 0; } }
+        .cdx-checkout-scroll { scrollbar-width: thin; scrollbar-color: rgba(200,144,58,0.5) rgba(240,223,200,0.06); }
+        .cdx-checkout-scroll::-webkit-scrollbar { width: 8px; }
+        .cdx-checkout-scroll::-webkit-scrollbar-track { background: rgba(240,223,200,0.04); }
+        .cdx-checkout-scroll::-webkit-scrollbar-thumb { background: rgba(200,144,58,0.45); border-radius: 4px; }
+        .cdx-checkout-scroll::-webkit-scrollbar-thumb:hover { background: rgba(200,144,58,0.7); }
       `}</style>
 
       {/* Backdrop */}
@@ -474,7 +479,7 @@ export default function CheckoutModal({
         onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       >
         {/* Card */}
-        <div style={{
+        <div className="cdx-checkout-scroll" style={{
           width: "100%", maxWidth: 480,
           background: "#0e0e0e",
           maxHeight: "92dvh", overflowY: "auto",
