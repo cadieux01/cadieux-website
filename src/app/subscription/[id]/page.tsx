@@ -127,11 +127,6 @@ export default function SubscriptionDetailPage() {
     return () => { supabase.removeChannel(channel); };
   }, [id, phone, fetchAll]);
 
-  const lastDeliveredIndex = deliveries.reduce(
-    (acc, d, i) => (d.status === "delivered" ? i : acc),
-    -1
-  );
-
   return (
     <div style={{ minHeight: "100dvh", background: "rgb(6,4,2)", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
@@ -227,85 +222,26 @@ export default function SubscriptionDetailPage() {
               )}
             </div>
 
-            {/* Timeline */}
+            {/* Courier-style tracker: each delivery shows a horizontal
+                Confirmed → Out for Delivery → Delivered stepper. */}
             <p style={{ margin: "0 0 18px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.4em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
-              Deliveries · {deliveries.length}
+              Shipments · {deliveries.length}
             </p>
 
-            <div style={{ position: "relative", paddingLeft: 36 }}>
-              {/* Vertical rail */}
-              <div style={{
-                position: "absolute", left: 13, top: 8, bottom: 8,
-                width: 1,
-                background: "transparent",
-                pointerEvents: "none",
-              }} />
-
-              {deliveries.map((d, i) => {
-                const sk = statusKey(d.status);
-                const colors = STATUS_COLORS[sk];
-                const isPast = i <= lastDeliveredIndex;
-                const isLast = i === deliveries.length - 1;
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {deliveries.map((d) => {
+                const isActive =
+                  d.status !== "delivered" && d.status !== "cancelled" &&
+                  deliveries.findIndex((x) => x.status !== "delivered" && x.status !== "cancelled") ===
+                    deliveries.indexOf(d);
                 return (
-                  <div key={d.id} style={{ position: "relative", paddingBottom: isLast ? 0 : 22 }}>
-                    {/* Connector to next node */}
-                    {!isLast && (
-                      <div style={{
-                        position: "absolute",
-                        left: -23,
-                        top: 22,
-                        bottom: -2,
-                        width: 1,
-                        borderLeft: isPast
-                          ? `1px solid rgba(${GOLD},0.55)`
-                          : "1px dashed rgba(240,223,200,0.18)",
-                      }} />
-                    )}
-
-                    {/* Dot */}
-                    <div style={{
-                      position: "absolute",
-                      left: -29,
-                      top: 4,
-                      width: 14, height: 14, borderRadius: "50%",
-                      background: colors.dot,
-                      boxShadow: `0 0 0 3px rgba(6,4,2,1), 0 0 0 4px ${colors.dot}55`,
-                    }} />
-
-                    {/* Body */}
-                    <div style={{
-                      background: "#0a0805",
-                      border: `1px solid rgba(${GOLD},0.25)`,
-                      borderRadius: 10,
-                      padding: "14px 16px",
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
-                        <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: `rgba(${GOLD},0.75)` }}>
-                          Delivery #{d.sequence} · Week {d.week_number}
-                        </span>
-                        <StatusPill status={d.status} small />
-                      </div>
-                      <div style={{ fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 400, color: "#FBF3D4", letterSpacing: "0.01em", marginBottom: 4 }}>
-                        {formatDate(d.delivery_date)}
-                      </div>
-                      {d.slot && (
-                        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300, color: "rgba(240,223,200,0.55)", letterSpacing: "0.04em" }}>
-                          {d.slot}
-                        </div>
-                      )}
-                      {d.status_updated_at && d.status !== "pending" && (
-                        <div style={{ marginTop: 6, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>
-                          Updated · {formatRelative(d.status_updated_at)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <DeliveryTrackerCard key={d.id} delivery={d} active={isActive} />
                 );
               })}
 
               {deliveries.length === 0 && (
-                <p style={{ marginLeft: -36, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.45)" }}>
-                  No deliveries scheduled yet.
+                <p style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.45)" }}>
+                  No shipments scheduled yet.
                 </p>
               )}
             </div>
@@ -361,6 +297,143 @@ function SummaryLine({ label, value, multiline = false }: { label: string; value
       }}>
         {value}
       </span>
+    </div>
+  );
+}
+
+// Courier-style horizontal stepper for a single delivery. Three milestones —
+// Confirmed → Out for Delivery → Delivered — coloured by completion state.
+const TRACK_STEPS: { key: "confirmed" | "dispatched" | "delivered"; label: string }[] = [
+  { key: "confirmed",  label: "Confirmed" },
+  { key: "dispatched", label: "Out for Delivery" },
+  { key: "delivered",  label: "Delivered" },
+];
+
+function deliveryStepIndex(status: string | null | undefined): number {
+  // -1 = nothing reached yet (pending). 0..2 = current step index.
+  const s = (status ?? "pending").toLowerCase();
+  if (s === "delivered") return 2;
+  if (s === "dispatched") return 1;
+  if (s === "confirmed") return 0;
+  return -1;
+}
+
+function DeliveryTrackerCard({ delivery, active }: { delivery: Delivery; active: boolean }) {
+  const cancelled = (delivery.status ?? "").toLowerCase() === "cancelled";
+  const reached = deliveryStepIndex(delivery.status);
+
+  return (
+    <div style={{
+      background: active ? "#0d0a06" : "#0a0805",
+      border: active
+        ? `1px solid rgba(${GOLD},0.85)`
+        : `1px solid rgba(${GOLD},0.22)`,
+      boxShadow: active
+        ? `0 0 0 1px rgba(${GOLD},0.25), 0 8px 28px -16px rgba(${GOLD},0.5)`
+        : "none",
+      borderRadius: 12,
+      padding: "16px 18px 18px",
+      display: "flex", flexDirection: "column", gap: 14,
+    }}>
+      {/* Top row: AWB-style ID + status pill */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: `rgba(${GOLD},0.7)` }}>
+            AWB · CDX-{delivery.id.slice(0, 6).toUpperCase()}
+          </span>
+          <span style={{ fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 400, color: "#FBF3D4", letterSpacing: "0.01em" }}>
+            Shipment #{delivery.sequence} · {formatDate(delivery.delivery_date)}
+          </span>
+        </div>
+        <StatusPill status={delivery.status} small />
+      </div>
+
+      {/* Stepper */}
+      {cancelled ? (
+        <div style={{
+          padding: "12px 14px",
+          borderRadius: 8,
+          background: "rgba(224,90,90,0.08)",
+          border: "1px solid rgba(224,90,90,0.45)",
+          fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+          color: "#e05a5a", letterSpacing: "0.04em",
+        }}>
+          This shipment was cancelled.
+        </div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", position: "relative", padding: "4px 6px 0" }}>
+          {TRACK_STEPS.map((step, i) => {
+            const done = i <= reached;
+            const isCurrent = i === reached;
+            const dotBg = done ? `rgb(${GOLD})` : "transparent";
+            const dotBorder = done ? `rgb(${GOLD})` : "rgba(240,223,200,0.25)";
+            const labelColor = done ? "#FBF3D4" : "rgba(240,223,200,0.4)";
+            const isLast = i === TRACK_STEPS.length - 1;
+            return (
+              <div key={step.key} style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
+                {/* Connector line to next step */}
+                {!isLast && (
+                  <div style={{
+                    position: "absolute",
+                    top: 9,
+                    left: "50%",
+                    width: "100%",
+                    height: 2,
+                    background: i < reached
+                      ? `rgb(${GOLD})`
+                      : "rgba(240,223,200,0.15)",
+                    zIndex: 0,
+                  }} />
+                )}
+                {/* Dot */}
+                <div style={{
+                  position: "relative", zIndex: 1,
+                  width: 18, height: 18, borderRadius: "50%",
+                  background: dotBg,
+                  border: `2px solid ${dotBorder}`,
+                  boxShadow: isCurrent ? `0 0 0 4px rgba(${GOLD},0.18)` : "none",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {done && i < reached && (
+                    <span style={{ color: "#0a0805", fontSize: 10, fontWeight: 700, lineHeight: 1 }}>✓</span>
+                  )}
+                </div>
+                <span style={{
+                  marginTop: 8,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 9, fontWeight: isCurrent ? 500 : 300,
+                  letterSpacing: "0.18em", textTransform: "uppercase",
+                  color: labelColor, textAlign: "center",
+                  whiteSpace: "nowrap",
+                  textOverflow: "ellipsis", overflow: "hidden",
+                  maxWidth: "100%",
+                }}>
+                  {step.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Footer: slot + last update */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10,
+        paddingTop: 10, borderTop: "1px dashed rgba(240,223,200,0.12)",
+      }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, color: "rgba(240,223,200,0.65)", letterSpacing: "0.04em" }}>
+          {delivery.slot ? `Slot · ${delivery.slot}` : "Slot · TBD"}
+        </span>
+        {delivery.status_updated_at && (delivery.status ?? "") !== "pending" ? (
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(240,223,200,0.4)" }}>
+            Updated · {formatRelative(delivery.status_updated_at)}
+          </span>
+        ) : (
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(240,223,200,0.3)" }}>
+            Awaiting confirmation
+          </span>
+        )}
+      </div>
     </div>
   );
 }
