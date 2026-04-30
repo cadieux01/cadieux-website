@@ -754,14 +754,14 @@ function SubscriptionInner() {
             <Section
               title={
                 onCurrentSubpage
-                  ? "Pick days for this week"
+                  ? "Available this week"
                   : onNextSubpage
                   ? "Pick days for next week"
                   : `Week ${currentWeek} of ${weeks} — pick days`
               }
               sub={
                 onCurrentSubpage
-                  ? "Available this week"
+                  ? "Pick days available this week"
                   : onNextSubpage
                   ? "These start next week"
                   : "Pick days for next week"
