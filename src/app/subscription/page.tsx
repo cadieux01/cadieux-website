@@ -785,15 +785,13 @@ function SubscriptionInner() {
             formatDeliveryDate(dateForWeek(key, currentWeek));
           const titleForWeek = (w: number) => {
             if (w === 1) return "Available this week";
-            if (w === 2) return "Next week";
-            return `${ordinal(w)} week`;
+            return `Week ${w}`;
           };
           const subForWeek = (w: number) => {
             if (w === 1) return noDaysThisCal
               ? "Your first deliveries land next week"
               : "Pick days available this week";
-            if (w === 2) return "Pick days for next week";
-            return `Pick days for the ${ordinal(w)} week`;
+            return `Pick days for week ${w}`;
           };
           return (
             <Section
@@ -888,9 +886,7 @@ function SubscriptionInner() {
                   >
                     {atMaxWeek
                       ? "Last week"
-                      : currentWeek === 1
-                      ? "Go to next week →"
-                      : `Go to ${ordinal(currentWeek + 1)} week →`}
+                      : `Go to week ${currentWeek + 1} →`}
                   </button>
                 );
               })()}
