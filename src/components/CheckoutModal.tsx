@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PRODUCTS, type CartItem } from "@/lib/data";
+import TurnstileWidget, { type TurnstileHandle } from "./TurnstileWidget";
 export type { CartItem } from "@/lib/data";
 
 // Wizard stores day labels like "Monday"/"Tuesday"; subscription_deliveries
@@ -102,6 +103,15 @@ export default function CheckoutModal({
   const [otpError, setOtpError] = useState("");
   const [orderNum, setOrderNum] = useState("");
 
+  // Cloudflare Turnstile bot-protection token. Refreshed (reset) after every
+  // protected request because Turnstile tokens are single-use.
+  const [turnstileToken, setTurnstileToken] = useState<string>("");
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const refreshTurnstile = () => {
+    setTurnstileToken("");
+    turnstileRef.current?.reset();
+  };
+
   /* ── Pre-fill on mount ─────────────────────────────────────────────────── */
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("cadieux_phone") : null;
@@ -151,22 +161,28 @@ export default function CheckoutModal({
   async function sendOtp() {
     const digits = phone.replace(/\D/g, "");
     if (digits.length !== 10) { setOtpError("Enter a valid 10-digit number."); return; }
+    if (!turnstileToken) { setOtpError("Please complete the human-verification check below."); return; }
     setSendingOtp(true); setOtpError("");
     try {
       const res = await fetch("/api/verify/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: digits }),
+        body: JSON.stringify({ phone: digits, turnstileToken }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         setOtpError(data.error ?? "Failed to send code. Try again.");
+        // Token is single-use — get a fresh one for the retry.
+        refreshTurnstile();
         return;
       }
       setOtpSent(true);
       setOtpCode("");
+      // Token consumed by /api/verify/send. Refresh so place_order has its own.
+      refreshTurnstile();
     } catch {
       setOtpError("Network error. Try again.");
+      refreshTurnstile();
     } finally {
       setSendingOtp(false);
     }
@@ -360,6 +376,7 @@ export default function CheckoutModal({
     const customerPhone = isReturning ? (savedCustomer!.phone ?? "") : phone;
     const customerName  = isReturning ? (savedCustomer!.full_name ?? "") : name.trim();
 
+    if (!turnstileToken) { setError("Please complete the human-verification check."); return; }
     setOrderLoading(true); setError("");
     try {
       const res = await fetch("/api/checkout", {
@@ -369,8 +386,12 @@ export default function CheckoutModal({
           customer_id: customer?.id,
           delivery_address: fullAddress,
           total_amount: total,
+          turnstileToken,
         }),
       });
+      // Token is single-use; refresh whether or not the call succeeded so the
+      // sub inserts (which also pass Turnstile) get fresh tokens.
+      refreshTurnstile();
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Order failed."); return; }
       const oid = data.order_id ?? "";
@@ -444,8 +465,10 @@ export default function CheckoutModal({
               customer_id: customer?.id,
               delivery_address: fullAddress,
               total_amount: total,
+              turnstileToken,
             }),
           });
+          refreshTurnstile();
           const d = await r.json();
           setOrderLoading(false);
           console.log("[Payment] Success, Razorpay ID:", response.razorpay_payment_id);
@@ -713,6 +736,17 @@ export default function CheckoutModal({
                         )}
                       </div>
 
+                      {/* Cloudflare Turnstile bot-check. Shown until verified. */}
+                      {!otpVerified && (
+                        <div style={{ marginTop: 14 }}>
+                          <TurnstileWidget
+                            ref={turnstileRef}
+                            onVerify={(t) => setTurnstileToken(t)}
+                            onExpire={() => setTurnstileToken("")}
+                          />
+                        </div>
+                      )}
+
                       {otpSent && !otpVerified && (
                         <div style={{ marginTop: 14 }}>
                           <span style={{ ...labelSt, marginBottom: 8 }}>Enter OTP *</span>
@@ -879,6 +913,15 @@ export default function CheckoutModal({
                     {error}
                   </p>
                 )}
+
+                {/* Cloudflare Turnstile bot-check — required to place the order. */}
+                <div style={{ marginBottom: 18 }}>
+                  <TurnstileWidget
+                    ref={turnstileRef}
+                    onVerify={(t) => setTurnstileToken(t)}
+                    onExpire={() => setTurnstileToken("")}
+                  />
+                </div>
 
                 {/* Pay Online (Razorpay) */}
                 <button

@@ -6,6 +6,7 @@ import {
   verifyPhoneCookie,
 } from "@/lib/phone-cookie";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -102,9 +103,18 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === "place_order") {
-    const { customer_id, delivery_address, total_amount } = body;
+    const { customer_id, delivery_address, total_amount, turnstileToken } = body;
     if (!delivery_address || !total_amount) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    }
+
+    // Bot gate: every order placement must pass Turnstile.
+    const isHuman = await verifyTurnstileToken(String(turnstileToken ?? ""));
+    if (!isHuman) {
+      return NextResponse.json(
+        { error: "Human verification failed. Please try again." },
+        { status: 403 }
+      );
     }
 
     // Server-side OTP enforcement: cookie must be present, valid, unexpired,
@@ -159,6 +169,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === "place_subscription") {
+    // Bot gate is enforced upstream — the phone cookie required here can only
+    // be obtained via /api/verify/send, which itself requires Turnstile.
     const cookieValue = req.cookies.get(PHONE_COOKIE_NAME)?.value;
     const verified = verifyPhoneCookie(cookieValue);
     if (!verified) {

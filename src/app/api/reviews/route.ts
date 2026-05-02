@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,6 +49,17 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   let body: any;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Bad JSON" }, { status: 400 }); }
+
+  // Bot gate: every review submission must pass Turnstile.
+  const turnstileToken = String(body?.turnstileToken ?? "");
+  const isHuman = await verifyTurnstileToken(turnstileToken);
+  if (!isHuman) {
+    return NextResponse.json(
+      { error: "Human verification failed. Please try again." },
+      { status: 403 }
+    );
+  }
+
   const author_name = String(body?.author_name ?? "").trim();
   const text = String(body?.body ?? "").trim();
   const rating = body?.rating == null ? null : Number(body.rating);

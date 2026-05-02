@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import TurnstileWidget, { type TurnstileHandle } from "./TurnstileWidget";
 
 type Reply = {
   id: string;
@@ -85,6 +86,10 @@ export default function ReviewSection({ productSlug, scope }: Props) {
   const [slugChoice, setSlugChoice] = useState<string>(productSlug ?? "");
   const [submitting, setSubmitting] = useState(false);
 
+  // Cloudflare Turnstile bot-check token (single-use, reset after submission).
+  const [turnstileToken, setTurnstileToken] = useState<string>("");
+  const turnstileRef = useRef<TurnstileHandle>(null);
+
   // per-review reply form open + drafts
   const [openReply, setOpenReply] = useState<Record<string, boolean>>({});
   const [replyName, setReplyName] = useState<Record<string, string>>({});
@@ -156,10 +161,18 @@ export default function ReviewSection({ productSlug, scope }: Props) {
   const submitReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
+    if (!turnstileToken) {
+      setError("Please complete the human-verification check.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const payload: any = { author_name: name.trim(), body: body.trim() };
+      const payload: any = {
+        author_name: name.trim(),
+        body: body.trim(),
+        turnstileToken,
+      };
       if (scope === "product") {
         payload.product_slug = productSlug;
         payload.rating = rating || null;
@@ -172,6 +185,9 @@ export default function ReviewSection({ productSlug, scope }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      // Token is single-use — refresh whether or not the call succeeded.
+      setTurnstileToken("");
+      turnstileRef.current?.reset();
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Failed");
       setReviews((prev) => [j.review, ...prev]);
@@ -353,6 +369,11 @@ export default function ReviewSection({ productSlug, scope }: Props) {
           {error && (
             <div style={{ color: "#e88a7a", fontSize: 12, fontFamily: "var(--font-body)" }}>{error}</div>
           )}
+          <TurnstileWidget
+            ref={turnstileRef}
+            onVerify={(t) => setTurnstileToken(t)}
+            onExpire={() => setTurnstileToken("")}
+          />
           <button type="submit" disabled={submitting} style={btnPrimary}>
             {submitting ? "Posting..." : "Post"}
           </button>

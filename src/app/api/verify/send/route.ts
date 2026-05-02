@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizePhone } from "@/lib/phone-cookie";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID ?? "";
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN ?? "";
@@ -26,9 +27,21 @@ function rateCheck(phone: string): boolean {
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const phone = String(body.phone ?? "");
+  const turnstileToken = String(body.turnstileToken ?? "");
+
   if (!phone) {
     return NextResponse.json({ ok: false, error: "Missing phone" }, { status: 400 });
   }
+
+  // Bot gate: every OTP send must be human-verified via Cloudflare Turnstile.
+  const isHuman = await verifyTurnstileToken(turnstileToken);
+  if (!isHuman) {
+    return NextResponse.json(
+      { ok: false, error: "Human verification failed. Please try again." },
+      { status: 403 }
+    );
+  }
+
   if (!SERVICE_SID || !ACCOUNT_SID || !AUTH_TOKEN) {
     return NextResponse.json(
       { ok: false, error: "OTP service not configured." },
