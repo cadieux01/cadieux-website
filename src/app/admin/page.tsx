@@ -19,27 +19,73 @@ type Order = {
   customers?: Customer | null;
 };
 
-type Subscription = {
-  id: string;
-  bread_slug: string | null;
-  bread_name: string | null;
-  bread_price: number | null;
-  weeks: number | null;
-  days: string[] | null;
-  slot_mode: string | null;
-  slot: string | null;
-  slots_by_day: Record<string, string> | null;
-  total: number | null;
-  customer_name: string | null;
-  customer_phone: string | null;
-  customer_address: string | null;
-  customer_city: string | null;
-  customer_pincode: string | null;
-  status: string | null;
-  created_at: string;
+type SubAddress = {
+  name?: string;
+  phone?: string;
+  line1?: string;
+  line2?: string | null;
+  city?: string;
+  pincode?: string;
 };
 
-type Section = "orders" | "subscriptions" | "feedback";
+type Subscription = {
+  id: string;
+  customer_id: string;
+  product_slug: string;
+  product_name: string;
+  quantity_per_delivery: number;
+  frequency: string;
+  day_of_week: string;
+  time_slot: string;
+  total_weeks: number;
+  delivery_address: SubAddress;
+  total_amount: number;
+  payment_status: string;
+  payment_method: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  customer?: { full_name: string | null; phone: string | null; city: string | null } | null;
+};
+
+type AdminDelivery = {
+  id: string;
+  subscription_id: string;
+  week_number: number;
+  scheduled_date: string;
+  scheduled_time_slot: string;
+  status: string;
+  status_updated_at: string | null;
+  admin_notes: string | null;
+};
+
+type ChangeRequest = {
+  id: string;
+  delivery_id: string;
+  subscription_id: string;
+  requested_date: string | null;
+  requested_time_slot: string | null;
+  reason: string | null;
+  status: string;
+  admin_response: string | null;
+  created_at: string;
+  delivery?: { week_number: number; scheduled_date: string; scheduled_time_slot: string; status: string } | null;
+  subscription?: { product_name: string; total_weeks: number } | null;
+  customer?: { full_name: string | null; phone: string | null } | null;
+};
+
+type Section = "orders" | "subscriptions" | "change-requests" | "feedback";
+
+const SUB_STATUS_OPTIONS = ["active", "paused", "completed", "cancelled"] as const;
+const DELIVERY_STATUS_OPTIONS = [
+  "pending_confirmation",
+  "confirmed",
+  "out_for_delivery",
+  "delivered",
+  "cancelled",
+] as const;
+const SUB_FILTER_OPTIONS = ["all", "active", "completed", "cancelled"] as const;
+type SubFilter = (typeof SUB_FILTER_OPTIONS)[number];
 
 type Reply = {
   id: string;
@@ -207,6 +253,8 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
 function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [subFilter, setSubFilter] = useState<SubFilter>("all");
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -234,13 +282,32 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
   const fetchSubscriptions = useCallback(async () => {
     try {
-      const r = await fetch("/api/admin/subscriptions", {
+      const url =
+        subFilter === "all"
+          ? "/api/admin/subscriptions"
+          : `/api/admin/subscriptions?status=${subFilter}`;
+      const r = await fetch(url, {
         headers: { "x-admin-token": PASSWORD },
         cache: "no-store",
       });
       const j = await r.json().catch(() => ({}));
       if (r.ok && Array.isArray(j.subscriptions)) {
         setSubscriptions(j.subscriptions as Subscription[]);
+      }
+    } catch {
+      /* silent */
+    }
+  }, [subFilter]);
+
+  const fetchChangeRequests = useCallback(async () => {
+    try {
+      const r = await fetch("/api/admin/change-requests", {
+        headers: { "x-admin-token": PASSWORD },
+        cache: "no-store",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && Array.isArray(j.requests)) {
+        setChangeRequests(j.requests as ChangeRequest[]);
       }
     } catch {
       /* silent */
@@ -260,6 +327,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     fetchOrders();
     fetchSubscriptions();
+    fetchChangeRequests();
     fetchReviews();
 
     // Realtime is no longer available to the anon role (RLS denies all
@@ -269,11 +337,12 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     const interval = setInterval(() => {
       fetchOrders();
       fetchSubscriptions();
+      fetchChangeRequests();
       fetchReviews();
     }, 10_000);
 
     return () => clearInterval(interval);
-  }, [fetchOrders, fetchSubscriptions, fetchReviews]);
+  }, [fetchOrders, fetchSubscriptions, fetchChangeRequests, fetchReviews]);
 
   const updateStatus = async (order: Order, newStatus: Status) => {
     const prev = orders;
@@ -447,35 +516,60 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             >
               Dashboard
             </p>
-            {([
-              { key: "orders", label: "General Payments" },
-              { key: "subscriptions", label: "Subscriptions" },
-              { key: "feedback", label: "Feedback" },
-            ] as { key: Section; label: string }[]).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => { setSection(key); setMenuOpen(false); }}
-                className="uppercase"
-                style={{
-                  textAlign: "left",
-                  padding: "12px 0",
-                  borderBottom: "1px solid rgba(245, 158, 11, 0.1)",
-                  background: "transparent",
-                  border: "none",
-                  borderBottomStyle: "solid",
-                  borderBottomWidth: 1,
-                  borderBottomColor: "rgba(245, 158, 11, 0.1)",
-                  color: section === key ? "#fbf3d4" : "rgba(251,243,212,0.5)",
-                  fontFamily: "var(--font-body)",
-                  fontSize: "0.8rem",
-                  letterSpacing: "0.2em",
-                  cursor: "pointer",
-                  transition: "color 200ms ease",
-                }}
-              >
-                {label}
-              </button>
-            ))}
+            {(() => {
+              const pendingCRs = changeRequests.filter((r) => r.status === "pending").length;
+              const items: { key: Section; label: string; badge?: number }[] = [
+                { key: "orders", label: "General Payments" },
+                { key: "subscriptions", label: "Subscriptions" },
+                { key: "change-requests", label: "Change Requests", badge: pendingCRs },
+                { key: "feedback", label: "Feedback" },
+              ];
+              return items.map(({ key, label, badge }) => (
+                <button
+                  key={key}
+                  onClick={() => { setSection(key); setMenuOpen(false); }}
+                  className="uppercase"
+                  style={{
+                    textAlign: "left",
+                    padding: "12px 0",
+                    borderBottom: "1px solid rgba(245, 158, 11, 0.1)",
+                    background: "transparent",
+                    border: "none",
+                    borderBottomStyle: "solid",
+                    borderBottomWidth: 1,
+                    borderBottomColor: "rgba(245, 158, 11, 0.1)",
+                    color: section === key ? "#fbf3d4" : "rgba(251,243,212,0.5)",
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.8rem",
+                    letterSpacing: "0.2em",
+                    cursor: "pointer",
+                    transition: "color 200ms ease",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <span>{label}</span>
+                  {badge && badge > 0 ? (
+                    <span
+                      style={{
+                        background: "#e05a5a",
+                        color: "#fff",
+                        fontSize: "0.6rem",
+                        letterSpacing: "0.05em",
+                        padding: "2px 7px",
+                        borderRadius: 999,
+                        minWidth: 20,
+                        textAlign: "center",
+                      }}
+                    >
+                      {badge}
+                    </span>
+                  ) : null}
+                </button>
+              ));
+            })()}
           </nav>
         </>
       )}
@@ -593,7 +687,19 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       {section === "subscriptions" && (
         <SubscriptionsSection
           subscriptions={subscriptions}
+          subFilter={subFilter}
+          onFilterChange={setSubFilter}
           onChanged={fetchSubscriptions}
+        />
+      )}
+
+      {section === "change-requests" && (
+        <ChangeRequestsSection
+          requests={changeRequests}
+          onChanged={() => {
+            fetchChangeRequests();
+            fetchSubscriptions();
+          }}
         />
       )}
 
@@ -615,128 +721,176 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   );
 }
 
+const SUB_STATUS_COLORS: Record<string, { fg: string; bg: string; bd: string }> = {
+  active:    { fg: "#c9a96e", bg: "rgba(201,169,110,0.10)", bd: "rgba(201,169,110,0.55)" },
+  paused:    { fg: "#e3b341", bg: "rgba(227,179,65,0.10)",  bd: "rgba(227,179,65,0.55)" },
+  completed: { fg: "#7bd88f", bg: "rgba(123,216,143,0.10)", bd: "rgba(123,216,143,0.55)" },
+  cancelled: { fg: "#ff8181", bg: "rgba(255,129,129,0.10)", bd: "rgba(255,129,129,0.55)" },
+};
+
+const DELIVERY_STATUS_LABELS: Record<string, string> = {
+  pending_confirmation: "Pending",
+  confirmed: "Confirmed",
+  out_for_delivery: "Out for delivery",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+
+function formatScheduledDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function SubscriptionsSection({
   subscriptions,
+  subFilter,
+  onFilterChange,
   onChanged,
 }: {
   subscriptions: Subscription[];
+  subFilter: SubFilter;
+  onFilterChange: (f: SubFilter) => void;
   onChanged: () => void;
 }) {
   const [openSubId, setOpenSubId] = useState<string | null>(null);
   const openSub = openSubId ? subscriptions.find((s) => s.id === openSubId) ?? null : null;
 
-  const updateStatus = async (id: string, next: Status) => {
-    const r = await fetch(`/api/admin/subscriptions/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-admin-token": PASSWORD },
-      body: JSON.stringify({ status: next.toLowerCase() }),
-    });
-    if (r.ok) onChanged();
-  };
-
   return (
     <section className="px-8 py-8">
-      <h2
-        className="uppercase mb-6"
-        style={{
-          fontFamily: "var(--font-heading)",
-          fontSize: "1.25rem",
-          letterSpacing: "0.3em",
-          color: "#fbf3d4",
-          fontWeight: 300,
-        }}
-      >
-        Subscriptions
-      </h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 16, marginBottom: 18 }}>
+        <h2
+          className="uppercase"
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontSize: "1.25rem",
+            letterSpacing: "0.3em",
+            color: "#fbf3d4",
+            fontWeight: 300,
+            margin: 0,
+          }}
+        >
+          Subscriptions
+        </h2>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {SUB_FILTER_OPTIONS.map((f) => {
+            const active = subFilter === f;
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => onFilterChange(f)}
+                className="uppercase"
+                style={{
+                  background: active ? "rgba(245,158,11,0.15)" : "transparent",
+                  border: `1px solid ${active ? "rgba(245,158,11,0.7)" : "rgba(245,158,11,0.25)"}`,
+                  color: active ? "#fbf3d4" : "rgba(251,243,212,0.55)",
+                  padding: "6px 14px",
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.65rem",
+                  letterSpacing: "0.22em",
+                  cursor: "pointer",
+                }}
+              >
+                {f}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {subscriptions.length === 0 ? (
         <p style={{ color: "rgba(192,200,206,0.5)", fontFamily: "var(--font-body)", fontSize: "0.85rem" }}>
-          No subscriptions yet.
+          No subscriptions to show.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table
-            className="w-full border-collapse"
-            style={{ fontFamily: "var(--font-body)", fontSize: "0.8rem", color: "#fbf3d4" }}
-          >
-            <thead>
-              <tr style={{ color: "rgba(245,158,11,0.8)", letterSpacing: "0.2em", textTransform: "uppercase", fontSize: "0.65rem" }}>
-                <Th>Sub ID</Th>
-                <Th>Customer</Th>
-                <Th>Phone</Th>
-                <Th>Address</Th>
-                <Th>Bread</Th>
-                <Th>Weeks</Th>
-                <Th>Days</Th>
-                <Th>Timings</Th>
-                <Th>Total</Th>
-                <Th>Status</Th>
-                <Th>Date</Th>
-                <Th>Track</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {subscriptions.map((s, i) => {
-                const status = (s.status ?? "pending").toLowerCase();
-                const normalized = (STATUS_OPTIONS.find((o) => o.toLowerCase() === status) ?? "Pending") as Status;
-                const displayNumber = String(subscriptions.length - i).padStart(5, "0");
-                const dayList = (s.days ?? []).map((k) => DAY_LABELS[k] ?? k).join(", ");
-                const timings = formatTimings(s);
-                const fullAddress = [s.customer_address, s.customer_city, s.customer_pincode]
-                  .filter(Boolean).join(", ");
-                return (
-                  <tr key={s.id} style={{ borderTop: "1px solid rgba(245, 158, 11, 0.12)" }}>
-                    <Td mono>{displayNumber}</Td>
-                    <Td>{s.customer_name ?? "—"}</Td>
-                    <Td>{s.customer_phone ?? "—"}</Td>
-                    <Td>{fullAddress || "—"}</Td>
-                    <Td>
-                      {s.bread_name ?? "—"}
-                      {s.bread_price != null && (
-                        <span style={{ color: "rgba(192,200,206,0.5)", marginLeft: 6, fontSize: "0.7rem" }}>
-                          · ₹{s.bread_price}
-                        </span>
-                      )}
-                    </Td>
-                    <Td>{s.weeks ?? "—"}</Td>
-                    <Td>{dayList || "—"}</Td>
-                    <Td>{timings}</Td>
-                    <Td>₹{Number(s.total ?? 0).toFixed(2)}</Td>
-                    <Td>
-                      <StatusBadge value={normalized} onChange={(next) => updateStatus(s.id, next)} />
-                    </Td>
-                    <Td>
-                      {new Date(s.created_at).toLocaleString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Td>
-                    <Td>
-                      <button
-                        type="button"
-                        onClick={() => setOpenSubId(s.id)}
-                        style={{
-                          background: "transparent",
-                          border: "1px solid rgba(245,158,11,0.45)",
-                          color: "#f59e0b",
-                          padding: "4px 10px",
-                          fontFamily: "var(--font-body)",
-                          fontSize: "0.65rem",
-                          letterSpacing: "0.18em",
-                          textTransform: "uppercase",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Open
-                      </button>
-                    </Td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div style={{ display: "grid", gap: 12 }}>
+          {subscriptions.map((s) => {
+            const status = (s.status ?? "active").toLowerCase();
+            const c = SUB_STATUS_COLORS[status] ?? SUB_STATUS_COLORS.active;
+            const dayLabel = DAY_LABELS[s.day_of_week] ?? s.day_of_week;
+            const freqLabel = s.frequency === "bi-weekly" ? "Every 2 weeks" : "Weekly";
+            const addr = s.delivery_address ?? {};
+            const addrLine = [addr.line1, addr.line2, addr.city, addr.pincode].filter(Boolean).join(", ");
+            return (
+              <div
+                key={s.id}
+                style={{
+                  border: "1px solid rgba(245,158,11,0.18)",
+                  background: "rgba(245,158,11,0.03)",
+                  padding: "16px 18px",
+                  display: "grid",
+                  gap: 10,
+                  fontFamily: "var(--font-body)",
+                  color: "#fbf3d4",
+                  fontSize: "0.82rem",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
+                  <div>
+                    <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: "1.05rem", letterSpacing: "0.04em" }}>
+                      {s.product_name} × {s.quantity_per_delivery}
+                    </div>
+                    <div style={{ marginTop: 4, color: "rgba(251,243,212,0.6)", fontSize: "0.78rem" }}>
+                      {freqLabel} · {dayLabel} · {s.time_slot} · {s.total_weeks} weeks
+                    </div>
+                  </div>
+                  <span
+                    className="uppercase"
+                    style={{
+                      color: c.fg,
+                      background: c.bg,
+                      border: `1px solid ${c.bd}`,
+                      padding: "4px 12px",
+                      fontSize: "0.6rem",
+                      letterSpacing: "0.22em",
+                    }}
+                  >
+                    {s.status}
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 18, fontSize: "0.78rem" }}>
+                  <span><span style={{ color: "rgba(251,243,212,0.5)" }}>Customer · </span>{s.customer?.full_name ?? "—"}</span>
+                  <span><span style={{ color: "rgba(251,243,212,0.5)" }}>Phone · </span>{s.customer?.phone ?? "—"}</span>
+                  <span><span style={{ color: "rgba(251,243,212,0.5)" }}>Total · </span>₹{Number(s.total_amount).toLocaleString("en-IN")}</span>
+                  <span><span style={{ color: "rgba(251,243,212,0.5)" }}>Payment · </span>{s.payment_status}{s.payment_method ? ` (${s.payment_method})` : ""}</span>
+                </div>
+                {addrLine && (
+                  <div style={{ fontSize: "0.75rem", color: "rgba(251,243,212,0.5)" }}>
+                    {addr.name ? <><b style={{ color: "rgba(251,243,212,0.7)", fontWeight: 500 }}>{addr.name}</b> · </> : null}
+                    {addrLine}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", borderTop: "1px solid rgba(245,158,11,0.1)", paddingTop: 10 }}>
+                  <span style={{ fontSize: "0.7rem", color: "rgba(251,243,212,0.4)" }}>
+                    Created {new Date(s.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setOpenSubId(s.id)}
+                    className="uppercase"
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(245,158,11,0.55)",
+                      color: "#f59e0b",
+                      padding: "6px 14px",
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.65rem",
+                      letterSpacing: "0.2em",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Open
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -744,40 +898,30 @@ function SubscriptionsSection({
         <SubscriptionDrawer
           subscription={openSub}
           onClose={() => setOpenSubId(null)}
+          onChanged={onChanged}
         />
       )}
     </section>
   );
 }
 
-type AdminDelivery = {
-  id: string;
-  subscription_id: string;
-  sequence: number;
-  week_number: number;
-  day_key: string;
-  slot: string | null;
-  delivery_date: string;
-  status: string;
-  status_updated_at: string | null;
-};
-
 function SubscriptionDrawer({
   subscription,
   onClose,
+  onChanged,
 }: {
   subscription: Subscription;
   onClose: () => void;
+  onChanged: () => void;
 }) {
   const [deliveries, setDeliveries] = useState<AdminDelivery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const adminToken = PASSWORD;
 
   const fetchDeliveries = useCallback(async () => {
     try {
-      const r = await fetch(`/api/subscriptions/${subscription.id}/deliveries`, {
-        headers: { "x-admin-token": adminToken },
+      const r = await fetch(`/api/admin/subscriptions/${subscription.id}/deliveries`, {
+        headers: { "x-admin-token": PASSWORD },
         cache: "no-store",
       });
       const j = await r.json().catch(() => ({}));
@@ -792,17 +936,31 @@ function SubscriptionDrawer({
     } finally {
       setLoading(false);
     }
-  }, [subscription.id, adminToken]);
+  }, [subscription.id]);
 
   useEffect(() => {
     fetchDeliveries();
-  }, [fetchDeliveries]);
-
-  // Poll deliveries every 10s while drawer is open (replaces Realtime).
-  useEffect(() => {
     const interval = setInterval(fetchDeliveries, 10_000);
     return () => clearInterval(interval);
   }, [fetchDeliveries]);
+
+  const updateOverallStatus = async (next: string) => {
+    const r = await fetch(`/api/admin/subscriptions/${subscription.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-token": PASSWORD },
+      body: JSON.stringify({ status: next }),
+    });
+    if (r.ok) onChanged();
+  };
+
+  const updatePaymentStatus = async (next: string) => {
+    const r = await fetch(`/api/admin/subscriptions/${subscription.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-token": PASSWORD },
+      body: JSON.stringify({ payment_status: next }),
+    });
+    if (r.ok) onChanged();
+  };
 
   const updateDeliveryStatus = async (deliveryId: string, next: string) => {
     const prev = deliveries;
@@ -811,10 +969,10 @@ function SubscriptionDrawer({
     );
     try {
       const r = await fetch(
-        `/api/subscriptions/${subscription.id}/deliveries/${deliveryId}`,
+        `/api/admin/subscriptions/${subscription.id}/deliveries/${deliveryId}`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+          headers: { "Content-Type": "application/json", "x-admin-token": PASSWORD },
           body: JSON.stringify({ status: next }),
         }
       );
@@ -824,24 +982,18 @@ function SubscriptionDrawer({
         alert(`Failed to update: ${j.error ?? r.status}`);
       } else {
         fetchDeliveries();
+        onChanged();
       }
     } catch {
       setDeliveries(prev);
     }
   };
 
-  const overallStatus = (subscription.status ?? "pending").toLowerCase();
-  const overallNorm = (STATUS_OPTIONS.find((o) => o.toLowerCase() === overallStatus) ?? "Pending") as Status;
-
-  const updateOverall = async (next: Status) => {
-    await fetch(`/api/admin/subscriptions/${subscription.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
-      body: JSON.stringify({ status: next.toLowerCase() }),
-    });
-  };
-
-  const dayList = (subscription.days ?? []).map((k) => DAY_LABELS[k] ?? k).join(", ");
+  const dayLabel = DAY_LABELS[subscription.day_of_week] ?? subscription.day_of_week;
+  const freqLabel = subscription.frequency === "bi-weekly" ? "Every 2 weeks" : "Weekly";
+  const addr = subscription.delivery_address ?? {};
+  const addrLine = [addr.line1, addr.line2, addr.city, addr.pincode].filter(Boolean).join(", ");
+  const c = SUB_STATUS_COLORS[subscription.status] ?? SUB_STATUS_COLORS.active;
 
   return (
     <div
@@ -853,7 +1005,7 @@ function SubscriptionDrawer({
       }}
     >
       <div style={{
-        width: "min(560px, 100%)",
+        width: "min(620px, 100%)",
         height: "100dvh",
         background: "#0e0e0e",
         borderLeft: "1px solid rgba(245,158,11,0.25)",
@@ -862,17 +1014,16 @@ function SubscriptionDrawer({
         color: "#fbf3d4",
         fontFamily: "var(--font-body)",
       }}>
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
           <div>
             <p style={{ margin: 0, fontSize: "0.65rem", letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(245,158,11,0.75)" }}>
               Subscription
             </p>
             <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: "1.5rem", fontWeight: 300, letterSpacing: "0.04em" }}>
-              {subscription.bread_name ?? "—"}
+              {subscription.product_name} × {subscription.quantity_per_delivery}
             </p>
             <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "rgba(251,243,212,0.55)" }}>
-              {subscription.customer_name ?? "—"} · {subscription.customer_phone ?? "—"}
+              {subscription.customer?.full_name ?? "—"} · {subscription.customer?.phone ?? "—"}
             </p>
           </div>
           <button
@@ -888,31 +1039,73 @@ function SubscriptionDrawer({
           </button>
         </div>
 
-        {/* Overall status + summary */}
         <div style={{
-          background: "rgba(245,158,11,0.06)",
-          border: "1px solid rgba(245,158,11,0.2)",
+          background: c.bg,
+          border: `1px solid ${c.bd}`,
           padding: "14px 16px",
-          marginBottom: 22,
-          display: "flex", flexDirection: "column", gap: 8,
+          marginBottom: 18,
+          display: "flex", flexDirection: "column", gap: 10,
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: "0.6rem", letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(245,158,11,0.7)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.6rem", letterSpacing: "0.3em", textTransform: "uppercase", color: c.fg }}>
               Overall status
             </span>
-            <StatusBadge value={overallNorm} onChange={updateOverall} />
+            <select
+              value={subscription.status}
+              onChange={(e) => updateOverallStatus(e.target.value)}
+              style={{
+                background: "rgba(0,0,0,0.4)",
+                color: c.fg,
+                border: `1px solid ${c.bd}`,
+                padding: "5px 10px",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.72rem",
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              {SUB_STATUS_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.6rem", letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(251,243,212,0.5)" }}>
+              Payment
+            </span>
+            <select
+              value={subscription.payment_status}
+              onChange={(e) => updatePaymentStatus(e.target.value)}
+              style={{
+                background: "rgba(0,0,0,0.4)",
+                color: "#fbf3d4",
+                border: "1px solid rgba(245,158,11,0.4)",
+                padding: "5px 10px",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.72rem",
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              {["pending", "paid", "refunded"].map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem" }}>
             <span style={{ color: "rgba(251,243,212,0.5)" }}>Plan</span>
-            <span>{subscription.weeks ?? 0} wks · {dayList || "—"}</span>
+            <span>{freqLabel} · {dayLabel} · {subscription.time_slot}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem" }}>
             <span style={{ color: "rgba(251,243,212,0.5)" }}>Total</span>
-            <span>₹{Number(subscription.total ?? 0).toFixed(2)}</span>
+            <span>₹{Number(subscription.total_amount).toLocaleString("en-IN")} · {subscription.total_weeks} weeks</span>
           </div>
-          {subscription.customer_address && (
-            <div style={{ fontSize: "0.75rem", color: "rgba(251,243,212,0.45)", lineHeight: 1.5 }}>
-              {[subscription.customer_address, subscription.customer_city, subscription.customer_pincode].filter(Boolean).join(", ")}
+          {addrLine && (
+            <div style={{ fontSize: "0.75rem", color: "rgba(251,243,212,0.55)", lineHeight: 1.5 }}>
+              {addr.name ? <><b style={{ color: "#fbf3d4", fontWeight: 500 }}>{addr.name}</b><br /></> : null}
+              {addrLine}
             </div>
           )}
         </div>
@@ -924,47 +1117,58 @@ function SubscriptionDrawer({
         {loading && <p style={{ color: "rgba(251,243,212,0.45)" }}>Loading…</p>}
         {error && <p style={{ color: "#e05a5a" }}>Error: {error}</p>}
 
-        {/* Vertical timeline with editable status */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {deliveries.map((d) => {
-            const dayLabel = DAY_LABELS[d.day_key] ?? d.day_key;
-            const status = d.status.toLowerCase();
-            const norm = (STATUS_OPTIONS.find((o) => o.toLowerCase() === status) ?? "Pending") as Status;
-            return (
-              <div
-                key={d.id}
-                style={{
-                  border: "1px solid rgba(245,158,11,0.2)",
-                  background: "rgba(245,158,11,0.03)",
-                  padding: "12px 14px",
-                  display: "flex", flexDirection: "column", gap: 6,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: "0.65rem", letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(245,158,11,0.75)" }}>
-                    #{d.sequence} · Week {d.week_number} · {dayLabel}
-                  </span>
-                  <StatusBadge
-                    value={norm}
-                    onChange={(next) => updateDeliveryStatus(d.id, next.toLowerCase())}
-                  />
-                </div>
-                <div style={{ fontSize: "0.85rem", color: "#fbf3d4" }}>
-                  {new Date(d.delivery_date + "T00:00:00").toLocaleDateString("en-IN", {
-                    weekday: "short", day: "numeric", month: "short", year: "numeric",
-                  })}
-                  {d.slot && <span style={{ color: "rgba(251,243,212,0.5)" }}> · {d.slot}</span>}
-                </div>
-                {d.status_updated_at && (
-                  <div style={{ fontSize: "0.65rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(251,243,212,0.35)" }}>
-                    Updated · {new Date(d.status_updated_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
-                  </div>
-                )}
+          {deliveries.map((d) => (
+            <div
+              key={d.id}
+              style={{
+                border: "1px solid rgba(245,158,11,0.2)",
+                background: "rgba(245,158,11,0.03)",
+                padding: "12px 14px",
+                display: "flex", flexDirection: "column", gap: 8,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.65rem", letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(245,158,11,0.75)" }}>
+                  Week {d.week_number}
+                </span>
+                <select
+                  value={d.status}
+                  onChange={(e) => updateDeliveryStatus(d.id, e.target.value)}
+                  style={{
+                    background: "rgba(0,0,0,0.4)",
+                    color: "#fbf3d4",
+                    border: "1px solid rgba(245,158,11,0.4)",
+                    padding: "4px 8px",
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.7rem",
+                    letterSpacing: "0.12em",
+                    cursor: "pointer",
+                  }}
+                >
+                  {DELIVERY_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{DELIVERY_STATUS_LABELS[opt] ?? opt}</option>
+                  ))}
+                </select>
               </div>
-            );
-          })}
+              <div style={{ fontSize: "0.85rem", color: "#fbf3d4" }}>
+                {formatScheduledDate(d.scheduled_date)}
+                <span style={{ color: "rgba(251,243,212,0.5)" }}> · {d.scheduled_time_slot}</span>
+              </div>
+              {d.status_updated_at && (
+                <div style={{ fontSize: "0.65rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(251,243,212,0.35)" }}>
+                  Updated · {new Date(d.status_updated_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                </div>
+              )}
+              {d.admin_notes && (
+                <div style={{ fontSize: "0.75rem", color: "rgba(251,243,212,0.6)", fontStyle: "italic" }}>
+                  Note: {d.admin_notes}
+                </div>
+              )}
+            </div>
+          ))}
 
-          {!loading && deliveries.length === 0 && (
+          {!loading && deliveries.length === 0 && !error && (
             <p style={{ color: "rgba(251,243,212,0.45)", fontSize: "0.78rem" }}>
               No deliveries scheduled.
             </p>
@@ -975,16 +1179,257 @@ function SubscriptionDrawer({
   );
 }
 
-function formatTimings(s: Subscription): string {
-  if (s.slot_mode === "same") return s.slot ?? "—";
-  if (s.slot_mode === "custom" && s.slots_by_day) {
-    const parts = (s.days ?? []).map((k) => {
-      const t = s.slots_by_day?.[k];
-      return t ? `${DAY_LABELS[k] ?? k}: ${t}` : null;
-    }).filter(Boolean);
-    return parts.length > 0 ? parts.join(" · ") : "—";
-  }
-  return "—";
+function ChangeRequestsSection({
+  requests,
+  onChanged,
+}: {
+  requests: ChangeRequest[];
+  onChanged: () => void;
+}) {
+  const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [responses, setResponses] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+
+  const filtered = filter === "all" ? requests : requests.filter((r) => r.status === filter);
+
+  const act = async (id: string, action: "approve" | "reject") => {
+    setBusy((b) => ({ ...b, [id]: true }));
+    try {
+      const r = await fetch(`/api/admin/change-requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-token": PASSWORD },
+        body: JSON.stringify({ action, admin_response: responses[id] ?? null }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        alert(`Failed: ${j.error ?? r.status}`);
+        return;
+      }
+      onChanged();
+    } finally {
+      setBusy((b) => ({ ...b, [id]: false }));
+    }
+  };
+
+  return (
+    <section className="px-8 py-8">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 16, marginBottom: 18 }}>
+        <h2
+          className="uppercase"
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontSize: "1.25rem",
+            letterSpacing: "0.3em",
+            color: "#fbf3d4",
+            fontWeight: 300,
+            margin: 0,
+          }}
+        >
+          Change Requests
+        </h2>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {(["pending", "approved", "rejected", "all"] as const).map((f) => {
+            const active = filter === f;
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className="uppercase"
+                style={{
+                  background: active ? "rgba(245,158,11,0.15)" : "transparent",
+                  border: `1px solid ${active ? "rgba(245,158,11,0.7)" : "rgba(245,158,11,0.25)"}`,
+                  color: active ? "#fbf3d4" : "rgba(251,243,212,0.55)",
+                  padding: "6px 14px",
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.65rem",
+                  letterSpacing: "0.22em",
+                  cursor: "pointer",
+                }}
+              >
+                {f}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <p style={{ color: "rgba(192,200,206,0.5)", fontFamily: "var(--font-body)", fontSize: "0.85rem" }}>
+          No {filter === "all" ? "" : filter + " "}change requests.
+        </p>
+      ) : (
+        <div style={{ display: "grid", gap: 12 }}>
+          {filtered.map((r) => {
+            const isPending = r.status === "pending";
+            const statusColor =
+              r.status === "approved" ? "#7bd88f" :
+              r.status === "rejected" ? "#ff8181" :
+              "#e3b341";
+            return (
+              <div
+                key={r.id}
+                style={{
+                  border: "1px solid rgba(245,158,11,0.18)",
+                  background: "rgba(245,158,11,0.03)",
+                  padding: "16px 18px",
+                  display: "grid",
+                  gap: 10,
+                  fontFamily: "var(--font-body)",
+                  color: "#fbf3d4",
+                  fontSize: "0.82rem",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: "1rem", letterSpacing: "0.04em" }}>
+                      {r.subscription?.product_name ?? "—"}
+                    </div>
+                    <div style={{ marginTop: 4, color: "rgba(251,243,212,0.6)", fontSize: "0.78rem" }}>
+                      {r.customer?.full_name ?? "—"} · {r.customer?.phone ?? "—"}
+                    </div>
+                  </div>
+                  <span
+                    className="uppercase"
+                    style={{
+                      color: statusColor,
+                      border: `1px solid ${statusColor}`,
+                      padding: "4px 12px",
+                      fontSize: "0.6rem",
+                      letterSpacing: "0.22em",
+                    }}
+                  >
+                    {r.status}
+                  </span>
+                </div>
+
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                  fontSize: "0.78rem",
+                  paddingTop: 6,
+                  borderTop: "1px solid rgba(245,158,11,0.1)",
+                }}>
+                  <div>
+                    <div style={{ fontSize: "0.6rem", letterSpacing: "0.22em", textTransform: "uppercase", color: "rgba(251,243,212,0.45)", marginBottom: 4 }}>
+                      Original
+                    </div>
+                    {r.delivery ? (
+                      <>
+                        <div>Week {r.delivery.week_number}</div>
+                        <div style={{ color: "rgba(251,243,212,0.7)" }}>
+                          {formatScheduledDate(r.delivery.scheduled_date)}
+                        </div>
+                        <div style={{ color: "rgba(251,243,212,0.5)", fontSize: "0.72rem" }}>
+                          {r.delivery.scheduled_time_slot}
+                        </div>
+                      </>
+                    ) : <span style={{ color: "rgba(251,243,212,0.5)" }}>—</span>}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.6rem", letterSpacing: "0.22em", textTransform: "uppercase", color: "rgba(245,158,11,0.7)", marginBottom: 4 }}>
+                      Requested
+                    </div>
+                    {r.requested_date && (
+                      <div style={{ color: "rgba(251,243,212,0.85)" }}>
+                        {formatScheduledDate(r.requested_date)}
+                      </div>
+                    )}
+                    {r.requested_time_slot && (
+                      <div style={{ color: "rgba(251,243,212,0.6)", fontSize: "0.72rem" }}>
+                        {r.requested_time_slot}
+                      </div>
+                    )}
+                    {!r.requested_date && !r.requested_time_slot && (
+                      <span style={{ color: "rgba(251,243,212,0.5)" }}>—</span>
+                    )}
+                  </div>
+                </div>
+
+                {r.reason && (
+                  <div style={{ fontSize: "0.78rem", color: "rgba(251,243,212,0.7)", fontStyle: "italic", borderLeft: "2px solid rgba(245,158,11,0.4)", paddingLeft: 10 }}>
+                    "{r.reason}"
+                  </div>
+                )}
+
+                {!isPending && r.admin_response && (
+                  <div style={{ fontSize: "0.75rem", color: "rgba(251,243,212,0.6)" }}>
+                    <span style={{ color: "rgba(245,158,11,0.7)" }}>Response:</span> {r.admin_response}
+                  </div>
+                )}
+
+                {isPending && (
+                  <>
+                    <textarea
+                      placeholder="Optional response to customer…"
+                      value={responses[r.id] ?? ""}
+                      onChange={(e) => setResponses((v) => ({ ...v, [r.id]: e.target.value }))}
+                      rows={2}
+                      style={{
+                        width: "100%",
+                        background: "rgba(0,0,0,0.4)",
+                        border: "1px solid rgba(245,158,11,0.25)",
+                        color: "#fbf3d4",
+                        padding: "8px 10px",
+                        fontFamily: "var(--font-body)",
+                        fontSize: "0.78rem",
+                        resize: "vertical",
+                      }}
+                    />
+                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                      <button
+                        type="button"
+                        disabled={busy[r.id]}
+                        onClick={() => act(r.id, "reject")}
+                        className="uppercase"
+                        style={{
+                          background: "transparent",
+                          border: "1px solid rgba(255,129,129,0.55)",
+                          color: "#ff8181",
+                          padding: "6px 14px",
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.65rem",
+                          letterSpacing: "0.2em",
+                          cursor: busy[r.id] ? "not-allowed" : "pointer",
+                          opacity: busy[r.id] ? 0.5 : 1,
+                        }}
+                      >
+                        Reject
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy[r.id]}
+                        onClick={() => act(r.id, "approve")}
+                        className="uppercase"
+                        style={{
+                          background: "rgba(123,216,143,0.12)",
+                          border: "1px solid rgba(123,216,143,0.55)",
+                          color: "#7bd88f",
+                          padding: "6px 14px",
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.65rem",
+                          letterSpacing: "0.2em",
+                          cursor: busy[r.id] ? "not-allowed" : "pointer",
+                          opacity: busy[r.id] ? 0.5 : 1,
+                        }}
+                      >
+                        Approve
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                <div style={{ fontSize: "0.7rem", color: "rgba(251,243,212,0.4)" }}>
+                  Submitted {new Date(r.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function Th({ children }: { children: React.ReactNode }) {

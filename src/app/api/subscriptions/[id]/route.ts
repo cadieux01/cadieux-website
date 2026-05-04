@@ -8,21 +8,16 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
-function phoneMatches(stored: string | null | undefined, queried: string): boolean {
-  if (!stored) return false;
-  if (stored === queried) return true;
-  if (normalizePhone(stored) === normalizePhone(queried)) return true;
-  const a = stored.replace(/\D/g, "").slice(-10);
-  const b = queried.replace(/\D/g, "").slice(-10);
-  return a.length === 10 && a === b;
-}
-
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const { id } = params;
-  const phone = req.nextUrl.searchParams.get("phone") ?? "";
+  const phoneRaw = req.nextUrl.searchParams.get("phone") ?? "";
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const { data: sub, error } = await supabaseAdmin
     .from("subscriptions")
@@ -34,8 +29,14 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (!phoneMatches(sub.customer_phone, phone)) {
-    // Avoid enumeration — same 404 as a missing row.
+  // Match via customer_id → customers.phone (avoid enumeration on mismatch).
+  const { data: cust } = await supabaseAdmin
+    .from("customers")
+    .select("phone")
+    .eq("id", sub.customer_id)
+    .maybeSingle();
+
+  if (!cust || normalizePhone(cust.phone) !== phone) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -43,10 +44,20 @@ export async function GET(
     .from("subscription_deliveries")
     .select("*")
     .eq("subscription_id", id)
-    .order("sequence", { ascending: true });
+    .order("week_number", { ascending: true });
+
+  const deliveryIds = (deliveries ?? []).map((d) => d.id);
+  const { data: changeRequests } = deliveryIds.length
+    ? await supabaseAdmin
+        .from("subscription_change_requests")
+        .select("*")
+        .in("delivery_id", deliveryIds)
+        .order("created_at", { ascending: false })
+    : { data: [] as Array<Record<string, unknown>> };
 
   return NextResponse.json({
     subscription: sub,
     deliveries: deliveries ?? [],
+    change_requests: changeRequests ?? [],
   });
 }

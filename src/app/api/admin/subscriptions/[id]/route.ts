@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 
-const ALLOWED_STATUSES = new Set([
-  "pending",
-  "confirmed",
-  "dispatched",
-  "delivered",
-  "cancelled",
-]);
+const ALLOWED_STATUSES = new Set(["active", "completed", "cancelled", "paused"]);
+const ALLOWED_PAYMENT_STATUSES = new Set(["pending", "paid", "failed", "refunded"]);
 
 export async function PATCH(
   req: NextRequest,
@@ -18,21 +13,34 @@ export async function PATCH(
   }
 
   const body = await req.json().catch(() => ({}));
-  if (typeof body.status !== "string") {
-    return NextResponse.json({ error: "Missing status" }, { status: 400 });
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (typeof body.status === "string") {
+    const s = body.status.toLowerCase();
+    if (!ALLOWED_STATUSES.has(s)) {
+      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    }
+    update.status = s;
   }
-  const status = body.status.toLowerCase();
-  if (!ALLOWED_STATUSES.has(status)) {
-    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  if (typeof body.payment_status === "string") {
+    const ps = body.payment_status.toLowerCase();
+    if (!ALLOWED_PAYMENT_STATUSES.has(ps)) {
+      return NextResponse.json({ error: "Invalid payment_status" }, { status: 400 });
+    }
+    update.payment_status = ps;
+  }
+
+  if (Object.keys(update).length === 1) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   const { error } = await supabaseAdmin
     .from("subscriptions")
-    .update({ status })
+    .update(update)
     .eq("id", params.id);
 
   if (error) {
-    console.error("[admin/subscriptions update]", error.message);
+    console.error("[admin/subscriptions PATCH]", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
