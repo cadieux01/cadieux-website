@@ -16,25 +16,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Missing phone" }, { status: 400 });
   }
 
-  // Bot gate: every OTP send must be human-verified via Cloudflare Turnstile.
-  const isHuman = await verifyTurnstileToken(turnstileToken);
-  if (!isHuman) {
-    return NextResponse.json(
-      { ok: false, error: "Human verification failed. Please try again." },
-      { status: 403 }
-    );
-  }
-
-  if (!SERVICE_SID || !ACCOUNT_SID || !AUTH_TOKEN) {
-    return NextResponse.json(
-      { ok: false, error: "OTP service not configured." },
-      { status: 500 }
-    );
-  }
-
   const to = normalizePhone(phone);
 
   // Distributed rate limit: 3 OTP sends per phone per hour (Upstash Redis).
+  // Runs before Turnstile so abusive clients can't burn siteverify quota.
   const { success, limit, remaining, reset } = await otpRateLimit.limit(to);
   if (!success) {
     return NextResponse.json(
@@ -51,6 +36,22 @@ export async function POST(req: NextRequest) {
           "X-RateLimit-Reset": reset.toString(),
         },
       }
+    );
+  }
+
+  // Bot gate: every OTP send must be human-verified via Cloudflare Turnstile.
+  const isHuman = await verifyTurnstileToken(turnstileToken);
+  if (!isHuman) {
+    return NextResponse.json(
+      { ok: false, error: "Human verification failed. Please try again." },
+      { status: 403 }
+    );
+  }
+
+  if (!SERVICE_SID || !ACCOUNT_SID || !AUTH_TOKEN) {
+    return NextResponse.json(
+      { ok: false, error: "OTP service not configured." },
+      { status: 500 }
     );
   }
 
