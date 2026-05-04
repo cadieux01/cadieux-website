@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
@@ -108,23 +107,12 @@ export default function SubscriptionDetailPage() {
     fetchAll();
   }, [phone, phoneChecked, fetchAll]);
 
-  // Realtime: re-fetch on any change to this subscription's row or its deliveries.
+  // Poll for changes every 15s. Replaces Realtime (anon role can no longer
+  // observe the subscriptions/subscription_deliveries tables under RLS).
   useEffect(() => {
     if (!id || !phone) return;
-    const channel = supabase
-      .channel(`sub-${id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "subscription_deliveries", filter: `subscription_id=eq.${id}` },
-        () => fetchAll()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "subscriptions", filter: `id=eq.${id}` },
-        () => fetchAll()
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const interval = setInterval(fetchAll, 15_000);
+    return () => clearInterval(interval);
   }, [id, phone, fetchAll]);
 
   return (

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback, FormEvent } from "react";
-import { supabase } from "@/lib/supabase";
 
 type Customer = {
   id: string;
@@ -217,23 +216,34 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const fetchOrders = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("orders")
-      .select("id, customer_id, total_amount, status, delivery_address, created_at, customers(id, full_name, phone, city)")
-      .order("created_at", { ascending: false });
-    if (!error && data) {
-      setOrders(data as unknown as Order[]);
+    try {
+      const r = await fetch("/api/admin/orders", {
+        headers: { "x-admin-token": PASSWORD },
+        cache: "no-store",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && Array.isArray(j.orders)) {
+        setOrders(j.orders as Order[]);
+      }
+    } catch {
+      /* silent — leave existing state */
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const fetchSubscriptions = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("subscriptions")
-      .select("id, bread_slug, bread_name, bread_price, weeks, days, slot_mode, slot, slots_by_day, total, customer_name, customer_phone, customer_address, customer_city, customer_pincode, status, created_at")
-      .order("created_at", { ascending: false });
-    if (!error && data) {
-      setSubscriptions(data as unknown as Subscription[]);
+    try {
+      const r = await fetch("/api/admin/subscriptions", {
+        headers: { "x-admin-token": PASSWORD },
+        cache: "no-store",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && Array.isArray(j.subscriptions)) {
+        setSubscriptions(j.subscriptions as Subscription[]);
+      }
+    } catch {
+      /* silent */
     }
   }, []);
 
@@ -252,52 +262,17 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     fetchSubscriptions();
     fetchReviews();
 
-    const channel = supabase
-      .channel("orders-admin")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        () => {
-          fetchOrders();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "subscriptions" },
-        () => {
-          fetchSubscriptions();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "subscription_deliveries" },
-        (payload) => {
-          window.dispatchEvent(
-            new CustomEvent("cadieux:delivery-changed", { detail: payload })
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "reviews" },
-        () => {
-          fetchReviews();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "review_replies" },
-        () => {
-          fetchReviews();
-        }
-      )
-      .subscribe((status) => {
-        setConnected(status === "SUBSCRIBED");
-      });
+    // Realtime is no longer available to the anon role (RLS denies all
+    // anon SELECT on orders/subscriptions/customers). Poll the admin
+    // endpoints every 10s instead.
+    setConnected(true);
+    const interval = setInterval(() => {
+      fetchOrders();
+      fetchSubscriptions();
+      fetchReviews();
+    }, 10_000);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => clearInterval(interval);
   }, [fetchOrders, fetchSubscriptions, fetchReviews]);
 
   const updateStatus = async (order: Order, newStatus: Status) => {
@@ -306,12 +281,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       curr.map((o) => (o.id === order.id ? { ...o, status: newStatus.toLowerCase() } : o))
     );
 
-    const { error } = await supabase
-      .from("orders")
-      .update({ status: newStatus.toLowerCase() })
-      .eq("id", order.id);
+    const r = await fetch(`/api/admin/orders/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-token": PASSWORD },
+      body: JSON.stringify({ status: newStatus.toLowerCase() }),
+    });
 
-    if (error) {
+    if (!r.ok) {
       setOrders(prev);
       return;
     }
@@ -650,11 +626,12 @@ function SubscriptionsSection({
   const openSub = openSubId ? subscriptions.find((s) => s.id === openSubId) ?? null : null;
 
   const updateStatus = async (id: string, next: Status) => {
-    const { error } = await supabase
-      .from("subscriptions")
-      .update({ status: next.toLowerCase() })
-      .eq("id", id);
-    if (!error) onChanged();
+    const r = await fetch(`/api/admin/subscriptions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-token": PASSWORD },
+      body: JSON.stringify({ status: next.toLowerCase() }),
+    });
+    if (r.ok) onChanged();
   };
 
   return (
@@ -821,16 +798,11 @@ function SubscriptionDrawer({
     fetchDeliveries();
   }, [fetchDeliveries]);
 
-  // Re-fetch when realtime fires for this subscription's deliveries.
+  // Poll deliveries every 10s while drawer is open (replaces Realtime).
   useEffect(() => {
-    const handler = (e: Event) => {
-      const ce = e as CustomEvent<{ new?: { subscription_id?: string }; old?: { subscription_id?: string } }>;
-      const sid = ce.detail?.new?.subscription_id ?? ce.detail?.old?.subscription_id;
-      if (!sid || sid === subscription.id) fetchDeliveries();
-    };
-    window.addEventListener("cadieux:delivery-changed", handler);
-    return () => window.removeEventListener("cadieux:delivery-changed", handler);
-  }, [subscription.id, fetchDeliveries]);
+    const interval = setInterval(fetchDeliveries, 10_000);
+    return () => clearInterval(interval);
+  }, [fetchDeliveries]);
 
   const updateDeliveryStatus = async (deliveryId: string, next: string) => {
     const prev = deliveries;
@@ -862,10 +834,11 @@ function SubscriptionDrawer({
   const overallNorm = (STATUS_OPTIONS.find((o) => o.toLowerCase() === overallStatus) ?? "Pending") as Status;
 
   const updateOverall = async (next: Status) => {
-    await supabase
-      .from("subscriptions")
-      .update({ status: next.toLowerCase() })
-      .eq("id", subscription.id);
+    await fetch(`/api/admin/subscriptions/${subscription.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+      body: JSON.stringify({ status: next.toLowerCase() }),
+    });
   };
 
   const dayList = (subscription.days ?? []).map((k) => DAY_LABELS[k] ?? k).join(", ");
@@ -1161,29 +1134,31 @@ function EditCustomerModal({
       ? `${address.trim()} - ${pincode.trim()}`
       : address.trim();
 
-    const { error: custErr } = await supabase
-      .from("customers")
-      .update({
+    const custRes = await fetch(`/api/admin/customers/${customerId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-token": PASSWORD },
+      body: JSON.stringify({
         full_name: fullName.trim() || null,
         phone: phone.trim() || null,
         city: city.trim() || null,
-      })
-      .eq("id", customerId);
-
-    if (custErr) {
+      }),
+    });
+    if (!custRes.ok) {
+      const j = await custRes.json().catch(() => ({}));
       setSaving(false);
-      setError(custErr.message || "Failed to update customer");
+      setError(j.error || "Failed to update customer");
       return;
     }
 
-    const { error: orderErr } = await supabase
-      .from("orders")
-      .update({ delivery_address: newDeliveryAddress })
-      .eq("id", order.id);
-
-    if (orderErr) {
+    const orderRes = await fetch(`/api/admin/orders/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-token": PASSWORD },
+      body: JSON.stringify({ delivery_address: newDeliveryAddress }),
+    });
+    if (!orderRes.ok) {
+      const j = await orderRes.json().catch(() => ({}));
       setSaving(false);
-      setError(orderErr.message || "Failed to update order address");
+      setError(j.error || "Failed to update order address");
       return;
     }
 
