@@ -12,7 +12,17 @@ import {
   isCompleted,
   isInProgress,
 } from "@/lib/subscription-ui";
-import { TIME_SLOTS } from "@/lib/subscription-draft";
+// Time slots used in the change-request modal. Must match the legacy
+// subscription wizard's SLOTS list (src/app/subscription/page.tsx).
+const TIME_SLOTS = [
+  "6:00 – 8:00 AM",
+  "8:00 – 10:00 AM",
+  "10:00 AM – 12:00 PM",
+  "12:00 – 2:00 PM",
+  "2:00 – 4:00 PM",
+  "4:00 – 6:00 PM",
+  "6:00 – 8:00 PM",
+] as const;
 
 type Sub = {
   id: string;

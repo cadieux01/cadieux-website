@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import ScrollReveal from "@/components/ScrollReveal";
 import { useCart } from "@/context/CartContext";
 
@@ -21,18 +20,6 @@ function chip(selected: boolean) {
 
 export default function CartPage() {
   const { cart, cartTotal, updateQty, removeFromCart, openCheckout } = useCart();
-  const [activeSubs, setActiveSubs] = useState<number>(0);
-
-  useEffect(() => {
-    const phone = typeof window !== "undefined" ? localStorage.getItem("cadieux_phone") : "";
-    if (!phone) return;
-    fetch(`/api/subscriptions?phone=${encodeURIComponent(phone)}`)
-      .then((r) => r.json())
-      .then((j: { subscriptions?: { id: string }[] }) => {
-        setActiveSubs((j.subscriptions ?? []).length);
-      })
-      .catch(() => {});
-  }, []);
 
   return (
     <div style={{ minHeight: "100dvh", background: "#1D1D1F", position: "relative", overflowX: "clip" }}>
@@ -55,36 +42,6 @@ export default function CartPage() {
             Your Cart
           </h1>
         </ScrollReveal>
-
-        {activeSubs > 0 && (
-          <Link
-            href="/subscriptions/track"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 16,
-              padding: "16px 20px",
-              marginBottom: 32,
-              background: "rgba(67,105,178,0.08)",
-              border: "1px solid rgba(67,105,178,0.35)",
-              textDecoration: "none",
-              color: "#FBF3D4",
-            }}
-          >
-            <div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#4369B2", marginBottom: 4 }}>
-                Subscriptions
-              </div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "rgba(251,243,212,0.85)" }}>
-                You have {activeSubs} active {activeSubs === 1 ? "plan" : "plans"} on autopilot.
-              </div>
-            </div>
-            <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#4369B2", whiteSpace: "nowrap" }}>
-              Track →
-            </span>
-          </Link>
-        )}
 
         {cart.length === 0 ? (
           <div>
