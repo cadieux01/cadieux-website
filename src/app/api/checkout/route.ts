@@ -7,6 +7,7 @@ import {
 } from "@/lib/phone-cookie";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { orderRateLimit, getClientIP } from "@/lib/ratelimit";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -106,6 +107,16 @@ export async function POST(req: NextRequest) {
     const { customer_id, delivery_address, total_amount, turnstileToken } = body;
     if (!delivery_address || !total_amount) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    }
+
+    // Distributed rate limit: 5 orders per IP per hour (Upstash Redis).
+    const ip = getClientIP(req);
+    const { success: rlOk } = await orderRateLimit.limit(ip);
+    if (!rlOk) {
+      return NextResponse.json(
+        { error: "Too many orders. Please wait before placing another order." },
+        { status: 429 }
+      );
     }
 
     // Bot gate: every order placement must pass Turnstile.

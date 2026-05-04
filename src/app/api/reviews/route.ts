@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { reviewRateLimit, getClientIP } from "@/lib/ratelimit";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,6 +50,16 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   let body: any;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Bad JSON" }, { status: 400 }); }
+
+  // Distributed rate limit: 3 reviews per IP per day (Upstash Redis).
+  const ip = getClientIP(req);
+  const { success: rlOk } = await reviewRateLimit.limit(ip);
+  if (!rlOk) {
+    return NextResponse.json(
+      { error: "Too many reviews. Please try again tomorrow." },
+      { status: 429 }
+    );
+  }
 
   // Bot gate: every review submission must pass Turnstile.
   const turnstileToken = String(body?.turnstileToken ?? "");
