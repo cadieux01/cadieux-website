@@ -44,7 +44,9 @@ export default function ProductDetailPage() {
     // dropping it straight into the cart — the user picks weeks/days/window
     // there and we compute the running total from the variant price.
     if (orderType === "sub") {
-      router.push(`/subscription?slug=${product.slug}`);
+      // New flow: send users to the multi-step setup wizard. They'll pick the
+      // product (and qty / weeks / days / slots) starting at Step 1.
+      router.push("/subscriptions/setup");
       return;
     }
     addToCart({

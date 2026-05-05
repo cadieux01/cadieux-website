@@ -228,6 +228,12 @@ export async function POST(req: NextRequest) {
       : 1;
     const frequency = body.frequency === "bi-weekly" ? "bi-weekly" : "weekly";
 
+    // The new /subscriptions/setup wizard sends an explicit per-delivery list
+    // and wants the parent row to start in pending_confirmation; the legacy
+    // /subscription wizard does not, so default to "active" for back-compat.
+    const subStatus = body.status === "pending_confirmation" ? "pending_confirmation" : "active";
+    const paymentMethod = body.payment_method === "cod" ? "cod" : null;
+
     const { data: sub, error: subErr } = await supabaseAdmin
       .from("subscriptions")
       .insert({
@@ -246,7 +252,7 @@ export async function POST(req: NextRequest) {
         customer_address,
         customer_city,
         customer_pincode,
-        status: "active",
+        status: subStatus,
         // New tracking-model columns — populated for /subscriptions/track + admin.
         customer_id,
         product_slug: bread_slug,
@@ -259,7 +265,7 @@ export async function POST(req: NextRequest) {
         delivery_address: deliveryAddressJson,
         total_amount: total,
         payment_status: "pending",
-        payment_method: null,
+        payment_method: paymentMethod,
       })
       .select("id")
       .single();

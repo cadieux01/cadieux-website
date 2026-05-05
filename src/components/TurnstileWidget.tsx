@@ -32,8 +32,6 @@ interface TurnstileWidgetProps {
   theme?: "auto" | "light" | "dark";
 }
 
-const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-
 const TurnstileWidget = forwardRef<TurnstileHandle, TurnstileWidgetProps>(
   function TurnstileWidget({ onVerify, onExpire, theme = "auto" }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -55,33 +53,41 @@ const TurnstileWidget = forwardRef<TurnstileHandle, TurnstileWidgetProps>(
     }));
 
     useEffect(() => {
-      // Inject the loader script once per page.
-      if (!document.querySelector(`script[src="${SCRIPT_SRC}"]`)) {
-        const s = document.createElement("script");
-        s.src = SCRIPT_SRC;
-        s.async = true;
-        s.defer = true;
-        document.body.appendChild(s);
+      // Loader script is preloaded globally in src/app/layout.tsx. Poll for
+      // readiness — on first nav after a hard load it may not be parsed yet,
+      // and on client-side nav it's already attached.
+      let cancelled = false;
+      const tryRender = () => {
+        if (cancelled) return false;
+        if (!window.turnstile || !containerRef.current || widgetIdRef.current) {
+          return Boolean(widgetIdRef.current);
+        }
+        const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+        if (!sitekey) {
+          console.error("❌ NEXT_PUBLIC_TURNSTILE_SITE_KEY not configured");
+          return true;
+        }
+        widgetIdRef.current = window.turnstile.render(containerRef.current, {
+          sitekey,
+          callback: (token: string) => onVerifyRef.current(token),
+          "expired-callback": () => onExpireRef.current?.(),
+          theme,
+        });
+        return true;
+      };
+
+      if (tryRender()) {
+        return () => {
+          cancelled = true;
+          if (widgetIdRef.current && window.turnstile) {
+            try { window.turnstile.remove(widgetIdRef.current); } catch { /* ignore */ }
+            widgetIdRef.current = null;
+          }
+        };
       }
 
-      let cancelled = false;
       const interval = window.setInterval(() => {
-        if (cancelled) return;
-        if (window.turnstile && containerRef.current && !widgetIdRef.current) {
-          const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-          if (!sitekey) {
-            console.error("❌ NEXT_PUBLIC_TURNSTILE_SITE_KEY not configured");
-            window.clearInterval(interval);
-            return;
-          }
-          widgetIdRef.current = window.turnstile.render(containerRef.current, {
-            sitekey,
-            callback: (token: string) => onVerifyRef.current(token),
-            "expired-callback": () => onExpireRef.current?.(),
-            theme,
-          });
-          window.clearInterval(interval);
-        }
+        if (tryRender()) window.clearInterval(interval);
       }, 100);
 
       return () => {

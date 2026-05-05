@@ -147,7 +147,7 @@ export default function TrackPage() {
             title="No active plans yet"
             body="Start a subscription and never run out of bread."
             cta="Start a plan"
-            href="/subscriptions/setup/product"
+            href="/subscriptions/setup"
           />
         )}
 

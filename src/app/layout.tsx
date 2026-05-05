@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Jost } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
 import CustomCursor from "@/components/CustomCursor";
@@ -50,6 +51,15 @@ export default function RootLayout({
             hero.jpg is 3.2 MB and only used on /shop/[slug] — load it on
             demand there, not on every visit. */}
         <link rel="preload" as="video" href="/logo-intro.mp4" type="video/mp4" />
+        {/* Cloudflare Turnstile loader — explicit-render mode. Loaded once
+            globally so individual <TurnstileWidget /> mounts can render
+            instantly instead of injecting + polling for the script each
+            time. ?render=explicit prevents auto-rendering on .cf-turnstile
+            divs we don't control. */}
+        <Script
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+          strategy="afterInteractive"
+        />
       </head>
       <body className="font-body" suppressHydrationWarning>
         <CartProvider>
