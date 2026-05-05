@@ -7,13 +7,8 @@ import {
   SETUP_PRODUCTS,
   TIME_SLOTS,
   formatSlot,
-  isoDate,
   parseIso,
-  next13WeekMondays,
-  daysInWeek,
-  shortDayLabel,
   longDayLabel,
-  weekRangeLabel,
   emptySetupState,
   loadSetupState,
   saveSetupState,
@@ -22,6 +17,8 @@ import {
   type SetupState,
   type ProductSlug,
 } from "@/lib/subscription-setup";
+import { MonthCalendar } from "@/components/subscription-setup/MonthCalendar";
+import { WeekDayStrip } from "@/components/subscription-setup/WeekDayStrip";
 
 const BG = "#0e0e0e";
 const GOLD = "#c9a96e";
@@ -50,26 +47,12 @@ export default function SetupPage() {
     setState((s) => ({ ...s, ...patch }));
   }
 
-  // Re-sync derived fields when earlier choices change.
-  // If weeksCount drops below selectedWeeks.length, trim from the tail.
-  useEffect(() => {
-    if (state.selectedWeeks.length > state.weeksCount) {
-      const trimmed = [...state.selectedWeeks].sort().slice(0, state.weeksCount);
-      const nextDays: Record<string, string[]> = {};
-      const nextSlots: Record<string, string> = { ...state.slotByDate };
-      trimmed.forEach((w) => {
-        if (state.daysByWeek[w]) nextDays[w] = state.daysByWeek[w];
-      });
-      // Drop slots for any date no longer reachable.
-      const reachable = new Set<string>();
-      Object.values(nextDays).forEach((arr) => arr.forEach((d) => reachable.add(d)));
-      Object.keys(nextSlots).forEach((d) => { if (!reachable.has(d)) delete nextSlots[d]; });
-      update({ selectedWeeks: trimmed, daysByWeek: nextDays, slotByDate: nextSlots });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.weeksCount]);
-
   function next() {
+    // When leaving Step 3, auto-sync weeksCount to whatever the user
+    // actually picked on the calendar. Step 2's value is just a hint.
+    if (step === 3 && state.selectedWeeks.length > 0 && state.selectedWeeks.length !== state.weeksCount) {
+      update({ weeksCount: state.selectedWeeks.length });
+    }
     if (step < TOTAL_STEPS) setStep(step + 1);
   }
   function back() {
@@ -84,7 +67,7 @@ export default function SetupPage() {
     switch (step) {
       case 1: return Boolean(state.productSlug) && state.qty >= 1;
       case 2: return state.weeksCount >= 1 && state.weeksCount <= 12;
-      case 3: return state.selectedWeeks.length === state.weeksCount;
+      case 3: return state.selectedWeeks.length >= 1;
       case 4: return state.selectedWeeks.every((w) => (state.daysByWeek[w] ?? []).length > 0);
       case 5: {
         const rows = listWeekDayRows(state);
@@ -143,7 +126,7 @@ export default function SetupPage() {
         )}
         {step === 3 && (
           <Step3Calendar
-            weeksCount={state.weeksCount}
+            hintCount={state.weeksCount}
             selectedWeeks={state.selectedWeeks}
             onChange={(selectedWeeks) => {
               // Drop daysByWeek + slots for any week no longer selected.
@@ -160,6 +143,7 @@ export default function SetupPage() {
               });
               update({ selectedWeeks, daysByWeek: nextDays, slotByDate: nextSlots });
             }}
+            onChangeHint={() => setStep(2)}
           />
         )}
         {step === 4 && (
@@ -443,42 +427,41 @@ function Step2Weeks({
   );
 }
 
-// ── Step 3: Calendar of weeks ────────────────────────────────────────────
+// ── Step 3: Month calendar (week selection) ──────────────────────────────
 
 function Step3Calendar({
-  weeksCount,
+  hintCount,
   selectedWeeks,
   onChange,
+  onChangeHint,
 }: {
-  weeksCount: number;
+  hintCount: number;
   selectedWeeks: string[];
   onChange: (weeks: string[]) => void;
+  onChangeHint: () => void;
 }) {
-  const weeks = useMemo(() => next13WeekMondays(new Date(), 13), []);
-  const today = useMemo(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  }, []);
-
-  function toggle(weekIso: string) {
-    const isSelected = selectedWeeks.includes(weekIso);
+  function toggleWeek(weekSundayIso: string) {
+    const isSelected = selectedWeeks.includes(weekSundayIso);
     if (isSelected) {
-      onChange(selectedWeeks.filter((w) => w !== weekIso));
-      return;
+      onChange(selectedWeeks.filter((w) => w !== weekSundayIso));
+    } else {
+      onChange([...selectedWeeks, weekSundayIso].sort());
     }
-    if (selectedWeeks.length >= weeksCount) return; // hard cap
-    onChange([...selectedWeeks, weekIso].sort());
   }
+
+  const actual = selectedWeeks.length;
+  const showSoftHint = actual > 0 && actual !== hintCount;
 
   return (
     <section>
       <StepTitle>Pick your weeks</StepTitle>
-      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 20 }}>
-        Tap weeks to schedule deliveries. They don't have to be consecutive.
+      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 16 }}>
+        Tap dates to select weeks. Each tap selects the entire week.
       </p>
+
       <div
         style={{
-          marginBottom: 20,
+          marginBottom: 16,
           padding: "10px 14px",
           background: "rgba(201,169,110,0.08)",
           border: `1px solid ${GOLD}`,
@@ -489,64 +472,50 @@ function Step3Calendar({
           letterSpacing: "0.05em",
         }}
       >
-        Selected: {selectedWeeks.length} of {weeksCount} weeks
+        Selected: {actual} {actual === 1 ? "week" : "weeks"}
       </div>
-      <div style={{ display: "grid", gap: 8 }}>
-        {weeks.map((w) => {
-          const mon = parseIso(w);
-          const sun = new Date(mon);
-          sun.setDate(mon.getDate() + 6);
-          const past = sun < today;
-          const selected = selectedWeeks.includes(w);
-          const atCap = !selected && selectedWeeks.length >= weeksCount;
-          const disabled = past || atCap;
-          return (
-            <button
-              key={w}
-              onClick={() => !past && toggle(w)}
-              disabled={past || (atCap && !selected)}
-              style={{
-                padding: "14px 16px",
-                borderRadius: 12,
-                border: `1px solid ${selected ? GOLD : FAINT}`,
-                background: selected
-                  ? "rgba(201,169,110,0.12)"
-                  : past
-                  ? "rgba(255,255,255,0.015)"
-                  : "rgba(255,255,255,0.03)",
-                color: past ? FAINT : TEXT,
-                cursor: disabled ? "not-allowed" : "pointer",
-                opacity: past ? 0.4 : 1,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                textAlign: "left",
-              }}
-            >
-              <div>
-                <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 18 }}>
-                  Week of {weekRangeLabel(w)}
-                </div>
-                {past && <div style={{ fontSize: 12, color: FAINT, marginTop: 2 }}>Past — not available</div>}
-              </div>
-              <div
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 999,
-                  border: `1px solid ${selected ? GOLD : FAINT}`,
-                  background: selected ? GOLD : "transparent",
-                }}
-              />
-            </button>
-          );
-        })}
-      </div>
+
+      <MonthCalendar selectedWeeks={selectedWeeks} onToggleWeek={toggleWeek} />
+
+      {showSoftHint && (
+        <div
+          style={{
+            marginTop: 18,
+            padding: "12px 14px",
+            borderRadius: 12,
+            background: "rgba(255,255,255,0.025)",
+            border: `1px solid ${FAINT}`,
+            fontSize: 13,
+            color: FADED,
+            lineHeight: 1.5,
+          }}
+        >
+          You picked {hintCount} {hintCount === 1 ? "week" : "weeks"} earlier — currently you've
+          selected {actual}. Continue with {actual}{" "}
+          {actual === 1 ? "week" : "weeks"} or{" "}
+          <button
+            onClick={onChangeHint}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: GOLD,
+              padding: 0,
+              cursor: "pointer",
+              fontSize: 13,
+              fontFamily: "inherit",
+              textDecoration: "underline",
+            }}
+          >
+            change number of weeks
+          </button>
+          .
+        </div>
+      )}
     </section>
   );
 }
 
-// ── Step 4: Days per week ────────────────────────────────────────────────
+// ── Step 4: Day strip per selected week ──────────────────────────────────
 
 function Step4Days({
   selectedWeeks,
@@ -557,10 +526,6 @@ function Step4Days({
   daysByWeek: Record<string, string[]>;
   onChange: (next: Record<string, string[]>) => void;
 }) {
-  const today = useMemo(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  }, []);
   const sortedWeeks = [...selectedWeeks].sort();
 
   function toggleDay(weekIso: string, dayIso: string) {
@@ -575,61 +540,15 @@ function Step4Days({
       <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 20 }}>
         Choose one or more days per week.
       </p>
-      <div style={{ display: "grid", gap: 22 }}>
-        {sortedWeeks.map((w, i) => {
-          const days = daysInWeek(w);
-          const picked = daysByWeek[w] ?? [];
-          return (
-            <div
-              key={w}
-              style={{
-                padding: 16,
-                borderRadius: 14,
-                background: "rgba(255,255,255,0.03)",
-                border: `1px solid ${FAINT}`,
-              }}
-            >
-              <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 18 }}>
-                  Week {i + 1}
-                </div>
-                <div style={{ fontSize: 12, color: FADED }}>{weekRangeLabel(w)}</div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
-                {days.map((d) => {
-                  const dIso = isoDate(d);
-                  const past = d < today;
-                  const selected = picked.includes(dIso);
-                  return (
-                    <button
-                      key={dIso}
-                      onClick={() => !past && toggleDay(w, dIso)}
-                      disabled={past}
-                      style={{
-                        padding: "10px 0",
-                        borderRadius: 10,
-                        border: `1px solid ${selected ? GOLD : FAINT}`,
-                        background: selected ? "rgba(201,169,110,0.15)" : "transparent",
-                        color: past ? FAINT : TEXT,
-                        cursor: past ? "not-allowed" : "pointer",
-                        opacity: past ? 0.4 : 1,
-                        fontSize: 12,
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      {shortDayLabel(d)}
-                    </button>
-                  );
-                })}
-              </div>
-              {picked.length === 0 && (
-                <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,129,129,0.7)" }}>
-                  Select at least one day
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <div style={{ display: "grid", gap: 16 }}>
+        {sortedWeeks.map((w) => (
+          <WeekDayStrip
+            key={w}
+            weekSundayIso={w}
+            pickedDates={daysByWeek[w] ?? []}
+            onTogglePick={(iso) => toggleDay(w, iso)}
+          />
+        ))}
       </div>
     </section>
   );

@@ -84,6 +84,34 @@ export function mondayOf(d: Date): Date {
   return out;
 }
 
+/** Returns the Sunday (00:00 local) of the calendar week containing d. */
+export function sundayOf(d: Date): Date {
+  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  out.setDate(out.getDate() - out.getDay());
+  return out;
+}
+
+/** All seven Date objects (Sun..Sat) for a given week-Sunday ISO. */
+export function daysInWeekSunday(weekSundayIso: string): Date[] {
+  const sun = parseIso(weekSundayIso);
+  const out: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(sun);
+    d.setDate(sun.getDate() + i);
+    out.push(d);
+  }
+  return out;
+}
+
+/** "May 11 – May 17" for a Sunday-start week. */
+export function weekRangeLabelSunday(weekSundayIso: string): string {
+  const sun = parseIso(weekSundayIso);
+  const sat = new Date(sun);
+  sat.setDate(sun.getDate() + 6);
+  const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return `${fmt(sun)} – ${fmt(sat)}`;
+}
+
 /** Day-key (mon..sun) for a Date. */
 export function dayKeyOf(d: Date): DayKey {
   return DAY_KEYS[mondayIndex(d)];
@@ -134,7 +162,10 @@ export function weekRangeLabel(weekMondayIso: string): string {
 
 // ── sessionStorage keys ──────────────────────────────────────────────────
 
-export const SETUP_KEY = "cadieux_setup_v1";
+// v2: switched week semantics from Monday-start to Sunday-start in the new
+// calendar UI. Bumping the key silently invalidates any in-flight v1 state
+// in users' sessionStorage so they don't see misaligned week pills.
+export const SETUP_KEY = "cadieux_setup_v2";
 export const ADDRESS_KEY = "cadieux_setup_address_v1";
 
 export type SetupState = {
