@@ -775,24 +775,14 @@ function SubscriptionInner() {
         {/* STEP 2 — DAYS (one page per subscription week) */}
         {step === "days" && weeks && (() => {
           const selectedThisWeek = daysByWeek[currentWeek] ?? [];
-          const isFirstWeek = currentWeek === 1;
-          const noDaysThisCal = thisWeekDays.length === 0;
-          // Week 1 lists only days deliverable this calendar week (unless
-          // there are none — then it falls back to the full 7-day list,
-          // which dateForWeek dates into next calendar week).
-          const dayList = isFirstWeek && !noDaysThisCal ? thisWeekDays : DAYS;
+          // All 7 days are pickable for every week. dateForWeek applies the
+          // week-1 rule (same-or-earlier weekday slips to next calendar
+          // week) so Week 1 deliveries always land on real future dates.
+          const dayList = DAYS;
           const fmtForWeek = (key: string) =>
             formatDeliveryDate(dateForWeek(key, currentWeek));
-          const titleForWeek = (w: number) => {
-            if (w === 1) return "Available this week";
-            return `Week ${w}`;
-          };
-          const subForWeek = (w: number) => {
-            if (w === 1) return noDaysThisCal
-              ? "Your first deliveries land next week"
-              : "Pick days available this week";
-            return `Pick days for week ${w}`;
-          };
+          const titleForWeek = (w: number) => `Week ${w}`;
+          const subForWeek = (w: number) => `Pick days for week ${w}`;
           return (
             <Section
               title={titleForWeek(currentWeek)}

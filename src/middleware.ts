@@ -8,11 +8,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Authenticated admin clients bypass the IP-based limiter. Admin polls
-  // /api/admin/* every 10s across multiple endpoints; the 30/min cap
-  // would otherwise starve the dashboard.
-  const adminToken = request.headers.get("x-admin-token");
-  if (adminToken && adminToken === process.env.ADMIN_TOKEN) {
+  // Admin endpoints are gated by ADMIN_TOKEN inside each route. The
+  // dashboard polls /api/admin/* every 10s across multiple endpoints
+  // and a single click can fan out further requests; the public 30/min
+  // cap would starve admin work. Skip the IP limiter on this prefix
+  // entirely. Specific limiters (otp/order/review) still apply on the
+  // user-facing endpoints they wrap.
+  if (request.nextUrl.pathname.startsWith("/api/admin/")) {
     return NextResponse.next();
   }
 
