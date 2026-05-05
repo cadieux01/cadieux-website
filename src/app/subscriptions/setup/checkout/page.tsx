@@ -36,7 +36,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     setHydrated(true);
     const s = loadSetupState();
-    const ok = Boolean(s.productSlug) && s.selectedWeeks.length > 0;
+    const ok = Boolean(s.productSlug) && s.selectedDates.length > 0;
     setHasSetup(ok);
     if (!ok) {
       router.replace("/subscriptions/setup");

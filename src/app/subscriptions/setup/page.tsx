@@ -17,8 +17,7 @@ import {
   type SetupState,
   type ProductSlug,
 } from "@/lib/subscription-setup";
-import { MonthCalendar } from "@/components/subscription-setup/MonthCalendar";
-import { WeekDayStrip } from "@/components/subscription-setup/WeekDayStrip";
+import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 
 const BG = "#0e0e0e";
 const GOLD = "#c9a96e";
@@ -26,7 +25,7 @@ const TEXT = "#FBF3D4";
 const FADED = "rgba(240,223,200,0.6)";
 const FAINT = "rgba(240,223,200,0.12)";
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 4;
 
 export default function SetupPage() {
   const router = useRouter();
@@ -48,11 +47,6 @@ export default function SetupPage() {
   }
 
   function next() {
-    // When leaving Step 3, auto-sync weeksCount to whatever the user
-    // actually picked on the calendar. Step 2's value is just a hint.
-    if (step === 3 && state.selectedWeeks.length > 0 && state.selectedWeeks.length !== state.weeksCount) {
-      update({ weeksCount: state.selectedWeeks.length });
-    }
     if (step < TOTAL_STEPS) setStep(step + 1);
   }
   function back() {
@@ -63,17 +57,21 @@ export default function SetupPage() {
   const deliveries = useMemo(() => buildDeliveries(state), [state]);
   const totalAmount = selectedProduct ? selectedProduct.price * state.qty * deliveries.length : 0;
 
+  // Live total used by the calendar bill bar — uses selectedDates count
+  // because the user hasn't picked slots yet at step 2.
+  const liveTotal = selectedProduct
+    ? selectedProduct.price * state.qty * state.selectedDates.length
+    : 0;
+
   const canNext = useMemo(() => {
     switch (step) {
       case 1: return Boolean(state.productSlug) && state.qty >= 1;
-      case 2: return state.weeksCount >= 1 && state.weeksCount <= 12;
-      case 3: return state.selectedWeeks.length >= 1;
-      case 4: return state.selectedWeeks.every((w) => (state.daysByWeek[w] ?? []).length > 0);
-      case 5: {
+      case 2: return state.selectedDates.length >= 1;
+      case 3: {
         const rows = listWeekDayRows(state);
         return rows.length > 0 && rows.every((r) => Boolean(state.slotByDate[r.date_iso]));
       }
-      case 6: return deliveries.length > 0;
+      case 4: return deliveries.length > 0;
       default: return false;
     }
   }, [step, state, deliveries.length]);
@@ -81,6 +79,18 @@ export default function SetupPage() {
   function proceedToCheckout() {
     if (!canNext) return;
     router.push("/subscriptions/setup/checkout");
+  }
+
+  function toggleDate(iso: string) {
+    setState((s) => {
+      const has = s.selectedDates.includes(iso);
+      const nextDates = has
+        ? s.selectedDates.filter((d) => d !== iso)
+        : [...s.selectedDates, iso].sort();
+      const nextSlots = { ...s.slotByDate };
+      if (has) delete nextSlots[iso];
+      return { ...s, selectedDates: nextDates, slotByDate: nextSlots };
+    });
   }
 
   if (!hydrated) {
@@ -119,56 +129,21 @@ export default function SetupPage() {
           />
         )}
         {step === 2 && (
-          <Step2Weeks
-            weeksCount={state.weeksCount}
-            onChange={(weeksCount) => update({ weeksCount })}
+          <Step2Dates
+            selectedDates={state.selectedDates}
+            onToggleDate={toggleDate}
+            deliveriesCount={state.selectedDates.length}
+            totalAmount={liveTotal}
           />
         )}
         {step === 3 && (
-          <Step3Calendar
-            hintCount={state.weeksCount}
-            selectedWeeks={state.selectedWeeks}
-            onChange={(selectedWeeks) => {
-              // Drop daysByWeek + slots for any week no longer selected.
-              const allowed = new Set(selectedWeeks);
-              const nextDays: Record<string, string[]> = {};
-              Object.entries(state.daysByWeek).forEach(([w, arr]) => {
-                if (allowed.has(w)) nextDays[w] = arr;
-              });
-              const reachable = new Set<string>();
-              Object.values(nextDays).forEach((arr) => arr.forEach((d) => reachable.add(d)));
-              const nextSlots: Record<string, string> = {};
-              Object.entries(state.slotByDate).forEach(([d, s]) => {
-                if (reachable.has(d)) nextSlots[d] = s;
-              });
-              update({ selectedWeeks, daysByWeek: nextDays, slotByDate: nextSlots });
-            }}
-            onChangeHint={() => setStep(2)}
-          />
-        )}
-        {step === 4 && (
-          <Step4Days
-            selectedWeeks={state.selectedWeeks}
-            daysByWeek={state.daysByWeek}
-            onChange={(daysByWeek) => {
-              const reachable = new Set<string>();
-              Object.values(daysByWeek).forEach((arr) => arr.forEach((d) => reachable.add(d)));
-              const nextSlots: Record<string, string> = {};
-              Object.entries(state.slotByDate).forEach(([d, s]) => {
-                if (reachable.has(d)) nextSlots[d] = s;
-              });
-              update({ daysByWeek, slotByDate: nextSlots });
-            }}
-          />
-        )}
-        {step === 5 && (
-          <Step5Slots
+          <Step3Slots
             state={state}
             onChange={(slotByDate) => update({ slotByDate })}
           />
         )}
-        {step === 6 && (
-          <Step6Review
+        {step === 4 && (
+          <Step4Review
             product={selectedProduct}
             qty={state.qty}
             deliveries={deliveries}
@@ -200,19 +175,30 @@ const pageStyle: React.CSSProperties = {
 
 function ProgressDots({ step, total }: { step: number; total: number }) {
   return (
-    <div style={{ display: "flex", gap: 8, marginTop: 22 }}>
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          style={{
-            flex: 1,
-            height: 3,
-            borderRadius: 2,
-            background: i + 1 <= step ? GOLD : FAINT,
-            transition: "background 0.2s ease",
-          }}
-        />
-      ))}
+    <div style={{ display: "flex", gap: 10, marginTop: 22, alignItems: "center" }}>
+      {Array.from({ length: total }).map((_, i) => {
+        const idx = i + 1;
+        const isActive = idx === step;
+        const isComplete = idx < step;
+        // Active = solid gold dot; complete = gold ring; future = faint outline.
+        const bg = isActive ? GOLD : "transparent";
+        const border = isActive || isComplete ? GOLD : "rgba(240,223,200,0.25)";
+        return (
+          <div
+            key={i}
+            aria-current={isActive ? "step" : undefined}
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 999,
+              background: bg,
+              border: `1.5px solid ${border}`,
+              opacity: !isActive && !isComplete ? 0.5 : 1,
+              transition: "background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease",
+            }}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -230,6 +216,7 @@ function NavRow({
   onNext: () => void;
   finalLabel: string;
 }) {
+  const nextTooltip = step === 2 && !canNext ? "Pick at least one delivery date" : "";
   return (
     <div
       style={{
@@ -273,6 +260,7 @@ function NavRow({
         <button
           onClick={onNext}
           disabled={!canNext}
+          title={nextTooltip}
           style={{
             padding: "12px 28px",
             background: canNext ? GOLD : FAINT,
@@ -377,186 +365,38 @@ function qtyBtnStyle(disabled: boolean): React.CSSProperties {
   };
 }
 
-// ── Step 2: Number of weeks ─────────────────────────────────────────────
+// ── Step 2: Date calendar ────────────────────────────────────────────────
 
-function Step2Weeks({
-  weeksCount,
-  onChange,
+function Step2Dates({
+  selectedDates,
+  onToggleDate,
+  deliveriesCount,
+  totalAmount,
 }: {
-  weeksCount: number;
-  onChange: (n: number) => void;
+  selectedDates: string[];
+  onToggleDate: (iso: string) => void;
+  deliveriesCount: number;
+  totalAmount: number;
 }) {
   return (
     <section>
-      <StepTitle>How many weeks?</StepTitle>
-      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 20 }}>
-        Pick how many weeks of deliveries you want. You'll choose which weeks next.
+      <StepTitle>Choose your delivery dates</StepTitle>
+      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 18 }}>
+        Pick any dates that work for you. We&apos;ll deliver fresh on each.
       </p>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))",
-          gap: 10,
-        }}
-      >
-        {Array.from({ length: 12 }).map((_, i) => {
-          const n = i + 1;
-          const selected = weeksCount === n;
-          return (
-            <button
-              key={n}
-              onClick={() => onChange(n)}
-              style={{
-                padding: "16px 0",
-                borderRadius: 12,
-                border: `1px solid ${selected ? GOLD : FAINT}`,
-                background: selected ? "rgba(201,169,110,0.12)" : "transparent",
-                color: TEXT,
-                cursor: "pointer",
-                fontFamily: "var(--font-heading)",
-                fontWeight: 300,
-                fontSize: 22,
-              }}
-            >
-              {n}
-            </button>
-          );
-        })}
-      </div>
+      <DateCalendar
+        selectedDates={selectedDates}
+        onToggleDate={onToggleDate}
+        deliveriesCount={deliveriesCount}
+        totalAmount={totalAmount}
+      />
     </section>
   );
 }
 
-// ── Step 3: Month calendar (week selection) ──────────────────────────────
+// ── Step 3: Time slot per date ──────────────────────────────────────────
 
-function Step3Calendar({
-  hintCount,
-  selectedWeeks,
-  onChange,
-  onChangeHint,
-}: {
-  hintCount: number;
-  selectedWeeks: string[];
-  onChange: (weeks: string[]) => void;
-  onChangeHint: () => void;
-}) {
-  function toggleWeek(weekSundayIso: string) {
-    const isSelected = selectedWeeks.includes(weekSundayIso);
-    if (isSelected) {
-      onChange(selectedWeeks.filter((w) => w !== weekSundayIso));
-    } else {
-      onChange([...selectedWeeks, weekSundayIso].sort());
-    }
-  }
-
-  const actual = selectedWeeks.length;
-  const showSoftHint = actual > 0 && actual !== hintCount;
-
-  return (
-    <section>
-      <StepTitle>Pick your weeks</StepTitle>
-      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 16 }}>
-        Tap dates to select weeks. Each tap selects the entire week.
-      </p>
-
-      <div
-        style={{
-          marginBottom: 16,
-          padding: "10px 14px",
-          background: "rgba(201,169,110,0.08)",
-          border: `1px solid ${GOLD}`,
-          borderRadius: 999,
-          textAlign: "center",
-          fontSize: 13,
-          color: GOLD,
-          letterSpacing: "0.05em",
-        }}
-      >
-        Selected: {actual} {actual === 1 ? "week" : "weeks"}
-      </div>
-
-      <MonthCalendar selectedWeeks={selectedWeeks} onToggleWeek={toggleWeek} />
-
-      {showSoftHint && (
-        <div
-          style={{
-            marginTop: 18,
-            padding: "12px 14px",
-            borderRadius: 12,
-            background: "rgba(255,255,255,0.025)",
-            border: `1px solid ${FAINT}`,
-            fontSize: 13,
-            color: FADED,
-            lineHeight: 1.5,
-          }}
-        >
-          You picked {hintCount} {hintCount === 1 ? "week" : "weeks"} earlier — currently you've
-          selected {actual}. Continue with {actual}{" "}
-          {actual === 1 ? "week" : "weeks"} or{" "}
-          <button
-            onClick={onChangeHint}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: GOLD,
-              padding: 0,
-              cursor: "pointer",
-              fontSize: 13,
-              fontFamily: "inherit",
-              textDecoration: "underline",
-            }}
-          >
-            change number of weeks
-          </button>
-          .
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ── Step 4: Day strip per selected week ──────────────────────────────────
-
-function Step4Days({
-  selectedWeeks,
-  daysByWeek,
-  onChange,
-}: {
-  selectedWeeks: string[];
-  daysByWeek: Record<string, string[]>;
-  onChange: (next: Record<string, string[]>) => void;
-}) {
-  const sortedWeeks = [...selectedWeeks].sort();
-
-  function toggleDay(weekIso: string, dayIso: string) {
-    const cur = daysByWeek[weekIso] ?? [];
-    const next = cur.includes(dayIso) ? cur.filter((d) => d !== dayIso) : [...cur, dayIso].sort();
-    onChange({ ...daysByWeek, [weekIso]: next });
-  }
-
-  return (
-    <section>
-      <StepTitle>Pick days for each week</StepTitle>
-      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 20 }}>
-        Choose one or more days per week.
-      </p>
-      <div style={{ display: "grid", gap: 16 }}>
-        {sortedWeeks.map((w) => (
-          <WeekDayStrip
-            key={w}
-            weekSundayIso={w}
-            pickedDates={daysByWeek[w] ?? []}
-            onTogglePick={(iso) => toggleDay(w, iso)}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// ── Step 5: Time slot per (week, day) ────────────────────────────────────
-
-function Step5Slots({
+function Step3Slots({
   state,
   onChange,
 }: {
@@ -647,7 +487,7 @@ function Step5Slots({
             >
               <div style={{ flex: 1, minWidth: 140 }}>
                 <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 16 }}>
-                  Week {r.week_number} · {longDayLabel(r.date)}
+                  {longDayLabel(r.date)}
                 </div>
               </div>
               <select
@@ -678,9 +518,9 @@ const selectStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
 };
 
-// ── Step 6: Review ───────────────────────────────────────────────────────
+// ── Step 4: Review ───────────────────────────────────────────────────────
 
-function Step6Review({
+function Step4Review({
   product,
   qty,
   deliveries,
@@ -736,7 +576,7 @@ function Step6Review({
           >
             <div>
               <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 16 }}>
-                Week {d.week_number} · {longDayLabel(parseIso(d.delivery_date))}
+                {longDayLabel(parseIso(d.delivery_date))}
               </div>
             </div>
             <div style={{ fontSize: 12, color: GOLD }}>{formatSlot(d.slot)}</div>

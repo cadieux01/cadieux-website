@@ -52,10 +52,11 @@ export function formatSlot(slot: string): string {
   };
   const f1 = fmt(h1);
   const f2 = fmt(h2);
-  // If both halves share AM/PM, drop the first label.
   if (f1.ampm === f2.ampm) return `${f1.hh} – ${f2.hh} ${f2.ampm}`;
   return `${f1.hh} ${f1.ampm} – ${f2.hh} ${f2.ampm}`;
 }
+
+// ── Date primitives ──────────────────────────────────────────────────────
 
 /** ISO date "yyyy-mm-dd" from a Date (local, not UTC). */
 export function isoDate(d: Date): string {
@@ -76,40 +77,12 @@ export function mondayIndex(d: Date): number {
   return (d.getDay() + 6) % 7;
 }
 
-/** Returns the Monday (00:00 local) of the calendar week containing d. */
-export function mondayOf(d: Date): Date {
-  const idx = mondayIndex(d);
-  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  out.setDate(out.getDate() - idx);
-  return out;
-}
-
-/** Returns the Sunday (00:00 local) of the calendar week containing d. */
+/** Returns the Sunday (00:00 local) of the calendar week containing d.
+ *  Used by buildDeliveries() to derive a stable week_number per row. */
 export function sundayOf(d: Date): Date {
   const out = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   out.setDate(out.getDate() - out.getDay());
   return out;
-}
-
-/** All seven Date objects (Sun..Sat) for a given week-Sunday ISO. */
-export function daysInWeekSunday(weekSundayIso: string): Date[] {
-  const sun = parseIso(weekSundayIso);
-  const out: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(sun);
-    d.setDate(sun.getDate() + i);
-    out.push(d);
-  }
-  return out;
-}
-
-/** "May 11 – May 17" for a Sunday-start week. */
-export function weekRangeLabelSunday(weekSundayIso: string): string {
-  const sun = parseIso(weekSundayIso);
-  const sat = new Date(sun);
-  sat.setDate(sun.getDate() + 6);
-  const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-  return `${fmt(sun)} – ${fmt(sat)}`;
 }
 
 /** Day-key (mon..sun) for a Date. */
@@ -117,74 +90,52 @@ export function dayKeyOf(d: Date): DayKey {
   return DAY_KEYS[mondayIndex(d)];
 }
 
-/** Build the next N week-Monday ISOs starting from this calendar week. */
-export function next13WeekMondays(today: Date, count = 13): string[] {
-  const start = mondayOf(today);
-  const out: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i * 7);
-    out.push(isoDate(d));
-  }
-  return out;
-}
-
-/** All seven day-Date objects (Mon..Sun) for a given week-Monday ISO. */
-export function daysInWeek(weekMondayIso: string): Date[] {
-  const mon = parseIso(weekMondayIso);
-  const out: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(mon);
-    d.setDate(mon.getDate() + i);
-    out.push(d);
-  }
-  return out;
-}
-
-/** Short label like "Mon 4". */
-export function shortDayLabel(d: Date): string {
-  return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric" });
-}
-
 /** "Mon 4 May" for review summary. */
 export function longDayLabel(d: Date): string {
   return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 }
 
-/** "May 4 – May 10" range for a week-Monday ISO. */
-export function weekRangeLabel(weekMondayIso: string): string {
-  const mon = parseIso(weekMondayIso);
-  const sun = new Date(mon);
-  sun.setDate(mon.getDate() + 6);
-  const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-  return `${fmt(mon)} – ${fmt(sun)}`;
-}
+// ── sessionStorage keys + state ──────────────────────────────────────────
 
-// ── sessionStorage keys ──────────────────────────────────────────────────
-
-// v2: switched week semantics from Monday-start to Sunday-start in the new
-// calendar UI. Bumping the key silently invalidates any in-flight v1 state
-// in users' sessionStorage so they don't see misaligned week pills.
-export const SETUP_KEY = "cadieux_setup_v2";
+// v3: collapsed wizard down to a single date-picker step. Old shape stored
+// (selectedWeeks, daysByWeek) is migrated transparently on first load.
+export const SETUP_KEY = "cadieux_setup_v3";
+const LEGACY_V2_KEY = "cadieux_setup_v2";
+const LEGACY_V1_KEY = "cadieux_setup_v1";
 export const ADDRESS_KEY = "cadieux_setup_address_v1";
 
 export type SetupState = {
   productSlug: ProductSlug | null;
-  qty: number;                                 // 1..5
-  weeksCount: number;                          // 1..12
-  selectedWeeks: string[];                     // ISO Mondays
-  daysByWeek: Record<string, string[]>;        // weekMondayIso -> ISO day dates
-  slotByDate: Record<string, string>;          // ISO day date -> "06:00-07:00"
+  qty: number;                                // 1..5
+  selectedDates: string[];                    // ISO dates, sorted ascending
+  slotByDate: Record<string, string>;         // ISO date -> "06:00-07:00"
 };
 
 export function emptySetupState(): SetupState {
   return {
     productSlug: null,
     qty: 1,
-    weeksCount: 1,
-    selectedWeeks: [],
-    daysByWeek: {},
+    selectedDates: [],
     slotByDate: {},
+  };
+}
+
+type LegacyV2 = {
+  productSlug?: ProductSlug | null;
+  qty?: number;
+  daysByWeek?: Record<string, string[]>;
+  slotByDate?: Record<string, string>;
+};
+
+/** Flatten the old { weekIso → [dayIso,...] } map into a sorted, deduped list. */
+function migrateFromV2(legacy: LegacyV2): SetupState {
+  const dates = Object.values(legacy.daysByWeek ?? {}).flat();
+  const sorted = Array.from(new Set(dates)).sort();
+  return {
+    productSlug: legacy.productSlug ?? null,
+    qty: legacy.qty ?? 1,
+    selectedDates: sorted,
+    slotByDate: legacy.slotByDate ?? {},
   };
 }
 
@@ -192,12 +143,25 @@ export function loadSetupState(): SetupState {
   if (typeof window === "undefined") return emptySetupState();
   try {
     const raw = sessionStorage.getItem(SETUP_KEY);
-    if (!raw) return emptySetupState();
-    const parsed = JSON.parse(raw) as Partial<SetupState>;
-    return { ...emptySetupState(), ...parsed };
-  } catch {
-    return emptySetupState();
-  }
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<SetupState>;
+      return { ...emptySetupState(), ...parsed };
+    }
+    // Try migrating from older shapes so an in-progress user doesn't lose
+    // their work across a deploy boundary.
+    const legacyRaw =
+      sessionStorage.getItem(LEGACY_V2_KEY) ?? sessionStorage.getItem(LEGACY_V1_KEY);
+    if (legacyRaw) {
+      const migrated = migrateFromV2(JSON.parse(legacyRaw) as LegacyV2);
+      try {
+        sessionStorage.setItem(SETUP_KEY, JSON.stringify(migrated));
+        sessionStorage.removeItem(LEGACY_V2_KEY);
+        sessionStorage.removeItem(LEGACY_V1_KEY);
+      } catch { /* ignore */ }
+      return migrated;
+    }
+  } catch { /* ignore */ }
+  return emptySetupState();
 }
 
 export function saveSetupState(state: SetupState): void {
@@ -209,9 +173,13 @@ export function clearSetupState(): void {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.removeItem(SETUP_KEY);
+    sessionStorage.removeItem(LEGACY_V2_KEY);
+    sessionStorage.removeItem(LEGACY_V1_KEY);
     sessionStorage.removeItem(ADDRESS_KEY);
   } catch { /* ignore */ }
 }
+
+// ── Address (unchanged) ──────────────────────────────────────────────────
 
 export type SetupAddress = {
   customer_id: string;
@@ -242,57 +210,68 @@ export function saveAddress(a: SetupAddress): void {
 
 export type SetupDelivery = {
   sequence: number;
-  week_number: number; // 1-based by chronological order of selectedWeeks
+  week_number: number;   // 1-based by Sunday-of-week, derived from selectedDates
   day_key: DayKey;
   delivery_date: string; // yyyy-mm-dd
   slot: string;          // "06:00-07:00"
 };
 
-/** Flatten the wizard state into one row per (week, day) sorted chronologically. */
-export function buildDeliveries(state: SetupState): SetupDelivery[] {
-  const sortedWeeks = [...state.selectedWeeks].sort();
-  const weekIndex: Record<string, number> = {};
-  sortedWeeks.forEach((w, i) => { weekIndex[w] = i + 1; });
-
-  const rows: SetupDelivery[] = [];
-  for (const w of sortedWeeks) {
-    const dayDates = state.daysByWeek[w] ?? [];
-    for (const dIso of dayDates) {
-      const slot = state.slotByDate[dIso];
-      if (!slot) continue;
-      rows.push({
-        sequence: 0,
-        week_number: weekIndex[w],
-        day_key: dayKeyOf(parseIso(dIso)),
-        delivery_date: dIso,
-        slot,
-      });
-    }
+/** Group selected dates by their Sunday-of-week to assign a stable, 1-based
+ *  week_number. Earliest week → 1. */
+function weekNumberMap(dates: string[]): Record<string, number> {
+  const sundayKeyByDate: Record<string, string> = {};
+  const weekKeys = new Set<string>();
+  for (const iso of dates) {
+    const wk = isoDate(sundayOf(parseIso(iso)));
+    sundayKeyByDate[iso] = wk;
+    weekKeys.add(wk);
   }
-  rows.sort((a, b) => a.delivery_date.localeCompare(b.delivery_date));
+  const ordered = Array.from(weekKeys).sort();
+  const out: Record<string, number> = {};
+  for (const iso of dates) {
+    const wk = sundayKeyByDate[iso];
+    out[iso] = ordered.indexOf(wk) + 1;
+  }
+  return out;
+}
+
+/** Flatten the wizard state into one row per date, sorted chronologically. */
+export function buildDeliveries(state: SetupState): SetupDelivery[] {
+  const dates = [...state.selectedDates].sort();
+  const weekByDate = weekNumberMap(dates);
+  const rows: SetupDelivery[] = [];
+  dates.forEach((iso) => {
+    const slot = state.slotByDate[iso];
+    if (!slot) return;
+    rows.push({
+      sequence: 0,
+      week_number: weekByDate[iso] ?? 1,
+      day_key: dayKeyOf(parseIso(iso)),
+      delivery_date: iso,
+      slot,
+    });
+  });
   rows.forEach((r, i) => { r.sequence = i + 1; });
   return rows;
 }
 
-/** Combined list of every (week, day) row, regardless of slot-fill state. Used by Step 5. */
+/** Combined list of every selected date, regardless of slot-fill state.
+ *  Used by the time-slot picker step. */
 export function listWeekDayRows(state: SetupState): Array<{
   week_iso: string;
   week_number: number;
   date_iso: string;
   date: Date;
 }> {
-  const sortedWeeks = [...state.selectedWeeks].sort();
-  const out: Array<{ week_iso: string; week_number: number; date_iso: string; date: Date }> = [];
-  sortedWeeks.forEach((w, idx) => {
-    const dayDates = [...(state.daysByWeek[w] ?? [])].sort();
-    for (const dIso of dayDates) {
-      out.push({
-        week_iso: w,
-        week_number: idx + 1,
-        date_iso: dIso,
-        date: parseIso(dIso),
-      });
-    }
+  const dates = [...state.selectedDates].sort();
+  const weekByDate = weekNumberMap(dates);
+  return dates.map((iso) => {
+    const date = parseIso(iso);
+    return {
+      week_iso: isoDate(sundayOf(date)),
+      week_number: weekByDate[iso] ?? 1,
+      date_iso: iso,
+      date,
+    };
   });
-  return out;
 }

@@ -1,0 +1,450 @@
+"use client";
+
+// iOS-Calendar-style month grid where each date is independently
+// selectable. Header has prev/next month arrows and a tappable month label
+// that opens a 3-month picker overlay (current month + next two).
+// A bill bar at the bottom shows the live N × price × qty total.
+
+import { useMemo, useState } from "react";
+import { isoDate } from "@/lib/subscription-setup";
+
+const GOLD = "#c9a96e";
+const TEXT = "#FBF3D4";
+const FADED = "rgba(240,223,200,0.6)";
+const FAINT = "rgba(240,223,200,0.12)";
+const CHARCOAL = "#0d0d0d";
+const WALNUT = "#1a2e1a";
+
+type Cell = {
+  date: Date;
+  iso: string;
+  inMonth: boolean;
+  isPast: boolean;
+  isToday: boolean;
+};
+
+function atMidnight(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Build six rows (42 cells) starting from the Sunday on/before the 1st of (y,m). */
+function buildMonthCells(y: number, m: number, today: Date): Cell[][] {
+  const first = new Date(y, m, 1);
+  const gridStart = new Date(first);
+  gridStart.setDate(first.getDate() - first.getDay());
+  const rows: Cell[][] = [];
+  for (let r = 0; r < 6; r++) {
+    const cells: Cell[] = [];
+    for (let c = 0; c < 7; c++) {
+      const d = new Date(gridStart);
+      d.setDate(gridStart.getDate() + r * 7 + c);
+      cells.push({
+        date: d,
+        iso: isoDate(d),
+        inMonth: d.getMonth() === m,
+        isPast: d < today,
+        isToday: d.getTime() === today.getTime(),
+      });
+    }
+    rows.push(cells);
+  }
+  return rows;
+}
+
+const MONTH_LABELS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+];
+const MONTH_SHORT = [
+  "Jan","Feb","Mar","Apr","May","Jun",
+  "Jul","Aug","Sep","Oct","Nov","Dec",
+];
+const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export function DateCalendar({
+  selectedDates,
+  onToggleDate,
+  deliveriesCount,
+  totalAmount,
+}: {
+  selectedDates: string[];
+  onToggleDate: (iso: string) => void;
+  deliveriesCount: number;
+  totalAmount: number;
+}) {
+  const today = useMemo(() => atMidnight(new Date()), []);
+  const baseY = today.getFullYear();
+  const baseM = today.getMonth();
+  const [offset, setOffset] = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const viewDate = new Date(baseY, baseM + offset, 1);
+  const viewY = viewDate.getFullYear();
+  const viewM = viewDate.getMonth();
+
+  const rows = useMemo(
+    () => buildMonthCells(viewY, viewM, today),
+    [viewY, viewM, today]
+  );
+  const selectedSet = useMemo(() => new Set(selectedDates), [selectedDates]);
+
+  const canPrev = offset > 0;
+  const canNext = offset < 2;
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        background: "rgba(255,255,255,0.03)",
+        border: `1px solid ${FAINT}`,
+        borderRadius: 16,
+        padding: 16,
+      }}
+    >
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 14,
+        }}
+      >
+        <NavArrow
+          dir="prev"
+          disabled={!canPrev}
+          onClick={() => canPrev && setOffset(offset - 1)}
+        />
+        <button
+          onClick={() => setPickerOpen((v) => !v)}
+          aria-haspopup="menu"
+          aria-expanded={pickerOpen}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: TEXT,
+            cursor: "pointer",
+            fontFamily: "var(--font-heading)",
+            fontWeight: 300,
+            fontSize: 22,
+            letterSpacing: "0.02em",
+            padding: "4px 12px",
+            borderRadius: 8,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span
+            key={`${viewY}-${viewM}-label`}
+            style={{ animation: "cdx-fade-in 0.22s ease" }}
+          >
+            {MONTH_LABELS[viewM]} {viewY}
+          </span>
+          <span aria-hidden style={{ fontSize: 12, color: GOLD, transform: pickerOpen ? "rotate(180deg)" : "none", transition: "transform 0.18s ease" }}>▾</span>
+        </button>
+        <NavArrow
+          dir="next"
+          disabled={!canNext}
+          onClick={() => canNext && setOffset(offset + 1)}
+        />
+      </header>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          gap: 0,
+          marginBottom: 6,
+        }}
+      >
+        {DOW_LABELS.map((d) => (
+          <div
+            key={d}
+            style={{
+              textAlign: "center",
+              fontSize: 11,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: GOLD,
+              opacity: 0.75,
+              padding: "6px 0",
+              fontFamily: "var(--font-body)",
+            }}
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div
+        key={`${viewY}-${viewM}-grid`}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          gridAutoRows: "minmax(44px, auto)",
+          gap: 4,
+          animation: "cdx-fade-in 0.22s ease",
+        }}
+      >
+        {rows.flat().map((cell) => {
+          const selected = selectedSet.has(cell.iso);
+          const fg = selected
+            ? CHARCOAL
+            : cell.isPast
+            ? "rgba(240,223,200,0.22)"
+            : cell.inMonth
+            ? TEXT
+            : "rgba(240,223,200,0.35)";
+          return (
+            <button
+              key={cell.iso}
+              onClick={() => !cell.isPast && onToggleDate(cell.iso)}
+              disabled={cell.isPast}
+              aria-pressed={selected}
+              aria-label={`${cell.date.toDateString()}${selected ? " (selected)" : ""}`}
+              style={{
+                minHeight: 44,
+                minWidth: 0,
+                padding: 0,
+                border: "none",
+                background: selected ? GOLD : "transparent",
+                color: fg,
+                cursor: cell.isPast ? "not-allowed" : "pointer",
+                borderRadius: 999,
+                fontFamily: "var(--font-body)",
+                fontSize: 15,
+                fontWeight: cell.isToday ? 600 : 400,
+                position: "relative",
+                transition: "background 0.15s ease, color 0.15s ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {cell.isToday && !selected && (
+                <span
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    inset: 4,
+                    borderRadius: 999,
+                    border: `1.5px solid ${GOLD}`,
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+              <span style={{ position: "relative", zIndex: 1 }}>
+                {cell.date.getDate()}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <BillBar count={deliveriesCount} total={totalAmount} />
+
+      {pickerOpen && (
+        <MonthPickerOverlay
+          baseY={baseY}
+          baseM={baseM}
+          activeOffset={offset}
+          onPick={(o) => {
+            setOffset(o);
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      <style>{`
+        @keyframes cdx-fade-in {
+          from { opacity: 0; transform: translateY(2px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes cdx-overlay-in {
+          from { opacity: 0; transform: scale(0.98); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function BillBar({ count, total }: { count: number; total: number }) {
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        padding: "14px 18px",
+        borderRadius: 14,
+        background: WALNUT,
+        border: `1px solid ${GOLD}`,
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontWeight: 300,
+            fontSize: 28,
+            color: GOLD,
+            lineHeight: 1,
+          }}
+        >
+          {count}
+        </span>
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 12,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            color: FADED,
+          }}
+        >
+          {count === 1 ? "delivery" : "deliveries"}
+        </span>
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-heading)",
+          fontWeight: 300,
+          fontSize: 22,
+          color: TEXT,
+        }}
+      >
+        ₹{total.toLocaleString("en-IN")}
+      </div>
+    </div>
+  );
+}
+
+function MonthPickerOverlay({
+  baseY,
+  baseM,
+  activeOffset,
+  onPick,
+  onClose,
+}: {
+  baseY: number;
+  baseM: number;
+  activeOffset: number;
+  onPick: (offset: number) => void;
+  onClose: () => void;
+}) {
+  const months = [0, 1, 2].map((o) => {
+    const d = new Date(baseY, baseM + o, 1);
+    return { offset: o, y: d.getFullYear(), m: d.getMonth() };
+  });
+  return (
+    <div
+      role="menu"
+      onClick={onClose}
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: "rgba(14,14,14,0.85)",
+        backdropFilter: "blur(6px)",
+        borderRadius: 16,
+        zIndex: 5,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+        animation: "cdx-overlay-in 0.18s ease",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 10,
+          width: "100%",
+          maxWidth: 360,
+        }}
+      >
+        {months.map((mo) => {
+          const active = mo.offset === activeOffset;
+          return (
+            <button
+              key={mo.offset}
+              onClick={() => onPick(mo.offset)}
+              style={{
+                padding: "18px 10px",
+                borderRadius: 12,
+                border: `1px solid ${active ? GOLD : FAINT}`,
+                background: active ? "rgba(201,169,110,0.14)" : "rgba(255,255,255,0.04)",
+                color: TEXT,
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-heading)",
+                  fontWeight: 300,
+                  fontSize: 22,
+                  color: active ? GOLD : TEXT,
+                }}
+              >
+                {MONTH_SHORT[mo.m]}
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: 11,
+                  letterSpacing: "0.1em",
+                  color: FADED,
+                }}
+              >
+                {mo.y}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function NavArrow({
+  dir,
+  disabled,
+  onClick,
+}: {
+  dir: "prev" | "next";
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={dir === "prev" ? "Previous month" : "Next month"}
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 999,
+        background: "transparent",
+        border: `1px solid ${disabled ? FAINT : "rgba(240,223,200,0.25)"}`,
+        color: disabled ? FAINT : GOLD,
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontSize: 18,
+        lineHeight: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {dir === "prev" ? "‹" : "›"}
+    </button>
+  );
+}

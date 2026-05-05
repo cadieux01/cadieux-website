@@ -38,7 +38,7 @@ export default function PaymentPage() {
     setHydrated(true);
     const s = loadSetupState();
     const a = loadAddress();
-    if (!s.productSlug || s.selectedWeeks.length === 0) {
+    if (!s.productSlug || s.selectedDates.length === 0) {
       router.replace("/subscriptions/setup");
       return;
     }
@@ -84,7 +84,7 @@ export default function PaymentPage() {
           bread_slug: product.slug,
           bread_name: product.name,
           bread_price: product.price,
-          weeks: state.selectedWeeks.length,
+          weeks: new Set(deliveries.map((d) => d.week_number)).size,
           days,
           slot_mode: "custom",
           slots_by_day: slotsByDay,
