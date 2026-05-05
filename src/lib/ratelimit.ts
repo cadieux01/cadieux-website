@@ -38,6 +38,16 @@ export const apiRateLimit = new Ratelimit({
   prefix: "ratelimit:api",
 });
 
+// Self-serve subscription delivery edits: 10 per customer per day. Keyed by
+// the OTP-verified phone so admins / multiple customers behind the same NAT
+// don't share a quota.
+export const editRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, "1 d"),
+  analytics: true,
+  prefix: "ratelimit:edit",
+});
+
 // Helper to get IP from request
 export function getClientIP(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");

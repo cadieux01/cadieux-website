@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import { GOLD, formatDate } from "@/lib/subscription-ui";
 
 const TIME_SLOTS = [
@@ -42,7 +43,7 @@ type ChangeRequest = {
 };
 
 const BG = "#0e0e0e";
-const FADED = "#f5f0e8"; // Cadieux faded for not-reached steps
+const FADED = "#f5f0e8";
 const MS_DAY = 86_400_000;
 const REASON_MAX = 200;
 
@@ -78,6 +79,22 @@ function parseDate(yyyyMmDd: string): Date | null {
   return new Date(y, m - 1, d);
 }
 
+/** Three-way classification driving which UI affordance the user sees. */
+type EditMode = "direct" | "request" | "terminal";
+
+function classifyEdit(delivery: Delivery): EditMode {
+  if (
+    delivery.status === "out_for_delivery" ||
+    delivery.status === "delivered" ||
+    delivery.status === "cancelled"
+  ) {
+    return "terminal";
+  }
+  const sched = parseDate(delivery.scheduled_date);
+  const tooSoon = sched ? sched.getTime() - Date.now() < MS_DAY : true;
+  return tooSoon ? "request" : "direct";
+}
+
 export default function DeliveryDetailPage() {
   const params = useParams<{ deliveryId: string }>();
   const deliveryId = params?.deliveryId ?? "";
@@ -88,6 +105,7 @@ export default function DeliveryDetailPage() {
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [toast, setToast] = useState("");
 
   useEffect(() => {
     setPhone(readPhone());
@@ -119,6 +137,13 @@ export default function DeliveryDetailPage() {
     const t = setInterval(fetchData, 10_000);
     return () => clearInterval(t);
   }, [fetchData]);
+
+  // Auto-clear toast.
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(""), 3500);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   const pendingCR = useMemo(
     () => changeRequests.find((c) => c.status === "pending") ?? null,
@@ -155,28 +180,7 @@ export default function DeliveryDetailPage() {
 
   const step = statusStep(delivery.status);
   const isCancelled = delivery.status === "cancelled";
-
-  // Form-disabled rules.
-  const sched = parseDate(delivery.scheduled_date);
-  const tooSoon = sched ? sched.getTime() - Date.now() < MS_DAY : true;
-  const formLocked =
-    delivery.week_number < 2 ||
-    delivery.status === "delivered" ||
-    delivery.status === "cancelled" ||
-    delivery.status === "out_for_delivery" ||
-    tooSoon ||
-    !!pendingCR;
-
-  const lockReason = (() => {
-    if (delivery.week_number < 2) return "Week 1 deliveries cannot be changed.";
-    if (delivery.status === "delivered") return "Already delivered.";
-    if (delivery.status === "cancelled") return "Delivery is cancelled.";
-    if (delivery.status === "out_for_delivery")
-      return "This delivery is already out for delivery.";
-    if (tooSoon) return "Changes must be requested at least 24 hours in advance.";
-    if (pendingCR) return "A change request is already pending.";
-    return "";
-  })();
+  const mode = classifyEdit(delivery);
 
   return (
     <Shell>
@@ -224,15 +228,64 @@ export default function DeliveryDetailPage() {
         <Timeline currentStep={step} />
       )}
 
-      {!isCancelled && (
+      {!isCancelled && mode === "direct" && (
+        <DirectEditPanel
+          subscriptionId={delivery.subscription_id}
+          deliveryId={delivery.id}
+          currentDate={delivery.scheduled_date}
+          currentSlot={delivery.scheduled_time_slot}
+          onSaved={() => {
+            setToast("Delivery updated");
+            fetchData();
+          }}
+        />
+      )}
+
+      {!isCancelled && mode === "request" && (
         <ChangeRequestPanel
-          locked={formLocked}
-          lockReason={lockReason}
           deliveryId={delivery.id}
           pendingCR={pendingCR}
           lastResolvedCR={lastResolvedCR}
           onSubmitted={fetchData}
         />
+      )}
+
+      {mode === "terminal" && !isCancelled && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: "14px 18px",
+            border: "1px solid rgba(240,223,200,0.12)",
+            borderRadius: 12,
+            background: "rgba(255,255,255,0.025)",
+            fontSize: 13,
+            color: "rgba(240,223,200,0.6)",
+          }}
+        >
+          This delivery can no longer be changed.
+        </div>
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 28,
+            transform: "translateX(-50%)",
+            padding: "10px 18px",
+            borderRadius: 999,
+            background: "rgba(123,216,143,0.95)",
+            color: "#0a0a0a",
+            fontSize: 13,
+            fontWeight: 600,
+            letterSpacing: "0.04em",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+          }}
+        >
+          {toast}
+        </div>
       )}
     </Shell>
   );
@@ -263,7 +316,6 @@ function Timeline({ currentStep }: { currentStep: number }) {
         marginBottom: 32,
       }}
     >
-      {/* vertical rail */}
       <div
         style={{
           position: "absolute",
@@ -318,16 +370,228 @@ function Timeline({ currentStep }: { currentStep: number }) {
   );
 }
 
+/** Direct-edit panel — used when delivery is 24h+ away. Calls the new
+ *  PATCH endpoint and writes through to the DB without admin involvement.
+ *  Turnstile gate keeps it bot-resistant. */
+function DirectEditPanel({
+  subscriptionId,
+  deliveryId,
+  currentDate,
+  currentSlot,
+  onSaved,
+}: {
+  subscriptionId: string;
+  deliveryId: string;
+  currentDate: string;
+  currentSlot: string;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState("");
+  const [slot, setSlot] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const turnstileRef = useRef<TurnstileHandle>(null);
+
+  const minDate = useMemo(() => {
+    const t = new Date(Date.now() + MS_DAY);
+    const yyyy = t.getFullYear();
+    const mm = String(t.getMonth() + 1).padStart(2, "0");
+    const dd = String(t.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }, []);
+
+  function reset() {
+    setDate("");
+    setSlot("");
+    setErr("");
+    setTurnstileToken("");
+    turnstileRef.current?.reset();
+  }
+
+  async function save() {
+    setErr("");
+    if (!date && !slot) {
+      setErr("Pick a new date or a new time slot.");
+      return;
+    }
+    if (date) {
+      const d = parseDate(date);
+      if (!d || d.getTime() - Date.now() < MS_DAY - 1000) {
+        setErr("New date must be at least 24 hours away.");
+        return;
+      }
+    }
+    if (!turnstileToken) {
+      setErr("Please complete the human-verification check.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `/api/subscriptions/${subscriptionId}/deliveries/${deliveryId}/edit`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            new_date: date || null,
+            new_time_slot: slot || null,
+            turnstile_token: turnstileToken,
+          }),
+        }
+      );
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setErr(j.error ?? "Failed to update.");
+        // Token is single-use — refresh for the next attempt.
+        setTurnstileToken("");
+        turnstileRef.current?.reset();
+        return;
+      }
+      setOpen(false);
+      reset();
+      onSaved();
+    } catch {
+      setErr("Network error. Please try again.");
+      setTurnstileToken("");
+      turnstileRef.current?.reset();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((o) => !o);
+          if (open) reset();
+        }}
+        style={{
+          width: "100%",
+          padding: "14px 18px",
+          background: "rgba(201,169,110,0.08)",
+          border: `1px solid ${GOLD}`,
+          borderRadius: 12,
+          color: GOLD,
+          fontSize: 14,
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          fontFamily: "inherit",
+        }}
+      >
+        <span>Edit date or time</span>
+        <span style={{ fontSize: 18 }}>{open ? "▴" : "▾"}</span>
+      </button>
+
+      <div style={{ marginTop: 8, fontSize: 12, color: "rgba(240,223,200,0.5)" }}>
+        Changes apply instantly while you&apos;re more than 24 hours out.
+      </div>
+
+      {open && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 18,
+            border: "1px solid rgba(240,223,200,0.12)",
+            borderRadius: 12,
+            background: "rgba(255,255,255,0.025)",
+            display: "grid",
+            gap: 14,
+          }}
+        >
+          <Field label={`New date (current: ${formatDate(currentDate)})`}>
+            <input
+              type="date"
+              value={date}
+              min={minDate}
+              onChange={(e) => setDate(e.target.value)}
+              style={inputStyle}
+            />
+          </Field>
+          <Field label={`New time slot (current: ${currentSlot})`}>
+            <select
+              value={slot}
+              onChange={(e) => setSlot(e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">— Same as before —</option>
+              {TIME_SLOTS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <TurnstileWidget
+            ref={turnstileRef}
+            onVerify={(t) => setTurnstileToken(t)}
+            onExpire={() => setTurnstileToken("")}
+            theme="dark"
+          />
+
+          {err && <div style={{ color: "#ff9b9b", fontSize: 13 }}>{err}</div>}
+
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                reset();
+              }}
+              style={{
+                padding: "10px 18px",
+                background: "transparent",
+                border: "1px solid rgba(240,223,200,0.25)",
+                borderRadius: 999,
+                color: "#FBF3D4",
+                fontSize: 13,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={busy || !turnstileToken}
+              style={{
+                padding: "10px 22px",
+                background: !busy && turnstileToken ? GOLD : "rgba(240,223,200,0.12)",
+                border: "none",
+                borderRadius: 999,
+                color: !busy && turnstileToken ? "#0a0a0a" : "rgba(240,223,200,0.5)",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: busy || !turnstileToken ? "not-allowed" : "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {busy ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Fallback panel — used when delivery is < 24h away. Routes through the
+ *  existing change-request flow (admin must approve). */
 function ChangeRequestPanel({
-  locked,
-  lockReason,
   deliveryId,
   pendingCR,
   lastResolvedCR,
   onSubmitted,
 }: {
-  locked: boolean;
-  lockReason: string;
   deliveryId: string;
   pendingCR: ChangeRequest | null;
   lastResolvedCR: ChangeRequest | null;
@@ -340,7 +604,6 @@ function ChangeRequestPanel({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  // Min date for the datepicker = tomorrow (24h+ rule).
   const minDate = useMemo(() => {
     const t = new Date(Date.now() + MS_DAY);
     const yyyy = t.getFullYear();
@@ -392,7 +655,6 @@ function ChangeRequestPanel({
     }
   }
 
-  // Pending pill state
   if (pendingCR) {
     return (
       <div
@@ -478,19 +740,18 @@ function ChangeRequestPanel({
 
       <button
         type="button"
-        onClick={() => !locked && setOpen((o) => !o)}
-        disabled={locked}
+        onClick={() => setOpen((o) => !o)}
         style={{
           width: "100%",
           padding: "14px 18px",
-          background: locked ? "rgba(255,255,255,0.02)" : "rgba(201,169,110,0.08)",
-          border: `1px solid ${locked ? "rgba(240,223,200,0.12)" : GOLD}`,
+          background: "rgba(201,169,110,0.08)",
+          border: `1px solid ${GOLD}`,
           borderRadius: 12,
-          color: locked ? "rgba(240,223,200,0.4)" : GOLD,
+          color: GOLD,
           fontSize: 14,
           letterSpacing: "0.05em",
           textTransform: "uppercase",
-          cursor: locked ? "not-allowed" : "pointer",
+          cursor: "pointer",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
@@ -498,16 +759,14 @@ function ChangeRequestPanel({
         }}
       >
         <span>Request a change</span>
-        <span style={{ fontSize: 18 }}>{open && !locked ? "▴" : "▾"}</span>
+        <span style={{ fontSize: 18 }}>{open ? "▴" : "▾"}</span>
       </button>
 
-      {locked && lockReason && (
-        <div style={{ marginTop: 8, fontSize: 12, color: "rgba(240,223,200,0.5)" }}>
-          {lockReason}
-        </div>
-      )}
+      <div style={{ marginTop: 8, fontSize: 12, color: "rgba(240,223,200,0.5)" }}>
+        Within 24 hours of delivery — admin needs to approve the change.
+      </div>
 
-      {!locked && open && (
+      {open && (
         <div
           style={{
             marginTop: 12,

@@ -54,6 +54,24 @@ function statusStep(status: string): number {
   }
 }
 
+const MS_DAY = 86_400_000;
+
+/** Mirrors classifyEdit() on the detail page. Drives the per-card icon hint. */
+type EditMode = "direct" | "request" | "terminal";
+function classifyEdit(d: { status: string; scheduled_date: string }): EditMode {
+  if (
+    d.status === "out_for_delivery" ||
+    d.status === "delivered" ||
+    d.status === "cancelled"
+  ) {
+    return "terminal";
+  }
+  const [y, mo, dd] = d.scheduled_date.split("-").map(Number);
+  const sched = y && mo && dd ? new Date(y, mo - 1, dd) : null;
+  const tooSoon = sched ? sched.getTime() - Date.now() < MS_DAY : true;
+  return tooSoon ? "request" : "direct";
+}
+
 export default function TrackPage() {
   const [phone, setPhone] = useState<string>("");
   const [subs, setSubs] = useState<Sub[]>([]);
@@ -244,11 +262,13 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
   const ringColor = DELIVERY_STATUS_COLOR[delivery.status] ?? "rgba(240,223,200,0.4)";
   const isCancelled = delivery.status === "cancelled";
   const label = DELIVERY_STATUS_LABEL[delivery.status] ?? delivery.status;
+  const mode = classifyEdit(delivery);
 
   return (
     <Link
       href={`/subscriptions/track/${delivery.id}`}
       style={{
+        position: "relative",
         display: "flex",
         alignItems: "center",
         gap: 14,
@@ -261,6 +281,30 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
         transition: "background 0.15s ease",
       }}
     >
+      {mode !== "terminal" && (
+        <span
+          aria-hidden
+          title={
+            mode === "direct"
+              ? "Edit anytime — tap to change date or time"
+              : "Within 24 hours — admin must approve changes"
+          }
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 10,
+            fontSize: 11,
+            lineHeight: 1,
+            color:
+              mode === "direct"
+                ? "rgba(201,169,110,0.85)"
+                : "rgba(227,179,65,0.85)",
+            letterSpacing: 0,
+          }}
+        >
+          {mode === "direct" ? "✎" : "◷"}
+        </span>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{

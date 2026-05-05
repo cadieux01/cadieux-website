@@ -81,12 +81,6 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (delivery.week_number < 2) {
-    return NextResponse.json(
-      { error: "Week 1 deliveries cannot be changed." },
-      { status: 400 }
-    );
-  }
   if (delivery.status === "out_for_delivery" || delivery.status === "delivered") {
     return NextResponse.json(
       { error: "This delivery is already in progress." },

@@ -1161,8 +1161,26 @@ function SubscriptionDrawer({
                 </div>
               )}
               {d.admin_notes && (
-                <div style={{ fontSize: "0.75rem", color: "rgba(251,243,212,0.6)", fontStyle: "italic" }}>
-                  Note: {d.admin_notes}
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {d.admin_notes.includes("[user edit") && (
+                    <span
+                      style={{
+                        alignSelf: "flex-start",
+                        fontSize: "0.6rem",
+                        letterSpacing: "0.2em",
+                        textTransform: "uppercase",
+                        color: "#7bd88f",
+                        border: "1px solid rgba(123,216,143,0.5)",
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                      }}
+                    >
+                      ✎ User edited
+                    </span>
+                  )}
+                  <div style={{ fontSize: "0.75rem", color: "rgba(251,243,212,0.6)", fontStyle: "italic", whiteSpace: "pre-wrap" }}>
+                    Notes: {d.admin_notes}
+                  </div>
                 </div>
               )}
             </div>
