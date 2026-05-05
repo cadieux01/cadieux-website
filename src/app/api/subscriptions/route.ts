@@ -8,6 +8,11 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
+// Track page polls every 10s and must always see admin's latest writes.
+// Disable Next.js fetch/route caching here.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: NextRequest) {
   const phoneRaw = req.nextUrl.searchParams.get("phone");
   if (!phoneRaw) return NextResponse.json({ subscriptions: [] });

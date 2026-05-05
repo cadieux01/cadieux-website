@@ -1189,16 +1189,30 @@ function ChangeRequestsSection({
   const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const filtered = filter === "all" ? requests : requests.filter((r) => r.status === filter);
 
+  // Recent (last 7 days) — resolved requests only, surfaced when viewing pending.
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const recentResolved = requests.filter((r) => {
+    if (r.status !== "approved" && r.status !== "rejected") return false;
+    return Date.now() - new Date(r.created_at).getTime() < SEVEN_DAYS_MS;
+  });
+
   const act = async (id: string, action: "approve" | "reject") => {
+    const response = (responses[id] ?? "").trim();
+    if (action === "reject" && !response) {
+      setErrors((e) => ({ ...e, [id]: "A response is required when rejecting." }));
+      return;
+    }
+    setErrors((e) => ({ ...e, [id]: "" }));
     setBusy((b) => ({ ...b, [id]: true }));
     try {
       const r = await fetch(`/api/admin/change-requests/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "x-admin-token": PASSWORD },
-        body: JSON.stringify({ action, admin_response: responses[id] ?? null }),
+        body: JSON.stringify({ action, admin_response: response || null }),
       });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
@@ -1280,7 +1294,7 @@ function ChangeRequestsSection({
                   fontSize: "0.82rem",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
                   <div>
                     <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: "1rem", letterSpacing: "0.04em" }}>
                       {r.subscription?.product_name ?? "—"}
@@ -1289,18 +1303,26 @@ function ChangeRequestsSection({
                       {r.customer?.full_name ?? "—"} · {r.customer?.phone ?? "—"}
                     </div>
                   </div>
-                  <span
-                    className="uppercase"
-                    style={{
-                      color: statusColor,
-                      border: `1px solid ${statusColor}`,
-                      padding: "4px 12px",
-                      fontSize: "0.6rem",
-                      letterSpacing: "0.22em",
-                    }}
-                  >
-                    {r.status}
-                  </span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <ContactMenu
+                      customerName={r.customer?.full_name ?? null}
+                      phone={r.customer?.phone ?? null}
+                      productName={r.subscription?.product_name ?? null}
+                      weekNumber={r.delivery?.week_number ?? null}
+                    />
+                    <span
+                      className="uppercase"
+                      style={{
+                        color: statusColor,
+                        border: `1px solid ${statusColor}`,
+                        padding: "4px 12px",
+                        fontSize: "0.6rem",
+                        letterSpacing: "0.22em",
+                      }}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
                 </div>
 
                 <div style={{
@@ -1362,14 +1384,18 @@ function ChangeRequestsSection({
                 {isPending && (
                   <>
                     <textarea
-                      placeholder="Optional response to customer…"
+                      placeholder="Response to customer (required to reject)…"
                       value={responses[r.id] ?? ""}
-                      onChange={(e) => setResponses((v) => ({ ...v, [r.id]: e.target.value }))}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setResponses((vs) => ({ ...vs, [r.id]: v }));
+                        if (errors[r.id]) setErrors((es) => ({ ...es, [r.id]: "" }));
+                      }}
                       rows={2}
                       style={{
                         width: "100%",
                         background: "rgba(0,0,0,0.4)",
-                        border: "1px solid rgba(245,158,11,0.25)",
+                        border: `1px solid ${errors[r.id] ? "rgba(255,129,129,0.7)" : "rgba(245,158,11,0.25)"}`,
                         color: "#fbf3d4",
                         padding: "8px 10px",
                         fontFamily: "var(--font-body)",
@@ -1377,6 +1403,11 @@ function ChangeRequestsSection({
                         resize: "vertical",
                       }}
                     />
+                    {errors[r.id] && (
+                      <div style={{ color: "#ff8181", fontSize: "0.72rem" }}>
+                        {errors[r.id]}
+                      </div>
+                    )}
                     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                       <button
                         type="button"
@@ -1428,7 +1459,180 @@ function ChangeRequestsSection({
           })}
         </div>
       )}
+
+      {filter === "pending" && recentResolved.length > 0 && (
+        <div style={{ marginTop: 36 }}>
+          <h3
+            className="uppercase"
+            style={{
+              fontFamily: "var(--font-heading)",
+              fontSize: "0.95rem",
+              letterSpacing: "0.3em",
+              color: "rgba(251,243,212,0.65)",
+              fontWeight: 300,
+              margin: "0 0 12px",
+            }}
+          >
+            Recent · last 7 days
+          </h3>
+          <div style={{ display: "grid", gap: 8 }}>
+            {recentResolved.map((r) => {
+              const sc = r.status === "approved" ? "#7bd88f" : "#ff8181";
+              return (
+                <div
+                  key={r.id}
+                  style={{
+                    border: "1px solid rgba(245,158,11,0.12)",
+                    background: "rgba(255,255,255,0.015)",
+                    padding: "10px 14px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 12,
+                    fontFamily: "var(--font-body)",
+                    color: "rgba(251,243,212,0.75)",
+                    fontSize: "0.78rem",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                    <span style={{ color: "#fbf3d4" }}>
+                      {r.subscription?.product_name ?? "—"}
+                      {r.delivery ? ` · Week ${r.delivery.week_number}` : ""}
+                    </span>
+                    <span style={{ color: "rgba(251,243,212,0.5)", fontSize: "0.72rem" }}>
+                      {r.customer?.full_name ?? "—"} ·{" "}
+                      {new Date(r.created_at).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </span>
+                  </div>
+                  <span
+                    className="uppercase"
+                    style={{
+                      color: sc,
+                      border: `1px solid ${sc}`,
+                      padding: "3px 10px",
+                      fontSize: "0.58rem",
+                      letterSpacing: "0.22em",
+                    }}
+                  >
+                    {r.status}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+function ContactMenu({
+  customerName,
+  phone,
+  productName,
+  weekNumber,
+}: {
+  customerName: string | null;
+  phone: string | null;
+  productName: string | null;
+  weekNumber: number | null;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (!phone) return null;
+
+  // Strip non-digits for tel:/wa.me. wa.me requires country code with no '+'.
+  const digits = phone.replace(/\D/g, "");
+  // If 10 digits (Indian local), prefix 91 for WhatsApp.
+  const waPhone = digits.length === 10 ? `91${digits}` : digits;
+
+  const name = customerName ?? "there";
+  const product = productName ?? "your subscription";
+  const weekText = weekNumber ? ` for Week ${weekNumber}` : "";
+  const message = `Hi ${name}, regarding your subscription change request${weekText} of ${product}...`;
+  const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
+  const telUrl = `tel:${digits}`;
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="uppercase"
+        style={{
+          background: "transparent",
+          border: "1px solid rgba(245,158,11,0.45)",
+          color: "#f59e0b",
+          padding: "4px 12px",
+          fontFamily: "var(--font-body)",
+          fontSize: "0.6rem",
+          letterSpacing: "0.22em",
+          cursor: "pointer",
+        }}
+      >
+        Contact ▾
+      </button>
+      {open && (
+        <>
+          <div
+            onClick={() => setOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 50,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              right: 0,
+              top: "calc(100% + 6px)",
+              zIndex: 51,
+              background: "#1a1410",
+              border: "1px solid rgba(245,158,11,0.35)",
+              minWidth: 160,
+              boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
+            }}
+          >
+            <a
+              href={telUrl}
+              onClick={() => setOpen(false)}
+              style={{
+                display: "block",
+                padding: "10px 14px",
+                color: "#fbf3d4",
+                textDecoration: "none",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.78rem",
+                borderBottom: "1px solid rgba(245,158,11,0.15)",
+              }}
+            >
+              📞 Call {phone}
+            </a>
+            <a
+              href={waUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setOpen(false)}
+              style={{
+                display: "block",
+                padding: "10px 14px",
+                color: "#7bd88f",
+                textDecoration: "none",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.78rem",
+              }}
+            >
+              💬 WhatsApp
+            </a>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

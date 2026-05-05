@@ -8,7 +8,7 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
-// Track-detail page polls every 10s; must always see admin's latest writes.
+// Detail page polls every 10s; never cache.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -23,18 +23,29 @@ function phoneMatches(stored: string | null | undefined, queried: string): boole
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { deliveryId: string } }
 ) {
-  const { id } = params;
+  const { deliveryId } = params;
   const phone = req.nextUrl.searchParams.get("phone") ?? "";
+  if (!phone) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
-  const { data: sub, error } = await supabaseAdmin
+  const { data: delivery, error: dErr } = await supabaseAdmin
+    .from("subscription_deliveries")
+    .select("*")
+    .eq("id", deliveryId)
+    .maybeSingle();
+  if (dErr || !delivery) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const { data: sub } = await supabaseAdmin
     .from("subscriptions")
     .select("*")
-    .eq("id", id)
+    .eq("id", delivery.subscription_id)
     .maybeSingle();
-
-  if (error || !sub) {
+  if (!sub) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -43,21 +54,15 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { data: deliveries } = await supabaseAdmin
-    .from("subscription_deliveries")
-    .select("*")
-    .eq("subscription_id", id)
-    .order("sequence", { ascending: true });
-
   const { data: change_requests } = await supabaseAdmin
     .from("subscription_change_requests")
     .select("*")
-    .eq("subscription_id", id)
+    .eq("delivery_id", deliveryId)
     .order("created_at", { ascending: false });
 
   return NextResponse.json({
+    delivery,
     subscription: sub,
-    deliveries: deliveries ?? [],
     change_requests: change_requests ?? [],
   });
 }
