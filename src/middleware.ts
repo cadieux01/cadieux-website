@@ -8,6 +8,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Authenticated admin clients bypass the IP-based limiter. Admin polls
+  // /api/admin/* every 10s across multiple endpoints; the 30/min cap
+  // would otherwise starve the dashboard.
+  const adminToken = request.headers.get("x-admin-token");
+  if (adminToken && adminToken === process.env.ADMIN_TOKEN) {
+    return NextResponse.next();
+  }
+
   const ip = getClientIP(request);
   const { success } = await apiRateLimit.limit(ip);
 
