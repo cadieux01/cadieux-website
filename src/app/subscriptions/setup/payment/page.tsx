@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import {
   SETUP_PRODUCTS,
   buildDeliveries,
@@ -33,6 +34,11 @@ export default function PaymentPage() {
   const [method, setMethod] = useState<Method>("cod");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Saved-address path skips OTP but still requires a Turnstile token so the
+  // server can confirm a human is placing the order. Managed mode resolves
+  // silently in the common case — no UI interaction needed.
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   useEffect(() => {
     setHydrated(true);
@@ -57,9 +63,15 @@ export default function PaymentPage() {
   const deliveries = useMemo(() => (state ? buildDeliveries(state) : []), [state]);
   const totalAmount = product && state ? product.price * state.qty * deliveries.length : 0;
 
+  const isSaved = address?.source === "saved";
+
   async function placeOrder() {
     if (!state || !product || !address) return;
     if (method !== "cod") { setError("Please pick a payment method."); return; }
+    if (isSaved && !turnstileToken) {
+      setError("Please complete the human-verification check.");
+      return;
+    }
 
     setSubmitting(true); setError("");
 
@@ -99,6 +111,8 @@ export default function PaymentPage() {
           customer_pincode: address.pincode,
           payment_method: "cod",
           status: "pending_confirmation",
+          address_source: address.source,
+          turnstile_token: turnstileToken || undefined,
           deliveries: deliveries.map((d) => ({
             sequence: d.sequence,
             week_number: d.week_number,
@@ -112,12 +126,22 @@ export default function PaymentPage() {
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
         setError(data.error ?? "Failed to create subscription.");
+        // The Turnstile token is single-use server-side — refresh after any
+        // failure so the next attempt has a fresh token.
+        if (isSaved) {
+          setTurnstileToken("");
+          turnstileRef.current?.reset();
+        }
         return;
       }
       clearSetupState();
       router.push("/subscriptions/track");
     } catch {
       setError("Network error. Please try again.");
+      if (isSaved) {
+        setTurnstileToken("");
+        turnstileRef.current?.reset();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -192,23 +216,34 @@ export default function PaymentPage() {
           {/* TODO: integrate Cashfree/Razorpay here for online payments. */}
         </div>
 
+        {isSaved && (
+          <div style={{ marginBottom: 14 }}>
+            <TurnstileWidget
+              ref={turnstileRef}
+              onVerify={(t) => setTurnstileToken(t)}
+              onExpire={() => setTurnstileToken("")}
+              theme="dark"
+            />
+          </div>
+        )}
+
         {error && <div style={{ marginBottom: 14, fontSize: 13, color: RED }}>{error}</div>}
 
         <button
           onClick={placeOrder}
-          disabled={submitting || method !== "cod"}
+          disabled={submitting || method !== "cod" || (isSaved && !turnstileToken)}
           style={{
             width: "100%",
             padding: "14px 20px",
             borderRadius: 999,
             border: "none",
-            background: !submitting && method === "cod" ? GOLD : FAINT,
-            color: !submitting && method === "cod" ? "#0a0a0a" : FADED,
+            background: !submitting && method === "cod" && (!isSaved || turnstileToken) ? GOLD : FAINT,
+            color: !submitting && method === "cod" && (!isSaved || turnstileToken) ? "#0a0a0a" : FADED,
             fontSize: 14,
             fontWeight: 600,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            cursor: !submitting && method === "cod" ? "pointer" : "not-allowed",
+            cursor: !submitting && method === "cod" && (!isSaved || turnstileToken) ? "pointer" : "not-allowed",
           }}
         >
           {submitting ? "Placing order…" : `Confirm — ₹${totalAmount.toLocaleString("en-IN")}`}

@@ -5,6 +5,7 @@ import {
   normalizePhone,
   verifyPhoneCookie,
 } from "@/lib/phone-cookie";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
@@ -159,15 +160,6 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === "place_subscription") {
-    const cookieValue = req.cookies.get(PHONE_COOKIE_NAME)?.value;
-    const verified = verifyPhoneCookie(cookieValue);
-    if (!verified) {
-      return NextResponse.json(
-        { error: "Phone verification required." },
-        { status: 401 }
-      );
-    }
-
     const {
       customer_id,
       bread_slug,
@@ -193,13 +185,50 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid subscription payload." }, { status: 400 });
     }
 
+    // Two trust paths:
+    //  - "saved" — returning customer reusing a previously-OTP-verified row;
+    //    we gate on a fresh Turnstile token + the customer_id existing in DB.
+    //  - "new"   — fresh address just OTP-verified this session; we gate on
+    //    the OTP cookie matching the customer's phone (legacy behaviour).
+    // The client-supplied flag is hint-only — server independently verifies
+    // the matching gate before allowing the insert. Gate checks run before
+    // any DB lookup so attackers can't probe customer existence without
+    // first solving the gate.
+    const addressSource: "saved" | "new" = body.address_source === "saved" ? "saved" : "new";
+
+    let verifiedPhone: string | null = null;
+    if (addressSource === "saved") {
+      const turnstileToken = String(body.turnstile_token ?? "");
+      const isHuman = await verifyTurnstileToken(turnstileToken);
+      if (!isHuman) {
+        return NextResponse.json(
+          { error: "Human verification failed. Please try again." },
+          { status: 403 }
+        );
+      }
+    } else {
+      const cookieValue = req.cookies.get(PHONE_COOKIE_NAME)?.value;
+      const verified = verifyPhoneCookie(cookieValue);
+      if (!verified) {
+        return NextResponse.json(
+          { error: "Phone verification required." },
+          { status: 401 }
+        );
+      }
+      verifiedPhone = verified.phone;
+    }
+
     const { data: cust } = await supabaseAdmin
       .from("customers")
       .select("id, phone")
       .eq("id", customer_id)
       .maybeSingle();
 
-    if (!cust || normalizePhone(cust.phone) !== verified.phone) {
+    if (!cust) {
+      return NextResponse.json({ error: "Saved address not found." }, { status: 400 });
+    }
+
+    if (addressSource === "new" && verifiedPhone && normalizePhone(cust.phone) !== verifiedPhone) {
       return NextResponse.json(
         { error: "Phone verification mismatch." },
         { status: 401 }

@@ -63,6 +63,7 @@ export default function CheckoutPage() {
       address: savedCustomer.delivery_address ?? "",
       city: savedCustomer.city ?? "",
       pincode: "",
+      source: "saved",
     };
     saveAddress(addr);
     router.push("/subscriptions/setup/payment");
@@ -318,6 +319,7 @@ function NewAddressForm({
         address: address.trim(),
         city: city.trim(),
         pincode: pincode.trim(),
+        source: "new",
       });
       onDone();
     } catch {

@@ -188,6 +188,10 @@ export type SetupAddress = {
   address: string;
   city: string;
   pincode: string;
+  // Whether this address was reused from a previously OTP-verified customer
+  // record ("saved") or freshly entered + just-OTP-verified in this session
+  // ("new"). Drives which gate the payment page enforces server-side.
+  source: "saved" | "new";
 };
 
 export function loadAddress(): SetupAddress | null {
