@@ -5,16 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import { GOLD, formatDate } from "@/lib/subscription-ui";
-
-const TIME_SLOTS = [
-  "6:00 – 8:00 AM",
-  "8:00 – 10:00 AM",
-  "10:00 AM – 12:00 PM",
-  "12:00 – 2:00 PM",
-  "2:00 – 4:00 PM",
-  "4:00 – 6:00 PM",
-  "6:00 – 8:00 PM",
-] as const;
+import { TIME_SLOTS, formatSlot } from "@/lib/subscription-setup";
 
 type Delivery = {
   id: string;
@@ -524,7 +515,7 @@ function DirectEditPanel({
               <option value="">— Same as before —</option>
               {TIME_SLOTS.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {formatSlot(t)}
                 </option>
               ))}
             </select>
@@ -796,7 +787,7 @@ function ChangeRequestPanel({
               <option value="">— Same as before —</option>
               {TIME_SLOTS.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {formatSlot(t)}
                 </option>
               ))}
             </select>

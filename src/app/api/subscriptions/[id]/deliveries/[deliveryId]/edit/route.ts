@@ -20,18 +20,18 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
-// Mirrors the dropdown shown on the delivery detail page. Server only accepts
-// these exact strings; legacy slot values already in the DB are not validated
-// since we never re-write them unless the user picks a new one.
-const ALLOWED_TIME_SLOTS = new Set([
-  "6:00 – 8:00 AM",
-  "8:00 – 10:00 AM",
-  "10:00 AM – 12:00 PM",
-  "12:00 – 2:00 PM",
-  "2:00 – 4:00 PM",
-  "4:00 – 6:00 PM",
-  "6:00 – 8:00 PM",
-]);
+// Mirrors the dropdown shown on the delivery detail page — 14 one-hour
+// blocks from 6 AM to 8 PM, same shape as the new setup wizard. Server only
+// accepts these exact strings; legacy slot values already in the DB are not
+// validated since we never re-write them unless the user picks a new one.
+const ALLOWED_TIME_SLOTS = new Set<string>(
+  Array.from({ length: 14 }, (_, i) => {
+    const h = 6 + i;
+    const a = String(h).padStart(2, "0");
+    const b = String(h + 1).padStart(2, "0");
+    return `${a}:00-${b}:00`;
+  })
+);
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
