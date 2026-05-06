@@ -546,6 +546,7 @@ export default function PageContent() {
                   first paint; playOnEnter warms it 600px before viewport) */}
               <video
                 ref={playOnEnter} muted playsInline loop preload="none"
+                poster="/bread-eating-01.poster.jpg"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
