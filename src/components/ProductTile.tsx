@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRef, useState } from "react";
 import type { ProductMedia, ProductStat } from "@/lib/data";
 
@@ -107,11 +108,11 @@ export default function ProductTile({ slug, tag, title, subtitle, price, stats, 
             >
               {m.type === "video" ? (
                 <video
-                  src={m.src}
                   autoPlay
                   muted
                   loop
                   playsInline
+                  poster={m.src.replace(/\.mp4$/, ".poster.jpg")}
                   style={{
                     width: "100%",
                     height: "100%",
@@ -120,18 +121,20 @@ export default function ProductTile({ slug, tag, title, subtitle, price, stats, 
                     display: "block",
                     pointerEvents: "none",
                   }}
-                />
+                >
+                  <source src={m.src.replace(/\.mp4$/, ".av1.mp4")} type='video/mp4; codecs="av01.0.05M.08"' />
+                  <source src={m.src} type="video/mp4" />
+                </video>
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={m.src}
                   alt={m.alt || title}
+                  fill
                   draggable={false}
+                  sizes="(max-width: 768px) 100vw, 600px"
+                  priority={i === 0}
                   style={{
-                    width: "100%",
-                    height: "100%",
                     objectFit: "cover",
-                    display: "block",
                     pointerEvents: "none",
                     userSelect: "none",
                   }}

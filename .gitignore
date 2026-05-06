@@ -27,7 +27,10 @@ node_modules/
 *.mp4
 *.mov
 *.avi
+!/public/*.mp4
+!/public/*.av1.mp4
 
 # TypeScript incremental build artifact
 tsconfig.tsbuildinfo
 
+/public/_originals/

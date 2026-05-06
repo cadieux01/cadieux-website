@@ -254,7 +254,7 @@ export default function PageContent() {
             <img
               key={g.id}
               ref={el => { grainRefs.current[i] = el; }}
-              src="/grains.png"
+              src="/grains.jpg"
               alt=""
               data-op={g.op.toFixed(3)}
               style={{
@@ -293,6 +293,7 @@ export default function PageContent() {
                 playsInline
                 preload="metadata"
                 loop
+                poster="/bread-intro.poster.jpg"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
@@ -301,6 +302,7 @@ export default function PageContent() {
                   backgroundColor: "#060402",
                 }}
               >
+                <source src="/bread-intro.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
                 <source src="/bread-intro.mp4" type="video/mp4" />
               </video>
               <div style={{
@@ -396,6 +398,7 @@ export default function PageContent() {
                   first paint; playOnEnter warms it 600px before viewport) */}
               <video
                 ref={playOnEnter} muted playsInline loop preload="none"
+                poster="/product-video-05.poster.jpg"
                 style={{
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
@@ -403,6 +406,7 @@ export default function PageContent() {
                   backgroundColor: "#1D1D1F",
                 }}
               >
+                <source src="/product-video-05.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
                 <source src="/product-video-05.mp4" type="video/mp4" />
               </video>
               {/* Dark overlay */}
@@ -549,6 +553,7 @@ export default function PageContent() {
                   backgroundColor: "#1D1D1F",
                 }}
               >
+                <source src="/bread-eating-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
                 <source src="/bread-eating-01.mp4" type="video/mp4" />
               </video>
               {/* Dark overlay — matched to Phase 3 */}
@@ -690,10 +695,13 @@ export default function PageContent() {
             {/* Background video — preload="none" because this is the deepest
                 section with the largest video (15.6 MB); we don't want it
                 fetching metadata on first paint. */}
-            <video ref={playOnEnter} muted playsInline loop preload="none" style={{
-              position: "absolute", inset: 0, width: "100%", height: "100%",
-              objectFit: "cover", zIndex: 0, backgroundColor: "#060402",
-            }}>
+            <video ref={playOnEnter} muted playsInline loop preload="none"
+              poster="/bread-making-01.poster.jpg"
+              style={{
+                position: "absolute", inset: 0, width: "100%", height: "100%",
+                objectFit: "cover", zIndex: 0, backgroundColor: "#060402",
+              }}>
+              <source src="/bread-making-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
               <source src="/bread-making-01.mp4" type="video/mp4" />
             </video>
             {/* Dark overlay */}

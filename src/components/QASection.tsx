@@ -195,11 +195,13 @@ export default function QASection() {
           playsInline
           loop
           preload="metadata"
+          poster="/product-video-06.poster.jpg"
           style={{
             position: "absolute", inset: 0, width: "100%", height: "100%",
             objectFit: "cover", zIndex: 0, backgroundColor: "#060402",
           }}
         >
+          <source src="/product-video-06.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
           <source src="/product-video-06.mp4" type="video/mp4" />
         </video>
 

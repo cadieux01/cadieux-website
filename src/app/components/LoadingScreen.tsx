@@ -124,11 +124,11 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
     >
       <video
         ref={videoRef}
-        src="/logo-intro.mp4"
         autoPlay
         muted
         playsInline
         preload="auto"
+        poster="/logo-intro.poster.jpg"
         style={{
           position: "absolute",
           inset: 0,
@@ -138,7 +138,10 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
           backgroundColor: "#000",
           display: "block",
         }}
-      />
+      >
+        <source src="/logo-intro.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
+        <source src="/logo-intro.mp4" type="video/mp4" />
+      </video>
     </div>
   );
 }

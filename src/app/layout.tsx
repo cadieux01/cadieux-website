@@ -45,12 +45,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${cormorant.variable} ${jost.variable}`} suppressHydrationWarning>
       <head>
-        {/* Preload only the loading-screen video — it gates first paint.
-            Other section videos load on their own with preload="metadata"
-            so we don't blow the network budget on first visit.
-            hero.jpg is 3.2 MB and only used on /shop/[slug] — load it on
-            demand there, not on every visit. */}
-        <link rel="preload" as="video" href="/logo-intro.mp4" type="video/mp4" />
+        {/* Universal logo-intro preload removed — it was paying for a 1+ MB
+            video on every page even though only `/` ever shows the loading
+            screen, and only on first session at that. The LoadingScreen
+            component now loads its own asset on demand. */}
         {/* Cloudflare Turnstile loader — explicit-render mode. Loaded once
             globally so individual <TurnstileWidget /> mounts can render
             instantly instead of injecting + polling for the script each

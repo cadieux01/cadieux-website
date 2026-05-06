@@ -33,11 +33,11 @@ export default function VideoIntro({ onDone }: { onDone: () => void }) {
     >
       <video
         ref={videoRef}
-        src="/bread-intro.mp4"
         autoPlay
         muted
         playsInline
         preload="metadata"
+        poster="/bread-intro.poster.jpg"
         style={{
           position: "absolute",
           inset: 0,
@@ -46,7 +46,10 @@ export default function VideoIntro({ onDone }: { onDone: () => void }) {
           objectFit: "cover",
           backgroundColor: "#060402",
         }}
-      />
+      >
+        <source src="/bread-intro.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
+        <source src="/bread-intro.mp4" type="video/mp4" />
+      </video>
 
       {/* Skip button */}
       <button

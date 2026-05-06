@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { notFound, useParams, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import {
@@ -497,11 +498,11 @@ function Gallery({
             >
               {m.type === "video" ? (
                 <video
-                  src={m.src}
                   autoPlay
                   muted
                   loop
                   playsInline
+                  poster={m.src.replace(/\.mp4$/, ".poster.jpg")}
                   style={{
                     width: "100%",
                     height: "100%",
@@ -510,18 +511,20 @@ function Gallery({
                     display: "block",
                     pointerEvents: "none",
                   }}
-                />
+                >
+                  <source src={m.src.replace(/\.mp4$/, ".av1.mp4")} type='video/mp4; codecs="av01.0.05M.08"' />
+                  <source src={m.src} type="video/mp4" />
+                </video>
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={m.src}
                   alt={m.alt || "Product image"}
+                  fill
                   draggable={false}
+                  sizes="(max-width: 768px) 100vw, 800px"
+                  priority={i === 0}
                   style={{
-                    width: "100%",
-                    height: "100%",
                     objectFit: "cover",
-                    display: "block",
                     pointerEvents: "none",
                     userSelect: "none",
                   }}
@@ -619,16 +622,21 @@ function Gallery({
           >
             {m.type === "video" ? (
               <video
-                src={m.src}
                 muted
                 playsInline
+                poster={m.src.replace(/\.mp4$/, ".poster.jpg")}
+                preload="none"
                 style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }}
-              />
+              >
+                <source src={m.src.replace(/\.mp4$/, ".av1.mp4")} type='video/mp4; codecs="av01.0.05M.08"' />
+                <source src={m.src} type="video/mp4" />
+              </video>
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={m.src}
                 alt={m.alt || ""}
+                width={148}
+                height={184}
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             )}

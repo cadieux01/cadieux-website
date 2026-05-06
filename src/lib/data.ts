@@ -61,7 +61,7 @@ export const PRODUCTS = [
     weight: "400g packet",
     subtitle: "Clean sandwich bread built for protein without the fuss. Soft slices, no compromise.",
     desc: "Clean, everyday bread built for high protein without the fuss. Soft sandwich slices with no compromise on nutrition.",
-    image: "/grains.png",
+    image: "/grains.jpg",
     stats: [
       { target: 7, suffix: "g", label: "Protein/slice" },
       { target: 10, label: "Slices" },
@@ -93,7 +93,7 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
       { type: "video", src: "/product-video-05.mp4", alt: "Multigrain bread close-up" },
       { type: "video", src: "/bread-making-01.mp4", alt: "Bread being made" },
       { type: "image", src: "/hero.jpg", alt: "Multigrain loaf hero" },
-      { type: "image", src: "/grains.png", alt: "Grains and seeds" },
+      { type: "image", src: "/grains.jpg", alt: "Grains and seeds" },
     ],
     ingredients: [
       { name: "Rye sourdough ferment", role: "Base structure & gut-friendly acids" },
@@ -121,7 +121,7 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
     media: [
       { type: "video", src: "/product-video-06.mp4", alt: "Plain protein bread close-up" },
       { type: "video", src: "/bread-eating-01.mp4", alt: "Bread being enjoyed" },
-      { type: "image", src: "/grains.png", alt: "Grains used" },
+      { type: "image", src: "/grains.jpg", alt: "Grains used" },
       { type: "image", src: "/hero.jpg", alt: "Loaf hero shot" },
     ],
     ingredients: [
