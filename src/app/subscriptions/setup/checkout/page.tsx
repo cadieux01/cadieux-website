@@ -66,7 +66,7 @@ export default function CheckoutPage() {
       source: "saved",
     };
     saveAddress(addr);
-    router.push("/subscriptions/setup/payment");
+    router.replace("/subscriptions/setup/payment");
   }
 
   if (!hydrated || !hasSetup) {
@@ -110,7 +110,7 @@ export default function CheckoutPage() {
         {mode === "new" && (
           <NewAddressForm
             onCancel={() => setMode("choose")}
-            onDone={() => router.push("/subscriptions/setup/payment")}
+            onDone={() => router.replace("/subscriptions/setup/payment")}
           />
         )}
       </div>

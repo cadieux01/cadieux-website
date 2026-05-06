@@ -112,10 +112,12 @@ export default function SubscriptionHubPage() {
     cards.push({
       href: "/subscriptions/past",
       title: "Past Plans",
+      // pastCount now includes active + completed + cancelled — it's the
+      // full history. The wording reflects that.
       caption:
         pastCount === 1
-          ? "1 completed plan — reorder anytime."
-          : `${pastCount} completed plans — reorder anytime.`,
+          ? "1 plan in your history."
+          : `${pastCount} plans in your history.`,
       icon: <IconArchive />,
     });
   }

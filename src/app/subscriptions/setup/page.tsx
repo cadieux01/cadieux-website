@@ -78,7 +78,9 @@ export default function SetupPage() {
 
   function proceedToCheckout() {
     if (!canNext) return;
-    router.push("/subscriptions/setup/checkout");
+    // replace, not push — keeps history clean so browser-back from later
+    // wizard steps lands on /subscription hub, not on a stale wizard state.
+    router.replace("/subscriptions/setup/checkout");
   }
 
   function toggleDate(iso: string) {

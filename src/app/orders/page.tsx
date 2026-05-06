@@ -5,7 +5,7 @@ import Link from "next/link";
 
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
-type Order = {
+type RawOrder = {
   id: string;
   total_amount: number;
   delivery_address: string;
@@ -13,8 +13,64 @@ type Order = {
   created_at: string;
 };
 
+type RawSub = {
+  id: string;
+  product_name: string | null;
+  total_amount: number;
+  status: string;
+  created_at: string;
+  customer_address: string | null;
+  customer_city: string | null;
+};
+
+type Row = {
+  id: string;
+  type: "order" | "subscription";
+  total: number;
+  description: string;
+  status: string;
+  created_at: string;
+  href: string | null;
+};
+
+function buildRows(orders: RawOrder[], subs: RawSub[]): Row[] {
+  const orderRows: Row[] = orders.map((o) => ({
+    id: `o:${o.id}`,
+    type: "order",
+    total: Number(o.total_amount),
+    description: o.delivery_address,
+    status: o.status,
+    created_at: o.created_at,
+    href: null,
+  }));
+
+  const subRows: Row[] = subs.map((s) => {
+    const status = (s.status || "").toLowerCase();
+    const isActive = status !== "completed" && status !== "cancelled";
+    const addr = [s.customer_address, s.customer_city].filter(Boolean).join(", ");
+    const desc = [s.product_name ?? "Subscription", addr].filter(Boolean).join(" — ");
+    // Per-subscription detail page doesn't exist yet (the [deliveryId] route
+    // owns /subscriptions/track/<uuid>). Active subs land on the live
+    // tracker; finished ones land on the history page where they're listed.
+    const href = isActive ? "/subscriptions/track" : "/subscriptions/past";
+    return {
+      id: `s:${s.id}`,
+      type: "subscription",
+      total: Number(s.total_amount),
+      description: desc || "Subscription",
+      status: s.status,
+      created_at: s.created_at,
+      href,
+    };
+  });
+
+  return [...orderRows, ...subRows].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
+
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [phoneMissing, setPhoneMissing] = useState(false);
 
@@ -26,7 +82,7 @@ export default function OrdersPage() {
     try {
       const r = await fetch(`/api/checkout?phone=${encodeURIComponent(phone)}`, { cache: "no-store" });
       const d = await r.json();
-      setOrders(d.orders ?? []);
+      setRows(buildRows(d.orders ?? [], d.subscriptions ?? []));
     } catch { /* ignore */ }
     finally { if (showLoading) setLoading(false); }
   }
@@ -55,32 +111,92 @@ export default function OrdersPage() {
           <button onClick={() => fetchOrders(true)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)", WebkitTapHighlightColor: "transparent" }}>↻ Refresh</button>
         </div>
         <p style={{ margin: "0 0 36px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(251,243,212,0.5)" }}>
-          Your order history
+          One-time orders & subscriptions
         </p>
 
-        {loading && orders.length === 0 && (
+        {loading && rows.length === 0 && (
           <p style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "rgba(240,223,200,0.3)", letterSpacing: "0.1em" }}>Loading…</p>
         )}
         {phoneMissing && (
           <p style={{ fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(240,223,200,0.4)", lineHeight: 1.7 }}>Place an order from the cart first — we look up your orders by phone number.</p>
         )}
-        {!loading && !phoneMissing && orders.length === 0 && (
+        {!loading && !phoneMissing && rows.length === 0 && (
           <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(240,223,200,0.35)", lineHeight: 1.7 }}>No orders yet. Add something to your cart to get started.</p>
         )}
-        {orders.map((o, i) => (
-          <div key={o.id} style={{ borderBottom: "1px solid rgba(240,223,200,0.07)", padding: "14px 0" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.7)" }}>#{String(orders.length - i).padStart(6, "0")}</span>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "#FBF3D4" }}>₹{o.total_amount}</span>
-            </div>
-            <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.02em" }}>{o.delivery_address}</p>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: o.status === "pending" ? "rgba(200,144,58,0.6)" : "rgba(74,222,128,0.7)" }}>{o.status}</span>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.25)" }}>{new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
-            </div>
-          </div>
+
+        {rows.map((row, i) => (
+          <OrderRow key={row.id} row={row} number={rows.length - i} />
         ))}
       </div>
     </div>
   );
+}
+
+function OrderRow({ row, number }: { row: Row; number: number }) {
+  const isSub = row.type === "subscription";
+  const typeLabel = isSub ? "Subscription" : "One-time";
+  const status = (row.status || "").toLowerCase();
+  const statusColor =
+    status === "delivered" || status === "completed"
+      ? "rgba(74,222,128,0.7)"
+      : status === "cancelled"
+        ? "#ff8181"
+        : "rgba(200,144,58,0.6)";
+
+  const inner = (
+    <>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, alignItems: "center", gap: 12 }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(200,144,58,0.7)" }}>
+          #{String(number).padStart(6, "0")}
+        </span>
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 10,
+            fontWeight: 300,
+            letterSpacing: "0.25em",
+            textTransform: "uppercase",
+            padding: "3px 9px",
+            borderRadius: 999,
+            border: `1px solid ${isSub ? "rgba(201,169,110,0.55)" : "rgba(240,223,200,0.18)"}`,
+            color: isSub ? "rgba(201,169,110,0.95)" : "rgba(240,223,200,0.55)",
+          }}
+        >
+          {typeLabel}
+        </span>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "#FBF3D4" }}>
+          ₹{Number(row.total).toLocaleString("en-IN")}
+        </span>
+      </div>
+      <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.02em" }}>
+        {row.description}
+      </p>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: statusColor }}>
+          {row.status}
+        </span>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.25)" }}>
+          {new Date(row.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+        </span>
+      </div>
+    </>
+  );
+
+  const wrapStyle: React.CSSProperties = {
+    borderBottom: "1px solid rgba(240,223,200,0.07)",
+    padding: "14px 0",
+    display: "block",
+    color: "inherit",
+    textDecoration: "none",
+    cursor: row.href ? "pointer" : "default",
+  };
+
+  if (row.href) {
+    return (
+      <Link href={row.href} style={wrapStyle}>
+        {inner}
+      </Link>
+    );
+  }
+  return <div style={wrapStyle}>{inner}</div>;
 }

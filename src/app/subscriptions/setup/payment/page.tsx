@@ -135,7 +135,9 @@ export default function PaymentPage() {
         return;
       }
       clearSetupState();
-      router.push("/subscriptions/track");
+      // replace — back from track lands on /subscription hub, not payment.
+      // ?placed=1 triggers the one-time success toast on the track page.
+      router.replace("/subscriptions/track?placed=1");
     } catch {
       setError("Network error. Please try again.");
       if (isSaved) {

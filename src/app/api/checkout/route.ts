@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 
   if (!customer) return NextResponse.json({ customer: null });
 
-  // Get all orders
+  // One-time orders.
   const { data: orders, error: ordersErr } = await supabaseAdmin
     .from("orders")
     .select("id, total_amount, delivery_address, status, created_at")
@@ -44,11 +44,29 @@ export async function GET(req: NextRequest) {
 
   if (ordersErr) console.error("[orders fetch]", ordersErr.message);
 
+  // Subscription orders, surfaced alongside one-time orders on the user's
+  // Orders page. Match by either FK or stored phone for legacy-row safety.
+  const last10 = (phone ?? "").replace(/\D/g, "").slice(-10);
+  const subOr = [
+    `customer_id.eq.${customer.id}`,
+    `customer_phone.eq.${phone}`,
+    `customer_phone.like.%${last10}`,
+  ].join(",");
+
+  const { data: subscriptions, error: subsErr } = await supabaseAdmin
+    .from("subscriptions")
+    .select("id, product_name, total_amount, status, created_at, customer_address, customer_city")
+    .or(subOr)
+    .order("created_at", { ascending: false });
+
+  if (subsErr) console.error("[subscriptions fetch for orders]", subsErr.message);
+
   const lastOrder = orders?.[0];
 
   return NextResponse.json({
     customer: { ...customer, delivery_address: lastOrder?.delivery_address ?? "" },
     orders: orders ?? [],
+    subscriptions: subscriptions ?? [],
   });
 }
 

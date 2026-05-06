@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   DAY_LABEL,
   DELIVERY_STATUS_COLOR,
@@ -127,6 +128,9 @@ export default function TrackPage() {
         fontFamily: "var(--font-body)",
       }}
     >
+      <Suspense fallback={null}>
+        <PlacedToast />
+      </Suspense>
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <div
           style={{
@@ -425,6 +429,52 @@ function Pill({ text, color }: { text: string; color: string }) {
     >
       {text}
     </span>
+  );
+}
+
+function PlacedToast() {
+  const searchParams = useSearchParams();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("placed") !== "1") return;
+    setVisible(true);
+    // Strip ?placed=1 so a refresh doesn't replay the toast.
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("placed");
+      window.history.replaceState({}, "", url.pathname + (url.search || ""));
+    }
+    const t = setTimeout(() => setVisible(false), 4000);
+    return () => clearTimeout(t);
+  }, [searchParams]);
+
+  if (!visible) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: "fixed",
+        top: 20,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 100,
+        maxWidth: "calc(100vw - 32px)",
+        padding: "12px 20px",
+        borderRadius: 999,
+        background: "rgba(201,169,110,0.12)",
+        border: `1px solid ${GOLD}`,
+        color: "#FBF3D4",
+        fontSize: 13,
+        fontFamily: "var(--font-body)",
+        letterSpacing: "0.02em",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      Subscription placed successfully — your weekly plan is below.
+    </div>
   );
 }
 
