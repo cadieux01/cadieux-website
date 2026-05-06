@@ -1,9 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Jost } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
-import SmoothScroll from "@/components/SmoothScroll";
-import CustomCursor from "@/components/CustomCursor";
+import ClientLayoutChrome from "@/components/ClientLayoutChrome";
 import NavGate from "@/components/NavGate";
 import SiteMusic from "@/components/SiteMusic";
 import EdgeSwipeNav from "@/components/EdgeSwipeNav";
@@ -11,7 +9,11 @@ import { CartProvider } from "@/context/CartContext";
 
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
-  weight: ["300", "400", "600", "700"],
+  // Audit shows only 300/400/600 are actually used in styles. 700 was loaded
+  // but never referenced — dropped to save one font file. fontWeight:500
+  // sites (9) substitute to 400/600 just as before since 500 was never
+  // loaded.
+  weight: ["300", "400", "600"],
   variable: "--font-heading",
   display: "swap",
 });
@@ -44,25 +46,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${cormorant.variable} ${jost.variable}`} suppressHydrationWarning>
-      <head>
-        {/* Universal logo-intro preload removed — it was paying for a 1+ MB
-            video on every page even though only `/` ever shows the loading
-            screen, and only on first session at that. The LoadingScreen
-            component now loads its own asset on demand. */}
-        {/* Cloudflare Turnstile loader — explicit-render mode. Loaded once
-            globally so individual <TurnstileWidget /> mounts can render
-            instantly instead of injecting + polling for the script each
-            time. ?render=explicit prevents auto-rendering on .cf-turnstile
-            divs we don't control. */}
-        <Script
-          src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-          strategy="afterInteractive"
-        />
-      </head>
       <body className="font-body" suppressHydrationWarning>
         <CartProvider>
-          <SmoothScroll />
-          <CustomCursor />
+          {/* SmoothScroll + CustomCursor are loaded only on fine-pointer
+              devices via dynamic import, so phones/tablets skip the bundle. */}
+          <ClientLayoutChrome />
           <NavGate />
           <SiteMusic />
           <EdgeSwipeNav />

@@ -14,7 +14,7 @@ const remap = (v: number, lo: number, hi: number) => clamp((v - lo) / (hi - lo),
 const ease  = (t: number) => t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
 
 const GRAIN_URI =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+  "url(/grain.svg)";
 
 export default function ImmersiveEntry() {
   const router = useRouter();

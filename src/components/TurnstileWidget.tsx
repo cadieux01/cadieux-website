@@ -53,9 +53,23 @@ const TurnstileWidget = forwardRef<TurnstileHandle, TurnstileWidgetProps>(
     }));
 
     useEffect(() => {
-      // Loader script is preloaded globally in src/app/layout.tsx. Poll for
-      // readiness — on first nav after a hard load it may not be parsed yet,
-      // and on client-side nav it's already attached.
+      // Inject the Turnstile loader on demand — only pages that actually
+      // mount this widget pay for the ~100KB script. We tag the script so
+      // multiple concurrent mounts share the same load.
+      const SCRIPT_ID = "cf-turnstile-loader";
+      if (
+        typeof document !== "undefined" &&
+        !document.getElementById(SCRIPT_ID) &&
+        !window.turnstile
+      ) {
+        const s = document.createElement("script");
+        s.id = SCRIPT_ID;
+        s.src =
+          "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        s.async = true;
+        document.head.appendChild(s);
+      }
+
       let cancelled = false;
       const tryRender = () => {
         if (cancelled) return false;

@@ -43,17 +43,22 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { data: deliveries } = await supabaseAdmin
-    .from("subscription_deliveries")
-    .select("*")
-    .eq("subscription_id", id)
-    .order("sequence", { ascending: true });
-
-  const { data: change_requests } = await supabaseAdmin
-    .from("subscription_change_requests")
-    .select("*")
-    .eq("subscription_id", id)
-    .order("created_at", { ascending: false });
+  // Two independent reads — fire in parallel to halve poll latency. The
+  // track page polls every 10s so the latency saving here compounds.
+  const [deliveriesRes, changeRequestsRes] = await Promise.all([
+    supabaseAdmin
+      .from("subscription_deliveries")
+      .select("*")
+      .eq("subscription_id", id)
+      .order("sequence", { ascending: true }),
+    supabaseAdmin
+      .from("subscription_change_requests")
+      .select("*")
+      .eq("subscription_id", id)
+      .order("created_at", { ascending: false }),
+  ]);
+  const { data: deliveries } = deliveriesRes;
+  const { data: change_requests } = changeRequestsRes;
 
   return NextResponse.json({
     subscription: sub,
