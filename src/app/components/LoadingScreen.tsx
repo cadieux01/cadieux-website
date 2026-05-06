@@ -38,19 +38,13 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
   const dismissedRef = useRef(false);
 
   useEffect(() => {
-    // Hard reload always replays the intro — clear the flag first so the
-    // sessionStorage read below returns false.
-    try {
-      const navEntry = performance.getEntriesByType("navigation")[0] as
-        | PerformanceNavigationTiming
-        | undefined;
-      if (navEntry && navEntry.type === "reload") {
-        window.sessionStorage.removeItem(SESSION_KEY);
-      }
-    } catch {
-      /* perf API unavailable */
-    }
-
+    // Note: we deliberately do NOT clear the session flag on
+    // PerformanceNavigationTiming.type === "reload". The navigation entry
+    // is fixed to the original page load and never updates during SPA
+    // navigation, so a "reload" entry would cause every internal nav back
+    // to / to clear the flag and replay the intro. sessionStorage already
+    // clears when the tab closes, which is the correct boundary: intro
+    // plays once per browser session, never again until a new session.
     let alreadyPlayed = false;
     try {
       alreadyPlayed = window.sessionStorage.getItem(SESSION_KEY) === "1";
