@@ -204,13 +204,9 @@ body {
 }
 
 /* Scroll line animation */
-/* Subscription hub: card stagger entrance + hover lift */
-@keyframes cdxHubFadeUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
+/* Subscription hub: hover lift only — entrance animation removed so cards are
+   visible from first paint instead of waiting 480ms behind opacity:0. */
 .cdx-hub-card {
-  animation: cdxHubFadeUp 480ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
   transition: border-color 220ms ease, transform 220ms ease, background 220ms ease;
 }
 .cdx-hub-card:hover {
@@ -221,6 +217,25 @@ body {
 .cdx-hub-card:focus-visible {
   outline: 1px solid #c9a96e;
   outline-offset: 4px;
+}
+/* Shimmer block for the data-loading caption inside Track / Past cards */
+@keyframes cdxHubShimmer {
+  0%   { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+.cdx-hub-skeleton {
+  display: inline-block;
+  height: 12px;
+  width: 70%;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(245,240,232,0.06) 0%,
+    rgba(245,240,232,0.18) 50%,
+    rgba(245,240,232,0.06) 100%
+  );
+  background-size: 400px 100%;
+  animation: cdxHubShimmer 1.2s linear infinite;
 }
 
 @keyframes scrollLine {

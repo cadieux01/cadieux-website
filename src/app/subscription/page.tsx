@@ -22,16 +22,41 @@ const TEXT = "#FBF3D4";
 const GRAIN =
   "url(/grain.svg)";
 
-type Card = {
-  href: string;
-  title: string;
-  caption: string;
-  icon: React.ReactNode;
-};
+// In-memory + sessionStorage cache so navigating back to /subscription
+// reuses counts instantly. TTL is short — admins may add a delivery in the
+// background — but long enough to feel instant on the typical jump-around
+// flow (Setup → Hub → Track → Hub).
+const CACHE_KEY = "cdx_hub_counts_v1";
+const CACHE_TTL_MS = 60_000;
+type CountsCache = { active: number; past: number; ts: number; phone: string };
 
 function readPhone(): string {
   if (typeof window === "undefined") return "";
   return localStorage.getItem("cadieux_phone") ?? "";
+}
+
+function readCachedCounts(phone: string): CountsCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const c = JSON.parse(raw) as CountsCache;
+    if (c.phone !== phone) return null;
+    if (Date.now() - c.ts > CACHE_TTL_MS) return null;
+    return c;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedCounts(phone: string, active: number, past: number) {
+  if (typeof window === "undefined") return;
+  try {
+    const c: CountsCache = { active, past, phone, ts: Date.now() };
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(c));
+  } catch {
+    /* ignore quota / private mode */
+  }
 }
 
 // Tiny inline SVG icons — single-stroke, gold, no external deps.
@@ -61,14 +86,33 @@ function IconArchive() {
   );
 }
 
+// Three states for the data inside Track / Past cards:
+//   "guest"    — no phone in localStorage; show neutral copy, no fetch
+//   "loading"  — logged-in, fetch in flight; show skeleton in caption
+//   "ready"    — counts available (from cache or fetch); show the count
+type DataState =
+  | { kind: "guest" }
+  | { kind: "loading" }
+  | { kind: "ready"; active: number; past: number };
+
 export default function SubscriptionHubPage() {
-  const [activeCount, setActiveCount] = useState(0);
-  const [pastCount, setPastCount] = useState(0);
+  // First render (SSR + initial client paint) MUST be "guest" so the server
+  // and client agree on the markup — anything else here would read
+  // localStorage on the client and trigger a hydration mismatch. After mount
+  // we synchronously upgrade to "ready" (from sessionStorage cache) or
+  // "loading" (cold logged-in user) inside useEffect.
+  const [data, setData] = useState<DataState>({ kind: "guest" });
 
   useEffect(() => {
-    let cancelled = false;
     const phone = readPhone();
-    if (!phone) return; // cold visitor — only "Start New Plan" renders
+    if (!phone) return; // stay guest — no fetches for cold visitors
+    const cached = readCachedCounts(phone);
+    if (cached) {
+      setData({ kind: "ready", active: cached.active, past: cached.past });
+      return;
+    }
+    setData({ kind: "loading" });
+    let cancelled = false;
     (async () => {
       try {
         const [aRes, pRes] = await Promise.all([
@@ -78,10 +122,12 @@ export default function SubscriptionHubPage() {
         const aJ = await aRes.json().catch(() => ({}));
         const pJ = await pRes.json().catch(() => ({}));
         if (cancelled) return;
-        setActiveCount(Array.isArray(aJ.subscriptions) ? aJ.subscriptions.length : 0);
-        setPastCount(Array.isArray(pJ.subscriptions) ? pJ.subscriptions.length : 0);
+        const active = Array.isArray(aJ.subscriptions) ? aJ.subscriptions.length : 0;
+        const past = Array.isArray(pJ.subscriptions) ? pJ.subscriptions.length : 0;
+        writeCachedCounts(phone, active, past);
+        setData({ kind: "ready", active, past });
       } catch {
-        /* fall through — render Start-only */
+        if (!cancelled) setData({ kind: "ready", active: 0, past: 0 });
       }
     })();
     return () => {
@@ -89,38 +135,61 @@ export default function SubscriptionHubPage() {
     };
   }, []);
 
-  const cards: Card[] = [
+  // All 3 cards are always rendered so the layout is stable on first paint.
+  // The Track / Past captions swap in based on `data` without changing the
+  // grid shape.
+  const trackCaption =
+    data.kind === "guest"
+      ? "Track upcoming deliveries on your plans."
+      : data.kind === "loading"
+      ? "Loading your active plans…"
+      : data.kind === "ready" && data.active === 0
+      ? "No active plans yet."
+      : data.kind === "ready" && data.active === 1
+      ? "1 active plan — see upcoming deliveries."
+      : `${(data as { active: number }).active} active plans — see upcoming deliveries.`;
+
+  const pastCaption =
+    data.kind === "guest"
+      ? "Browse plans you've finished or cancelled."
+      : data.kind === "loading"
+      ? "Loading your history…"
+      : data.kind === "ready" && data.past === 0
+      ? "No past plans yet."
+      : data.kind === "ready" && data.past === 1
+      ? "1 plan in your history."
+      : `${(data as { past: number }).past} plans in your history.`;
+
+  type CardSpec = {
+    href: string;
+    title: string;
+    caption: string;
+    icon: React.ReactNode;
+    skeleton?: boolean;
+  };
+
+  const cards: CardSpec[] = [
     {
       href: "/subscriptions/setup",
       title: "Start New Plan",
       caption: "Pick days, pick slots, set it and forget it.",
       icon: <IconBread />,
     },
-  ];
-  if (activeCount > 0) {
-    cards.push({
+    {
       href: "/subscriptions/track",
       title: "Track Plans",
-      caption:
-        activeCount === 1
-          ? "1 active plan — see upcoming deliveries."
-          : `${activeCount} active plans — see upcoming deliveries.`,
+      caption: trackCaption,
       icon: <IconList />,
-    });
-  }
-  if (pastCount > 0) {
-    cards.push({
+      skeleton: data.kind === "loading",
+    },
+    {
       href: "/subscriptions/past",
       title: "Past Plans",
-      // pastCount now includes active + completed + cancelled — it's the
-      // full history. The wording reflects that.
-      caption:
-        pastCount === 1
-          ? "1 plan in your history."
-          : `${pastCount} plans in your history.`,
+      caption: pastCaption,
       icon: <IconArchive />,
-    });
-  }
+      skeleton: data.kind === "loading",
+    },
+  ];
 
   return (
     <div style={{ minHeight: "100dvh", background: BG, position: "relative", overflowX: "clip" }}>
@@ -235,9 +304,10 @@ export default function SubscriptionHubPage() {
                   fontWeight: 300,
                   lineHeight: 1.45,
                   color: "rgba(245,240,232,0.62)",
+                  minHeight: 19,
                 }}
               >
-                {c.caption}
+                {c.skeleton ? <span className="cdx-hub-skeleton" /> : c.caption}
               </div>
             </Link>
           ))}
