@@ -39,6 +39,15 @@ export default function Nav() {
     } catch { /* ignore */ }
   }, [menuOpen, hydrated]);
 
+  // Listen for left-edge swipe → open menu (dispatched by EdgeSwipeNav).
+  // Only acts on home, where the hamburger lives.
+  useEffect(() => {
+    if (!isHome) return;
+    const open = () => setMenuOpen(true);
+    window.addEventListener("cadieux:open-menu", open);
+    return () => window.removeEventListener("cadieux:open-menu", open);
+  }, [isHome]);
+
   function nav(path: string) {
     setMenuOpen(false);
     router.push(path);
@@ -59,7 +68,11 @@ export default function Nav() {
         <button
           onClick={menuOpen ? () => setMenuOpen(false) : openMenu}
           style={{
-            position: "fixed", top: 20, left: 20, zIndex: 210,
+            position: "fixed",
+            // Sit below the iOS notch / Dynamic Island in PWA standalone mode.
+            top: "max(20px, env(safe-area-inset-top))",
+            left: "max(20px, env(safe-area-inset-left))",
+            zIndex: 210,
             background: "none", border: "none", cursor: "pointer", padding: 8,
             display: "flex", flexDirection: "column", gap: 7,
             WebkitTapHighlightColor: "transparent",
@@ -87,7 +100,13 @@ export default function Nav() {
         display: "flex", flexDirection: "column",
       }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.05, pointerEvents: "none" }} />
-        <div style={{ position: "relative", zIndex: 1, padding: "100px 28px 96px", flexShrink: 0, display: "flex", flexDirection: "column" }}>
+        {/* Top/left/bottom paddings include env(safe-area-inset-*) so the menu
+            content clears iOS notch / home indicator in standalone PWA mode. */}
+        <div style={{
+          position: "relative", zIndex: 1,
+          padding: "calc(100px + env(safe-area-inset-top)) calc(28px + env(safe-area-inset-right)) calc(96px + env(safe-area-inset-bottom)) calc(28px + env(safe-area-inset-left))",
+          flexShrink: 0, display: "flex", flexDirection: "column",
+        }}>
           <p style={{ margin: "0 0 40px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)" }}>Menu</p>
           {[
             { label: "Products of Cadieux", action: () => nav("/shop") },

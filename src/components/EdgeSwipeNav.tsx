@@ -69,7 +69,14 @@ export default function EdgeSwipeNav() {
 
       if (dt <= MAX_DURATION && Math.abs(dy) <= MAX_DY) {
         if (origin === "left" && dx >= MIN_DX) {
-          window.history.back();
+          // On home, the left edge has no "back" target — instead, open the
+          // site menu, mirroring the hamburger button at top-left. Nav.tsx
+          // listens for this event.
+          if (window.location.pathname === "/") {
+            window.dispatchEvent(new CustomEvent("cadieux:open-menu"));
+          } else {
+            window.history.back();
+          }
         } else if (origin === "right" && dx <= -MIN_DX) {
           window.history.forward();
         }
