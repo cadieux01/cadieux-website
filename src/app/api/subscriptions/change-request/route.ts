@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import {
-  PHONE_COOKIE_NAME,
-  normalizePhone,
-  verifyPhoneCookie,
-} from "@/lib/phone-cookie";
+import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,7 +18,7 @@ function parseScheduledDate(yyyyMmDd: string): Date | null {
 }
 
 export async function POST(req: NextRequest) {
-  const verified = verifyPhoneCookie(req.cookies.get(PHONE_COOKIE_NAME)?.value);
+  const verified = getVerifiedPhone(req);
   if (!verified) {
     return NextResponse.json(
       { error: "Phone verification required." },

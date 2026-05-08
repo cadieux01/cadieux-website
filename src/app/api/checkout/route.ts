@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import {
-  PHONE_COOKIE_NAME,
-  normalizePhone,
-  verifyPhoneCookie,
-} from "@/lib/phone-cookie";
+import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
 
@@ -126,10 +122,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
-    // Server-side OTP enforcement: cookie must be present, valid, unexpired,
-    // and its phone must match the customer's stored phone.
-    const cookieValue = req.cookies.get(PHONE_COOKIE_NAME)?.value;
-    const verified = verifyPhoneCookie(cookieValue);
+    // Server-side OTP enforcement: cookie OR mobile bearer token must be
+    // present, valid, unexpired, and its phone must match the customer's
+    // stored phone.
+    const verified = getVerifiedPhone(req);
     if (!verified) {
       return NextResponse.json(
         { error: "Phone verification required." },
@@ -225,8 +221,7 @@ export async function POST(req: NextRequest) {
         );
       }
     } else {
-      const cookieValue = req.cookies.get(PHONE_COOKIE_NAME)?.value;
-      const verified = verifyPhoneCookie(cookieValue);
+      const verified = getVerifiedPhone(req);
       if (!verified) {
         return NextResponse.json(
           { error: "Phone verification required." },

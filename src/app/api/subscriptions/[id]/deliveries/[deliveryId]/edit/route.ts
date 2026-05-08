@@ -6,11 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import {
-  PHONE_COOKIE_NAME,
-  normalizePhone,
-  verifyPhoneCookie,
-} from "@/lib/phone-cookie";
+import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { editRateLimit } from "@/lib/ratelimit";
 
@@ -45,9 +41,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; deliveryId: string } }
 ) {
-  // 1. Phone-cookie auth. The cookie is HMAC-signed and 30-min TTL, so the
-  //    user must have OTP'd recently to reach this endpoint.
-  const verified = verifyPhoneCookie(req.cookies.get(PHONE_COOKIE_NAME)?.value);
+  // 1. Phone auth. Accepts the web cookie (HMAC, 30-min TTL) or a mobile
+  //    bearer token (HMAC, 30-day TTL) — same signer, interchangeable.
+  const verified = getVerifiedPhone(req);
   if (!verified) {
     return NextResponse.json(
       { error: "Phone verification required." },
