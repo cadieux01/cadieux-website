@@ -67,6 +67,7 @@ const CITY_MIN = 2;
 const CITY_MAX = 60;
 const QTY_MIN = 1;
 const QTY_MAX = 99;
+const ITEMS_MAX = 20;
 
 const PINCODE_RE = /^\d{6}$/;
 
@@ -156,6 +157,13 @@ export function validateOrderBodyShape(
   // items
   if (!Array.isArray(body.items) || body.items.length === 0) {
     return fail(400, "items must be a non-empty array.", "items");
+  }
+  if (body.items.length > ITEMS_MAX) {
+    return fail(
+      400,
+      `Cart exceeds ${ITEMS_MAX} line items.`,
+      "items_too_many",
+    );
   }
   const items: ClientOrderItem[] = [];
   for (let i = 0; i < body.items.length; i++) {
