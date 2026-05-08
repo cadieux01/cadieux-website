@@ -171,8 +171,12 @@ export function validateOrderBodyShape(
     if (!raw || typeof raw !== "object") {
       return fail(400, `items[${i}] is invalid.`, "items");
     }
-    if (!isString(raw.product_id) || raw.product_id.trim() === "") {
+    if (!isString(raw.product_id)) {
       return fail(400, `items[${i}].product_id is required.`, "items");
+    }
+    const productId = raw.product_id.trim();
+    if (productId === "" || productId.length > 64) {
+      return fail(400, `items[${i}].product_id is invalid.`, "items");
     }
     if (
       !isFiniteNumber(raw.quantity) ||
@@ -197,7 +201,7 @@ export function validateOrderBodyShape(
       );
     }
     items.push({
-      product_id: raw.product_id,
+      product_id: productId,
       quantity: raw.quantity,
       price_snapshot_inr: raw.price_snapshot_inr,
     });
