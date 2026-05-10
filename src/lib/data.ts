@@ -31,46 +31,50 @@ export const SUB_WEEKS = [2, 3, 4, 6];
 
 export type ProductStat = { target: number; suffix?: string; label: string };
 
+// @deprecated: prefer getActiveProducts() from @/lib/products for live
+// price/name/weight (Supabase-backed). PRODUCTS stays as a typed shape used
+// by rich-content lookups (PRODUCT_DETAILS) and as a graceful fallback if
+// Supabase is unreachable. Values here MUST match the DB rows.
 export const PRODUCTS = [
   {
     slug: "multigrain",
-    name: "Protein Bread Multigrain",
+    name: "Multi-Grain High Protein Bread",
     tag: "Protein Bread",
     title: "Multigrain",
     tags: ["Multi Grains", "No Maida"],
-    price: 140,
-    protein: "7.2g protein per slice",
+    price: 135,
+    protein: "7g protein per slice",
     weight: "240g net weight",
     subtitle: "Ancient grains, seeds, whey protein. Baked to lock in structure.",
     desc: "Ancient grains, seeds, and five distinct protein sources — slow-fermented, cold-proofed, and baked to lock in structure.",
     image: "/hero.jpg",
     stats: [
       { target: 7, suffix: "g", label: "Protein/slice" },
-      { target: 6, suffix: "g", label: "Fiber/slice" },
+      { target: 8, label: "Slices" },
       { target: 240, suffix: "g", label: "Net weight" },
     ] as ProductStat[],
   },
   {
-    slug: "plain",
-    name: "Protein Bread Plain",
+    slug: "high-protein",
+    name: "High Protein Bread",
     tag: "Protein Bread",
     title: "Plain",
-    tags: ["Sandwich Bread", "10 Slices"],
-    price: 110,
-    protein: "7.2g protein per slice",
-    weight: "400g packet",
+    tags: ["Sandwich Bread", "8 Slices"],
+    price: 99,
+    protein: "7g protein per slice",
+    weight: "320g net weight",
     subtitle: "Clean sandwich bread built for protein without the fuss. Soft slices, no compromise.",
     desc: "Clean, everyday bread built for high protein without the fuss. Soft sandwich slices with no compromise on nutrition.",
     image: "/grains.jpg",
     stats: [
       { target: 7, suffix: "g", label: "Protein/slice" },
-      { target: 10, label: "Slices" },
-      { target: 400, suffix: "g", label: "Net Weight" },
+      { target: 8, label: "Slices" },
+      { target: 320, suffix: "g", label: "Net Weight" },
     ] as ProductStat[],
   },
 ];
 
-export type ProductSlug = "multigrain" | "plain";
+export type ProductSlug = "multigrain" | "high-protein";
 
 export type ProductMedia = { type: "video" | "image"; src: string; alt?: string };
 export type ProductIngredient = { name: string; role: string };
@@ -112,11 +116,11 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
       { metric: "Glycaemic index", value: "Low (54)", note: "Independent GI testing · 2026" },
     ],
   },
-  plain: {
+  "high-protein": {
     description: [
       "Plain is the everyday Cadieux — a soft, clean sandwich loaf that happens to carry serious protein.",
       "Same careful process as our multigrain, just a milder crumb built for daily use: toast, sandwiches, kids' lunches, late-night eggs.",
-      "Seven grams of protein per slice. Ten slices per loaf. Nothing hidden.",
+      "Seven grams of protein per slice. Eight slices per loaf. Nothing hidden.",
     ],
     media: [
       { type: "video", src: "/product-video-06.mp4", alt: "Plain protein bread close-up" },
@@ -134,10 +138,10 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
       { name: "Sea salt", role: "Structure and flavour" },
     ],
     testReports: [
-      { metric: "Protein per slice", value: "7.1 g", note: "FSSAI-accredited lab · Mar 2026" },
-      { metric: "Net weight", value: "400 g", note: "Per packet · verified on line" },
+      { metric: "Protein per slice", value: "7.0 g", note: "FSSAI-accredited lab · Mar 2026" },
+      { metric: "Net weight", value: "320 g", note: "Per packet · verified on line" },
       { metric: "Added sugar", value: "0 g", note: "Trace honey for ferment only" },
-      { metric: "Slices per loaf", value: "10", note: "Precision-cut on every bake" },
+      { metric: "Slices per loaf", value: "8", note: "Precision-cut on every bake" },
     ],
   },
 };

@@ -3,9 +3,11 @@
 
 import { DAY_KEYS, type DayKey } from "./subscription-dates";
 
-export type ProductSlug = "multigrain" | "plain";
+export type ProductSlug = "multigrain" | "high-protein";
 
-/** Minimal product info we need in the wizard. Mirrors PRODUCTS in lib/data.ts. */
+/** Minimal product info we need in the wizard. Mirrors PRODUCTS in lib/data.ts.
+ *  Values must match the Supabase products table — kept in sync manually until
+ *  this wizard is migrated to read from getActiveProducts() server-side. */
 export const SETUP_PRODUCTS: Array<{
   slug: ProductSlug;
   name: string;
@@ -15,16 +17,16 @@ export const SETUP_PRODUCTS: Array<{
 }> = [
   {
     slug: "multigrain",
-    name: "Protein Bread Multigrain",
+    name: "Multi-Grain High Protein Bread",
     title: "Multigrain",
-    price: 140,
+    price: 135,
     blurb: "Ancient grains, seeds, whey protein.",
   },
   {
-    slug: "plain",
-    name: "Protein Bread Plain",
+    slug: "high-protein",
+    name: "High Protein Bread",
     title: "Plain",
-    price: 110,
+    price: 99,
     blurb: "Soft sandwich slices, clean build.",
   },
 ];
