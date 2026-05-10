@@ -84,3 +84,12 @@ export function normalizePhone(raw: string): string {
   if (String(raw).startsWith("+")) return String(raw);
   return `+${digits}`;
 }
+
+/** Mask all but the last 4 digits of a phone for safe logging.
+ *  "+917093403747" → "+91*******3747", "9876543210" → "******3210" */
+export function maskPhone(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const s = String(raw);
+  if (s.length <= 4) return "*".repeat(s.length);
+  return s.slice(0, s.length - 4).replace(/\d/g, "*") + s.slice(-4);
+}

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { maskPhone } from "@/lib/phone-cookie";
 
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID ?? "";
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN ?? "";
@@ -43,13 +44,20 @@ export async function POST(req: NextRequest) {
     });
     const data = await res.json().catch(() => ({} as Record<string, unknown>));
     if (!res.ok) {
-      console.error("Twilio WhatsApp error:", data);
-      const msg = (data as { message?: string }).message ?? "Twilio send failed";
-      return NextResponse.json({ error: msg }, { status: 502 });
+      // Twilio echoes back `to`, `body`, `from` — never log `data` directly.
+      const d = data as { code?: number | string; message?: string; status?: number };
+      console.error("Twilio WhatsApp error", {
+        http_status: res.status,
+        twilio_code: d.code,
+        twilio_status: d.status,
+        twilio_message: d.message,
+        to: maskPhone(to),
+      });
+      return NextResponse.json({ error: d.message ?? "Twilio send failed" }, { status: 502 });
     }
     return NextResponse.json({ ok: true, sid: (data as { sid?: string }).sid });
   } catch (err) {
-    console.error("send-whatsapp error:", err);
+    console.error("send-whatsapp error", { to: maskPhone(to), err: String(err) });
     return NextResponse.json({ error: "Failed to send WhatsApp" }, { status: 500 });
   }
 }

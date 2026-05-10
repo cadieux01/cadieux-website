@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone, isValidMobileAppKey } from "@/lib/phone-cookie";
+import { getVerifiedPhone, isValidMobileAppKey, maskPhone } from "@/lib/phone-cookie";
 import {
   reconcilePrices,
   toLocal10,
@@ -186,6 +186,7 @@ export async function POST(req: NextRequest) {
       }),
     }),
     "send-sms",
+    { phone: phoneLocal },
   );
 
   const shortId = String(order.id).slice(0, 8).toUpperCase();
@@ -202,6 +203,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({ phone: phoneLocal, message: waMessage }),
     }),
     "send-whatsapp",
+    { phone: phoneLocal },
   );
 
   return NextResponse.json({
@@ -213,11 +215,38 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * Detaches a fetch from the response lifecycle. Logs failures but never
- * throws — the order is already committed by the time these run.
+ * Detaches a fetch from the response lifecycle. Logs both network failures
+ * AND non-2xx responses — Twilio errors come back as 4xx/5xx, which
+ * `fetch` does NOT throw on, so the previous .catch-only path silently
+ * dropped real delivery failures. Phone is masked to the last 4 digits.
  */
-function fireAndForget(p: Promise<unknown>, label: string): void {
-  p.catch((err) => {
-    console.error(`[mobile/checkout] ${label} failed:`, err);
+function fireAndForget(
+  p: Promise<Response>,
+  label: string,
+  ctx: { phone: string },
+): void {
+  p.then(async (res) => {
+    if (!res.ok) {
+      // Pull only safe fields. Don't log the full response — Twilio echoes
+      // back the recipient phone and the message body, both sensitive.
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string | number;
+      };
+      console.error(
+        `[mobile/checkout] ${label} http_failed`,
+        {
+          status: res.status,
+          code: data.code,
+          error: data.error,
+          phone: maskPhone(ctx.phone),
+        },
+      );
+    }
+  }).catch((err) => {
+    console.error(
+      `[mobile/checkout] ${label} threw`,
+      { phone: maskPhone(ctx.phone), err: String(err) },
+    );
   });
 }

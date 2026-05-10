@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { maskPhone } from "@/lib/phone-cookie";
 
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID ?? "";
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN ?? "";
@@ -87,14 +88,23 @@ export async function POST(req: NextRequest) {
         Body: message,
       }).toString(),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({} as Record<string, unknown>));
     if (!res.ok) {
-      console.error("Twilio SMS error:", data);
-      return NextResponse.json({ error: data.message ?? "Twilio send failed" }, { status: 502 });
+      // Twilio echoes back `to`, `body`, `from` in error responses — never
+      // log `data` directly. Pull only the diagnostic fields we need.
+      const d = data as { code?: number | string; message?: string; status?: number };
+      console.error("Twilio SMS error", {
+        http_status: res.status,
+        twilio_code: d.code,
+        twilio_status: d.status,
+        twilio_message: d.message,
+        to: maskPhone(to),
+      });
+      return NextResponse.json({ error: d.message ?? "Twilio send failed" }, { status: 502 });
     }
-    return NextResponse.json({ ok: true, sid: data.sid });
+    return NextResponse.json({ ok: true, sid: (data as { sid?: string }).sid });
   } catch (err) {
-    console.error("send-sms error:", err);
+    console.error("send-sms error", { to: maskPhone(to), err: String(err) });
     return NextResponse.json({ error: "Failed to send SMS" }, { status: 500 });
   }
 }
