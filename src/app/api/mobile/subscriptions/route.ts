@@ -312,6 +312,88 @@ function validateShape(
   };
 }
 
+// Disable Next.js route cache so every poll reflects the latest admin writes.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function GET(req: NextRequest) {
+  if (!process.env.MOBILE_APP_KEY) {
+    return fail(500, "Server misconfigured");
+  }
+  if (!isValidMobileAppKey(req.headers.get("x-app-key"))) {
+    return fail(401, "Unauthorized");
+  }
+  const verified = getVerifiedPhone(req);
+  if (!verified) {
+    return fail(401, "Phone not verified");
+  }
+  const phoneLocal = toLocal10(verified.phone);
+  if (phoneLocal.length !== 10) {
+    return fail(400, "Verified phone is not in expected format");
+  }
+
+  // Look up customer by local 10-digit phone.
+  const { data: customer, error: custErr } = await supabaseAdmin
+    .from("customers")
+    .select("id")
+    .eq("phone", phoneLocal)
+    .maybeSingle();
+  if (custErr) {
+    console.error("[mobile/subscriptions GET] customer lookup:", custErr);
+    return fail(500, "Failed to resolve customer");
+  }
+  if (!customer) {
+    return NextResponse.json({ ok: true, active: [], past: [] });
+  }
+
+  // All subscriptions for this customer, newest first, capped at 50.
+  const { data: subs, error: subsErr } = await supabaseAdmin
+    .from("subscriptions")
+    .select(
+      "id, status, bread_name, product_name, bread_price, total_amount, weeks, days, start_date, created_at, customer_name, customer_address",
+    )
+    .eq("customer_id", customer.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (subsErr) {
+    console.error("[mobile/subscriptions GET] subscriptions fetch:", subsErr);
+    return fail(500, "Failed to fetch subscriptions");
+  }
+  if (!subs || subs.length === 0) {
+    return NextResponse.json({ ok: true, active: [], past: [] });
+  }
+
+  // Next upcoming delivery per subscription (first non-delivered, non-cancelled).
+  const ids = subs.map((s) => s.id);
+  const { data: deliveries } = await supabaseAdmin
+    .from("subscription_deliveries")
+    .select("subscription_id, scheduled_date, status")
+    .in("subscription_id", ids)
+    .not("status", "in", "(delivered,cancelled)")
+    .order("scheduled_date", { ascending: true });
+
+  const nextBySub = new Map<string, string | null>();
+  for (const d of deliveries ?? []) {
+    if (!nextBySub.has(d.subscription_id)) {
+      nextBySub.set(d.subscription_id, d.scheduled_date);
+    }
+  }
+
+  const withNext = subs.map((s) => ({
+    ...s,
+    next_delivery_date: nextBySub.get(s.id) ?? null,
+  }));
+
+  const active = withNext.filter(
+    (s) => s.status !== "cancelled" && s.status !== "completed",
+  );
+  const past = withNext.filter(
+    (s) => s.status === "cancelled" || s.status === "completed",
+  );
+
+  return NextResponse.json({ ok: true, active, past });
+}
+
 export async function POST(req: NextRequest) {
   // Fail closed if MOBILE_APP_KEY isn't configured.
   if (!process.env.MOBILE_APP_KEY) {
