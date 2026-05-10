@@ -30,6 +30,16 @@ export const reviewRateLimit = new Ratelimit({
   prefix: "ratelimit:review",
 });
 
+// Reviews from mobile: 3 per OTP-verified phone per day. Keyed on the
+// 10-digit local phone (not IP) — mobile carriers NAT thousands of users
+// behind a single egress address, so IP is too coarse for this surface.
+export const mobileReviewRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(3, "1 d"),
+  analytics: true,
+  prefix: "ratelimit:reviews:mobile",
+});
+
 // General API: 30 requests per IP per minute (DDoS protection)
 export const apiRateLimit = new Ratelimit({
   redis,
