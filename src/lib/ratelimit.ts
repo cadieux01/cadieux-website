@@ -67,6 +67,14 @@ export const profileEditRateLimit = new Ratelimit({
   prefix: "ratelimit:profile-edit:mobile",
 });
 
+// Address book creates: 10 per phone per day.
+export const addressCreateRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, "1 d"),
+  analytics: true,
+  prefix: "ratelimit:address-create:mobile",
+});
+
 // Helper to get IP from request
 export function getClientIP(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
