@@ -58,6 +58,15 @@ export const editRateLimit = new Ratelimit({
   prefix: "ratelimit:edit",
 });
 
+// Mobile profile edits (name/email/photo/marketing): 10 per phone per day.
+// Keyed by 10-digit local phone, same reasoning as other mobile limits.
+export const profileEditRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, "1 d"),
+  analytics: true,
+  prefix: "ratelimit:profile-edit:mobile",
+});
+
 // Helper to get IP from request
 export function getClientIP(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
