@@ -24,9 +24,10 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
-const ADDRESS_COLS = "id, customer_id, label, full_name, line1, area, city, pincode, is_default, created_at";
+const ADDRESS_COLS = "id, customer_id, label, full_name, phone, line1, area, city, pincode, is_default, created_at";
 
 const LABEL_MAX = 40;
+const PHONE_DIGITS_RE = /^\d{10}$/;
 const NAME_MIN = 2;
 const NAME_MAX = 80;
 const LINE1_MIN = 3;
@@ -172,12 +173,34 @@ export async function POST(req: NextRequest) {
     return fail(400, "pincode must be exactly 6 digits.", "pincode");
   }
 
+  // Validate phone — strip +91 prefix and spaces, must be 10 digits.
+  const phoneRaw = typeof body.phone === "string" ? body.phone.trim() : "";
+  const phoneDigits = phoneRaw.replace(/^\+91/, "").replace(/\s/g, "");
+  if (!PHONE_DIGITS_RE.test(phoneDigits)) {
+    return fail(400, "phone must be a valid 10-digit Indian number.", "phone");
+  }
+
   const makeDefault = body.make_default === true;
 
   // Resolve customer (creates stub if first interaction).
   const customerId = await resolveCustomer(phoneLocal);
   if (!customerId) {
     return fail(500, "Failed to resolve customer");
+  }
+
+  // Check for duplicate label (case-insensitive) for this customer.
+  const { data: dupeLabel } = await supabaseAdmin
+    .from("addresses")
+    .select("id")
+    .eq("customer_id", customerId)
+    .ilike("label", labelRaw)
+    .maybeSingle();
+  if (dupeLabel) {
+    return fail(
+      400,
+      `You already have an address labeled "${labelRaw}". Choose a different label.`,
+      "duplicate_label",
+    );
   }
 
   // Check existing address count.
@@ -213,6 +236,7 @@ export async function POST(req: NextRequest) {
       customer_id: customerId,
       label: labelRaw,
       full_name: fullName,
+      phone: phoneDigits,
       line1,
       area,
       city,
@@ -223,6 +247,14 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (insertErr || !inserted) {
+    // 23505 = unique_violation — label race condition between duplicate-check and insert.
+    if (insertErr?.code === "23505") {
+      return fail(
+        400,
+        `You already have an address labeled "${labelRaw}". Choose a different label.`,
+        "duplicate_label",
+      );
+    }
     console.error("[mobile/addresses POST] insert failed:", insertErr);
     return fail(500, "Failed to save address");
   }
