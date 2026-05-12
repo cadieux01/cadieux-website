@@ -1,6 +1,8 @@
 // /api/mobile/customer
 // GET: returns the verified phone's customer profile (or null if not yet created)
-// PATCH: updates name/email/photo/marketing_opt_in. Phone change disabled by design.
+// PATCH: updates name/email/marketing_opt_in. Phone change disabled by design.
+//        photo_url is deprecated — the app uses initials-only avatars. Sending
+//        photo_url in a PATCH body returns 400 not_allowed.
 //
 // Auth: X-App-Key (friction layer) + Authorization: Bearer <phone-verified token>.
 // All operations are scoped to the bearer's verified phone — no id param is
@@ -70,7 +72,7 @@ export async function GET(req: NextRequest) {
 type Patch = {
   full_name?: string;
   email?: string | null;
-  photo_url?: string | null;
+  // photo_url intentionally omitted — deprecated, not allowed via PATCH.
   marketing_opt_in?: boolean;
 };
 
@@ -88,10 +90,10 @@ function validatePatch(
   // Explicitly reject disallowed fields. Anything not in the whitelist is
   // forbidden — phone is the obvious one but we also block id/created_at/
   // city/address to keep this endpoint narrowly scoped.
+  // photo_url is intentionally excluded: initials are the final avatar design.
   const allowed = new Set([
     "full_name",
     "email",
-    "photo_url",
     "marketing_opt_in",
   ]);
   for (const k of Object.keys(r)) {
@@ -125,26 +127,6 @@ function validatePatch(
         return { ok: false, res: fail(400, "Invalid email.", "email") };
       }
       update.email = v;
-    }
-  }
-
-  if (r.photo_url !== undefined) {
-    if (r.photo_url === null) {
-      update.photo_url = null;
-    } else {
-      const v = String(r.photo_url).trim();
-      try {
-        const u = new URL(v);
-        if (u.protocol !== "http:" && u.protocol !== "https:") {
-          return {
-            ok: false,
-            res: fail(400, "Photo URL must be http(s).", "photo_url"),
-          };
-        }
-      } catch {
-        return { ok: false, res: fail(400, "Invalid photo URL.", "photo_url") };
-      }
-      update.photo_url = v;
     }
   }
 
