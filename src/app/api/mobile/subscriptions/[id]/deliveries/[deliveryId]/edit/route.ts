@@ -3,7 +3,7 @@
 //
 // Rules (mirror the web PATCH endpoint — minus Turnstile):
 //  - Delivery status must be pending_confirmation or confirmed.
-//  - Scheduled date must be ≥24h away.
+//  - Scheduled date must be ≥24h away (edit cutoff; placement cutoff is 12h, separate).
 //  - Rate-limited: 10 edits/day per phone (key: sub-edit:mobile:${phoneLocal}).
 //  - Body: { scheduled_date?, scheduled_time_slot? } — at least one required.
 //  - Ownership verified via customer_id FK (no phone fuzzy-match).
@@ -26,18 +26,18 @@ const supabaseAdmin = createClient(
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cadieux.in";
 
-// 14 one-hour slots from 06:00-07:00 to 19:00-20:00. Must stay in sync with
-// the setup wizard UI and the web edit endpoint.
+// 14 one-hour slots 06:00..19:00 (HH:MM start). Must stay in sync with
+// lib/timeSlots.ts in the mobile app and the web edit endpoint.
 const ALLOWED_TIME_SLOTS = new Set<string>(
   Array.from({ length: 14 }, (_, i) => {
     const h = 6 + i;
-    const a = String(h).padStart(2, "0");
-    const b = String(h + 1).padStart(2, "0");
-    return `${a}:00-${b}:00`;
+    return `${String(h).padStart(2, "0")}:00`;
   }),
 );
 
-const MS_DAY = 24 * 60 * 60 * 1000;
+// Edit cutoff: 24h (operational reroute window).
+// Placement cutoff (12h) is separate — see /api/mobile/subscriptions POST.
+const EDIT_GAP_MS = 24 * 60 * 60 * 1000;
 
 function fail(status: number, error: string, code?: string) {
   return NextResponse.json({ ok: false, error, code }, { status });
@@ -116,7 +116,7 @@ export async function POST(
   if (scheduledDate) {
     const d = parseDate(scheduledDate);
     if (!d) return fail(400, "Invalid scheduled_date.", "scheduled_date");
-    if (d.getTime() - Date.now() < MS_DAY - 1000) {
+    if (d.getTime() - Date.now() < EDIT_GAP_MS - 1000) {
       return fail(
         400,
         "New date must be at least 24 hours away.",
@@ -178,7 +178,7 @@ export async function POST(
 
   // 24h gate on the *current* scheduled date. Within 24h → use change-request.
   const currentDate = parseDate(delivery.scheduled_date);
-  if (!currentDate || currentDate.getTime() - Date.now() < MS_DAY - 1000) {
+  if (!currentDate || currentDate.getTime() - Date.now() < EDIT_GAP_MS - 1000) {
     return fail(
       400,
       "Within 24 hours of delivery — please send a change request for admin approval.",

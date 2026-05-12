@@ -79,6 +79,13 @@ const CAL_DAYS_AHEAD_MAX = 90;
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// Placement gap: slot must be at least 12 h from now (bake + ship lead time).
+// NOTE: This is for NEW order placement. The edit cutoff (24 h) is separate
+// and lives in /api/mobile/subscriptions/[id]/deliveries/[deliveryId]/edit.
+const PLACEMENT_GAP_MS = 12 * 60 * 60 * 1000;
+// IST is UTC+5:30. Used for IST-aware slot-start calculation.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
 type DeliveryAddress = {
   line1: string;
   area: string;
@@ -427,6 +434,24 @@ function validateCalendarShape(
         code: "deliveries",
       };
     }
+
+    // Placement gap: slot start (IST) must be ≥12 h from now.
+    // Parse time_slot 'HH:MM' and compute IST epoch ms for that slot.
+    const [slotH, slotM] = (d.time_slot as string).split(":").map(Number);
+    const [yyyy, moPart, dayPart] = (d.date as string).split("-").map(Number);
+    // IST midnight of the date = UTC midnight - IST_OFFSET_MS
+    const istSlotStartMs =
+      Date.UTC(yyyy, moPart - 1, dayPart) - IST_OFFSET_MS +
+      slotH * 3600_000 + slotM * 60_000;
+    if (istSlotStartMs - Date.now() < PLACEMENT_GAP_MS) {
+      return {
+        ok: false,
+        status: 400,
+        error: `deliveries[${i}].time_slot is too soon — allow at least 12 hours for baking and shipping.`,
+        code: "placement_gap",
+      };
+    }
+
     seenDates.add(d.date);
     parsed.push({ date: d.date, time_slot: d.time_slot });
   }
