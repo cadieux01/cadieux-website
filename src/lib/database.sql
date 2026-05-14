@@ -12,13 +12,19 @@ CREATE TABLE customers (
 );
 
 -- Orders
+-- Cancellation columns (cancelled_at, cancellation_reason, refund_status)
+-- support the 1-hour customer-cancel window. See
+-- src/lib/order-cancellation.ts and /api/mobile/orders/[id]/cancel.
 CREATE TABLE orders (
-  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id      UUID REFERENCES customers(id),
-  total_amount     DECIMAL(10, 2),
-  status           TEXT DEFAULT 'pending',
-  delivery_address TEXT,
-  created_at       TIMESTAMPTZ DEFAULT now()
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id         UUID REFERENCES customers(id),
+  total_amount        DECIMAL(10, 2),
+  status              TEXT DEFAULT 'pending',
+  delivery_address    TEXT,
+  created_at          TIMESTAMPTZ DEFAULT now(),
+  cancelled_at        TIMESTAMPTZ,
+  cancellation_reason TEXT,
+  refund_status       TEXT CHECK (refund_status IN ('pending', 'processed', 'failed'))
 );
 
 -- Blog Posts

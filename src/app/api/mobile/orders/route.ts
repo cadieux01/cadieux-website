@@ -62,7 +62,9 @@ export async function GET(req: NextRequest) {
   // Fetch orders.
   const { data: orders, error: ordersErr } = await supabaseAdmin
     .from("orders")
-    .select("id, total_amount, status, delivery_address, items, created_at")
+    .select(
+      "id, total_amount, status, delivery_address, items, created_at, cancelled_at, cancellation_reason, refund_status",
+    )
     .eq("customer_id", customer.id)
     .order("created_at", { ascending: false })
     .limit(50);
