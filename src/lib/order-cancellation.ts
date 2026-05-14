@@ -11,8 +11,12 @@
 /** Minutes from `orders.created_at` during which a full refund is allowed. */
 export const CANCELLATION_WINDOW_MINUTES = 60;
 
-/** Order statuses where a customer cancel is still permitted. */
+/** Order statuses where a customer cancel is still permitted.
+ *  `pending_payment` is included so a customer who abandoned the payment
+ *  step can free up the placeholder order. No refund is needed in that
+ *  case — see the cancel route, which nulls refund_status accordingly. */
 export const CANCELLABLE_STATUSES: ReadonlySet<string> = new Set([
+  "pending_payment",
   "paid",
   "confirmed",
 ]);

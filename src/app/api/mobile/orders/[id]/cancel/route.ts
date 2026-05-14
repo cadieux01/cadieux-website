@@ -136,14 +136,18 @@ export async function POST(
   }
 
   // ----- 6. Update -----
+  // pending_payment orders never received a payment, so there is nothing to
+  // refund — leave refund_status null. paid/confirmed orders captured money
+  // (Razorpay or COD authorisation) and therefore enter the refund queue.
   const nowIso = new Date().toISOString();
+  const requiresRefund = order.status !== "pending_payment";
   const { data: updated, error: updateErr } = await supabaseAdmin
     .from("orders")
     .update({
       status: "cancelled",
       cancelled_at: nowIso,
       cancellation_reason: reason,
-      refund_status: "pending",
+      refund_status: requiresRefund ? "pending" : null,
     })
     .eq("id", orderId)
     .eq("customer_id", customer.id)
@@ -174,7 +178,8 @@ export async function POST(
   return NextResponse.json({
     ok: true,
     order: updated,
-    message:
-      "Order cancelled. Refund will be processed within 5-7 business days.",
+    message: requiresRefund
+      ? "Order cancelled. Refund will be processed within 5-7 business days."
+      : "Order cancelled. No payment was captured, so no refund is needed.",
   });
 }
