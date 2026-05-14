@@ -781,6 +781,50 @@ export default function PageContent() {
                   paddingBottom: 2,
                 }}
               >@cadieuxindia</a>
+
+              {/* ── Legal links ──
+                  Five required policy pages. Each routes to a server-rendered
+                  page that embeds the cleaned Termly HTML. Kept compact and
+                  centred so the footer height grows by only one row on mobile. */}
+              <div
+                style={{
+                  marginTop: 18,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  gap: "0.4rem 1.1rem",
+                }}
+              >
+                <span style={{
+                  width: "100%",
+                  fontSize: 9, letterSpacing: "0.35em", textTransform: "uppercase",
+                  color: "rgba(200,144,58,0.65)",
+                  marginBottom: 4,
+                }}>Legal</span>
+                {[
+                  ["Privacy Policy", "/privacy-policy"],
+                  ["Cookie Policy", "/cookies"],
+                  ["Terms", "/terms"],
+                  ["Returns", "/refunds"],
+                  ["Shipping", "/shipping"],
+                ].map(([label, href]) => (
+                  <a
+                    key={href}
+                    href={href}
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: 10,
+                      fontWeight: 300,
+                      letterSpacing: "0.18em",
+                      textTransform: "uppercase",
+                      color: "rgba(251,243,212,0.55)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
             </div>
           </section>
 
