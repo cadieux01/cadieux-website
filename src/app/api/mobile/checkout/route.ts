@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey, maskPhone } from "@/lib/phone-cookie";
 import {
+  DELIVERY_FEE_INR,
   reconcilePrices,
   toLocal10,
   validateOrderBodyShape,
@@ -150,11 +151,18 @@ export async function POST(req: NextRequest) {
   }
 
   // 7. Insert the order with the items snapshot + server-computed total.
+  // Total stored in orders.total_amount is inclusive of the flat delivery
+  // fee — that's the amount we charge and the amount the order screens
+  // display.
+  const subtotal = reconciled.total;
+  const deliveryFee = DELIVERY_FEE_INR;
+  const grandTotal = subtotal + deliveryFee;
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
     .insert({
       customer_id: customerId,
-      total_amount: reconciled.total,
+      total_amount: grandTotal,
+      delivery_fee: deliveryFee,
       status: "pending_payment",
       delivery_address: addressString,
       items: reconciled.items,
@@ -181,7 +189,7 @@ export async function POST(req: NextRequest) {
         phone: phoneLocal,
         name: fullName,
         orderId: order.id,
-        total: reconciled.total,
+        total: grandTotal,
         address: addressString,
       }),
     }),
@@ -193,7 +201,7 @@ export async function POST(req: NextRequest) {
   const waMessage =
     `Hi ${fullName || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
     `Order ID: ${shortId}\n` +
-    `Total: ₹${reconciled.total}\n` +
+    `Total: ₹${grandTotal}\n` +
     `Delivery to: ${addressString}\n\n` +
     `We will confirm your order shortly. Thank you for choosing Cadieux!`;
   fireAndForget(
@@ -209,7 +217,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     order_id: order.id,
-    total_amount_inr: reconciled.total,
+    subtotal_inr: subtotal,
+    delivery_fee_inr: deliveryFee,
+    total_amount_inr: grandTotal,
     items_summary: reconciled.itemsSummary,
   });
 }

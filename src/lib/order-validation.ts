@@ -5,6 +5,13 @@
 // client-supplied total_amount). Pure functions, no I/O — the caller
 // is responsible for fetching products and customer rows.
 
+// Flat delivery fee added to every order. No free-delivery threshold.
+// Mirrors the website's "Standard delivery — ₹50" line in the Shipping
+// Policy. Treated as the source of truth for both /api/checkout and
+// /api/mobile/checkout so the stored orders.total_amount and the
+// payment-gateway charge always agree.
+export const DELIVERY_FEE_INR = 50;
+
 export type ClientOrderItem = {
   product_id: string;
   quantity: number;

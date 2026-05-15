@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
+import { DELIVERY_FEE_INR } from "@/lib/order-validation";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -122,6 +123,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
+    // Client sends the items subtotal; server adds the flat delivery fee
+    // so the stored orders.total_amount always matches the Razorpay charge.
+    const subtotal = Number(total_amount);
+    const deliveryFee = DELIVERY_FEE_INR;
+    const grandTotal = subtotal + deliveryFee;
+
     // Server-side OTP enforcement: cookie OR mobile bearer token must be
     // present, valid, unexpired, and its phone must match the customer's
     // stored phone.
@@ -157,7 +164,13 @@ export async function POST(req: NextRequest) {
 
     const { data: order, error } = await supabaseAdmin
       .from("orders")
-      .insert({ customer_id, total_amount, delivery_address, status: "pending" })
+      .insert({
+        customer_id,
+        total_amount: grandTotal,
+        delivery_fee: deliveryFee,
+        delivery_address,
+        status: "pending",
+      })
       .select("id")
       .single();
 
@@ -169,8 +182,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("✅ Order created:", { order_id: order.id, customer_id, total_amount });
-    return NextResponse.json({ order_id: order.id });
+    console.log("✅ Order created:", { order_id: order.id, customer_id, total_amount: grandTotal });
+    return NextResponse.json({ order_id: order.id, total_amount: grandTotal });
   }
 
   if (body.action === "place_subscription") {

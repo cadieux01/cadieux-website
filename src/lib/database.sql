@@ -18,7 +18,8 @@ CREATE TABLE customers (
 CREATE TABLE orders (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id         UUID REFERENCES customers(id),
-  total_amount        DECIMAL(10, 2),
+  total_amount        DECIMAL(10, 2),   -- inclusive of delivery_fee
+  delivery_fee        DECIMAL(10, 2) NOT NULL DEFAULT 50,
   status              TEXT DEFAULT 'pending',
   delivery_address    TEXT,
   created_at          TIMESTAMPTZ DEFAULT now(),

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { PRODUCTS, type CartItem } from "@/lib/data";
+import { DELIVERY_FEE_INR } from "@/lib/order-validation";
 import TurnstileWidget, { type TurnstileHandle } from "./TurnstileWidget";
 export type { CartItem } from "@/lib/data";
 
@@ -76,6 +77,11 @@ export default function CheckoutModal({
   onClose: () => void;
   onOrderPlaced: () => void;
 }) {
+  // `total` is the items subtotal; we charge customers — and store on the
+  // order — the inclusive grand total below.
+  const deliveryFee = DELIVERY_FEE_INR;
+  const grandTotal = total + deliveryFee;
+
   const [step, setStep] = useState<Step>("form");
   const [formMode, setFormMode] = useState<FormMode>("fresh");
 
@@ -262,7 +268,7 @@ export default function CheckoutModal({
           phone: resolvedPhone,
           name: customerName || "Customer",
           orderId,
-          total,
+          total: grandTotal,
           address: deliveryAddress,
         }),
       });
@@ -279,7 +285,7 @@ export default function CheckoutModal({
     const message =
       `Hi ${customerName || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
       `Order ID: ${shortId}\n` +
-      `Total: ₹${total}\n` +
+      `Total: ₹${grandTotal}\n` +
       `Delivery to: ${deliveryAddress}\n\n` +
       `We will confirm your order shortly. Thank you for choosing Cadieux!`;
     try {
@@ -420,7 +426,7 @@ export default function CheckoutModal({
     try {
       const res = await fetch("/api/create-order", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: total * 100 }),
+        body: JSON.stringify({ amount: grandTotal * 100 }),
       });
       if (!res.ok) {
         setError("Online payment unavailable. Please use Cash on Delivery.");
@@ -451,7 +457,7 @@ export default function CheckoutModal({
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount: total * 100,
+        amount: grandTotal * 100,
         currency: "INR",
         name: "Cadieux",
         description: "Protein Bread",
@@ -569,9 +575,15 @@ export default function CheckoutModal({
                       <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4" }}>₹{item.price * item.qty}</span>
                     </div>
                   ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(240,223,200,0.07)", padding: "11px 0" }}>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(240,223,200,0.65)", letterSpacing: "0.03em" }}>
+                      Delivery fee
+                    </span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#FBF3D4" }}>₹{deliveryFee}</span>
+                  </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid rgba(240,223,200,0.12)", paddingTop: 12, marginTop: 4 }}>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>Total (Incl. GST)</span>
-                    <span style={{ fontFamily: "var(--font-heading)", fontSize: 27, fontWeight: 300, color: "#FBF3D4" }}>₹{total}</span>
+                    <span style={{ fontFamily: "var(--font-heading)", fontSize: 27, fontWeight: 300, color: "#FBF3D4" }}>₹{grandTotal}</span>
                   </div>
                 </div>
 
@@ -897,7 +909,10 @@ export default function CheckoutModal({
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                     <div>
                       <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(240,223,200,0.35)" }}>Order Total</p>
-                      <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: 29, fontWeight: 300, color: "#FBF3D4" }}>₹{total}</p>
+                      <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: 29, fontWeight: 300, color: "#FBF3D4" }}>₹{grandTotal}</p>
+                      <p style={{ margin: "4px 0 0", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.04em", color: "rgba(240,223,200,0.4)" }}>
+                        Includes ₹{deliveryFee} delivery
+                      </p>
                     </div>
                   </div>
                   <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.5)", letterSpacing: "0.03em" }}>
