@@ -11,6 +11,7 @@
 // note in /api/mobile/verify/send.
 
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import {
   MOBILE_TOKEN_TTL_MS,
   isValidMobileAppKey,
@@ -21,6 +22,16 @@ import {
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID ?? "";
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN ?? "";
 const SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE_SID ?? "";
+
+// Admin client used to stamp age_verified_at on the customer row when
+// the user ticks the 18+ confirmation during OTP verification. RLS is
+// bypassed by design — this endpoint is server-only and the upsert
+// touches a single row matched on the just-verified phone number.
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  { auth: { autoRefreshToken: false, persistSession: false } },
+);
 
 export async function POST(req: NextRequest) {
   if (!process.env.MOBILE_APP_KEY) {
@@ -41,10 +52,21 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const phone = String(body.phone ?? "");
   const code = String(body.code ?? "").replace(/\D/g, "");
+  const ageVerified = body.age_verified === true;
 
   if (!phone || !code) {
     return NextResponse.json(
       { ok: false, error: "Missing fields" },
+      { status: 400 }
+    );
+  }
+  if (!ageVerified) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Please confirm you are 18 years or older to continue.",
+        code: "age_not_verified",
+      },
       { status: 400 }
     );
   }
@@ -75,6 +97,36 @@ export async function POST(req: NextRequest) {
         { ok: false, error: "Invalid code." },
         { status: 401 }
       );
+    }
+
+    // Stamp age_verified_at on the customer record once the OTP is approved.
+    // - Match by the 10-digit local phone (same format used elsewhere).
+    // - Insert a minimal row if none exists; otherwise only set the timestamp
+    //   when it's still null so we keep the original confirmation date.
+    // - Non-fatal: failure here doesn't block sign-in. The order-placement
+    //   path will create / update the row again with full_name + city.
+    const phoneLocal = to.replace(/^\+?91/, "").replace(/\D/g, "");
+    if (phoneLocal.length === 10) {
+      try {
+        const { data: existing } = await supabaseAdmin
+          .from("customers")
+          .select("id, age_verified_at")
+          .eq("phone", phoneLocal)
+          .maybeSingle();
+
+        if (!existing) {
+          await supabaseAdmin
+            .from("customers")
+            .insert({ phone: phoneLocal, age_verified_at: new Date().toISOString() });
+        } else if (!existing.age_verified_at) {
+          await supabaseAdmin
+            .from("customers")
+            .update({ age_verified_at: new Date().toISOString() })
+            .eq("id", existing.id);
+        }
+      } catch (e) {
+        console.error("[mobile/verify/check] age_verified_at upsert failed:", e);
+      }
     }
 
     const exp = Date.now() + MOBILE_TOKEN_TTL_MS;

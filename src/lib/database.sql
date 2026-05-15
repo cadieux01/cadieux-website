@@ -3,12 +3,13 @@
 
 -- Customers
 CREATE TABLE customers (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email         TEXT UNIQUE,
-  full_name     TEXT,
-  phone         TEXT,
-  city          TEXT,
-  created_at    TIMESTAMPTZ DEFAULT now()
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email             TEXT UNIQUE,
+  full_name         TEXT,
+  phone             TEXT,
+  city              TEXT,
+  age_verified_at   TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ DEFAULT now()
 );
 
 -- Orders
