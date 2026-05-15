@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { notifyCustomer } from "@/lib/push";
 
 const ALLOWED_STATUSES = new Set([
   "pending",
@@ -8,6 +9,27 @@ const ALLOWED_STATUSES = new Set([
   "delivered",
   "cancelled",
 ]);
+
+// Customer-facing copy for the four push-triggering status transitions.
+// Kept here (not in lib/push) because the wording is admin-flow specific.
+const STATUS_PUSH_COPY: Record<string, { title: string; body: string }> = {
+  confirmed: {
+    title: "Order confirmed",
+    body: "Your bread is being prepared.",
+  },
+  dispatched: {
+    title: "On the way",
+    body: "Your order is on the way!",
+  },
+  delivered: {
+    title: "Delivered",
+    body: "Your bread has been delivered. Enjoy!",
+  },
+  cancelled: {
+    title: "Order cancelled",
+    body: "Your order has been cancelled.",
+  },
+};
 
 export async function PATCH(
   req: NextRequest,
@@ -40,14 +62,33 @@ export async function PATCH(
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
+  const { data: updated, error } = await supabaseAdmin
     .from("orders")
     .update(update)
-    .eq("id", params.id);
+    .eq("id", params.id)
+    .select("id, customer_id, status")
+    .maybeSingle();
 
   if (error) {
     console.error("[admin/orders update]", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Fire-and-forget push on a status transition we have copy for.
+  // notifyCustomer never throws and never blocks — the admin gets their
+  // 200 immediately regardless of push latency or token validity.
+  if (
+    updated?.customer_id &&
+    typeof update.status === "string" &&
+    STATUS_PUSH_COPY[update.status]
+  ) {
+    const copy = STATUS_PUSH_COPY[update.status];
+    notifyCustomer(updated.customer_id, copy.title, copy.body, {
+      kind: "order_status",
+      order_id: updated.id,
+      status: updated.status,
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,10 @@
 -- Run this in: Supabase Dashboard → SQL Editor → New Query → paste → Run
 
 -- Customers
+-- push_token is the Expo push token (ExponentPushToken[xxx]) the mobile
+-- app registers on each launch. One token per customer — re-registration
+-- overwrites any previous value. Cleared by the server when Expo reports
+-- the token is invalid/expired (DeviceNotRegistered).
 CREATE TABLE customers (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email             TEXT UNIQUE,
@@ -9,8 +13,12 @@ CREATE TABLE customers (
   phone             TEXT,
   city              TEXT,
   age_verified_at   TIMESTAMPTZ,
+  push_token        TEXT,
   created_at        TIMESTAMPTZ DEFAULT now()
 );
+
+-- Migration for existing deployments (run once):
+-- ALTER TABLE customers ADD COLUMN IF NOT EXISTS push_token TEXT;
 
 -- Orders
 -- Cancellation columns (cancelled_at, cancellation_reason, refund_status)

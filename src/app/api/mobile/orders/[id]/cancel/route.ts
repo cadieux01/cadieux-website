@@ -27,6 +27,7 @@ import {
   CANCELLABLE_STATUSES,
   isWithinCancellationWindow,
 } from "@/lib/order-cancellation";
+import { notifyCustomer } from "@/lib/push";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -174,6 +175,16 @@ export async function POST(
     orderId,
     phone: maskPhone(phoneLocal),
   });
+
+  // Confirmation push to the same device that initiated the cancel. Some
+  // users will dismiss the in-app success toast immediately, so a system
+  // notification gives them a durable receipt.
+  notifyCustomer(
+    customer.id,
+    "Order cancelled",
+    "Your order has been cancelled.",
+    { kind: "order_status", order_id: orderId, status: "cancelled" },
+  );
 
   return NextResponse.json({
     ok: true,
