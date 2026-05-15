@@ -157,6 +157,25 @@ export async function POST(req: NextRequest) {
   const subtotal = reconciled.total;
   const deliveryFee = DELIVERY_FEE_INR;
   const grandTotal = subtotal + deliveryFee;
+
+  // Defense-in-depth: if the client volunteered its expected grand total,
+  // reject any drift. reconcilePrices already catches per-line tampering;
+  // this catches the case where the client computed the total wrongly or
+  // tried to short-pay relative to the items it sent.
+  const clientTotal = (raw as { total_amount_inr?: unknown })?.total_amount_inr;
+  if (clientTotal !== undefined && clientTotal !== null) {
+    const clientTotalNum = Number(clientTotal);
+    if (!Number.isFinite(clientTotalNum) || clientTotalNum !== grandTotal) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Price mismatch — please refresh and retry",
+          code: "price_mismatch",
+        },
+        { status: 400 },
+      );
+    }
+  }
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
     .insert({

@@ -3,7 +3,12 @@ import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
-import { DELIVERY_FEE_INR } from "@/lib/order-validation";
+import {
+  DELIVERY_FEE_INR,
+  reconcileWebPrices,
+  validateWebOrderItemsShape,
+  type WebProductRow,
+} from "@/lib/order-validation";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -119,15 +124,9 @@ export async function POST(req: NextRequest) {
 
   if (body.action === "place_order") {
     const { customer_id, delivery_address, total_amount } = body;
-    if (!delivery_address || !total_amount) {
+    if (!delivery_address || total_amount === undefined || total_amount === null) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
-
-    // Client sends the items subtotal; server adds the flat delivery fee
-    // so the stored orders.total_amount always matches the Razorpay charge.
-    const subtotal = Number(total_amount);
-    const deliveryFee = DELIVERY_FEE_INR;
-    const grandTotal = subtotal + deliveryFee;
 
     // Server-side OTP enforcement: cookie OR mobile bearer token must be
     // present, valid, unexpired, and its phone must match the customer's
@@ -143,6 +142,58 @@ export async function POST(req: NextRequest) {
     if (!customer_id) {
       return NextResponse.json({ error: "Missing customer." }, { status: 400 });
     }
+
+    // Validate items shape — the client must declare what's in the cart so
+    // we can re-derive prices from the products table. Never trust the
+    // client-supplied total_amount.
+    const itemsShape = validateWebOrderItemsShape(body.items);
+    if (!itemsShape.ok) {
+      return NextResponse.json(
+        { error: itemsShape.error, code: itemsShape.code },
+        { status: itemsShape.status }
+      );
+    }
+
+    // Fetch authoritative product rows for every slug in the cart.
+    const slugs = Array.from(new Set(itemsShape.items.map((i) => i.slug)));
+    const { data: productRows, error: productsErr } = await supabaseAdmin
+      .from("products")
+      .select("slug, name, price_inr, is_active")
+      .in("slug", slugs);
+    if (productsErr) {
+      console.error("[checkout] products fetch failed:", productsErr);
+      return NextResponse.json(
+        { error: "Failed to validate cart" },
+        { status: 500 }
+      );
+    }
+
+    const reconciled = reconcileWebPrices(
+      itemsShape.items,
+      (productRows ?? []) as WebProductRow[],
+    );
+    if (!reconciled.ok) {
+      return NextResponse.json(
+        { error: reconciled.error, code: reconciled.code },
+        { status: reconciled.status }
+      );
+    }
+
+    // The client sends its idea of the subtotal in `total_amount` — we
+    // compare to the server-computed subtotal and reject any drift.
+    const clientSubtotal = Number(total_amount);
+    if (!Number.isFinite(clientSubtotal) || clientSubtotal !== reconciled.subtotal) {
+      return NextResponse.json(
+        {
+          error: "Price mismatch — please refresh and retry",
+          code: "price_mismatch",
+        },
+        { status: 400 }
+      );
+    }
+
+    const deliveryFee = DELIVERY_FEE_INR;
+    const grandTotal = reconciled.subtotal + deliveryFee;
 
     const { data: cust } = await supabaseAdmin
       .from("customers")

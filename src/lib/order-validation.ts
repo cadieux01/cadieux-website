@@ -289,3 +289,138 @@ export function reconcilePrices(
 export function toLocal10(phoneE164: string): string {
   return phoneE164.replace(/^\+?91/, "").replace(/\D/g, "");
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Web place_order validators (legacy /api/checkout).
+//
+// The legacy route used to trust client `total_amount` outright — a bad
+// actor could pay ₹1 for a ₹99 loaf. The fix below mirrors the mobile
+// route: clients must send `items` with slug + quantity, server fetches
+// authoritative prices from the products table, recomputes the subtotal,
+// and rejects on mismatch.
+//
+// Web carts can mix one-time products with subscriptions. We only run a
+// strict per-line price check on `kind: "once"` items (those map 1:1 to
+// products.price_inr). For `kind: "sub"` we trust the client-supplied
+// line total here and defer to place_subscription's own validation —
+// subscription pricing is a function of weeks/days which doesn't fit the
+// "price × quantity" model.
+
+export type ClientWebOrderItem = {
+  slug: string;
+  quantity: number;
+  kind: "once" | "sub";
+  line_total_inr: number;
+};
+
+const SLUG_RE = /^[a-z0-9-]{1,64}$/;
+
+/**
+ * Shape-and-bounds check on the `items` array the web client now sends
+ * to /api/checkout?action=place_order. Pure — no DB access.
+ */
+export function validateWebOrderItemsShape(
+  raw: unknown,
+):
+  | { ok: true; items: ClientWebOrderItem[] }
+  | ValidationFailure {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return fail(400, "items must be a non-empty array.", "items");
+  }
+  if (raw.length > ITEMS_MAX) {
+    return fail(400, `Cart exceeds ${ITEMS_MAX} line items.`, "items_too_many");
+  }
+  const items: ClientWebOrderItem[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const row = raw[i] as Record<string, unknown> | null;
+    if (!row || typeof row !== "object") {
+      return fail(400, `items[${i}] is invalid.`, "items");
+    }
+    if (!isString(row.slug) || !SLUG_RE.test(row.slug)) {
+      return fail(400, `items[${i}].slug is invalid.`, "items");
+    }
+    if (
+      !isFiniteNumber(row.quantity) ||
+      !Number.isInteger(row.quantity) ||
+      row.quantity < QTY_MIN ||
+      row.quantity > QTY_MAX
+    ) {
+      return fail(
+        400,
+        `items[${i}].quantity must be an integer between ${QTY_MIN} and ${QTY_MAX}.`,
+        "items",
+      );
+    }
+    if (row.kind !== "once" && row.kind !== "sub") {
+      return fail(400, `items[${i}].kind must be "once" or "sub".`, "items");
+    }
+    if (
+      !isFiniteNumber(row.line_total_inr) ||
+      row.line_total_inr < 0
+    ) {
+      return fail(
+        400,
+        `items[${i}].line_total_inr must be a non-negative number.`,
+        "items",
+      );
+    }
+    items.push({
+      slug: row.slug,
+      quantity: row.quantity,
+      kind: row.kind,
+      line_total_inr: row.line_total_inr,
+    });
+  }
+  return { ok: true, items };
+}
+
+export type WebProductRow = {
+  slug: string;
+  name: string;
+  price_inr: number;
+  is_active: boolean;
+};
+
+export type WebReconcileSuccess = {
+  ok: true;
+  subtotal: number;
+};
+
+/**
+ * Server-side price recheck for web orders. For every `once` line, asserts
+ * `product.price_inr * quantity === line_total_inr`. For `sub` lines, the
+ * slug must exist + be active but we don't validate the line total here
+ * (see comment block above). Returns the server-trusted subtotal.
+ */
+export function reconcileWebPrices(
+  items: ClientWebOrderItem[],
+  products: WebProductRow[],
+): WebReconcileSuccess | ValidationFailure {
+  const productBySlug = new Map(products.map((p) => [p.slug, p]));
+  let subtotal = 0;
+  for (const item of items) {
+    const product = productBySlug.get(item.slug);
+    if (!product || !product.is_active) {
+      return fail(
+        400,
+        `Product unavailable: ${item.slug}`,
+        "product_unavailable",
+      );
+    }
+    if (item.kind === "once") {
+      const expected = product.price_inr * item.quantity;
+      if (expected !== item.line_total_inr) {
+        return fail(
+          400,
+          `Price mismatch: ${item.slug} — please refresh and retry`,
+          "price_mismatch",
+        );
+      }
+      subtotal += expected;
+    } else {
+      // sub — trust the client line total, validated elsewhere.
+      subtotal += item.line_total_inr;
+    }
+  }
+  return { ok: true, subtotal };
+}

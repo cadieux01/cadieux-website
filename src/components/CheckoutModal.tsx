@@ -82,6 +82,16 @@ export default function CheckoutModal({
   const deliveryFee = DELIVERY_FEE_INR;
   const grandTotal = total + deliveryFee;
 
+  // Snapshot of cart for the place_order body. Server re-derives every
+  // `once` line price from the products table and rejects on mismatch,
+  // so a tampered client price gets a 400 price_mismatch.
+  const orderItems = cart.map((c) => ({
+    slug: PRODUCTS[c.productIndex].slug,
+    quantity: c.qty,
+    kind: c.orderType,
+    line_total_inr: c.price * c.qty,
+  }));
+
   const [step, setStep] = useState<Step>("form");
   const [formMode, setFormMode] = useState<FormMode>("fresh");
 
@@ -392,6 +402,7 @@ export default function CheckoutModal({
           customer_id: customer?.id,
           delivery_address: fullAddress,
           total_amount: total,
+          items: orderItems,
           turnstileToken,
         }),
       });
@@ -471,6 +482,7 @@ export default function CheckoutModal({
               customer_id: customer?.id,
               delivery_address: fullAddress,
               total_amount: total,
+              items: orderItems,
               turnstileToken,
             }),
           });
