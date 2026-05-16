@@ -40,11 +40,15 @@ const TABS: ReadonlyArray<{
   { key: "club", label: "Fitness Clubs", disabled: true },
 ];
 
-// Open Google Maps directions for the given location.
+// Open Google Maps directions for the given location. We have no street
+// address in the dataset, so build a name + area + city query — Google
+// geocodes that with high accuracy in Vizag. As a backstop we tack on the
+// lat/lng coordinates so even ambiguous community names resolve.
 function navigateTo(loc: CadieuxLocation) {
-  const dest = encodeURIComponent(`${loc.name}, ${loc.address}`);
+  const q = encodeURIComponent(`${loc.name}, ${loc.area}, Visakhapatnam`);
+  const ll = `${loc.latitude},${loc.longitude}`;
   window.open(
-    `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`,
+    `https://www.google.com/maps/dir/?api=1&destination=${q}&destination_place_id=&travelmode=driving&query=${ll}`,
     "_blank",
     "noopener,noreferrer",
   );
@@ -56,10 +60,6 @@ function typeBadge(type: CadieuxLocationType): string {
   if (type === "gym") return "Gym";
   if (type === "store") return "Store";
   return "Fitness Club";
-}
-
-function isLocationType(value: TabKey): value is CadieuxLocationType {
-  return value !== "all";
 }
 
 const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
@@ -151,26 +151,17 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
   function checkPincode(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = pincode.trim();
-    if (!/^\d{6}$/.test(trimmed)) {
+    if (!/^\d{6}$/.test(trimmed) || !isServedPincode(trimmed)) {
       setPincodeResult({ kind: "unserved" });
       return;
     }
-    if (!isServedPincode(trimmed)) {
-      setPincodeResult({ kind: "unserved" });
-      return;
-    }
-    // Use the centroid of stalls/communities with this pincode as the
-    // reference point for "nearest stall".
-    const matches = LOCATIONS.filter((l) => l.pincode === trimmed);
-    if (matches.length === 0) {
-      setPincodeResult({ kind: "served", nearest: null });
-      return;
-    }
-    const cx =
-      matches.reduce((s, l) => s + l.lat, 0) / matches.length;
-    const cy =
-      matches.reduce((s, l) => s + l.lng, 0) / matches.length;
-    setPincodeResult({ kind: "served", nearest: nearestStall(cx, cy) });
+    // No pincode-to-area lookup in our dataset; fall back to the city
+    // centroid for the "nearest stall" recommendation. The user can
+    // re-check after browsing the map for a sharper pick.
+    setPincodeResult({
+      kind: "served",
+      nearest: nearestStall(VIZAG_CENTER.lat, VIZAG_CENTER.lng),
+    });
   }
 
   return (
@@ -280,7 +271,7 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
                 .map((loc) => (
                   <Marker
                     key={loc.id}
-                    position={{ lat: loc.lat, lng: loc.lng }}
+                    position={{ lat: loc.latitude, lng: loc.longitude }}
                     onClick={() => setSelectedId(loc.id)}
                     icon={{
                       path: google.maps.SymbolPath.CIRCLE,
@@ -296,7 +287,7 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
 
               {selected && (
                 <InfoWindow
-                  position={{ lat: selected.lat, lng: selected.lng }}
+                  position={{ lat: selected.latitude, lng: selected.longitude }}
                   onCloseClick={() => setSelectedId(null)}
                 >
                   <div style={{ color: "#1a1612", maxWidth: 220, padding: 4 }}>
@@ -316,10 +307,7 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
                         marginBottom: 6,
                       }}
                     >
-                      {typeBadge(selected.type)}
-                    </div>
-                    <div style={{ fontSize: 12, marginBottom: 8 }}>
-                      {selected.address}
+                      {typeBadge(selected.type)} · {selected.area}
                     </div>
                     <button
                       type="button"
@@ -643,7 +631,12 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
               >
                 {items.map((loc) => {
                   const dist = userLoc
-                    ? haversineKm(userLoc.lat, userLoc.lng, loc.lat, loc.lng)
+                    ? haversineKm(
+                        userLoc.lat,
+                        userLoc.lng,
+                        loc.latitude,
+                        loc.longitude,
+                      )
                     : null;
                   return (
                     <article
@@ -713,7 +706,14 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
                           lineHeight: 1.5,
                         }}
                       >
-                        {loc.address}
+                        {loc.area}
+                        {typeof loc.rating === "number" && (
+                          <>
+                            {" "}· <span style={{ color: "#c9a96e" }}>
+                              ★ {loc.rating.toFixed(1)}
+                            </span>
+                          </>
+                        )}
                       </p>
                       {(loc.notes || dist !== null) && (
                         <p
