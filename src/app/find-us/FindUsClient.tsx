@@ -6,6 +6,7 @@ import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-map
 
 import {
   COMMUNITY_COUNT,
+  GYM_COUNT,
   LOCATIONS,
   STALL_COUNT,
   ZONES,
@@ -20,7 +21,17 @@ import {
 const GOLD_RGB = "201,169,110";
 const GREEN_HEX = "#2F6A3A"; // stall pin
 const GOLD_HEX = "#C9A96E"; // community pin
+const BLUE_HEX = "#3b82f6"; // gym pin
 const VIZAG_CENTER = { lat: 17.74, lng: 83.30 };
+
+// Map a location type to its marker fill colour. Centralising this keeps
+// the legend + map + per-card badge in sync.
+function pinColorFor(type: CadieuxLocationType): string {
+  if (type === "stall") return GREEN_HEX;
+  if (type === "community") return GOLD_HEX;
+  if (type === "gym") return BLUE_HEX;
+  return GOLD_HEX;
+}
 
 // Tab definitions. Disabled tabs render but are not clickable — they signal
 // upcoming categories without breaking the layout.
@@ -32,10 +43,10 @@ const TABS: ReadonlyArray<{
   count?: number;
   disabled?: boolean;
 }> = [
-  { key: "all", label: "All", count: STALL_COUNT + COMMUNITY_COUNT },
+  { key: "all", label: "All", count: STALL_COUNT + COMMUNITY_COUNT + GYM_COUNT },
   { key: "stall", label: "Stalls", count: STALL_COUNT },
   { key: "community", label: "Gated Communities", count: COMMUNITY_COUNT },
-  { key: "gym", label: "Gyms", disabled: true },
+  { key: "gym", label: "Gyms", count: GYM_COUNT },
   { key: "store", label: "Stores", disabled: true },
   { key: "club", label: "Fitness Clubs", disabled: true },
 ];
@@ -267,7 +278,12 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
               onClick={() => setSelectedId(null)}
             >
               {filtered
-                .filter((l) => l.type === "stall" || l.type === "community")
+                .filter(
+                  (l) =>
+                    l.type === "stall" ||
+                    l.type === "community" ||
+                    l.type === "gym",
+                )
                 .map((loc) => (
                   <Marker
                     key={loc.id}
@@ -275,9 +291,10 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
                     onClick={() => setSelectedId(loc.id)}
                     icon={{
                       path: google.maps.SymbolPath.CIRCLE,
+                      // Stalls are first-class — slightly larger pins so they
+                      // pop visually against the denser gym/community dots.
                       scale: loc.type === "stall" ? 9 : 6,
-                      fillColor:
-                        loc.type === "stall" ? GREEN_HEX : GOLD_HEX,
+                      fillColor: pinColorFor(loc.type),
                       fillOpacity: 0.95,
                       strokeColor: "#000",
                       strokeWeight: 1,
@@ -387,6 +404,18 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
               }}
             />
             Gated Community ({COMMUNITY_COUNT})
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 5,
+                background: BLUE_HEX,
+                border: "1px solid #000",
+              }}
+            />
+            Gym ({GYM_COUNT})
           </span>
         </div>
 
@@ -681,11 +710,15 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
                             color:
                               loc.type === "stall"
                                 ? "#9bd0a3"
-                                : `rgba(${GOLD_RGB},0.9)`,
+                                : loc.type === "gym"
+                                  ? "#93c5fd"
+                                  : `rgba(${GOLD_RGB},0.9)`,
                             border: `0.5px solid ${
                               loc.type === "stall"
                                 ? "rgba(155,208,163,0.4)"
-                                : `rgba(${GOLD_RGB},0.4)`
+                                : loc.type === "gym"
+                                  ? "rgba(147,197,253,0.4)"
+                                  : `rgba(${GOLD_RGB},0.4)`
                             }`,
                             borderRadius: 4,
                             padding: "3px 7px",
