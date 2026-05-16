@@ -117,7 +117,7 @@ export default function Nav() {
             { label: "Blogs",               action: () => nav("/blogs") },
             { label: "Feedback & Reviews",  action: () => nav("/feedback") },
             { label: "Reports",             action: () => nav("/reports") },
-            { label: "Store Locator",       action: () => nav("/store-locator") },
+            { label: "Find Us",             action: () => nav("/find-us") },
             { label: "Connect with Cadieux", action: () => nav("/connect") },
           ].map(({ label, action }) => (
             <button key={label} onClick={action} style={{
