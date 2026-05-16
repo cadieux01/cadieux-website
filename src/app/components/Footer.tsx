@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SplitText from "@/components/SplitTextLazy";
 
 export default function Footer() {
@@ -29,6 +30,28 @@ export default function Footer() {
       <p className="label-text" style={{ opacity: 0.6 }}>
         <SplitText text="Same Bread. Better Built." repelStrength={30} repelRadius={85} staggerDelay={0.025} />
       </p>
+      <nav
+        aria-label="Footer"
+        style={{
+          display: "flex",
+          gap: "1.5rem",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          marginTop: "0.5rem",
+        }}
+      >
+        <Link
+          href="/find-us"
+          className="label-text"
+          style={{
+            color: "rgba(201,169,110,0.85)",
+            textDecoration: "none",
+            opacity: 0.85,
+          }}
+        >
+          Find Us
+        </Link>
+      </nav>
       <p className="label-text" style={{ opacity: 0.4, marginTop: "1rem" }}>
         <SplitText text="© 2024 CADIEUX · VISAKHAPATNAM" repelStrength={20} repelRadius={70} staggerDelay={0.02} animateEntrance={false} />
       </p>
