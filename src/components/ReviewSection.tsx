@@ -23,8 +23,22 @@ type Review = {
   likes_count: number;
   created_at: string;
   edited_at: string | null;
+  // Server-computed: true when the requesting user (OTP-verified) is the
+  // review's author. Drives the Edit / Delete UI. Anonymous viewers and
+  // non-author viewers always see false.
+  is_owner?: boolean;
   replies: Reply[];
 };
+
+// Mirrors REVIEW_EDIT_WINDOW_MS in src/lib/review-display.ts. Re-declared
+// here so the client doesn't need to import the server helper.
+const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function isWithinEditWindow(createdAt: string): boolean {
+  const t = new Date(createdAt).getTime();
+  if (!Number.isFinite(t)) return false;
+  return Date.now() - t < EDIT_WINDOW_MS;
+}
 
 type Props = {
   productSlug?: string | null;
@@ -190,6 +204,10 @@ export default function ReviewSection({ productSlug, scope }: Props) {
       turnstileRef.current?.reset();
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Failed");
+      // Server marks the freshly-inserted review with is_owner=true when
+      // the caller is OTP-verified, so the Edit / Delete controls show
+      // up immediately. Also seed the localStorage flag for back-compat
+      // with older tabs already on the page.
       setReviews((prev) => [j.review, ...prev]);
       try { localStorage.setItem(`mine-review-${j.review.id}`, "1"); } catch {}
       setMineReviews((p) => ({ ...p, [j.review.id]: true }));
@@ -273,6 +291,24 @@ export default function ReviewSection({ productSlug, scope }: Props) {
       setEditReviewBody("");
     } catch (e: any) {
       alert(e?.message ?? "Failed to edit");
+    }
+  };
+
+  // Delete: server soft-deletes (sets is_deleted=true). The row stays in
+  // DB for audit but disappears from every public list. Confirmation
+  // copy makes the irreversibility clear to the user.
+  const deleteReview = async (reviewId: string) => {
+    const ok =
+      typeof window !== "undefined" &&
+      window.confirm("Delete your review? This can't be undone.");
+    if (!ok) return;
+    try {
+      const r = await fetch(`/api/reviews/${reviewId}`, { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Failed");
+      setReviews((prev) => prev.filter((rev) => rev.id !== reviewId));
+    } catch (e: any) {
+      alert(e?.message ?? "Failed to delete");
     }
   };
 
@@ -374,6 +410,13 @@ export default function ReviewSection({ productSlug, scope }: Props) {
             onVerify={(t) => setTurnstileToken(t)}
             onExpire={() => setTurnstileToken("")}
           />
+          {/* Disclosure (not consent) — reviews are public. Only the first
+              word of the submitted name is shown publicly; the review
+              text is shown verbatim. */}
+          <div style={disclosureStyle}>
+            By submitting, your review will be public. Your first name and
+            review text will be visible to other shoppers.
+          </div>
           <button type="submit" disabled={submitting} style={btnPrimary}>
             {submitting ? "Posting..." : "Post"}
           </button>
@@ -431,8 +474,17 @@ export default function ReviewSection({ productSlug, scope }: Props) {
                   <button onClick={() => setOpenReply((p) => ({ ...p, [rev.id]: !p[rev.id] }))} style={textBtn}>
                     Reply
                   </button>
-                  {mineReviews[rev.id] && (
+                  {/* Ownership: prefer the server-supplied is_owner flag (the
+                      authoritative phone-based check). Fall back to the
+                      legacy localStorage flag so reviews written before the
+                      phone capture still show Edit/Delete on the device that
+                      posted them. The server still enforces ownership and
+                      the 24h window — the client UI is just optimistic. */}
+                  {(rev.is_owner || mineReviews[rev.id]) && isWithinEditWindow(rev.created_at) && (
                     <button onClick={() => startEditReview(rev)} style={textBtn}>Edit</button>
+                  )}
+                  {(rev.is_owner || mineReviews[rev.id]) && (
+                    <button onClick={() => deleteReview(rev.id)} style={textBtn}>Delete</button>
                   )}
                 </div>
               )}
@@ -623,6 +675,15 @@ const textBtn: React.CSSProperties = {
   letterSpacing: "0.15em",
   textTransform: "uppercase",
   cursor: "pointer",
+};
+
+const disclosureStyle: React.CSSProperties = {
+  fontFamily: "var(--font-body)",
+  fontSize: 11,
+  fontWeight: 300,
+  lineHeight: 1.55,
+  color: "rgba(251,243,212,0.55)",
+  padding: "8px 0 2px",
 };
 
 const emptyStyle: React.CSSProperties = {

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { reviewRateLimit, getClientIP } from "@/lib/ratelimit";
+import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
+import { publicDisplayName } from "@/lib/review-display";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,9 +13,18 @@ const supabaseAdmin = createClient(
 
 export async function GET(req: NextRequest) {
   const product = req.nextUrl.searchParams.get("product");
+
+  // Verified phone identifies the caller for the is_owner flag. Not
+  // required — anonymous browsers still get the full public list.
+  const verified = getVerifiedPhone(req);
+  const verifiedPhone = verified ? normalizePhone(verified.phone) : null;
+
   let q = supabaseAdmin
     .from("reviews")
-    .select("id, product_slug, author_name, rating, body, likes_count, created_at")
+    .select(
+      "id, product_slug, author_name, rating, body, likes_count, created_at, edited_at, customer_phone"
+    )
+    .eq("is_deleted", false)
     .order("created_at", { ascending: false });
   if (product) q = q.eq("product_slug", product);
   const { data: reviews, error } = await q;
@@ -23,11 +34,11 @@ export async function GET(req: NextRequest) {
   }
 
   const ids = (reviews ?? []).map((r) => r.id);
-  let replies: any[] = [];
+  let replies: { id: string; review_id: string; author_name: string; is_admin: boolean; body: string; likes_count: number; created_at: string; edited_at: string | null }[] = [];
   if (ids.length) {
     const { data: rdata, error: rerr } = await supabaseAdmin
       .from("review_replies")
-      .select("id, review_id, author_name, is_admin, body, likes_count, created_at")
+      .select("id, review_id, author_name, is_admin, body, likes_count, created_at, edited_at")
       .in("review_id", ids)
       .order("created_at", { ascending: true });
     if (rerr) {
@@ -37,19 +48,40 @@ export async function GET(req: NextRequest) {
     replies = rdata ?? [];
   }
 
-  const byReview = new Map<string, any[]>();
+  const byReview = new Map<string, typeof replies>();
   for (const r of replies) {
     const arr = byReview.get(r.review_id) ?? [];
     arr.push(r);
     byReview.set(r.review_id, arr);
   }
-  const out = (reviews ?? []).map((r) => ({ ...r, replies: byReview.get(r.id) ?? [] }));
+
+  // Shape the public payload: replace author_name with first-name-only,
+  // compute is_owner, and DROP customer_phone so it never leaves the
+  // server. Admin-side tooling reads the raw row directly via Supabase.
+  const out = (reviews ?? []).map((r) => {
+    const isOwner =
+      !!verifiedPhone &&
+      !!r.customer_phone &&
+      normalizePhone(r.customer_phone) === verifiedPhone;
+    const { customer_phone: _omit, ...rest } = r;
+    void _omit;
+    return {
+      ...rest,
+      author_name: publicDisplayName(r.author_name),
+      is_owner: isOwner,
+      replies: byReview.get(r.id) ?? [],
+    };
+  });
   return NextResponse.json({ reviews: out });
 }
 
 export async function POST(req: NextRequest) {
-  let body: any;
-  try { body = await req.json(); } catch { return NextResponse.json({ error: "Bad JSON" }, { status: 400 }); }
+  let body: { turnstileToken?: unknown; author_name?: unknown; body?: unknown; rating?: unknown; product_slug?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Bad JSON" }, { status: 400 });
+  }
 
   // Distributed rate limit: 3 reviews per IP per day (Upstash Redis).
   const ip = getClientIP(req);
@@ -86,14 +118,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Rating must be 1-5." }, { status: 400 });
   }
 
+  // If the caller is OTP-verified, persist their phone so they (and only
+  // they) can later edit/delete this review. Anonymous submissions stay
+  // un-editable forever — the existing flow is unchanged for them.
+  const verified = getVerifiedPhone(req);
+  const customer_phone = verified ? normalizePhone(verified.phone) : null;
+
   const { data, error } = await supabaseAdmin
     .from("reviews")
-    .insert({ product_slug, author_name, rating, body: text })
-    .select("id, product_slug, author_name, rating, body, likes_count, created_at")
+    .insert({ product_slug, author_name, rating, body: text, customer_phone })
+    .select(
+      "id, product_slug, author_name, rating, body, likes_count, created_at, edited_at"
+    )
     .single();
   if (error) {
     console.error("review insert failed:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ review: { ...data, replies: [] } });
+  return NextResponse.json({
+    review: {
+      ...data,
+      author_name: publicDisplayName(data.author_name),
+      is_owner: !!customer_phone,
+      replies: [],
+    },
+  });
 }

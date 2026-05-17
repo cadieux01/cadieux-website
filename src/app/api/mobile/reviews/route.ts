@@ -3,8 +3,9 @@
 // Differences from web:
 //  - Bearer-auth (phone-verified) instead of Turnstile
 //  - Per-phone rate limit (3/day) — web rate limits per IP
-//  - Display name is user-supplied; phone is captured for rate-key only,
-//    not stored
+//  - Display name is user-supplied; the verified phone is persisted as
+//    customer_phone so the author can later edit/delete their own
+//    review within the 24h window enforced by PATCH/DELETE /api/reviews/[id]
 //
 // MOBILE_APP_KEY is friction layer not real secret. Bearer is the real gate.
 
@@ -14,7 +15,9 @@ import {
   getVerifiedPhone,
   isValidMobileAppKey,
   maskPhone,
+  normalizePhone,
 } from "@/lib/phone-cookie";
+import { publicDisplayName } from "@/lib/review-display";
 import { toLocal10 } from "@/lib/order-validation";
 import { mobileReviewRateLimit } from "@/lib/ratelimit";
 import { getProductBySlug } from "@/lib/products";
@@ -157,9 +160,10 @@ export async function POST(req: NextRequest) {
       author_name: display_name,
       rating,
       body,
+      customer_phone: normalizePhone(verified.phone),
     })
     .select(
-      "id, product_slug, author_name, rating, body, likes_count, created_at",
+      "id, product_slug, author_name, rating, body, likes_count, created_at, edited_at",
     )
     .single();
 
@@ -170,6 +174,11 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    review: { ...data, replies: [] },
+    review: {
+      ...data,
+      author_name: publicDisplayName(data.author_name),
+      is_owner: true,
+      replies: [],
+    },
   });
 }
