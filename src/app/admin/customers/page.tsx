@@ -5,10 +5,16 @@
 // per-customer aggregates and a click-through to /admin/customers/[id].
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import {
+  DateRangePicker,
+  useDateRangeFromQuery,
+  withinRange,
+} from "@/components/admin/DateRangePicker";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import {
   formatDate,
   formatINR,
@@ -29,6 +35,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const range = useDateRangeFromQuery();
 
   const load = useCallback(async (q: string) => {
     setError(null);
@@ -59,8 +66,46 @@ export default function CustomersPage() {
     return () => clearTimeout(t);
   }, [query, load]);
 
+  // Range filter is applied client-side on customer.created_at; the
+  // server doesn't accept a date filter today and adding one is
+  // overkill given the customer table is small.
+  const visible = useMemo(
+    () => rows.filter((c) => withinRange(c.created_at, range)),
+    [rows, range],
+  );
+
+  const handleExport = () => {
+    const csv = toCsv(visible, [
+      { header: "Customer ID", value: (c) => c.id },
+      { header: "Name", value: (c) => c.full_name ?? "" },
+      { header: "Phone", value: (c) => c.phone ?? "" },
+      { header: "City", value: (c) => c.city ?? "" },
+      { header: "Total orders", value: (c) => c.total_orders },
+      { header: "Total spent", value: (c) => c.total_spent },
+      { header: "Last order", value: (c) => c.last_order_at ?? "" },
+      { header: "Joined", value: (c) => c.created_at },
+    ]);
+    downloadCsv(csvFilename("customers"), csv);
+  };
+
   return (
-    <AdminShell title="Customers" subtitle="Lookup &amp; activity">
+    <AdminShell
+      title="Customers"
+      subtitle="Lookup &amp; activity"
+      actions={
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={visible.length === 0}
+          style={chipNeutral}
+        >
+          Export CSV
+        </button>
+      }
+    >
+      <div className="mb-4">
+        <DateRangePicker value={range} />
+      </div>
       <div className="flex flex-wrap gap-3 mb-6 items-center">
         <input
           value={query}
@@ -77,7 +122,7 @@ export default function CustomersPage() {
           }}
         />
         <span style={{ color: "rgba(192,200,206,0.55)", fontSize: "0.75rem" }}>
-          {rows.length} result{rows.length === 1 ? "" : "s"}
+          {visible.length} result{visible.length === 1 ? "" : "s"}
         </span>
       </div>
 
@@ -97,8 +142,8 @@ export default function CustomersPage() {
       ) : null}
       {loading ? (
         <Placeholder>Loading customers…</Placeholder>
-      ) : rows.length === 0 ? (
-        <Placeholder>No customers found.</Placeholder>
+      ) : visible.length === 0 ? (
+        <Placeholder>No customers match the filters.</Placeholder>
       ) : (
         <div
           style={{
@@ -120,7 +165,7 @@ export default function CustomersPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((c, i) => (
+              {visible.map((c, i) => (
                 <tr
                   key={c.id}
                   style={{
@@ -235,6 +280,18 @@ const td: React.CSSProperties = {
   fontSize: "0.85rem",
   verticalAlign: "top",
   borderBottom: "1px solid rgba(245,158,11,0.06)",
+};
+
+const chipNeutral: React.CSSProperties = {
+  padding: "0.35rem 0.85rem",
+  border: "1px solid rgba(245,158,11,0.4)",
+  fontFamily: "var(--font-body)",
+  fontSize: "0.65rem",
+  letterSpacing: "0.22em",
+  background: "transparent",
+  color: "rgba(245,158,11,0.85)",
+  cursor: "pointer",
+  textTransform: "uppercase",
 };
 
 const buttonSmAnchor: React.CSSProperties = {

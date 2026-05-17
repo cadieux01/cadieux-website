@@ -12,8 +12,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import {
+  DateRangePicker,
+  useDateRangeFromQuery,
+  withinRange,
+} from "@/components/admin/DateRangePicker";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import {
   addDaysISO,
   formatDate,
@@ -46,6 +52,7 @@ export default function SubscriptionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterValue>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const range = useDateRangeFromQuery();
 
   const load = useCallback(async () => {
     setError(null);
@@ -74,16 +81,17 @@ export default function SubscriptionsPage() {
   }, [load]);
 
   const filtered = useMemo(() => {
-    if (filter !== "expiring_7d") return subs;
+    const inRange = subs.filter((s) => withinRange(s.created_at, range));
+    if (filter !== "expiring_7d") return inRange;
     const today = isoLocalDate(new Date());
     const horizon = addDaysISO(today, 7);
-    return subs.filter((s) => {
+    return inRange.filter((s) => {
       if (s.status !== "active") return false;
       const end = s.derived_end_date;
       if (!end) return false;
       return end >= today && end <= horizon;
     });
-  }, [subs, filter]);
+  }, [subs, filter, range]);
 
   const setStatus = async (
     sub: AdminSubscriptionRow,
@@ -113,15 +121,28 @@ export default function SubscriptionsPage() {
       title="Subscription Health"
       subtitle="End-date derived from delivery schedule"
       actions={
-        <button
-          type="button"
-          onClick={() => void load()}
-          style={chipNeutral}
-        >
-          Refresh
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => exportSubsCsv(filtered)}
+            disabled={filtered.length === 0}
+            style={chipNeutral}
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => void load()}
+            style={chipNeutral}
+          >
+            Refresh
+          </button>
+        </>
       }
     >
+      <div className="mb-4">
+        <DateRangePicker value={range} />
+      </div>
       <div className="flex flex-wrap gap-2 mb-6">
         {FILTERS.map((f) => {
           const active = f.value === filter;
@@ -312,6 +333,25 @@ export default function SubscriptionsPage() {
       </p>
     </AdminShell>
   );
+}
+
+function exportSubsCsv(rows: AdminSubscriptionRow[]): void {
+  const csv = toCsv(rows, [
+    { header: "Subscription ID", value: (s) => s.id },
+    { header: "Customer", value: (s) => s.customer?.full_name ?? "" },
+    { header: "Phone", value: (s) => s.customer?.phone ?? "" },
+    { header: "Product", value: (s) => s.product_name },
+    { header: "Quantity per delivery", value: (s) => s.quantity_per_delivery },
+    { header: "Frequency", value: (s) => s.frequency },
+    { header: "Total weeks", value: (s) => s.total_weeks },
+    { header: "Status", value: (s) => s.status },
+    { header: "Payment status", value: (s) => s.payment_status },
+    { header: "Total amount", value: (s) => s.total_amount },
+    { header: "Started", value: (s) => s.created_at },
+    { header: "Derived end", value: (s) => s.derived_end_date ?? "" },
+    { header: "Remaining deliveries", value: (s) => s.remaining_deliveries ?? "" },
+  ]);
+  downloadCsv(csvFilename("subscriptions"), csv);
 }
 
 function Placeholder({ children }: { children: React.ReactNode }) {
