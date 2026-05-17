@@ -93,6 +93,10 @@ export default function PaymentPage() {
         body: JSON.stringify({
           action: "place_subscription",
           customer_id: address.customer_id,
+          // planId is the canonical key the server uses to look up
+          // pricing in lib/subscription-pricing.ts. bread_slug is kept
+          // for back-compat with older callers; they're always equal.
+          planId: product.slug,
           bread_slug: product.slug,
           bread_name: product.name,
           bread_price: product.price,
@@ -102,6 +106,10 @@ export default function PaymentPage() {
           slots_by_day: slotsByDay,
           slot: null,
           total: totalAmount,
+          // clientAmount is the spec-name for the price the server
+          // validates against. We send both `total` (legacy) and the
+          // new explicit field so the route can prefer it.
+          clientAmount: totalAmount,
           quantity_per_delivery: state.qty,
           frequency: "weekly",
           customer_name: address.full_name,
@@ -125,7 +133,9 @@ export default function PaymentPage() {
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
-        setError(data.error ?? "Failed to create subscription.");
+        // Prefer the user-friendly `message` (e.g. price_mismatch copy)
+        // over the machine-readable `error` code when present.
+        setError(data.message ?? data.error ?? "Failed to create subscription.");
         // The Turnstile token is single-use server-side — refresh after any
         // failure so the next attempt has a fresh token.
         if (isSaved) {

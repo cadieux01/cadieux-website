@@ -302,9 +302,10 @@ export function toLocal10(phoneE164: string): string {
 // Web carts can mix one-time products with subscriptions. We only run a
 // strict per-line price check on `kind: "once"` items (those map 1:1 to
 // products.price_inr). For `kind: "sub"` we trust the client-supplied
-// line total here and defer to place_subscription's own validation —
-// subscription pricing is a function of weeks/days which doesn't fit the
-// "price × quantity" model.
+// line total here and defer to place_subscription's own validation in
+// lib/subscription-pricing.ts — subscription pricing is a function of
+// per-loaf price × qty × deliveryCount which doesn't fit the
+// "price × quantity" per-line model used for one-time items.
 
 export type ClientWebOrderItem = {
   slug: string;

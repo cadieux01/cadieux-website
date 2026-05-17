@@ -9,6 +9,10 @@ import {
   validateWebOrderItemsShape,
   type WebProductRow,
 } from "@/lib/order-validation";
+import {
+  getServerPrice,
+  getSubscriptionPlan,
+} from "@/lib/subscription-pricing";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -241,8 +245,6 @@ export async function POST(req: NextRequest) {
     const {
       customer_id,
       bread_slug,
-      bread_name,
-      bread_price,
       weeks,
       days,
       slot_mode,
@@ -340,19 +342,143 @@ export async function POST(req: NextRequest) {
     const subStatus = body.status === "pending_confirmation" ? "pending_confirmation" : "active";
     const paymentMethod = body.payment_method === "cod" ? "cod" : null;
 
+    // Compute the per-delivery template up front so we can derive an
+    // authoritative delivery count for server-side price validation. The
+    // exact same template is reused after insert — bread_slug + qty +
+    // deliveryCount are the only inputs that determine the grand total.
+    type ClientDelivery = {
+      sequence: number;
+      week_number: number;
+      day_key: string;
+      delivery_date: string;
+      slot: string | null;
+      skipped: boolean;
+    };
+    type DeliveryTemplate = {
+      sequence: number;
+      week_number: number;
+      day_key: string;
+      slot: string | null;
+      delivery_date: string;
+      status: string;
+      scheduled_date: string;
+      scheduled_time_slot: string | null;
+    };
+    const clientDeliveries = Array.isArray(body.deliveries)
+      ? (body.deliveries as ClientDelivery[]).filter((d) => d && !d.skipped)
+      : null;
+
+    let deliveryTemplate: DeliveryTemplate[];
+    if (clientDeliveries && clientDeliveries.length > 0) {
+      deliveryTemplate = clientDeliveries
+        .sort((a, b) => a.delivery_date.localeCompare(b.delivery_date))
+        .map((d, i) => ({
+          sequence: i + 1,
+          week_number: Number(d.week_number) || 1,
+          day_key: String(d.day_key).toLowerCase(),
+          slot: d.slot ?? null,
+          delivery_date: d.delivery_date,
+          status: "pending_confirmation",
+          scheduled_date: d.delivery_date,
+          scheduled_time_slot: d.slot ?? null,
+        }));
+    } else {
+      const generated = generateDeliveries(new Date(), dayKeys, Number(weeks));
+      deliveryTemplate = generated.map((d) => {
+        const slotForDay =
+          slot_mode === "same"
+            ? slot
+            : (slots_by_day && (slots_by_day as Record<string, string>)[d.day_key]) ?? null;
+        const dateStr = d.delivery_date.toISOString().slice(0, 10);
+        return {
+          sequence: d.sequence,
+          week_number: d.week_number,
+          day_key: d.day_key,
+          slot: slotForDay,
+          delivery_date: dateStr,
+          status: "pending_confirmation",
+          scheduled_date: dateStr,
+          scheduled_time_slot: slotForDay,
+        };
+      });
+    }
+
+    // Server-side price validation. The plan id (bread_slug) maps to a
+    // canonical per-loaf price in lib/subscription-pricing.ts — the
+    // client-supplied `total` and `bread_price` are hint-only. Any drift
+    // beyond a half-rupee epsilon is rejected with a 400 and audited so
+    // we can spot tampering attempts in aggregate.
+    const planId: string = String(bread_slug);
+    const plan = getSubscriptionPlan(planId);
+    if (!plan) {
+      return NextResponse.json(
+        { error: "Unknown subscription plan." },
+        { status: 400 }
+      );
+    }
+    const deliveryCount = deliveryTemplate.length;
+    const serverAmount = getServerPrice(planId, qtyPerDelivery, deliveryCount);
+    if (serverAmount === null) {
+      return NextResponse.json(
+        { error: "Unknown subscription plan." },
+        { status: 400 }
+      );
+    }
+    const clientAmount = Number(body.clientAmount ?? total);
+    if (!Number.isFinite(clientAmount) || Math.abs(clientAmount - serverAmount) > 0.5) {
+      const phoneForLog = verifiedPhone ?? customer_phone ?? null;
+      console.warn(
+        `[PRICE_TAMPERING] phone=${phoneForLog} plan=${planId} client=${clientAmount} server=${serverAmount}`
+      );
+      const ip =
+        req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        req.headers.get("x-real-ip") ||
+        null;
+      const userAgent = req.headers.get("user-agent") ?? null;
+      // Best-effort audit insert — we don't block the response on it.
+      void supabaseAdmin
+        .from("price_tampering_attempts")
+        .insert({
+          phone: phoneForLog,
+          customer_id: customer_id ?? null,
+          context: "subscription",
+          plan_id: planId,
+          client_amount: Number.isFinite(clientAmount) ? clientAmount : null,
+          server_amount: serverAmount,
+          ip,
+          user_agent: userAgent,
+        })
+        .then(({ error }) => {
+          if (error) {
+            console.warn("[PRICE_TAMPERING] audit insert failed:", error.message);
+          }
+        });
+      return NextResponse.json(
+        {
+          error: "price_mismatch",
+          code: "price_mismatch",
+          message:
+            "The subscription price has changed. Please refresh the page and try again.",
+        },
+        { status: 400 }
+      );
+    }
+
     const { data: sub, error: subErr } = await supabaseAdmin
       .from("subscriptions")
       .insert({
         // Legacy columns — preserved exactly for existing wizard / admin views.
+        // bread_price / total are forced to the server-derived figures so a
+        // tampered client can never persist a forged amount.
         bread_slug,
-        bread_name,
-        bread_price,
+        bread_name: plan.name,
+        bread_price: plan.pricePerLoafInr,
         weeks,
         days: dayKeys,
         slot_mode,
         slot: slot_mode === "same" ? slot : null,
         slots_by_day: slot_mode === "custom" ? slots_by_day : null,
-        total,
+        total: serverAmount,
         customer_name,
         customer_phone,
         customer_address,
@@ -362,14 +488,14 @@ export async function POST(req: NextRequest) {
         // New tracking-model columns — populated for /subscriptions/track + admin.
         customer_id,
         product_slug: bread_slug,
-        product_name: bread_name,
+        product_name: plan.name,
         quantity_per_delivery: qtyPerDelivery,
         frequency,
         day_of_week: dayKeys[0] ?? null,
         time_slot: slot_mode === "same" ? slot : (slots_by_day?.[dayKeys[0]] ?? null),
         total_weeks: weeks,
         delivery_address: deliveryAddressJson,
-        total_amount: total,
+        total_amount: serverAmount,
         payment_status: "pending",
         payment_method: paymentMethod,
       })
@@ -384,70 +510,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // If the wizard supplied an explicit per-delivery list, honor it. Skipped
-    // entries are dropped entirely, and provided dates/slots win over the
-    // server-side calendar generator.
-    type ClientDelivery = {
-      sequence: number;
-      week_number: number;
-      day_key: string;
-      delivery_date: string;
-      slot: string | null;
-      skipped: boolean;
-    };
-    const clientDeliveries = Array.isArray(body.deliveries)
-      ? (body.deliveries as ClientDelivery[]).filter((d) => d && !d.skipped)
-      : null;
-
-    type LegacyDeliveryRow = {
-      subscription_id: string;
-      sequence: number;
-      week_number: number;
-      day_key: string;
-      slot: string | null;
-      delivery_date: string;
-      status: string;
-      scheduled_date: string;
-      scheduled_time_slot: string | null;
-    };
-
-    let deliveryRows: LegacyDeliveryRow[];
-
-    if (clientDeliveries && clientDeliveries.length > 0) {
-      deliveryRows = clientDeliveries
-        .sort((a, b) => a.delivery_date.localeCompare(b.delivery_date))
-        .map((d, i) => ({
-          subscription_id: sub.id,
-          sequence: i + 1,
-          week_number: Number(d.week_number) || 1,
-          day_key: String(d.day_key).toLowerCase(),
-          slot: d.slot ?? null,
-          delivery_date: d.delivery_date,
-          status: "pending_confirmation",
-          scheduled_date: d.delivery_date,
-          scheduled_time_slot: d.slot ?? null,
-        }));
-    } else {
-      const generated = generateDeliveries(new Date(), dayKeys, Number(weeks));
-      deliveryRows = generated.map((d) => {
-        const slotForDay =
-          slot_mode === "same"
-            ? slot
-            : (slots_by_day && (slots_by_day as Record<string, string>)[d.day_key]) ?? null;
-        const dateStr = d.delivery_date.toISOString().slice(0, 10);
-        return {
-          subscription_id: sub.id,
-          sequence: d.sequence,
-          week_number: d.week_number,
-          day_key: d.day_key,
-          slot: slotForDay,
-          delivery_date: dateStr,
-          status: "pending_confirmation",
-          scheduled_date: dateStr,
-          scheduled_time_slot: slotForDay,
-        };
-      });
-    }
+    // Reuse the per-delivery template computed for price validation —
+    // attaching subscription_id is the only remaining step.
+    const deliveryRows = deliveryTemplate.map((d) => ({
+      subscription_id: sub.id,
+      ...d,
+    }));
 
     if (deliveryRows.length > 0) {
       const { error: delErr } = await supabaseAdmin
