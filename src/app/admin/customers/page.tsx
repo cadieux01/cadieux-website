@@ -5,7 +5,7 @@
 // per-customer aggregates and a click-through to /admin/customers/[id].
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import {
@@ -30,7 +30,35 @@ type CustomerListRow = AdminCustomerSummary & {
   last_order_at: string | null;
 };
 
+// Suspense wrapper is required because useDateRangeFromQuery (and the
+// other hooks downstream) read useSearchParams(); Next.js prerender
+// fails the build for any client page that consumes it without a
+// suspense boundary.
 export default function CustomersPage() {
+  return (
+    <Suspense fallback={<AdminLoading />}>
+      <CustomersPageInner />
+    </Suspense>
+  );
+}
+
+function AdminLoading() {
+  return (
+    <div
+      style={{
+        padding: "2rem",
+        color: "rgba(245,158,11,0.7)",
+        fontFamily: "var(--font-body)",
+        fontSize: "0.85rem",
+        letterSpacing: "0.05em",
+      }}
+    >
+      Loading…
+    </div>
+  );
+}
+
+function CustomersPageInner() {
   const [rows, setRows] = useState<CustomerListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

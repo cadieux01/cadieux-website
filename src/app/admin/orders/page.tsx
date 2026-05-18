@@ -13,7 +13,7 @@
 // for the "Delivery" column and a single-line "—" for items.
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import {
@@ -56,7 +56,34 @@ type BulkResult = {
   action: BulkAction;
 };
 
+// Suspense wrapper required by Next.js prerender for any client page
+// that reads useSearchParams() — useDateRangeFromQuery does, so the
+// boundary lives at the page export.
 export default function OrdersPage() {
+  return (
+    <Suspense fallback={<AdminLoading />}>
+      <OrdersPageInner />
+    </Suspense>
+  );
+}
+
+function AdminLoading() {
+  return (
+    <div
+      style={{
+        padding: "2rem",
+        color: "rgba(245,158,11,0.7)",
+        fontFamily: "var(--font-body)",
+        fontSize: "0.85rem",
+        letterSpacing: "0.05em",
+      }}
+    >
+      Loading…
+    </div>
+  );
+}
+
+function OrdersPageInner() {
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

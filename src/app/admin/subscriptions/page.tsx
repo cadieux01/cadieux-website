@@ -9,7 +9,7 @@
 // logic here.
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import {
@@ -46,7 +46,33 @@ const FILTERS: { value: FilterValue; label: string }[] = [
   { value: "expiring_7d", label: "Expiring in 7 days" },
 ];
 
+// Suspense wrapper required by Next.js prerender for any client page
+// that reads useSearchParams() — useDateRangeFromQuery does.
 export default function SubscriptionsPage() {
+  return (
+    <Suspense fallback={<AdminLoading />}>
+      <SubscriptionsPageInner />
+    </Suspense>
+  );
+}
+
+function AdminLoading() {
+  return (
+    <div
+      style={{
+        padding: "2rem",
+        color: "rgba(245,158,11,0.7)",
+        fontFamily: "var(--font-body)",
+        fontSize: "0.85rem",
+        letterSpacing: "0.05em",
+      }}
+    >
+      Loading…
+    </div>
+  );
+}
+
+function SubscriptionsPageInner() {
   const [subs, setSubs] = useState<AdminSubscriptionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -9,7 +9,7 @@
 // field (web checkout flow, legacy rows) fall into the "Undated" /
 // "No slot" buckets at the end.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
@@ -20,7 +20,23 @@ import {
   OrderFilterValue,
 } from "@/lib/admin-shared";
 
+// Suspense wrapper required by Next.js prerender for any client page
+// that reads useSearchParams() directly.
 export default function PrintPackingListPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={page}>
+          <p>Loading packing list…</p>
+        </main>
+      }
+    >
+      <PrintPackingListPageInner />
+    </Suspense>
+  );
+}
+
+function PrintPackingListPageInner() {
   const params = useSearchParams();
   const status = (params.get("status") ?? "all") as OrderFilterValue;
   const q = params.get("q") ?? "";

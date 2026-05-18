@@ -10,7 +10,7 @@
 // degenerate zero-zero chart so the operator can tell "no data" from
 // "broken chart".
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -79,7 +79,33 @@ function colourFor(key: string, idx: number): string {
 }
 const FALLBACK_COLOURS = [GOLD, "#fbbf24", "#fb923c", "#fdba74", "#fde68a"];
 
+// Suspense wrapper required by Next.js prerender for any client page
+// that reads useSearchParams() — useDateRangeFromQuery does.
 export default function OverviewPage() {
+  return (
+    <Suspense fallback={<AdminLoading />}>
+      <OverviewPageInner />
+    </Suspense>
+  );
+}
+
+function AdminLoading() {
+  return (
+    <div
+      style={{
+        padding: "2rem",
+        color: "rgba(245,158,11,0.7)",
+        fontFamily: "var(--font-body)",
+        fontSize: "0.85rem",
+        letterSpacing: "0.05em",
+      }}
+    >
+      Loading…
+    </div>
+  );
+}
+
+function OverviewPageInner() {
   const [data, setData] = useState<OverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
