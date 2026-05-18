@@ -240,7 +240,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("✅ Order created:", { order_id: order.id, customer_id, total_amount: grandTotal });
     return NextResponse.json({ order_id: order.id, total_amount: grandTotal });
   }
 
@@ -577,7 +576,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.log("✅ Subscription created:", { subscription_id: sub.id, deliveries: deliveryRows.length });
     return NextResponse.json({ subscription_id: sub.id, deliveries: deliveryRows.length });
   }
 
