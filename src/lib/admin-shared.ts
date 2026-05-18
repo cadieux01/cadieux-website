@@ -63,6 +63,37 @@ export type AdminOrderRow = {
   customers?: AdminCustomerSummary | null;
 };
 
+export type AdminProductRow = {
+  id: string;
+  slug: string;
+  name: string;
+  price_inr: number;
+  subscription_per_loaf_inr: number | null;
+  weight: string | null;
+  description: string | null;
+  tagline: string | null;
+  highlights: string[];
+  image_url: string | null;
+  is_active: boolean;
+  in_stock: boolean;
+  is_archived: boolean;
+  archived_at: string | null;
+  sort_order: number;
+  updated_at: string | null;
+};
+
+export type AdminProductChangeRow = {
+  id: string;
+  changed_at: string;
+  product_id: string;
+  product_slug: string;
+  field_changed: string;
+  old_value: unknown;
+  new_value: unknown;
+  changed_by: string | null;
+  context: string | null;
+};
+
 export type AdminSubscriptionRow = {
   id: string;
   customer_id: string;
