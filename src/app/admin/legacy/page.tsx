@@ -11,6 +11,7 @@
 import { useEffect, useState, useCallback, FormEvent } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { ContactActions } from "@/components/admin/ContactActions";
 import { ADMIN_PASSWORD } from "@/lib/admin-shared";
 
 type Customer = {
@@ -519,7 +520,20 @@ function Dashboard() {
                           </button>
                         </div>
                       </Td>
-                      <Td>{o.customers?.phone ?? "—"}</Td>
+                      <Td>
+                        {o.customers?.phone ? (
+                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                            <span>{o.customers.phone}</span>
+                            <ContactActions
+                              phone={o.customers.phone}
+                              customerName={o.customers.full_name}
+                              orderInfo={`order #${o.id.slice(0, 8)}`}
+                            />
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </Td>
                       <Td>{o.delivery_address ?? "—"}</Td>
                       <Td>{o.customers?.city ?? "—"}</Td>
                       <Td>₹{Number(o.total_amount ?? 0).toFixed(2)}</Td>
@@ -727,7 +741,16 @@ function SubscriptionsSection({
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 18, fontSize: "0.78rem" }}>
                   <span><span style={{ color: "rgba(251,243,212,0.5)" }}>Customer · </span>{s.customer?.full_name ?? "—"}</span>
-                  <span><span style={{ color: "rgba(251,243,212,0.5)" }}>Phone · </span>{s.customer?.phone ?? "—"}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span><span style={{ color: "rgba(251,243,212,0.5)" }}>Phone · </span>{s.customer?.phone ?? "—"}</span>
+                    {s.customer?.phone ? (
+                      <ContactActions
+                        phone={s.customer.phone}
+                        customerName={s.customer.full_name}
+                        orderInfo={`${s.product_name} subscription`}
+                      />
+                    ) : null}
+                  </span>
                   <span><span style={{ color: "rgba(251,243,212,0.5)" }}>Total · </span>₹{Number(s.total_amount).toLocaleString("en-IN")}</span>
                   <span><span style={{ color: "rgba(251,243,212,0.5)" }}>Payment · </span>{s.payment_status}{s.payment_method ? ` (${s.payment_method})` : ""}</span>
                 </div>
@@ -893,8 +916,17 @@ function SubscriptionDrawer({
             <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: "1.5rem", fontWeight: 300, letterSpacing: "0.04em" }}>
               {subscription.product_name} × {subscription.quantity_per_delivery}
             </p>
-            <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "rgba(251,243,212,0.55)" }}>
-              {subscription.customer?.full_name ?? "—"} · {subscription.customer?.phone ?? "—"}
+            <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "rgba(251,243,212,0.55)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span>
+                {subscription.customer?.full_name ?? "—"} · {subscription.customer?.phone ?? "—"}
+              </span>
+              {subscription.customer?.phone ? (
+                <ContactActions
+                  phone={subscription.customer.phone}
+                  customerName={subscription.customer.full_name}
+                  orderInfo={`${subscription.product_name} subscription`}
+                />
+              ) : null}
             </p>
           </div>
           <button
@@ -1193,11 +1225,18 @@ function ChangeRequestsSection({
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <ContactMenu
-                      customerName={r.customer?.full_name ?? null}
+                    <ContactActions
                       phone={r.customer?.phone ?? null}
-                      productName={r.subscription?.product_name ?? null}
-                      weekNumber={r.delivery?.week_number ?? null}
+                      customerName={r.customer?.full_name ?? null}
+                      orderInfo={
+                        r.subscription?.product_name
+                          ? `change request${
+                              r.delivery?.week_number
+                                ? ` for Week ${r.delivery.week_number}`
+                                : ""
+                            } of ${r.subscription.product_name}`
+                          : null
+                      }
                     />
                     <span
                       className="uppercase"
@@ -1416,112 +1455,6 @@ function ChangeRequestsSection({
         </div>
       )}
     </section>
-  );
-}
-
-function ContactMenu({
-  customerName,
-  phone,
-  productName,
-  weekNumber,
-}: {
-  customerName: string | null;
-  phone: string | null;
-  productName: string | null;
-  weekNumber: number | null;
-}) {
-  const [open, setOpen] = useState(false);
-
-  if (!phone) return null;
-
-  // Strip non-digits for tel:/wa.me. wa.me requires country code with no '+'.
-  const digits = phone.replace(/\D/g, "");
-  // If 10 digits (Indian local), prefix 91 for WhatsApp.
-  const waPhone = digits.length === 10 ? `91${digits}` : digits;
-
-  const name = customerName ?? "there";
-  const product = productName ?? "your subscription";
-  const weekText = weekNumber ? ` for Week ${weekNumber}` : "";
-  const message = `Hi ${name}, regarding your subscription change request${weekText} of ${product}...`;
-  const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
-  const telUrl = `tel:${digits}`;
-
-  return (
-    <div style={{ position: "relative" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="uppercase"
-        style={{
-          background: "transparent",
-          border: "1px solid rgba(245,158,11,0.45)",
-          color: "#f59e0b",
-          padding: "4px 12px",
-          fontFamily: "var(--font-body)",
-          fontSize: "0.6rem",
-          letterSpacing: "0.22em",
-          cursor: "pointer",
-        }}
-      >
-        Contact ▾
-      </button>
-      {open && (
-        <>
-          <div
-            onClick={() => setOpen(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 50,
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              right: 0,
-              top: "calc(100% + 6px)",
-              zIndex: 51,
-              background: "#1a1410",
-              border: "1px solid rgba(245,158,11,0.35)",
-              minWidth: 160,
-              boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
-            }}
-          >
-            <a
-              href={telUrl}
-              onClick={() => setOpen(false)}
-              style={{
-                display: "block",
-                padding: "10px 14px",
-                color: "#fbf3d4",
-                textDecoration: "none",
-                fontFamily: "var(--font-body)",
-                fontSize: "0.78rem",
-                borderBottom: "1px solid rgba(245,158,11,0.15)",
-              }}
-            >
-              📞 Call {phone}
-            </a>
-            <a
-              href={waUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setOpen(false)}
-              style={{
-                display: "block",
-                padding: "10px 14px",
-                color: "#7bd88f",
-                textDecoration: "none",
-                fontFamily: "var(--font-body)",
-                fontSize: "0.78rem",
-              }}
-            >
-              💬 WhatsApp
-            </a>
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 

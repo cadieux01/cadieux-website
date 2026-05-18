@@ -17,6 +17,7 @@ import {
   useDateRangeFromQuery,
   withinRange,
 } from "@/components/admin/DateRangePicker";
+import { ContactActions } from "@/components/admin/ContactActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
@@ -25,7 +26,6 @@ import {
   formatDate,
   formatINR,
   isoLocalDate,
-  telHref,
 } from "@/lib/admin-formatting";
 import { AdminSubscriptionRow, SUBSCRIPTION_STATUSES } from "@/lib/admin-shared";
 
@@ -259,16 +259,20 @@ function SubscriptionsPageInner() {
                         {s.customer?.full_name ?? "—"}
                       </Link>
                       {s.customer?.phone ? (
-                        <div>
-                          <a
-                            href={telHref(s.customer.phone)}
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <span
                             style={{
                               color: "rgba(245,158,11,0.85)",
                               fontSize: "0.75rem",
                             }}
                           >
                             {s.customer.phone}
-                          </a>
+                          </span>
+                          <ContactActions
+                            phone={s.customer.phone}
+                            customerName={s.customer.full_name}
+                            orderInfo={`${s.product_name} subscription`}
+                          />
                         </div>
                       ) : null}
                     </td>

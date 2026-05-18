@@ -13,13 +13,12 @@ import {
   useDateRangeFromQuery,
   withinRange,
 } from "@/components/admin/DateRangePicker";
+import { ContactActions } from "@/components/admin/ContactActions";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import {
   formatDate,
   formatINR,
-  telHref,
-  whatsAppHref,
 } from "@/lib/admin-formatting";
 import { AdminCustomerSummary } from "@/lib/admin-shared";
 
@@ -212,39 +211,24 @@ function CustomersPageInner() {
                     </Link>
                   </td>
                   <td style={td}>
-                    <div className="flex flex-wrap gap-2 items-center">
-                      {c.phone ? (
-                        <>
-                          <a
-                            href={telHref(c.phone)}
-                            style={{
-                              color: "rgba(245,158,11,0.85)",
-                              fontSize: "0.78rem",
-                            }}
-                          >
-                            {c.phone}
-                          </a>
-                          <a
-                            href={whatsAppHref(c.phone)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              fontSize: "0.55rem",
-                              letterSpacing: "0.2em",
-                              textTransform: "uppercase",
-                              color: "#4ade80",
-                              border: "1px solid rgba(74,222,128,0.5)",
-                              padding: "1px 6px",
-                              textDecoration: "none",
-                            }}
-                          >
-                            WA
-                          </a>
-                        </>
-                      ) : (
-                        "—"
-                      )}
-                    </div>
+                    {c.phone ? (
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span
+                          style={{
+                            color: "rgba(245,158,11,0.85)",
+                            fontSize: "0.78rem",
+                          }}
+                        >
+                          {c.phone}
+                        </span>
+                        <ContactActions
+                          phone={c.phone}
+                          customerName={c.full_name}
+                        />
+                      </div>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td style={td}>{c.city ?? "—"}</td>
                   <td style={td}>{c.total_orders}</td>

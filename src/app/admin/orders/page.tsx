@@ -21,6 +21,7 @@ import {
   useDateRangeFromQuery,
   withinRange,
 } from "@/components/admin/DateRangePicker";
+import { ContactActions } from "@/components/admin/ContactActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
@@ -28,7 +29,6 @@ import {
   formatDate,
   formatDateTime,
   formatINR,
-  telHref,
 } from "@/lib/admin-formatting";
 import {
   AdminOrderRow,
@@ -452,16 +452,22 @@ function OrdersPageInner() {
                         {o.customers?.full_name ?? "—"}
                       </div>
                       {o.customers?.phone ? (
-                        <a
-                          href={telHref(o.customers.phone)}
-                          style={{
-                            color: "rgba(245,158,11,0.85)",
-                            fontSize: "0.75rem",
-                            letterSpacing: "0.05em",
-                          }}
-                        >
-                          {o.customers.phone}
-                        </a>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <span
+                            style={{
+                              color: "rgba(245,158,11,0.85)",
+                              fontSize: "0.75rem",
+                              letterSpacing: "0.05em",
+                            }}
+                          >
+                            {o.customers.phone}
+                          </span>
+                          <ContactActions
+                            phone={o.customers.phone}
+                            customerName={o.customers.full_name}
+                            orderInfo={`order #${o.id.slice(0, 8)}`}
+                          />
+                        </div>
                       ) : null}
                     </td>
                     <td style={td}>

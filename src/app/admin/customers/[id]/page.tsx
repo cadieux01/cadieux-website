@@ -14,14 +14,13 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { ContactActions } from "@/components/admin/ContactActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import {
   formatDate,
   formatDateTime,
   formatINR,
-  telHref,
-  whatsAppHref,
 } from "@/lib/admin-formatting";
 
 type CustomerDetail = {
@@ -155,14 +154,10 @@ export default function CustomerDetailPage() {
       actions={
         <>
           {c.phone ? (
-            <a
-              href={whatsAppHref(c.phone)}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={chipPrimary}
-            >
-              WhatsApp
-            </a>
+            <ContactActions
+              phone={c.phone}
+              customerName={c.full_name}
+            />
           ) : null}
           <button
             type="button"
@@ -203,11 +198,22 @@ export default function CustomerDetailPage() {
         }}
       >
         <Card title="Profile">
-          <KeyVal k="Phone" v={c.phone ? (
-            <a href={telHref(c.phone)} style={{ color: "#fbf3d4" }}>
-              {c.phone}
-            </a>
-          ) : "—"} />
+          <KeyVal
+            k="Phone"
+            v={
+              c.phone ? (
+                <span className="inline-flex items-center gap-2 flex-wrap">
+                  <span style={{ color: "#fbf3d4" }}>{c.phone}</span>
+                  <ContactActions
+                    phone={c.phone}
+                    customerName={c.full_name}
+                  />
+                </span>
+              ) : (
+                "—"
+              )
+            }
+          />
           <KeyVal k="City" v={c.city ?? "—"} />
           {c.pincode ? <KeyVal k="Pincode" v={c.pincode} /> : null}
           <KeyVal k="Joined" v={formatDate(c.created_at)} />
