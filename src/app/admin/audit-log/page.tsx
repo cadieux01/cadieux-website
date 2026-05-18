@@ -44,6 +44,33 @@ const CREAM = "#fbf3d4";
 const FADED = "rgba(192,200,206,0.6)";
 const BORDER = "rgba(245,158,11,0.18)";
 
+// Defensive label lookups. If the DB hands back an entity/action value
+// the TS union doesn't know about (e.g. a future enum migration that
+// shipped server-side before the client rebuild), the bracket index
+// returns undefined and React renders the cell silently — but if it
+// ever ends up in a non-React-safe position later, we'd crash. Falling
+// back to the raw key keeps the row legible.
+function entityLabel(e: AuditLogRow["entity"]): string {
+  const key = e as keyof typeof AUDIT_ENTITY_LABEL;
+  return AUDIT_ENTITY_LABEL[key] ?? String(e ?? "Unknown");
+}
+function actionLabel(a: AuditLogRow["action"]): string {
+  const key = a as keyof typeof AUDIT_ACTION_LABEL;
+  return AUDIT_ACTION_LABEL[key] ?? String(a ?? "Unknown");
+}
+
+// Meta from Supabase is JSONB so circular refs are impossible, but
+// BigInt values or exotic shapes would still throw. Wrap to keep a
+// single bad row from crashing the whole table render.
+function safeStringifyMeta(meta: unknown, indent?: number): string {
+  if (meta == null) return "";
+  try {
+    return JSON.stringify(meta, null, indent);
+  } catch {
+    return "(unserializable)";
+  }
+}
+
 // Convert a DateRange (date-only) to ISO bounds for the server. We
 // include the entire end day by passing tomorrow as exclusive upper
 // bound so the operator's "today" preset returns rows from today.
@@ -170,15 +197,15 @@ function AuditLogPageInner() {
       );
       const csv = toCsv(res.rows ?? [], [
         { header: "When", value: (r) => r.occurred_at },
-        { header: "Entity", value: (r) => AUDIT_ENTITY_LABEL[r.entity] },
-        { header: "Action", value: (r) => AUDIT_ACTION_LABEL[r.action] },
+        { header: "Entity", value: (r) => entityLabel(r.entity) },
+        { header: "Action", value: (r) => actionLabel(r.action) },
         { header: "Target", value: (r) => r.target_label ?? "" },
         { header: "Target ID", value: (r) => r.target_id ?? "" },
         { header: "Context", value: (r) => r.context ?? "" },
         { header: "IP", value: (r) => r.ip_address ?? "" },
         {
           header: "Meta",
-          value: (r) => (r.meta ? JSON.stringify(r.meta) : ""),
+          value: (r) => safeStringifyMeta(r.meta),
         },
       ]);
       downloadCsv(csvFilename("audit-log"), csv);
@@ -385,8 +412,8 @@ function AuditLogPageInner() {
                       }}
                     >
                       <td style={td}>{formatDateTime(r.occurred_at)}</td>
-                      <td style={td}>{AUDIT_ENTITY_LABEL[r.entity]}</td>
-                      <td style={td}>{AUDIT_ACTION_LABEL[r.action]}</td>
+                      <td style={td}>{entityLabel(r.entity)}</td>
+                      <td style={td}>{actionLabel(r.action)}</td>
                       <td style={td}>
                         <div style={{ color: CREAM }}>
                           {r.target_label || "—"}
@@ -429,7 +456,7 @@ function AuditLogPageInner() {
                                 marginTop: "0.25rem",
                               }}
                             >
-                              {JSON.stringify(r.meta, null, 2)}
+                              {safeStringifyMeta(r.meta, 2)}
                             </pre>
                           </details>
                         ) : null}
