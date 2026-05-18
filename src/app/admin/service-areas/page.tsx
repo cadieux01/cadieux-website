@@ -4,6 +4,11 @@
 // can hold multiple area labels (one-to-many) so a single 530017 row can
 // surface as "MVP Colony" + "Lawson's Bay Colony" depending on which
 // gated community the customer is in.
+//
+// This page also supports bulk activate/deactivate via a checkbox per
+// row + a sticky action bar at the bottom of the viewport. Tabs split
+// the list into Active / History (deactivated) / All so the operator
+// can dial in the right scope before bulk-acting.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -25,10 +30,13 @@ type GroupedRow = {
   added_at: string;
 };
 
+type Tab = "active" | "history" | "all";
+
 const GOLD = "#f59e0b";
 const CREAM = "#fbf3d4";
 const FADED = "rgba(192,200,206,0.6)";
 const BORDER = "rgba(245,158,11,0.18)";
+const DARK_GREEN = "#024628";
 
 export default function ServiceAreasPage() {
   const [rows, setRows] = useState<ServiceAreaRow[]>([]);
@@ -37,6 +45,10 @@ export default function ServiceAreasPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<Tab>("active");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
 
   const [newPincode, setNewPincode] = useState("");
   const [newAreas, setNewAreas] = useState("");
@@ -100,15 +112,72 @@ export default function ServiceAreasPage() {
     return out;
   }, [rows]);
 
+  const counts = useMemo(() => {
+    let active = 0;
+    let history = 0;
+    for (const g of grouped) {
+      if (g.is_active) active++;
+      else history++;
+    }
+    return { active, history, all: grouped.length };
+  }, [grouped]);
+
+  // Tab filter first, then text search. We keep both independent so the
+  // operator can land on "History" tab and still search a specific pincode.
   const filtered = useMemo(() => {
+    const tabFiltered =
+      tab === "active"
+        ? grouped.filter((g) => g.is_active)
+        : tab === "history"
+          ? grouped.filter((g) => !g.is_active)
+          : grouped;
     const q = search.trim().toLowerCase();
-    if (!q) return grouped;
-    return grouped.filter(
+    if (!q) return tabFiltered;
+    return tabFiltered.filter(
       (g) =>
         g.pincode.includes(q) ||
         g.area_names.some((a) => a.toLowerCase().includes(q)),
     );
-  }, [grouped, search]);
+  }, [grouped, tab, search]);
+
+  // Reset selection whenever the visible set changes — selecting on a
+  // different tab and acting elsewhere would be confusing.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [tab]);
+
+  const visiblePincodes = useMemo(
+    () => filtered.map((g) => g.pincode),
+    [filtered],
+  );
+  const allVisibleSelected =
+    visiblePincodes.length > 0 &&
+    visiblePincodes.every((p) => selected.has(p));
+  const someVisibleSelected =
+    !allVisibleSelected && visiblePincodes.some((p) => selected.has(p));
+
+  const toggleOne = (pincode: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(pincode)) next.delete(pincode);
+      else next.add(pincode);
+      return next;
+    });
+  };
+
+  const toggleAllVisible = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        for (const p of visiblePincodes) next.delete(p);
+      } else {
+        for (const p of visiblePincodes) next.add(p);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelected(new Set());
 
   const showNotice = (msg: string) => {
     setNotice(msg);
@@ -150,7 +219,12 @@ export default function ServiceAreasPage() {
   };
 
   const deactivate = async (pincode: string) => {
-    if (!confirm(`Deactivate pincode ${pincode}? Customers will no longer be able to check out.`)) return;
+    if (
+      !confirm(
+        `Deactivate pincode ${pincode}? Customers will no longer be able to check out.`,
+      )
+    )
+      return;
     setBusy((b) => ({ ...b, [pincode]: true }));
     try {
       await adminFetch(`/api/admin/service-areas/${pincode}/deactivate`, {
@@ -184,10 +258,46 @@ export default function ServiceAreasPage() {
     }
   };
 
+  const runBulk = async (action: "activate" | "deactivate") => {
+    const pincodes = Array.from(selected);
+    if (pincodes.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await adminFetch<{
+        succeeded: string[];
+        failed: string[];
+      }>("/api/admin/service-areas/bulk", {
+        method: "POST",
+        body: JSON.stringify({ action, pincodes }),
+      });
+      const ok = res.succeeded?.length ?? 0;
+      const fail = res.failed?.length ?? 0;
+      showNotice(
+        fail === 0
+          ? `${action === "activate" ? "Reactivated" : "Deactivated"} ${ok} pincode${ok === 1 ? "" : "s"}`
+          : `${action} succeeded for ${ok}, failed for ${fail}`,
+      );
+      setSelected(new Set());
+      setConfirmDeactivate(false);
+      await load();
+    } catch (e) {
+      showNotice(
+        e instanceof AdminFetchError ? e.message : `Bulk ${action} failed`,
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const startBulkDeactivate = () => {
+    if (selected.size === 0) return;
+    setConfirmDeactivate(true);
+  };
+
   return (
     <AdminShell
       title="Service Areas"
-      subtitle={`${grouped.length} pincodes`}
+      subtitle={`${counts.active} active · ${counts.history} paused`}
       actions={
         <button
           type="button"
@@ -293,6 +403,43 @@ export default function ServiceAreasPage() {
         )}
       </div>
 
+      {/* Tab chips */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          marginBottom: 12,
+        }}
+      >
+        {(["active", "history", "all"] as Tab[]).map((t) => {
+          const active = tab === t;
+          const label = t === "active" ? "Active" : t === "history" ? "History" : "All";
+          const c = counts[t];
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className="uppercase"
+              style={{
+                background: active ? "rgba(245,158,11,0.15)" : "transparent",
+                border: `1px solid ${active ? "rgba(245,158,11,0.7)" : "rgba(245,158,11,0.25)"}`,
+                color: active ? CREAM : "rgba(251,243,212,0.55)",
+                padding: "6px 14px",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.65rem",
+                letterSpacing: "0.22em",
+                cursor: "pointer",
+              }}
+            >
+              {label}
+              <span style={{ marginLeft: 8, opacity: 0.7 }}>{c}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <input
         type="text"
         placeholder="Search by pincode or area…"
@@ -313,78 +460,301 @@ export default function ServiceAreasPage() {
             border: `1px solid ${BORDER}`,
             borderRadius: 8,
             overflow: "hidden",
+            // Leave breathing room for the sticky bulk bar.
+            marginBottom: selected.size > 0 ? 80 : 0,
           }}
         >
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "rgba(10,8,5,0.6)" }}>
-                <th style={th}>Pincode</th>
-                <th style={th}>Areas</th>
-                <th style={th}>Added</th>
-                <th style={th}>Status</th>
-                <th style={{ ...th, textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((g) => (
-                <tr key={g.pincode} style={{ borderTop: `1px solid ${BORDER}` }}>
-                  <td style={{ ...td, fontWeight: 500, color: CREAM }}>
-                    {g.pincode}
-                  </td>
-                  <td style={td}>{g.area_names.join(", ")}</td>
-                  <td style={{ ...td, color: FADED }}>
-                    {new Date(g.added_at).toLocaleDateString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </td>
-                  <td style={td}>
-                    <span
-                      className="uppercase"
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                minWidth: 640,
+              }}
+            >
+              <thead>
+                <tr style={{ background: "rgba(10,8,5,0.6)" }}>
+                  <th style={{ ...th, width: 40, paddingRight: 6 }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all visible"
+                      checked={allVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someVisibleSelected;
+                      }}
+                      onChange={toggleAllVisible}
+                    />
+                  </th>
+                  <th style={th}>Pincode</th>
+                  <th style={th}>Areas</th>
+                  <th style={th}>Added</th>
+                  <th style={th}>Status</th>
+                  <th style={{ ...th, textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((g) => {
+                  const checked = selected.has(g.pincode);
+                  return (
+                    <tr
+                      key={g.pincode}
                       style={{
-                        fontFamily: "var(--font-body)",
-                        fontSize: "0.55rem",
-                        letterSpacing: "0.25em",
-                        padding: "2px 8px",
-                        borderRadius: 99,
-                        border: g.is_active
-                          ? "1px solid rgba(34,197,94,0.5)"
-                          : "1px solid rgba(192,200,206,0.3)",
-                        color: g.is_active ? "#bbf7d0" : FADED,
-                        background: g.is_active
-                          ? "rgba(34,197,94,0.12)"
+                        borderTop: `1px solid ${BORDER}`,
+                        background: checked
+                          ? "rgba(245,158,11,0.06)"
                           : "transparent",
                       }}
                     >
-                      {g.is_active ? "Active" : "Paused"}
-                    </span>
-                  </td>
-                  <td style={{ ...td, textAlign: "right" }}>
-                    {g.is_active ? (
-                      <button
-                        onClick={() => deactivate(g.pincode)}
-                        disabled={busy[g.pincode]}
-                        className="uppercase"
-                        style={dangerBtn}
-                      >
-                        Deactivate
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => reactivate(g.pincode)}
-                        disabled={busy[g.pincode]}
-                        className="uppercase"
-                        style={primaryBtn}
-                      >
-                        Reactivate
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <td style={{ ...td, paddingRight: 6 }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${g.pincode}`}
+                          checked={checked}
+                          onChange={() => toggleOne(g.pincode)}
+                        />
+                      </td>
+                      <td style={{ ...td, fontWeight: 500, color: CREAM }}>
+                        {g.pincode}
+                      </td>
+                      <td style={td}>{g.area_names.join(", ")}</td>
+                      <td style={{ ...td, color: FADED, whiteSpace: "nowrap" }}>
+                        {new Date(g.added_at).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td style={td}>
+                        <span
+                          className="uppercase"
+                          style={{
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.55rem",
+                            letterSpacing: "0.25em",
+                            padding: "2px 8px",
+                            borderRadius: 99,
+                            border: g.is_active
+                              ? "1px solid rgba(34,197,94,0.5)"
+                              : "1px solid rgba(192,200,206,0.3)",
+                            color: g.is_active ? "#bbf7d0" : FADED,
+                            background: g.is_active
+                              ? "rgba(34,197,94,0.12)"
+                              : "transparent",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {g.is_active ? "Active" : "Paused"}
+                        </span>
+                      </td>
+                      <td style={{ ...td, textAlign: "right" }}>
+                        {g.is_active ? (
+                          <button
+                            onClick={() => deactivate(g.pincode)}
+                            disabled={busy[g.pincode]}
+                            className="uppercase"
+                            style={dangerBtn}
+                          >
+                            Deactivate
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => reactivate(g.pincode)}
+                            disabled={busy[g.pincode]}
+                            className="uppercase"
+                            style={primaryBtn}
+                          >
+                            Reactivate
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky bulk action bar */}
+      {selected.size > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 200,
+            background: "rgba(6,4,2,0.96)",
+            borderTop: `1px solid ${DARK_GREEN}`,
+            padding:
+              "0.9rem clamp(1rem, 4vw, 1.5rem) calc(0.9rem + env(safe-area-inset-bottom))",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              alignItems: "center",
+              flexWrap: "wrap",
+              justifyContent: "space-between",
+            }}
+          >
+            <div
+              className="uppercase"
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "0.7rem",
+                letterSpacing: "0.22em",
+                color: CREAM,
+              }}
+            >
+              {selected.size} selected
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={clearSelection}
+                disabled={bulkBusy}
+                className="uppercase"
+                style={{
+                  ...primaryBtn,
+                  color: FADED,
+                  borderColor: "rgba(192,200,206,0.4)",
+                }}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => void runBulk("activate")}
+                disabled={bulkBusy}
+                className="uppercase"
+                style={{
+                  ...primaryBtn,
+                  cursor: bulkBusy ? "wait" : "pointer",
+                  opacity: bulkBusy ? 0.6 : 1,
+                }}
+              >
+                {bulkBusy ? "Working…" : "Activate"}
+              </button>
+              <button
+                type="button"
+                onClick={startBulkDeactivate}
+                disabled={bulkBusy}
+                className="uppercase"
+                style={{
+                  ...dangerBtn,
+                  padding: "8px 16px",
+                  fontSize: "0.65rem",
+                  cursor: bulkBusy ? "wait" : "pointer",
+                  opacity: bulkBusy ? 0.6 : 1,
+                }}
+              >
+                Deactivate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk deactivate confirmation */}
+      {confirmDeactivate && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !bulkBusy && setConfirmDeactivate(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 400,
+            background: "rgba(0,0,0,0.65)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "rgb(6,4,2)",
+              border: `1px solid ${BORDER}`,
+              borderRadius: 8,
+              padding: "1.5rem",
+              maxWidth: 420,
+              width: "100%",
+              fontFamily: "var(--font-body)",
+              color: CREAM,
+            }}
+          >
+            <h3
+              className="uppercase"
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-heading)",
+                fontWeight: 300,
+                fontSize: "1.1rem",
+                letterSpacing: "0.18em",
+                color: CREAM,
+              }}
+            >
+              Confirm bulk deactivate
+            </h3>
+            <p
+              style={{
+                marginTop: 10,
+                fontSize: "0.85rem",
+                color: "rgba(251,243,212,0.75)",
+                lineHeight: 1.5,
+              }}
+            >
+              You&rsquo;re about to deactivate{" "}
+              <strong>{selected.size} pincode{selected.size === 1 ? "" : "s"}</strong>.
+              Customers in these pincodes won&rsquo;t be able to check out until
+              they&rsquo;re reactivated.
+            </p>
+            <div
+              style={{
+                marginTop: 16,
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setConfirmDeactivate(false)}
+                disabled={bulkBusy}
+                className="uppercase"
+                style={{
+                  ...primaryBtn,
+                  color: FADED,
+                  borderColor: "rgba(192,200,206,0.4)",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void runBulk("deactivate")}
+                disabled={bulkBusy}
+                className="uppercase"
+                style={{
+                  ...dangerBtn,
+                  padding: "8px 16px",
+                  fontSize: "0.65rem",
+                  cursor: bulkBusy ? "wait" : "pointer",
+                  opacity: bulkBusy ? 0.6 : 1,
+                }}
+              >
+                {bulkBusy ? "Working…" : "Deactivate"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </AdminShell>
