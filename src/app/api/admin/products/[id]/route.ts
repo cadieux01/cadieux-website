@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import {
@@ -8,6 +9,11 @@ import {
   slugify,
   writeAuditEntries,
 } from "@/lib/admin-product-audit";
+
+function bustProductCaches(): void {
+  revalidateTag("products");
+  revalidateTag("subscription-plans");
+}
 
 const PRODUCT_SELECT =
   "id, slug, name, price_inr, subscription_per_loaf_inr, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at";
@@ -173,6 +179,8 @@ export async function PATCH(
     "update",
   );
   await writeAuditEntries(entries);
+
+  bustProductCaches();
 
   return NextResponse.json({ product: after });
 }

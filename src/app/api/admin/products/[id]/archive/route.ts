@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { writeAuditEntries } from "@/lib/admin-product-audit";
@@ -58,6 +59,9 @@ export async function POST(
       context: "archive",
     },
   ]);
+
+  revalidateTag("products");
+  revalidateTag("subscription-plans");
 
   return NextResponse.json({ product: after });
 }
