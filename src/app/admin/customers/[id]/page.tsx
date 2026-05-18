@@ -4,9 +4,10 @@
 // customer row, full order history, full subscription list, and any
 // push tokens registered.
 //
-// "Send manual reminder email" is a placeholder button — no /api/admin
-// route exists yet for ad-hoc admin email. The button surfaces a toast
-// noting that and links the operator to the existing Resend cron.
+// "Send manual email" opens a modal that POSTs to
+// /api/admin/customers/[id]/send-email (Resend-backed, admin-token
+// gated). Last 5 sent emails are loaded via GET on the same route and
+// rendered in a collapsible history strip.
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -65,6 +66,15 @@ type DetailResponse = {
   push_tokens: PushToken[];
 };
 
+type AdminEmailRow = {
+  id: string;
+  subject: string;
+  body: string;
+  template: string | null;
+  sent_at: string;
+  message_id: string | null;
+};
+
 export default function CustomerDetailPage() {
   const params = useParams();
   const id = String(params?.id ?? "");
@@ -73,6 +83,9 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [emails, setEmails] = useState<AdminEmailRow[]>([]);
+  const [emailsLoading, setEmailsLoading] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -89,17 +102,34 @@ export default function CustomerDetailPage() {
     }
   }, [id]);
 
-  useEffect(() => {
-    if (id) void load();
-  }, [id, load]);
+  const loadEmails = useCallback(async () => {
+    if (!id) return;
+    setEmailsLoading(true);
+    try {
+      const res = await adminFetch<{ emails: AdminEmailRow[] }>(
+        `/api/admin/customers/${id}/send-email`,
+      );
+      setEmails(res.emails ?? []);
+    } catch {
+      // Audit table may not exist — degrade silently.
+      setEmails([]);
+    } finally {
+      setEmailsLoading(false);
+    }
+  }, [id]);
 
-  const triggerReminderEmail = () => {
-    // No /api/admin/customers/[id]/email route exists today. Surface
-    // that fact instead of silently failing.
-    setToast(
-      "Email helper not wired yet. The Resend cron at /api/cron/subscription-reminders runs daily at 03:30 UTC. Wiring an ad-hoc admin email is a follow-up.",
-    );
-    setTimeout(() => setToast(null), 6000);
+  useEffect(() => {
+    if (id) {
+      void load();
+      void loadEmails();
+    }
+  }, [id, load, loadEmails]);
+
+  const handleEmailSent = (msg: string) => {
+    setEmailModalOpen(false);
+    setToast(msg);
+    setTimeout(() => setToast(null), 5000);
+    void loadEmails();
   };
 
   if (loading) {
@@ -136,10 +166,10 @@ export default function CustomerDetailPage() {
           ) : null}
           <button
             type="button"
-            onClick={triggerReminderEmail}
+            onClick={() => setEmailModalOpen(true)}
             style={chipNeutral}
           >
-            Send manual reminder
+            Send email
           </button>
           <Link href="/admin/customers" style={chipNeutral}>
             Back
@@ -237,6 +267,32 @@ export default function CustomerDetailPage() {
         </Table>
       )}
 
+      <h3 style={sectionHeading}>Email history</h3>
+      {emailsLoading ? (
+        <Placeholder>Loading email history…</Placeholder>
+      ) : emails.length === 0 ? (
+        <Placeholder>No admin emails sent yet.</Placeholder>
+      ) : (
+        <Table headers={["Subject", "Template", "Sent"]}>
+          {emails.map((e) => (
+            <tr key={e.id} title={e.body}>
+              <td style={td}>{e.subject}</td>
+              <td style={td}>{e.template ?? "—"}</td>
+              <td style={td}>{formatDateTime(e.sent_at)}</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
+      {emailModalOpen ? (
+        <SendEmailModal
+          customerId={id}
+          customerName={c.full_name}
+          onCancel={() => setEmailModalOpen(false)}
+          onSent={handleEmailSent}
+        />
+      ) : null}
+
       <h3 style={sectionHeading}>Order history</h3>
       {data.orders.length === 0 ? (
         <Placeholder>No orders yet.</Placeholder>
@@ -254,6 +310,115 @@ export default function CustomerDetailPage() {
         </Table>
       )}
     </AdminShell>
+  );
+}
+
+function SendEmailModal({
+  customerId,
+  customerName,
+  onCancel,
+  onSent,
+}: {
+  customerId: string;
+  customerName: string | null;
+  onCancel: () => void;
+  onSent: (msg: string) => void;
+}) {
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [template, setTemplate] = useState("");
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const send = async () => {
+    setErr(null);
+    setSending(true);
+    try {
+      await adminFetch(`/api/admin/customers/${customerId}/send-email`, {
+        method: "POST",
+        body: JSON.stringify({
+          subject: subject.trim(),
+          body: body.trim(),
+          template: template.trim() || undefined,
+        }),
+      });
+      onSent(
+        `Email sent to ${customerName ?? "customer"}.`,
+      );
+    } catch (e) {
+      if (e instanceof AdminFetchError) setErr(e.message);
+      else setErr("Send failed.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={modalBackdrop} onClick={sending ? undefined : onCancel}>
+      <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalTitle}>Send email · {customerName ?? "customer"}</h3>
+        <label style={modalLabel}>
+          Subject
+          <input
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            maxLength={200}
+            disabled={sending}
+            placeholder="A note from Cadieux"
+            style={modalInput}
+          />
+        </label>
+        <label style={modalLabel}>
+          Body
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            maxLength={10000}
+            disabled={sending}
+            rows={10}
+            placeholder="Hi …"
+            style={{ ...modalInput, fontFamily: "var(--font-body)", resize: "vertical" }}
+          />
+        </label>
+        <label style={modalLabel}>
+          Template tag (optional)
+          <input
+            value={template}
+            onChange={(e) => setTemplate(e.target.value)}
+            maxLength={64}
+            disabled={sending}
+            placeholder="e.g. follow_up, promo, recovery"
+            style={modalInput}
+          />
+        </label>
+        {err ? (
+          <p style={{ color: "#fca5a5", fontSize: "0.8rem", margin: "0 0 0.8rem" }}>
+            {err}
+          </p>
+        ) : null}
+        <div style={modalActions}>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={sending}
+            style={chipNeutral}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void send()}
+            disabled={sending || subject.trim().length === 0 || body.trim().length === 0}
+            style={{
+              ...chipPrimary,
+              opacity: sending || subject.trim().length === 0 || body.trim().length === 0 ? 0.5 : 1,
+            }}
+          >
+            {sending ? "Sending…" : "Send email"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -400,4 +565,63 @@ const chipPrimary: React.CSSProperties = {
 const chipNeutral: React.CSSProperties = {
   ...chipBase,
   color: "rgba(245,158,11,0.85)",
+};
+
+const modalBackdrop: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(6,4,2,0.78)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 50,
+  padding: "1rem",
+};
+
+const modalCard: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 540,
+  background: "rgb(12,8,4)",
+  border: "1px solid rgba(245,158,11,0.4)",
+  padding: "1.4rem 1.4rem 1.2rem",
+  borderRadius: 6,
+  maxHeight: "90vh",
+  overflowY: "auto",
+};
+
+const modalTitle: React.CSSProperties = {
+  fontFamily: "var(--font-heading)",
+  fontSize: "1.05rem",
+  color: "#fbf3d4",
+  margin: "0 0 1rem",
+  letterSpacing: "0.04em",
+};
+
+const modalLabel: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.3rem",
+  margin: "0 0 0.9rem",
+  fontFamily: "var(--font-body)",
+  fontSize: "0.7rem",
+  letterSpacing: "0.2em",
+  textTransform: "uppercase",
+  color: "rgba(245,158,11,0.85)",
+};
+
+const modalInput: React.CSSProperties = {
+  background: "transparent",
+  border: "1px solid rgba(245,158,11,0.3)",
+  color: "#fbf3d4",
+  padding: "0.55rem 0.7rem",
+  fontSize: "0.85rem",
+  letterSpacing: "0.02em",
+  outline: "none",
+  textTransform: "none",
+};
+
+const modalActions: React.CSSProperties = {
+  display: "flex",
+  gap: "0.6rem",
+  justifyContent: "flex-end",
 };
