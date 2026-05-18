@@ -618,9 +618,15 @@ export async function POST(req: NextRequest) {
   const { body, addressString } = shape;
 
   // 5. Server-side price reconcile against the products table.
+  //    Subscriptions are priced off subscription_per_loaf_inr (set per
+  //    product in the admin editor) — fall back to price_inr only when
+  //    that column is null so legacy rows still work. Also enforces the
+  //    same availability flags as one-time checkout.
   const { data: product, error: productErr } = await supabaseAdmin
     .from("products")
-    .select("id, slug, name, price_inr, is_active")
+    .select(
+      "id, slug, name, price_inr, subscription_per_loaf_inr, is_active, is_archived, in_stock",
+    )
     .eq("id", body.product_id)
     .maybeSingle();
 
@@ -628,10 +634,29 @@ export async function POST(req: NextRequest) {
     console.error("[mobile/subscriptions] product fetch failed:", productErr);
     return fail(500, "Failed to validate product");
   }
-  if (!product || !product.is_active) {
+  if (!product || !product.is_active || product.is_archived === true) {
     return fail(400, `Product unavailable: ${body.product_id}`, "product_unavailable");
   }
-  if (product.price_inr !== body.price_snapshot_inr) {
+  if (product.in_stock === false) {
+    return fail(
+      400,
+      `Product is out of stock: ${product.name}`,
+      "out_of_stock",
+    );
+  }
+  const subPriceRaw = product.subscription_per_loaf_inr;
+  const subPrice =
+    subPriceRaw !== null && subPriceRaw !== undefined
+      ? Number(subPriceRaw)
+      : Number(product.price_inr);
+  if (!Number.isFinite(subPrice) || subPrice <= 0) {
+    return fail(
+      400,
+      "Subscription price is not configured for this product.",
+      "subscription_unavailable",
+    );
+  }
+  if (subPrice !== body.price_snapshot_inr) {
     return fail(
       400,
       `Price mismatch: ${body.product_id} — please refresh and retry`,
@@ -768,8 +793,8 @@ export async function POST(req: NextRequest) {
     customerId = newCust.id;
   }
 
-  // 8. Compute totals from server-trusted price.
-  const totalAmountInr = product.price_inr * deliveryRowsTemplate.length;
+  // 8. Compute totals from server-trusted subscription price.
+  const totalAmountInr = subPrice * deliveryRowsTemplate.length;
 
   // 9. Build the new-tracking-model address blob (jsonb).
   const deliveryAddressJson = {
@@ -788,7 +813,7 @@ export async function POST(req: NextRequest) {
       // Legacy columns
       bread_slug: product.slug,
       bread_name: product.name,
-      bread_price: product.price_inr,
+      bread_price: subPrice,
       weeks: subRowWeeks,
       days: subRowDays,
       slot_mode: "same",

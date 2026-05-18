@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
   const productIds = Array.from(new Set(body.items.map((i) => i.product_id)));
   const { data: productRows, error: productsErr } = await supabaseAdmin
     .from("products")
-    .select("id, name, price_inr, is_active")
+    .select("id, name, price_inr, is_active, is_archived, in_stock")
     .in("id", productIds);
 
   if (productsErr) {

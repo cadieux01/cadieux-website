@@ -36,6 +36,11 @@ export type ProductRow = {
   name: string;
   price_inr: number;
   is_active: boolean;
+  // New mirror-fields, optional so a legacy caller that hasn't widened
+  // its SELECT yet still type-checks. reconcilePrices defaults
+  // undefined → in-stock / not-archived to preserve back-compat.
+  is_archived?: boolean | null;
+  in_stock?: boolean | null;
 };
 
 export type ItemSnapshot = {
@@ -245,11 +250,18 @@ export function reconcilePrices(
 
   for (const item of items) {
     const product = productById.get(item.product_id);
-    if (!product || !product.is_active) {
+    if (!product || !product.is_active || product.is_archived === true) {
       return fail(
         400,
         `Product unavailable: ${item.product_id}`,
         "product_unavailable",
+      );
+    }
+    if (product.in_stock === false) {
+      return fail(
+        400,
+        `Product is out of stock: ${product.name}`,
+        "out_of_stock",
       );
     }
     const serverLine = product.price_inr * item.quantity;
@@ -380,6 +392,8 @@ export type WebProductRow = {
   name: string;
   price_inr: number;
   is_active: boolean;
+  is_archived?: boolean | null;
+  in_stock?: boolean | null;
 };
 
 export type WebItemSnapshot = {
@@ -412,11 +426,18 @@ export function reconcileWebPrices(
   const snapshot: WebItemSnapshot[] = [];
   for (const item of items) {
     const product = productBySlug.get(item.slug);
-    if (!product || !product.is_active) {
+    if (!product || !product.is_active || product.is_archived === true) {
       return fail(
         400,
         `Product unavailable: ${item.slug}`,
         "product_unavailable",
+      );
+    }
+    if (product.in_stock === false) {
+      return fail(
+        400,
+        `Product is out of stock: ${product.name}`,
+        "out_of_stock",
       );
     }
     if (item.kind === "once") {

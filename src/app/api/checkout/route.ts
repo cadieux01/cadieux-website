@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     const slugs = Array.from(new Set(itemsShape.items.map((i) => i.slug)));
     const { data: productRows, error: productsErr } = await supabaseAdmin
       .from("products")
-      .select("slug, name, price_inr, is_active")
+      .select("slug, name, price_inr, is_active, is_archived, in_stock")
       .in("slug", slugs);
     if (productsErr) {
       console.error("[checkout] products fetch failed:", productsErr);
