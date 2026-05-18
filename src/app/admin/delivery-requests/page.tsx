@@ -43,6 +43,7 @@ export default function DeliveryRequestsPage() {
     useState<"pending" | "serviceable" | "rejected" | "all">("pending");
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<string | null>(null);
@@ -57,16 +58,35 @@ export default function DeliveryRequestsPage() {
       setRows(res.requests ?? []);
     } catch (e) {
       setError(
-        e instanceof AdminFetchError ? e.message : "Failed to load requests.",
+        e instanceof AdminFetchError
+          ? e.message
+          : e instanceof Error
+          ? e.message
+          : "Failed to load requests.",
       );
     } finally {
       setLoading(false);
     }
   }, [filter]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
+
   useEffect(() => {
     setLoading(true);
     void load();
+  }, [load]);
+
+  // 10s polling for active dispatch awareness.
+  useEffect(() => {
+    const t = setInterval(() => void load(), 10_000);
+    return () => clearInterval(t);
   }, [load]);
 
   const counts = useMemo(() => {
@@ -129,6 +149,27 @@ export default function DeliveryRequestsPage() {
     <AdminShell
       title="Delivery Requests"
       subtitle={`${counts.total} ${filter}`}
+      actions={
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          className="uppercase"
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "0.65rem",
+            letterSpacing: "0.22em",
+            padding: "0.35rem 0.85rem",
+            background: "transparent",
+            border: `1px solid ${GOLD}`,
+            color: GOLD,
+            cursor: refreshing ? "wait" : "pointer",
+            opacity: refreshing ? 0.6 : 1,
+          }}
+        >
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
+      }
     >
       {notice && (
         <div

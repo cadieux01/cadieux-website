@@ -22,6 +22,7 @@ export default function AdminProductsPage() {
   const [rows, setRows] = useState<AdminProductRow[]>([]);
   const [includeArchived, setIncludeArchived] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -35,12 +36,25 @@ export default function AdminProductsPage() {
       setRows(res.products ?? []);
     } catch (e) {
       const msg =
-        e instanceof AdminFetchError ? e.message : "Failed to load products";
+        e instanceof AdminFetchError
+          ? e.message
+          : e instanceof Error
+          ? e.message
+          : "Failed to load products";
       setError(msg);
     } finally {
       setLoading(false);
     }
   }, [includeArchived]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   useEffect(() => {
     void load();
@@ -60,6 +74,25 @@ export default function AdminProductsPage() {
       }`}
       actions={
         <>
+          <button
+            type="button"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+            className="uppercase"
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: "0.7rem",
+              letterSpacing: "0.25em",
+              color: GOLD,
+              border: `1px solid ${GOLD}`,
+              padding: "0.45rem 0.9rem",
+              background: "transparent",
+              cursor: refreshing ? "wait" : "pointer",
+              opacity: refreshing ? 0.6 : 1,
+            }}
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
           <button
             type="button"
             onClick={() => setIncludeArchived((v) => !v)}

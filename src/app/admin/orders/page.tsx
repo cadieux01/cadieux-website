@@ -93,6 +93,7 @@ function AdminLoading() {
 function OrdersPageInner() {
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<OrderFilterValue>("all");
   const [query, setQuery] = useState("");
@@ -113,11 +114,21 @@ function OrdersPageInner() {
       setOrders(res.orders ?? []);
     } catch (e) {
       if (e instanceof AdminFetchError) setError(e.message);
+      else if (e instanceof Error) setError(e.message);
       else setError("Could not load orders.");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   useEffect(() => {
     void load();
@@ -348,11 +359,16 @@ function OrdersPageInner() {
           </button>
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
             className="uppercase"
-            style={chipNeutral}
+            style={{
+              ...chipNeutral,
+              cursor: refreshing ? "wait" : "pointer",
+              opacity: refreshing ? 0.6 : 1,
+            }}
           >
-            Refresh
+            {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </>
       }
@@ -491,7 +507,8 @@ function OrdersPageInner() {
             overflow: "hidden",
           }}
         >
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 880 }}>
             <thead>
               <tr style={tableHeadRow}>
                 <th style={{ ...th, width: 36 }}>
@@ -720,6 +737,7 @@ function OrdersPageInner() {
               })}
             </tbody>
           </table>
+        </div>
         </div>
       )}
     </AdminShell>

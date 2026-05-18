@@ -108,6 +108,7 @@ function AdminLoading() {
 function OverviewPageInner() {
   const [data, setData] = useState<OverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const range = useDateRangeFromQuery();
 
@@ -125,11 +126,21 @@ function OverviewPageInner() {
       setData(res);
     } catch (e) {
       if (e instanceof AdminFetchError) setError(e.message);
+      else if (e instanceof Error) setError(e.message);
       else setError("Could not load overview.");
     } finally {
       setLoading(false);
     }
   }, [range]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   useEffect(() => {
     void load();
@@ -144,8 +155,17 @@ function OverviewPageInner() {
           : "Analytics dashboard"
       }
       actions={
-        <button type="button" onClick={() => void load()} style={chipNeutral}>
-          Refresh
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          style={{
+            ...chipNeutral,
+            cursor: refreshing ? "wait" : "pointer",
+            opacity: refreshing ? 0.6 : 1,
+          }}
+        >
+          {refreshing ? "Refreshing…" : "Refresh"}
         </button>
       }
     >

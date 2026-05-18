@@ -252,7 +252,8 @@ function SubscriptionsPageInner() {
             overflow: "hidden",
           }}
         >
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 880 }}>
             <thead>
               <tr style={tableHeadRow}>
                 <th style={th}>Customer</th>
@@ -386,6 +387,7 @@ function SubscriptionsPageInner() {
               })}
             </tbody>
           </table>
+        </div>
         </div>
       )}
 

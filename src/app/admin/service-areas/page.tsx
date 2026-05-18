@@ -33,6 +33,7 @@ const BORDER = "rgba(245,158,11,0.18)";
 export default function ServiceAreasPage() {
   const [rows, setRows] = useState<ServiceAreaRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
@@ -52,12 +53,25 @@ export default function ServiceAreasPage() {
       setRows(res.rows ?? []);
     } catch (e) {
       setError(
-        e instanceof AdminFetchError ? e.message : "Failed to load service areas.",
+        e instanceof AdminFetchError
+          ? e.message
+          : e instanceof Error
+          ? e.message
+          : "Failed to load service areas.",
       );
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   useEffect(() => {
     void load();
@@ -171,7 +185,25 @@ export default function ServiceAreasPage() {
   };
 
   return (
-    <AdminShell title="Service Areas" subtitle={`${grouped.length} pincodes`}>
+    <AdminShell
+      title="Service Areas"
+      subtitle={`${grouped.length} pincodes`}
+      actions={
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          className="uppercase"
+          style={{
+            ...primaryBtn,
+            cursor: refreshing ? "wait" : "pointer",
+            opacity: refreshing ? 0.6 : 1,
+          }}
+        >
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
+      }
+    >
       {notice && (
         <div
           style={{

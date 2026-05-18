@@ -38,6 +38,7 @@ type Review = {
 export default function FeedbackPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
@@ -63,14 +64,17 @@ export default function FeedbackPage() {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   }, [load]);
 
-  // 10s polling cadence matches the rest of the admin surface.
   useEffect(() => {
-    const t = setInterval(() => void load(), 10_000);
-    return () => clearInterval(t);
+    void load();
   }, [load]);
 
   const deleteReview = async (id: string) => {
@@ -140,7 +144,31 @@ export default function FeedbackPage() {
   void ADMIN_PASSWORD;
 
   return (
-    <AdminShell title="Feedback" subtitle="Reviews · replies">
+    <AdminShell
+      title="Feedback"
+      subtitle="Reviews · replies"
+      actions={
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          className="uppercase"
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "0.7rem",
+            letterSpacing: "0.25em",
+            color: "#f59e0b",
+            border: "1px solid #f59e0b",
+            padding: "0.45rem 0.9rem",
+            background: "transparent",
+            cursor: refreshing ? "wait" : "pointer",
+            opacity: refreshing ? 0.6 : 1,
+          }}
+        >
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
+      }
+    >
       {loading ? (
         <p style={mutedText}>Loading feedback…</p>
       ) : error ? (

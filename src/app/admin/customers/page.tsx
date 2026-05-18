@@ -60,6 +60,7 @@ function AdminLoading() {
 function CustomersPageInner() {
   const [rows, setRows] = useState<CustomerListRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const range = useDateRangeFromQuery();
@@ -76,11 +77,21 @@ function CustomersPageInner() {
       setRows(res.customers ?? []);
     } catch (e) {
       if (e instanceof AdminFetchError) setError(e.message);
+      else if (e instanceof Error) setError(e.message);
       else setError("Could not load customers.");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load(query);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load, query]);
 
   useEffect(() => {
     void load("");
@@ -120,14 +131,28 @@ function CustomersPageInner() {
       title="Customers"
       subtitle="Lookup &amp; activity"
       actions={
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={visible.length === 0}
-          style={chipNeutral}
-        >
-          Export CSV
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+            style={{
+              ...chipNeutral,
+              cursor: refreshing ? "wait" : "pointer",
+              opacity: refreshing ? 0.6 : 1,
+            }}
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={visible.length === 0}
+            style={chipNeutral}
+          >
+            Export CSV
+          </button>
+        </>
       }
     >
       <div className="mb-4">
@@ -179,7 +204,8 @@ function CustomersPageInner() {
             overflow: "hidden",
           }}
         >
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
             <thead>
               <tr style={tableHeadRow}>
                 <th style={th}>Name</th>
@@ -246,6 +272,7 @@ function CustomersPageInner() {
               ))}
             </tbody>
           </table>
+        </div>
         </div>
       )}
     </AdminShell>

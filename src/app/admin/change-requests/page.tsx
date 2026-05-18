@@ -37,6 +37,7 @@ type Filter = "pending" | "approved" | "rejected" | "all";
 export default function ChangeRequestsPage() {
   const [rows, setRows] = useState<ChangeRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("pending");
   const [responses, setResponses] = useState<Record<string, string>>({});
@@ -52,21 +53,28 @@ export default function ChangeRequestsPage() {
       setRows(res.requests ?? []);
     } catch (e) {
       setError(
-        e instanceof AdminFetchError ? e.message : "Could not load change requests.",
+        e instanceof AdminFetchError
+          ? e.message
+          : e instanceof Error
+          ? e.message
+          : "Could not load change requests.",
       );
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    void load();
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   }, [load]);
 
-  // 10s polling mirrors the legacy dashboard cadence.
   useEffect(() => {
-    const t = setInterval(() => void load(), 10_000);
-    return () => clearInterval(t);
+    void load();
   }, [load]);
 
   const filtered = useMemo(
@@ -112,7 +120,31 @@ export default function ChangeRequestsPage() {
   }, [rows]);
 
   return (
-    <AdminShell title="Change Requests" subtitle="Subscription reschedule queue">
+    <AdminShell
+      title="Change Requests"
+      subtitle="Subscription reschedule queue"
+      actions={
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          className="uppercase"
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "0.7rem",
+            letterSpacing: "0.25em",
+            color: "#f59e0b",
+            border: "1px solid #f59e0b",
+            padding: "0.45rem 0.9rem",
+            background: "transparent",
+            cursor: refreshing ? "wait" : "pointer",
+            opacity: refreshing ? 0.6 : 1,
+          }}
+        >
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
+      }
+    >
       <div className="flex flex-wrap gap-2 mb-5">
         {(["pending", "approved", "rejected", "all"] as Filter[]).map((f) => {
           const active = filter === f;
