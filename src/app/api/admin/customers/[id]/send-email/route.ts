@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 const FROM_EMAIL =
   process.env.RESEND_FROM_EMAIL || "Cadieux <hello@cadieux.in>";
@@ -157,6 +158,22 @@ export async function POST(
   if (auditErr) {
     console.warn("[admin/send-email] audit insert failed:", auditErr.message);
   }
+
+  void recordAuditEvent({
+    req,
+    entity: "email",
+    action: "send_email",
+    targetId: customerId,
+    targetLabel: (customer as { full_name?: string | null }).full_name || recipient,
+    context: `Sent email "${subject}" to ${recipient}`,
+    meta: {
+      customer_id: customerId,
+      recipient,
+      subject,
+      template,
+      message_id: messageId,
+    },
+  });
 
   return NextResponse.json({ ok: true, message_id: messageId });
 }

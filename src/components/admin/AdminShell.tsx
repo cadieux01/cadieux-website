@@ -22,6 +22,7 @@ const NAV: { href: string; label: string; secondary?: boolean }[] = [
   { href: "/admin/customers", label: "Customers" },
   { href: "/admin/subscriptions", label: "Subscriptions" },
   { href: "/admin/products", label: "Products" },
+  { href: "/admin/audit-log", label: "Audit Log" },
   { href: "/admin/legacy", label: "Legacy", secondary: true },
 ];
 

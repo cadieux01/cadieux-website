@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { recordAuditEvent } from "@/lib/audit-log";
 import { notifyCustomer } from "@/lib/push";
 
 const ALLOWED_STATUSES = new Set([
@@ -62,6 +63,14 @@ export async function PATCH(
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
+  // Capture the prior status so we can record a clean before/after on
+  // the audit row when status changes.
+  const { data: before } = await supabaseAdmin
+    .from("orders")
+    .select("status")
+    .eq("id", params.id)
+    .maybeSingle();
+
   const { data: updated, error } = await supabaseAdmin
     .from("orders")
     .update(update)
@@ -89,6 +98,29 @@ export async function PATCH(
       status: updated.status,
     });
   }
+
+  const statusChanged =
+    typeof update.status === "string" && before?.status !== update.status;
+  void recordAuditEvent({
+    req,
+    entity: "order",
+    action: statusChanged
+      ? update.status === "cancelled"
+        ? "cancel"
+        : "status_change"
+      : "update",
+    targetId: params.id,
+    targetLabel: `#${params.id.slice(0, 8)}`,
+    context: statusChanged
+      ? `Order status changed from "${before?.status ?? "—"}" to "${update.status as string}"`
+      : `Updated order ${params.id.slice(0, 8)}`,
+    meta: {
+      fields: Object.keys(update),
+      ...(statusChanged
+        ? { status_before: before?.status ?? null, status_after: update.status }
+        : {}),
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }

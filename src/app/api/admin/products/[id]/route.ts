@@ -9,6 +9,7 @@ import {
   slugify,
   writeAuditEntries,
 } from "@/lib/admin-product-audit";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 function bustProductCaches(): void {
   revalidateTag("products");
@@ -181,6 +182,29 @@ export async function PATCH(
   await writeAuditEntries(entries);
 
   bustProductCaches();
+
+  const priceChanged =
+    "price_inr" in update && before.price_inr !== after.price_inr;
+  void recordAuditEvent({
+    req,
+    entity: "product",
+    action: priceChanged ? "price_change" : "update",
+    targetId: after.id,
+    targetLabel: after.name,
+    context: priceChanged
+      ? `Changed price for "${after.name}" from ₹${before.price_inr} to ₹${after.price_inr}`
+      : `Updated product "${after.name}"`,
+    meta: {
+      slug: after.slug,
+      fields: Object.keys(update),
+      ...(priceChanged
+        ? {
+            price_before: before.price_inr,
+            price_after: after.price_inr,
+          }
+        : {}),
+    },
+  });
 
   return NextResponse.json({ product: after });
 }

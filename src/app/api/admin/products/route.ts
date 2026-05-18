@@ -7,6 +7,7 @@ import {
   slugify,
   writeAuditEntries,
 } from "@/lib/admin-product-audit";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 // Bust the unstable_cache entries that key off the same product rows.
 // "products" is consumed by getActiveProducts() (lib/products.ts).
@@ -176,6 +177,21 @@ export async function POST(req: NextRequest) {
   await writeAuditEntries(entries);
 
   bustProductCaches();
+
+  void recordAuditEvent({
+    req,
+    entity: "product",
+    action: "create",
+    targetId: inserted.id,
+    targetLabel: inserted.name,
+    context: `Created product "${inserted.name}"`,
+    meta: {
+      slug: inserted.slug,
+      price_inr: inserted.price_inr,
+      in_stock: inserted.in_stock,
+      is_active: inserted.is_active,
+    },
+  });
 
   return NextResponse.json({ product: inserted }, { status: 201 });
 }

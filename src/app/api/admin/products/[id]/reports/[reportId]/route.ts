@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { recordAuditEvent } from "@/lib/audit-log";
 import {
   PRODUCT_REPORT_CATEGORIES,
   ProductReportCategory,
+  productReportsTag,
 } from "@/lib/product-reports";
 
 // Edit / hard-delete a single lab report.
@@ -16,10 +18,11 @@ import {
 
 const BUCKET = "product-reports";
 const REPORT_SELECT =
-  "id, product_id, title, category, file_url, file_name, file_mime, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, updated_at";
+  "id, product_id, title, category, file_url, file_name, mime_type, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, archived_at";
 
-function bust(): void {
+function bust(productId: string): void {
   revalidateTag("product-reports");
+  revalidateTag(productReportsTag(productId));
 }
 
 export async function PATCH(
@@ -66,7 +69,6 @@ export async function PATCH(
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
-  update.updated_at = new Date().toISOString();
 
   const { data, error } = await supabaseAdmin
     .from("product_reports")
@@ -84,7 +86,21 @@ export async function PATCH(
     );
   }
 
-  bust();
+  bust(params.id);
+
+  void recordAuditEvent({
+    req,
+    entity: "product_report",
+    action: "update",
+    targetId: data.id,
+    targetLabel: data.title,
+    context: `Edited report "${data.title}"`,
+    meta: {
+      product_id: params.id,
+      fields: Object.keys(update),
+    },
+  });
+
   return NextResponse.json({ report: data });
 }
 
@@ -98,7 +114,7 @@ export async function DELETE(
 
   const { data: row, error: fetchErr } = await supabaseAdmin
     .from("product_reports")
-    .select("storage_path")
+    .select("storage_path, title, category")
     .eq("id", params.reportId)
     .eq("product_id", params.id)
     .maybeSingle();
@@ -128,6 +144,21 @@ export async function DELETE(
     console.warn("[admin/reports DELETE storage]", rmErr.message);
   }
 
-  bust();
+  bust(params.id);
+
+  void recordAuditEvent({
+    req,
+    entity: "product_report",
+    action: "delete",
+    targetId: params.reportId,
+    targetLabel: row.title,
+    context: `Deleted report "${row.title}"`,
+    meta: {
+      product_id: params.id,
+      category: row.category,
+      storage_path: row.storage_path,
+    },
+  });
+
   return NextResponse.json({ ok: true });
 }

@@ -420,7 +420,8 @@ function ReportCard({
               marginTop: "0.25rem",
             }}
           >
-            {formatBytes(report.file_size_bytes)} · {report.file_mime}
+            {formatBytes(report.file_size_bytes)}
+            {report.mime_type ? ` · ${report.mime_type}` : ""}
           </div>
           <div className="flex flex-wrap gap-2 mt-3">
             <button
@@ -606,10 +607,9 @@ function AddReportModal({
             textTransform: "uppercase",
           }}
         >
-          File (PDF, image, or DOCX · max 10MB)
+          File (any type · max 10MB)
           <input
             type="file"
-            accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
             onChange={(e) => onFile(e.target.files?.[0] ?? null)}
             className="mt-1 w-full"
             style={{
@@ -691,7 +691,8 @@ function AddReportModal({
   );
 }
 
-function formatBytes(n: number): string {
+function formatBytes(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "—";
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;

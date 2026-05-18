@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 // GET — admin detail view. Returns the customer row + every order
 // they've placed + every subscription they hold + push token presence.
@@ -85,14 +86,27 @@ export async function PATCH(
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
+  const { data: updated, error } = await supabaseAdmin
     .from("customers")
     .update(update)
-    .eq("id", params.id);
+    .eq("id", params.id)
+    .select("id, full_name, phone")
+    .maybeSingle();
 
   if (error) {
     console.error("[admin/customers update]", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  void recordAuditEvent({
+    req,
+    entity: "customer",
+    action: "update",
+    targetId: params.id,
+    targetLabel: updated?.full_name || updated?.phone || params.id,
+    context: `Updated customer ${updated?.full_name ?? params.id}`,
+    meta: { fields: Object.keys(update) },
+  });
+
   return NextResponse.json({ ok: true });
 }

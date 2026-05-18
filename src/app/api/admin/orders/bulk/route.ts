@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { recordAuditEvent } from "@/lib/audit-log";
 import { notifyCustomer } from "@/lib/push";
 
 // Bulk status transition. Mirrors the single-order PATCH endpoint's
@@ -65,6 +66,16 @@ export async function POST(req: NextRequest) {
       continue;
     }
     succeeded.push(data.id);
+
+    void recordAuditEvent({
+      req,
+      entity: "order",
+      action: nextStatus === "cancelled" ? "cancel" : "status_change",
+      targetId: data.id,
+      targetLabel: `#${data.id.slice(0, 8)}`,
+      context: `Bulk ${action} → ${nextStatus} for order ${data.id.slice(0, 8)}`,
+      meta: { bulk: true, action, status_after: nextStatus },
+    });
 
     // Fire-and-forget push, identical to single-order PATCH semantics.
     const copy = STATUS_PUSH_COPY[nextStatus];

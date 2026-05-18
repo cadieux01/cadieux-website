@@ -2,46 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { recordAuditEvent } from "@/lib/audit-log";
 import {
   PRODUCT_REPORT_CATEGORIES,
   ProductReportCategory,
+  productReportsTag,
 } from "@/lib/product-reports";
 
 // Lab Reports for a single product.
-//   GET  → list all (including archived) for the admin UI.
+//   GET  → list all (incl. archived when ?include_archived=1).
 //   POST → multipart upload: file + title + category + optional sort_order.
 //
-// Storage bucket: product-reports (public). File path is namespaced under
-// the product id so cascade-deleting a product makes it obvious to find
-// orphaned files: <product_id>/<timestamp>-<rand>.<ext>.
+// Storage bucket: product-reports (public). File path is namespaced
+// under the product id so a cascading product delete makes orphan
+// files easy to spot: <product_id>/<timestamp>-<rand>.<ext>.
 
 const BUCKET = "product-reports";
 const MAX_BYTES = 10 * 1024 * 1024;
-const ALLOWED_MIME = new Set([
-  "application/pdf",
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/msword",
-  "application/octet-stream",
-]);
-const EXT_BY_MIME: Record<string, string> = {
-  "application/pdf": "pdf",
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-    "docx",
-  "application/msword": "doc",
-  "application/octet-stream": "bin",
-};
 
 const REPORT_SELECT =
-  "id, product_id, title, category, file_url, file_name, file_mime, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, updated_at";
+  "id, product_id, title, category, file_url, file_name, mime_type, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, archived_at";
 
-function bust(): void {
+function bust(productId: string): void {
   revalidateTag("product-reports");
+  revalidateTag(productReportsTag(productId));
+}
+
+// Best-effort extension from the upload file name. Used to keep the
+// stored object readable to humans — the public URL ends in .pdf /
+// .png / etc. so browser viewers Just Work.
+function extFromName(name: string): string {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0 || dot === name.length - 1) return "bin";
+  const raw = name.slice(dot + 1).toLowerCase();
+  return raw.replace(/[^a-z0-9]/g, "").slice(0, 5) || "bin";
 }
 
 export async function GET(
@@ -52,10 +46,18 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await supabaseAdmin
+  const includeArchived =
+    req.nextUrl.searchParams.get("include_archived") === "true" ||
+    req.nextUrl.searchParams.get("include_archived") === "1";
+
+  let q = supabaseAdmin
     .from("product_reports")
     .select(REPORT_SELECT)
-    .eq("product_id", params.id)
+    .eq("product_id", params.id);
+  if (!includeArchived) {
+    q = q.eq("is_archived", false);
+  }
+  const { data, error } = await q
     .order("sort_order", { ascending: true })
     .order("uploaded_at", { ascending: false });
 
@@ -115,12 +117,6 @@ export async function POST(
       { status: 400 },
     );
   }
-  if (!ALLOWED_MIME.has(file.type)) {
-    return NextResponse.json(
-      { error: `Unsupported mime "${file.type}".` },
-      { status: 400 },
-    );
-  }
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
       { error: `File too large (${file.size} bytes). Max ${MAX_BYTES}.` },
@@ -128,16 +124,20 @@ export async function POST(
     );
   }
 
-  const ext = EXT_BY_MIME[file.type] ?? "bin";
+  // No MIME allowlist — admin is trusted, and the spec wants any file
+  // type accepted up to the 10 MB cap. Extension is derived from the
+  // upload's filename so the stored path stays human-readable.
+  const ext = extFromName(file.name);
   const stamp = Date.now();
   const rand = Math.random().toString(36).slice(2, 10);
   const path = `${params.id}/${stamp}-${rand}.${ext}`;
+  const contentType = file.type || "application/octet-stream";
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error: uploadErr } = await supabaseAdmin.storage
     .from(BUCKET)
     .upload(path, buffer, {
-      contentType: file.type,
+      contentType,
       cacheControl: "31536000",
       upsert: false,
     });
@@ -164,7 +164,7 @@ export async function POST(
       category,
       file_url: pub.publicUrl,
       file_name: file.name || `report.${ext}`,
-      file_mime: file.type,
+      mime_type: file.type || null,
       file_size_bytes: file.size,
       storage_path: path,
       sort_order: sortOrder,
@@ -182,6 +182,23 @@ export async function POST(
     );
   }
 
-  bust();
+  bust(params.id);
+
+  void recordAuditEvent({
+    req,
+    entity: "product_report",
+    action: "create",
+    targetId: row.id,
+    targetLabel: title,
+    context: `Added ${category.toUpperCase()} report "${title}"`,
+    meta: {
+      product_id: params.id,
+      category,
+      file_name: row.file_name,
+      file_size_bytes: row.file_size_bytes,
+      mime_type: row.mime_type,
+    },
+  });
+
   return NextResponse.json({ report: row });
 }

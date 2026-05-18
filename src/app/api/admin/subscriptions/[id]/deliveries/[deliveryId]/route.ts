@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 const ALLOWED_STATUSES = new Set([
   "pending_confirmation",
@@ -42,6 +43,13 @@ export async function PATCH(
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
+  const { data: before } = await supabaseAdmin
+    .from("subscription_deliveries")
+    .select("status")
+    .eq("id", params.deliveryId)
+    .eq("subscription_id", params.id)
+    .maybeSingle();
+
   const { error } = await supabaseAdmin
     .from("subscription_deliveries")
     .update(update)
@@ -52,6 +60,26 @@ export async function PATCH(
     console.error("[admin/subscription_deliveries PATCH]", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const statusChanged =
+    typeof update.status === "string" && before?.status !== update.status;
+  void recordAuditEvent({
+    req,
+    entity: "subscription_delivery",
+    action: statusChanged ? "status_change" : "update",
+    targetId: params.deliveryId,
+    targetLabel: `Delivery ${params.deliveryId.slice(0, 8)}`,
+    context: statusChanged
+      ? `Delivery status: ${before?.status ?? "—"} → ${update.status as string}`
+      : `Updated delivery ${params.deliveryId.slice(0, 8)}`,
+    meta: {
+      subscription_id: params.id,
+      fields: Object.keys(update).filter((k) => k !== "status_updated_at"),
+      ...(statusChanged
+        ? { status_before: before?.status ?? null, status_after: update.status }
+        : {}),
+    },
+  });
 
   // If all deliveries for this subscription are now delivered/cancelled, mark
   // the subscription as completed automatically.

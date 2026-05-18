@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { writeAuditEntries } from "@/lib/admin-product-audit";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 // POST /api/admin/products/[id]/unarchive
 //   Reverses an archive: is_archived=false, archived_at=null. The product
@@ -60,6 +61,15 @@ export async function POST(
 
   revalidateTag("products");
   revalidateTag("subscription-plans");
+
+  void recordAuditEvent({
+    req,
+    entity: "product",
+    action: "unarchive",
+    targetId: after.id,
+    targetLabel: after.slug,
+    context: `Unarchived product "${after.slug}"`,
+  });
 
   return NextResponse.json({ product: after });
 }

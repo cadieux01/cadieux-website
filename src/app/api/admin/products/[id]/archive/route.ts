@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { writeAuditEntries } from "@/lib/admin-product-audit";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 // POST /api/admin/products/[id]/archive
 //   Soft-deletes the product by flipping is_archived=true and stamping
@@ -62,6 +63,16 @@ export async function POST(
 
   revalidateTag("products");
   revalidateTag("subscription-plans");
+
+  void recordAuditEvent({
+    req,
+    entity: "product",
+    action: "archive",
+    targetId: after.id,
+    targetLabel: after.slug,
+    context: `Archived product "${after.slug}"`,
+    meta: { archived_at: after.archived_at },
+  });
 
   return NextResponse.json({ product: after });
 }

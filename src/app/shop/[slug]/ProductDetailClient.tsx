@@ -778,7 +778,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                       color: "#c9a96e",
                     }}
                   >
-                    View {fileKind(r.file_mime)} →
+                    View {fileKind(r.mime_type)} →
                   </div>
                 </a>
               </li>
@@ -790,7 +790,8 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
   );
 }
 
-function fileKind(mime: string): string {
+function fileKind(mime: string | null): string {
+  if (!mime) return "File";
   if (mime === "application/pdf") return "PDF";
   if (mime.startsWith("image/")) return "Image";
   if (

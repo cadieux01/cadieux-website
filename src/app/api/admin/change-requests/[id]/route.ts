@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 export async function PATCH(
   req: NextRequest,
@@ -60,6 +61,22 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  void recordAuditEvent({
+    req,
+    entity: "change_request",
+    action: "update",
+    targetId: params.id,
+    targetLabel: `Request ${params.id.slice(0, 8)}`,
+    context: `Change request ${action}d`,
+    meta: {
+      action,
+      delivery_id: cr.delivery_id,
+      requested_date: cr.requested_date,
+      requested_time_slot: cr.requested_time_slot,
+      admin_response: adminResponse,
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }

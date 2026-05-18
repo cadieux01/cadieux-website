@@ -24,13 +24,13 @@ export type ProductReport = {
   category: ProductReportCategory;
   file_url: string;
   file_name: string;
-  file_mime: string;
-  file_size_bytes: number;
+  mime_type: string | null;
+  file_size_bytes: number | null;
   storage_path: string;
   sort_order: number;
   is_archived: boolean;
   uploaded_at: string;
-  updated_at: string;
+  archived_at: string | null;
 };
 
 export const PRODUCT_REPORT_CATEGORY_LABEL: Record<
@@ -58,14 +58,19 @@ const supabaseAnon = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
-// 60s cache, tag "product-reports" — admin writes call
-// revalidateTag("product-reports") to clear all per-product entries.
+// 60s cache. Per-product tag so a write to one product's reports
+// doesn't invalidate every other product's cache. Admin writes call
+// revalidateTag(productReportsTag(productId)).
+export function productReportsTag(productId: string): string {
+  return `product-reports:${productId}`;
+}
+
 export const getProductReports = unstable_cache(
   async (productId: string): Promise<ProductReport[]> => {
     const { data, error } = await supabaseAnon
       .from("product_reports")
       .select(
-        "id, product_id, title, category, file_url, file_name, file_mime, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, updated_at",
+        "id, product_id, title, category, file_url, file_name, mime_type, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, archived_at",
       )
       .eq("product_id", productId)
       .eq("is_archived", false)
@@ -79,5 +84,8 @@ export const getProductReports = unstable_cache(
     return (data ?? []) as ProductReport[];
   },
   ["product-reports-by-product"],
+  // The tag is fixed at cache build, but per-product invalidation
+  // works because we call revalidateTag("product-reports:<id>") AND
+  // the umbrella "product-reports" tag from admin writes.
   { revalidate: 60, tags: ["product-reports"] },
 );

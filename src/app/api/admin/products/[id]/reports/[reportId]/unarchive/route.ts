@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { recordAuditEvent } from "@/lib/audit-log";
+import { productReportsTag } from "@/lib/product-reports";
 
 // Restore an archived lab report back to public visibility.
 export async function POST(
@@ -14,10 +16,10 @@ export async function POST(
 
   const { data, error } = await supabaseAdmin
     .from("product_reports")
-    .update({ is_archived: false, updated_at: new Date().toISOString() })
+    .update({ is_archived: false, archived_at: null })
     .eq("id", params.reportId)
     .eq("product_id", params.id)
-    .select("id")
+    .select("id, title")
     .single();
 
   if (error || !data) {
@@ -28,5 +30,17 @@ export async function POST(
   }
 
   revalidateTag("product-reports");
+  revalidateTag(productReportsTag(params.id));
+
+  void recordAuditEvent({
+    req,
+    entity: "product_report",
+    action: "unarchive",
+    targetId: data.id,
+    targetLabel: data.title,
+    context: `Unarchived report "${data.title}"`,
+    meta: { product_id: params.id },
+  });
+
   return NextResponse.json({ ok: true });
 }
