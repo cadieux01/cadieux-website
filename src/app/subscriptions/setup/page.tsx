@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   SETUP_PRODUCTS,
   TIME_SLOTS,
+  fetchSubscriptionPlans,
   formatSlot,
   parseIso,
   longDayLabel,
@@ -16,6 +17,7 @@ import {
   listWeekDayRows,
   type SetupState,
   type ProductSlug,
+  type WizardProduct,
 } from "@/lib/subscription-setup";
 import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 
@@ -32,10 +34,14 @@ export default function SetupPage() {
   const [hydrated, setHydrated] = useState(false);
   const [state, setState] = useState<SetupState>(emptySetupState());
   const [step, setStep] = useState(1);
+  // Live wizard catalogue. Starts as the hardcoded fallback so the picker
+  // renders immediately; fetchSubscriptionPlans() then merges DB prices.
+  const [plans, setPlans] = useState<WizardProduct[]>(SETUP_PRODUCTS);
 
   useEffect(() => {
     setState(loadSetupState());
     setHydrated(true);
+    fetchSubscriptionPlans().then(setPlans);
   }, []);
 
   useEffect(() => {
@@ -53,7 +59,7 @@ export default function SetupPage() {
     if (step > 1) setStep(step - 1);
   }
 
-  const selectedProduct = SETUP_PRODUCTS.find((p) => p.slug === state.productSlug) || null;
+  const selectedProduct = plans.find((p) => p.slug === state.productSlug) || null;
   const deliveries = useMemo(() => buildDeliveries(state), [state]);
   const totalAmount = selectedProduct ? selectedProduct.price * state.qty * deliveries.length : 0;
 
@@ -122,6 +128,7 @@ export default function SetupPage() {
 
         {step === 1 && (
           <Step1Product
+            plans={plans}
             slug={state.productSlug}
             qty={state.qty}
             onPickProduct={(slug) => update({ productSlug: slug })}
@@ -286,11 +293,13 @@ function NavRow({
 // ── Step 1: Product + qty ────────────────────────────────────────────────
 
 function Step1Product({
+  plans,
   slug,
   qty,
   onPickProduct,
   onAdjustQty,
 }: {
+  plans: WizardProduct[];
   slug: ProductSlug | null;
   qty: number;
   onPickProduct: (slug: ProductSlug) => void;
@@ -300,7 +309,7 @@ function Step1Product({
     <section>
       <StepTitle>Choose your bread</StepTitle>
       <div style={{ display: "grid", gap: 12, marginBottom: 28 }}>
-        {SETUP_PRODUCTS.map((p) => {
+        {plans.map((p) => {
           const selected = slug === p.slug;
           return (
             <button

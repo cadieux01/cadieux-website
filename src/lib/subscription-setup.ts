@@ -5,27 +5,30 @@ import { DAY_KEYS, type DayKey } from "./subscription-dates";
 
 export type ProductSlug = "multigrain" | "high-protein";
 
-/** Minimal product info for the wizard UI.
- *
- *  DISPLAY-ONLY FALLBACK. The server-side checkout
- *  (/api/checkout?action=place_subscription) now reads
- *  `subscription_per_loaf_inr` directly from the products table — the
- *  admin editor at /admin/products is the single source of truth.
- *
- *  The values here are still shown in the wizard so the user sees a
- *  number while they pick a plan. If the admin updates prices in the
- *  DB without redeploying, the wizard's preview total may drift from
- *  the server-enforced total; the checkout will then reject with
- *  `price_mismatch` and the user can refresh to get the live preview.
- *  Follow-up: have the wizard pages fetch from a public products
- *  endpoint and treat this constant as a network-failure fallback. */
-export const SETUP_PRODUCTS: Array<{
+export type WizardProduct = {
   slug: ProductSlug;
   name: string;
   title: string;
   price: number;
   blurb: string;
-}> = [
+};
+
+/** Hardcoded wizard catalogue used as a NETWORK-FAILURE FALLBACK.
+ *
+ *  The wizard prefers the live values from GET /api/subscription-plans
+ *  (which reads `subscription_per_loaf_inr` from the products table), so
+ *  price/name edits in /admin/products show up without a redeploy. This
+ *  constant is only consulted when the fetch fails or is still in flight.
+ *
+ *  The server-side checkout (/api/checkout?action=place_subscription)
+ *  always re-validates against the DB, so a stale fallback price would
+ *  surface as a `price_mismatch` error rather than an undercharge.
+ *
+ *  `title` and `blurb` are wizard-only display strings (shorter than the
+ *  catalogue name, with brand copy). The public API reuses these by
+ *  slug — adding a new slug here is required for the wizard to surface
+ *  that product even after it lands in the DB. */
+export const SETUP_PRODUCTS: WizardProduct[] = [
   {
     slug: "multigrain",
     name: "Multi-Grain High Protein Bread",
@@ -41,6 +44,30 @@ export const SETUP_PRODUCTS: Array<{
     blurb: "Soft sandwich slices, clean build.",
   },
 ];
+
+/** Fetch the live wizard catalogue from /api/subscription-plans, merging
+ *  DB-driven prices over the SETUP_PRODUCTS fallback. On any error (offline,
+ *  500, malformed JSON, empty list) returns SETUP_PRODUCTS unchanged so the
+ *  wizard always has something to render.
+ *
+ *  Call from a useEffect on the client; the response is HTTP-cached and
+ *  the underlying Supabase query is server-cached (60s, tag-busted on
+ *  admin product writes). */
+export async function fetchSubscriptionPlans(): Promise<WizardProduct[]> {
+  try {
+    const r = await fetch("/api/subscription-plans", { cache: "no-store" });
+    if (!r.ok) return SETUP_PRODUCTS;
+    const data = (await r.json()) as { plans?: WizardProduct[] };
+    if (!Array.isArray(data.plans) || data.plans.length === 0) return SETUP_PRODUCTS;
+    // Merge: for each fallback slug, prefer the live row if present, else
+    // keep the fallback. Preserves order from SETUP_PRODUCTS so the picker
+    // layout is stable when the API briefly returns a subset.
+    const bySlug = new Map(data.plans.map((p) => [p.slug, p]));
+    return SETUP_PRODUCTS.map((fb) => bySlug.get(fb.slug) ?? fb);
+  } catch {
+    return SETUP_PRODUCTS;
+  }
+}
 
 /** 14 one-hour slots from 6 AM to 8 PM, e.g. "06:00-07:00". */
 export const TIME_SLOTS: string[] = (() => {

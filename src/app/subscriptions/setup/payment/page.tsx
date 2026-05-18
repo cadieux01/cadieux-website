@@ -8,6 +8,7 @@ import {
   SETUP_PRODUCTS,
   buildDeliveries,
   clearSetupState,
+  fetchSubscriptionPlans,
   formatSlot,
   longDayLabel,
   loadAddress,
@@ -15,6 +16,7 @@ import {
   parseIso,
   type SetupAddress,
   type SetupState,
+  type WizardProduct,
 } from "@/lib/subscription-setup";
 
 const BG = "#0e0e0e";
@@ -39,6 +41,10 @@ export default function PaymentPage() {
   // silently in the common case — no UI interaction needed.
   const [turnstileToken, setTurnstileToken] = useState("");
   const turnstileRef = useRef<TurnstileHandle>(null);
+  // Live wizard catalogue. Starts from the hardcoded fallback so the
+  // summary always renders something; replaced by DB prices once the
+  // public API responds.
+  const [plans, setPlans] = useState<WizardProduct[]>(SETUP_PRODUCTS);
 
   useEffect(() => {
     setHydrated(true);
@@ -54,11 +60,12 @@ export default function PaymentPage() {
     }
     setState(s);
     setAddress(a);
+    fetchSubscriptionPlans().then(setPlans);
   }, [router]);
 
   const product = useMemo(
-    () => (state ? SETUP_PRODUCTS.find((p) => p.slug === state.productSlug) ?? null : null),
-    [state]
+    () => (state ? plans.find((p) => p.slug === state.productSlug) ?? null : null),
+    [state, plans]
   );
   const deliveries = useMemo(() => (state ? buildDeliveries(state) : []), [state]);
   const totalAmount = product && state ? product.price * state.qty * deliveries.length : 0;
