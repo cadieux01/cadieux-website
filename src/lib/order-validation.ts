@@ -382,9 +382,19 @@ export type WebProductRow = {
   is_active: boolean;
 };
 
+export type WebItemSnapshot = {
+  slug: string;
+  name: string;
+  qty: number;
+  kind: "once" | "sub";
+  price_inr: number;
+  line_total: number;
+};
+
 export type WebReconcileSuccess = {
   ok: true;
   subtotal: number;
+  items: WebItemSnapshot[];
 };
 
 /**
@@ -399,6 +409,7 @@ export function reconcileWebPrices(
 ): WebReconcileSuccess | ValidationFailure {
   const productBySlug = new Map(products.map((p) => [p.slug, p]));
   let subtotal = 0;
+  const snapshot: WebItemSnapshot[] = [];
   for (const item of items) {
     const product = productBySlug.get(item.slug);
     if (!product || !product.is_active) {
@@ -418,10 +429,26 @@ export function reconcileWebPrices(
         );
       }
       subtotal += expected;
+      snapshot.push({
+        slug: item.slug,
+        name: product.name,
+        qty: item.quantity,
+        kind: "once",
+        price_inr: product.price_inr,
+        line_total: expected,
+      });
     } else {
       // sub — trust the client line total, validated elsewhere.
       subtotal += item.line_total_inr;
+      snapshot.push({
+        slug: item.slug,
+        name: product.name,
+        qty: item.quantity,
+        kind: "sub",
+        price_inr: product.price_inr,
+        line_total: item.line_total_inr,
+      });
     }
   }
-  return { ok: true, subtotal };
+  return { ok: true, subtotal, items: snapshot };
 }

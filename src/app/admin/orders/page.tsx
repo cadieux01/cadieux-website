@@ -4,18 +4,13 @@
 //
 // Reads /api/admin/orders (admin-token-gated GET) and lets the operator
 // filter by status, search by customer name/phone, sort by created_at
-// or by a (placeholder) delivery date, and run per-row PATCH actions
-// that match the transitions the existing /api/admin/orders/[id]
-// endpoint accepts.
+// or by delivery_date, and run per-row PATCH actions that match the
+// transitions the existing /api/admin/orders/[id] endpoint accepts.
 //
-// Two known gaps versus the original spec, surfaced explicitly so the
-// operator isn't surprised:
-//   - The `orders` table has no `delivery_date` or `delivery_slot`
-//     column. The "Delivery" column shows `created_at` instead and the
-//     sort flip is a no-op. Adding those columns is a separate task.
-//   - The `orders` table has no `items` column. The "Items" cell shows
-//     "—" today. Hooking it up requires either a new `order_items`
-//     table or a JSON column on `orders`.
+// Live columns surfaced (post the orders.delivery_date + items
+// migration): delivery_date, delivery_slot, items jsonb. Rows that
+// predate the migration (where these are null) fall back to created_at
+// for the "Delivery" column and a single-line "—" for items.
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -29,7 +24,12 @@ import {
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
-import { formatDateTime, formatINR, telHref } from "@/lib/admin-formatting";
+import {
+  formatDate,
+  formatDateTime,
+  formatINR,
+  telHref,
+} from "@/lib/admin-formatting";
 import {
   AdminOrderRow,
   ORDER_FILTER_VALUES,
@@ -104,8 +104,19 @@ export default function OrdersPage() {
       })
       .sort((a, b) => {
         if (sort === "delivery_asc") {
-          // Falls back to created_at since no delivery_date column
-          // exists yet. See file header note.
+          // delivery_date is YYYY-MM-DD (lex-sortable). Rows that
+          // predate the migration fall back to created_at so they
+          // still appear at a stable position in the queue.
+          const aKey = a.delivery_date ?? a.created_at.slice(0, 10);
+          const bKey = b.delivery_date ?? b.created_at.slice(0, 10);
+          const cmp = aKey.localeCompare(bKey);
+          if (cmp !== 0) return cmp;
+          // Tie-break by slot then created_at so packing groups stay
+          // contiguous within a day.
+          const aSlot = a.delivery_slot ?? "";
+          const bSlot = b.delivery_slot ?? "";
+          const slotCmp = aSlot.localeCompare(bSlot);
+          if (slotCmp !== 0) return slotCmp;
           return a.created_at.localeCompare(b.created_at);
         }
         return b.created_at.localeCompare(a.created_at);
@@ -310,7 +321,7 @@ export default function OrdersPage() {
             Newest first
           </option>
           <option value="delivery_asc" style={{ color: "#000" }}>
-            Oldest first
+            Delivery date ↑
           </option>
         </select>
       </div>
@@ -369,6 +380,7 @@ export default function OrdersPage() {
                 <th style={th}>Customer</th>
                 <th style={th}>Total</th>
                 <th style={th}>Status</th>
+                <th style={th}>Delivery</th>
                 <th style={th}>Created</th>
                 <th style={th}>Actions</th>
               </tr>
@@ -432,6 +444,22 @@ export default function OrdersPage() {
                     </td>
                     <td style={td}>
                       <StatusBadge status={o.status} />
+                    </td>
+                    <td style={td}>
+                      <div style={{ color: "#fbf3d4", fontSize: "0.8rem" }}>
+                        {o.delivery_date ? formatDate(o.delivery_date) : "—"}
+                      </div>
+                      {o.delivery_slot ? (
+                        <div
+                          style={{
+                            color: "rgba(192,200,206,0.65)",
+                            fontSize: "0.7rem",
+                            letterSpacing: "0.05em",
+                          }}
+                        >
+                          {o.delivery_slot}
+                        </div>
+                      ) : null}
                     </td>
                     <td style={td}>
                       <span
@@ -685,6 +713,8 @@ function exportCsv(rows: AdminOrderRow[]): void {
     { header: "Phone", value: (o) => o.customers?.phone ?? "" },
     { header: "Total", value: (o) => o.total_amount ?? 0 },
     { header: "Status", value: (o) => o.status ?? "" },
+    { header: "Delivery date", value: (o) => o.delivery_date ?? "" },
+    { header: "Delivery slot", value: (o) => o.delivery_slot ?? "" },
     { header: "Delivery address", value: (o) => o.delivery_address ?? "" },
     { header: "Created", value: (o) => o.created_at },
   ]);

@@ -185,6 +185,11 @@ export async function POST(req: NextRequest) {
       status: "pending_payment",
       delivery_address: addressString,
       items: reconciled.items,
+      // Mobile flow doesn't capture delivery_date/slot yet — null is
+      // safe because admin /orders UI falls back to created_at and the
+      // operator can patch via PATCH /api/admin/orders/[id] later.
+      delivery_date: null,
+      delivery_slot: null,
     })
     .select("id")
     .single();

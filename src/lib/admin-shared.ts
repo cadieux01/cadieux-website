@@ -52,6 +52,18 @@ export type AdminCustomerSummary = {
   city: string | null;
 };
 
+export type AdminOrderItemSnapshot = {
+  slug?: string | null;
+  product_id?: string | null;
+  name: string;
+  quantity?: number | null;
+  qty?: number | null;
+  unit_price_inr?: number | null;
+  price_inr?: number | null;
+  line_total_inr?: number | null;
+  line_total?: number | null;
+};
+
 export type AdminOrderRow = {
   id: string;
   customer_id: string | null;
@@ -59,6 +71,9 @@ export type AdminOrderRow = {
   delivery_fee?: number | null;
   status: string | null;
   delivery_address: string | null;
+  delivery_date: string | null;
+  delivery_slot: string | null;
+  items: AdminOrderItemSnapshot[] | null;
   created_at: string;
   customers?: AdminCustomerSummary | null;
 };

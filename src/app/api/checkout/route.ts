@@ -213,6 +213,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // delivery_date / delivery_slot are nullable here because the web
+    // checkout flow does not yet capture them — backfill for legacy rows
+    // sets them to created_at::date / null respectively. New rows that
+    // come from the mobile app populate both fields explicitly.
     const { data: order, error } = await supabaseAdmin
       .from("orders")
       .insert({
@@ -221,6 +225,9 @@ export async function POST(req: NextRequest) {
         delivery_fee: deliveryFee,
         delivery_address,
         status: "pending",
+        items: reconciled.items,
+        delivery_date: null,
+        delivery_slot: null,
       })
       .select("id")
       .single();
