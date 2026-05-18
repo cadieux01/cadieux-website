@@ -9,10 +9,6 @@ import {
   validateWebOrderItemsShape,
   type WebProductRow,
 } from "@/lib/order-validation";
-import {
-  getServerPrice,
-  getSubscriptionPlan,
-} from "@/lib/subscription-pricing";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -403,27 +399,71 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Server-side price validation. The plan id (bread_slug) maps to a
-    // canonical per-loaf price in lib/subscription-pricing.ts — the
-    // client-supplied `total` and `bread_price` are hint-only. Any drift
-    // beyond a half-rupee epsilon is rejected with a 400 and audited so
-    // we can spot tampering attempts in aggregate.
+    // Server-side price validation. The plan id (bread_slug) is looked up
+    // in the products table — the admin editor at /admin/products is now
+    // the single source of truth for both the per-loaf subscription price
+    // and the product's availability. Client-supplied `total` and
+    // `bread_price` are hint-only. Any drift beyond a half-rupee epsilon
+    // is rejected with a 400 and audited so we can spot tampering
+    // attempts in aggregate.
+    //
+    // Rejection rules:
+    //   - product missing                       → 400 unknown plan
+    //   - product is_archived                   → 400 unknown plan
+    //   - product is_active=false               → 400 not available
+    //   - product in_stock=false                → 400 out of stock
+    //   - subscription_per_loaf_inr is null/<=0 → 400 not available
     const planId: string = String(bread_slug);
-    const plan = getSubscriptionPlan(planId);
-    if (!plan) {
+    const { data: planRow, error: planErr } = await supabaseAdmin
+      .from("products")
+      .select(
+        "slug, name, price_inr, subscription_per_loaf_inr, is_active, in_stock, is_archived",
+      )
+      .eq("slug", planId)
+      .maybeSingle();
+    if (planErr) {
+      console.error("[checkout] subscription plan lookup failed:", planErr.message);
+      return NextResponse.json(
+        { error: "Failed to validate subscription" },
+        { status: 500 }
+      );
+    }
+    if (!planRow || planRow.is_archived) {
       return NextResponse.json(
         { error: "Unknown subscription plan." },
+        { status: 400 }
+      );
+    }
+    if (!planRow.is_active) {
+      return NextResponse.json(
+        { error: "This subscription is no longer available." },
+        { status: 400 }
+      );
+    }
+    if (!planRow.in_stock) {
+      return NextResponse.json(
+        { error: "This bread is currently out of stock." },
+        { status: 400 }
+      );
+    }
+    const pricePerLoaf = Number(
+      planRow.subscription_per_loaf_inr ?? planRow.price_inr,
+    );
+    if (!Number.isFinite(pricePerLoaf) || pricePerLoaf <= 0) {
+      return NextResponse.json(
+        { error: "Subscription price is not configured for this product." },
         { status: 400 }
       );
     }
     const deliveryCount = deliveryTemplate.length;
-    const serverAmount = getServerPrice(planId, qtyPerDelivery, deliveryCount);
-    if (serverAmount === null) {
+    if (!Number.isFinite(qtyPerDelivery) || qtyPerDelivery <= 0 || deliveryCount <= 0) {
       return NextResponse.json(
-        { error: "Unknown subscription plan." },
+        { error: "Invalid subscription quantity." },
         { status: 400 }
       );
     }
+    const serverAmount = pricePerLoaf * qtyPerDelivery * deliveryCount;
+    const plan = { id: planId, name: planRow.name, pricePerLoafInr: pricePerLoaf };
     const clientAmount = Number(body.clientAmount ?? total);
     if (!Number.isFinite(clientAmount) || Math.abs(clientAmount - serverAmount) > 0.5) {
       const phoneForLog = verifiedPhone ?? customer_phone ?? null;

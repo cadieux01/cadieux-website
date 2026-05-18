@@ -5,9 +5,20 @@ import { DAY_KEYS, type DayKey } from "./subscription-dates";
 
 export type ProductSlug = "multigrain" | "high-protein";
 
-/** Minimal product info we need in the wizard. Mirrors PRODUCTS in lib/data.ts.
- *  Values must match the Supabase products table — kept in sync manually until
- *  this wizard is migrated to read from getActiveProducts() server-side. */
+/** Minimal product info for the wizard UI.
+ *
+ *  DISPLAY-ONLY FALLBACK. The server-side checkout
+ *  (/api/checkout?action=place_subscription) now reads
+ *  `subscription_per_loaf_inr` directly from the products table — the
+ *  admin editor at /admin/products is the single source of truth.
+ *
+ *  The values here are still shown in the wizard so the user sees a
+ *  number while they pick a plan. If the admin updates prices in the
+ *  DB without redeploying, the wizard's preview total may drift from
+ *  the server-enforced total; the checkout will then reject with
+ *  `price_mismatch` and the user can refresh to get the live preview.
+ *  Follow-up: have the wizard pages fetch from a public products
+ *  endpoint and treat this constant as a network-failure fallback. */
 export const SETUP_PRODUCTS: Array<{
   slug: ProductSlug;
   name: string;
