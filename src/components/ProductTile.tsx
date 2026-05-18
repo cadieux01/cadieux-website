@@ -13,9 +13,10 @@ type Props = {
   price: number;
   stats: ProductStat[];
   media: ProductMedia[];
+  outOfStock?: boolean;
 };
 
-export default function ProductTile({ slug, tag, title, subtitle, price, stats, media }: Props) {
+export default function ProductTile({ slug, tag, title, subtitle, price, stats, media, outOfStock = false }: Props) {
   const [hover, setHover] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -180,6 +181,33 @@ export default function ProductTile({ slug, tag, title, subtitle, price, stats, 
           <span>Test Reports</span>
           <span aria-hidden="true" style={{ fontSize: 10, lineHeight: 1 }}>✓</span>
         </div>
+
+        {/* Out-of-stock pill — only when the live products row has
+            in_stock=false. The tile stays clickable so customers can
+            still read the PDP. */}
+        {outOfStock && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 12,
+              right: 12,
+              fontFamily: "var(--font-body)",
+              fontSize: 9,
+              fontWeight: 500,
+              letterSpacing: "0.25em",
+              textTransform: "uppercase",
+              color: "#fecaca",
+              padding: "5px 10px",
+              background: "rgba(10,8,5,0.75)",
+              border: "0.5px solid rgba(239,68,68,0.55)",
+              borderRadius: 4,
+              backdropFilter: "blur(4px)",
+              pointerEvents: "none",
+            }}
+          >
+            Out of stock
+          </div>
+        )}
 
         {/* "Swipe" hint — only when more than one media */}
         {media.length > 1 && activeIdx === 0 && (

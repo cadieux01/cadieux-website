@@ -19,6 +19,7 @@ export type ProductRow = {
   highlights: string[];
   image_url: string | null;
   is_active: boolean;
+  in_stock: boolean;
   sort_order: number;
 };
 
@@ -36,9 +37,10 @@ export const getActiveProducts = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, is_active, sort_order",
+        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, is_active, in_stock, sort_order",
       )
       .eq("is_active", true)
+      .eq("is_archived", false)
       .order("sort_order", { ascending: true });
 
     if (error) {
@@ -54,4 +56,24 @@ export const getActiveProducts = unstable_cache(
 export async function getProductBySlug(slug: string): Promise<ProductRow | null> {
   const products = await getActiveProducts();
   return products.find((p) => p.slug === slug) ?? null;
+}
+
+// Lightweight availability map for the public shop. Returns null when
+// the upstream fetch failed entirely so callers can degrade gracefully
+// (show everything as live) instead of hiding the catalogue.
+export type AvailabilityMap = {
+  listed: Set<string>;
+  outOfStock: Set<string>;
+};
+
+export async function getProductAvailability(): Promise<AvailabilityMap | null> {
+  const products = await getActiveProducts();
+  if (products.length === 0) return null;
+  const listed = new Set<string>();
+  const outOfStock = new Set<string>();
+  for (const p of products) {
+    listed.add(p.slug);
+    if (!p.in_stock) outOfStock.add(p.slug);
+  }
+  return { listed, outOfStock };
 }
