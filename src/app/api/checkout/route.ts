@@ -9,6 +9,11 @@ import {
   validateWebOrderItemsShape,
   type WebProductRow,
 } from "@/lib/order-validation";
+import {
+  isAcceptableDeliveryDate,
+  isAcceptableDeliverySlot,
+} from "@/lib/order-delivery";
+import { isPincodeServiceable, normalizePincode } from "@/lib/service-areas";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -128,6 +133,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
+    // Delivery date + slot are now required for one-shot orders.
+    // The customer picks tomorrow / day-after IST and one of 14 hourly
+    // slots in the checkout modal.
+    const deliveryDate =
+      typeof body.delivery_date === "string" ? body.delivery_date : "";
+    const deliverySlot =
+      typeof body.delivery_slot === "string" ? body.delivery_slot : "";
+    if (!isAcceptableDeliveryDate(deliveryDate)) {
+      return NextResponse.json(
+        { error: "Please pick a delivery date (tomorrow or day-after IST)." },
+        { status: 400 },
+      );
+    }
+    if (!isAcceptableDeliverySlot(deliverySlot)) {
+      return NextResponse.json(
+        { error: "Please pick a delivery time slot." },
+        { status: 400 },
+      );
+    }
+
+    // Re-check serviceability server-side. The client gates the CTA but
+    // a determined attacker could submit anyway.
+    const pinFromAddress = typeof body.pincode === "string"
+      ? normalizePincode(body.pincode)
+      : (delivery_address.match(/(\d{6})\s*$/)?.[1] ?? null);
+    if (!pinFromAddress) {
+      return NextResponse.json(
+        { error: "Invalid pincode." },
+        { status: 400 },
+      );
+    }
+    const serviceable = await isPincodeServiceable(pinFromAddress);
+    if (!serviceable) {
+      return NextResponse.json(
+        {
+          error: "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
+          code: "pincode_unserviceable",
+        },
+        { status: 400 },
+      );
+    }
+
     // Server-side OTP enforcement: cookie OR mobile bearer token must be
     // present, valid, unexpired, and its phone must match the customer's
     // stored phone.
@@ -213,10 +260,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // delivery_date / delivery_slot are nullable here because the web
-    // checkout flow does not yet capture them — backfill for legacy rows
-    // sets them to created_at::date / null respectively. New rows that
-    // come from the mobile app populate both fields explicitly.
+    // delivery_date + delivery_slot are now populated by the web
+    // checkout (tomorrow / day-after IST + one of 14 hourly slots).
+    // The mobile app populates both fields explicitly as well.
     const { data: order, error } = await supabaseAdmin
       .from("orders")
       .insert({
@@ -226,8 +272,8 @@ export async function POST(req: NextRequest) {
         delivery_address,
         status: "pending",
         items: reconciled.items,
-        delivery_date: null,
-        delivery_slot: null,
+        delivery_date: deliveryDate,
+        delivery_slot: deliverySlot,
       })
       .select("id")
       .single();

@@ -21,6 +21,11 @@ import {
   validateOrderBodyShape,
   type ProductRow,
 } from "@/lib/order-validation";
+import {
+  isAcceptableDeliveryDate,
+  isAcceptableDeliverySlot,
+} from "@/lib/order-delivery";
+import { isPincodeServiceable, normalizePincode } from "@/lib/service-areas";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -75,6 +80,60 @@ export async function POST(req: NextRequest) {
     );
   }
   const { body, fullName, addressString } = shape;
+
+  // 4b. Pincode serviceability: refuse to place orders for pincodes we
+  // don't currently deliver to. Mobile clients should funnel the user
+  // into the same "send request" UX as web in this case.
+  const pincode = normalizePincode(body.delivery_address.pincode);
+  if (!pincode) {
+    return NextResponse.json(
+      { ok: false, error: "Invalid pincode" },
+      { status: 400 },
+    );
+  }
+  const serviceable = await isPincodeServiceable(pincode);
+  if (!serviceable) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
+        code: "pincode_unserviceable",
+      },
+      { status: 400 },
+    );
+  }
+
+  // 4c. Optional delivery date + slot. The mobile app will start sending
+  // these in a follow-up release; until then we accept null and store
+  // null. When present we validate them strictly so a stale or malformed
+  // value can't slip through.
+  const rawObj = (raw ?? {}) as { delivery_date?: unknown; delivery_slot?: unknown };
+  let deliveryDate: string | null = null;
+  let deliverySlot: string | null = null;
+  if (rawObj.delivery_date !== undefined && rawObj.delivery_date !== null) {
+    if (
+      typeof rawObj.delivery_date !== "string" ||
+      !isAcceptableDeliveryDate(rawObj.delivery_date)
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid delivery_date" },
+        { status: 400 },
+      );
+    }
+    deliveryDate = rawObj.delivery_date;
+  }
+  if (rawObj.delivery_slot !== undefined && rawObj.delivery_slot !== null) {
+    if (
+      typeof rawObj.delivery_slot !== "string" ||
+      !isAcceptableDeliverySlot(rawObj.delivery_slot)
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid delivery_slot" },
+        { status: 400 },
+      );
+    }
+    deliverySlot = rawObj.delivery_slot;
+  }
 
   // 5. Server-side price validation. Re-fetch authoritative product rows.
   const productIds = Array.from(new Set(body.items.map((i) => i.product_id)));
@@ -185,11 +244,11 @@ export async function POST(req: NextRequest) {
       status: "pending_payment",
       delivery_address: addressString,
       items: reconciled.items,
-      // Mobile flow doesn't capture delivery_date/slot yet — null is
-      // safe because admin /orders UI falls back to created_at and the
-      // operator can patch via PATCH /api/admin/orders/[id] later.
-      delivery_date: null,
-      delivery_slot: null,
+      // Mobile clients can now optionally pass delivery_date + slot in
+      // the request body; absent fields stay null (legacy app builds)
+      // and the operator can patch via PATCH /api/admin/orders/[id].
+      delivery_date: deliveryDate,
+      delivery_slot: deliverySlot,
     })
     .select("id")
     .single();

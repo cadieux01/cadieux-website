@@ -1,8 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { PRODUCTS, type CartItem } from "@/lib/data";
 import { DELIVERY_FEE_INR } from "@/lib/order-validation";
+import {
+  ORDER_DELIVERY_SLOTS,
+  formatSlot12,
+  formatDeliveryDate,
+  getOrderDeliveryDateOptions,
+} from "@/lib/order-delivery";
 import TurnstileWidget, { type TurnstileHandle } from "./TurnstileWidget";
 export type { CartItem } from "@/lib/data";
 
@@ -119,6 +126,26 @@ export default function CheckoutModal({
   const [otpError, setOtpError] = useState("");
   const [orderNum, setOrderNum] = useState("");
 
+  // Delivery date + slot. Tomorrow (IST) by default; the customer can
+  // bump to day-after. 14 hourly slots from 06:00 to 19:00.
+  const [{ tomorrow: tomorrowIso, dayAfter: dayAfterIso }] = useState(() =>
+    getOrderDeliveryDateOptions(),
+  );
+  const [deliveryDate, setDeliveryDate] = useState<string>(tomorrowIso);
+  const [deliverySlot, setDeliverySlot] = useState<string>("");
+
+  // Pincode serviceability. Effective pincode is taken from the editable
+  // field for fresh/edit mode and from the saved address for returning.
+  type PinState =
+    | { state: "idle" }
+    | { state: "checking" }
+    | { state: "serviceable"; area_names: string[] }
+    | { state: "unserviceable" }
+    | { state: "error" };
+  const [pinStatus, setPinStatus] = useState<PinState>({ state: "idle" });
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const router = useRouter();
+
   // Cloudflare Turnstile bot-protection token. Refreshed (reset) after every
   // protected request because Turnstile tokens are single-use.
   const [turnstileToken, setTurnstileToken] = useState<string>("");
@@ -153,6 +180,119 @@ export default function CheckoutModal({
       })
       .catch(() => {});
   }, []);
+
+  // Effective pincode for serviceability — saved address for returning,
+  // editable field for fresh/edit. We extract from saved address each
+  // render so the effect below picks it up.
+  const effectivePincode = (() => {
+    if (formMode === "returning" && savedCustomer?.delivery_address) {
+      return savedCustomer.delivery_address.match(/(\d{6})\s*$/)?.[1] ?? "";
+    }
+    return pincode;
+  })();
+
+  // Debounced serviceability check. Re-runs every time the effective
+  // pincode reaches 6 digits.
+  useEffect(() => {
+    const pin = (effectivePincode || "").replace(/\D/g, "");
+    if (pin.length !== 6) {
+      setPinStatus({ state: "idle" });
+      return;
+    }
+    setPinStatus({ state: "checking" });
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetch(`/api/service-areas/check?pincode=${pin}`, { signal: ctrl.signal })
+        .then((r) => r.json())
+        .then((d: { serviceable?: boolean; area_names?: string[] }) => {
+          if (d.serviceable) {
+            setPinStatus({
+              state: "serviceable",
+              area_names: Array.isArray(d.area_names) ? d.area_names : [],
+            });
+          } else {
+            setPinStatus({ state: "unserviceable" });
+          }
+        })
+        .catch((e) => {
+          if ((e as { name?: string })?.name === "AbortError") return;
+          setPinStatus({ state: "error" });
+        });
+    }, 500);
+    return () => {
+      window.clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [effectivePincode]);
+
+  // Submit a delivery_request when the customer's pincode isn't yet
+  // covered. We don't gate this on OTP — the request is essentially a
+  // contact-form. After insert we route to /cart with a session flag so
+  // the cart page can render the amber banner.
+  async function submitDeliveryRequest() {
+    setError("");
+    setRequestSubmitting(true);
+    try {
+      // Resolve the address inputs across the two modes.
+      const isReturning = formMode === "returning" && savedCustomer;
+      const phoneDigits = (isReturning ? savedCustomer!.phone : phone).replace(/\D/g, "");
+      const fullAddress = isReturning
+        ? (savedCustomer!.delivery_address ?? "")
+        : `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+      const pin =
+        (isReturning
+          ? fullAddress.match(/(\d{6})\s*$/)?.[1]
+          : pincode.replace(/\D/g, "")) ?? "";
+      const areaName = isReturning ? null : area.trim() || null;
+
+      if (phoneDigits.length !== 10) {
+        setError("Enter a valid 10-digit number.");
+        return;
+      }
+      if (pin.length !== 6) {
+        setError("Enter a valid 6-digit pincode.");
+        return;
+      }
+      if (!fullAddress) {
+        setError("Please enter your address.");
+        return;
+      }
+
+      const res = await fetch("/api/delivery-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: phoneDigits,
+          pincode: pin,
+          area_name: areaName,
+          address: fullAddress,
+          customer_id: customer?.id ?? null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Couldn't send your request. Try again.");
+        return;
+      }
+      // Tell /cart to render the amber confirmation banner. The cart
+      // remains intact — the customer can complete the order once we
+      // mark the pincode serviceable.
+      try {
+        sessionStorage.setItem(
+          "cadieux_delivery_request",
+          JSON.stringify({ pincode: pin, ts: Date.now() }),
+        );
+      } catch {
+        /* private mode */
+      }
+      onClose();
+      router.push("/cart");
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setRequestSubmitting(false);
+    }
+  }
 
   function prefillAddress(raw: string) {
     // stored as "AddressLine, Area, City - 530045"
@@ -240,6 +380,10 @@ export default function CheckoutModal({
     if (!area.trim())                             { setError("Please enter your area / locality."); return; }
     if (!city.trim())                             { setError("Please enter your city."); return; }
     if (pincode.replace(/\D/g,"").length !== 6)  { setError("Enter a valid 6-digit pincode."); return; }
+    if (pinStatus.state === "checking")           { setError("Checking pincode availability…"); return; }
+    if (pinStatus.state === "unserviceable")      { setError("We don't deliver to this pincode yet. Send a delivery request below."); return; }
+    if (!deliveryDate)                            { setError("Please pick a delivery date."); return; }
+    if (!deliverySlot)                            { setError("Please pick a delivery time."); return; }
 
     const fullAddress = `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
 
@@ -401,6 +545,9 @@ export default function CheckoutModal({
           action: "place_order",
           customer_id: customer?.id,
           delivery_address: fullAddress,
+          pincode: fullAddress.match(/(\d{6})\s*$/)?.[1] ?? "",
+          delivery_date: deliveryDate,
+          delivery_slot: deliverySlot,
           total_amount: total,
           items: orderItems,
           turnstileToken,
@@ -481,6 +628,9 @@ export default function CheckoutModal({
               action: "place_order",
               customer_id: customer?.id,
               delivery_address: fullAddress,
+              pincode: fullAddress.match(/(\d{6})\s*$/)?.[1] ?? "",
+              delivery_date: deliveryDate,
+              delivery_slot: deliverySlot,
               total_amount: total,
               items: orderItems,
               turnstileToken,
@@ -518,6 +668,8 @@ export default function CheckoutModal({
     }
   }
 
+  // Re-validate date/slot when entering the payment step from the
+  // returning-customer card (where validation lives on the button).
   const fullAddressDisplay = [addressLine, area, city, pincode].filter(Boolean).join(", ");
 
   /* ── Render ─────────────────────────────────────────────────────────────── */
@@ -626,28 +778,68 @@ export default function CheckoutModal({
                       )}
                     </div>
 
+                    {/* Pincode serviceability indicator (saved address) */}
+                    <PincodeStatusStrip pinStatus={pinStatus} />
+
+                    {/* Delivery schedule for returning customers too */}
+                    <DeliveryScheduleSection
+                      tomorrowIso={tomorrowIso}
+                      dayAfterIso={dayAfterIso}
+                      deliveryDate={deliveryDate}
+                      deliverySlot={deliverySlot}
+                      onPickDate={(d) => { setDeliveryDate(d); setError(""); }}
+                      onPickSlot={(s) => { setDeliverySlot(s); setError(""); }}
+                    />
+
                     {error && (
                       <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, color: "#e05a5a", letterSpacing: "0.04em" }}>
                         {error}
                       </p>
                     )}
 
-                    {/* Proceed with saved details */}
-                    <button
-                      onClick={() => { setError(""); setStep("payment"); }}
-                      style={{
-                        display: "block", width: "100%",
-                        background: "#f0dfc8", border: "none", padding: "17px 0",
-                        cursor: "pointer",
-                        fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300,
-                        letterSpacing: "0.45em", textTransform: "uppercase",
-                        color: "#080604",
-                        WebkitTapHighlightColor: "transparent",
-                        marginBottom: 10,
-                      }}
-                    >
-                      Proceed to Payment
-                    </button>
+                    {pinStatus.state === "unserviceable" ? (
+                      <button
+                        onClick={submitDeliveryRequest}
+                        disabled={requestSubmitting}
+                        style={{
+                          display: "block", width: "100%",
+                          background: requestSubmitting ? "rgba(245,158,11,0.35)" : "#f59e0b",
+                          border: "none", padding: "17px 0",
+                          cursor: requestSubmitting ? "default" : "pointer",
+                          fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 400,
+                          letterSpacing: "0.3em", textTransform: "uppercase",
+                          color: "#080604",
+                          WebkitTapHighlightColor: "transparent",
+                          marginBottom: 10,
+                        }}
+                      >
+                        {requestSubmitting ? "Sending…" : "Send Request to Deliver Here"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (pinStatus.state === "checking") {
+                            setError("Checking pincode availability…");
+                            return;
+                          }
+                          if (!deliveryDate) { setError("Please pick a delivery date."); return; }
+                          if (!deliverySlot) { setError("Please pick a delivery time."); return; }
+                          setError(""); setStep("payment");
+                        }}
+                        style={{
+                          display: "block", width: "100%",
+                          background: "#f0dfc8", border: "none", padding: "17px 0",
+                          cursor: "pointer",
+                          fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300,
+                          letterSpacing: "0.45em", textTransform: "uppercase",
+                          color: "#080604",
+                          WebkitTapHighlightColor: "transparent",
+                          marginBottom: 10,
+                        }}
+                      >
+                        Proceed to Payment
+                      </button>
+                    )}
 
                     {/* Edit saved details */}
                     <button
@@ -854,29 +1046,61 @@ export default function CheckoutModal({
                       </label>
                     </div>
 
+                    {/* Pincode serviceability indicator */}
+                    <PincodeStatusStrip pinStatus={pinStatus} />
+
+                    {/* Delivery schedule: two date cards + slot dropdown */}
+                    <DeliveryScheduleSection
+                      tomorrowIso={tomorrowIso}
+                      dayAfterIso={dayAfterIso}
+                      deliveryDate={deliveryDate}
+                      deliverySlot={deliverySlot}
+                      onPickDate={(d) => { setDeliveryDate(d); setError(""); }}
+                      onPickSlot={(s) => { setDeliverySlot(s); setError(""); }}
+                    />
+
                     {error && (
                       <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 12, color: "#e05a5a", letterSpacing: "0.04em" }}>
                         {error}
                       </p>
                     )}
 
-                    <button
-                      onClick={handleSubmit}
-                      disabled={submitting}
-                      style={{
-                        display: "block", width: "100%",
-                        background: submitting ? "rgba(240,223,200,0.5)" : "#f0dfc8",
-                        border: "none", padding: "17px 0",
-                        cursor: submitting ? "default" : "pointer",
-                        fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300,
-                        letterSpacing: "0.45em", textTransform: "uppercase",
-                        color: "#080604",
-                        WebkitTapHighlightColor: "transparent",
-                        transition: "background 0.2s",
-                      }}
-                    >
-                      {submitting ? "Saving…" : "Proceed to Payment"}
-                    </button>
+                    {pinStatus.state === "unserviceable" ? (
+                      <button
+                        onClick={submitDeliveryRequest}
+                        disabled={requestSubmitting}
+                        style={{
+                          display: "block", width: "100%",
+                          background: requestSubmitting ? "rgba(245,158,11,0.35)" : "#f59e0b",
+                          border: "none", padding: "17px 0",
+                          cursor: requestSubmitting ? "default" : "pointer",
+                          fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 400,
+                          letterSpacing: "0.3em", textTransform: "uppercase",
+                          color: "#080604",
+                          WebkitTapHighlightColor: "transparent",
+                        }}
+                      >
+                        {requestSubmitting ? "Sending…" : "Send Request to Deliver Here"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                        style={{
+                          display: "block", width: "100%",
+                          background: submitting ? "rgba(240,223,200,0.5)" : "#f0dfc8",
+                          border: "none", padding: "17px 0",
+                          cursor: submitting ? "default" : "pointer",
+                          fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300,
+                          letterSpacing: "0.45em", textTransform: "uppercase",
+                          color: "#080604",
+                          WebkitTapHighlightColor: "transparent",
+                          transition: "background 0.2s",
+                        }}
+                      >
+                        {submitting ? "Saving…" : "Proceed to Payment"}
+                      </button>
+                    )}
 
                     {/* Back to saved details if editing */}
                     {savedCustomer && (
@@ -933,6 +1157,11 @@ export default function CheckoutModal({
                   <p style={{ margin: "4px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.35)", letterSpacing: "0.03em", lineHeight: 1.6 }}>
                     {fullAddressDisplay}
                   </p>
+                  {deliveryDate && deliverySlot && (
+                    <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(200,144,58,0.75)" }}>
+                      {formatDeliveryDate(deliveryDate)} · {formatSlot12(deliverySlot)}
+                    </p>
+                  )}
                 </div>
 
                 {error && (
@@ -1056,5 +1285,160 @@ export default function CheckoutModal({
         </div>
       </div>
     </>
+  );
+}
+
+/* ── Pincode serviceability indicator ────────────────────────────────── */
+function PincodeStatusStrip({
+  pinStatus,
+}: {
+  pinStatus:
+    | { state: "idle" }
+    | { state: "checking" }
+    | { state: "serviceable"; area_names: string[] }
+    | { state: "unserviceable" }
+    | { state: "error" };
+}) {
+  if (pinStatus.state === "idle") return null;
+  const isOk = pinStatus.state === "serviceable";
+  const isBad = pinStatus.state === "unserviceable";
+  const isChecking = pinStatus.state === "checking";
+  const isErr = pinStatus.state === "error";
+  const border = isOk
+    ? "1px solid rgba(74,222,128,0.35)"
+    : isBad
+      ? "1px solid rgba(245,158,11,0.45)"
+      : "1px solid rgba(240,223,200,0.12)";
+  const bg = isOk
+    ? "rgba(74,222,128,0.07)"
+    : isBad
+      ? "rgba(245,158,11,0.07)"
+      : "transparent";
+  const fg = isOk
+    ? "#4ade80"
+    : isBad
+      ? "#f59e0b"
+      : isErr
+        ? "#e05a5a"
+        : "rgba(240,223,200,0.55)";
+  return (
+    <div
+      style={{
+        marginTop: -18,
+        marginBottom: 22,
+        padding: "10px 12px",
+        border,
+        background: bg,
+        fontFamily: "var(--font-body)",
+        fontSize: 12,
+        fontWeight: 300,
+        letterSpacing: "0.05em",
+        color: fg,
+        lineHeight: 1.5,
+      }}
+    >
+      {isChecking && "Checking pincode availability…"}
+      {isOk &&
+        (pinStatus.area_names.length > 0
+          ? `✓ We deliver here · ${pinStatus.area_names.slice(0, 3).join(", ")}`
+          : "✓ We deliver here.")}
+      {isBad &&
+        "⚠ We don't deliver here yet. Send us a request and we'll get in touch."}
+      {isErr && "Couldn't verify pincode. Try again."}
+    </div>
+  );
+}
+
+/* ── Delivery date + slot picker ─────────────────────────────────────── */
+function DeliveryScheduleSection({
+  tomorrowIso,
+  dayAfterIso,
+  deliveryDate,
+  deliverySlot,
+  onPickDate,
+  onPickSlot,
+}: {
+  tomorrowIso: string;
+  dayAfterIso: string;
+  deliveryDate: string;
+  deliverySlot: string;
+  onPickDate: (d: string) => void;
+  onPickSlot: (s: string) => void;
+}) {
+  const dates: { iso: string; tag: string }[] = [
+    { iso: tomorrowIso, tag: "Tomorrow" },
+    { iso: dayAfterIso, tag: "Day after" },
+  ];
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <p style={sectionHead}>Delivery Schedule</p>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+        {dates.map((d) => {
+          const active = d.iso === deliveryDate;
+          return (
+            <button
+              key={d.iso}
+              type="button"
+              onClick={() => onPickDate(d.iso)}
+              style={{
+                flex: 1,
+                padding: "12px 10px",
+                background: active ? "rgba(200,144,58,0.12)" : "transparent",
+                border: active
+                  ? "1px solid rgba(200,144,58,0.7)"
+                  : "1px solid rgba(240,223,200,0.14)",
+                cursor: "pointer",
+                fontFamily: "var(--font-body)",
+                color: active ? "#FBF3D4" : "rgba(240,223,200,0.6)",
+                textAlign: "left",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 9,
+                  fontWeight: 200,
+                  letterSpacing: "0.35em",
+                  textTransform: "uppercase",
+                  color: active ? "rgba(200,144,58,0.85)" : "rgba(200,144,58,0.45)",
+                  marginBottom: 4,
+                }}
+              >
+                {d.tag}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 300, letterSpacing: "0.04em" }}>
+                {formatDeliveryDate(d.iso)}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <label style={{ display: "block" }}>
+        <span style={labelSt}>Time slot *</span>
+        <select
+          value={deliverySlot}
+          onChange={(e) => onPickSlot(e.target.value)}
+          style={{
+            ...inputSt,
+            appearance: "none",
+            WebkitAppearance: "none",
+            background: "transparent",
+            color: deliverySlot ? "#FBF3D4" : "rgba(240,223,200,0.4)",
+            cursor: "pointer",
+          }}
+        >
+          <option value="" style={{ background: "#0e0e0e", color: "#FBF3D4" }}>
+            Select a delivery time…
+          </option>
+          {ORDER_DELIVERY_SLOTS.map((s) => (
+            <option key={s} value={s} style={{ background: "#0e0e0e", color: "#FBF3D4" }}>
+              {formatSlot12(s)}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
   );
 }
