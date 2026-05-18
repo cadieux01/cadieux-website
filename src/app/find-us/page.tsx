@@ -1,17 +1,19 @@
 import type { Metadata } from "next";
+
+import { getActiveLocations } from "@/lib/pickup-locations";
 import FindUsClient from "./FindUsClient";
 
 export const metadata: Metadata = {
-  title:
-    "Find Cadieux Near You — 10 Stalls + 50 Communities + 100 Gyms in Visakhapatnam",
+  title: "Find Cadieux Near You — Pickup locations across Visakhapatnam",
   description:
-    "Find your nearest Cadieux stall, check if we deliver to your gated community, or pick up at one of 100 top-rated Vizag gyms. We cover 10 stalls, 50+ premium residential communities and 100 fitness partners across Visakhapatnam.",
+    "Find your nearest Cadieux kitchen, stall or partner pickup point in Visakhapatnam. Check whether we deliver to your pincode in one tap.",
 };
 
-export default function FindUsPage() {
+export default async function FindUsPage() {
   // The map needs the public Google Maps key at runtime; the key is
-  // restricted to Cadieux domains in the GCP console, so shipping it to the
-  // client is intentional.
+  // restricted to Cadieux domains in the GCP console, so shipping it
+  // to the client is intentional.
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
-  return <FindUsClient apiKey={apiKey} />;
+  const locations = await getActiveLocations();
+  return <FindUsClient apiKey={apiKey} locations={locations} />;
 }

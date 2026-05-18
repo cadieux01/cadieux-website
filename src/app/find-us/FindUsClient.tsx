@@ -1,77 +1,40 @@
 "use client";
 
+// Public Find Us screen. Renders every active pickup location from the
+// DB-backed `pickup_locations` table (passed in from the server page).
+// Pin colours: kitchen=green, stall=gold, partner_pickup=blue.
+//
+// The pincode checker hits the public /api/service-areas/check route
+// so the answer reflects the same data admin/service-areas writes.
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 
-import {
-  COMMUNITY_COUNT,
-  GYM_COUNT,
-  LOCATIONS,
-  STALL_COUNT,
-  ZONES,
-  haversineKm,
-  isServedPincode,
-  nearestStall,
-  type CadieuxLocation,
-  type CadieuxLocationType,
-} from "@/lib/find-us-locations";
+import type {
+  PickupLocationRow,
+  PickupLocationType,
+} from "@/lib/pickup-locations";
 
-// Brand tokens (match the rest of the site — see store-locator/page.tsx).
 const GOLD_RGB = "201,169,110";
-const GREEN_HEX = "#2F6A3A"; // stall pin
-const GOLD_HEX = "#C9A96E"; // community pin
-const BLUE_HEX = "#3b82f6"; // gym pin
-const VIZAG_CENTER = { lat: 17.74, lng: 83.30 };
+const GREEN_HEX = "#16a34a"; // kitchen
+const GOLD_HEX = "#c9a96e"; // stall
+const BLUE_HEX = "#3b82f6"; // partner pickup
+const VIZAG_CENTER = { lat: 17.74, lng: 83.3 };
 
-// Map a location type to its marker fill colour. Centralising this keeps
-// the legend + map + per-card badge in sync.
-function pinColorFor(type: CadieuxLocationType): string {
-  if (type === "stall") return GREEN_HEX;
-  if (type === "community") return GOLD_HEX;
-  if (type === "gym") return BLUE_HEX;
-  return GOLD_HEX;
+function pinColorFor(type: PickupLocationType): string {
+  if (type === "kitchen") return GREEN_HEX;
+  if (type === "stall") return GOLD_HEX;
+  return BLUE_HEX;
 }
 
-// Tab definitions. Disabled tabs render but are not clickable — they signal
-// upcoming categories without breaking the layout.
-type TabKey = "all" | "stall" | "community" | "gym" | "store" | "club";
-
-const TABS: ReadonlyArray<{
-  key: TabKey;
-  label: string;
-  count?: number;
-  disabled?: boolean;
-}> = [
-  { key: "all", label: "All", count: STALL_COUNT + COMMUNITY_COUNT + GYM_COUNT },
-  { key: "stall", label: "Stalls", count: STALL_COUNT },
-  { key: "community", label: "Gated Communities", count: COMMUNITY_COUNT },
-  { key: "gym", label: "Gyms", count: GYM_COUNT },
-  { key: "store", label: "Stores", disabled: true },
-  { key: "club", label: "Fitness Clubs", disabled: true },
-];
-
-// Open Google Maps directions for the given location. We have no street
-// address in the dataset, so build a name + area + city query — Google
-// geocodes that with high accuracy in Vizag. As a backstop we tack on the
-// lat/lng coordinates so even ambiguous community names resolve.
-function navigateTo(loc: CadieuxLocation) {
-  const q = encodeURIComponent(`${loc.name}, ${loc.area}, Visakhapatnam`);
-  const ll = `${loc.latitude},${loc.longitude}`;
-  window.open(
-    `https://www.google.com/maps/dir/?api=1&destination=${q}&destination_place_id=&travelmode=driving&query=${ll}`,
-    "_blank",
-    "noopener,noreferrer",
-  );
-}
-
-function typeBadge(type: CadieuxLocationType): string {
+function typeBadge(type: PickupLocationType): string {
+  if (type === "kitchen") return "Kitchen";
   if (type === "stall") return "Stall";
-  if (type === "community") return "Gated Community";
-  if (type === "gym") return "Gym";
-  if (type === "store") return "Store";
-  return "Fitness Club";
+  return "Partner Pickup";
 }
+
+type TabKey = "all" | PickupLocationType;
 
 const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
 
@@ -82,7 +45,6 @@ const MAP_OPTIONS: google.maps.MapOptions = {
   streetViewControl: false,
   fullscreenControl: false,
   clickableIcons: false,
-  // Cadieux dark brand styling — keeps the map readable on rgb(6,4,2).
   styles: [
     { elementType: "geometry", stylers: [{ color: "#1a1612" }] },
     { elementType: "labels.text.stroke", stylers: [{ color: "#1a1612" }] },
@@ -96,7 +58,43 @@ const MAP_OPTIONS: google.maps.MapOptions = {
   ],
 };
 
-export default function FindUsClient({ apiKey }: { apiKey: string }) {
+// Great-circle distance, kilometres. Sufficient within a single city.
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Open Google Maps directions for the given location. Lat/lng-based
+// destination is the most reliable handoff because it doesn't depend
+// on Google's reverse-geocoder picking the right address.
+function navigateTo(loc: PickupLocationRow) {
+  const ll = `${loc.latitude},${loc.longitude}`;
+  const name = encodeURIComponent(`${loc.name}, ${loc.area}, Visakhapatnam`);
+  window.open(
+    `https://www.google.com/maps/dir/?api=1&destination=${ll}&destination_place_id=&travelmode=driving&query=${name}`,
+    "_blank",
+    "noopener,noreferrer",
+  );
+}
+
+type CheckResult =
+  | { kind: "served"; areaNames: string[] }
+  | { kind: "unserved" }
+  | { kind: "error"; message: string };
+
+export default function FindUsClient({
+  apiKey,
+  locations,
+}: {
+  apiKey: string;
+  locations: PickupLocationRow[];
+}) {
   const { isLoaded } = useJsApiLoader({
     id: "cdx-find-us-map",
     googleMapsApiKey: apiKey,
@@ -105,17 +103,13 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [search, setSearch] = useState("");
   const [pincode, setPincode] = useState("");
-  const [pincodeResult, setPincodeResult] = useState<
-    | { kind: "served"; nearest: ReturnType<typeof nearestStall> }
-    | { kind: "unserved" }
-    | null
-  >(null);
+  const [pincodeResult, setPincodeResult] = useState<CheckResult | null>(null);
+  const [checking, setChecking] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(
     null,
   );
 
-  // Optional geolocation — silent on refusal; only used to show distance.
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -128,51 +122,57 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
     );
   }, []);
 
-  // Filter pipeline: tab + free-text search (name OR area).
+  const counts = useMemo(() => {
+    const c = { all: locations.length, kitchen: 0, stall: 0, partner_pickup: 0 };
+    for (const l of locations) c[l.type] += 1;
+    return c;
+  }, [locations]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return LOCATIONS.filter((loc) => {
+    return locations.filter((loc) => {
       if (activeTab !== "all" && loc.type !== activeTab) return false;
       if (!q) return true;
       return (
         loc.name.toLowerCase().includes(q) ||
         loc.area.toLowerCase().includes(q) ||
-        loc.zone.toLowerCase().includes(q)
+        loc.address.toLowerCase().includes(q)
       );
     });
-  }, [activeTab, search]);
-
-  // Group filtered list by zone, preserving the order from ZONES.
-  const grouped = useMemo(() => {
-    const byZone = new Map<string, CadieuxLocation[]>();
-    for (const z of ZONES) byZone.set(z, []);
-    for (const loc of filtered) {
-      const bucket = byZone.get(loc.zone);
-      if (bucket) bucket.push(loc);
-      else byZone.set(loc.zone, [loc]);
-    }
-    return Array.from(byZone.entries()).filter(([, items]) => items.length > 0);
-  }, [filtered]);
+  }, [activeTab, search, locations]);
 
   const selected = useMemo(
-    () => LOCATIONS.find((l) => l.id === selectedId) ?? null,
-    [selectedId],
+    () => locations.find((l) => l.id === selectedId) ?? null,
+    [selectedId, locations],
   );
 
-  function checkPincode(e: React.FormEvent) {
+  async function checkPincode(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = pincode.trim();
-    if (!/^\d{6}$/.test(trimmed) || !isServedPincode(trimmed)) {
-      setPincodeResult({ kind: "unserved" });
+    if (!/^\d{6}$/.test(trimmed)) {
+      setPincodeResult({ kind: "error", message: "Enter a 6-digit pincode." });
       return;
     }
-    // No pincode-to-area lookup in our dataset; fall back to the city
-    // centroid for the "nearest stall" recommendation. The user can
-    // re-check after browsing the map for a sharper pick.
-    setPincodeResult({
-      kind: "served",
-      nearest: nearestStall(VIZAG_CENTER.lat, VIZAG_CENTER.lng),
-    });
+    setChecking(true);
+    try {
+      const r = await fetch(`/api/service-areas/check?pincode=${trimmed}`);
+      const json: { serviceable?: boolean; area_names?: string[]; error?: string } =
+        await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setPincodeResult({
+          kind: "error",
+          message: json?.error ?? "Could not check that pincode.",
+        });
+      } else if (json.serviceable) {
+        setPincodeResult({ kind: "served", areaNames: json.area_names ?? [] });
+      } else {
+        setPincodeResult({ kind: "unserved" });
+      }
+    } catch {
+      setPincodeResult({ kind: "error", message: "Network error — try again." });
+    } finally {
+      setChecking(false);
+    }
   }
 
   return (
@@ -195,7 +195,6 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
         }}
       />
 
-      {/* Back link */}
       <Link
         href="/"
         style={{
@@ -227,7 +226,6 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
           margin: "0 auto",
         }}
       >
-        {/* Hero */}
         <h1
           style={{
             margin: "0 0 12px",
@@ -253,11 +251,10 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
             maxWidth: 640,
           }}
         >
-          {STALL_COUNT} stalls across Visakhapatnam, with delivery to{" "}
-          {COMMUNITY_COUNT}+ gated communities and growing.
+          {counts.all} pickup {counts.all === 1 ? "location" : "locations"} across
+          Visakhapatnam. Tap any pin for directions, or check your pincode below.
         </p>
 
-        {/* Map */}
         <div
           style={{
             width: "100%",
@@ -277,60 +274,39 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
               options={MAP_OPTIONS}
               onClick={() => setSelectedId(null)}
             >
-              {filtered
-                .filter(
-                  (l) =>
-                    l.type === "stall" ||
-                    l.type === "community" ||
-                    l.type === "gym",
-                )
-                .map((loc) => (
-                  <Marker
-                    key={loc.id}
-                    position={{ lat: loc.latitude, lng: loc.longitude }}
-                    onClick={() => setSelectedId(loc.id)}
-                    icon={{
-                      path: google.maps.SymbolPath.CIRCLE,
-                      // Stalls are first-class — slightly larger pins so they
-                      // pop visually against the denser gym/community dots.
-                      scale: loc.type === "stall" ? 9 : 6,
-                      fillColor: pinColorFor(loc.type),
-                      fillOpacity: 0.95,
-                      strokeColor: "#000",
-                      strokeWeight: 1,
-                    }}
-                  />
-                ))}
+              {filtered.map((loc) => (
+                <Marker
+                  key={loc.id}
+                  position={{ lat: loc.latitude, lng: loc.longitude }}
+                  onClick={() => setSelectedId(loc.id)}
+                  icon={{
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: loc.type === "kitchen" ? 10 : 8,
+                    fillColor: pinColorFor(loc.type),
+                    fillOpacity: 0.95,
+                    strokeColor: "#000",
+                    strokeWeight: 1,
+                  }}
+                />
+              ))}
 
               {selected && (
                 <InfoWindow
                   position={{ lat: selected.latitude, lng: selected.longitude }}
                   onCloseClick={() => setSelectedId(null)}
                 >
-                  <div style={{ color: "#1a1612", maxWidth: 220, padding: 4 }}>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        fontSize: 14,
-                        marginBottom: 4,
-                      }}
-                    >
+                  <div style={{ color: "#1a1612", maxWidth: 240, padding: 4 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
                       {selected.name}
                     </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        opacity: 0.75,
-                        marginBottom: 6,
-                      }}
-                    >
+                    <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 6 }}>
                       {typeBadge(selected.type)} · {selected.area}
                     </div>
                     <button
                       type="button"
                       onClick={() => navigateTo(selected)}
                       style={{
-                        background: "#2F6A3A",
+                        background: GREEN_HEX,
                         color: "#fff",
                         border: "none",
                         borderRadius: 4,
@@ -367,7 +343,7 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
           )}
         </div>
 
-        {/* Map legend */}
+        {/* Legend */}
         <div
           style={{
             display: "flex",
@@ -381,42 +357,12 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
             textTransform: "uppercase",
           }}
         >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: 6,
-                background: GREEN_HEX,
-                border: "1px solid #000",
-              }}
-            />
-            Stall ({STALL_COUNT})
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 5,
-                background: GOLD_HEX,
-                border: "1px solid #000",
-              }}
-            />
-            Gated Community ({COMMUNITY_COUNT})
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 5,
-                background: BLUE_HEX,
-                border: "1px solid #000",
-              }}
-            />
-            Gym ({GYM_COUNT})
-          </span>
+          <LegendDot color={GREEN_HEX} label={`Kitchen (${counts.kitchen})`} />
+          <LegendDot color={GOLD_HEX} label={`Stall (${counts.stall})`} />
+          <LegendDot
+            color={BLUE_HEX}
+            label={`Partner Pickup (${counts.partner_pickup})`}
+          />
         </div>
 
         {/* Pincode checker */}
@@ -476,6 +422,7 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
           </div>
           <button
             type="submit"
+            disabled={checking}
             className="cdx-locator-btn"
             style={{
               background: "transparent",
@@ -488,10 +435,11 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
               letterSpacing: "0.25em",
               textTransform: "uppercase",
               color: `rgba(${GOLD_RGB},0.95)`,
-              cursor: "pointer",
+              cursor: checking ? "wait" : "pointer",
+              opacity: checking ? 0.6 : 1,
             }}
           >
-            Check
+            {checking ? "Checking…" : "Check"}
           </button>
           {pincodeResult && (
             <p
@@ -503,24 +451,24 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
                 color:
                   pincodeResult.kind === "served"
                     ? "#9bd0a3"
-                    : "rgba(251,243,212,0.7)",
+                    : pincodeResult.kind === "unserved"
+                      ? "rgba(251,243,212,0.7)"
+                      : "#fca5a5",
                 lineHeight: 1.5,
               }}
             >
               {pincodeResult.kind === "served" ? (
                 <>
-                  ✓ Yes — Cadieux delivers to{" "}
-                  <strong>{pincode}</strong>.
-                  {pincodeResult.nearest && (
-                    <>
-                      {" "}Nearest stall:{" "}
-                      <strong>{pincodeResult.nearest.stall.name}</strong> (
-                      {pincodeResult.nearest.distanceKm.toFixed(1)} km).
-                    </>
+                  ✓ Yes — Cadieux delivers to <strong>{pincode}</strong>
+                  {pincodeResult.areaNames.length > 0 && (
+                    <> ({pincodeResult.areaNames.join(", ")})</>
                   )}
+                  .
                 </>
-              ) : (
+              ) : pincodeResult.kind === "unserved" ? (
                 <>Sorry — Cadieux doesn&apos;t deliver to that pincode yet.</>
+              ) : (
+                pincodeResult.message
               )}
             </p>
           )}
@@ -537,52 +485,56 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
             marginBottom: 20,
           }}
         >
-          {TABS.map((tab) => {
-            const isActive = activeTab === tab.key;
-            const disabled = !!tab.disabled;
-            return (
-              <button
-                key={tab.key}
-                role="tab"
-                type="button"
-                aria-selected={isActive}
-                disabled={disabled}
-                onClick={() => !disabled && setActiveTab(tab.key)}
-                style={{
-                  background: isActive
-                    ? `rgba(${GOLD_RGB},0.18)`
-                    : "transparent",
-                  border: `1px solid rgba(${GOLD_RGB},${
-                    isActive ? 0.85 : 0.4
-                  })`,
-                  borderRadius: 999,
-                  padding: "8px 16px",
-                  fontFamily: "var(--font-body)",
-                  fontSize: 11,
-                  fontWeight: 400,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  color: disabled
-                    ? "rgba(251,243,212,0.25)"
-                    : isActive
-                      ? "#FBF3D4"
-                      : `rgba(${GOLD_RGB},0.85)`,
-                  cursor: disabled ? "not-allowed" : "pointer",
-                  opacity: disabled ? 0.5 : 1,
-                }}
-              >
-                {tab.label}
-                {typeof tab.count === "number" && (
-                  <span style={{ marginLeft: 8, opacity: 0.7 }}>
-                    {tab.count}
-                  </span>
-                )}
-                {disabled && (
-                  <span style={{ marginLeft: 8, opacity: 0.7 }}>Soon</span>
-                )}
-              </button>
-            );
-          })}
+          {(["all", "kitchen", "stall", "partner_pickup"] as TabKey[]).map(
+            (key) => {
+              const isActive = activeTab === key;
+              const label =
+                key === "all"
+                  ? "All"
+                  : key === "kitchen"
+                    ? "Kitchen"
+                    : key === "stall"
+                      ? "Stalls"
+                      : "Partner Pickup";
+              const count =
+                key === "all"
+                  ? counts.all
+                  : key === "kitchen"
+                    ? counts.kitchen
+                    : key === "stall"
+                      ? counts.stall
+                      : counts.partner_pickup;
+              return (
+                <button
+                  key={key}
+                  role="tab"
+                  type="button"
+                  aria-selected={isActive}
+                  onClick={() => setActiveTab(key)}
+                  style={{
+                    background: isActive
+                      ? `rgba(${GOLD_RGB},0.18)`
+                      : "transparent",
+                    border: `1px solid rgba(${GOLD_RGB},${
+                      isActive ? 0.85 : 0.4
+                    })`,
+                    borderRadius: 999,
+                    padding: "8px 16px",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 11,
+                    fontWeight: 400,
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    color: isActive ? "#FBF3D4" : `rgba(${GOLD_RGB},0.85)`,
+                    cursor: "pointer",
+                  }}
+                >
+                  {label}
+                  <span style={{ marginLeft: 8, opacity: 0.7 }}>{count}</span>
+                </button>
+              );
+            },
+          )}
         </div>
 
         {/* Search */}
@@ -590,7 +542,7 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, area or zone…"
+          placeholder="Search by name, area or address…"
           aria-label="Search locations"
           style={{
             width: "100%",
@@ -608,8 +560,8 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
           }}
         />
 
-        {/* Grouped list */}
-        {grouped.length === 0 ? (
+        {/* Card grid */}
+        {filtered.length === 0 ? (
           <p
             style={{
               fontFamily: "var(--font-body)",
@@ -622,187 +574,133 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
             No locations match your filters.
           </p>
         ) : (
-          grouped.map(([zone, items]) => (
-            <section key={zone} style={{ marginBottom: 36 }}>
-              <h2
-                style={{
-                  fontFamily: "var(--font-heading)",
-                  fontSize: 20,
-                  fontWeight: 400,
-                  color: "#FBF3D4",
-                  letterSpacing: "0.02em",
-                  margin: "0 0 14px",
-                }}
-              >
-                {zone}
-                <span
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+              gap: 12,
+            }}
+          >
+            {filtered.map((loc) => {
+              const dist = userLoc
+                ? haversineKm(userLoc.lat, userLoc.lng, loc.latitude, loc.longitude)
+                : null;
+              return (
+                <article
+                  key={loc.id}
                   style={{
-                    marginLeft: 12,
-                    fontFamily: "var(--font-body)",
-                    fontSize: 10,
-                    fontWeight: 300,
-                    color: "#8a7a5a",
-                    letterSpacing: "0.18em",
-                    textTransform: "uppercase",
+                    background: "#080604",
+                    border: `0.25px solid rgba(${GOLD_RGB},0.3)`,
+                    borderRadius: 10,
+                    padding: "16px 18px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
                   }}
                 >
-                  {items.length}{" "}
-                  {items.length === 1 ? "location" : "locations"}
-                </span>
-              </h2>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fill, minmax(260px, 1fr))",
-                  gap: 12,
-                }}
-              >
-                {items.map((loc) => {
-                  const dist = userLoc
-                    ? haversineKm(
-                        userLoc.lat,
-                        userLoc.lng,
-                        loc.latitude,
-                        loc.longitude,
-                      )
-                    : null;
-                  return (
-                    <article
-                      key={loc.id}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <h3
                       style={{
-                        background: "#080604",
-                        border: `0.25px solid rgba(${GOLD_RGB},0.3)`,
-                        borderRadius: 10,
-                        padding: "16px 18px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
+                        margin: 0,
+                        fontFamily: "var(--font-body)",
+                        fontSize: 15,
+                        fontWeight: 500,
+                        color: "#f5f0e8",
+                        letterSpacing: "0.01em",
                       }}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          justifyContent: "space-between",
-                          gap: 8,
-                        }}
-                      >
-                        <h3
-                          style={{
-                            margin: 0,
-                            fontFamily: "var(--font-body)",
-                            fontSize: 15,
-                            fontWeight: 500,
-                            color: "#f5f0e8",
-                            letterSpacing: "0.01em",
-                          }}
-                        >
-                          {loc.name}
-                        </h3>
-                        <span
-                          style={{
-                            fontFamily: "var(--font-body)",
-                            fontSize: 9,
-                            fontWeight: 400,
-                            letterSpacing: "0.18em",
-                            textTransform: "uppercase",
-                            color:
-                              loc.type === "stall"
-                                ? "#9bd0a3"
-                                : loc.type === "gym"
-                                  ? "#93c5fd"
-                                  : `rgba(${GOLD_RGB},0.9)`,
-                            border: `0.5px solid ${
-                              loc.type === "stall"
-                                ? "rgba(155,208,163,0.4)"
-                                : loc.type === "gym"
-                                  ? "rgba(147,197,253,0.4)"
-                                  : `rgba(${GOLD_RGB},0.4)`
-                            }`,
-                            borderRadius: 4,
-                            padding: "3px 7px",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {typeBadge(loc.type)}
-                        </span>
-                      </div>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontFamily: "var(--font-body)",
-                          fontSize: 11,
-                          fontWeight: 300,
-                          color: "#8a7a5a",
-                          letterSpacing: "0.03em",
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        {loc.area}
-                        {typeof loc.rating === "number" && (
-                          <>
-                            {" "}· <span style={{ color: "#c9a96e" }}>
-                              ★ {loc.rating.toFixed(1)}
-                            </span>
-                          </>
-                        )}
-                      </p>
-                      {(loc.notes || dist !== null) && (
-                        <p
-                          style={{
-                            margin: 0,
-                            fontFamily: "var(--font-body)",
-                            fontSize: 10,
-                            fontWeight: 300,
-                            color: "#6a5a40",
-                            letterSpacing: "0.18em",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          {loc.notes}
-                          {loc.notes && dist !== null ? " · " : ""}
-                          {dist !== null && `${dist.toFixed(1)} km away`}
-                        </p>
-                      )}
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "flex-end",
-                          marginTop: 4,
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => navigateTo(loc)}
-                          aria-label={`Get directions to ${loc.name}`}
-                          className="cdx-locator-btn"
-                          style={{
-                            background: "transparent",
-                            border: `1px solid rgba(${GOLD_RGB},0.5)`,
-                            borderRadius: 6,
-                            padding: "7px 14px",
-                            fontFamily: "var(--font-body)",
-                            fontSize: 10,
-                            fontWeight: 400,
-                            letterSpacing: "0.25em",
-                            textTransform: "uppercase",
-                            color: `rgba(${GOLD_RGB},0.95)`,
-                            cursor: "pointer",
-                          }}
-                        >
-                          ↗ Directions
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ))
+                      {loc.name}
+                    </h3>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-body)",
+                        fontSize: 9,
+                        fontWeight: 400,
+                        letterSpacing: "0.18em",
+                        textTransform: "uppercase",
+                        color: pinColorFor(loc.type),
+                        border: `0.5px solid ${pinColorFor(loc.type)}66`,
+                        borderRadius: 4,
+                        padding: "3px 7px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {typeBadge(loc.type)}
+                    </span>
+                  </div>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontFamily: "var(--font-body)",
+                      fontSize: 11,
+                      fontWeight: 300,
+                      color: "#8a7a5a",
+                      letterSpacing: "0.03em",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {loc.area}
+                  </p>
+                  {(loc.notes || dist !== null) && (
+                    <p
+                      style={{
+                        margin: 0,
+                        fontFamily: "var(--font-body)",
+                        fontSize: 10,
+                        fontWeight: 300,
+                        color: "#6a5a40",
+                        letterSpacing: "0.18em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {loc.notes}
+                      {loc.notes && dist !== null ? " · " : ""}
+                      {dist !== null && `${dist.toFixed(1)} km away`}
+                    </p>
+                  )}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      marginTop: 4,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => navigateTo(loc)}
+                      aria-label={`Get directions to ${loc.name}`}
+                      className="cdx-locator-btn"
+                      style={{
+                        background: "transparent",
+                        border: `1px solid rgba(${GOLD_RGB},0.5)`,
+                        borderRadius: 6,
+                        padding: "7px 14px",
+                        fontFamily: "var(--font-body)",
+                        fontSize: 10,
+                        fontWeight: 400,
+                        letterSpacing: "0.25em",
+                        textTransform: "uppercase",
+                        color: `rgba(${GOLD_RGB},0.95)`,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ↗ Directions
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
 
-        {/* CTA: suggest a location */}
+        {/* CTA */}
         <div
           style={{
             marginTop: 48,
@@ -821,7 +719,7 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
               margin: "0 0 10px",
             }}
           >
-            Don&apos;t see your community?
+            Don&apos;t see your area?
           </h2>
           <p
             style={{
@@ -833,8 +731,8 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
               lineHeight: 1.6,
             }}
           >
-            Tell us where you live — once {`a handful of neighbours sign up,`}
-            {" "}we open up your gate.
+            Tell us where you live — once a handful of neighbours sign up, we
+            open up your gate.
           </p>
           <a
             href="mailto:hello@cadieux.in?subject=Suggest%20a%20location"
@@ -873,5 +771,22 @@ export default function FindUsClient({ apiKey }: { apiKey: string }) {
         input:focus { border-color: rgba(${GOLD_RGB},0.85) !important; }
       `}</style>
     </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      <span
+        style={{
+          width: 12,
+          height: 12,
+          borderRadius: 6,
+          background: color,
+          border: "1px solid #000",
+        }}
+      />
+      {label}
+    </span>
   );
 }
