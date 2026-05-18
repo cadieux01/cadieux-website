@@ -33,9 +33,16 @@ import {
 import {
   AdminOrderRow,
   ORDER_FILTER_VALUES,
+  ORDER_STATUSES,
   OrderFilterValue,
   OrderStatus,
 } from "@/lib/admin-shared";
+import {
+  sendCustomerEditSMS,
+  sendOrderStatusSMS,
+  sendOrderWhatsApp,
+  toNotifyStatus,
+} from "@/lib/admin-notify";
 
 type SortKey = "created_desc" | "delivery_asc";
 
@@ -115,6 +122,22 @@ function OrdersPageInner() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 10s polling — matches the legacy admin dashboard cadence. We keep
+  // this lightweight: the same /api/admin/orders endpoint is hit every
+  // tick (it's a small payload and the admin is one user). Cleared on
+  // unmount.
+  useEffect(() => {
+    const t = setInterval(() => void load(), 10_000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const [editing, setEditing] = useState<AdminOrderRow | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const showNotice = useCallback((m: string) => {
+    setNotice(m);
+    setTimeout(() => setNotice(null), 4000);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -239,6 +262,37 @@ function OrdersPageInner() {
         method: "PATCH",
         body: JSON.stringify({ status: next }),
       });
+      // Mirror legacy: SMS + WhatsApp on every status change we have
+      // copy for. Both are fire-and-forget; failures surface in a toast
+      // but never roll back the status update.
+      const phone = order.customers?.phone;
+      const name = order.customers?.full_name ?? "Customer";
+      const notify = toNotifyStatus(next);
+      if (phone && notify) {
+        const [smsRes, waRes] = await Promise.all([
+          sendOrderStatusSMS({
+            phone,
+            name,
+            orderId: order.id,
+            status: notify,
+          }),
+          notify === "Pending"
+            ? Promise.resolve({ ok: true as const, error: undefined as string | undefined })
+            : sendOrderWhatsApp(phone, name, notify),
+        ]);
+        if (!smsRes.ok || !waRes.ok) {
+          showNotice(
+            `Status updated. Notify warnings: ${[
+              smsRes.ok ? null : `SMS: ${smsRes.error}`,
+              waRes.ok ? null : `WA: ${waRes.error}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}`,
+          );
+        } else if (notify !== "Pending") {
+          showNotice(`SMS + WhatsApp sent to ${name}.`);
+        }
+      }
     } catch (e) {
       setOrders(prev);
       if (e instanceof AdminFetchError) {
@@ -249,6 +303,22 @@ function OrdersPageInner() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  const sendWhatsAppForOrder = async (order: AdminOrderRow) => {
+    const phone = order.customers?.phone;
+    const name = order.customers?.full_name ?? "Customer";
+    const notify = toNotifyStatus(order.status);
+    if (!phone) {
+      showNotice("Customer has no phone on file.");
+      return;
+    }
+    if (!notify || notify === "Pending") {
+      showNotice("No WhatsApp template for this status.");
+      return;
+    }
+    const res = await sendOrderWhatsApp(phone, name, notify);
+    showNotice(res.ok ? `WhatsApp sent to ${name}.` : `WhatsApp failed: ${res.error ?? ""}`);
   };
 
   return (
@@ -376,6 +446,38 @@ function OrdersPageInner() {
         <ResultModal result={bulkResult} onClose={() => setBulkResult(null)} />
       ) : null}
 
+      {notice ? (
+        <div
+          style={{
+            border: "1px solid rgba(245,158,11,0.45)",
+            background: "rgba(245,158,11,0.07)",
+            color: "#fbf3d4",
+            padding: "0.7rem 1rem",
+            marginBottom: "1rem",
+            fontFamily: "var(--font-body)",
+            fontSize: "0.85rem",
+            letterSpacing: "0.03em",
+          }}
+        >
+          {notice}
+        </div>
+      ) : null}
+
+      {editing ? (
+        <EditOrderModal
+          order={editing}
+          onCancel={() => setEditing(null)}
+          onSaved={(updated, msg) => {
+            setEditing(null);
+            setOrders((curr) =>
+              curr.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)),
+            );
+            showNotice(msg);
+            void load();
+          }}
+        />
+      ) : null}
+
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
       {loading ? (
         <Placeholder>Loading orders…</Placeholder>
@@ -405,6 +507,7 @@ function OrdersPageInner() {
                 </th>
                 <th style={th}>Order</th>
                 <th style={th}>Customer</th>
+                <th style={th}>Address</th>
                 <th style={th}>Total</th>
                 <th style={th}>Status</th>
                 <th style={th}>Delivery</th>
@@ -470,13 +573,64 @@ function OrdersPageInner() {
                         </div>
                       ) : null}
                     </td>
+                    <td style={{ ...td, maxWidth: 240 }}>
+                      <div
+                        style={{
+                          color: "#fbf3d4",
+                          fontSize: "0.78rem",
+                          lineHeight: 1.4,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {o.delivery_address ?? "—"}
+                      </div>
+                      {o.customers?.city ? (
+                        <div
+                          style={{
+                            color: "rgba(192,200,206,0.65)",
+                            fontSize: "0.7rem",
+                            letterSpacing: "0.05em",
+                            marginTop: 2,
+                          }}
+                        >
+                          {o.customers.city}
+                        </div>
+                      ) : null}
+                    </td>
                     <td style={td}>
                       <span style={{ color: "#fbf3d4", fontSize: "0.85rem" }}>
                         {formatINR(o.total_amount)}
                       </span>
                     </td>
                     <td style={td}>
-                      <StatusBadge status={o.status} />
+                      <select
+                        value={(o.status ?? "").toLowerCase()}
+                        disabled={busy}
+                        onChange={(e) => {
+                          const next = e.target.value as OrderStatus;
+                          if (next === "cancelled") {
+                            if (!confirm("Cancel this order?")) return;
+                          }
+                          void patchStatus(o, next);
+                        }}
+                        style={statusSelect}
+                      >
+                        {ORDER_STATUSES.map((s) => (
+                          <option key={s} value={s} style={{ color: "#000" }}>
+                            {s}
+                          </option>
+                        ))}
+                        {o.status &&
+                        !ORDER_STATUSES.includes(o.status as OrderStatus) ? (
+                          <option value={o.status} style={{ color: "#000" }}>
+                            {o.status}
+                          </option>
+                        ) : null}
+                      </select>
+                      <div style={{ marginTop: 4 }}>
+                        <StatusBadge status={o.status} />
+                      </div>
                     </td>
                     <td style={td}>
                       <div style={{ color: "#fbf3d4", fontSize: "0.8rem" }}>
@@ -519,6 +673,27 @@ function OrdersPageInner() {
                             Mark {next}
                           </button>
                         ) : null}
+                        {o.customers?.phone &&
+                        toNotifyStatus(o.status) &&
+                        toNotifyStatus(o.status) !== "Pending" ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void sendWhatsAppForOrder(o)}
+                            style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
+                            title={`WhatsApp ${o.customers.full_name ?? ""}`}
+                          >
+                            Send WA
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setEditing(o)}
+                          style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
+                        >
+                          Edit
+                        </button>
                         {o.status !== "cancelled" && o.status !== "delivered" ? (
                           <button
                             type="button"
@@ -739,6 +914,225 @@ function ResultModal({
   );
 }
 
+function EditOrderModal({
+  order,
+  onCancel,
+  onSaved,
+}: {
+  order: AdminOrderRow;
+  onCancel: () => void;
+  onSaved: (updated: AdminOrderRow, message: string) => void;
+}) {
+  const [fullName, setFullName] = useState(order.customers?.full_name ?? "");
+  const [phone, setPhone] = useState(order.customers?.phone ?? "");
+  const [city, setCity] = useState(order.customers?.city ?? "");
+  const [address, setAddress] = useState(order.delivery_address ?? "");
+  const [notify, setNotify] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const customerId = order.customer_id;
+  const canSave =
+    !saving &&
+    (fullName.trim().length > 0 || phone.trim().length > 0 || address.trim().length > 0);
+
+  const save = async () => {
+    setErr(null);
+    setSaving(true);
+    try {
+      const updatedCustomer = {
+        full_name: fullName.trim() || null,
+        phone: phone.trim() || null,
+        city: city.trim() || null,
+      };
+      if (customerId) {
+        await adminFetch(`/api/admin/customers/${customerId}`, {
+          method: "PATCH",
+          body: JSON.stringify(updatedCustomer),
+        });
+      }
+      if (address.trim() && address.trim() !== (order.delivery_address ?? "")) {
+        await adminFetch(`/api/admin/orders/${order.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ delivery_address: address.trim() }),
+        });
+      }
+      let notifyMessage = "Customer + order updated.";
+      if (notify && phone.trim()) {
+        // Legacy parity: SMS customer_edit + WhatsApp informational ping.
+        const sms = await sendCustomerEditSMS({
+          phone: phone.trim(),
+          name: fullName.trim() || "Customer",
+          address: address.trim(),
+        });
+        const waBody = `Hi ${fullName.trim() || "Customer"}! Your Cadieux account details have been updated. Name: ${fullName.trim()} · Address: ${address.trim()}. If you did not request this change, please contact us immediately.`;
+        let waOk = true;
+        let waErr = "";
+        try {
+          const r = await fetch("/api/send-whatsapp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: phone.trim(), message: waBody }),
+          });
+          if (!r.ok) {
+            const d = (await r.json().catch(() => ({}))) as { error?: string };
+            waOk = false;
+            waErr = d.error ?? `HTTP ${r.status}`;
+          }
+        } catch (e) {
+          waOk = false;
+          waErr = String(e);
+        }
+        if (sms.ok && waOk) {
+          notifyMessage = "Customer + order updated. SMS + WhatsApp sent.";
+        } else {
+          notifyMessage = `Updated. Notify warnings: ${[
+            sms.ok ? null : `SMS: ${sms.error}`,
+            waOk ? null : `WA: ${waErr}`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}`;
+        }
+      }
+      onSaved(
+        {
+          ...order,
+          delivery_address: address.trim() || order.delivery_address,
+          customers: {
+            id: customerId ?? "",
+            full_name: updatedCustomer.full_name,
+            phone: updatedCustomer.phone,
+            city: updatedCustomer.city,
+          },
+        },
+        notifyMessage,
+      );
+    } catch (e) {
+      if (e instanceof AdminFetchError) setErr(e.message);
+      else setErr("Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={modalBackdrop} onClick={saving ? undefined : onCancel}>
+      <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalTitle}>Edit customer · order #{order.id.slice(0, 8)}</h3>
+        <Field label="Full name">
+          <input
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            disabled={saving}
+            style={modalInput}
+          />
+        </Field>
+        <Field label="Phone">
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            disabled={saving}
+            style={modalInput}
+          />
+        </Field>
+        <Field label="City">
+          <input
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            disabled={saving}
+            style={modalInput}
+          />
+        </Field>
+        <Field label="Delivery address">
+          <textarea
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            disabled={saving}
+            rows={4}
+            style={{
+              ...modalInput,
+              fontFamily: "var(--font-body)",
+              resize: "vertical",
+            }}
+          />
+        </Field>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            margin: "0.5rem 0 1rem",
+            color: "rgba(192,200,206,0.8)",
+            fontFamily: "var(--font-body)",
+            fontSize: "0.78rem",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={notify}
+            disabled={saving}
+            onChange={(e) => setNotify(e.target.checked)}
+          />
+          Send SMS + WhatsApp to customer about this change
+        </label>
+        {err ? (
+          <p style={{ color: "#fca5a5", fontSize: "0.8rem", margin: "0 0 0.8rem" }}>
+            {err}
+          </p>
+        ) : null}
+        <div style={modalActions}>
+          <button type="button" onClick={onCancel} disabled={saving} style={chipNeutral}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={!canSave}
+            style={{
+              ...chipPrimary,
+              opacity: !canSave ? 0.5 : 1,
+            }}
+          >
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.3rem",
+        margin: "0 0 0.8rem",
+        fontFamily: "var(--font-body)",
+        fontSize: "0.68rem",
+        letterSpacing: "0.18em",
+        textTransform: "uppercase",
+        color: "rgba(245,158,11,0.85)",
+      }}
+    >
+      {label}
+      {children}
+    </label>
+  );
+}
+
+const modalInput: React.CSSProperties = {
+  background: "transparent",
+  border: "1px solid rgba(245,158,11,0.3)",
+  color: "#fbf3d4",
+  padding: "0.55rem 0.7rem",
+  fontSize: "0.85rem",
+  letterSpacing: "0.02em",
+  outline: "none",
+  textTransform: "none",
+};
+
 function exportCsv(rows: AdminOrderRow[]): void {
   const csv = toCsv(rows, [
     { header: "Order ID", value: (o) => o.id },
@@ -802,6 +1196,19 @@ function ErrorBanner({
     </div>
   );
 }
+
+const statusSelect: React.CSSProperties = {
+  padding: "0.3rem 0.5rem",
+  background: "transparent",
+  border: "1px solid rgba(245,158,11,0.45)",
+  color: "#fbf3d4",
+  fontFamily: "var(--font-body)",
+  fontSize: "0.72rem",
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+  maxWidth: 140,
+};
 
 const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",

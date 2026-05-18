@@ -14,16 +14,65 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ADMIN_PASSWORD, ADMIN_SESSION_KEY } from "@/lib/admin-shared";
 
-// `secondary: true` renders the link in a quieter, smaller treatment so
-// users can tell the legacy surface apart from the new admin pages.
-const NAV: { href: string; label: string; secondary?: boolean }[] = [
+// 30-day remember-me. We persist `{ expiresAt: <epoch-ms> }` in
+// localStorage so the operator only logs in once a month. The previous
+// sessionStorage flag is migrated transparently on first load.
+const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;
+
+function readRememberedAuth(): boolean {
+  if (typeof window === "undefined") return false;
+  // Back-compat: if the old sessionStorage flag is still set, treat
+  // the user as authed and upgrade them to the new localStorage record
+  // immediately so they don't get bounced to the password gate.
+  const session = sessionStorage.getItem(ADMIN_SESSION_KEY);
+  const ls = localStorage.getItem(ADMIN_SESSION_KEY);
+  if (ls) {
+    try {
+      const parsed = JSON.parse(ls) as { expiresAt?: number };
+      if (
+        parsed &&
+        typeof parsed.expiresAt === "number" &&
+        parsed.expiresAt > Date.now()
+      ) {
+        return true;
+      }
+      // Expired — clean up.
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+    } catch {
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+    }
+  }
+  if (session === "1") {
+    writeRememberedAuth();
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    return true;
+  }
+  return false;
+}
+
+function writeRememberedAuth(): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(
+    ADMIN_SESSION_KEY,
+    JSON.stringify({ expiresAt: Date.now() + REMEMBER_MS })
+  );
+}
+
+function clearRememberedAuth(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(ADMIN_SESSION_KEY);
+  sessionStorage.removeItem(ADMIN_SESSION_KEY);
+}
+
+const NAV: { href: string; label: string }[] = [
   { href: "/admin/overview", label: "Overview" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/customers", label: "Customers" },
   { href: "/admin/subscriptions", label: "Subscriptions" },
+  { href: "/admin/change-requests", label: "Change Requests" },
+  { href: "/admin/feedback", label: "Feedback" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/audit-log", label: "Audit Log" },
-  { href: "/admin/legacy", label: "Legacy", secondary: true },
 ];
 
 export function AdminShell({
@@ -42,10 +91,7 @@ export function AdminShell({
   const pathname = usePathname();
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const v = sessionStorage.getItem(ADMIN_SESSION_KEY);
-      if (v === "1") setAuthed(true);
-    }
+    if (readRememberedAuth()) setAuthed(true);
     setChecking(false);
   }, []);
 
@@ -57,7 +103,7 @@ export function AdminShell({
         <GrainOverlay />
         <PasswordGate
           onSuccess={() => {
-            sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+            writeRememberedAuth();
             setAuthed(true);
           }}
         />
@@ -92,7 +138,7 @@ export function AdminShell({
             <button
               type="button"
               onClick={() => {
-                sessionStorage.removeItem(ADMIN_SESSION_KEY);
+                clearRememberedAuth();
                 setAuthed(false);
               }}
               className="uppercase"
@@ -132,22 +178,17 @@ export function AdminShell({
                   className="uppercase whitespace-nowrap"
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: item.secondary ? "0.62rem" : "0.7rem",
+                    fontSize: "0.7rem",
                     letterSpacing: "0.25em",
-                    color: active
-                      ? "#fbf3d4"
-                      : item.secondary
-                        ? "rgba(192,200,206,0.4)"
-                        : "rgba(245,158,11,0.7)",
+                    color: active ? "#fbf3d4" : "rgba(245,158,11,0.7)",
                     paddingBottom: "2px",
                     borderBottom: active
                       ? "1px solid #f59e0b"
                       : "1px solid transparent",
                     scrollSnapAlign: "start",
-                    opacity: item.secondary && !active ? 0.85 : 1,
                   }}
                 >
-                  {item.secondary ? `/ ${item.label}` : item.label}
+                  {item.label}
                 </Link>
               );
             })}

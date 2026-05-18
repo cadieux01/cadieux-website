@@ -27,7 +27,14 @@ import {
   formatINR,
   isoLocalDate,
 } from "@/lib/admin-formatting";
-import { AdminSubscriptionRow, SUBSCRIPTION_STATUSES } from "@/lib/admin-shared";
+import {
+  AdminDeliveryRow,
+  AdminSubscriptionRow,
+  DELIVERY_STATUS_LABELS,
+  DELIVERY_STATUS_OPTIONS,
+  SUBSCRIPTION_PAYMENT_STATUSES,
+  SUBSCRIPTION_STATUSES,
+} from "@/lib/admin-shared";
 
 type FilterValue =
   | "all"
@@ -105,6 +112,18 @@ function SubscriptionsPageInner() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 10s polling — same cadence as the legacy admin dashboard.
+  useEffect(() => {
+    const t = setInterval(() => void load(), 10_000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const [drawerId, setDrawerId] = useState<string | null>(null);
+  const drawerSub = useMemo(
+    () => (drawerId ? subs.find((s) => s.id === drawerId) ?? null : null),
+    [drawerId, subs],
+  );
 
   const filtered = useMemo(() => {
     const inRange = subs.filter((s) => withinRange(s.created_at, range));
@@ -298,6 +317,13 @@ function SubscriptionsPageInner() {
                     <td style={td}><StatusBadge status={s.status} /></td>
                     <td style={td}>
                       <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDrawerId(s.id)}
+                          style={buttonSm}
+                        >
+                          Open
+                        </button>
                         {canPause ? (
                           <button
                             type="button"
@@ -347,6 +373,14 @@ function SubscriptionsPageInner() {
         </div>
       )}
 
+      {drawerSub ? (
+        <SubscriptionDrawer
+          subscription={drawerSub}
+          onClose={() => setDrawerId(null)}
+          onChanged={() => void load()}
+        />
+      ) : null}
+
       <p
         style={{
           marginTop: "1.5rem",
@@ -364,6 +398,559 @@ function SubscriptionsPageInner() {
     </AdminShell>
   );
 }
+
+function SubscriptionDrawer({
+  subscription,
+  onClose,
+  onChanged,
+}: {
+  subscription: AdminSubscriptionRow;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [deliveries, setDeliveries] = useState<AdminDeliveryRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDeliveries = useCallback(async () => {
+    try {
+      const r = await adminFetch<{ deliveries: AdminDeliveryRow[] }>(
+        `/api/admin/subscriptions/${subscription.id}/deliveries`,
+      );
+      setDeliveries(r.deliveries ?? []);
+      setError(null);
+    } catch (e) {
+      setError(
+        e instanceof AdminFetchError ? e.message : "Failed to load deliveries.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [subscription.id]);
+
+  useEffect(() => {
+    void fetchDeliveries();
+    const t = setInterval(() => void fetchDeliveries(), 10_000);
+    return () => clearInterval(t);
+  }, [fetchDeliveries]);
+
+  const updateOverallStatus = async (next: string) => {
+    try {
+      await adminFetch(`/api/admin/subscriptions/${subscription.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: next }),
+      });
+      onChanged();
+    } catch (e) {
+      alert(e instanceof AdminFetchError ? e.message : "Update failed.");
+    }
+  };
+
+  const updatePaymentStatus = async (next: string) => {
+    try {
+      await adminFetch(`/api/admin/subscriptions/${subscription.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ payment_status: next }),
+      });
+      onChanged();
+    } catch (e) {
+      alert(e instanceof AdminFetchError ? e.message : "Update failed.");
+    }
+  };
+
+  const updateDeliveryStatus = async (deliveryId: string, next: string) => {
+    const prev = deliveries;
+    setDeliveries((curr) =>
+      curr.map((d) => (d.id === deliveryId ? { ...d, status: next } : d)),
+    );
+    try {
+      await adminFetch(
+        `/api/admin/subscriptions/${subscription.id}/deliveries/${deliveryId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status: next }),
+        },
+      );
+      void fetchDeliveries();
+      onChanged();
+    } catch (e) {
+      setDeliveries(prev);
+      alert(
+        e instanceof AdminFetchError ? e.message : "Delivery update failed.",
+      );
+    }
+  };
+
+  const updateDeliveryNotes = async (deliveryId: string, notes: string) => {
+    try {
+      await adminFetch(
+        `/api/admin/subscriptions/${subscription.id}/deliveries/${deliveryId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ admin_notes: notes }),
+        },
+      );
+      void fetchDeliveries();
+    } catch (e) {
+      alert(
+        e instanceof AdminFetchError ? e.message : "Notes update failed.",
+      );
+    }
+  };
+
+  const addr = subscription.delivery_address ?? null;
+  const addrLine = addr
+    ? [addr.line1, addr.line2, addr.city, addr.pincode].filter(Boolean).join(", ")
+    : "";
+
+  return (
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 200,
+        background: "rgba(0,0,0,0.7)",
+        display: "flex",
+        justifyContent: "flex-end",
+      }}
+    >
+      <div
+        style={{
+          width: "min(620px, 100%)",
+          height: "100dvh",
+          background: "#0e0e0e",
+          borderLeft: "1px solid rgba(245,158,11,0.25)",
+          overflowY: "auto",
+          padding: "28px 28px 60px",
+          color: "#fbf3d4",
+          fontFamily: "var(--font-body)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: 18,
+          }}
+        >
+          <div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.65rem",
+                letterSpacing: "0.3em",
+                textTransform: "uppercase",
+                color: "rgba(245,158,11,0.75)",
+              }}
+            >
+              Subscription
+            </p>
+            <p
+              style={{
+                margin: "4px 0 0",
+                fontFamily: "var(--font-heading)",
+                fontSize: "1.5rem",
+                fontWeight: 300,
+                letterSpacing: "0.04em",
+              }}
+            >
+              {subscription.product_name} × {subscription.quantity_per_delivery}
+            </p>
+            <p
+              style={{
+                margin: "4px 0 0",
+                fontSize: "0.75rem",
+                color: "rgba(251,243,212,0.55)",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <span>
+                {subscription.customer?.full_name ?? "—"} ·{" "}
+                {subscription.customer?.phone ?? "—"}
+              </span>
+              {subscription.customer?.phone ? (
+                <ContactActions
+                  phone={subscription.customer.phone}
+                  customerName={subscription.customer.full_name}
+                  orderInfo={`${subscription.product_name} subscription`}
+                />
+              ) : null}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "rgba(251,243,212,0.55)",
+              fontSize: 18,
+              cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(245,158,11,0.05)",
+            border: "1px solid rgba(245,158,11,0.35)",
+            padding: "14px 16px",
+            marginBottom: 18,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "0.6rem",
+                letterSpacing: "0.3em",
+                textTransform: "uppercase",
+                color: "rgba(245,158,11,0.8)",
+              }}
+            >
+              Overall status
+            </span>
+            <select
+              value={subscription.status}
+              onChange={(e) => void updateOverallStatus(e.target.value)}
+              style={drawerSelect}
+            >
+              {SUBSCRIPTION_STATUSES.map((opt) => (
+                <option key={opt} value={opt} style={{ color: "#000" }}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "0.6rem",
+                letterSpacing: "0.3em",
+                textTransform: "uppercase",
+                color: "rgba(251,243,212,0.5)",
+              }}
+            >
+              Payment
+            </span>
+            <select
+              value={subscription.payment_status}
+              onChange={(e) => void updatePaymentStatus(e.target.value)}
+              style={drawerSelect}
+            >
+              {SUBSCRIPTION_PAYMENT_STATUSES.map((opt) => (
+                <option key={opt} value={opt} style={{ color: "#000" }}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: "0.78rem",
+            }}
+          >
+            <span style={{ color: "rgba(251,243,212,0.5)" }}>Plan</span>
+            <span>
+              {subscription.frequency} · {subscription.day_of_week ?? "—"} ·{" "}
+              {subscription.time_slot ?? "—"}
+            </span>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: "0.78rem",
+            }}
+          >
+            <span style={{ color: "rgba(251,243,212,0.5)" }}>Total</span>
+            <span>
+              {formatINR(subscription.total_amount)} · {subscription.total_weeks} weeks
+            </span>
+          </div>
+          {addrLine ? (
+            <div
+              style={{
+                fontSize: "0.75rem",
+                color: "rgba(251,243,212,0.55)",
+                lineHeight: 1.5,
+              }}
+            >
+              {addr?.name ? (
+                <>
+                  <b style={{ color: "#fbf3d4", fontWeight: 500 }}>{addr.name}</b>
+                  <br />
+                </>
+              ) : null}
+              {addrLine}
+            </div>
+          ) : null}
+        </div>
+
+        <p
+          style={{
+            margin: "0 0 14px",
+            fontSize: "0.6rem",
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(245,158,11,0.75)",
+          }}
+        >
+          Deliveries · {deliveries.length}
+        </p>
+
+        {loading ? (
+          <p style={{ color: "rgba(251,243,212,0.45)" }}>Loading…</p>
+        ) : null}
+        {error ? <p style={{ color: "#e05a5a" }}>Error: {error}</p> : null}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {deliveries.map((d) => (
+            <DeliveryCard
+              key={d.id}
+              delivery={d}
+              onStatusChange={(next) => void updateDeliveryStatus(d.id, next)}
+              onNotesSave={(notes) => void updateDeliveryNotes(d.id, notes)}
+            />
+          ))}
+          {!loading && deliveries.length === 0 && !error ? (
+            <p style={{ color: "rgba(251,243,212,0.45)", fontSize: "0.78rem" }}>
+              No deliveries scheduled.
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeliveryCard({
+  delivery,
+  onStatusChange,
+  onNotesSave,
+}: {
+  delivery: AdminDeliveryRow;
+  onStatusChange: (s: string) => void;
+  onNotesSave: (notes: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(delivery.admin_notes ?? "");
+  const userEdited = (delivery.admin_notes ?? "").includes("[user edit");
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(245,158,11,0.2)",
+        background: "rgba(245,158,11,0.03)",
+        padding: "12px 14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <span
+          style={{
+            fontSize: "0.65rem",
+            letterSpacing: "0.25em",
+            textTransform: "uppercase",
+            color: "rgba(245,158,11,0.75)",
+          }}
+        >
+          Week {delivery.week_number}
+        </span>
+        <select
+          value={delivery.status}
+          onChange={(e) => onStatusChange(e.target.value)}
+          style={drawerSelect}
+        >
+          {DELIVERY_STATUS_OPTIONS.map((opt) => (
+            <option key={opt} value={opt} style={{ color: "#000" }}>
+              {DELIVERY_STATUS_LABELS[opt] ?? opt}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div style={{ fontSize: "0.85rem", color: "#fbf3d4" }}>
+        {formatScheduledDate(delivery.scheduled_date)}
+        <span style={{ color: "rgba(251,243,212,0.5)" }}>
+          {" "}
+          · {delivery.scheduled_time_slot}
+        </span>
+      </div>
+      {delivery.status_updated_at ? (
+        <div
+          style={{
+            fontSize: "0.65rem",
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "rgba(251,243,212,0.35)",
+          }}
+        >
+          Updated ·{" "}
+          {new Date(delivery.status_updated_at).toLocaleString("en-IN", {
+            day: "numeric",
+            month: "short",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </div>
+      ) : null}
+      {userEdited ? (
+        <span
+          style={{
+            alignSelf: "flex-start",
+            fontSize: "0.6rem",
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            color: "#7bd88f",
+            border: "1px solid rgba(123,216,143,0.5)",
+            padding: "2px 8px",
+            borderRadius: 999,
+          }}
+        >
+          ✎ User edited
+        </span>
+      ) : null}
+      {editing ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(245,158,11,0.3)",
+              color: "#fbf3d4",
+              padding: "0.45rem 0.6rem",
+              fontFamily: "var(--font-body)",
+              fontSize: "0.8rem",
+              resize: "vertical",
+              outline: "none",
+            }}
+          />
+          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(delivery.admin_notes ?? "");
+                setEditing(false);
+              }}
+              style={buttonSm}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onNotesSave(draft);
+                setEditing(false);
+              }}
+              style={buttonSm}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      ) : delivery.admin_notes ? (
+        <div
+          style={{
+            fontSize: "0.75rem",
+            color: "rgba(251,243,212,0.6)",
+            fontStyle: "italic",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          Notes: {delivery.admin_notes}{" "}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            style={{
+              ...buttonSm,
+              fontSize: "0.55rem",
+              padding: "0.15rem 0.5rem",
+              marginLeft: 6,
+            }}
+          >
+            Edit notes
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          style={{
+            ...buttonSm,
+            fontSize: "0.6rem",
+            padding: "0.2rem 0.6rem",
+            alignSelf: "flex-start",
+          }}
+        >
+          Add notes
+        </button>
+      )}
+    </div>
+  );
+}
+
+function formatScheduledDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+const drawerSelect: React.CSSProperties = {
+  background: "rgba(0,0,0,0.4)",
+  color: "#fbf3d4",
+  border: "1px solid rgba(245,158,11,0.4)",
+  padding: "5px 10px",
+  fontFamily: "var(--font-body)",
+  fontSize: "0.72rem",
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
 
 function exportSubsCsv(rows: AdminSubscriptionRow[]): void {
   const csv = toCsv(rows, [

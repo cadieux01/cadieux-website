@@ -121,10 +121,57 @@ export type AdminSubscriptionRow = {
   payment_status: string;
   status: string;
   created_at: string;
+  // Plan timing fields are surfaced by the subscription drawer; the
+  // server returns them via SELECT *, but they may be null/absent on
+  // legacy rows.
+  day_of_week?: string | null;
+  time_slot?: string | null;
+  delivery_address?: {
+    name?: string | null;
+    line1?: string | null;
+    line2?: string | null;
+    city?: string | null;
+    pincode?: string | null;
+  } | null;
   customer?: AdminCustomerSummary | null;
   // Server-computed using MAX(subscription_deliveries.delivery_date)
   // with a fallback to created_at + total_weeks * 7d. Matches the
   // derivation in src/app/api/cron/subscription-reminders/route.ts.
   derived_end_date?: string | null;
   remaining_deliveries?: number;
+};
+
+export const DELIVERY_STATUS_OPTIONS = [
+  "pending_confirmation",
+  "confirmed",
+  "out_for_delivery",
+  "delivered",
+  "cancelled",
+] as const;
+export type DeliveryStatus = (typeof DELIVERY_STATUS_OPTIONS)[number];
+
+export const DELIVERY_STATUS_LABELS: Record<string, string> = {
+  pending_confirmation: "Pending",
+  confirmed: "Confirmed",
+  out_for_delivery: "Out for delivery",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+
+export const SUBSCRIPTION_PAYMENT_STATUSES = [
+  "pending",
+  "paid",
+  "failed",
+  "refunded",
+] as const;
+
+export type AdminDeliveryRow = {
+  id: string;
+  subscription_id: string;
+  week_number: number;
+  scheduled_date: string;
+  scheduled_time_slot: string;
+  status: string;
+  status_updated_at: string | null;
+  admin_notes: string | null;
 };
