@@ -69,6 +69,8 @@ const NAV: { href: string; label: string }[] = [
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/customers", label: "Customers" },
   { href: "/admin/subscriptions", label: "Subscriptions" },
+  { href: "/admin/delivery-requests", label: "Requests" },
+  { href: "/admin/service-areas", label: "Service Areas" },
   { href: "/admin/change-requests", label: "Change Requests" },
   { href: "/admin/feedback", label: "Feedback" },
   { href: "/admin/products", label: "Products" },
