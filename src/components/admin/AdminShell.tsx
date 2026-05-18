@@ -14,13 +14,15 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ADMIN_PASSWORD, ADMIN_SESSION_KEY } from "@/lib/admin-shared";
 
-const NAV: { href: string; label: string }[] = [
+// `secondary: true` renders the link in a quieter, smaller treatment so
+// users can tell the legacy surface apart from the new admin pages.
+const NAV: { href: string; label: string; secondary?: boolean }[] = [
   { href: "/admin/overview", label: "Overview" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/customers", label: "Customers" },
   { href: "/admin/subscriptions", label: "Subscriptions" },
   { href: "/admin/products", label: "Products" },
-  { href: "/admin", label: "Legacy" },
+  { href: "/admin/legacy", label: "Legacy", secondary: true },
 ];
 
 export function AdminShell({
@@ -107,32 +109,57 @@ export function AdminShell({
             </button>
           </div>
 
-          <nav className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+          {/*
+            Mobile-responsive nav. On phones the row is horizontally
+            scrollable (snap-to-link) so a wider list of tabs never gets
+            cut off; from md upward it wraps naturally. The hidden
+            scrollbar keeps the dark-walnut aesthetic intact — the
+            visible cue is the gold underline on the active link.
+          */}
+          <nav
+            className="mt-4 flex flex-nowrap md:flex-wrap gap-x-5 gap-y-2 overflow-x-auto md:overflow-visible -mx-6 px-6 md:mx-0 md:px-0 admin-nav-scroller"
+            style={{ scrollSnapType: "x mandatory" }}
+            aria-label="Admin sections"
+          >
             {NAV.map((item) => {
               const active =
-                pathname === item.href ||
-                (item.href !== "/admin" && pathname?.startsWith(item.href));
+                pathname === item.href || pathname?.startsWith(item.href + "/");
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="uppercase"
+                  className="uppercase whitespace-nowrap"
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: "0.7rem",
+                    fontSize: item.secondary ? "0.62rem" : "0.7rem",
                     letterSpacing: "0.25em",
-                    color: active ? "#fbf3d4" : "rgba(245,158,11,0.7)",
+                    color: active
+                      ? "#fbf3d4"
+                      : item.secondary
+                        ? "rgba(192,200,206,0.4)"
+                        : "rgba(245,158,11,0.7)",
                     paddingBottom: "2px",
                     borderBottom: active
                       ? "1px solid #f59e0b"
                       : "1px solid transparent",
+                    scrollSnapAlign: "start",
+                    opacity: item.secondary && !active ? 0.85 : 1,
                   }}
                 >
-                  {item.label}
+                  {item.secondary ? `/ ${item.label}` : item.label}
                 </Link>
               );
             })}
           </nav>
+          <style jsx>{`
+            .admin-nav-scroller::-webkit-scrollbar {
+              display: none;
+            }
+            .admin-nav-scroller {
+              scrollbar-width: none;
+              -ms-overflow-style: none;
+            }
+          `}</style>
         </header>
 
         <section className="px-6 py-8">
