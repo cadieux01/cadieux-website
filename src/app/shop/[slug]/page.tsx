@@ -8,7 +8,8 @@
 import { notFound } from "next/navigation";
 
 import { PRODUCTS } from "@/lib/data";
-import { getProductAvailability } from "@/lib/products";
+import { getProductAvailability, getProductBySlug } from "@/lib/products";
+import { getProductReports } from "@/lib/product-reports";
 
 import ProductDetailClient from "./ProductDetailClient";
 
@@ -30,5 +31,12 @@ export default async function ProductDetailPage({
 
   const outOfStock = availability?.outOfStock.has(slug) ?? false;
 
-  return <ProductDetailClient slug={slug} outOfStock={outOfStock} />;
+  // Fetch lab reports for this product (empty array if the products table
+  // is unreachable or the slug isn't tracked in Supabase yet).
+  const productRow = await getProductBySlug(slug);
+  const reports = productRow ? await getProductReports(productRow.id) : [];
+
+  return (
+    <ProductDetailClient slug={slug} outOfStock={outOfStock} reports={reports} />
+  );
 }

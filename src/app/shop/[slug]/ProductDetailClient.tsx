@@ -12,6 +12,11 @@ import {
 } from "@/lib/data";
 import { useCart } from "@/context/CartContext";
 import ReviewSection from "@/components/ReviewSection";
+import {
+  PRODUCT_REPORT_CATEGORIES,
+  PRODUCT_REPORT_CATEGORY_LABEL,
+  type ProductReport,
+} from "@/lib/product-reports";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -25,9 +30,11 @@ const DIVIDER_STYLE: React.CSSProperties = {
 export default function ProductDetailClient({
   slug,
   outOfStock = false,
+  reports = [],
 }: {
   slug: string;
   outOfStock?: boolean;
+  reports?: ProductReport[];
 }) {
   const typedSlug = slug as ProductSlug;
   const product = PRODUCTS.find((p) => p.slug === typedSlug);
@@ -402,36 +409,17 @@ export default function ProductDetailClient({
           </div>
         </Section>
 
-        <hr style={DIVIDER_STYLE} />
-
-        {/* Test reports — no preview data; customer opens the dedicated page to see the real reports. */}
-        <Section label="Independently tested" title="Test Reports">
-          <div style={{ display: "flex", justifyContent: "flex-start" }}>
-            <Link
-              href={`/shop/${slug}/reports`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "16px 28px",
-                border: "1px solid #c9a96e",
-                color: "#FBF3D4",
-                fontFamily: "var(--font-body)",
-                fontSize: 11,
-                fontWeight: 500,
-                letterSpacing: "0.35em",
-                textTransform: "uppercase",
-                borderRadius: 4,
-                textDecoration: "none",
-                background: "rgba(201,169,110,0.08)",
-              }}
-            >
-              View Reports <span aria-hidden="true">→</span>
-            </Link>
-          </div>
-        </Section>
-
-        <hr style={DIVIDER_STYLE} />
+        {reports.length > 0 ? (
+          <>
+            <hr style={DIVIDER_STYLE} />
+            <Section label="Independently tested" title="Lab Reports & Certifications">
+              <ReportsList reports={reports} />
+            </Section>
+            <hr style={DIVIDER_STYLE} />
+          </>
+        ) : (
+          <hr style={DIVIDER_STYLE} />
+        )}
 
         {/* Reviews */}
         <Section label="What customers say" title="Customer Reviews">
@@ -721,4 +709,97 @@ function Section({ label, title, children }: { label: string; title: string; chi
   );
 }
 
+function ReportsList({ reports }: { reports: ProductReport[] }) {
+  // Group by the canonical category order so FSSAI shows above Other.
+  const grouped = PRODUCT_REPORT_CATEGORIES.map((cat) => ({
+    category: cat,
+    rows: reports.filter((r) => r.category === cat),
+  })).filter((g) => g.rows.length > 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+      {grouped.map((group) => (
+        <div key={group.category}>
+          <div
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 500,
+              letterSpacing: "0.4em",
+              textTransform: "uppercase",
+              color: "#c9a96e",
+              marginBottom: 12,
+            }}
+          >
+            {PRODUCT_REPORT_CATEGORY_LABEL[group.category]}
+          </div>
+          <ul
+            style={{
+              listStyle: "none",
+              padding: 0,
+              margin: 0,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+              gap: 12,
+            }}
+          >
+            {group.rows.map((r) => (
+              <li key={r.id}>
+                <a
+                  href={r.file_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: "block",
+                    padding: "14px 16px",
+                    border: "1px solid rgba(201, 169, 110, 0.35)",
+                    background: "rgba(201,169,110,0.05)",
+                    textDecoration: "none",
+                    color: "#FBF3D4",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: 14,
+                      fontWeight: 500,
+                      letterSpacing: "0.02em",
+                      marginBottom: 6,
+                    }}
+                  >
+                    {r.title}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: 11,
+                      letterSpacing: "0.2em",
+                      textTransform: "uppercase",
+                      color: "#c9a96e",
+                    }}
+                  >
+                    View {fileKind(r.file_mime)} →
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function fileKind(mime: string): string {
+  if (mime === "application/pdf") return "PDF";
+  if (mime.startsWith("image/")) return "Image";
+  if (
+    mime ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mime === "application/msword"
+  ) {
+    return "Document";
+  }
+  return "File";
+}
 

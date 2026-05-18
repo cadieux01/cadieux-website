@@ -9,6 +9,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { LabReportsSection } from "@/components/admin/LabReportsSection";
 import {
   ProductForm,
   ProductFormValues,
@@ -184,16 +185,19 @@ export default function EditProductPage() {
       ) : loading || !product ? (
         <p style={{ color: FADED, fontFamily: "var(--font-body)" }}>Loading…</p>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-8">
-          <ProductForm
-            initial={formValuesFromRow(product)}
-            submitLabel="Save changes"
-            onSubmit={submit}
-            busy={busy}
-            error={saveErr}
-          />
-          <HistoryPanel history={history} />
-        </div>
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-8">
+            <ProductForm
+              initial={formValuesFromRow(product)}
+              submitLabel="Save changes"
+              onSubmit={submit}
+              busy={busy}
+              error={saveErr}
+            />
+            <HistoryPanel history={history} />
+          </div>
+          <LabReportsSection productId={product.id} />
+        </>
       )}
     </AdminShell>
   );
