@@ -82,6 +82,7 @@ function AdminLoading() {
 function SubscriptionsPageInner() {
   const [subs, setSubs] = useState<AdminSubscriptionRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterValue>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -103,11 +104,21 @@ function SubscriptionsPageInner() {
       setSubs(res.subscriptions ?? []);
     } catch (e) {
       if (e instanceof AdminFetchError) setError(e.message);
+      else if (e instanceof Error) setError(e.message);
       else setError("Could not load subscriptions.");
     } finally {
       setLoading(false);
     }
   }, [filter]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   useEffect(() => {
     void load();
@@ -177,10 +188,15 @@ function SubscriptionsPageInner() {
           </button>
           <button
             type="button"
-            onClick={() => void load()}
-            style={chipNeutral}
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+            style={{
+              ...chipNeutral,
+              cursor: refreshing ? "wait" : "pointer",
+              opacity: refreshing ? 0.6 : 1,
+            }}
           >
-            Refresh
+            {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </>
       }
@@ -520,11 +536,14 @@ function SubscriptionDrawer({
       <div
         style={{
           width: "min(620px, 100%)",
+          maxHeight: "100dvh",
           height: "100dvh",
           background: "#0e0e0e",
           borderLeft: "1px solid rgba(245,158,11,0.25)",
           overflowY: "auto",
-          padding: "28px 28px 60px",
+          overscrollBehavior: "contain",
+          padding:
+            "28px 28px calc(60px + env(safe-area-inset-bottom)) 28px",
           color: "#fbf3d4",
           fontFamily: "var(--font-body)",
         }}

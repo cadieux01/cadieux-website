@@ -45,15 +45,18 @@ export default function FeedbackPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      // GET /api/reviews is public — no token needed, and the public
-      // shape includes replies inline.
-      const res = await fetch("/api/reviews", { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { reviews?: Review[] };
+      // GET /api/reviews is public — no token needed — but we route through
+      // adminFetch so error shapes are consistent with the rest of the admin
+      // surface (AdminFetchError carries the real HTTP status + message).
+      const json = await adminFetch<{ reviews?: Review[] }>("/api/reviews");
       setReviews(json.reviews ?? []);
     } catch (e) {
       setError(
-        e instanceof AdminFetchError ? e.message : "Could not load feedback.",
+        e instanceof AdminFetchError
+          ? e.message
+          : e instanceof Error
+          ? e.message
+          : "Could not load feedback.",
       );
     } finally {
       setLoading(false);

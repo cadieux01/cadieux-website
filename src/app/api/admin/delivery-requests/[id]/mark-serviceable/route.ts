@@ -106,7 +106,7 @@ export async function POST(
 
   void recordAuditEvent({
     req,
-    entity: "other",
+    entity: "delivery_request",
     action: "status_change",
     targetId: params.id,
     targetLabel: `Delivery request ${pincode}`,

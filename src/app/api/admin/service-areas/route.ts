@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
 
   void recordAuditEvent({
     req,
-    entity: "other",
+    entity: "service_area",
     action: "create",
     targetId: pincode,
     targetLabel: `Pincode ${pincode}`,

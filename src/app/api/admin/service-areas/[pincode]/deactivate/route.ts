@@ -31,7 +31,7 @@ export async function POST(
 
   void recordAuditEvent({
     req,
-    entity: "other",
+    entity: "service_area",
     action: "archive",
     targetId: pincode,
     targetLabel: `Pincode ${pincode}`,

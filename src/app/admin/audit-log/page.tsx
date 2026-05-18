@@ -116,6 +116,7 @@ function AuditLogPageInner() {
   const [rows, setRows] = useState<AuditLogRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -130,12 +131,25 @@ function AuditLogPageInner() {
       setTotal(res.total ?? 0);
     } catch (e) {
       setErr(
-        e instanceof AdminFetchError ? e.message : "Failed to load audit log",
+        e instanceof AdminFetchError
+          ? e.message
+          : e instanceof Error
+          ? e.message
+          : "Failed to load audit log",
       );
     } finally {
       setLoading(false);
     }
   }, [range, entities, actions, q, page]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   // Reset to page 0 whenever a filter changes; load on every change.
   useEffect(() => {
@@ -197,22 +211,43 @@ function AuditLogPageInner() {
       title="Audit Log"
       subtitle={subtitle}
       actions={
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="uppercase"
-          style={{
-            fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
-            letterSpacing: "0.25em",
-            color: GOLD,
-            border: `1px solid ${GOLD}`,
-            padding: "0.45rem 0.9rem",
-            background: "transparent",
-          }}
-        >
-          Export CSV
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+            className="uppercase"
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: "0.7rem",
+              letterSpacing: "0.25em",
+              color: GOLD,
+              border: `1px solid ${GOLD}`,
+              padding: "0.45rem 0.9rem",
+              background: "transparent",
+              cursor: refreshing ? "wait" : "pointer",
+              opacity: refreshing ? 0.6 : 1,
+            }}
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="uppercase"
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: "0.7rem",
+              letterSpacing: "0.25em",
+              color: GOLD,
+              border: `1px solid ${GOLD}`,
+              padding: "0.45rem 0.9rem",
+              background: "transparent",
+            }}
+          >
+            Export CSV
+          </button>
+        </>
       }
     >
       <div className="flex flex-col gap-4">
@@ -272,9 +307,23 @@ function AuditLogPageInner() {
         </div>
 
         {err ? (
-          <p style={{ color: "#fecaca", fontFamily: "var(--font-body)" }}>
+          <div
+            role="alert"
+            style={{
+              border: "1px solid rgba(239,68,68,0.55)",
+              background: "rgba(239,68,68,0.08)",
+              padding: "0.75rem 1rem",
+              color: "#fecaca",
+              fontFamily: "var(--font-body)",
+              fontSize: "0.85rem",
+              lineHeight: 1.5,
+            }}
+          >
+            <strong style={{ color: "#fca5a5", letterSpacing: "0.1em" }}>
+              Error loading audit log:
+            </strong>{" "}
             {err}
-          </p>
+          </div>
         ) : null}
 
         <div

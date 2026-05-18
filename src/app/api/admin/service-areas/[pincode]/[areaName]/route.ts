@@ -40,7 +40,7 @@ export async function DELETE(
 
   void recordAuditEvent({
     req,
-    entity: "other",
+    entity: "service_area",
     action: "delete",
     targetId: pincode,
     targetLabel: `Pincode ${pincode}`,

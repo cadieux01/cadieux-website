@@ -26,6 +26,8 @@ export type AuditEntity =
   | "address"
   | "change_request"
   | "feedback"
+  | "service_area"
+  | "delivery_request"
   | "other";
 
 export type AuditAction =
@@ -55,6 +57,8 @@ export const AUDIT_ENTITIES: AuditEntity[] = [
   "address",
   "change_request",
   "feedback",
+  "service_area",
+  "delivery_request",
   "other",
 ];
 
@@ -86,6 +90,8 @@ export const AUDIT_ENTITY_LABEL: Record<AuditEntity, string> = {
   address: "Address",
   change_request: "Change request",
   feedback: "Feedback",
+  service_area: "Service area",
+  delivery_request: "Delivery request",
   other: "Other",
 };
 
