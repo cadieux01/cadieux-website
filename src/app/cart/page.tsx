@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import ScrollReveal from "@/components/ScrollReveal";
 import { useCart } from "@/context/CartContext";
 
@@ -28,7 +29,8 @@ function chip(selected: boolean) {
 }
 
 export default function CartPage() {
-  const { cart, cartTotal, updateQty, removeFromCart, openCheckout } = useCart();
+  const { cart, cartTotal, updateQty, removeFromCart } = useCart();
+  const router = useRouter();
   const banner = useDeliveryRequestBanner();
 
   return (
@@ -136,7 +138,7 @@ export default function CartPage() {
             </div>
 
             <button
-              onClick={openCheckout}
+              onClick={() => router.push("/checkout")}
               style={{ display: "block", width: "100%", marginTop: 32, background: "#024628", border: "none", padding: "18px 0", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.45em", textTransform: "uppercase", color: "#FBF3D4", WebkitTapHighlightColor: "transparent" }}
             >
               Proceed to Checkout

@@ -11,16 +11,12 @@ type CartContextType = {
   clearCart: () => void;
   cartCount: number;
   cartTotal: number;
-  checkoutOpen: boolean;
-  openCheckout: () => void;
-  closeCheckout: () => void;
 };
 
 const CartContext = createContext<CartContextType | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   // Load cart from localStorage on mount
@@ -77,9 +73,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
         clearCart: () => setCart([]),
         cartCount,
         cartTotal,
-        checkoutOpen,
-        openCheckout: () => setCheckoutOpen(true),
-        closeCheckout: () => setCheckoutOpen(false),
       }}
     >
       {children}

@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import CheckoutModal from "./CheckoutModal";
-import { useCart } from "@/context/CartContext";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -12,12 +10,6 @@ export default function Nav() {
   const router = useRouter();
   const pathname = usePathname();
   const isHome = pathname === "/";
-
-  const {
-    cart, cartTotal,
-    clearCart,
-    checkoutOpen, closeCheckout,
-  } = useCart();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -142,18 +134,6 @@ export default function Nav() {
         }} />
       )}
 
-      {/* Checkout modal */}
-      {checkoutOpen && (
-        <CheckoutModal
-          cart={cart}
-          total={cartTotal}
-          onClose={closeCheckout}
-          onOrderPlaced={() => {
-            clearCart();
-            closeCheckout();
-          }}
-        />
-      )}
     </>
   );
 }
