@@ -163,54 +163,90 @@ function MessageModal({
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-md p-6"
+        className="w-full max-w-md"
         style={{
           background: "rgb(6,4,2)",
           border: `1px solid ${BORDER}`,
+          // 3-zone scrollable layout
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "min(90vh, calc(100dvh - 2rem))",
+          minHeight: 0,
+          overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h4
-          className="uppercase mb-1"
+        <div
           style={{
-            fontFamily: "var(--font-heading)",
-            color: CREAM,
-            fontSize: "1.1rem",
-            letterSpacing: "0.2em",
-            fontWeight: 300,
+            flexShrink: 0,
+            padding: "1.25rem 1.5rem 0.85rem",
+            background: "rgb(6,4,2)",
+            borderBottom: `1px solid ${BORDER}`,
           }}
         >
-          {channel === "whatsapp" ? "Send WhatsApp" : "Send SMS"}
-        </h4>
-        <p
-          className="mb-4"
+          <h4
+            className="uppercase"
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-heading)",
+              color: CREAM,
+              fontSize: "1.1rem",
+              letterSpacing: "0.2em",
+              fontWeight: 300,
+            }}
+          >
+            {channel === "whatsapp" ? "Send WhatsApp" : "Send SMS"}
+          </h4>
+          <p
+            style={{
+              margin: "4px 0 0",
+              fontFamily: "var(--font-body)",
+              color: FADED,
+              fontSize: "0.75rem",
+              letterSpacing: "0.1em",
+            }}
+          >
+            To {phone}
+          </p>
+        </div>
+
+        <div
           style={{
-            fontFamily: "var(--font-body)",
-            color: FADED,
-            fontSize: "0.75rem",
-            letterSpacing: "0.1em",
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            padding: "1rem 1.5rem",
           }}
         >
-          To {phone}
-        </p>
+          <textarea
+            value={message}
+            onChange={(e) => onMessage(e.target.value)}
+            rows={8}
+            className="w-full px-3 py-2"
+            style={{
+              border: `1px solid ${BORDER}`,
+              background: "transparent",
+              color: CREAM,
+              fontFamily: "var(--font-body)",
+              fontSize: "0.9rem",
+              lineHeight: 1.5,
+              resize: "vertical",
+            }}
+          />
+        </div>
 
-        <textarea
-          value={message}
-          onChange={(e) => onMessage(e.target.value)}
-          rows={8}
-          className="w-full px-3 py-2"
+        <div
           style={{
-            border: `1px solid ${BORDER}`,
-            background: "transparent",
-            color: CREAM,
-            fontFamily: "var(--font-body)",
-            fontSize: "0.9rem",
-            lineHeight: 1.5,
-            resize: "vertical",
+            flexShrink: 0,
+            padding: "1rem 1.5rem 1.25rem",
+            background: "rgb(6,4,2)",
+            borderTop: `1px solid ${BORDER}`,
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 8,
           }}
-        />
-
-        <div className="flex justify-end gap-2 mt-4">
+        >
           <button
             type="button"
             onClick={onCancel}

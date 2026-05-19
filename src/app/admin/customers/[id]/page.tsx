@@ -362,66 +362,72 @@ function SendEmailModal({
   return (
     <div style={modalBackdrop} onClick={sending ? undefined : onCancel}>
       <div style={modalCard} onClick={(e) => e.stopPropagation()}>
-        <h3 style={modalTitle}>Send email · {customerName ?? "customer"}</h3>
-        <label style={modalLabel}>
-          Subject
-          <input
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            maxLength={200}
-            disabled={sending}
-            placeholder="A note from Cadieux"
-            style={modalInput}
-          />
-        </label>
-        <label style={modalLabel}>
-          Body
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            maxLength={10000}
-            disabled={sending}
-            rows={10}
-            placeholder="Hi …"
-            style={{ ...modalInput, fontFamily: "var(--font-body)", resize: "vertical" }}
-          />
-        </label>
-        <label style={modalLabel}>
-          Template tag (optional)
-          <input
-            value={template}
-            onChange={(e) => setTemplate(e.target.value)}
-            maxLength={64}
-            disabled={sending}
-            placeholder="e.g. follow_up, promo, recovery"
-            style={modalInput}
-          />
-        </label>
-        {err ? (
-          <p style={{ color: "#fca5a5", fontSize: "0.8rem", margin: "0 0 0.8rem" }}>
-            {err}
-          </p>
-        ) : null}
-        <div style={modalActions}>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={sending}
-            style={chipNeutral}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void send()}
-            disabled={sending || subject.trim().length === 0 || body.trim().length === 0}
-            style={{
-              ...chipPrimary,
-              opacity: sending || subject.trim().length === 0 || body.trim().length === 0 ? 0.5 : 1,
-            }}
-          >
-            {sending ? "Sending…" : "Send email"}
-          </button>
+        <div style={modalHeader}>
+          <h3 style={modalTitle}>Send email · {customerName ?? "customer"}</h3>
+        </div>
+        <div style={modalScrollBody}>
+          <label style={modalLabel}>
+            Subject
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              maxLength={200}
+              disabled={sending}
+              placeholder="A note from Cadieux"
+              style={modalInput}
+            />
+          </label>
+          <label style={modalLabel}>
+            Body
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              maxLength={10000}
+              disabled={sending}
+              rows={10}
+              placeholder="Hi …"
+              style={{ ...modalInput, fontFamily: "var(--font-body)", resize: "vertical" }}
+            />
+          </label>
+          <label style={modalLabel}>
+            Template tag (optional)
+            <input
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+              maxLength={64}
+              disabled={sending}
+              placeholder="e.g. follow_up, promo, recovery"
+              style={modalInput}
+            />
+          </label>
+          {err ? (
+            <p style={{ color: "#fca5a5", fontSize: "0.8rem", margin: 0 }}>
+              {err}
+            </p>
+          ) : null}
+        </div>
+        <div style={modalFooter}>
+          <div style={modalActions}>
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={sending}
+              style={chipNeutral}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void send()}
+              disabled={sending || subject.trim().length === 0 || body.trim().length === 0}
+              style={{
+                ...chipPrimary,
+                opacity: sending || subject.trim().length === 0 || body.trim().length === 0 ? 0.5 : 1,
+              }}
+            >
+              {sending ? "Sending…" : "Send email"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -589,17 +595,42 @@ const modalCard: React.CSSProperties = {
   maxWidth: 540,
   background: "rgb(12,8,4)",
   border: "1px solid rgba(245,158,11,0.4)",
-  padding: "1.4rem 1.4rem 1.2rem",
   borderRadius: 6,
-  maxHeight: "90vh",
+  // 3-zone scrollable layout: sticky header + scrollable body + sticky footer
+  display: "flex",
+  flexDirection: "column",
+  maxHeight: "min(90vh, calc(100dvh - 2rem))",
+  minHeight: 0,
+  overflow: "hidden",
+};
+
+const modalHeader: React.CSSProperties = {
+  flexShrink: 0,
+  padding: "1.1rem 1.4rem 0.9rem",
+  background: "rgb(12,8,4)",
+  borderBottom: "1px solid rgba(245,158,11,0.18)",
+};
+
+const modalScrollBody: React.CSSProperties = {
+  flex: "1 1 auto",
+  minHeight: 0,
   overflowY: "auto",
+  WebkitOverflowScrolling: "touch",
+  padding: "1.1rem 1.4rem",
+};
+
+const modalFooter: React.CSSProperties = {
+  flexShrink: 0,
+  padding: "0.9rem 1.4rem",
+  background: "rgb(12,8,4)",
+  borderTop: "1px solid rgba(245,158,11,0.18)",
 };
 
 const modalTitle: React.CSSProperties = {
   fontFamily: "var(--font-heading)",
   fontSize: "1.05rem",
   color: "#fbf3d4",
-  margin: "0 0 1rem",
+  margin: 0,
   letterSpacing: "0.04em",
 };
 

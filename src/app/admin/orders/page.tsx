@@ -847,40 +847,46 @@ function ConfirmModal({
   return (
     <div style={modalBackdrop} onClick={running ? undefined : onCancel}>
       <div style={modalCard} onClick={(e) => e.stopPropagation()}>
-        <h3 style={modalTitle}>
-          {ACTION_LABEL[action]} · {count} order{count === 1 ? "" : "s"}?
-        </h3>
-        <p style={modalBody}>
-          {action === "cancel"
-            ? `This will mark ${count} order${count === 1 ? "" : "s"} as cancelled. The customer will receive a push notification. This cannot be undone via the admin UI.`
-            : `${count} order${count === 1 ? "" : "s"} will be marked as ${ACTION_PAST[action]} and the customers notified.`}
-        </p>
-        <div style={modalActions}>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={running}
-            style={chipNeutral}
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={running}
-            style={{
-              ...chipPrimary,
-              background: action === "cancel" ? "rgba(239,68,68,0.15)" : "rgba(245,158,11,0.15)",
-              borderColor:
-                action === "cancel"
-                  ? "rgba(239,68,68,0.6)"
-                  : "rgba(245,158,11,0.6)",
-              color: action === "cancel" ? "#fca5a5" : "#f59e0b",
-              opacity: running ? 0.6 : 1,
-            }}
-          >
-            {running ? "Working…" : "Confirm"}
-          </button>
+        <div style={modalHeader}>
+          <h3 style={modalTitle}>
+            {ACTION_LABEL[action]} · {count} order{count === 1 ? "" : "s"}?
+          </h3>
+        </div>
+        <div style={modalScrollBody}>
+          <p style={modalBody}>
+            {action === "cancel"
+              ? `This will mark ${count} order${count === 1 ? "" : "s"} as cancelled. The customer will receive a push notification. This cannot be undone via the admin UI.`
+              : `${count} order${count === 1 ? "" : "s"} will be marked as ${ACTION_PAST[action]} and the customers notified.`}
+          </p>
+        </div>
+        <div style={modalFooter}>
+          <div style={modalActions}>
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={running}
+              style={chipNeutral}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={running}
+              style={{
+                ...chipPrimary,
+                background: action === "cancel" ? "rgba(239,68,68,0.15)" : "rgba(245,158,11,0.15)",
+                borderColor:
+                  action === "cancel"
+                    ? "rgba(239,68,68,0.6)"
+                    : "rgba(245,158,11,0.6)",
+                color: action === "cancel" ? "#fca5a5" : "#f59e0b",
+                opacity: running ? 0.6 : 1,
+              }}
+            >
+              {running ? "Working…" : "Confirm"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -897,35 +903,39 @@ function ResultModal({
   return (
     <div style={modalBackdrop} onClick={onClose}>
       <div style={modalCard} onClick={(e) => e.stopPropagation()}>
-        <h3 style={modalTitle}>Bulk {ACTION_PAST[result.action]} complete</h3>
-        <p style={modalBody}>
-          {result.succeeded.length} succeeded · {result.failed.length} failed
-        </p>
-        {result.failed.length > 0 ? (
-          <ul
-            style={{
-              maxHeight: 220,
-              overflowY: "auto",
-              border: "1px solid rgba(239,68,68,0.35)",
-              padding: "0.5rem 0.8rem",
-              color: "#fca5a5",
-              fontFamily: "var(--font-body)",
-              fontSize: "0.78rem",
-              listStyle: "none",
-              margin: "0 0 1rem",
-            }}
-          >
-            {result.failed.map((f) => (
-              <li key={f.id} style={{ padding: "0.2rem 0" }}>
-                #{f.id.slice(0, 8)} — {f.error}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <div style={modalActions}>
-          <button type="button" onClick={onClose} style={chipPrimary}>
-            Close
-          </button>
+        <div style={modalHeader}>
+          <h3 style={modalTitle}>Bulk {ACTION_PAST[result.action]} complete</h3>
+        </div>
+        <div style={modalScrollBody}>
+          <p style={{ ...modalBody, marginBottom: "1rem" }}>
+            {result.succeeded.length} succeeded · {result.failed.length} failed
+          </p>
+          {result.failed.length > 0 ? (
+            <ul
+              style={{
+                border: "1px solid rgba(239,68,68,0.35)",
+                padding: "0.5rem 0.8rem",
+                color: "#fca5a5",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.78rem",
+                listStyle: "none",
+                margin: 0,
+              }}
+            >
+              {result.failed.map((f) => (
+                <li key={f.id} style={{ padding: "0.2rem 0" }}>
+                  #{f.id.slice(0, 8)} — {f.error}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <div style={modalFooter}>
+          <div style={modalActions}>
+            <button type="button" onClick={onClose} style={chipPrimary}>
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1036,83 +1046,89 @@ function EditOrderModal({
   return (
     <div style={modalBackdrop} onClick={saving ? undefined : onCancel}>
       <div style={modalCard} onClick={(e) => e.stopPropagation()}>
-        <h3 style={modalTitle}>Edit customer · order #{order.id.slice(0, 8)}</h3>
-        <Field label="Full name">
-          <input
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            disabled={saving}
-            style={modalInput}
-          />
-        </Field>
-        <Field label="Phone">
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            disabled={saving}
-            style={modalInput}
-          />
-        </Field>
-        <Field label="City">
-          <input
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            disabled={saving}
-            style={modalInput}
-          />
-        </Field>
-        <Field label="Delivery address">
-          <textarea
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            disabled={saving}
-            rows={4}
+        <div style={modalHeader}>
+          <h3 style={modalTitle}>Edit customer · order #{order.id.slice(0, 8)}</h3>
+        </div>
+        <div style={modalScrollBody}>
+          <Field label="Full name">
+            <input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              disabled={saving}
+              style={modalInput}
+            />
+          </Field>
+          <Field label="Phone">
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              disabled={saving}
+              style={modalInput}
+            />
+          </Field>
+          <Field label="City">
+            <input
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              disabled={saving}
+              style={modalInput}
+            />
+          </Field>
+          <Field label="Delivery address">
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              disabled={saving}
+              rows={4}
+              style={{
+                ...modalInput,
+                fontFamily: "var(--font-body)",
+                resize: "vertical",
+              }}
+            />
+          </Field>
+          <label
             style={{
-              ...modalInput,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              margin: "0.5rem 0 1rem",
+              color: "rgba(192,200,206,0.8)",
               fontFamily: "var(--font-body)",
-              resize: "vertical",
-            }}
-          />
-        </Field>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            margin: "0.5rem 0 1rem",
-            color: "rgba(192,200,206,0.8)",
-            fontFamily: "var(--font-body)",
-            fontSize: "0.78rem",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={notify}
-            disabled={saving}
-            onChange={(e) => setNotify(e.target.checked)}
-          />
-          Send SMS + WhatsApp to customer about this change
-        </label>
-        {err ? (
-          <p style={{ color: "#fca5a5", fontSize: "0.8rem", margin: "0 0 0.8rem" }}>
-            {err}
-          </p>
-        ) : null}
-        <div style={modalActions}>
-          <button type="button" onClick={onCancel} disabled={saving} style={chipNeutral}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={!canSave}
-            style={{
-              ...chipPrimary,
-              opacity: !canSave ? 0.5 : 1,
+              fontSize: "0.78rem",
             }}
           >
-            {saving ? "Saving…" : "Save changes"}
-          </button>
+            <input
+              type="checkbox"
+              checked={notify}
+              disabled={saving}
+              onChange={(e) => setNotify(e.target.checked)}
+            />
+            Send SMS + WhatsApp to customer about this change
+          </label>
+          {err ? (
+            <p style={{ color: "#fca5a5", fontSize: "0.8rem", margin: 0 }}>
+              {err}
+            </p>
+          ) : null}
+        </div>
+        <div style={modalFooter}>
+          <div style={modalActions}>
+            <button type="button" onClick={onCancel} disabled={saving} style={chipNeutral}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={!canSave}
+              style={{
+                ...chipPrimary,
+                opacity: !canSave ? 0.5 : 1,
+              }}
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1313,15 +1329,42 @@ const modalCard: React.CSSProperties = {
   maxWidth: 460,
   background: "rgb(12,8,4)",
   border: "1px solid rgba(245,158,11,0.4)",
-  padding: "1.4rem 1.4rem 1.2rem",
   borderRadius: 6,
+  // 3-zone scrollable layout: sticky header + scrollable body + sticky footer
+  display: "flex",
+  flexDirection: "column",
+  maxHeight: "min(90vh, calc(100dvh - 2rem))",
+  minHeight: 0,
+  overflow: "hidden",
+};
+
+const modalHeader: React.CSSProperties = {
+  flexShrink: 0,
+  padding: "1.1rem 1.4rem 0.9rem",
+  background: "rgb(12,8,4)",
+  borderBottom: "1px solid rgba(245,158,11,0.18)",
+};
+
+const modalScrollBody: React.CSSProperties = {
+  flex: "1 1 auto",
+  minHeight: 0,
+  overflowY: "auto",
+  WebkitOverflowScrolling: "touch",
+  padding: "1.1rem 1.4rem",
+};
+
+const modalFooter: React.CSSProperties = {
+  flexShrink: 0,
+  padding: "0.9rem 1.4rem",
+  background: "rgb(12,8,4)",
+  borderTop: "1px solid rgba(245,158,11,0.18)",
 };
 
 const modalTitle: React.CSSProperties = {
   fontFamily: "var(--font-heading)",
   fontSize: "1.05rem",
   color: "#fbf3d4",
-  margin: "0 0 0.7rem",
+  margin: 0,
   letterSpacing: "0.04em",
 };
 
@@ -1330,7 +1373,7 @@ const modalBody: React.CSSProperties = {
   fontSize: "0.85rem",
   color: "rgba(192,200,206,0.85)",
   lineHeight: 1.5,
-  margin: "0 0 1.2rem",
+  margin: 0,
 };
 
 const modalActions: React.CSSProperties = {

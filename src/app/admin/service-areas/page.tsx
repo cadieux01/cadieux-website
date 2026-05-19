@@ -683,42 +683,69 @@ export default function ServiceAreasPage() {
               background: "rgb(6,4,2)",
               border: `1px solid ${BORDER}`,
               borderRadius: 8,
-              padding: "1.5rem",
               maxWidth: 420,
               width: "100%",
               fontFamily: "var(--font-body)",
               color: CREAM,
+              // 3-zone scrollable layout
+              display: "flex",
+              flexDirection: "column",
+              maxHeight: "min(90vh, calc(100dvh - 2rem))",
+              minHeight: 0,
+              overflow: "hidden",
             }}
           >
-            <h3
-              className="uppercase"
-              style={{
-                margin: 0,
-                fontFamily: "var(--font-heading)",
-                fontWeight: 300,
-                fontSize: "1.1rem",
-                letterSpacing: "0.18em",
-                color: CREAM,
-              }}
-            >
-              Confirm bulk deactivate
-            </h3>
-            <p
-              style={{
-                marginTop: 10,
-                fontSize: "0.85rem",
-                color: "rgba(251,243,212,0.75)",
-                lineHeight: 1.5,
-              }}
-            >
-              You&rsquo;re about to deactivate{" "}
-              <strong>{selected.size} pincode{selected.size === 1 ? "" : "s"}</strong>.
-              Customers in these pincodes won&rsquo;t be able to check out until
-              they&rsquo;re reactivated.
-            </p>
             <div
               style={{
-                marginTop: 16,
+                flexShrink: 0,
+                padding: "1.25rem 1.5rem 1rem",
+                background: "rgb(6,4,2)",
+                borderBottom: `1px solid ${BORDER}`,
+              }}
+            >
+              <h3
+                className="uppercase"
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-heading)",
+                  fontWeight: 300,
+                  fontSize: "1.1rem",
+                  letterSpacing: "0.18em",
+                  color: CREAM,
+                }}
+              >
+                Confirm bulk deactivate
+              </h3>
+            </div>
+            <div
+              style={{
+                flex: "1 1 auto",
+                minHeight: 0,
+                overflowY: "auto",
+                WebkitOverflowScrolling: "touch",
+                padding: "1rem 1.5rem",
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.85rem",
+                  color: "rgba(251,243,212,0.75)",
+                  lineHeight: 1.5,
+                }}
+              >
+                You&rsquo;re about to deactivate{" "}
+                <strong>{selected.size} pincode{selected.size === 1 ? "" : "s"}</strong>.
+                Customers in these pincodes won&rsquo;t be able to check out until
+                they&rsquo;re reactivated.
+              </p>
+            </div>
+            <div
+              style={{
+                flexShrink: 0,
+                padding: "1rem 1.5rem 1.25rem",
+                background: "rgb(6,4,2)",
+                borderTop: `1px solid ${BORDER}`,
                 display: "flex",
                 justifyContent: "flex-end",
                 gap: 8,

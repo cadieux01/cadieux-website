@@ -514,142 +514,178 @@ function AddReportModal({
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-md p-6"
+        className="w-full max-w-md"
         style={{
           background: "rgb(6,4,2)",
           border: `1px solid ${BORDER}`,
+          // 3-zone scrollable layout
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "min(90vh, calc(100dvh - 2rem))",
+          minHeight: 0,
+          overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h4
-          className="uppercase mb-4"
+        <div
           style={{
-            fontFamily: "var(--font-heading)",
-            color: CREAM,
-            fontSize: "1.1rem",
-            letterSpacing: "0.2em",
-            fontWeight: 300,
+            flexShrink: 0,
+            padding: "1.25rem 1.5rem 1rem",
+            background: "rgb(6,4,2)",
+            borderBottom: `1px solid ${BORDER}`,
           }}
         >
-          Add Report
-        </h4>
-
-        <label
-          className="block mb-3"
-          style={{
-            fontFamily: "var(--font-body)",
-            color: FADED,
-            fontSize: "0.7rem",
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-          }}
-        >
-          Title
-          <input
-            value={title}
-            onChange={(e) => onTitle(e.target.value)}
-            placeholder="e.g. FSSAI License 2025"
-            className="mt-1 w-full px-3 py-2"
+          <h4
+            className="uppercase"
             style={{
-              border: `1px solid ${BORDER}`,
-              background: "transparent",
+              margin: 0,
+              fontFamily: "var(--font-heading)",
               color: CREAM,
-              fontFamily: "var(--font-body)",
-              fontSize: "0.9rem",
-              letterSpacing: "0.05em",
-              textTransform: "none",
-            }}
-          />
-        </label>
-
-        <label
-          className="block mb-3"
-          style={{
-            fontFamily: "var(--font-body)",
-            color: FADED,
-            fontSize: "0.7rem",
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-          }}
-        >
-          Category
-          <select
-            value={category}
-            onChange={(e) =>
-              onCategory(e.target.value as ProductReportCategory)
-            }
-            className="mt-1 w-full px-3 py-2"
-            style={{
-              border: `1px solid ${BORDER}`,
-              background: "rgb(6,4,2)",
-              color: CREAM,
-              fontFamily: "var(--font-body)",
-              fontSize: "0.9rem",
-              textTransform: "none",
-              letterSpacing: "0.05em",
+              fontSize: "1.1rem",
+              letterSpacing: "0.2em",
+              fontWeight: 300,
             }}
           >
-            {PRODUCT_REPORT_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {PRODUCT_REPORT_CATEGORY_LABEL[c]}
-              </option>
-            ))}
-          </select>
-        </label>
+            Add Report
+          </h4>
+        </div>
 
-        <label
-          className="block mb-4"
+        <div
           style={{
-            fontFamily: "var(--font-body)",
-            color: FADED,
-            fontSize: "0.7rem",
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            padding: "1rem 1.5rem",
           }}
         >
-          File (any type · max 10MB)
-          <input
-            type="file"
-            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-            className="mt-1 w-full"
+          <label
+            className="block mb-3"
             style={{
-              color: CREAM,
               fontFamily: "var(--font-body)",
-              fontSize: "0.85rem",
-              textTransform: "none",
-              letterSpacing: "0.02em",
+              color: FADED,
+              fontSize: "0.7rem",
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
             }}
-          />
-          {file ? (
-            <span
+          >
+            Title
+            <input
+              value={title}
+              onChange={(e) => onTitle(e.target.value)}
+              placeholder="e.g. FSSAI License 2025"
+              className="mt-1 w-full px-3 py-2"
               style={{
-                display: "block",
-                marginTop: "0.35rem",
+                border: `1px solid ${BORDER}`,
+                background: "transparent",
                 color: CREAM,
-                fontSize: "0.8rem",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.9rem",
+                letterSpacing: "0.05em",
                 textTransform: "none",
-                letterSpacing: 0,
+              }}
+            />
+          </label>
+
+          <label
+            className="block mb-3"
+            style={{
+              fontFamily: "var(--font-body)",
+              color: FADED,
+              fontSize: "0.7rem",
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+            }}
+          >
+            Category
+            <select
+              value={category}
+              onChange={(e) =>
+                onCategory(e.target.value as ProductReportCategory)
+              }
+              className="mt-1 w-full px-3 py-2"
+              style={{
+                border: `1px solid ${BORDER}`,
+                background: "rgb(6,4,2)",
+                color: CREAM,
+                fontFamily: "var(--font-body)",
+                fontSize: "0.9rem",
+                textTransform: "none",
+                letterSpacing: "0.05em",
               }}
             >
-              {file.name} ({formatBytes(file.size)})
-            </span>
-          ) : null}
-        </label>
+              {PRODUCT_REPORT_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {PRODUCT_REPORT_CATEGORY_LABEL[c]}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        {err ? (
-          <p
-            className="mb-3"
+          <label
+            className="block mb-4"
             style={{
-              color: "#fecaca",
               fontFamily: "var(--font-body)",
-              fontSize: "0.85rem",
+              color: FADED,
+              fontSize: "0.7rem",
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
             }}
           >
-            {err}
-          </p>
-        ) : null}
+            File (any type · max 10MB)
+            <input
+              type="file"
+              onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+              className="mt-1 w-full"
+              style={{
+                color: CREAM,
+                fontFamily: "var(--font-body)",
+                fontSize: "0.85rem",
+                textTransform: "none",
+                letterSpacing: "0.02em",
+              }}
+            />
+            {file ? (
+              <span
+                style={{
+                  display: "block",
+                  marginTop: "0.35rem",
+                  color: CREAM,
+                  fontSize: "0.8rem",
+                  textTransform: "none",
+                  letterSpacing: 0,
+                }}
+              >
+                {file.name} ({formatBytes(file.size)})
+              </span>
+            ) : null}
+          </label>
 
-        <div className="flex justify-end gap-2">
+          {err ? (
+            <p
+              style={{
+                margin: 0,
+                color: "#fecaca",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.85rem",
+              }}
+            >
+              {err}
+            </p>
+          ) : null}
+        </div>
+
+        <div
+          style={{
+            flexShrink: 0,
+            padding: "1rem 1.5rem 1.25rem",
+            background: "rgb(6,4,2)",
+            borderTop: `1px solid ${BORDER}`,
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 8,
+          }}
+        >
           <button
             type="button"
             onClick={onCancel}

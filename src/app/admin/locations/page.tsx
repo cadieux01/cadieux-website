@@ -730,58 +730,90 @@ function ConfirmModal({
           width: "min(460px, 100%)",
           background: "rgb(6,4,2)",
           border: `1px solid ${BORDER}`,
-          padding: "1.25rem",
+          // 3-zone scrollable layout
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "min(90vh, calc(100dvh - 2rem))",
+          minHeight: 0,
+          overflow: "hidden",
         }}
       >
-        <h3
-          className="uppercase"
+        <div
           style={{
-            fontFamily: "var(--font-heading)",
-            fontWeight: 300,
-            color: CREAM,
-            fontSize: "1.05rem",
-            letterSpacing: "0.16em",
-            margin: 0,
-            marginBottom: "0.75rem",
+            flexShrink: 0,
+            padding: "1.1rem 1.25rem 0.9rem",
+            background: "rgb(6,4,2)",
+            borderBottom: `1px solid ${BORDER}`,
           }}
         >
-          {title}
-        </h3>
-        <p
-          style={{
-            fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
-            color: FADED,
-            lineHeight: 1.55,
-            margin: 0,
-          }}
-        >
-          {message}
-        </p>
-        {children}
-        <div className="flex gap-2 justify-end" style={{ marginTop: "1.1rem" }}>
-          <button
-            type="button"
-            onClick={onClose}
-            className="uppercase"
-            style={{ ...miniBtn, color: FADED, borderColor: BORDER }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={confirmDisabled}
+          <h3
             className="uppercase"
             style={{
-              ...miniBtn,
-              ...confirmStyle,
-              opacity: confirmDisabled ? 0.5 : 1,
-              cursor: confirmDisabled ? "not-allowed" : "pointer",
+              fontFamily: "var(--font-heading)",
+              fontWeight: 300,
+              color: CREAM,
+              fontSize: "1.05rem",
+              letterSpacing: "0.16em",
+              margin: 0,
             }}
           >
-            {confirmLabel}
-          </button>
+            {title}
+          </h3>
+        </div>
+        <div
+          style={{
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            padding: "1.1rem 1.25rem",
+          }}
+        >
+          <p
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: "0.85rem",
+              color: FADED,
+              lineHeight: 1.55,
+              margin: 0,
+            }}
+          >
+            {message}
+          </p>
+          {children}
+        </div>
+        <div
+          style={{
+            flexShrink: 0,
+            padding: "0.9rem 1.25rem",
+            background: "rgb(6,4,2)",
+            borderTop: `1px solid ${BORDER}`,
+          }}
+        >
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="uppercase"
+              style={{ ...miniBtn, color: FADED, borderColor: BORDER }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={confirmDisabled}
+              className="uppercase"
+              style={{
+                ...miniBtn,
+                ...confirmStyle,
+                opacity: confirmDisabled ? 0.5 : 1,
+                cursor: confirmDisabled ? "not-allowed" : "pointer",
+              }}
+            >
+              {confirmLabel}
+            </button>
+          </div>
         </div>
       </div>
     </div>
