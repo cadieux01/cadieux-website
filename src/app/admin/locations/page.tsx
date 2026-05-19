@@ -893,22 +893,35 @@ function LocationModal({
         alignItems: "center",
         justifyContent: "center",
         padding: "1rem",
-        overflowY: "auto",
       }}
       onClick={onClose}
     >
+      {/* Flex-column shell: header + scrolling body + footer. The body
+          is the only thing that scrolls, so Save/Cancel stay reachable
+          on phone-sized viewports where the map + form together are
+          taller than the screen. */}
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "min(720px, 100%)",
           background: "rgb(6,4,2)",
           border: `1px solid ${BORDER}`,
-          padding: "1.25rem 1.25rem 1.5rem",
           maxHeight: "calc(100dvh - 2rem)",
-          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
         }}
       >
-        <div className="flex items-center justify-between mb-4">
+        {/* Sticky header */}
+        <div
+          className="flex items-center justify-between"
+          style={{
+            flexShrink: 0,
+            padding: "1.1rem 1.25rem",
+            borderBottom: `1px solid ${BORDER}`,
+            background: "rgb(6,4,2)",
+          }}
+        >
           <h3
             className="uppercase"
             style={{
@@ -936,172 +949,195 @@ function LocationModal({
           </button>
         </div>
 
-        {/* Places Autocomplete */}
-        <div style={{ marginBottom: "0.85rem" }}>
-          <Label>Search Google Maps</Label>
-          <Autocomplete
-            onLoad={(ac) => setAutocomplete(ac)}
-            onPlaceChanged={onPlaceChanged}
-            options={{
-              componentRestrictions: { country: "in" },
-              fields: [
-                "name",
-                "formatted_address",
-                "geometry",
-                "address_components",
-                "vicinity",
-              ],
-            }}
-          >
-            <input
-              type="text"
-              placeholder="Start typing a place name or address…"
-              style={textInput}
-            />
-          </Autocomplete>
-        </div>
-
-        {/* Map with draggable marker */}
+        {/* Scrollable body */}
         <div
           style={{
-            width: "100%",
-            height: 260,
-            border: `1px solid ${BORDER}`,
-            marginBottom: "0.85rem",
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            padding: "1.1rem 1.25rem",
           }}
         >
-          <GoogleMap
-            mapContainerStyle={{ width: "100%", height: "100%" }}
-            center={{ lat, lng }}
-            zoom={14}
-            options={{
-              disableDefaultUI: true,
-              zoomControl: true,
-              clickableIcons: false,
+          {/* Places Autocomplete */}
+          <div style={{ marginBottom: "0.85rem" }}>
+            <Label>Search Google Maps</Label>
+            <Autocomplete
+              onLoad={(ac) => setAutocomplete(ac)}
+              onPlaceChanged={onPlaceChanged}
+              options={{
+                componentRestrictions: { country: "in" },
+                fields: [
+                  "name",
+                  "formatted_address",
+                  "geometry",
+                  "address_components",
+                  "vicinity",
+                ],
+              }}
+            >
+              <input
+                type="text"
+                placeholder="Start typing a place name or address…"
+                style={textInput}
+              />
+            </Autocomplete>
+          </div>
+
+          {/* Map with draggable marker — fixed block height so it
+              scrolls with the rest of the form rather than commandeering
+              the viewport on phones. */}
+          <div
+            style={{
+              width: "100%",
+              height: 240,
+              border: `1px solid ${BORDER}`,
+              marginBottom: "0.85rem",
+              flexShrink: 0,
             }}
           >
-            <Marker
-              position={{ lat, lng }}
-              draggable
-              onDragEnd={(e) => {
-                if (e.latLng) {
-                  setLat(e.latLng.lat());
-                  setLng(e.latLng.lng());
-                }
+            <GoogleMap
+              mapContainerStyle={{ width: "100%", height: "100%" }}
+              center={{ lat, lng }}
+              zoom={14}
+              options={{
+                disableDefaultUI: true,
+                zoomControl: true,
+                clickableIcons: false,
               }}
-              icon={{
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 9,
-                fillColor: colorFor(type),
-                fillOpacity: 0.95,
-                strokeColor: "#000",
-                strokeWeight: 1,
+            >
+              <Marker
+                position={{ lat, lng }}
+                draggable
+                onDragEnd={(e) => {
+                  if (e.latLng) {
+                    setLat(e.latLng.lat());
+                    setLng(e.latLng.lng());
+                  }
+                }}
+                icon={{
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 9,
+                  fillColor: colorFor(type),
+                  fillOpacity: 0.95,
+                  strokeColor: "#000",
+                  strokeWeight: 1,
+                }}
+              />
+            </GoogleMap>
+          </div>
+
+          <FormGrid>
+            <div>
+              <Label>Name</Label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                style={textInput}
+              />
+            </div>
+            <div>
+              <Label>Type</Label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as PickupType)}
+                style={{ ...textInput, paddingRight: "2rem" }}
+              >
+                <option value="kitchen">Kitchen</option>
+                <option value="stall">Stall</option>
+                <option value="partner_pickup">Partner pickup</option>
+              </select>
+            </div>
+            <div>
+              <Label>Area</Label>
+              <input
+                type="text"
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+                style={textInput}
+              />
+            </div>
+            <div>
+              <Label>Sort order</Label>
+              <input
+                type="number"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                placeholder="auto"
+                style={textInput}
+              />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Label>Address</Label>
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                style={textInput}
+              />
+            </div>
+            <div>
+              <Label>Latitude</Label>
+              <input
+                type="number"
+                step="0.0000001"
+                value={lat}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) setLat(n);
+                }}
+                style={textInput}
+              />
+            </div>
+            <div>
+              <Label>Longitude</Label>
+              <input
+                type="number"
+                step="0.0000001"
+                value={lng}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) setLng(n);
+                }}
+                style={textInput}
+              />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Label>Notes (optional)</Label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                style={{ ...textInput, resize: "vertical" }}
+              />
+            </div>
+          </FormGrid>
+
+          {err ? (
+            <p
+              style={{
+                color: "#fca5a5",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.78rem",
+                marginTop: "0.75rem",
               }}
-            />
-          </GoogleMap>
+            >
+              {err}
+            </p>
+          ) : null}
         </div>
 
-        <FormGrid>
-          <div>
-            <Label>Name</Label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={textInput}
-            />
-          </div>
-          <div>
-            <Label>Type</Label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as PickupType)}
-              style={{ ...textInput, paddingRight: "2rem" }}
-            >
-              <option value="kitchen">Kitchen</option>
-              <option value="stall">Stall</option>
-              <option value="partner_pickup">Partner pickup</option>
-            </select>
-          </div>
-          <div>
-            <Label>Area</Label>
-            <input
-              type="text"
-              value={area}
-              onChange={(e) => setArea(e.target.value)}
-              style={textInput}
-            />
-          </div>
-          <div>
-            <Label>Sort order</Label>
-            <input
-              type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
-              placeholder="auto"
-              style={textInput}
-            />
-          </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <Label>Address</Label>
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              style={textInput}
-            />
-          </div>
-          <div>
-            <Label>Latitude</Label>
-            <input
-              type="number"
-              step="0.0000001"
-              value={lat}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (Number.isFinite(n)) setLat(n);
-              }}
-              style={textInput}
-            />
-          </div>
-          <div>
-            <Label>Longitude</Label>
-            <input
-              type="number"
-              step="0.0000001"
-              value={lng}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (Number.isFinite(n)) setLng(n);
-              }}
-              style={textInput}
-            />
-          </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <Label>Notes (optional)</Label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              style={{ ...textInput, resize: "vertical" }}
-            />
-          </div>
-        </FormGrid>
-
-        {err ? (
-          <p
-            style={{
-              color: "#fca5a5",
-              fontFamily: "var(--font-body)",
-              fontSize: "0.78rem",
-              marginTop: "0.75rem",
-            }}
-          >
-            {err}
-          </p>
-        ) : null}
-
-        <div className="flex gap-2 justify-end" style={{ marginTop: "1rem" }}>
+        {/* Sticky footer */}
+        <div
+          className="flex gap-2 justify-end"
+          style={{
+            flexShrink: 0,
+            padding: "0.9rem 1.25rem",
+            borderTop: `1px solid ${BORDER}`,
+            background: "rgb(6,4,2)",
+          }}
+        >
           <button
             type="button"
             onClick={onClose}
