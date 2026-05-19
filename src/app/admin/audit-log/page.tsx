@@ -149,22 +149,34 @@ function AuditLogPageInner() {
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
+    // 10s hard timeout. Without this, a hung request (DB down, edge
+    // route stuck, missing audit_log table) would leave the page
+    // stuck on "Loading…" forever — the symptom that brought us here.
+    const ctrl = new AbortController();
+    const timeoutId = window.setTimeout(() => ctrl.abort(), 10_000);
     try {
       const qs = buildQuery(range, entities, actions, q, PAGE_SIZE, page * PAGE_SIZE);
       const res = await adminFetch<{ rows: AuditLogRow[]; total: number }>(
         `/api/admin/audit-log?${qs}`,
+        { signal: ctrl.signal },
       );
       setRows(res.rows ?? []);
       setTotal(res.total ?? 0);
     } catch (e) {
+      const aborted =
+        (e instanceof DOMException && e.name === "AbortError") ||
+        (e instanceof Error && e.name === "AbortError");
       setErr(
-        e instanceof AdminFetchError
+        aborted
+          ? "Request timed out after 10s. The audit_log table may be missing, or the server is unreachable."
+          : e instanceof AdminFetchError
           ? e.message
           : e instanceof Error
           ? e.message
           : "Failed to load audit log",
       );
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   }, [range, entities, actions, q, page]);
@@ -339,17 +351,43 @@ function AuditLogPageInner() {
             style={{
               border: "1px solid rgba(239,68,68,0.55)",
               background: "rgba(239,68,68,0.08)",
-              padding: "0.75rem 1rem",
+              padding: "0.85rem 1rem",
               color: "#fecaca",
               fontFamily: "var(--font-body)",
               fontSize: "0.85rem",
               lineHeight: 1.5,
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "0.75rem",
             }}
           >
-            <strong style={{ color: "#fca5a5", letterSpacing: "0.1em" }}>
-              Error loading audit log:
-            </strong>{" "}
-            {err}
+            <div style={{ minWidth: 0, flex: "1 1 320px" }}>
+              <strong style={{ color: "#fca5a5", letterSpacing: "0.1em" }}>
+                Couldn’t load audit log:
+              </strong>{" "}
+              {err}
+            </div>
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading}
+              className="uppercase"
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "0.65rem",
+                letterSpacing: "0.22em",
+                color: "#fecaca",
+                border: "1px solid rgba(254,202,202,0.6)",
+                padding: "0.4rem 0.85rem",
+                background: "transparent",
+                cursor: loading ? "wait" : "pointer",
+                opacity: loading ? 0.6 : 1,
+              }}
+            >
+              {loading ? "Retrying…" : "Retry"}
+            </button>
           </div>
         ) : null}
 

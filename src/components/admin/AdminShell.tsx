@@ -371,9 +371,11 @@ function AdminDrawer({
           boxShadow: open ? "0 20px 40px -10px rgba(0,0,0,0.5)" : "none",
         }}
       >
-        {/* Top: wordmark + sign-out */}
+        {/* Top: wordmark + sign-out — `flexShrink: 0` keeps this header
+            at full height while the nav body below scrolls. */}
         <div
           style={{
+            flexShrink: 0,
             padding:
               "calc(1.25rem + env(safe-area-inset-top)) 1.25rem 1rem calc(1.25rem + env(safe-area-inset-left))",
             borderBottom: `1px solid ${DARK_GREEN}`,
@@ -413,13 +415,19 @@ function AdminDrawer({
           </button>
         </div>
 
-        {/* Scrollable nav body */}
+        {/* Scrollable nav body — `minHeight: 0` lets the flex child
+            actually scroll inside the fixed drawer (otherwise it would
+            expand the parent and overflow off-screen on iPhone SE).
+            WebkitOverflowScrolling keeps iOS scroll momentum smooth. */}
         <nav
           aria-label="Admin sections"
           style={{
             flex: 1,
+            minHeight: 0,
+            maxHeight: "100dvh",
             overflowY: "auto",
             overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
             padding:
               "0.75rem 0.75rem calc(1.25rem + env(safe-area-inset-bottom)) calc(0.75rem + env(safe-area-inset-left))",
           }}

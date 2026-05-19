@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,6 +21,15 @@ export async function DELETE(
     .eq("id", params.replyId)
     .eq("review_id", params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  void recordAuditEvent({
+    req,
+    entity: "review",
+    action: "delete",
+    targetId: params.replyId,
+    targetLabel: params.replyId,
+    context: "Admin deleted reply",
+    meta: { review_id: params.id, reply_id: params.replyId },
+  });
   return NextResponse.json({ ok: true });
 }
 
@@ -27,6 +37,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; replyId: string } }
 ) {
+  if (req.headers.get("x-admin-token") !== process.env.ADMIN_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   let payload: any;
   try { payload = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   const body = typeof payload?.body === "string" ? payload.body.trim() : "";
@@ -41,5 +54,14 @@ export async function PATCH(
     .select("*")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  void recordAuditEvent({
+    req,
+    entity: "review",
+    action: "update",
+    targetId: params.replyId,
+    targetLabel: params.replyId,
+    context: "Admin edited reply",
+    meta: { review_id: params.id, reply_id: params.replyId },
+  });
   return NextResponse.json({ reply: data });
 }

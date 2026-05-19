@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 const BUCKET = "product-images";
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -76,6 +77,16 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+
+  void recordAuditEvent({
+    req,
+    entity: "product",
+    action: "other",
+    targetId: path,
+    targetLabel: path,
+    context: `Uploaded product image (${file.type}, ${file.size} bytes)`,
+    meta: { bucket: BUCKET, path, mime: file.type, size: file.size },
+  });
 
   return NextResponse.json({ url: pub.publicUrl, path });
 }

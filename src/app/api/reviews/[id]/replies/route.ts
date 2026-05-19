@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,6 +34,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (error) {
     console.error("reply insert failed:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  // Audit only admin-authored replies — visitor replies aren't
+  // operator actions and would flood the log.
+  if (is_admin && data) {
+    void recordAuditEvent({
+      req,
+      entity: "review",
+      action: "create",
+      targetId: data.id,
+      targetLabel: data.id,
+      context: "Admin posted reply",
+      meta: { review_id: params.id, reply_id: data.id },
+    });
   }
   return NextResponse.json({ reply: data });
 }

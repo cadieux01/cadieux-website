@@ -82,24 +82,44 @@ export default function Nav() {
       )}
 
       {/* ── Menu widget ── */}
+      {/* The drawer is split into a sticky header (the "Menu" caption,
+          which sits below the hamburger button) and an independently
+          scrollable nav body. This guarantees every link is reachable
+          on small viewports (iPhone SE @ 375x667) even as the nav
+          grows. -webkit-overflow-scrolling:touch keeps iOS scroll
+          momentum smooth inside the fixed drawer. */}
       <div style={{
         position: "fixed", top: 0, left: 0, zIndex: 205,
-        width: "min(360px, 92vw)", height: "100dvh",
+        width: "min(360px, 92vw)", height: "100dvh", maxHeight: "100dvh",
         background: "#0a0a0a",
         transform: menuOpen ? "translateX(0)" : "translateX(-100%)",
         transition: "transform 0.45s cubic-bezier(0.22,1,0.36,1)",
-        overflowY: "auto", overscrollBehavior: "contain",
         display: "flex", flexDirection: "column",
+        overflow: "hidden",
       }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.05, pointerEvents: "none" }} />
-        {/* Top/left/bottom paddings include env(safe-area-inset-*) so the menu
-            content clears iOS notch / home indicator in standalone PWA mode. */}
+
+        {/* Sticky header — sits at top, never scrolls. Leaves room for
+            the hamburger button overlay (positioned at top:20px). */}
         <div style={{
           position: "relative", zIndex: 1,
-          padding: "calc(100px + env(safe-area-inset-top)) calc(28px + env(safe-area-inset-right)) calc(96px + env(safe-area-inset-bottom)) calc(28px + env(safe-area-inset-left))",
-          flexShrink: 0, display: "flex", flexDirection: "column",
+          padding: "calc(100px + env(safe-area-inset-top)) calc(28px + env(safe-area-inset-right)) 24px calc(28px + env(safe-area-inset-left))",
+          flexShrink: 0,
         }}>
-          <p style={{ margin: "0 0 40px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)" }}>Menu</p>
+          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)" }}>Menu</p>
+        </div>
+
+        {/* Scrollable nav body — everything below the sticky header. */}
+        <div style={{
+          position: "relative", zIndex: 1,
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+          WebkitOverflowScrolling: "touch",
+          padding: "0 calc(28px + env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) calc(28px + env(safe-area-inset-left))",
+          display: "flex", flexDirection: "column",
+        }}>
           {[
             { label: "Products of Cadieux", action: () => nav("/shop") },
             { label: "Orders",              action: () => nav("/orders") },
@@ -118,6 +138,7 @@ export default function Nav() {
               fontFamily: "var(--font-heading)", fontSize: "clamp(16px,2.6vw,20px)", fontWeight: 300,
               color: "#FBF3D4", letterSpacing: "0.03em",
               display: "block", width: "100%",
+              flexShrink: 0,
               WebkitTapHighlightColor: "transparent",
             }}>
               {label}

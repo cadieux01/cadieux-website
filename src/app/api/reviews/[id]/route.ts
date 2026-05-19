@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { recordAuditEvent } from "@/lib/audit-log";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { isWithinEditWindow, publicDisplayName } from "@/lib/review-display";
 
@@ -60,6 +61,15 @@ export async function DELETE(
       console.error("review delete failed:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    void recordAuditEvent({
+      req,
+      entity: "review",
+      action: "delete",
+      targetId: id,
+      targetLabel: id,
+      context: "Admin hard-deleted review",
+      meta: null,
+    });
     return NextResponse.json({ ok: true });
   }
 
@@ -180,6 +190,19 @@ export async function PATCH(
   if (error) {
     console.error("review patch failed:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  // Audit admin edits (skip author self-edits — those happen in the
+  // 24h author edit window and are not operator actions).
+  if (isAdmin(req)) {
+    void recordAuditEvent({
+      req,
+      entity: "review",
+      action: "update",
+      targetId: id,
+      targetLabel: id,
+      context: "Admin edited review",
+      meta: { fields_changed: Object.keys(update) },
+    });
   }
   // Mirror the shape returned by GET / POST — first-name display + the
   // is_owner flag (always true for the author path; admin callers will

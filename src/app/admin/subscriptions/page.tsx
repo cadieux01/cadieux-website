@@ -1,6 +1,6 @@
 "use client";
 
-// Subscription health board. Calls the enriched
+// Subscriptions admin board. Calls the enriched
 // /api/admin/subscriptions?enrich=1 endpoint so each row carries a
 // server-computed derived_end_date and remaining_deliveries count.
 //
@@ -174,7 +174,7 @@ function SubscriptionsPageInner() {
 
   return (
     <AdminShell
-      title="Subscription Health"
+      title="Subscriptions"
       subtitle="End-date derived from delivery schedule"
       actions={
         <>

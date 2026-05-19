@@ -1,4 +1,4 @@
-// Reusable derivations for subscription health UI / analytics.
+// Reusable derivations for the Subscriptions UI / analytics.
 //
 // `derived_end_date` mirrors the rule used in
 // src/app/api/cron/subscription-reminders/route.ts:
