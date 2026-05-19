@@ -49,7 +49,7 @@ export default function Footer() {
             opacity: 0.85,
           }}
         >
-          Find Us
+          Store Locator
         </Link>
       </nav>
       <p className="label-text" style={{ opacity: 0.4, marginTop: "1rem" }}>
