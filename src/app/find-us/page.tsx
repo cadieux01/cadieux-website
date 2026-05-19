@@ -9,7 +9,7 @@ import FindUsClient from "./FindUsClient";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Find Cadieux Near You — Pickup locations across Visakhapatnam",
+  title: "Store Locator | Cadieux",
   description:
     "Find your nearest Cadieux kitchen, stall or partner pickup point in Visakhapatnam. Check whether we deliver to your pincode in one tap.",
 };

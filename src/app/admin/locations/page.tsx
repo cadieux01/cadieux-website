@@ -1,13 +1,20 @@
 "use client";
 
 // /admin/locations — CRUD for the pickup_locations table that powers
-// the public Find Us pages on web + mobile. Reuses the AdminShell.
+// the public /find-us (Store Locator) on web + mobile. Reuses the
+// AdminShell.
 //
-// Filter chips: All | Kitchen | Stall | Partner pickup | Archived.
+// Tabs: Active | Archived | All (mirrors /admin/service-areas).
 // The Add/Edit modal embeds a Google Map with Places Autocomplete and
 // a draggable marker — picking a place fills name+address+area+lat/lng
 // in one click; dragging the marker updates the coords without
 // touching the rest.
+//
+// Bulk operations: tick rows → sticky action bar offers Archive N
+// (gold), Delete N (red, requires typing "DELETE" to confirm), and
+// Edit (enabled only when exactly one row is ticked). All three
+// share POST /api/admin/locations/bulk, which logs a single audit
+// row per bulk action.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -29,6 +36,7 @@ const GOLD_SOFT = "rgba(245,158,11,0.85)";
 const CREAM = "#fbf3d4";
 const FADED = "rgba(192,200,206,0.6)";
 const BORDER = "rgba(245,158,11,0.18)";
+const DANGER = "#ef4444";
 
 // Pin colours per type — matches /find-us legend.
 const COLOR_KITCHEN = "#16a34a";
@@ -55,14 +63,12 @@ type LocationRow = {
   updated_at: string;
 };
 
-type FilterKey = "all" | PickupType | "archived";
+type TabKey = "active" | "archived" | "all";
 
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "kitchen", label: "Kitchen" },
-  { key: "stall", label: "Stall" },
-  { key: "partner_pickup", label: "Partner pickup" },
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "active", label: "Active" },
   { key: "archived", label: "Archived" },
+  { key: "all", label: "All" },
 ];
 
 const TYPE_LABEL: Record<PickupType, string> = {
@@ -88,11 +94,19 @@ export default function AdminLocationsPage() {
   const [rows, setRows] = useState<LocationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterKey>("all");
+  const [tab, setTab] = useState<TabKey>("active");
   const [q, setQ] = useState("");
 
   const [editing, setEditing] = useState<LocationRow | null>(null);
   const [creating, setCreating] = useState(false);
+
+  // Bulk selection state.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState<null | "archive" | "delete">(
+    null,
+  );
+  const [deleteText, setDeleteText] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,15 +133,16 @@ export default function AdminLocationsPage() {
     void load();
   }, [load]);
 
+  // Clear selection when the visible set changes (tab switch / refresh).
+  useEffect(() => {
+    setSelected(new Set());
+  }, [tab]);
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (filter === "archived") {
-        if (!r.is_archived) return false;
-      } else {
-        if (r.is_archived) return false;
-        if (filter !== "all" && r.type !== filter) return false;
-      }
+      if (tab === "active" && r.is_archived) return false;
+      if (tab === "archived" && !r.is_archived) return false;
       if (!needle) return true;
       return (
         r.name.toLowerCase().includes(needle) ||
@@ -135,7 +150,33 @@ export default function AdminLocationsPage() {
         r.address.toLowerCase().includes(needle)
       );
     });
-  }, [rows, filter, q]);
+  }, [rows, tab, q]);
+
+  const visibleIds = useMemo(() => filtered.map((r) => r.id), [filtered]);
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const someVisibleSelected =
+    !allVisibleSelected && visibleIds.some((id) => selected.has(id));
+
+  const toggleAllVisible = () => {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (allVisibleSelected) {
+        for (const id of visibleIds) next.delete(id);
+      } else {
+        for (const id of visibleIds) next.add(id);
+      }
+      return next;
+    });
+  };
+  const toggleOne = (id: string) => {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const subtitle = `${rows.filter((r) => !r.is_archived).length} active · ${
     rows.filter((r) => r.is_archived).length
@@ -164,9 +205,47 @@ export default function AdminLocationsPage() {
     }
   }
 
+  async function runBulk(action: "archive" | "unarchive" | "delete") {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await adminFetch<{
+        ok: boolean;
+        succeeded: string[];
+        failed: string[];
+      }>(`/api/admin/locations/bulk`, {
+        method: "POST",
+        body: JSON.stringify({ action, ids }),
+      });
+      if (res.failed.length > 0) {
+        alert(
+          `${res.succeeded.length} ${action}d, ${res.failed.length} skipped (not found).`,
+        );
+      }
+      setBulkConfirm(null);
+      setDeleteText("");
+      setSelected(new Set());
+      await load();
+    } catch (e) {
+      alert(e instanceof AdminFetchError ? e.message : `Bulk ${action} failed`);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const selectionCount = selected.size;
+  const onlyOneSelected = selectionCount === 1;
+  const editSelected = () => {
+    if (!onlyOneSelected) return;
+    const id = Array.from(selected)[0];
+    const row = rows.find((r) => r.id === id);
+    if (row) setEditing(row);
+  };
+
   return (
     <AdminShell
-      title="Locations"
+      title="Store Locator"
       subtitle={subtitle}
       actions={
         <>
@@ -189,16 +268,25 @@ export default function AdminLocationsPage() {
         </>
       }
     >
-      <div className="flex flex-col gap-4">
-        {/* Filter chips */}
+      <div
+        className="flex flex-col gap-4"
+        style={{ marginBottom: selectionCount > 0 ? 96 : 0 }}
+      >
+        {/* Tabs */}
         <div className="flex items-center gap-2 flex-wrap">
-          {FILTERS.map((f) => {
-            const active = filter === f.key;
+          {TABS.map((t) => {
+            const active = tab === t.key;
+            const count =
+              t.key === "active"
+                ? rows.filter((r) => !r.is_archived).length
+                : t.key === "archived"
+                  ? rows.filter((r) => r.is_archived).length
+                  : rows.length;
             return (
               <button
-                key={f.key}
+                key={t.key}
                 type="button"
-                onClick={() => setFilter(f.key)}
+                onClick={() => setTab(t.key)}
                 className="uppercase"
                 style={{
                   fontFamily: "var(--font-body)",
@@ -211,7 +299,8 @@ export default function AdminLocationsPage() {
                   cursor: "pointer",
                 }}
               >
-                {f.label}
+                {t.label}
+                <span style={{ marginLeft: 8, opacity: 0.7 }}>{count}</span>
               </button>
             );
           })}
@@ -265,7 +354,7 @@ export default function AdminLocationsPage() {
                 fontFamily: "var(--font-body)",
                 color: CREAM,
                 fontSize: "0.82rem",
-                minWidth: 720,
+                minWidth: 760,
               }}
             >
               <thead>
@@ -278,6 +367,18 @@ export default function AdminLocationsPage() {
                     textTransform: "uppercase",
                   }}
                 >
+                  <th style={{ ...th, width: 36 }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all visible"
+                      checked={allVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someVisibleSelected;
+                      }}
+                      onChange={toggleAllVisible}
+                      disabled={visibleIds.length === 0}
+                    />
+                  </th>
                   <th style={th}>Name</th>
                   <th style={th}>Type</th>
                   <th style={th}>Area</th>
@@ -289,99 +390,259 @@ export default function AdminLocationsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} style={{ ...td, color: FADED }}>
+                    <td colSpan={7} style={{ ...td, color: FADED }}>
                       Loading…
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ ...td, color: FADED }}>
+                    <td colSpan={7} style={{ ...td, color: FADED }}>
                       No locations match the current filters.
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((r) => (
-                    <tr
-                      key={r.id}
-                      style={{ borderTop: `1px solid ${BORDER}` }}
-                    >
-                      <td style={td}>
-                        <div style={{ color: CREAM, display: "flex", alignItems: "center", gap: 8 }}>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              width: 10,
-                              height: 10,
-                              borderRadius: 5,
-                              background: colorFor(r.type),
-                              border: "1px solid #000",
-                              flexShrink: 0,
-                            }}
+                  filtered.map((r) => {
+                    const isSel = selected.has(r.id);
+                    return (
+                      <tr
+                        key={r.id}
+                        style={{
+                          borderTop: `1px solid ${BORDER}`,
+                          background: isSel
+                            ? "rgba(245,158,11,0.06)"
+                            : undefined,
+                        }}
+                      >
+                        <td style={td}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${r.name}`}
+                            checked={isSel}
+                            onChange={() => toggleOne(r.id)}
                           />
-                          {r.name}
-                        </div>
-                        {r.is_archived ? (
-                          <div
-                            style={{
-                              color: "rgba(239,68,68,0.85)",
-                              fontSize: "0.65rem",
-                              letterSpacing: "0.2em",
-                              textTransform: "uppercase",
-                              marginTop: 2,
-                            }}
-                          >
-                            Archived
+                        </td>
+                        <td style={td}>
+                          <div style={{ color: CREAM, display: "flex", alignItems: "center", gap: 8 }}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                width: 10,
+                                height: 10,
+                                borderRadius: 5,
+                                background: colorFor(r.type),
+                                border: "1px solid #000",
+                                flexShrink: 0,
+                              }}
+                            />
+                            {r.name}
                           </div>
-                        ) : null}
-                      </td>
-                      <td style={td}>{TYPE_LABEL[r.type]}</td>
-                      <td style={td}>{r.area}</td>
-                      <td style={{ ...td, color: FADED, fontSize: "0.72rem" }}>
-                        {r.latitude.toFixed(5)}, {r.longitude.toFixed(5)}
-                      </td>
-                      <td style={td}>{r.sort_order}</td>
-                      <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
-                        <button
-                          type="button"
-                          onClick={() => setEditing(r)}
-                          className="uppercase"
-                          style={miniBtn}
-                        >
-                          Edit
-                        </button>
-                        {r.is_archived ? (
+                          {r.is_archived ? (
+                            <div
+                              style={{
+                                color: "rgba(239,68,68,0.85)",
+                                fontSize: "0.65rem",
+                                letterSpacing: "0.2em",
+                                textTransform: "uppercase",
+                                marginTop: 2,
+                              }}
+                            >
+                              Archived
+                            </div>
+                          ) : null}
+                        </td>
+                        <td style={td}>{TYPE_LABEL[r.type]}</td>
+                        <td style={td}>{r.area}</td>
+                        <td style={{ ...td, color: FADED, fontSize: "0.72rem" }}>
+                          {r.latitude.toFixed(5)}, {r.longitude.toFixed(5)}
+                        </td>
+                        <td style={td}>{r.sort_order}</td>
+                        <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
                           <button
                             type="button"
-                            onClick={() => void handleUnarchive(r)}
+                            onClick={() => setEditing(r)}
                             className="uppercase"
-                            style={{ ...miniBtn, marginLeft: 6 }}
+                            style={miniBtn}
                           >
-                            Restore
+                            Edit
                           </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => void handleArchive(r)}
-                            className="uppercase"
-                            style={{
-                              ...miniBtn,
-                              marginLeft: 6,
-                              color: "rgba(239,68,68,0.9)",
-                              borderColor: "rgba(239,68,68,0.45)",
-                            }}
-                          >
-                            Archive
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                          {r.is_archived ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleUnarchive(r)}
+                              className="uppercase"
+                              style={{ ...miniBtn, marginLeft: 6 }}
+                            >
+                              Restore
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void handleArchive(r)}
+                              className="uppercase"
+                              style={{
+                                ...miniBtn,
+                                marginLeft: 6,
+                                color: "rgba(239,68,68,0.9)",
+                                borderColor: "rgba(239,68,68,0.45)",
+                              }}
+                            >
+                              Archive
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         </div>
       </div>
+
+      {/* Sticky bulk action bar */}
+      {selectionCount > 0 ? (
+        <div
+          role="region"
+          aria-label="Bulk actions"
+          style={{
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 400,
+            background: "rgba(6,4,2,0.96)",
+            borderTop: `1px solid ${BORDER}`,
+            padding: "0.75rem 1.25rem",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          <div
+            className="uppercase"
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: "0.72rem",
+              letterSpacing: "0.22em",
+              color: CREAM,
+            }}
+          >
+            {selectionCount} selected
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="uppercase"
+            style={{ ...miniBtn, color: FADED, borderColor: BORDER }}
+          >
+            Clear
+          </button>
+          <div style={{ flex: 1 }} />
+          <button
+            type="button"
+            onClick={editSelected}
+            disabled={!onlyOneSelected || bulkBusy}
+            className="uppercase"
+            title={
+              onlyOneSelected ? "Edit selected" : "Select exactly one row to edit"
+            }
+            style={{
+              ...miniBtn,
+              opacity: onlyOneSelected ? 1 : 0.4,
+              cursor: onlyOneSelected ? "pointer" : "not-allowed",
+            }}
+          >
+            Edit selected
+          </button>
+          {tab !== "active" ? (
+            <button
+              type="button"
+              onClick={() => void runBulk("unarchive")}
+              disabled={bulkBusy}
+              className="uppercase"
+              style={{ ...miniBtn, opacity: bulkBusy ? 0.5 : 1 }}
+            >
+              Restore {selectionCount}
+            </button>
+          ) : null}
+          {tab !== "archived" ? (
+            <button
+              type="button"
+              onClick={() => setBulkConfirm("archive")}
+              disabled={bulkBusy}
+              className="uppercase"
+              style={{
+                ...miniBtn,
+                color: "#06120c",
+                background: GOLD,
+                borderColor: GOLD,
+                opacity: bulkBusy ? 0.5 : 1,
+              }}
+            >
+              Archive {selectionCount}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteText("");
+              setBulkConfirm("delete");
+            }}
+            disabled={bulkBusy}
+            className="uppercase"
+            style={{
+              ...miniBtn,
+              color: "#fff",
+              background: DANGER,
+              borderColor: DANGER,
+              opacity: bulkBusy ? 0.5 : 1,
+            }}
+          >
+            Delete {selectionCount}
+          </button>
+        </div>
+      ) : null}
+
+      {/* Bulk archive confirmation */}
+      {bulkConfirm === "archive" ? (
+        <ConfirmModal
+          onClose={() => setBulkConfirm(null)}
+          title={`Archive ${selectionCount} location${selectionCount === 1 ? "" : "s"}?`}
+          message={`They'll be hidden from /find-us and the app, kept for history.`}
+          confirmLabel={bulkBusy ? "Archiving…" : `Archive ${selectionCount}`}
+          confirmStyle={{ background: GOLD, borderColor: GOLD, color: "#06120c" }}
+          confirmDisabled={bulkBusy}
+          onConfirm={() => void runBulk("archive")}
+        />
+      ) : null}
+
+      {/* Bulk delete confirmation — type-to-confirm */}
+      {bulkConfirm === "delete" ? (
+        <ConfirmModal
+          onClose={() => {
+            setBulkConfirm(null);
+            setDeleteText("");
+          }}
+          title={`Permanently delete ${selectionCount} location${selectionCount === 1 ? "" : "s"}?`}
+          message={`This cannot be undone. Type DELETE in capitals to confirm.`}
+          confirmLabel={bulkBusy ? "Deleting…" : `Delete ${selectionCount}`}
+          confirmStyle={{ background: DANGER, borderColor: DANGER, color: "#fff" }}
+          confirmDisabled={bulkBusy || deleteText !== "DELETE"}
+          onConfirm={() => void runBulk("delete")}
+        >
+          <input
+            type="text"
+            autoFocus
+            value={deleteText}
+            onChange={(e) => setDeleteText(e.target.value)}
+            placeholder="Type DELETE"
+            style={{ ...textInput, marginTop: "0.75rem" }}
+          />
+        </ConfirmModal>
+      ) : null}
 
       {(editing || creating) && isLoaded ? (
         <LocationModal
@@ -423,6 +684,107 @@ export default function AdminLocationsPage() {
         </div>
       ) : null}
     </AdminShell>
+  );
+}
+
+// ─── Confirm Modal ──────────────────────────────────────────────────
+
+function ConfirmModal({
+  title,
+  message,
+  confirmLabel,
+  confirmStyle,
+  confirmDisabled,
+  onConfirm,
+  onClose,
+  children,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  confirmStyle?: React.CSSProperties;
+  confirmDisabled?: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.78)",
+        zIndex: 600,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1rem",
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(460px, 100%)",
+          background: "rgb(6,4,2)",
+          border: `1px solid ${BORDER}`,
+          padding: "1.25rem",
+        }}
+      >
+        <h3
+          className="uppercase"
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontWeight: 300,
+            color: CREAM,
+            fontSize: "1.05rem",
+            letterSpacing: "0.16em",
+            margin: 0,
+            marginBottom: "0.75rem",
+          }}
+        >
+          {title}
+        </h3>
+        <p
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "0.85rem",
+            color: FADED,
+            lineHeight: 1.55,
+            margin: 0,
+          }}
+        >
+          {message}
+        </p>
+        {children}
+        <div className="flex gap-2 justify-end" style={{ marginTop: "1.1rem" }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="uppercase"
+            style={{ ...miniBtn, color: FADED, borderColor: BORDER }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={confirmDisabled}
+            className="uppercase"
+            style={{
+              ...miniBtn,
+              ...confirmStyle,
+              opacity: confirmDisabled ? 0.5 : 1,
+              cursor: confirmDisabled ? "not-allowed" : "pointer",
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

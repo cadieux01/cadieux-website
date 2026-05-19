@@ -242,7 +242,7 @@ export default function FindUsClient({
             lineHeight: 1,
           }}
         >
-          Find Cadieux Near You
+          Store Locator
         </h1>
         <p
           style={{

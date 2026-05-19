@@ -89,7 +89,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Catalog",
     items: [
       { href: "/admin/products", label: "Products" },
-      { href: "/admin/locations", label: "Locations" },
+      { href: "/admin/locations", label: "Store Locator" },
       { href: "/admin/service-areas", label: "Service Areas" },
     ],
   },
