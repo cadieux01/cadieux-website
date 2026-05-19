@@ -11,6 +11,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 
+import {
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_LOADER_ID,
+} from "@/lib/google-maps-loader";
 import type {
   PickupLocationRow,
   PickupLocationType,
@@ -96,8 +100,9 @@ export default function FindUsClient({
   locations: PickupLocationRow[];
 }) {
   const { isLoaded } = useJsApiLoader({
-    id: "cdx-find-us-map",
+    id: GOOGLE_MAPS_LOADER_ID,
     googleMapsApiKey: apiKey,
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const [activeTab, setActiveTab] = useState<TabKey>("all");

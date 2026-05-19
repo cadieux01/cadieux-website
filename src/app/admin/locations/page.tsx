@@ -19,6 +19,10 @@ import {
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import {
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_LOADER_ID,
+} from "@/lib/google-maps-loader";
 
 const GOLD = "#f59e0b";
 const GOLD_SOFT = "rgba(245,158,11,0.85)";
@@ -73,16 +77,12 @@ function colorFor(type: PickupType): string {
   return COLOR_PARTNER;
 }
 
-// Required for Places library — keep as a module-level const so the
-// `useJsApiLoader` reference is stable (the hook compares identity).
-const LIBRARIES: ("places")[] = ["places"];
-
 export default function AdminLocationsPage() {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const { isLoaded } = useJsApiLoader({
-    id: "cdx-admin-locations-map",
+    id: GOOGLE_MAPS_LOADER_ID,
     googleMapsApiKey: apiKey,
-    libraries: LIBRARIES,
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const [rows, setRows] = useState<LocationRow[]>([]);
