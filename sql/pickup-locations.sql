@@ -121,3 +121,21 @@ values
 on conflict do nothing;
 
 commit;
+
+-- 6) Pincode + Google place_id (added later). Both nullable so older
+--    rows that were inserted before this migration keep working.
+--    google_place_id improves /find-us "Get Directions" accuracy when
+--    present; pincode lets the public locator search by pincode.
+begin;
+
+alter table public.pickup_locations
+  add column if not exists pincode text;
+
+alter table public.pickup_locations
+  add column if not exists google_place_id text;
+
+create index if not exists pickup_locations_pincode_idx
+  on public.pickup_locations (pincode)
+  where pincode is not null;
+
+commit;

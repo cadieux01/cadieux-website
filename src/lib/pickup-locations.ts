@@ -21,6 +21,13 @@ export type PickupLocationRow = {
   latitude: number;
   longitude: number;
   notes: string | null;
+  /** Optional 6-digit Indian pincode — auto-filled by the admin Maps
+   *  autocomplete / reverse geocoder. Nullable for back-compat with
+   *  rows seeded before the column was added. */
+  pincode: string | null;
+  /** Optional Google Maps Place ID. When present, /find-us uses it to
+   *  hand off a higher-accuracy "Get Directions" link. */
+  google_place_id: string | null;
   sort_order: number;
 };
 
@@ -38,7 +45,7 @@ export const getActiveLocations = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("pickup_locations")
       .select(
-        "id, name, type, area, address, latitude, longitude, notes, sort_order",
+        "id, name, type, area, address, latitude, longitude, notes, pincode, google_place_id, sort_order",
       )
       .eq("is_archived", false)
       .order("sort_order", { ascending: true })

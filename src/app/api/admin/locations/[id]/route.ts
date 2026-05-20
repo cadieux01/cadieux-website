@@ -8,7 +8,7 @@ import { recordAuditEvent } from "@/lib/audit-log";
 // present on the body are written; everything else is left alone.
 
 const LOCATION_SELECT =
-  "id, name, type, area, address, latitude, longitude, notes, sort_order, is_archived, archived_at, created_at, updated_at";
+  "id, name, type, area, address, latitude, longitude, notes, pincode, google_place_id, sort_order, is_archived, archived_at, created_at, updated_at";
 
 const TYPES = ["kitchen", "stall", "partner_pickup"] as const;
 type PickupType = (typeof TYPES)[number];
@@ -93,6 +93,30 @@ export async function PATCH(
       return NextResponse.json({ error: "sort_order must be a number" }, { status: 400 });
     }
     patch.sort_order = Math.trunc(n);
+  }
+  if (body.pincode !== undefined) {
+    if (body.pincode === null || (typeof body.pincode === "string" && body.pincode.trim() === "")) {
+      patch.pincode = null;
+    } else if (typeof body.pincode === "string" && /^\d{6}$/.test(body.pincode.trim())) {
+      patch.pincode = body.pincode.trim();
+    } else {
+      return NextResponse.json(
+        { error: "pincode must be a 6-digit string or null" },
+        { status: 400 },
+      );
+    }
+  }
+  if (body.google_place_id !== undefined) {
+    if (body.google_place_id === null || (typeof body.google_place_id === "string" && body.google_place_id.trim() === "")) {
+      patch.google_place_id = null;
+    } else if (typeof body.google_place_id === "string") {
+      patch.google_place_id = body.google_place_id.trim();
+    } else {
+      return NextResponse.json(
+        { error: "google_place_id must be a string or null" },
+        { status: 400 },
+      );
+    }
   }
 
   if (Object.keys(patch).length === 0) {

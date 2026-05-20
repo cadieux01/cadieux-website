@@ -38,6 +38,8 @@ export async function GET(req: NextRequest) {
     longitude: r.longitude,
     address: r.address,
     ...(r.notes ? { notes: r.notes } : {}),
+    ...(r.pincode ? { pincode: r.pincode } : {}),
+    ...(r.google_place_id ? { google_place_id: r.google_place_id } : {}),
   }));
 
   return NextResponse.json(
