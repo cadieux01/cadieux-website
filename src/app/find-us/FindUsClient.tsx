@@ -32,10 +32,13 @@ function pinColorFor(type: PickupLocationType): string {
   return BLUE_HEX;
 }
 
+// Customer-facing labels. Mirrors the admin dropdown: the DB enum
+// stays kitchen|stall|partner_pickup, only the rendered strings
+// change to match the operator's mental model.
 function typeBadge(type: PickupLocationType): string {
-  if (type === "kitchen") return "Kitchen";
+  if (type === "kitchen") return "Store";
   if (type === "stall") return "Stall";
-  return "Partner Pickup";
+  return "Other Place";
 }
 
 type TabKey = "all" | PickupLocationType;
@@ -77,11 +80,19 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 // Open Google Maps directions for the given location. Lat/lng-based
 // destination is the most reliable handoff because it doesn't depend
 // on Google's reverse-geocoder picking the right address.
+//
+// When the admin captured a google_place_id at edit time we hand it
+// off as `destination_place_id` — Google then resolves to that exact
+// entity (entrance, business name, hours) rather than the nearest
+// generic address to the lat/lng.
 function navigateTo(loc: PickupLocationRow) {
   const ll = `${loc.latitude},${loc.longitude}`;
   const name = encodeURIComponent(`${loc.name}, ${loc.area}, Visakhapatnam`);
+  const placeIdParam = loc.google_place_id
+    ? `&destination_place_id=${encodeURIComponent(loc.google_place_id)}`
+    : "";
   window.open(
-    `https://www.google.com/maps/dir/?api=1&destination=${ll}&destination_place_id=&travelmode=driving&query=${name}`,
+    `https://www.google.com/maps/dir/?api=1&destination=${ll}${placeIdParam}&travelmode=driving&query=${name}`,
     "_blank",
     "noopener,noreferrer",
   );
@@ -141,7 +152,8 @@ export default function FindUsClient({
       return (
         loc.name.toLowerCase().includes(q) ||
         loc.area.toLowerCase().includes(q) ||
-        loc.address.toLowerCase().includes(q)
+        loc.address.toLowerCase().includes(q) ||
+        (loc.pincode?.toLowerCase().includes(q) ?? false)
       );
     });
   }, [activeTab, search, locations]);
@@ -362,11 +374,11 @@ export default function FindUsClient({
             textTransform: "uppercase",
           }}
         >
-          <LegendDot color={GREEN_HEX} label={`Kitchen (${counts.kitchen})`} />
+          <LegendDot color={GREEN_HEX} label={`Store (${counts.kitchen})`} />
           <LegendDot color={GOLD_HEX} label={`Stall (${counts.stall})`} />
           <LegendDot
             color={BLUE_HEX}
-            label={`Partner Pickup (${counts.partner_pickup})`}
+            label={`Other Place (${counts.partner_pickup})`}
           />
         </div>
 
@@ -497,10 +509,10 @@ export default function FindUsClient({
                 key === "all"
                   ? "All"
                   : key === "kitchen"
-                    ? "Kitchen"
+                    ? "Stores"
                     : key === "stall"
                       ? "Stalls"
-                      : "Partner Pickup";
+                      : "Other Places";
               const count =
                 key === "all"
                   ? counts.all
@@ -547,7 +559,7 @@ export default function FindUsClient({
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, area or address…"
+          placeholder="Search by name, area, address or pincode…"
           aria-label="Search locations"
           style={{
             width: "100%",
