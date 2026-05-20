@@ -13,7 +13,7 @@ import {
   isAcceptableDeliveryDate,
   isAcceptableDeliverySlot,
 } from "@/lib/order-delivery";
-import { isPincodeServiceable, normalizePincode } from "@/lib/service-areas";
+import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -164,8 +164,8 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    const serviceable = await isPincodeServiceable(pinFromAddress);
-    if (!serviceable) {
+    const serviceability = await resolveServiceability(pinFromAddress);
+    if (!serviceability.serviceable) {
       return NextResponse.json(
         {
           error: "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
@@ -174,6 +174,11 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    // ITEM 4: when the pincode was auto-approved via proximity (not an
+    // exact match), drop an "area suggestion" into delivery_requests so
+    // admin can one-click promote it to an Areas We Serve entry.
+    const proximityHint =
+      serviceability.via === "proximity" ? serviceability : null;
 
     // Server-side OTP enforcement: cookie OR mobile bearer token must be
     // present, valid, unexpired, and its phone must match the customer's
@@ -284,6 +289,27 @@ export async function POST(req: NextRequest) {
         { error: "Failed to create order", details: error.message },
         { status: 500 }
       );
+    }
+
+    // Proximity match → log an area suggestion so admin can promote it
+    // to a formal Areas We Serve entry. Best-effort; failure here must
+    // never roll back the order.
+    if (proximityHint) {
+      const last10 = normalizePhone(cust.phone)?.replace(/\D/g, "").slice(-10) ?? "";
+      void supabaseAdmin
+        .from("delivery_requests")
+        .insert({
+          customer_id,
+          phone: last10,
+          pincode: pinFromAddress,
+          area_name: `Auto: near ${proximityHint.nearest_area} (${proximityHint.distance_km}km)`,
+          address: delivery_address,
+          status: "pending",
+          source: "proximity_order",
+        })
+        .then(({ error: e }) => {
+          if (e) console.warn("[checkout] proximity suggestion failed:", e.message);
+        });
     }
 
     return NextResponse.json({ order_id: order.id, total_amount: grandTotal });

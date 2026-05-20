@@ -25,7 +25,7 @@ import {
   isAcceptableDeliveryDate,
   isAcceptableDeliverySlot,
 } from "@/lib/order-delivery";
-import { isPincodeServiceable, normalizePincode } from "@/lib/service-areas";
+import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -91,8 +91,8 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  const serviceable = await isPincodeServiceable(pincode);
-  if (!serviceable) {
+  const serviceability = await resolveServiceability(pincode);
+  if (!serviceability.serviceable) {
     return NextResponse.json(
       {
         ok: false,
@@ -102,6 +102,10 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+  // When auto-approved via proximity, we'll log an area suggestion
+  // after the order insert succeeds (see below).
+  const proximityHint =
+    serviceability.via === "proximity" ? serviceability : null;
 
   // 4c. Optional delivery date + slot. The mobile app will start sending
   // these in a follow-up release; until then we accept null and store
@@ -259,6 +263,25 @@ export async function POST(req: NextRequest) {
       { ok: false, error: "Failed to create order" },
       { status: 500 },
     );
+  }
+
+  // Proximity match → log an area suggestion so admin can promote it
+  // to a formal Areas We Serve entry. Best-effort.
+  if (proximityHint) {
+    void supabaseAdmin
+      .from("delivery_requests")
+      .insert({
+        customer_id: customerId,
+        phone: phoneLocal,
+        pincode,
+        area_name: `Auto: near ${proximityHint.nearest_area} (${proximityHint.distance_km}km)`,
+        address: addressString,
+        status: "pending",
+        source: "proximity_order",
+      })
+      .then(({ error: e }) => {
+        if (e) console.warn("[mobile/checkout] proximity suggestion failed:", e.message);
+      });
   }
 
   // 8. Fire-and-forget SMS + WhatsApp (mirror website's CheckoutModal calls).
