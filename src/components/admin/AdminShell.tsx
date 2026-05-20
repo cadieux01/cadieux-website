@@ -90,7 +90,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/products", label: "Products" },
       { href: "/admin/locations", label: "Store Locator" },
-      { href: "/admin/service-areas", label: "Service Areas" },
+      { href: "/admin/service-areas", label: "Areas We Serve" },
     ],
   },
   {

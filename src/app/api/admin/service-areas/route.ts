@@ -1,12 +1,14 @@
 // Admin CRUD for service_areas. GET returns every row (active + inactive)
 // so the admin UI can show paused pincodes too. POST upserts one pincode
-// with one or many area_names.
+// with one or many area_names, and geocodes each (area, pincode) pair so
+// proximity auto-approve can use them.
 
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { geocodeArea } from "@/lib/geocode";
 import { SERVICE_AREAS_TAG, normalizePincode } from "@/lib/service-areas";
 
 export async function GET(req: NextRequest) {
@@ -15,7 +17,9 @@ export async function GET(req: NextRequest) {
   }
   const { data, error } = await supabaseAdmin
     .from("service_areas")
-    .select("pincode, area_name, is_active, added_at, added_by")
+    .select(
+      "pincode, area_name, is_active, added_at, added_by, latitude, longitude, geocoded_at",
+    )
     .order("added_at", { ascending: false });
   if (error) {
     console.error("[admin/service-areas] list failed:", error.message);
@@ -57,15 +61,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const rows = areaNames.map((area_name) => ({
-    pincode,
-    area_name,
-    is_active: true,
-    added_by: "admin",
-  }));
+  // Geocode each (area, pincode) pair so the proximity check can see them.
+  // Failures are non-fatal — the row is still saved, just without coords.
+  const geocodedAt = new Date().toISOString();
+  const rows = await Promise.all(
+    areaNames.map(async (area_name) => {
+      const geo = await geocodeArea(area_name, pincode);
+      return {
+        pincode,
+        area_name,
+        is_active: true,
+        added_by: "admin",
+        latitude: geo?.latitude ?? null,
+        longitude: geo?.longitude ?? null,
+        geocoded_at: geo ? geocodedAt : null,
+      };
+    }),
+  );
 
   // upsert on the composite PK so re-activating a previously-deactivated
-  // (pincode, area_name) pair just flips is_active back to true.
+  // (pincode, area_name) pair just flips is_active back to true (and
+  // refreshes the geocode).
   const { error } = await supabaseAdmin
     .from("service_areas")
     .upsert(rows, { onConflict: "pincode,area_name" });
@@ -76,6 +92,8 @@ export async function POST(req: NextRequest) {
 
   revalidateTag(SERVICE_AREAS_TAG);
 
+  const geocodedCount = rows.filter((r) => r.latitude !== null).length;
+
   void recordAuditEvent({
     req,
     entity: "service_area",
@@ -83,8 +101,19 @@ export async function POST(req: NextRequest) {
     targetId: pincode,
     targetLabel: `Pincode ${pincode}`,
     context: `Activated pincode ${pincode} (${areaNames.join(", ")})`,
-    meta: { pincode, area_names: areaNames },
+    meta: {
+      pincode,
+      area_names: areaNames,
+      geocoded: geocodedCount,
+      geocoded_failed: rows.length - geocodedCount,
+    },
   });
 
-  return NextResponse.json({ ok: true, pincode, area_names: areaNames });
+  return NextResponse.json({
+    ok: true,
+    pincode,
+    area_names: areaNames,
+    geocoded: geocodedCount,
+    geocoded_failed: rows.length - geocodedCount,
+  });
 }

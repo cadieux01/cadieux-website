@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { geocodeArea } from "@/lib/geocode";
 import { SERVICE_AREAS_TAG, normalizePincode } from "@/lib/service-areas";
 
 export async function POST(
@@ -25,6 +26,31 @@ export async function POST(
   if (error) {
     console.error("[admin/service-areas] reactivate failed:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Back-fill geocodes for any rows that pre-date the geocoding feature.
+  // Best-effort: failures here don't block reactivation.
+  const { data: missing } = await supabaseAdmin
+    .from("service_areas")
+    .select("pincode, area_name")
+    .eq("pincode", pincode)
+    .is("latitude", null);
+  if (missing && missing.length > 0) {
+    const stamp = new Date().toISOString();
+    for (const row of missing) {
+      const geo = await geocodeArea(row.area_name as string, pincode);
+      if (geo) {
+        await supabaseAdmin
+          .from("service_areas")
+          .update({
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+            geocoded_at: stamp,
+          })
+          .eq("pincode", pincode)
+          .eq("area_name", row.area_name);
+      }
+    }
   }
 
   revalidateTag(SERVICE_AREAS_TAG);

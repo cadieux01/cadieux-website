@@ -54,6 +54,7 @@ export default function ServiceAreasPage() {
   const [newAreas, setNewAreas] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [addBusy, setAddBusy] = useState(false);
+  const [suggestBusy, setSuggestBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -184,6 +185,33 @@ export default function ServiceAreasPage() {
     window.setTimeout(() => setNotice(null), 3500);
   };
 
+  const suggestPincode = async () => {
+    const firstArea = newAreas.split(",").map((s) => s.trim()).find(Boolean);
+    if (!firstArea) {
+      setAddError("Type an area name first so we can look it up.");
+      return;
+    }
+    setAddError(null);
+    setSuggestBusy(true);
+    try {
+      const res = await adminFetch<{ pincode: string | null }>(
+        `/api/admin/service-areas/suggest-pincode?area=${encodeURIComponent(firstArea)}`,
+      );
+      if (res.pincode && /^\d{6}$/.test(res.pincode)) {
+        setNewPincode(res.pincode);
+        showNotice(`Filled pincode ${res.pincode} from "${firstArea}"`);
+      } else {
+        setAddError(`Could not find a pincode for "${firstArea}".`);
+      }
+    } catch (e) {
+      setAddError(
+        e instanceof AdminFetchError ? e.message : "Lookup failed",
+      );
+    } finally {
+      setSuggestBusy(false);
+    }
+  };
+
   const submitNew = async () => {
     setAddError(null);
     const pincode = newPincode.replace(/\D/g, "");
@@ -201,13 +229,23 @@ export default function ServiceAreasPage() {
     }
     setAddBusy(true);
     try {
-      await adminFetch("/api/admin/service-areas", {
+      const res = await adminFetch<{
+        ok: boolean;
+        geocoded?: number;
+        geocoded_failed?: number;
+      }>("/api/admin/service-areas", {
         method: "POST",
         body: JSON.stringify({ pincode, area_names }),
       });
       setNewPincode("");
       setNewAreas("");
-      showNotice(`Activated pincode ${pincode}`);
+      const geo = res.geocoded ?? 0;
+      const failed = res.geocoded_failed ?? 0;
+      showNotice(
+        failed === 0
+          ? `Activated pincode ${pincode} (${geo} geocoded)`
+          : `Activated pincode ${pincode} — ${failed} area${failed === 1 ? "" : "s"} could not be geocoded (proximity won't apply)`,
+      );
       await load();
     } catch (e) {
       setAddError(
@@ -296,7 +334,7 @@ export default function ServiceAreasPage() {
 
   return (
     <AdminShell
-      title="Service Areas"
+      title="Areas We Serve"
       subtitle={`${counts.active} active · ${counts.history} paused`}
       actions={
         <button
@@ -379,6 +417,20 @@ export default function ServiceAreasPage() {
             onChange={(e) => setNewAreas(e.target.value)}
             style={{ ...inputBase, flex: 1, minWidth: 240 }}
           />
+          <button
+            type="button"
+            onClick={suggestPincode}
+            disabled={suggestBusy || addBusy}
+            title="Look up pincode for the first area name via Google Maps"
+            className="uppercase"
+            style={{
+              ...primaryBtn,
+              opacity: suggestBusy ? 0.6 : 1,
+              cursor: suggestBusy ? "wait" : "pointer",
+            }}
+          >
+            {suggestBusy ? "Looking…" : "↧ Pincode"}
+          </button>
           <button
             type="button"
             onClick={submitNew}
