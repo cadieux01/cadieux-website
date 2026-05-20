@@ -56,6 +56,8 @@ type LocationRow = {
   latitude: number;
   longitude: number;
   notes: string | null;
+  pincode: string | null;
+  google_place_id: string | null;
   sort_order: number;
   is_archived: boolean;
   archived_at: string | null;
@@ -71,10 +73,13 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
+// Customer-facing labels. The DB enum values (kitchen | stall |
+// partner_pickup) stay as-is to avoid a migration; only the display
+// strings change to match the operator's mental model.
 const TYPE_LABEL: Record<PickupType, string> = {
-  kitchen: "Kitchen",
+  kitchen: "Store",
   stall: "Stall",
-  partner_pickup: "Partner pickup",
+  partner_pickup: "Other Place",
 };
 
 function colorFor(type: PickupType): string {
@@ -838,14 +843,67 @@ function LocationModal({
   const [lat, setLat] = useState<number>(initial?.latitude ?? VIZAG_CENTER.lat);
   const [lng, setLng] = useState<number>(initial?.longitude ?? VIZAG_CENTER.lng);
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [pincode, setPincode] = useState(initial?.pincode ?? "");
+  const [googlePlaceId, setGooglePlaceId] = useState(
+    initial?.google_place_id ?? "",
+  );
   const [sortOrder, setSortOrder] = useState<string>(
     initial?.sort_order != null ? String(initial.sort_order) : "",
   );
+  // Track whether the pin has been explicitly placed (search or drag)
+  // so the "Pin set at" hint only appears after operator confirmation.
+  const [pinTouched, setPinTouched] = useState<boolean>(initial != null);
+  const [geocoding, setGeocoding] = useState(false);
 
   const [autocomplete, setAutocomplete] =
     useState<google.maps.places.Autocomplete | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Pick a component value by Google's `types` taxonomy.
+  function pickComponent(
+    comps: google.maps.GeocoderAddressComponent[] | undefined,
+    type: string,
+  ): string | undefined {
+    return comps?.find((c) => c.types.includes(type))?.long_name;
+  }
+
+  // Reverse-geocode the dropped pin → fill address/area/pincode that
+  // the operator can still edit. Only fires on dragEnd (not every
+  // pixel of the drag) to keep Geocoding API spend bounded.
+  const reverseGeocode = useCallback((latitude: number, longitude: number) => {
+    if (typeof google === "undefined" || !google.maps) return;
+    setGeocoding(true);
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode(
+      { location: { lat: latitude, lng: longitude } },
+      (results, status) => {
+        setGeocoding(false);
+        if (status !== "OK" || !results || results.length === 0) return;
+        // Pick the most specific street-address-like result first;
+        // otherwise fall back to results[0].
+        const best =
+          results.find((r) => r.types.includes("street_address")) ??
+          results.find((r) => r.types.includes("premise")) ??
+          results[0];
+        if (!best) return;
+        const comps = best.address_components;
+        const derivedAddress = best.formatted_address;
+        const derivedArea =
+          pickComponent(comps, "sublocality_level_1") ??
+          pickComponent(comps, "sublocality") ??
+          pickComponent(comps, "neighborhood") ??
+          pickComponent(comps, "locality");
+        const derivedPincode = pickComponent(comps, "postal_code");
+        if (derivedAddress) setAddress(derivedAddress);
+        if (derivedArea) setArea(derivedArea);
+        if (derivedPincode && /^\d{6}$/.test(derivedPincode)) {
+          setPincode(derivedPincode);
+        }
+        if (best.place_id) setGooglePlaceId(best.place_id);
+      },
+    );
+  }, []);
 
   // When the operator picks a place from Autocomplete, harvest the bits
   // we care about. Falls back to vicinity for area if there are no
@@ -857,30 +915,36 @@ function LocationModal({
     if (loc) {
       setLat(loc.lat());
       setLng(loc.lng());
+      setPinTouched(true);
     }
     if (place.name) setName((cur) => cur || place.name!);
     if (place.formatted_address) setAddress(place.formatted_address);
+    if (place.place_id) setGooglePlaceId(place.place_id);
 
     // Derive a short "area" string: try sublocality_level_1 first,
     // then locality, then vicinity. Keeps the public card subtitle
     // human-friendly without forcing the operator to retype.
     const comps = place.address_components ?? [];
-    const pick = (t: string) =>
-      comps.find((c) => c.types.includes(t))?.long_name;
     const derivedArea =
-      pick("sublocality_level_1") ??
-      pick("sublocality") ??
-      pick("neighborhood") ??
-      pick("locality") ??
+      pickComponent(comps, "sublocality_level_1") ??
+      pickComponent(comps, "sublocality") ??
+      pickComponent(comps, "neighborhood") ??
+      pickComponent(comps, "locality") ??
       place.vicinity ??
       "";
     if (derivedArea) setArea(derivedArea);
+
+    const derivedPincode = pickComponent(comps, "postal_code");
+    if (derivedPincode && /^\d{6}$/.test(derivedPincode)) {
+      setPincode(derivedPincode);
+    }
   }, [autocomplete]);
 
   async function handleSave() {
     setSaving(true);
     setErr(null);
     try {
+      const trimmedPincode = pincode.trim();
       const payload = {
         name: name.trim(),
         type,
@@ -889,6 +953,8 @@ function LocationModal({
         latitude: lat,
         longitude: lng,
         notes: notes.trim() ? notes.trim() : null,
+        pincode: trimmedPincode === "" ? null : trimmedPincode,
+        google_place_id: googlePlaceId.trim() === "" ? null : googlePlaceId.trim(),
         ...(sortOrder.trim() !== "" && Number.isFinite(Number(sortOrder))
           ? { sort_order: Number(sortOrder) }
           : {}),
@@ -1043,8 +1109,14 @@ function LocationModal({
                 draggable
                 onDragEnd={(e) => {
                   if (e.latLng) {
-                    setLat(e.latLng.lat());
-                    setLng(e.latLng.lng());
+                    const nLat = e.latLng.lat();
+                    const nLng = e.latLng.lng();
+                    setLat(nLat);
+                    setLng(nLng);
+                    setPinTouched(true);
+                    // Reverse-geocode only on dragEnd (not on every
+                    // pixel) so we don't burn Geocoding API quota.
+                    reverseGeocode(nLat, nLng);
                   }
                 }}
                 icon={{
@@ -1057,6 +1129,24 @@ function LocationModal({
                 }}
               />
             </GoogleMap>
+          </div>
+
+          {/* Pin status — confirms to the operator that the marker is
+              where they think it is. Reverse-geocoding spinner shows
+              while we fetch address/area/pincode. */}
+          <div
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: "0.72rem",
+              letterSpacing: "0.06em",
+              color: pinTouched ? GOLD_SOFT : FADED,
+              marginBottom: "0.85rem",
+            }}
+          >
+            {pinTouched
+              ? `Pin set at ${lat.toFixed(5)}, ${lng.toFixed(5)}`
+              : "Drag the pin or search Google Maps above to set the location."}
+            {geocoding ? " · resolving address…" : ""}
           </div>
 
           <FormGrid>
@@ -1076,9 +1166,9 @@ function LocationModal({
                 onChange={(e) => setType(e.target.value as PickupType)}
                 style={{ ...textInput, paddingRight: "2rem" }}
               >
-                <option value="kitchen">Kitchen</option>
                 <option value="stall">Stall</option>
-                <option value="partner_pickup">Partner pickup</option>
+                <option value="kitchen">Store</option>
+                <option value="partner_pickup">Other Place</option>
               </select>
             </div>
             <div>
@@ -1106,6 +1196,20 @@ function LocationModal({
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
+                style={textInput}
+              />
+            </div>
+            <div>
+              <Label>Pincode</Label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={pincode}
+                onChange={(e) =>
+                  setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+                placeholder="auto-filled from map"
                 style={textInput}
               />
             </div>
