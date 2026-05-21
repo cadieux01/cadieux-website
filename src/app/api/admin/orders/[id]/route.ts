@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { notifyCustomer } from "@/lib/push";
+import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/delivery-slots";
 
 const ALLOWED_STATUSES = new Set([
   "pending",
@@ -59,15 +60,38 @@ export async function PATCH(
     update.delivery_address = addr;
   }
 
+  // Admin override: delivery_date + delivery_slot can be edited freely
+  // with NO time restriction (this is the manual path for phone-call
+  // change requests). The 12 h 10 m booking and 14 h self-edit rules
+  // do NOT apply here — admin is the human override.
+  if (body.delivery_date !== undefined) {
+    if (body.delivery_date === null || body.delivery_date === "") {
+      update.delivery_date = null;
+    } else if (typeof body.delivery_date === "string" && isIsoDate(body.delivery_date)) {
+      update.delivery_date = body.delivery_date;
+    } else {
+      return NextResponse.json({ error: "Invalid delivery_date" }, { status: 400 });
+    }
+  }
+  if (body.delivery_slot !== undefined) {
+    if (body.delivery_slot === null || body.delivery_slot === "") {
+      update.delivery_slot = null;
+    } else if (typeof body.delivery_slot === "string" && isValidSlotValue(body.delivery_slot)) {
+      update.delivery_slot = body.delivery_slot;
+    } else {
+      return NextResponse.json({ error: "Invalid delivery_slot" }, { status: 400 });
+    }
+  }
+
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
-  // Capture the prior status so we can record a clean before/after on
-  // the audit row when status changes.
+  // Capture the prior status + scheduling so we can record a clean
+  // before/after on the audit row when any of them change.
   const { data: before } = await supabaseAdmin
     .from("orders")
-    .select("status")
+    .select("status, delivery_date, delivery_slot")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -101,6 +125,29 @@ export async function PATCH(
 
   const statusChanged =
     typeof update.status === "string" && before?.status !== update.status;
+  const dateChanged =
+    update.delivery_date !== undefined &&
+    (before?.delivery_date ?? null) !== (update.delivery_date ?? null);
+  const slotChanged =
+    update.delivery_slot !== undefined &&
+    (before?.delivery_slot ?? null) !== (update.delivery_slot ?? null);
+  const schedulingChanged = dateChanged || slotChanged;
+
+  // Build a human-readable context line that prioritises scheduling
+  // edits — these are the ones admins make from phone-call requests
+  // and the audit-log page needs to surface clearly.
+  let context: string;
+  if (schedulingChanged) {
+    const finalDate = (update.delivery_date ?? before?.delivery_date ?? null) as string | null;
+    const finalSlot = (update.delivery_slot ?? before?.delivery_slot ?? null) as string | null;
+    const slotLabel = finalSlot ? formatSlotForDisplay(finalSlot) : "—";
+    context = `Admin changed delivery to ${finalDate ?? "—"} ${slotLabel}`;
+  } else if (statusChanged) {
+    context = `Order status changed from "${before?.status ?? "—"}" to "${update.status as string}"`;
+  } else {
+    context = `Updated order ${params.id.slice(0, 8)}`;
+  }
+
   void recordAuditEvent({
     req,
     entity: "order",
@@ -111,13 +158,17 @@ export async function PATCH(
       : "update",
     targetId: params.id,
     targetLabel: `#${params.id.slice(0, 8)}`,
-    context: statusChanged
-      ? `Order status changed from "${before?.status ?? "—"}" to "${update.status as string}"`
-      : `Updated order ${params.id.slice(0, 8)}`,
+    context,
     meta: {
       fields: Object.keys(update),
       ...(statusChanged
         ? { status_before: before?.status ?? null, status_after: update.status }
+        : {}),
+      ...(dateChanged
+        ? { delivery_date_before: before?.delivery_date ?? null, delivery_date_after: update.delivery_date ?? null }
+        : {}),
+      ...(slotChanged
+        ? { delivery_slot_before: before?.delivery_slot ?? null, delivery_slot_after: update.delivery_slot ?? null }
         : {}),
     },
   });

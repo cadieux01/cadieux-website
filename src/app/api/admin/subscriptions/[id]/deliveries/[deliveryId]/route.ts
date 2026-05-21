@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { formatSlotForDisplay } from "@/lib/delivery-slots";
 
 const ALLOWED_STATUSES = new Set([
   "pending_confirmation",
@@ -45,7 +46,7 @@ export async function PATCH(
 
   const { data: before } = await supabaseAdmin
     .from("subscription_deliveries")
-    .select("status")
+    .select("status, scheduled_date, scheduled_time_slot")
     .eq("id", params.deliveryId)
     .eq("subscription_id", params.id)
     .maybeSingle();
@@ -63,20 +64,55 @@ export async function PATCH(
 
   const statusChanged =
     typeof update.status === "string" && before?.status !== update.status;
+  const dateChanged =
+    update.scheduled_date !== undefined &&
+    (before?.scheduled_date ?? null) !== (update.scheduled_date ?? null);
+  const slotChanged =
+    update.scheduled_time_slot !== undefined &&
+    (before?.scheduled_time_slot ?? null) !== (update.scheduled_time_slot ?? null);
+  const schedulingChanged = dateChanged || slotChanged;
+
+  // Admin override: scheduling edits bypass both the 12 h 10 m booking
+  // rule and the 14 h self-edit rule. We log the new date+slot so the
+  // audit page surfaces it clearly.
+  let context: string;
+  if (schedulingChanged) {
+    const finalDate =
+      (update.scheduled_date ?? before?.scheduled_date ?? null) as string | null;
+    const finalSlot =
+      (update.scheduled_time_slot ?? before?.scheduled_time_slot ?? null) as string | null;
+    const slotLabel = finalSlot ? formatSlotForDisplay(finalSlot) : "—";
+    context = `Admin changed delivery to ${finalDate ?? "—"} ${slotLabel}`;
+  } else if (statusChanged) {
+    context = `Delivery status: ${before?.status ?? "—"} → ${update.status as string}`;
+  } else {
+    context = `Updated delivery ${params.deliveryId.slice(0, 8)}`;
+  }
+
   void recordAuditEvent({
     req,
     entity: "subscription_delivery",
     action: statusChanged ? "status_change" : "update",
     targetId: params.deliveryId,
     targetLabel: `Delivery ${params.deliveryId.slice(0, 8)}`,
-    context: statusChanged
-      ? `Delivery status: ${before?.status ?? "—"} → ${update.status as string}`
-      : `Updated delivery ${params.deliveryId.slice(0, 8)}`,
+    context,
     meta: {
       subscription_id: params.id,
       fields: Object.keys(update).filter((k) => k !== "status_updated_at"),
       ...(statusChanged
         ? { status_before: before?.status ?? null, status_after: update.status }
+        : {}),
+      ...(dateChanged
+        ? {
+            scheduled_date_before: before?.scheduled_date ?? null,
+            scheduled_date_after: update.scheduled_date ?? null,
+          }
+        : {}),
+      ...(slotChanged
+        ? {
+            scheduled_time_slot_before: before?.scheduled_time_slot ?? null,
+            scheduled_time_slot_after: update.scheduled_time_slot ?? null,
+          }
         : {}),
     },
   });
