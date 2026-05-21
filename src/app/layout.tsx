@@ -8,6 +8,7 @@ import EdgeSwipeNav from "@/components/EdgeSwipeNav";
 import PWAServiceWorker from "@/components/PWAServiceWorker";
 import AndroidInstallPrompt from "@/components/AndroidInstallPrompt";
 import IOSInstallHint from "@/components/IOSInstallHint";
+import FloatingCartButton from "@/components/FloatingCartButton";
 import { CartProvider } from "@/context/CartContext";
 
 const cormorant = Cormorant_Garamond({
@@ -114,6 +115,7 @@ export default function RootLayout({
           <AndroidInstallPrompt />
           <IOSInstallHint />
           {children}
+          <FloatingCartButton />
         </CartProvider>
       </body>
     </html>

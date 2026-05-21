@@ -11,6 +11,7 @@ import {
   type ProductMedia,
 } from "@/lib/data";
 import { useCart } from "@/context/CartContext";
+import { flyToCart } from "@/lib/fly-to-cart";
 import ReviewSection from "@/components/ReviewSection";
 import {
   PRODUCT_REPORT_CATEGORIES,
@@ -45,6 +46,7 @@ export default function ProductDetailClient({
   const [added, setAdded] = useState(false);
   const { addToCart } = useCart();
   const router = useRouter();
+  const addBtnRef = useRef<HTMLButtonElement>(null);
 
   if (!product || !detail) {
     notFound();
@@ -70,6 +72,7 @@ export default function ProductDetailClient({
       qty: 1,
       orderType,
     });
+    flyToCart(addBtnRef.current);
     setAdded(true);
     setTimeout(() => setAdded(false), 1600);
   };
@@ -277,6 +280,7 @@ export default function ProductDetailClient({
             )}
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <button
+                ref={addBtnRef}
                 onClick={handleAdd}
                 disabled={outOfStock}
                 aria-disabled={outOfStock}
@@ -304,26 +308,6 @@ export default function ProductDetailClient({
                   ? "Set Up Subscription"
                   : "Add to Cart"}
               </button>
-              <Link
-                href="/cart"
-                style={{
-                  flex: "0 0 auto",
-                  padding: "16px 26px",
-                  background: "rgba(201,169,110,0.08)",
-                  border: "1px solid rgba(201,169,110,0.3)",
-                  color: "rgba(245,240,232,0.7)",
-                  fontFamily: "var(--font-body)",
-                  fontSize: 11,
-                  fontWeight: 500,
-                  letterSpacing: "0.35em",
-                  textTransform: "uppercase",
-                  borderRadius: 4,
-                  textDecoration: "none",
-                  textAlign: "center",
-                }}
-              >
-                View Cart
-              </Link>
             </div>
 
             <div style={{ marginTop: 32 }}>

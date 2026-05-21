@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/context/CartContext";
+import { flyToCart } from "@/lib/fly-to-cart";
 import type { CartItem } from "@/lib/data";
 
 const GRAIN =
@@ -53,9 +53,9 @@ export default function ProductCard({
   price,
   stats,
 }: ProductCardProps) {
-  const { cart, addToCart, updateQty, removeFromCart } = useCart();
-  const router = useRouter();
+  const { addToCart } = useCart();
   const cardRef = useRef<HTMLDivElement>(null);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [hovered, setHovered] = useState(false);
 
@@ -78,19 +78,6 @@ export default function ProductCard({
     setHovered(false);
   }
 
-  // Locate this product's one-time line in the cart so the stepper UI
-  // mirrors the current cart state across navigations. Subscriptions
-  // are tracked separately (one line per schedule) and are not
-  // managed from this card.
-  const cartIndex = useMemo(
-    () =>
-      cart.findIndex(
-        (c) => c.productIndex === productIndex && c.orderType === "once",
-      ),
-    [cart, productIndex],
-  );
-  const cartQty = cartIndex >= 0 ? cart[cartIndex]!.qty : 0;
-
   function handleAdd() {
     const item: CartItem = {
       productIndex,
@@ -100,17 +87,10 @@ export default function ProductCard({
       orderType: "once",
     };
     addToCart(item);
-  }
-
-  function handleIncrement() {
-    handleAdd();
-  }
-
-  function handleDecrement() {
-    if (cartIndex < 0) return;
-    const next = cartQty - 1;
-    if (next <= 0) removeFromCart(cartIndex);
-    else updateQty(cartIndex, next);
+    // Fire the fly-to-cart from the button itself so the trail starts
+    // exactly where the user tapped. The floating cart picks up the
+    // landing event and pulses.
+    flyToCart(addBtnRef.current);
   }
 
   const seeds = [
@@ -458,143 +438,47 @@ export default function ProductCard({
               {price}
             </div>
 
-            {cartQty === 0 ? (
-              <button
-                onClick={handleAdd}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(201,169,110,0.1)";
-                  e.currentTarget.style.borderColor = "rgba(201,169,110,0.8)";
-                  e.currentTarget.style.transform = "scale(1.02)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.borderColor = "rgba(201,169,110,0.5)";
-                  e.currentTarget.style.transform = "scale(1)";
-                }}
-                onMouseDown={(e) => {
-                  e.currentTarget.style.transform = "scale(0.98)";
-                }}
-                onMouseUp={(e) => {
-                  e.currentTarget.style.transform = "scale(1.02)";
-                }}
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontSize: 11,
-                  fontWeight: 400,
-                  letterSpacing: "2px",
-                  textTransform: "uppercase",
-                  color: "#c9a96e",
-                  background: "transparent",
-                  border: "0.5px solid rgba(201,169,110,0.5)",
-                  padding: "10px 18px",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  transition:
-                    "background 0.2s, border-color 0.2s, transform 0.1s",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                Add to Cart
-              </button>
-            ) : (
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "stretch",
-                  border: "0.5px solid rgba(201,169,110,0.5)",
-                  borderRadius: 6,
-                  overflow: "hidden",
-                  height: 36,
-                }}
-                aria-label="Quantity in cart"
-              >
-                <button
-                  type="button"
-                  onClick={handleDecrement}
-                  aria-label="Decrement quantity"
-                  style={stepperBtnStyle}
-                >
-                  −
-                </button>
-                <div
-                  style={{
-                    minWidth: 32,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "0 6px",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "#f5f0e8",
-                    background: "rgba(201,169,110,0.08)",
-                  }}
-                  aria-live="polite"
-                >
-                  {cartQty}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleIncrement}
-                  aria-label="Increment quantity"
-                  style={stepperBtnStyle}
-                >
-                  +
-                </button>
-              </div>
-            )}
-          </div>
-
-          {cartQty > 0 ? (
             <button
-              type="button"
-              onClick={() => router.push("/cart")}
+              ref={addBtnRef}
+              onClick={handleAdd}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(201,169,110,0.1)";
+                e.currentTarget.style.borderColor = "rgba(201,169,110,0.8)";
+                e.currentTarget.style.transform = "scale(1.02)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.borderColor = "rgba(201,169,110,0.5)";
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+              onMouseDown={(e) => {
+                e.currentTarget.style.transform = "scale(0.98)";
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.transform = "scale(1.02)";
+              }}
               style={{
-                marginTop: 12,
-                width: "100%",
                 fontFamily: "var(--font-body)",
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 400,
                 letterSpacing: "2px",
                 textTransform: "uppercase",
                 color: "#c9a96e",
                 background: "transparent",
-                border: "0.5px solid rgba(201,169,110,0.35)",
-                padding: "8px 14px",
+                border: "0.5px solid rgba(201,169,110,0.5)",
+                padding: "10px 18px",
                 borderRadius: 6,
                 cursor: "pointer",
-                transition: "background 0.2s, border-color 0.2s",
+                transition:
+                  "background 0.2s, border-color 0.2s, transform 0.1s",
                 WebkitTapHighlightColor: "transparent",
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(201,169,110,0.08)";
-                e.currentTarget.style.borderColor = "rgba(201,169,110,0.65)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.borderColor = "rgba(201,169,110,0.35)";
-              }}
             >
-              View Cart →
+              Add to Cart
             </button>
-          ) : null}
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
-const stepperBtnStyle: React.CSSProperties = {
-  width: 36,
-  fontFamily: "var(--font-body)",
-  fontSize: 18,
-  fontWeight: 400,
-  color: "#c9a96e",
-  background: "transparent",
-  border: "none",
-  borderLeft: "0.5px solid rgba(201,169,110,0.35)",
-  borderRight: "0.5px solid rgba(201,169,110,0.35)",
-  cursor: "pointer",
-  lineHeight: 1,
-  WebkitTapHighlightColor: "transparent",
-};
