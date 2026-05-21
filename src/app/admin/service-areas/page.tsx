@@ -56,6 +56,7 @@ export default function ServiceAreasPage() {
   const [addBusy, setAddBusy] = useState(false);
   const [suggestBusy, setSuggestBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [backfillBusy, setBackfillBusy] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -256,6 +257,47 @@ export default function ServiceAreasPage() {
     }
   };
 
+  const backfillGeocodes = async () => {
+    if (
+      !confirm(
+        "Run one-time geocode backfill for every row missing coords? This calls Google Geocoding once per row (~150ms apart).",
+      )
+    )
+      return;
+    setBackfillBusy(true);
+    try {
+      const res = await adminFetch<{
+        processed: number;
+        geocoded: number;
+        failed: number;
+        failed_rows: { pincode: string; area_name: string }[];
+      }>("/api/admin/service-areas/backfill-geocodes", { method: "POST" });
+      if (res.processed === 0) {
+        showNotice("Nothing to backfill — every row already has coords.");
+      } else if (res.failed === 0) {
+        showNotice(
+          `Backfilled ${res.geocoded}/${res.processed} rows (all succeeded).`,
+        );
+      } else {
+        const sample = res.failed_rows
+          .slice(0, 3)
+          .map((r) => `${r.pincode}/${r.area_name}`)
+          .join(", ");
+        const extra = res.failed_rows.length > 3 ? "…" : "";
+        showNotice(
+          `Backfilled ${res.geocoded}/${res.processed} — ${res.failed} failed (${sample}${extra}). See server logs for details.`,
+        );
+      }
+      await load();
+    } catch (e) {
+      showNotice(
+        e instanceof AdminFetchError ? e.message : "Backfill failed",
+      );
+    } finally {
+      setBackfillBusy(false);
+    }
+  };
+
   const deactivate = async (pincode: string) => {
     if (
       !confirm(
@@ -337,19 +379,35 @@ export default function ServiceAreasPage() {
       title="Areas We Serve"
       subtitle={`${counts.active} active · ${counts.history} paused`}
       actions={
-        <button
-          type="button"
-          onClick={() => void handleRefresh()}
-          disabled={refreshing}
-          className="uppercase"
-          style={{
-            ...primaryBtn,
-            cursor: refreshing ? "wait" : "pointer",
-            opacity: refreshing ? 0.6 : 1,
-          }}
-        >
-          {refreshing ? "Refreshing…" : "Refresh"}
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => void backfillGeocodes()}
+            disabled={backfillBusy}
+            title="One-time: geocode all rows missing latitude/longitude"
+            className="uppercase"
+            style={{
+              ...primaryBtn,
+              cursor: backfillBusy ? "wait" : "pointer",
+              opacity: backfillBusy ? 0.6 : 1,
+            }}
+          >
+            {backfillBusy ? "Backfilling…" : "Backfill geocodes (one-time)"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+            className="uppercase"
+            style={{
+              ...primaryBtn,
+              cursor: refreshing ? "wait" : "pointer",
+              opacity: refreshing ? 0.6 : 1,
+            }}
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
       }
     >
       {notice && (
