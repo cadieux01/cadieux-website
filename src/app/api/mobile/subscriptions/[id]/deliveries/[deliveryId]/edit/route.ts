@@ -3,7 +3,11 @@
 //
 // Rules (mirror the web PATCH endpoint — minus Turnstile):
 //  - Delivery status must be pending_confirmation or confirmed.
-//  - Scheduled date must be ≥24h away (edit cutoff; placement cutoff is 12h, separate).
+//  - Slot must be MORE than 14 h away (canSelfEdit). Within 14 h the
+//    customer must call ADMIN_PHONE — UI surfaces the message; this
+//    endpoint 400s with self_edit_cutoff as defense in depth.
+//  - The NEW slot is re-validated against the 12 h 10 m booking rule —
+//    a self-edit can't shove the delivery into the placement window.
 //  - Rate-limited: 10 edits/day per phone (key: sub-edit:mobile:${phoneLocal}).
 //  - Body: { scheduled_date?, scheduled_time_slot? } — at least one required.
 //  - Ownership verified via customer_id FK (no phone fuzzy-match).
@@ -17,6 +21,13 @@ import {
 } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 import { editRateLimit } from "@/lib/ratelimit";
+import {
+  ADMIN_PHONE,
+  SELF_EDIT_BLOCKED_MESSAGE,
+  canSelfEdit,
+  isValidSlotValue,
+  validateBookingSlot,
+} from "@/lib/delivery-slots";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,19 +36,6 @@ const supabaseAdmin = createClient(
 );
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cadieux.in";
-
-// 14 one-hour slots 06:00..19:00 (HH:MM start). Must stay in sync with
-// lib/timeSlots.ts in the mobile app and the web edit endpoint.
-const ALLOWED_TIME_SLOTS = new Set<string>(
-  Array.from({ length: 14 }, (_, i) => {
-    const h = 6 + i;
-    return `${String(h).padStart(2, "0")}:00`;
-  }),
-);
-
-// Edit cutoff: 24h (operational reroute window).
-// Placement cutoff (12h) is separate — see /api/mobile/subscriptions POST.
-const EDIT_GAP_MS = 24 * 60 * 60 * 1000;
 
 function fail(status: number, error: string, code?: string) {
   return NextResponse.json({ ok: false, error, code }, { status });
@@ -112,19 +110,14 @@ export async function POST(
     return fail(400, "Provide a new date or time slot.", "fields");
   }
 
-  // Validate new date — must be ≥24h in the future.
+  // Structural validation of new values. The 14 h self-edit gate runs
+  // after we read the delivery row (against the *current* slot); the
+  // 12 h 10 m booking gate runs against the *new* slot.
   if (scheduledDate) {
     const d = parseDate(scheduledDate);
     if (!d) return fail(400, "Invalid scheduled_date.", "scheduled_date");
-    if (d.getTime() - Date.now() < EDIT_GAP_MS - 1000) {
-      return fail(
-        400,
-        "New date must be at least 24 hours away.",
-        "scheduled_date",
-      );
-    }
   }
-  if (scheduledSlot && !ALLOWED_TIME_SLOTS.has(scheduledSlot)) {
+  if (scheduledSlot && !isValidSlotValue(scheduledSlot)) {
     return fail(400, "Invalid time slot.", "scheduled_time_slot");
   }
 
@@ -176,13 +169,23 @@ export async function POST(
     );
   }
 
-  // 24h gate on the *current* scheduled date. Within 24h → use change-request.
-  const currentDate = parseDate(delivery.scheduled_date);
-  if (!currentDate || currentDate.getTime() - Date.now() < EDIT_GAP_MS - 1000) {
-    return fail(
-      400,
-      "Within 24 hours of delivery — please send a change request for admin approval.",
-      "too_soon",
+  // 14 h self-edit gate on the *current* delivery. Within 14 h → call
+  // ADMIN_PHONE. UI surfaces the message; we return self_edit_cutoff
+  // here as defense in depth.
+  if (
+    !canSelfEdit(
+      delivery.scheduled_date,
+      delivery.scheduled_time_slot as string | null,
+    )
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: SELF_EDIT_BLOCKED_MESSAGE,
+        code: "self_edit_cutoff",
+        admin_phone: ADMIN_PHONE,
+      },
+      { status: 400 },
     );
   }
 
@@ -191,6 +194,13 @@ export async function POST(
   const oldSlot = delivery.scheduled_time_slot as string | null;
   const finalDate = scheduledDate ?? oldDate;
   const finalSlot = scheduledSlot ?? oldSlot;
+
+  // Re-validate the NEW slot against the 12 h 10 m booking rule — a
+  // self-edit can't shove the delivery into the placement window.
+  if (finalSlot) {
+    const gate = validateBookingSlot(finalDate, finalSlot);
+    if (gate) return fail(gate.status, gate.error, gate.code);
+  }
 
   const stamp = new Date().toLocaleString("en-IN", {
     day: "numeric",

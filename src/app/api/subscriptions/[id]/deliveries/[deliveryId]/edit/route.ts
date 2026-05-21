@@ -1,35 +1,32 @@
 // Customer self-edit for an upcoming delivery. Allowed only when the
-// scheduled delivery is more than ~24 hours away and the delivery is still
-// in pending_confirmation / confirmed. Anything tighter than that must use
-// the change-request flow (admin approval). All gates run server-side; the
-// client `address_source` / `mode` flag is hint-only.
+// scheduled delivery slot is MORE than 14 hours away (per the unified
+// delivery-slot rules) and the delivery is still pending_confirmation /
+// confirmed. Within the 14 h cutoff the customer must call ADMIN_PHONE
+// (UI surfaces the message; this route still 400s with self_edit_cutoff
+// as a defense in depth).
+//
+// On a successful save we also re-validate the NEW slot against the
+// 12 h 10 m booking rule via validateBookingSlot — a customer can't
+// reschedule into the placement window.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { editRateLimit } from "@/lib/ratelimit";
+import {
+  ADMIN_PHONE,
+  SELF_EDIT_BLOCKED_MESSAGE,
+  canSelfEdit,
+  isValidSlotValue,
+  validateBookingSlot,
+} from "@/lib/delivery-slots";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
-
-// Mirrors the dropdown shown on the delivery detail page — 14 one-hour
-// blocks from 6 AM to 8 PM, same shape as the new setup wizard. Server only
-// accepts these exact strings; legacy slot values already in the DB are not
-// validated since we never re-write them unless the user picks a new one.
-const ALLOWED_TIME_SLOTS = new Set<string>(
-  Array.from({ length: 14 }, (_, i) => {
-    const h = 6 + i;
-    const a = String(h).padStart(2, "0");
-    const b = String(h + 1).padStart(2, "0");
-    return `${a}:00-${b}:00`;
-  })
-);
-
-const MS_DAY = 24 * 60 * 60 * 1000;
 
 function parseDate(yyyyMmDd: string): Date | null {
   const [y, m, d] = yyyyMmDd.split("-").map(Number);
@@ -86,21 +83,16 @@ export async function PATCH(
     );
   }
 
-  // 5. Validate the new values structurally.
+  // 5. Validate the new values structurally. The booking-lead check (the
+  //    new slot must be ≥ 12 h 10 m out) runs after we read the delivery
+  //    row, so we can validate both the date and the slot together.
   if (newDate) {
     const d = parseDate(newDate);
     if (!d) {
       return NextResponse.json({ error: "Invalid new_date." }, { status: 400 });
     }
-    // 24h floor on the new date (1s slack for clock skew).
-    if (d.getTime() - Date.now() < MS_DAY - 1000) {
-      return NextResponse.json(
-        { error: "New date must be at least 24 hours away." },
-        { status: 400 }
-      );
-    }
   }
-  if (newSlot && !ALLOWED_TIME_SLOTS.has(newSlot)) {
+  if (newSlot && !isValidSlotValue(newSlot)) {
     return NextResponse.json(
       { error: "Invalid time slot." },
       { status: 400 }
@@ -157,23 +149,38 @@ export async function PATCH(
     );
   }
 
-  // 8. 24h gate on the *current* delivery. Within 24h must use change-request.
-  const scheduled = parseDate(delivery.scheduled_date);
-  if (!scheduled || scheduled.getTime() - Date.now() < MS_DAY - 1000) {
+  // 8. 14 h self-edit gate on the *current* delivery. Within 14 h the
+  //    customer must call ADMIN_PHONE — UI surfaces the message; this
+  //    route 400s with self_edit_cutoff so the client can show the
+  //    fallback even if the UI gate is bypassed.
+  if (!canSelfEdit(delivery.scheduled_date, delivery.scheduled_time_slot)) {
     return NextResponse.json(
       {
-        error:
-          "Within 24 hours of delivery — please send a change request for admin approval.",
+        error: SELF_EDIT_BLOCKED_MESSAGE,
+        code: "self_edit_cutoff",
+        admin_phone: ADMIN_PHONE,
       },
       { status: 400 }
     );
   }
 
-  // 9. Apply update + audit-trail line on admin_notes.
+  // 9. Re-validate the NEW slot against the 12 h 10 m booking rule —
+  //    a self-edit can't shove the delivery into the placement window.
   const oldDate = delivery.scheduled_date;
   const oldSlot = delivery.scheduled_time_slot;
   const finalDate = newDate ?? oldDate;
   const finalSlot = newSlot ?? oldSlot;
+  if (finalSlot) {
+    const gate = validateBookingSlot(finalDate, finalSlot);
+    if (gate) {
+      return NextResponse.json(
+        { error: gate.error, code: gate.code },
+        { status: gate.status }
+      );
+    }
+  }
+
+  // 10. Apply update + audit-trail line on admin_notes.
 
   const stamp = new Date().toLocaleString("en-IN", {
     day: "numeric",

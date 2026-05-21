@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import { GOLD, formatDate } from "@/lib/subscription-ui";
 import { TIME_SLOTS, formatSlot } from "@/lib/subscription-setup";
+import { ADMIN_PHONE, canSelfEdit } from "@/lib/delivery-slots";
 
 type Delivery = {
   id: string;
@@ -35,7 +36,6 @@ type ChangeRequest = {
 
 const BG = "#0e0e0e";
 const FADED = "#f5f0e8";
-const MS_DAY = 86_400_000;
 const REASON_MAX = 200;
 
 const STEPS = [
@@ -70,8 +70,11 @@ function parseDate(yyyyMmDd: string): Date | null {
   return new Date(y, m - 1, d);
 }
 
-/** Three-way classification driving which UI affordance the user sees. */
-type EditMode = "direct" | "request" | "terminal";
+/** Three-way classification driving which UI affordance the user sees.
+ *  - direct      → can self-edit (slot > 14 h away)
+ *  - call_admin  → within 14 h cutoff; must call ADMIN_PHONE
+ *  - terminal    → already shipped / delivered / cancelled */
+type EditMode = "direct" | "call_admin" | "terminal";
 
 function classifyEdit(delivery: Delivery): EditMode {
   if (
@@ -81,9 +84,12 @@ function classifyEdit(delivery: Delivery): EditMode {
   ) {
     return "terminal";
   }
-  const sched = parseDate(delivery.scheduled_date);
-  const tooSoon = sched ? sched.getTime() - Date.now() < MS_DAY : true;
-  return tooSoon ? "request" : "direct";
+  // Slot-aware 14 h gate via the unified delivery-slots lib. Treats a
+  // missing slot as "start of the day" so defensive UI still allows
+  // self-edit when the stored row has no slot yet.
+  return canSelfEdit(delivery.scheduled_date, delivery.scheduled_time_slot)
+    ? "direct"
+    : "call_admin";
 }
 
 export default function DeliveryDetailPage() {
@@ -232,12 +238,10 @@ export default function DeliveryDetailPage() {
         />
       )}
 
-      {!isCancelled && mode === "request" && (
-        <ChangeRequestPanel
-          deliveryId={delivery.id}
+      {!isCancelled && mode === "call_admin" && (
+        <CallAdminPanel
           pendingCR={pendingCR}
           lastResolvedCR={lastResolvedCR}
-          onSubmitted={fetchData}
         />
       )}
 
@@ -385,8 +389,10 @@ function DirectEditPanel({
   const [turnstileToken, setTurnstileToken] = useState("");
   const turnstileRef = useRef<TurnstileHandle>(null);
 
+  // Today (IST) is allowed — server's 12 h 10 m booking gate decides per
+  // slot whether the chosen date+slot is acceptable.
   const minDate = useMemo(() => {
-    const t = new Date(Date.now() + MS_DAY);
+    const t = new Date();
     const yyyy = t.getFullYear();
     const mm = String(t.getMonth() + 1).padStart(2, "0");
     const dd = String(t.getDate()).padStart(2, "0");
@@ -409,8 +415,8 @@ function DirectEditPanel({
     }
     if (date) {
       const d = parseDate(date);
-      if (!d || d.getTime() - Date.now() < MS_DAY - 1000) {
-        setErr("New date must be at least 24 hours away.");
+      if (!d) {
+        setErr("Invalid date.");
         return;
       }
     }
@@ -482,7 +488,7 @@ function DirectEditPanel({
       </button>
 
       <div style={{ marginTop: 8, fontSize: 12, color: "rgba(240,223,200,0.5)" }}>
-        Changes apply instantly while you&apos;re more than 24 hours out.
+        Changes apply instantly while you&apos;re more than 14 hours out.
       </div>
 
       {open && (
@@ -575,281 +581,90 @@ function DirectEditPanel({
   );
 }
 
-/** Fallback panel — used when delivery is < 24h away. Routes through the
- *  existing change-request flow (admin must approve). */
-function ChangeRequestPanel({
-  deliveryId,
+/** Fallback panel — used when the delivery slot is ≤ 14 h away. The
+ *  customer can no longer self-edit; they must call ADMIN_PHONE. Any
+ *  existing pending or resolved change-requests are still surfaced for
+ *  history. */
+function CallAdminPanel({
   pendingCR,
   lastResolvedCR,
-  onSubmitted,
 }: {
-  deliveryId: string;
   pendingCR: ChangeRequest | null;
   lastResolvedCR: ChangeRequest | null;
-  onSubmitted: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [date, setDate] = useState("");
-  const [slot, setSlot] = useState("");
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const minDate = useMemo(() => {
-    const t = new Date(Date.now() + MS_DAY);
-    const yyyy = t.getFullYear();
-    const mm = String(t.getMonth() + 1).padStart(2, "0");
-    const dd = String(t.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }, []);
-
-  async function submit() {
-    setErr("");
-    if (!date && !slot) {
-      setErr("Pick a new date or a new time slot.");
-      return;
-    }
-    if (date) {
-      const d = parseDate(date);
-      if (!d || d.getTime() - Date.now() < MS_DAY - 1000) {
-        setErr("New date must be at least 24 hours away.");
-        return;
-      }
-    }
-    if (reason.length > REASON_MAX) {
-      setErr(`Reason must be ${REASON_MAX} characters or fewer.`);
-      return;
-    }
-    setBusy(true);
-    try {
-      const r = await fetch("/api/subscriptions/change-request", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          delivery_id: deliveryId,
-          requested_date: date || null,
-          requested_time_slot: slot || null,
-          reason: reason || null,
-        }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error ?? "Failed");
-      setDate("");
-      setSlot("");
-      setReason("");
-      setOpen(false);
-      onSubmitted();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (pendingCR) {
-    return (
-      <div
-        style={{
-          marginTop: 12,
-          padding: "16px 18px",
-          background: "rgba(227,179,65,0.06)",
-          border: "1px solid rgba(227,179,65,0.4)",
-          borderRadius: 12,
-        }}
-      >
-        <div
-          style={{
-            display: "inline-block",
-            padding: "4px 10px",
-            borderRadius: 999,
-            fontSize: 11,
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            color: "#e3b341",
-            border: "1px solid #e3b341",
-            marginBottom: 10,
-          }}
-        >
-          Change request pending
-        </div>
-        <div style={{ fontSize: 13, color: "rgba(240,223,200,0.75)" }}>
-          {pendingCR.requested_date && (
-            <div>New date: {formatDate(pendingCR.requested_date)}</div>
-          )}
-          {pendingCR.requested_time_slot && (
-            <div>New time slot: {pendingCR.requested_time_slot}</div>
-          )}
-          {pendingCR.reason && (
-            <div style={{ marginTop: 6, fontStyle: "italic", color: "rgba(240,223,200,0.6)" }}>
-              &ldquo;{pendingCR.reason}&rdquo;
-            </div>
-          )}
-        </div>
-        <div style={{ marginTop: 10, fontSize: 12, color: "rgba(240,223,200,0.5)" }}>
-          We&apos;ll review and update this delivery shortly.
-        </div>
-      </div>
-    );
-  }
-
+  const telHref = `tel:${ADMIN_PHONE.replace(/[^+\d]/g, "")}`;
   return (
     <div style={{ marginTop: 12 }}>
-      {lastResolvedCR && (
-        <div
-          style={{
-            marginBottom: 16,
-            padding: "12px 16px",
-            borderRadius: 10,
-            border: `1px solid ${
-              lastResolvedCR.status === "approved" ? "rgba(123,216,143,0.4)" : "rgba(255,129,129,0.4)"
-            }`,
-            background:
-              lastResolvedCR.status === "approved"
-                ? "rgba(123,216,143,0.06)"
-                : "rgba(255,129,129,0.05)",
-            fontSize: 13,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              color: lastResolvedCR.status === "approved" ? "#7bd88f" : "#ff8181",
-              marginBottom: 6,
-            }}
-          >
-            Previous request {lastResolvedCR.status}
-          </div>
-          {lastResolvedCR.admin_response && (
-            <div style={{ color: "rgba(240,223,200,0.75)" }}>
-              {lastResolvedCR.admin_response}
-            </div>
-          )}
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
+      <div
         style={{
-          width: "100%",
-          padding: "14px 18px",
-          background: "rgba(201,169,110,0.08)",
+          padding: "20px 22px",
           border: `1px solid ${GOLD}`,
+          background: "rgba(201,169,110,0.08)",
           borderRadius: 12,
-          color: GOLD,
-          fontSize: 14,
-          letterSpacing: "0.05em",
-          textTransform: "uppercase",
-          cursor: "pointer",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          fontFamily: "inherit",
+          color: FADED,
+          lineHeight: 1.55,
         }}
       >
-        <span>Request a change</span>
-        <span style={{ fontSize: 18 }}>{open ? "▴" : "▾"}</span>
-      </button>
-
-      <div style={{ marginTop: 8, fontSize: 12, color: "rgba(240,223,200,0.5)" }}>
-        Within 24 hours of delivery — admin needs to approve the change.
+        <div
+          style={{
+            fontSize: 11,
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            color: GOLD,
+            marginBottom: 8,
+          }}
+        >
+          Within 14 hours of delivery
+        </div>
+        <div style={{ fontSize: 14, marginBottom: 12 }}>
+          To change a delivery within 14 hours, please call us at{" "}
+          <a
+            href={telHref}
+            style={{ color: GOLD, textDecoration: "underline" }}
+          >
+            {ADMIN_PHONE}
+          </a>
+          .
+        </div>
+        <div style={{ fontSize: 12, color: "rgba(240,223,200,0.55)" }}>
+          Need same-day changes? A quick call is faster — we&apos;ll update
+          your delivery on the spot.
+        </div>
       </div>
-
-      {open && (
+      {pendingCR ? (
         <div
           style={{
             marginTop: 12,
-            padding: 18,
-            border: "1px solid rgba(240,223,200,0.12)",
+            padding: "12px 16px",
+            background: "rgba(227,179,65,0.06)",
+            border: "1px solid rgba(227,179,65,0.4)",
             borderRadius: 12,
-            background: "rgba(255,255,255,0.025)",
-            display: "grid",
-            gap: 14,
+            fontSize: 13,
+            color: "rgba(240,223,200,0.85)",
           }}
         >
-          <Field label="New date">
-            <input
-              type="date"
-              value={date}
-              min={minDate}
-              onChange={(e) => setDate(e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-          <Field label="New time slot">
-            <select
-              value={slot}
-              onChange={(e) => setSlot(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="">— Same as before —</option>
-              {TIME_SLOTS.map((t) => (
-                <option key={t} value={t}>
-                  {formatSlot(t)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label={`Reason (optional, ${reason.length}/${REASON_MAX})`}>
-            <textarea
-              value={reason}
-              onChange={(e) =>
-                setReason(e.target.value.slice(0, REASON_MAX))
-              }
-              rows={3}
-              maxLength={REASON_MAX}
-              style={{ ...inputStyle, fontFamily: "inherit", resize: "vertical" }}
-            />
-          </Field>
-
-          {err && <div style={{ color: "#ff9b9b", fontSize: 13 }}>{err}</div>}
-
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                setErr("");
-              }}
-              style={{
-                padding: "10px 18px",
-                background: "transparent",
-                border: "1px solid rgba(240,223,200,0.25)",
-                borderRadius: 999,
-                color: "#FBF3D4",
-                fontSize: 13,
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={submit}
-              disabled={busy}
-              style={{
-                padding: "10px 22px",
-                background: GOLD,
-                border: "none",
-                borderRadius: 999,
-                color: "#0a0a0a",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: busy ? "not-allowed" : "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              {busy ? "Sending…" : "Submit request"}
-            </button>
-          </div>
+          A change request from{" "}
+          {new Date(pendingCR.created_at).toLocaleString("en-IN")} is pending.
         </div>
-      )}
+      ) : lastResolvedCR ? (
+        <div
+          style={{
+            marginTop: 12,
+            padding: "12px 16px",
+            background: "rgba(255,255,255,0.025)",
+            border: "1px solid rgba(240,223,200,0.12)",
+            borderRadius: 12,
+            fontSize: 12,
+            color: "rgba(240,223,200,0.55)",
+          }}
+        >
+          Previous request was {lastResolvedCR.status}.
+        </div>
+      ) : null}
     </div>
   );
 }
+
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
