@@ -2,6 +2,7 @@
 // pages. Pure functions + sessionStorage I/O — no React.
 
 import { DAY_KEYS, type DayKey } from "./subscription-dates";
+import { SLOTS, formatSlotForDisplay } from "./delivery-slots";
 
 export type ProductSlug = "multigrain" | "high-protein";
 
@@ -69,31 +70,17 @@ export async function fetchSubscriptionPlans(): Promise<WizardProduct[]> {
   }
 }
 
-/** 14 one-hour slots from 6 AM to 8 PM, e.g. "06:00-07:00". */
-export const TIME_SLOTS: string[] = (() => {
-  const out: string[] = [];
-  for (let h = 6; h < 20; h++) {
-    const a = String(h).padStart(2, "0");
-    const b = String(h + 1).padStart(2, "0");
-    out.push(`${a}:00-${b}:00`);
-  }
-  return out;
-})();
+/** Canonical 30-minute slot START values ("HH:MM"). 29 entries:
+ *  07:30, 08:00, …, 21:00. The previous "HH:MM-HH:MM" 1-hour windows
+ *  are still rendered correctly by `formatSlot()` for legacy rows. */
+export const TIME_SLOTS: string[] = SLOTS.map((s) => s.value);
 
-/** Pretty 1-hour slot label, e.g. "06:00-07:00" → "6 – 7 AM". */
+/** Pretty label for ANY stored slot value:
+ *    - New "HH:MM"          → "7:30 AM"
+ *    - Legacy "HH:MM-HH:MM" → "6 – 7 AM"   (preserved for legacy rows)
+ *  Delegates to the unified `formatSlotForDisplay` in delivery-slots.ts. */
 export function formatSlot(slot: string): string {
-  const [a, b] = slot.split("-");
-  const h1 = parseInt(a, 10);
-  const h2 = parseInt(b, 10);
-  const fmt = (h: number) => {
-    const ampm = h < 12 ? "AM" : "PM";
-    const hh = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    return { hh, ampm };
-  };
-  const f1 = fmt(h1);
-  const f2 = fmt(h2);
-  if (f1.ampm === f2.ampm) return `${f1.hh} – ${f2.hh} ${f2.ampm}`;
-  return `${f1.hh} ${f1.ampm} – ${f2.hh} ${f2.ampm}`;
+  return formatSlotForDisplay(slot);
 }
 
 // ── Date primitives ──────────────────────────────────────────────────────

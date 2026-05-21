@@ -1,71 +1,61 @@
-// Helpers for one-shot order delivery date/slot selection.
+// Legacy entry-point for one-off order delivery helpers. The canonical
+// implementation now lives in `delivery-slots.ts` — this file re-exports
+// the unified API under the old names so callers (checkout page + API
+// routes) compile unchanged while the new rules take effect:
 //
-// We offer two date choices — tomorrow (IST) and the day after — and
-// 14 one-hour slots from 06:00 to 19:00. Slots are stored as single
-// hour-strings ("06:00".."19:00") so they're trivially comparable;
-// `formatSlot12` renders the customer-facing 12-hour label.
+//   - 30-min slots from 7:30 AM to 9:00 PM
+//   - 12 h 10 m booking lead, IST-aware
+//   - "today + future" date list (was tomorrow / day-after only)
 //
-// IMPORTANT: dates are always computed in Asia/Kolkata regardless of
-// the server clock, so a Vercel function running in any region still
-// shows the same "tomorrow" as our customers see.
+// New code should import from "@/lib/delivery-slots" directly.
 
-/** Single-hour slots: "06:00" .. "19:00" (14 entries). */
-export const ORDER_DELIVERY_SLOTS: string[] = (() => {
-  const out: string[] = [];
-  for (let h = 6; h <= 19; h++) {
-    out.push(`${String(h).padStart(2, "0")}:00`);
-  }
-  return out;
-})();
+import {
+  SLOTS,
+  isIsoDate,
+  isValidSlotValue,
+  dateHasAnyBookable,
+  nextDeliveryDates,
+  formatSlotForDisplay,
+  todayIst,
+} from "./delivery-slots";
 
-/** Pretty 12-hour label, e.g. "06:00" → "6:00 AM". */
+/** All bookable 30-min slot START values (24-hour "HH:MM"). 29 entries. */
+export const ORDER_DELIVERY_SLOTS: string[] = SLOTS.map((s) => s.value);
+
+/** Pretty 12-hour label for a stored "HH:MM" slot value (or legacy range). */
 export function formatSlot12(slot: string): string {
-  const h = parseInt(slot.slice(0, 2), 10);
-  if (Number.isNaN(h)) return slot;
-  const ampm = h < 12 ? "AM" : "PM";
-  const hh = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${hh}:00 ${ampm}`;
+  return formatSlotForDisplay(slot);
 }
 
-/** Returns "yyyy-mm-dd" in Asia/Kolkata regardless of server TZ. */
-function istIsoDate(d: Date): string {
-  // en-CA produces ISO yyyy-mm-dd directly.
-  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-}
-
-/** Returns today's date (in IST) as a midnight-anchored Date. */
-function istNow(): Date {
-  return new Date();
-}
-
-/** "Tomorrow" and "Day after" in IST, ISO yyyy-mm-dd. */
+/** "Tomorrow" and "Day after" in IST — preserved for callers that still
+ *  ask for exactly two date choices. The full date list lives in
+ *  `nextDeliveryDates()` (today + future, 12h10m-aware). */
 export function getOrderDeliveryDateOptions(): { tomorrow: string; dayAfter: string } {
-  const now = istNow();
-  // Build a Date that represents IST midnight today by reading the
-  // IST date and adding 1 / 2 calendar days.
-  const todayIso = istIsoDate(now); // yyyy-mm-dd in IST
-  const [y, m, d] = todayIso.split("-").map((s) => parseInt(s, 10));
-  const base = new Date(Date.UTC(y, m - 1, d));
-  const tomorrow = new Date(base);
-  tomorrow.setUTCDate(base.getUTCDate() + 1);
-  const dayAfter = new Date(base);
-  dayAfter.setUTCDate(base.getUTCDate() + 2);
+  const dates = nextDeliveryDates(7);
+  // First entry may be "today" if at least one same-day slot still
+  // qualifies. To preserve legacy two-pill semantics we pick the first
+  // entry that is strictly later than today, then the next one.
+  const today = todayIst();
+  const future = dates.filter((d) => d > today);
   return {
-    tomorrow: tomorrow.toISOString().slice(0, 10),
-    dayAfter: dayAfter.toISOString().slice(0, 10),
+    tomorrow: future[0] ?? dates[1] ?? dates[0] ?? today,
+    dayAfter: future[1] ?? future[0] ?? dates[1] ?? today,
   };
 }
 
-/** Returns true if `iso` is one of the two acceptable delivery dates. */
+/** Returns true if `iso` is a yyyy-mm-dd that has at least one bookable
+ *  slot from now (IST). Today is acceptable if a same-day slot still
+ *  satisfies the 12h10m rule; otherwise only future dates are accepted. */
 export function isAcceptableDeliveryDate(iso: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
-  const { tomorrow, dayAfter } = getOrderDeliveryDateOptions();
-  return iso === tomorrow || iso === dayAfter;
+  if (!isIsoDate(iso)) return false;
+  // Don't accept anything strictly before IST-today.
+  if (iso < todayIst()) return false;
+  return dateHasAnyBookable(iso);
 }
 
-/** Returns true if `slot` is one of the 14 hour-strings. */
+/** Returns true if `slot` is one of the 29 canonical "HH:MM" slot values. */
 export function isAcceptableDeliverySlot(slot: string): boolean {
-  return ORDER_DELIVERY_SLOTS.includes(slot);
+  return isValidSlotValue(slot);
 }
 
 /** Pretty label for a delivery date, e.g. "Tue, 19 May 2026". */

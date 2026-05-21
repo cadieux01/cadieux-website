@@ -25,6 +25,7 @@ import {
   isAcceptableDeliveryDate,
   isAcceptableDeliverySlot,
 } from "@/lib/order-delivery";
+import { validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 
 const supabaseAdmin = createClient(
@@ -137,6 +138,19 @@ export async function POST(req: NextRequest) {
       );
     }
     deliverySlot = rawObj.delivery_slot;
+  }
+  // 12 h 10 m booking lead — server-side source of truth. Applies only
+  // when BOTH date and slot are provided (legacy app builds that omit
+  // them still null-write — see comment block above). The mobile app
+  // now always sends both.
+  if (deliveryDate && deliverySlot) {
+    const gate = validateBookingSlot(deliveryDate, deliverySlot);
+    if (gate) {
+      return NextResponse.json(
+        { ok: false, error: gate.error, code: gate.code },
+        { status: gate.status },
+      );
+    }
   }
 
   // 5. Server-side price validation. Re-fetch authoritative product rows.

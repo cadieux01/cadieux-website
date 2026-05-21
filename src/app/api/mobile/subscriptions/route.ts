@@ -79,10 +79,12 @@ const CAL_DAYS_AHEAD_MAX = 90;
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// Placement gap: slot must be at least 12 h from now (bake + ship lead time).
-// NOTE: This is for NEW order placement. The edit cutoff (24 h) is separate
-// and lives in /api/mobile/subscriptions/[id]/deliveries/[deliveryId]/edit.
-const PLACEMENT_GAP_MS = 12 * 60 * 60 * 1000;
+// Placement gap: slot must be at least 12 h 10 m from now (bake + ship
+// lead time). NOTE: This is for NEW order placement. The edit cutoff
+// (14 h, customer self-edit) is separate and lives in
+// /api/mobile/subscriptions/[id]/deliveries/[deliveryId]/edit.
+// Source of truth is BOOKING_LEAD_MINUTES in @/lib/delivery-slots.
+const PLACEMENT_GAP_MS = 730 * 60 * 1000;
 // IST is UTC+5:30. Used for IST-aware slot-start calculation.
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
@@ -447,8 +449,8 @@ function validateCalendarShape(
       return {
         ok: false,
         status: 400,
-        error: `deliveries[${i}].time_slot is too soon — allow at least 12 hours for baking and shipping.`,
-        code: "placement_gap",
+        error: `deliveries[${i}].time_slot is too soon — orders need 12 h 10 m to bake and ship.`,
+        code: "slot_too_soon",
       };
     }
 

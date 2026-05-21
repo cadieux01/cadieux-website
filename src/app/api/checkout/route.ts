@@ -13,6 +13,7 @@ import {
   isAcceptableDeliveryDate,
   isAcceptableDeliverySlot,
 } from "@/lib/order-delivery";
+import { validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
       typeof body.delivery_slot === "string" ? body.delivery_slot : "";
     if (!isAcceptableDeliveryDate(deliveryDate)) {
       return NextResponse.json(
-        { error: "Please pick a delivery date (tomorrow or day-after IST)." },
+        { error: "Please pick a delivery date with at least one bookable slot." },
         { status: 400 },
       );
     }
@@ -150,6 +151,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Please pick a delivery time slot." },
         { status: 400 },
+      );
+    }
+    // 12 h 10 m booking lead — server-side source of truth.
+    // The client greys disabled slots; this is the gate that actually
+    // refuses the order when a tampered or stale slot slips through.
+    const slotGate = validateBookingSlot(deliveryDate, deliverySlot);
+    if (slotGate) {
+      return NextResponse.json(
+        { error: slotGate.error, code: slotGate.code },
+        { status: slotGate.status },
       );
     }
 
@@ -475,6 +486,28 @@ export async function POST(req: NextRequest) {
           scheduled_time_slot: slotForDay,
         };
       });
+    }
+
+    // 12 h 10 m booking lead — applied to the FIRST upcoming delivery
+    // only. Subsequent weekly deliveries are by definition far enough
+    // away to satisfy the rule. Skips when the delivery list is empty
+    // (we'll fail below on the count check anyway).
+    {
+      const firstReal = deliveryTemplate
+        .map((d) => ({
+          date: d.delivery_date,
+          slot: d.slot ?? d.scheduled_time_slot ?? null,
+        }))
+        .find((d) => !!d.slot);
+      if (firstReal && firstReal.slot) {
+        const gate = validateBookingSlot(firstReal.date, firstReal.slot);
+        if (gate) {
+          return NextResponse.json(
+            { error: gate.error, code: gate.code },
+            { status: gate.status },
+          );
+        }
+      }
     }
 
     // Server-side price validation. The plan id (bread_slug) is looked up
