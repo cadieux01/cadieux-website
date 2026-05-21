@@ -40,8 +40,8 @@ export const BOOKING_LEAD_MINUTES = 730;
  *  cannot self-edit and must call ADMIN_PHONE. */
 export const SELF_EDIT_CUTOFF_MINUTES = 840;
 
-/** Customer-facing number for sub-cutoff edits. Owner: replace before prod. */
-export const ADMIN_PHONE = "+91-XXXXXXXXXX";
+/** Customer-facing number for sub-cutoff edits. */
+export const ADMIN_PHONE = "+91-7093403747";
 
 /** Human-readable timezone used in calculations. */
 export const IST_TZ = "Asia/Kolkata";
