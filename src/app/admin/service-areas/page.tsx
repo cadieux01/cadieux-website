@@ -58,6 +58,12 @@ export default function ServiceAreasPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
 
+  // Bulk import modal state
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const [bulkImportText, setBulkImportText] = useState("");
+  const [bulkImportBusy, setBulkImportBusy] = useState(false);
+  const [bulkImportError, setBulkImportError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -257,6 +263,124 @@ export default function ServiceAreasPage() {
     }
   };
 
+  // Parse pasted lines into { pincode, area_name? } entries + tally
+  // invalid lines. Tolerates blank lines and trims surrounding
+  // whitespace; splits on the first tab or comma so commas inside the
+  // area_name survive (e.g. "530017, MVP Colony, Block A" becomes
+  // pincode 530017 with area "MVP Colony, Block A").
+  const parsedBulk = useMemo(() => {
+    const text = bulkImportText;
+    if (!text.trim()) {
+      return {
+        entries: [] as { pincode: string; area_name: string }[],
+        invalidLines: [] as string[],
+        newCount: 0,
+        existingCount: 0,
+        invalidCount: 0,
+      };
+    }
+
+    // Existing (pincode, area_name) pairs — used to bucket each parsed
+    // entry into "new" vs "already exists" for the preview.
+    const existingKeys = new Set(
+      rows.map((r) => `${r.pincode}|${r.area_name.toLowerCase()}`),
+    );
+
+    const entries: { pincode: string; area_name: string }[] = [];
+    const invalidLines: string[] = [];
+    const seenInPaste = new Set<string>();
+    let existingCount = 0;
+
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      // Split on the first tab or comma only.
+      const splitIdx = (() => {
+        const t = line.indexOf("\t");
+        const c = line.indexOf(",");
+        if (t === -1) return c;
+        if (c === -1) return t;
+        return Math.min(t, c);
+      })();
+      const rawPincode = splitIdx === -1 ? line : line.slice(0, splitIdx);
+      const rawArea = splitIdx === -1 ? "" : line.slice(splitIdx + 1);
+
+      const pincode = rawPincode.replace(/\D/g, "");
+      if (!/^\d{6}$/.test(pincode)) {
+        invalidLines.push(line);
+        continue;
+      }
+
+      const area_name = (rawArea.trim() || "Vizag").slice(0, 80);
+      const key = `${pincode}|${area_name.toLowerCase()}`;
+
+      // Skip in-paste duplicates silently — same as the server does.
+      if (seenInPaste.has(key)) continue;
+      seenInPaste.add(key);
+
+      if (existingKeys.has(key)) {
+        existingCount++;
+        continue;
+      }
+      entries.push({ pincode, area_name });
+    }
+
+    return {
+      entries,
+      invalidLines,
+      newCount: entries.length,
+      existingCount,
+      invalidCount: invalidLines.length,
+    };
+  }, [bulkImportText, rows]);
+
+  const submitBulkImport = async () => {
+    setBulkImportError(null);
+    if (parsedBulk.entries.length === 0) {
+      setBulkImportError(
+        "Nothing to import — all lines are either duplicates or invalid.",
+      );
+      return;
+    }
+    setBulkImportBusy(true);
+    try {
+      const res = await adminFetch<{
+        added: number;
+        geocoded: number;
+        geocode_failed: number;
+        skipped_existing: number;
+        invalid: number;
+      }>("/api/admin/service-areas/bulk-import", {
+        method: "POST",
+        body: JSON.stringify({ entries: parsedBulk.entries }),
+      });
+      const skipped = res.skipped_existing + parsedBulk.existingCount;
+      const parts = [
+        `Added ${res.added}`,
+        `${res.geocoded} geocoded`,
+      ];
+      if (res.geocode_failed > 0) {
+        parts.push(`${res.geocode_failed} pending coords`);
+      }
+      if (skipped > 0) {
+        parts.push(`${skipped} skipped (existing)`);
+      }
+      if (parsedBulk.invalidCount > 0) {
+        parts.push(`${parsedBulk.invalidCount} invalid lines`);
+      }
+      showNotice(parts.join(" · "));
+      setBulkImportOpen(false);
+      setBulkImportText("");
+      await load();
+    } catch (e) {
+      setBulkImportError(
+        e instanceof AdminFetchError ? e.message : "Bulk import failed",
+      );
+    } finally {
+      setBulkImportBusy(false);
+    }
+  };
+
   const backfillGeocodes = async () => {
     if (
       !confirm(
@@ -380,6 +504,15 @@ export default function ServiceAreasPage() {
       subtitle={`${counts.active} active · ${counts.history} paused`}
       actions={
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => setBulkImportOpen(true)}
+            title="Paste many pincodes/areas at once"
+            className="uppercase"
+            style={primaryBtn}
+          >
+            Bulk Import
+          </button>
           <button
             type="button"
             onClick={() => void backfillGeocodes()}
@@ -889,6 +1022,248 @@ export default function ServiceAreasPage() {
                 }}
               >
                 {bulkBusy ? "Working…" : "Deactivate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk import modal */}
+      {bulkImportOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !bulkImportBusy && setBulkImportOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 400,
+            background: "rgba(0,0,0,0.65)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "rgb(6,4,2)",
+              border: `1px solid ${BORDER}`,
+              borderRadius: 8,
+              maxWidth: 640,
+              width: "100%",
+              fontFamily: "var(--font-body)",
+              color: CREAM,
+              display: "flex",
+              flexDirection: "column",
+              maxHeight: "min(90vh, calc(100dvh - 2rem))",
+              minHeight: 0,
+              overflow: "hidden",
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                flexShrink: 0,
+                padding: "1.25rem 1.5rem 1rem",
+                background: "rgb(6,4,2)",
+                borderBottom: `1px solid ${BORDER}`,
+              }}
+            >
+              <h3
+                className="uppercase"
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-heading)",
+                  fontWeight: 300,
+                  fontSize: "1.1rem",
+                  letterSpacing: "0.18em",
+                  color: CREAM,
+                }}
+              >
+                Bulk import pincodes
+              </h3>
+              <p
+                style={{
+                  margin: "0.5rem 0 0",
+                  fontSize: "0.75rem",
+                  color: FADED,
+                  lineHeight: 1.5,
+                }}
+              >
+                Paste pincodes from a verified source like India Post
+                (indiapost.gov.in). One per line, optionally{" "}
+                <span style={{ color: CREAM }}>pincode, area name</span>.
+                Missing area names default to &ldquo;Vizag&rdquo;.
+              </p>
+            </div>
+
+            {/* Body */}
+            <div
+              style={{
+                flex: "1 1 auto",
+                minHeight: 0,
+                overflowY: "auto",
+                WebkitOverflowScrolling: "touch",
+                padding: "1rem 1.5rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              <textarea
+                value={bulkImportText}
+                onChange={(e) => setBulkImportText(e.target.value)}
+                placeholder={
+                  "530001\n530002, Dabagardens\n530017, MVP Colony"
+                }
+                spellCheck={false}
+                rows={12}
+                style={{
+                  ...inputBase,
+                  width: "100%",
+                  resize: "vertical",
+                  minHeight: 200,
+                  fontFamily: "var(--font-mono, ui-monospace, monospace)",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  whiteSpace: "pre",
+                }}
+              />
+
+              {/* Preview counts — only meaningful once the operator has
+                  pasted something. */}
+              {bulkImportText.trim().length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 10,
+                    padding: "10px 12px",
+                    background: "rgba(245,158,11,0.06)",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 6,
+                    fontSize: 12,
+                  }}
+                >
+                  <span style={{ color: "#bbf7d0" }}>
+                    Will add <strong>{parsedBulk.newCount}</strong> new
+                    {parsedBulk.newCount === 1 ? " area" : " areas"}
+                  </span>
+                  <span style={{ color: FADED }}>·</span>
+                  <span style={{ color: FADED }}>
+                    {parsedBulk.existingCount} already exist
+                  </span>
+                  <span style={{ color: FADED }}>·</span>
+                  <span
+                    style={{
+                      color:
+                        parsedBulk.invalidCount > 0 ? "#ef4444" : FADED,
+                    }}
+                  >
+                    {parsedBulk.invalidCount} invalid line
+                    {parsedBulk.invalidCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+              )}
+
+              {/* Surface up to a handful of bad lines so the operator
+                  can spot typos without scrolling the textarea. */}
+              {parsedBulk.invalidLines.length > 0 && (
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "rgba(239,68,68,0.85)",
+                    fontFamily: "var(--font-mono, ui-monospace, monospace)",
+                    background: "rgba(239,68,68,0.05)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                    borderRadius: 6,
+                    padding: "8px 10px",
+                    maxHeight: 120,
+                    overflowY: "auto",
+                  }}
+                >
+                  <div
+                    className="uppercase"
+                    style={{
+                      letterSpacing: "0.2em",
+                      fontSize: 10,
+                      marginBottom: 4,
+                      color: "#ef4444",
+                    }}
+                  >
+                    Invalid lines (skipped)
+                  </div>
+                  {parsedBulk.invalidLines.slice(0, 10).map((l, i) => (
+                    <div key={i}>{l || "(blank)"}</div>
+                  ))}
+                  {parsedBulk.invalidLines.length > 10 && (
+                    <div style={{ opacity: 0.7 }}>
+                      …and {parsedBulk.invalidLines.length - 10} more
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {bulkImportError && (
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#ef4444",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 12,
+                  }}
+                >
+                  {bulkImportError}
+                </p>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                flexShrink: 0,
+                padding: "1rem 1.5rem 1.25rem",
+                background: "rgb(6,4,2)",
+                borderTop: `1px solid ${BORDER}`,
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setBulkImportOpen(false);
+                  setBulkImportError(null);
+                }}
+                disabled={bulkImportBusy}
+                className="uppercase"
+                style={{
+                  ...primaryBtn,
+                  color: FADED,
+                  borderColor: "rgba(192,200,206,0.4)",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitBulkImport()}
+                disabled={bulkImportBusy || parsedBulk.newCount === 0}
+                className="uppercase"
+                style={{
+                  ...primaryBtn,
+                  cursor: bulkImportBusy ? "wait" : "pointer",
+                  opacity:
+                    bulkImportBusy || parsedBulk.newCount === 0 ? 0.6 : 1,
+                }}
+              >
+                {bulkImportBusy
+                  ? "Importing…"
+                  : `Import ${parsedBulk.newCount} area${parsedBulk.newCount === 1 ? "" : "s"}`}
               </button>
             </div>
           </div>
