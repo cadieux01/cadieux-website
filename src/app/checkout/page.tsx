@@ -14,11 +14,11 @@ import { useCart } from "@/context/CartContext";
 import { PRODUCTS } from "@/lib/data";
 import { DELIVERY_FEE_INR } from "@/lib/order-validation";
 import {
-  ORDER_DELIVERY_SLOTS,
   formatSlot12,
   formatDeliveryDate,
   getOrderDeliveryDateOptions,
 } from "@/lib/order-delivery";
+import { bookableSlots } from "@/lib/delivery-slots";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 
 const GRAIN = "url(/grain.svg)";
@@ -130,6 +130,17 @@ export default function CheckoutPage() {
   );
   const [deliveryDate, setDeliveryDate] = useState<string>(tomorrowIso);
   const [deliverySlot, setDeliverySlot] = useState<string>("");
+
+  // If the currently-picked slot is no longer bookable (e.g. date changed,
+  // or time has crept past the 12h10m lead window for a same-day pick),
+  // drop it so the user can't submit a server-rejectable combo.
+  useEffect(() => {
+    if (!deliverySlot) return;
+    const stillOk = bookableSlots(deliveryDate, new Date()).some(
+      (s) => s.value === deliverySlot && !s.disabled,
+    );
+    if (!stillOk) setDeliverySlot("");
+  }, [deliveryDate, deliverySlot]);
 
   // Pincode serviceability
   const [pinStatus, setPinStatus] = useState<PinState>({ state: "idle" });
@@ -1465,30 +1476,86 @@ function DeliveryScheduleSection({
       </div>
 
       <p style={sectionHead}>Pick a Time</p>
-      <label style={{ display: "block" }}>
-        <span style={labelSt}>Time slot *</span>
-        <select
-          value={deliverySlot}
-          onChange={(e) => onPickSlot(e.target.value)}
-          style={{
-            ...inputSt,
-            appearance: "none",
-            WebkitAppearance: "none",
-            background: "transparent",
-            color: deliverySlot ? "#FBF3D4" : "rgba(240,223,200,0.4)",
-            cursor: "pointer",
-          }}
-        >
-          <option value="" style={{ background: "#0e0e0e", color: "#FBF3D4" }}>
-            Select a delivery time…
-          </option>
-          {ORDER_DELIVERY_SLOTS.map((s) => (
-            <option key={s} value={s} style={{ background: "#0e0e0e", color: "#FBF3D4" }}>
-              {formatSlot12(s)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <SlotPicker
+        deliveryDate={deliveryDate}
+        deliverySlot={deliverySlot}
+        onPickSlot={onPickSlot}
+      />
     </section>
+  );
+}
+
+/** Slot dropdown gated by the 12h10m booking rule. Disabled options stay
+ *  visible (greyed) so the user can see why "earlier today" isn't allowed.
+ *  When every slot for the picked date is disabled, surfaces an inline
+ *  empty-state instead of a useless dropdown. */
+function SlotPicker({
+  deliveryDate,
+  deliverySlot,
+  onPickSlot,
+}: {
+  deliveryDate: string;
+  deliverySlot: string;
+  onPickSlot: (s: string) => void;
+}) {
+  // Recompute on every render so the "too-soon" boundary creeps forward
+  // naturally as the user sits on the page; bookableSlots is pure.
+  const slots = bookableSlots(deliveryDate, new Date());
+  const allDisabled = slots.length === 0 || slots.every((s) => s.disabled);
+
+  if (allDisabled) {
+    return (
+      <div
+        style={{
+          padding: "14px 16px",
+          borderRadius: 4,
+          border: "1px solid rgba(200,144,58,0.45)",
+          background: "rgba(200,144,58,0.06)",
+          color: "rgba(240,223,200,0.85)",
+          fontSize: 13,
+          lineHeight: 1.5,
+          letterSpacing: "0.02em",
+        }}
+        role="status"
+      >
+        No slots available for this date — please choose another day.
+      </div>
+    );
+  }
+
+  return (
+    <label style={{ display: "block" }}>
+      <span style={labelSt}>Time slot *</span>
+      <select
+        value={deliverySlot}
+        onChange={(e) => onPickSlot(e.target.value)}
+        style={{
+          ...inputSt,
+          appearance: "none",
+          WebkitAppearance: "none",
+          background: "transparent",
+          color: deliverySlot ? "#FBF3D4" : "rgba(240,223,200,0.4)",
+          cursor: "pointer",
+        }}
+      >
+        <option value="" style={{ background: "#0e0e0e", color: "#FBF3D4" }}>
+          Select a delivery time…
+        </option>
+        {slots.map((s) => (
+          <option
+            key={s.value}
+            value={s.value}
+            disabled={s.disabled}
+            style={{
+              background: "#0e0e0e",
+              color: s.disabled ? "rgba(240,223,200,0.35)" : "#FBF3D4",
+            }}
+          >
+            {formatSlot12(s.value)}
+            {s.disabled ? " — too soon" : ""}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

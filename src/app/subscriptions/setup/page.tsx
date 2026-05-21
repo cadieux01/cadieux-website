@@ -19,6 +19,7 @@ import {
   type ProductSlug,
   type WizardProduct,
 } from "@/lib/subscription-setup";
+import { bookableSlots } from "@/lib/delivery-slots";
 import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 
 const BG = "#0e0e0e";
@@ -47,6 +48,27 @@ export default function SetupPage() {
   useEffect(() => {
     if (hydrated) saveSetupState(state);
   }, [state, hydrated]);
+
+  // Drop any per-date slot that has slipped past the 12h10m booking lead
+  // (e.g. user sat on the page, or returned later). Keeps the wizard from
+  // shipping a server-rejectable slot to checkout.
+  useEffect(() => {
+    if (!hydrated) return;
+    const now = new Date();
+    const next: Record<string, string> = {};
+    let changed = false;
+    for (const [iso, slot] of Object.entries(state.slotByDate)) {
+      const ok = bookableSlots(iso, now).some(
+        (s) => s.value === slot && !s.disabled,
+      );
+      if (ok) next[iso] = slot;
+      else changed = true;
+    }
+    if (changed) setState((s) => ({ ...s, slotByDate: next }));
+    // We only need this to run when the set of selected dates changes or
+    // step lands on the slot screen; running on every state churn is fine
+    // because the inner loop short-circuits when nothing is stale.
+  }, [hydrated, state.selectedDates, step]);
 
   function update(patch: Partial<SetupState>) {
     setState((s) => ({ ...s, ...patch }));
@@ -417,6 +439,10 @@ function Step3Slots({
   const rows = useMemo(() => listWeekDayRows(state), [state]);
   const [bulkSlot, setBulkSlot] = useState<string>("");
 
+  // Single `now` per render so every row uses the same too-soon boundary;
+  // bookableSlots is pure so this is cheap to recompute.
+  const now = new Date();
+
   function setSlot(dateIso: string, slot: string) {
     onChange({ ...state.slotByDate, [dateIso]: slot });
   }
@@ -424,7 +450,14 @@ function Step3Slots({
   function applyToAll() {
     if (!bulkSlot) return;
     const next: Record<string, string> = { ...state.slotByDate };
-    rows.forEach((r) => { next[r.date_iso] = bulkSlot; });
+    rows.forEach((r) => {
+      // Skip dates where the bulk slot would be too soon — keep their
+      // existing value (if any) so the user can pick something valid.
+      const ok = bookableSlots(r.date_iso, now).some(
+        (s) => s.value === bulkSlot && !s.disabled,
+      );
+      if (ok) next[r.date_iso] = bulkSlot;
+    });
     onChange(next);
   }
 
@@ -432,7 +465,7 @@ function Step3Slots({
     <section>
       <StepTitle>Pick a time slot for each delivery</StepTitle>
       <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 18 }}>
-        One-hour delivery windows from 6 AM to 8 PM.
+        30-minute delivery windows from 7:30 AM to 9:00 PM. Same-day slots need at least 12 h 10 m lead time.
       </p>
 
       <div
@@ -482,6 +515,8 @@ function Step3Slots({
       <div style={{ display: "grid", gap: 10 }}>
         {rows.map((r) => {
           const slot = state.slotByDate[r.date_iso] ?? "";
+          const daySlots = bookableSlots(r.date_iso, now);
+          const allDisabled = daySlots.length === 0 || daySlots.every((s) => s.disabled);
           return (
             <div
               key={r.date_iso}
@@ -501,16 +536,34 @@ function Step3Slots({
                   {longDayLabel(r.date)}
                 </div>
               </div>
-              <select
-                value={slot}
-                onChange={(e) => setSlot(r.date_iso, e.target.value)}
-                style={{ ...selectStyle, minWidth: 170 }}
-              >
-                <option value="">— pick a slot —</option>
-                {TIME_SLOTS.map((s) => (
-                  <option key={s} value={s}>{formatSlot(s)}</option>
-                ))}
-              </select>
+              {allDisabled ? (
+                <div
+                  style={{
+                    minWidth: 170,
+                    fontSize: 12,
+                    color: "rgba(200,144,58,0.85)",
+                    letterSpacing: "0.02em",
+                    lineHeight: 1.4,
+                  }}
+                  role="status"
+                >
+                  No slots available for this date — please choose another day.
+                </div>
+              ) : (
+                <select
+                  value={slot}
+                  onChange={(e) => setSlot(r.date_iso, e.target.value)}
+                  style={{ ...selectStyle, minWidth: 170 }}
+                >
+                  <option value="">— pick a slot —</option>
+                  {daySlots.map((s) => (
+                    <option key={s.value} value={s.value} disabled={s.disabled}>
+                      {formatSlot(s.value)}
+                      {s.disabled ? " — too soon" : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           );
         })}
