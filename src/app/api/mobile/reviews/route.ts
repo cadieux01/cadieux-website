@@ -169,7 +169,40 @@ export async function POST(req: NextRequest) {
 
   if (error || !data) {
     console.error("[mobile/reviews] insert failed:", error);
-    return fail(500, "Failed to save review");
+    // Map known Postgres failure modes to actionable client errors, and
+    // surface the raw message/code in dev so a stuck mobile build can
+    // diagnose schema drift without server-log access. Web does the
+    // same (returns error.message at /api/reviews POST).
+    if (error) {
+      // 23505 = unique_violation. Most likely cause here is a UNIQUE
+      // (customer_phone, product_slug) constraint hit when the same
+      // verified phone tries to review the same product twice.
+      if (error.code === "23505") {
+        return fail(
+          409,
+          "You've already reviewed this product. Edit your existing review instead.",
+          "duplicate_review",
+        );
+      }
+      // 23502 = not_null_violation. Hints at a column the insert isn't
+      // populating that the schema now requires.
+      if (error.code === "23502") {
+        return fail(500, error.message ?? "Missing required field", "not_null");
+      }
+      // 42703 = undefined_column. Insert is referencing a column that
+      // doesn't exist in production — schema drift between repo and DB.
+      if (error.code === "42703") {
+        return fail(500, error.message ?? "Schema mismatch", "undefined_column");
+      }
+      // 23503 = foreign_key_violation.
+      if (error.code === "23503") {
+        return fail(400, error.message ?? "Invalid reference", "fk_violation");
+      }
+    }
+    // Generic fallback — return Postgres' own message so the mobile
+    // toast / dev log can see what actually went wrong instead of the
+    // opaque "Failed to save review".
+    return fail(500, error?.message ?? "Failed to save review", error?.code);
   }
 
   return NextResponse.json({
