@@ -684,7 +684,11 @@ export default function CheckoutPage() {
       ? orderId.slice(0, 8).toUpperCase()
       : Math.random().toString(36).slice(2, 10).toUpperCase();
     clearCart();
-    router.push(`/checkout/success?order=${encodeURIComponent(shortId)}`);
+    // Pass the full UUID alongside the short id so the success page can
+    // deep-link into /orders/<id>. Short id stays for display only.
+    const qs = new URLSearchParams({ order: shortId });
+    if (orderId) qs.set("id", orderId);
+    router.push(`/checkout/success?${qs.toString()}`);
   }
 
   /* ── Header bits ──────────────────────────────────────────────────────── */

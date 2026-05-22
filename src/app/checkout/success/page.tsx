@@ -22,6 +22,7 @@ function SuccessInner() {
   const router = useRouter();
   const params = useSearchParams();
   const orderShort = (params.get("order") || "").toUpperCase();
+  const orderId = params.get("id") || "";
   const [animated, setAnimated] = useState(false);
 
   useEffect(() => {
@@ -101,7 +102,7 @@ function SuccessInner() {
         </p>
 
         <Link
-          href="/orders"
+          href={orderId ? `/orders/${encodeURIComponent(orderId)}` : "/orders"}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: "100%", maxWidth: 360, height: 56,
@@ -114,7 +115,7 @@ function SuccessInner() {
             WebkitTapHighlightColor: "transparent",
           }}
         >
-          Track Your Order
+          View Order
         </Link>
         <Link
           href="/shop"
