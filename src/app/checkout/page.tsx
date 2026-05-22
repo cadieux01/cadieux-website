@@ -173,6 +173,17 @@ export default function CheckoutPage() {
     fetch(`/api/checkout?phone=${encodeURIComponent(saved)}`)
       .then((r) => r.json())
       .then((d) => {
+        // Server-side trust hint: if the request's verified-phone
+        // cookie still matches this number, the server already
+        // considers us verified for the next 30 min — mirror that
+        // into client state so we skip OTP entirely and keep the
+        // sessionStorage flag in sync for subsequent reloads.
+        if (d.phone_verified) {
+          setOtpVerified(true);
+          try {
+            sessionStorage.setItem("cadieux_verified_phone", saved);
+          } catch { /* private mode */ }
+        }
         if (!d.customer) return;
         const c = d.customer as Customer;
         setSavedCustomer(c);
@@ -352,8 +363,15 @@ export default function CheckoutPage() {
   /* ── Address step → save_customer → delivery step ─────────────────────── */
   async function submitAddressStep() {
     setError("");
-    // Returning customer using saved details just advances.
+    // Returning customer using saved details just advances — BUT we
+    // still require an in-session OTP (cookie). Without it the server
+    // will reject `place_order` with "Phone verification required"
+    // at the payment step. Forcing OTP here means payment can't fail
+    // for that reason; for returning customers whose 30-min cookie
+    // is still valid the prefill effect already flipped otpVerified
+    // to true so this gate is a no-op.
     if (formMode === "returning" && savedCustomer && customer?.id) {
+      if (!otpVerified) { setError("Please verify your phone number to continue."); return; }
       if (pinStatus.state === "checking") { setError("Checking pincode availability…"); return; }
       if (pinStatus.state === "unserviceable") { setError("We don't deliver to this pincode yet."); return; }
       setStep("delivery");
@@ -523,6 +541,15 @@ export default function CheckoutPage() {
   /* ── COD ──────────────────────────────────────────────────────────────── */
   async function placeOrderCOD() {
     const { fullAddress, customerPhone, customerName } = resolveOrderIdentity();
+    // Defensive: should be unreachable since step 1 gates on otpVerified,
+    // but if a user clears sessionStorage / cookies mid-flow the server
+    // would reject place_order. Bounce back to step 1 with a clear msg
+    // instead of letting "Phone verification required" surface here.
+    if (!otpVerified) {
+      setError("Please verify your phone number before paying.");
+      setStep("address");
+      return;
+    }
     if (!turnstileToken) { setError("Please complete the human-verification check."); return; }
     setOrderLoading(true); setError("");
     try {
@@ -567,6 +594,13 @@ export default function CheckoutPage() {
 
   /* ── Razorpay ─────────────────────────────────────────────────────────── */
   async function payOnline() {
+    // Same defensive check as COD — server rejects place_order without
+    // a valid OTP cookie, so refuse to even open the gateway.
+    if (!otpVerified) {
+      setError("Please verify your phone number before paying.");
+      setStep("address");
+      return;
+    }
     setOrderLoading(true); setError("");
     try {
       const res = await fetch("/api/create-order", {
@@ -851,6 +885,37 @@ export default function CheckoutPage() {
                 </div>
 
                 <PincodeStatusStrip pinStatus={pinStatus} />
+
+                {/*
+                  Inline OTP prompt for returning customers whose
+                  session-verified cookie is missing (e.g. first
+                  checkout this session, or cleared cookies). Without
+                  this, they'd hit the saved-details "Continue" CTA,
+                  reach payment, and only THEN see the server's
+                  "Phone verification required" error. Forcing OTP at
+                  step 1 means payment never has to surface that gate.
+                */}
+                {!otpVerified && (
+                  <SavedCustomerOtpBlock
+                    phone={savedCustomer.phone}
+                    otpSent={otpSent}
+                    otpCode={otpCode}
+                    setOtpCode={setOtpCode}
+                    otpError={otpError}
+                    setOtpError={setOtpError}
+                    sendOtp={sendOtp}
+                    verifyOtp={verifyOtp}
+                    sendingOtp={sendingOtp}
+                    verifyingOtp={verifyingOtp}
+                    turnstileRef={turnstileRef}
+                    setTurnstileToken={setTurnstileToken}
+                  />
+                )}
+                {otpVerified && (
+                  <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.25em", textTransform: "uppercase", color: "#4ade80" }}>
+                    ✓ Phone Verified
+                  </p>
+                )}
 
                 <button
                   onClick={() => { setFormMode("edit"); setError(""); }}
@@ -1257,6 +1322,108 @@ function AddressForm(props: {
         </button>
       )}
     </section>
+  );
+}
+
+/* ── Inline OTP block for returning customer (Saved Details view) ───── */
+function SavedCustomerOtpBlock(props: {
+  phone: string;
+  otpSent: boolean;
+  otpCode: string; setOtpCode: (s: string) => void;
+  otpError: string; setOtpError: (s: string) => void;
+  sendOtp: () => void;
+  verifyOtp: () => void;
+  sendingOtp: boolean;
+  verifyingOtp: boolean;
+  turnstileRef: React.Ref<TurnstileHandle>;
+  setTurnstileToken: (s: string) => void;
+}) {
+  const {
+    phone, otpSent, otpCode, setOtpCode, otpError, setOtpError,
+    sendOtp, verifyOtp, sendingOtp, verifyingOtp,
+    turnstileRef, setTurnstileToken,
+  } = props;
+
+  const tail = phone.replace(/\D/g, "").slice(-4);
+  return (
+    <div
+      style={{
+        background: "rgba(245,158,11,0.05)",
+        border: "1px solid rgba(245,158,11,0.25)",
+        padding: "16px 18px",
+        marginBottom: 16,
+      }}
+    >
+      <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.85)" }}>
+        Verify Phone
+      </p>
+      <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(240,223,200,0.6)", letterSpacing: "0.03em", lineHeight: 1.5 }}>
+        We&rsquo;ll send a 6-digit code to your saved number ending in {tail}. Verify once per session to continue.
+      </p>
+
+      <TurnstileWidget
+        ref={turnstileRef}
+        onVerify={(t) => setTurnstileToken(t)}
+        onExpire={() => setTurnstileToken("")}
+      />
+
+      <button
+        onClick={sendOtp}
+        disabled={sendingOtp}
+        style={{
+          display: "block", width: "100%", marginTop: 14,
+          minHeight: 46,
+          background: "none",
+          border: "1px solid rgba(200,144,58,0.5)",
+          padding: "0 16px",
+          cursor: sendingOtp ? "default" : "pointer",
+          fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+          letterSpacing: "0.35em", textTransform: "uppercase",
+          color: sendingOtp ? "rgba(200,144,58,0.3)" : "rgba(200,144,58,0.9)",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        {sendingOtp ? "Sending…" : otpSent ? "Resend Code" : "Send OTP"}
+      </button>
+
+      {otpSent && (
+        <div style={{ marginTop: 14 }}>
+          <span style={labelSt}>Enter OTP *</span>
+          <input
+            type="text" inputMode="numeric" autoComplete="one-time-code"
+            maxLength={6}
+            value={otpCode}
+            onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(""); }}
+            placeholder="6-digit code"
+            style={{ ...inputSt, letterSpacing: "0.4em", fontSize: 19, borderColor: "rgba(200,144,58,0.45)" }}
+            autoFocus
+          />
+          <button
+            onClick={verifyOtp}
+            disabled={verifyingOtp || otpCode.replace(/\D/g, "").length < 6}
+            style={{
+              marginTop: 12, display: "block", width: "100%",
+              height: 48,
+              background: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(240,223,200,0.12)" : "#f0dfc8",
+              border: "none",
+              cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
+              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+              letterSpacing: "0.4em", textTransform: "uppercase",
+              color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(8,6,4,0.35)" : "#080604",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            {verifyingOtp ? "Verifying…" : "Verify"}
+          </button>
+        </div>
+      )}
+
+      {otpError && (
+        <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "#e05a5a", letterSpacing: "0.04em" }}>
+          {otpError}
+        </p>
+      )}
+    </div>
   );
 }
 

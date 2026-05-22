@@ -35,13 +35,21 @@ export async function GET(req: NextRequest) {
   const phone = req.nextUrl.searchParams.get("phone");
   if (!phone) return NextResponse.json({ customer: null });
 
+  // Tell the client whether the server already trusts this phone for
+  // this request. The web checkout uses this to skip OTP entirely
+  // for returning customers whose 30-min `cdx_phone_verified` cookie
+  // is still valid for the queried number. Server still re-checks at
+  // place_order, so this is a UX hint only — it can't grant trust.
+  const verified = getVerifiedPhone(req);
+  const phone_verified = !!verified && verified.phone === normalizePhone(phone);
+
   const { data: customer } = await supabaseAdmin
     .from("customers")
     .select("id, full_name, phone, city")
     .eq("phone", phone)
     .maybeSingle();
 
-  if (!customer) return NextResponse.json({ customer: null });
+  if (!customer) return NextResponse.json({ customer: null, phone_verified });
 
   // One-time orders.
   const { data: orders, error: ordersErr } = await supabaseAdmin
@@ -75,6 +83,7 @@ export async function GET(req: NextRequest) {
     customer: { ...customer, delivery_address: lastOrder?.delivery_address ?? "" },
     orders: orders ?? [],
     subscriptions: subscriptions ?? [],
+    phone_verified,
   });
 }
 
