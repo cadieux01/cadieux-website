@@ -23,7 +23,7 @@ export default function MakingPage() {
       <div style={{ position: "relative", zIndex: 1, padding: "100px clamp(28px,8vw,120px) 120px" }}>
         <ScrollReveal>
           <h1 data-stagger style={{ margin: "0 0 16px", fontFamily: "var(--font-heading)", fontSize: "clamp(52px,12vw,96px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1 }}>
-            How It&apos;s Made
+            Precision Baking
           </h1>
           <p data-stagger style={{ margin: "0 0 56px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "#4369B2", lineHeight: 2.2 }}>
             Six steps. No shortcuts.
