@@ -35,6 +35,14 @@ export async function GET(req: NextRequest) {
   const phone = req.nextUrl.searchParams.get("phone");
   if (!phone) return NextResponse.json({ customer: null });
 
+  // `slim=1` short-circuits past the full order + subscription history
+  // fetch (used by the /orders list page) and returns only what the
+  // checkout prefill actually consumes: the customer record + the most
+  // recent delivery_address + phone_verified hint. This drops the
+  // checkout prefill from ~3s (blocked behind a seq-scan on
+  // subscriptions.customer_phone LIKE '%last10') to ~150ms.
+  const slim = req.nextUrl.searchParams.get("slim") === "1";
+
   // Tell the client whether the server already trusts this phone for
   // this request. The web checkout uses this to skip OTP entirely
   // for returning customers whose 30-min `cdx_phone_verified` cookie
@@ -51,17 +59,31 @@ export async function GET(req: NextRequest) {
 
   if (!customer) return NextResponse.json({ customer: null, phone_verified });
 
-  // One-time orders.
-  const { data: orders, error: ordersErr } = await supabaseAdmin
-    .from("orders")
-    .select("id, total_amount, delivery_address, status, created_at")
-    .eq("customer_id", customer.id)
-    .order("created_at", { ascending: false });
+  if (slim) {
+    // Only the most recent address is needed for prefill. .limit(1) hits
+    // the (customer_id, created_at desc) index path and returns immediately.
+    const { data: lastOrderRow, error: lastOrderErr } = await supabaseAdmin
+      .from("orders")
+      .select("delivery_address")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (ordersErr) console.error("[orders fetch]", ordersErr.message);
+    if (lastOrderErr) console.error("[orders fetch slim]", lastOrderErr.message);
 
-  // Subscription orders, surfaced alongside one-time orders on the user's
-  // Orders page. Match by either FK or stored phone for legacy-row safety.
+    return NextResponse.json({
+      customer: {
+        ...customer,
+        delivery_address: lastOrderRow?.delivery_address ?? "",
+      },
+      phone_verified,
+    });
+  }
+
+  // Full payload (used by /orders list page). Run orders + subscriptions
+  // in parallel so the slow subscriptions `LIKE` scan doesn't serialize
+  // after orders.
   const last10 = (phone ?? "").replace(/\D/g, "").slice(-10);
   const subOr = [
     `customer_id.eq.${customer.id}`,
@@ -69,14 +91,27 @@ export async function GET(req: NextRequest) {
     `customer_phone.like.%${last10}`,
   ].join(",");
 
-  const { data: subscriptions, error: subsErr } = await supabaseAdmin
-    .from("subscriptions")
-    .select("id, product_name, total_amount, status, created_at, customer_address, customer_city")
-    .or(subOr)
-    .order("created_at", { ascending: false });
+  const [ordersRes, subsRes] = await Promise.all([
+    supabaseAdmin
+      .from("orders")
+      .select("id, total_amount, delivery_address, status, created_at")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false }),
+    supabaseAdmin
+      .from("subscriptions")
+      .select(
+        "id, product_name, total_amount, status, created_at, customer_address, customer_city",
+      )
+      .or(subOr)
+      .order("created_at", { ascending: false }),
+  ]);
 
-  if (subsErr) console.error("[subscriptions fetch for orders]", subsErr.message);
+  if (ordersRes.error) console.error("[orders fetch]", ordersRes.error.message);
+  if (subsRes.error)
+    console.error("[subscriptions fetch for orders]", subsRes.error.message);
 
+  const orders = ordersRes.data;
+  const subscriptions = subsRes.data;
   const lastOrder = orders?.[0];
 
   return NextResponse.json({

@@ -170,7 +170,10 @@ export default function CheckoutPage() {
     const sessionPhone = sessionStorage.getItem("cadieux_verified_phone");
     if (sessionPhone === saved) setOtpVerified(true);
 
-    fetch(`/api/checkout?phone=${encodeURIComponent(saved)}`)
+    // `slim=1` skips the full orders + subscriptions history fetch that
+    // the /orders list page needs but checkout doesn't. Cuts prefill
+    // latency from ~3s (subscriptions seq-scan) down to ~150ms.
+    fetch(`/api/checkout?phone=${encodeURIComponent(saved)}&slim=1`)
       .then((r) => r.json())
       .then((d) => {
         // Server-side trust hint: if the request's verified-phone
