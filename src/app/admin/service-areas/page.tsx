@@ -301,11 +301,55 @@ export default function ServiceAreasPage() {
     void suggestPincode(true);
   };
 
-  // Pull the relevant bits out of a picked Google Place: the human-
-  // readable name → newAreas, postal_code → newPincode. If the place
-  // result has no postal_code (rare but possible — esp. for unnamed
-  // localities), fall back to the suggest-pincode endpoint.
-  const onPlaceChanged = useCallback(() => {
+  // Client-side reverse geocode using the JS Maps SDK that's already
+  // loaded for autocomplete. Walks every returned result for the
+  // first `postal_code` component — Google reliably surfaces it on
+  // coordinate-based lookups even when forward (name) lookups omit it.
+  const clientReverseGeocode = useCallback(
+    (lat: number, lng: number): Promise<string | null> => {
+      return new Promise((resolve) => {
+        if (typeof google === "undefined" || !google.maps?.Geocoder) {
+          resolve(null);
+          return;
+        }
+        try {
+          new google.maps.Geocoder().geocode(
+            { location: { lat, lng } },
+            (results, status) => {
+              if (status !== "OK" || !results) {
+                resolve(null);
+                return;
+              }
+              for (const r of results) {
+                const pc = r.address_components
+                  ?.find((c) => c.types.includes("postal_code"))
+                  ?.long_name?.replace(/\D/g, "");
+                if (pc && /^\d{6}$/.test(pc)) {
+                  resolve(pc);
+                  return;
+                }
+              }
+              resolve(null);
+            },
+          );
+        } catch {
+          resolve(null);
+        }
+      });
+    },
+    [],
+  );
+
+  // Robust pincode resolution when a place is picked from autocomplete:
+  //   1. postal_code from the place's address_components
+  //   2. reverse-geocode the place's lat/lng client-side (the JS SDK
+  //      is already loaded, so this is free)
+  //   3. suggest-pincode endpoint (now also reverse-chained server-
+  //      side, so it works for names that don't carry postal_code)
+  // Step 2 fixes the common case of smaller localities like
+  // "Maddilapalem" whose Places result omits postal_code but whose
+  // coords reverse-geocode cleanly to a 6-digit pincode.
+  const onPlaceChanged = useCallback(async () => {
     if (!autocomplete) return;
     const place = autocomplete.getPlace();
     if (!place) return;
@@ -314,6 +358,7 @@ export default function ServiceAreasPage() {
     const pickedName = place.name?.trim();
     if (pickedName) setNewAreas(pickedName);
 
+    // Step 1: postal_code from address_components.
     const comps = place.address_components ?? [];
     const postal = comps
       .find((c) => c.types.includes("postal_code"))
@@ -324,28 +369,42 @@ export default function ServiceAreasPage() {
       return;
     }
 
-    // No postal_code in the Places result. Use the picked name (or the
-    // typed value as a fallback) against suggest-pincode — same
-    // endpoint as the manual/blur paths so we share the geocode cache.
-    const lookupTerm = pickedName ?? newAreas.trim();
-    if (!lookupTerm) return;
     setSuggestBusy(true);
-    adminFetch<{ pincode: string | null }>(
-      `/api/admin/service-areas/suggest-pincode?area=${encodeURIComponent(lookupTerm)}`,
-    )
-      .then((res) => {
-        const resolved = (res.pincode ?? "").replace(/\D/g, "");
-        if (/^\d{6}$/.test(resolved)) {
-          setNewPincode(resolved);
-          showNotice(`Picked "${lookupTerm}" → pincode ${resolved}`);
+    try {
+      // Step 2: client-side reverse geocode on the place's coords.
+      const loc = place.geometry?.location;
+      const lat = loc?.lat?.();
+      const lng = loc?.lng?.();
+      if (typeof lat === "number" && typeof lng === "number") {
+        const reversed = await clientReverseGeocode(lat, lng);
+        if (reversed) {
+          setNewPincode(reversed);
+          showNotice(
+            `Picked "${pickedName ?? "area"}" → pincode ${reversed}`,
+          );
+          return;
         }
-      })
-      .catch(() => {
-        // Silent — user can still type the pincode manually or click
-        // Activate, which will retry the lookup with a clear error.
-      })
-      .finally(() => setSuggestBusy(false));
-  }, [autocomplete, newAreas]);
+      }
+
+      // Step 3: name-based suggest-pincode (server now chains its own
+      // reverse-geocode fallback internally).
+      const lookupTerm = pickedName ?? newAreas.trim();
+      if (!lookupTerm) return;
+      const res = await adminFetch<{ pincode: string | null }>(
+        `/api/admin/service-areas/suggest-pincode?area=${encodeURIComponent(lookupTerm)}`,
+      );
+      const resolved = (res.pincode ?? "").replace(/\D/g, "");
+      if (/^\d{6}$/.test(resolved)) {
+        setNewPincode(resolved);
+        showNotice(`Picked "${lookupTerm}" → pincode ${resolved}`);
+      }
+    } catch {
+      // Silent — admin can still type the pincode manually or click
+      // Activate, which retries the chain with a clear error.
+    } finally {
+      setSuggestBusy(false);
+    }
+  }, [autocomplete, newAreas, clientReverseGeocode]);
 
   const submitNew = async () => {
     setAddError(null);

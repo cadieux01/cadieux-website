@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin } from "@/lib/admin-auth";
-import { geocodeArea } from "@/lib/geocode";
+import { geocodeArea, reverseGeocodePincode } from "@/lib/geocode";
 
 export async function GET(req: NextRequest) {
   if (!isAdmin(req)) {
@@ -29,8 +29,18 @@ export async function GET(req: NextRequest) {
   if (!geo) {
     return NextResponse.json({ pincode: null });
   }
+
+  // Many neighborhood/locality results omit `postal_code` from
+  // address_components even though Google clearly knows the coords.
+  // When that happens, reverse-geocode the coords — that response
+  // almost always contains a postal_code in one of the result rows.
+  let pincode = geo.postal_code;
+  if (!pincode || !/^\d{6}$/.test(pincode)) {
+    pincode = await reverseGeocodePincode(geo.latitude, geo.longitude);
+  }
+
   return NextResponse.json({
-    pincode: geo.postal_code,
+    pincode: pincode && /^\d{6}$/.test(pincode) ? pincode : null,
     latitude: geo.latitude,
     longitude: geo.longitude,
   });

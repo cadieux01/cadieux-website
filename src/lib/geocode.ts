@@ -103,6 +103,42 @@ export async function geocodeArea(
   };
 }
 
+/**
+ * Reverse-geocode a lat/lng pair into a pincode by walking every
+ * returned result for a `postal_code` component. Used as a fallback
+ * when a forward geocode succeeded (we have coords) but the chosen
+ * result was a neighborhood / locality and Google didn't attach a
+ * postal_code to it — reverse-geocoding on coordinates pulls in the
+ * surrounding street_address / postal_code-typed results which almost
+ * always have one. Returns null only when no result in the response
+ * carries a 6-digit postal_code.
+ */
+export async function reverseGeocodePincode(
+  latitude: number,
+  longitude: number,
+): Promise<string | null> {
+  const key = getApiKey();
+  if (!key) return null;
+  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+  url.searchParams.set("latlng", `${latitude},${longitude}`);
+  url.searchParams.set("region", "in");
+  url.searchParams.set("key", key);
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) return null;
+    const json = (await r.json()) as GoogleGeocodeResponse;
+    if (json.status !== "OK" || !json.results?.length) return null;
+    for (const result of json.results) {
+      const pc = pickComponent(result.address_components, "postal_code");
+      if (pc && /^\d{6}$/.test(pc)) return pc;
+    }
+    return null;
+  } catch (e) {
+    console.warn("[geocode] reverse-geocode failed:", String(e));
+    return null;
+  }
+}
+
 export type PincodeGeocode = {
   latitude: number;
   longitude: number;
