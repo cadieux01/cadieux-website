@@ -10,10 +10,26 @@
 // the list into Active / History (deactivated) / All so the operator
 // can dial in the right scope before bulk-acting.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import {
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_LOADER_ID,
+} from "@/lib/google-maps-loader";
+
+// Vizag-centric bias for the area-name autocomplete. Bounds rather
+// than strictBounds so unusual neighborhoods that fall outside this
+// box still surface; the operator can also free-type without picking
+// a suggestion.
+const VIZAG_AUTOCOMPLETE_BOUNDS = {
+  south: 17.2,
+  west: 82.8,
+  north: 18.1,
+  east: 83.7,
+};
 
 type ServiceAreaRow = {
   pincode: string;
@@ -63,6 +79,46 @@ export default function ServiceAreasPage() {
   const [bulkImportText, setBulkImportText] = useState("");
   const [bulkImportBusy, setBulkImportBusy] = useState(false);
   const [bulkImportError, setBulkImportError] = useState<string | null>(null);
+
+  // Google Places Autocomplete on the area name field. Degrades to a
+  // plain input when the loader fails or the API key is missing — free
+  // text entry always works.
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+  const { isLoaded: mapsLoaded } = useJsApiLoader({
+    id: GOOGLE_MAPS_LOADER_ID,
+    googleMapsApiKey: apiKey,
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
+  const autocompleteReady = mapsLoaded && apiKey.length > 0;
+  const [autocomplete, setAutocomplete] =
+    useState<google.maps.places.Autocomplete | null>(null);
+  // Set to true on each successful place_changed so the area-name
+  // onBlur lookup skips itself — the place already gave us a pincode
+  // (or we kicked off the place-specific fallback). Reset on the next
+  // keystroke so subsequent edits behave normally.
+  const placePickedRef = useRef<boolean>(false);
+  const autocompleteOptions = useMemo<
+    google.maps.places.AutocompleteOptions | undefined
+  >(
+    () =>
+      autocompleteReady
+        ? {
+            bounds: VIZAG_AUTOCOMPLETE_BOUNDS,
+            componentRestrictions: { country: "in" },
+            fields: [
+              "name",
+              "address_components",
+              "geometry",
+              "formatted_address",
+            ],
+            // `geocode` surfaces neighborhoods, sublocalities, and
+            // localities (e.g. "Madhurawada", "Gajuwaka") which is
+            // what an "area name" picker should show.
+            types: ["geocode"],
+          }
+        : undefined,
+    [autocompleteReady],
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -232,12 +288,64 @@ export default function ServiceAreasPage() {
 
   // Auto-fill the pincode when the admin tabs/clicks out of the area
   // name field, but only if the pincode is currently empty. Prevents
-  // accidentally overwriting an operator's correction.
+  // accidentally overwriting an operator's correction. Also skipped
+  // when a Places suggestion was just picked — the place-changed
+  // handler already filled (or is filling) the pincode itself.
   const handleAreaBlur = () => {
+    if (placePickedRef.current) {
+      placePickedRef.current = false;
+      return;
+    }
     if (newPincode.replace(/\D/g, "").length === 6) return;
     if (!newAreas.trim()) return;
     void suggestPincode(true);
   };
+
+  // Pull the relevant bits out of a picked Google Place: the human-
+  // readable name → newAreas, postal_code → newPincode. If the place
+  // result has no postal_code (rare but possible — esp. for unnamed
+  // localities), fall back to the suggest-pincode endpoint.
+  const onPlaceChanged = useCallback(() => {
+    if (!autocomplete) return;
+    const place = autocomplete.getPlace();
+    if (!place) return;
+    placePickedRef.current = true;
+
+    const pickedName = place.name?.trim();
+    if (pickedName) setNewAreas(pickedName);
+
+    const comps = place.address_components ?? [];
+    const postal = comps
+      .find((c) => c.types.includes("postal_code"))
+      ?.long_name?.replace(/\D/g, "");
+    if (postal && /^\d{6}$/.test(postal)) {
+      setNewPincode(postal);
+      showNotice(`Picked "${pickedName ?? "area"}" → pincode ${postal}`);
+      return;
+    }
+
+    // No postal_code in the Places result. Use the picked name (or the
+    // typed value as a fallback) against suggest-pincode — same
+    // endpoint as the manual/blur paths so we share the geocode cache.
+    const lookupTerm = pickedName ?? newAreas.trim();
+    if (!lookupTerm) return;
+    setSuggestBusy(true);
+    adminFetch<{ pincode: string | null }>(
+      `/api/admin/service-areas/suggest-pincode?area=${encodeURIComponent(lookupTerm)}`,
+    )
+      .then((res) => {
+        const resolved = (res.pincode ?? "").replace(/\D/g, "");
+        if (/^\d{6}$/.test(resolved)) {
+          setNewPincode(resolved);
+          showNotice(`Picked "${lookupTerm}" → pincode ${resolved}`);
+        }
+      })
+      .catch(() => {
+        // Silent — user can still type the pincode manually or click
+        // Activate, which will retry the lookup with a clear error.
+      })
+      .finally(() => setSuggestBusy(false));
+  }, [autocomplete, newAreas]);
 
   const submitNew = async () => {
     setAddError(null);
@@ -653,16 +761,40 @@ export default function ServiceAreasPage() {
             alignItems: "flex-start",
           }}
         >
-          <input
-            type="text"
-            placeholder="Area name — required (e.g. MVP Colony)"
-            aria-label="Area name (required)"
-            value={newAreas}
-            onChange={(e) => setNewAreas(e.target.value)}
-            onBlur={handleAreaBlur}
-            autoFocus
-            style={{ ...inputBase, flex: 1, minWidth: 240 }}
-          />
+          <div style={{ flex: 1, minWidth: 240 }}>
+            {autocompleteReady ? (
+              <Autocomplete
+                onLoad={setAutocomplete}
+                onPlaceChanged={onPlaceChanged}
+                options={autocompleteOptions}
+              >
+                <input
+                  type="text"
+                  placeholder="Area name — required (e.g. Madhurawada)"
+                  aria-label="Area name (required)"
+                  value={newAreas}
+                  onChange={(e) => {
+                    placePickedRef.current = false;
+                    setNewAreas(e.target.value);
+                  }}
+                  onBlur={handleAreaBlur}
+                  autoFocus
+                  style={{ ...inputBase, width: "100%" }}
+                />
+              </Autocomplete>
+            ) : (
+              <input
+                type="text"
+                placeholder="Area name — required (e.g. Madhurawada)"
+                aria-label="Area name (required)"
+                value={newAreas}
+                onChange={(e) => setNewAreas(e.target.value)}
+                onBlur={handleAreaBlur}
+                autoFocus
+                style={{ ...inputBase, width: "100%" }}
+              />
+            )}
+          </div>
           <input
             type="text"
             inputMode="numeric"
