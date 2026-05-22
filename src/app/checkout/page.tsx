@@ -550,7 +550,6 @@ export default function CheckoutPage() {
       setStep("address");
       return;
     }
-    if (!turnstileToken) { setError("Please complete the human-verification check."); return; }
     setOrderLoading(true); setError("");
     try {
       const res = await fetch("/api/checkout", {
@@ -565,10 +564,8 @@ export default function CheckoutPage() {
           delivery_slot: deliverySlot,
           total_amount: total,
           items: orderItems,
-          turnstileToken,
         }),
       });
-      refreshTurnstile();
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Order failed."); return; }
       const oid = data.order_id ?? "";
@@ -649,10 +646,8 @@ export default function CheckoutPage() {
               delivery_slot: deliverySlot,
               total_amount: total,
               items: orderItems,
-              turnstileToken,
             }),
           });
-          refreshTurnstile();
           const d = await r.json();
           setOrderLoading(false);
           console.log("[Payment] Success, Razorpay ID:", response.razorpay_payment_id);
@@ -1033,8 +1028,6 @@ export default function CheckoutPage() {
             }
             deliveryDate={deliveryDate}
             deliverySlot={deliverySlot}
-            turnstileRef={turnstileRef}
-            setTurnstileToken={setTurnstileToken}
           />
         )}
 
@@ -1436,14 +1429,11 @@ function PaymentReview(props: {
   fullAddress: string;
   deliveryDate: string;
   deliverySlot: string;
-  turnstileRef: React.Ref<TurnstileHandle>;
-  setTurnstileToken: (s: string) => void;
 }) {
   const {
     grandTotal, deliveryFee,
     customerName, customerPhone, fullAddress,
     deliveryDate, deliverySlot,
-    turnstileRef, setTurnstileToken,
   } = props;
 
   return (
@@ -1470,12 +1460,14 @@ function PaymentReview(props: {
           </p>
         )}
       </div>
-
-      <TurnstileWidget
-        ref={turnstileRef}
-        onVerify={(t) => setTurnstileToken(t)}
-        onExpire={() => setTurnstileToken("")}
-      />
+      {/*
+        No Turnstile at payment — the customer's phone is already
+        OTP-verified (step 1 gate) and the server enforces that via
+        the cdx_phone_verified cookie at place_order. Turnstile only
+        guards /api/verify/send to stop SMS-burning bots; once OTP
+        is done, the bot-gate has already done its job for this
+        session.
+      */}
     </section>
   );
 }
