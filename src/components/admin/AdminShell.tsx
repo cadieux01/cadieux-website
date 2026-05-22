@@ -353,24 +353,40 @@ function AdminDrawer({
         />
       ) : null}
 
+      {/* Outer slide wrapper: ONLY carries position + transform. The
+          flex layout lives on the inner div so the transform doesn't
+          interfere with iOS Safari's flex+overflow sizing (a known
+          quirk that left the SYSTEM section unreachable even with
+          minHeight:0 set on the nav). `bottom: 0` is a defensive
+          fallback in case `100dvh` resolves to 0 (very old browsers). */}
       <aside
         aria-hidden={!open}
         style={{
           position: "fixed",
           top: 0,
           left: 0,
+          bottom: 0,
           zIndex: 305,
           width: "min(280px, 88vw)",
           height: "100dvh",
-          background: NAV_BG,
           transform: open ? "translateX(0)" : "translateX(-100%)",
           transition: "transform 0.32s cubic-bezier(0.22,1,0.36,1)",
-          display: "flex",
-          flexDirection: "column",
-          borderRight: `1px solid ${DARK_GREEN}`,
           boxShadow: open ? "0 20px 40px -10px rgba(0,0,0,0.5)" : "none",
         }}
       >
+        <div
+          style={{
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            background: NAV_BG,
+            borderRight: `1px solid ${DARK_GREEN}`,
+            // Strictly contain the children so the scrollable nav
+            // can never push past the drawer bounds even if a child
+            // miscomputes its intrinsic size.
+            overflow: "hidden",
+          }}
+        >
         {/* Top: wordmark + sign-out — `flexShrink: 0` keeps this header
             at full height while the nav body below scrolls. */}
         <div
@@ -415,16 +431,19 @@ function AdminDrawer({
           </button>
         </div>
 
-        {/* Scrollable nav body — `minHeight: 0` lets the flex child
-            actually scroll inside the fixed drawer (otherwise it would
-            expand the parent and overflow off-screen on iPhone SE).
-            WebkitOverflowScrolling keeps iOS scroll momentum smooth. */}
+        {/* Scrollable nav body. Explicit `flexBasis: 0` (unitless, not
+            `0%`) avoids a long-standing Safari quirk where `flex: 1`
+            shorthand sized column flex children off their content
+            instead of the remaining track, pushing SYSTEM off-screen.
+            `minHeight: 0` is what actually lets the child shrink to
+            its allocated track and trigger overflow. */}
         <nav
           aria-label="Admin sections"
           style={{
-            flex: 1,
+            flexGrow: 1,
+            flexShrink: 1,
+            flexBasis: 0,
             minHeight: 0,
-            maxHeight: "100dvh",
             overflowY: "auto",
             overscrollBehavior: "contain",
             WebkitOverflowScrolling: "touch",
@@ -493,6 +512,7 @@ function AdminDrawer({
             </div>
           ))}
         </nav>
+        </div>
       </aside>
     </>
   );
