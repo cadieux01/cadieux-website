@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
-import { verifyTurnstileToken } from "@/lib/turnstile";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
 import {
   DELIVERY_FEE_INR,
@@ -394,37 +393,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid subscription payload." }, { status: 400 });
     }
 
-    // Two trust paths:
-    //  - "saved" — returning customer reusing a previously-OTP-verified row;
-    //    we gate on a fresh Turnstile token + the customer_id existing in DB.
-    //  - "new"   — fresh address just OTP-verified this session; we gate on
-    //    the OTP cookie matching the customer's phone (legacy behaviour).
-    // The client-supplied flag is hint-only — server independently verifies
-    // the matching gate before allowing the insert. Gate checks run before
-    // any DB lookup so attackers can't probe customer existence without
-    // first solving the gate.
-    const addressSource: "saved" | "new" = body.address_source === "saved" ? "saved" : "new";
-
-    let verifiedPhone: string | null = null;
-    if (addressSource === "saved") {
-      const turnstileToken = String(body.turnstile_token ?? "");
-      const isHuman = await verifyTurnstileToken(turnstileToken);
-      if (!isHuman) {
-        return NextResponse.json(
-          { error: "Human verification failed. Please try again." },
-          { status: 403 }
-        );
-      }
-    } else {
-      const verified = getVerifiedPhone(req);
-      if (!verified) {
-        return NextResponse.json(
-          { error: "Phone verification required." },
-          { status: 401 }
-        );
-      }
-      verifiedPhone = verified.phone;
+    // Single trust gate: the verified-phone cookie set at the OTP step. Both
+    // "saved" (returning customer reusing an existing address row) and "new"
+    // (fresh address just OTP-verified this session) flow through the same
+    // wizard step that requires OTP — Turnstile already gated /api/verify/send
+    // there, so by the time we get here, the cookie is the security control.
+    // The phone-match check below applies to both paths so a verified cookie
+    // can't be paired with someone else's customer_id.
+    const verified = getVerifiedPhone(req);
+    if (!verified) {
+      return NextResponse.json(
+        { error: "Phone verification required." },
+        { status: 401 }
+      );
     }
+    const verifiedPhone = verified.phone;
 
     const { data: cust } = await supabaseAdmin
       .from("customers")
@@ -436,7 +419,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Saved address not found." }, { status: 400 });
     }
 
-    if (addressSource === "new" && verifiedPhone && normalizePhone(cust.phone) !== verifiedPhone) {
+    if (normalizePhone(cust.phone) !== verifiedPhone) {
       return NextResponse.json(
         { error: "Phone verification mismatch." },
         { status: 401 }
