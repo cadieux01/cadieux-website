@@ -384,29 +384,32 @@ export default function AdminLocationsPage() {
                       disabled={visibleIds.length === 0}
                     />
                   </th>
+                  {/* Serial number — purely visual row counter for the
+                      current filtered view; sort_order stays in the DB
+                      and is editable via the modal but no longer shown
+                      as a column. */}
+                  <th style={{ ...th, width: 48 }}>S.No</th>
                   <th style={th}>Name</th>
                   <th style={th}>Type</th>
                   <th style={th}>Area</th>
-                  <th style={th}>Coords</th>
-                  <th style={th}>Sort</th>
                   <th style={{ ...th, textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} style={{ ...td, color: FADED }}>
+                    <td colSpan={6} style={{ ...td, color: FADED }}>
                       Loading…
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ ...td, color: FADED }}>
+                    <td colSpan={6} style={{ ...td, color: FADED }}>
                       No locations match the current filters.
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((r) => {
+                  filtered.map((r, idx) => {
                     const isSel = selected.has(r.id);
                     return (
                       <tr
@@ -425,6 +428,9 @@ export default function AdminLocationsPage() {
                             checked={isSel}
                             onChange={() => toggleOne(r.id)}
                           />
+                        </td>
+                        <td style={{ ...td, color: FADED, fontVariantNumeric: "tabular-nums" }}>
+                          {idx + 1}
                         </td>
                         <td style={td}>
                           <div style={{ color: CREAM, display: "flex", alignItems: "center", gap: 8 }}>
@@ -457,10 +463,6 @@ export default function AdminLocationsPage() {
                         </td>
                         <td style={td}>{TYPE_LABEL[r.type]}</td>
                         <td style={td}>{r.area}</td>
-                        <td style={{ ...td, color: FADED, fontSize: "0.72rem" }}>
-                          {r.latitude.toFixed(5)}, {r.longitude.toFixed(5)}
-                        </td>
-                        <td style={td}>{r.sort_order}</td>
                         <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
                           <button
                             type="button"

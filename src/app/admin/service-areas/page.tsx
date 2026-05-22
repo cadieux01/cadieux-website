@@ -192,13 +192,22 @@ export default function ServiceAreasPage() {
     window.setTimeout(() => setNotice(null), 3500);
   };
 
-  const suggestPincode = async () => {
+  // Look up the pincode for the first area name in the field via the
+  // suggest-pincode endpoint (Google Geocoding under the hood). Used by
+  // both the manual "Auto-fill Pincode" button and the area-name input's
+  // onBlur — the latter only fires when the pincode is still empty so
+  // we don't clobber an admin's manual override.
+  //
+  // `silent=true` (used by the onBlur path) suppresses the user-facing
+  // toast and the inline error so tabbing out feels lightweight. The
+  // manual button still gets full feedback.
+  const suggestPincode = async (silent = false) => {
     const firstArea = newAreas.split(",").map((s) => s.trim()).find(Boolean);
     if (!firstArea) {
-      setAddError("Type an area name first so we can look it up.");
+      if (!silent) setAddError("Type an area name first so we can look it up.");
       return;
     }
-    setAddError(null);
+    if (!silent) setAddError(null);
     setSuggestBusy(true);
     try {
       const res = await adminFetch<{ pincode: string | null }>(
@@ -206,17 +215,28 @@ export default function ServiceAreasPage() {
       );
       if (res.pincode && /^\d{6}$/.test(res.pincode)) {
         setNewPincode(res.pincode);
-        showNotice(`Filled pincode ${res.pincode} from "${firstArea}"`);
-      } else {
+        if (!silent) showNotice(`Filled pincode ${res.pincode} from "${firstArea}"`);
+      } else if (!silent) {
         setAddError(`Could not find a pincode for "${firstArea}".`);
       }
     } catch (e) {
-      setAddError(
-        e instanceof AdminFetchError ? e.message : "Lookup failed",
-      );
+      if (!silent) {
+        setAddError(
+          e instanceof AdminFetchError ? e.message : "Lookup failed",
+        );
+      }
     } finally {
       setSuggestBusy(false);
     }
+  };
+
+  // Auto-fill the pincode when the admin tabs/clicks out of the area
+  // name field, but only if the pincode is currently empty. Prevents
+  // accidentally overwriting an operator's correction.
+  const handleAreaBlur = () => {
+    if (newPincode.replace(/\D/g, "").length === 6) return;
+    if (!newAreas.trim()) return;
+    void suggestPincode(true);
   };
 
   const submitNew = async () => {
@@ -580,8 +600,20 @@ export default function ServiceAreasPage() {
             marginBottom: 12,
           }}
         >
-          Activate new pincode
+          Activate new area
         </div>
+        <p
+          style={{
+            margin: "0 0 12px",
+            color: FADED,
+            fontFamily: "var(--font-body)",
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          Type the area name first — pincode auto-fills via Google Maps when
+          you tab out. Edit the pincode if Google guessed wrong.
+        </p>
         <div
           style={{
             display: "flex",
@@ -592,27 +624,31 @@ export default function ServiceAreasPage() {
         >
           <input
             type="text"
+            placeholder="Area name — required (e.g. MVP Colony)"
+            aria-label="Area name (required)"
+            value={newAreas}
+            onChange={(e) => setNewAreas(e.target.value)}
+            onBlur={handleAreaBlur}
+            autoFocus
+            style={{ ...inputBase, flex: 1, minWidth: 240 }}
+          />
+          <input
+            type="text"
             inputMode="numeric"
             maxLength={6}
-            placeholder="Pincode (e.g. 530017)"
+            placeholder={suggestBusy ? "Looking up…" : "Pincode (auto-fills)"}
+            aria-label="Pincode (auto-fills from area name)"
             value={newPincode}
             onChange={(e) =>
               setNewPincode(e.target.value.replace(/\D/g, "").slice(0, 6))
             }
             style={inputBase}
           />
-          <input
-            type="text"
-            placeholder="Area names — comma separated"
-            value={newAreas}
-            onChange={(e) => setNewAreas(e.target.value)}
-            style={{ ...inputBase, flex: 1, minWidth: 240 }}
-          />
           <button
             type="button"
-            onClick={suggestPincode}
+            onClick={() => void suggestPincode(false)}
             disabled={suggestBusy || addBusy}
-            title="Look up pincode for the first area name via Google Maps"
+            title="Re-run Google lookup for the first area name"
             className="uppercase"
             style={{
               ...primaryBtn,
