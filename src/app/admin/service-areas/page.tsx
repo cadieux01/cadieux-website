@@ -103,6 +103,12 @@ export default function ServiceAreasPage() {
   // for native address autofill and shows contacts/saved addresses on
   // top of Google's dropdown).
   const areaInputRef = useRef<HTMLInputElement | null>(null);
+  // Readonly-on-mount trick: browsers (especially Safari + Chrome) skip
+  // their autofill heuristic on readonly inputs. We start the field
+  // readonly and clear the flag once the user focuses it (or after a
+  // short timeout if autoFocus already fired). By then the autofill
+  // sweep has passed and typing/Places picks work normally.
+  const [areaReadOnly, setAreaReadOnly] = useState(true);
   // Re-assert the suppression attributes after the Places widget has
   // attached to the input. Google sets `autocomplete="off"` on mount,
   // which Chrome ignores for inputs it heuristically classifies as
@@ -122,6 +128,15 @@ export default function ServiceAreasPage() {
     const t = window.setTimeout(apply, 80);
     return () => window.clearTimeout(t);
   }, [autocompleteReady]);
+  // Fallback: clear readonly after a short delay even if the user
+  // hasn't focused yet (autoFocus on a readonly input doesn't always
+  // fire focus on all browsers). 150ms is long enough for Chrome's
+  // and Safari's autofill heuristic to have run-and-skipped, but
+  // short enough that the user can start typing immediately.
+  useEffect(() => {
+    const t = window.setTimeout(() => setAreaReadOnly(false), 150);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const autocompleteOptions = useMemo<
     google.maps.places.AutocompleteOptions | undefined
@@ -838,7 +853,16 @@ export default function ServiceAreasPage() {
           Type the area name first — pincode auto-fills via Google Maps when
           you tab out. Edit the pincode if Google guessed wrong.
         </p>
-        <div
+        {/*
+          Wrap the row in a <form autoComplete="off"> with a swallowed
+          onSubmit so the browser sees a form-level "no autofill"
+          signal. The Activate button is type="button" so this never
+          submits via Enter — the form is purely a hint to the
+          autofill heuristic.
+        */}
+        <form
+          autoComplete="off"
+          onSubmit={(e) => e.preventDefault()}
           style={{
             display: "flex",
             gap: 10,
@@ -846,6 +870,51 @@ export default function ServiceAreasPage() {
             alignItems: "flex-start",
           }}
         >
+          {/*
+            Decoy username/password inputs. The autofill heuristic in
+            Chrome + Safari latches onto the FIRST credential-shaped
+            field in a form and applies its contact/credential
+            dropdown there. By putting two invisible decoys BEFORE
+            the real area input, the heuristic targets the decoys
+            and leaves the real input alone. We use off-screen
+            positioning (not display:none) because Chrome explicitly
+            ignores display:none decoys. aria-hidden + tabIndex=-1
+            keep them out of the a11y tree and tab order.
+          */}
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            tabIndex={-1}
+            aria-hidden="true"
+            defaultValue=""
+            style={{
+              position: "absolute",
+              top: -9999,
+              left: -9999,
+              width: 1,
+              height: 1,
+              opacity: 0,
+              pointerEvents: "none",
+            }}
+          />
+          <input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            tabIndex={-1}
+            aria-hidden="true"
+            defaultValue=""
+            style={{
+              position: "absolute",
+              top: -9999,
+              left: -9999,
+              width: 1,
+              height: 1,
+              opacity: 0,
+              pointerEvents: "none",
+            }}
+          />
           <div style={{ flex: 1, minWidth: 240 }}>
             {autocompleteReady ? (
               <Autocomplete
@@ -872,6 +941,8 @@ export default function ServiceAreasPage() {
                   autoComplete="new-password"
                   data-1p-ignore="true"
                   data-lpignore="true"
+                  readOnly={areaReadOnly}
+                  onFocus={() => setAreaReadOnly(false)}
                   value={newAreas}
                   onChange={(e) => {
                     placePickedRef.current = false;
@@ -895,6 +966,8 @@ export default function ServiceAreasPage() {
                 autoComplete="new-password"
                 data-1p-ignore="true"
                 data-lpignore="true"
+                readOnly={areaReadOnly}
+                onFocus={() => setAreaReadOnly(false)}
                 value={newAreas}
                 onChange={(e) => setNewAreas(e.target.value)}
                 onBlur={handleAreaBlur}
@@ -938,7 +1011,7 @@ export default function ServiceAreasPage() {
           >
             {addBusy ? "Activating…" : "Activate Area"}
           </button>
-        </div>
+        </form>
         {addError && (
           <p
             style={{
