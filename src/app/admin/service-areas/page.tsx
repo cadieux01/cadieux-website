@@ -11,7 +11,7 @@
 // can dial in the right scope before bulk-acting.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
+import { useJsApiLoader } from "@react-google-maps/api";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
@@ -80,9 +80,17 @@ export default function ServiceAreasPage() {
   const [bulkImportBusy, setBulkImportBusy] = useState(false);
   const [bulkImportError, setBulkImportError] = useState<string | null>(null);
 
-  // Google Places Autocomplete on the area name field. Degrades to a
-  // plain input when the loader fails or the API key is missing — free
-  // text entry always works.
+  // Google Places — custom dropdown driven by AutocompleteService
+  // (not the @react-google-maps <Autocomplete> widget). Reason: the
+  // widget binds to a native <input>, and the browser's address /
+  // contacts autofill heuristic targets that input regardless of
+  // attribute tricks (autoComplete="new-password", neutral name,
+  // role=combobox, decoys, readonly-on-mount — all failed in prior
+  // commits a7ea2f6 and e4c7ee0). Rendering predictions ourselves
+  // into a custom <ul> listbox sidesteps that entirely: the input
+  // is a plain combobox the browser doesn't recognize as a name or
+  // address field, and we own the dropdown so Chrome/Safari can't
+  // overlay their own UI on top of it.
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const { isLoaded: mapsLoaded } = useJsApiLoader({
     id: GOOGLE_MAPS_LOADER_ID,
@@ -90,76 +98,177 @@ export default function ServiceAreasPage() {
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
   const autocompleteReady = mapsLoaded && apiKey.length > 0;
-  const [autocomplete, setAutocomplete] =
-    useState<google.maps.places.Autocomplete | null>(null);
-  // Set to true on each successful place_changed so the area-name
-  // onBlur lookup skips itself — the place already gave us a pincode
-  // (or we kicked off the place-specific fallback). Reset on the next
-  // keystroke so subsequent edits behave normally.
+
+  // Set to true when a prediction is picked so the area-name onBlur
+  // lookup skips itself. Reset on the next keystroke.
   const placePickedRef = useRef<boolean>(false);
-  // Ref to the area-name input so we can re-assert `autocomplete` after
-  // the Google Places widget mounts (the widget rewrites the attribute
-  // to "off", but Chrome still treats address-like inputs as eligible
-  // for native address autofill and shows contacts/saved addresses on
-  // top of Google's dropdown).
   const areaInputRef = useRef<HTMLInputElement | null>(null);
-  // Readonly-on-mount trick: browsers (especially Safari + Chrome) skip
-  // their autofill heuristic on readonly inputs. We start the field
-  // readonly and clear the flag once the user focuses it (or after a
-  // short timeout if autoFocus already fired). By then the autofill
-  // sweep has passed and typing/Places picks work normally.
+  const dropdownRef = useRef<HTMLUListElement | null>(null);
+
+  // Readonly-until-focus trick — browsers (Safari especially) skip
+  // autofill on readonly inputs. We start readonly and clear the
+  // flag on first focus (synchronously via state). 150ms fallback
+  // covers the autoFocus edge case where focus fires before mount
+  // completes.
   const [areaReadOnly, setAreaReadOnly] = useState(true);
-  // Re-assert the suppression attributes after the Places widget has
-  // attached to the input. Google sets `autocomplete="off"` on mount,
-  // which Chrome ignores for inputs it heuristically classifies as
-  // address fields — so we set `autocomplete="new-password"` (Chrome
-  // honors this non-standard value as a hard "no autofill" signal,
-  // even for non-password inputs) after a microtask delay to outrun
-  // the widget's own writes. Re-runs whenever the loader state flips
-  // so the override survives Autocomplete's re-init too.
-  useEffect(() => {
-    const el = areaInputRef.current;
-    if (!el) return;
-    const apply = () => {
-      el.setAttribute("autocomplete", "new-password");
-      el.setAttribute("name", "cdx-area-search");
-    };
-    apply();
-    const t = window.setTimeout(apply, 80);
-    return () => window.clearTimeout(t);
-  }, [autocompleteReady]);
-  // Fallback: clear readonly after a short delay even if the user
-  // hasn't focused yet (autoFocus on a readonly input doesn't always
-  // fire focus on all browsers). 150ms is long enough for Chrome's
-  // and Safari's autofill heuristic to have run-and-skipped, but
-  // short enough that the user can start typing immediately.
   useEffect(() => {
     const t = window.setTimeout(() => setAreaReadOnly(false), 150);
     return () => window.clearTimeout(t);
   }, []);
 
-  const autocompleteOptions = useMemo<
-    google.maps.places.AutocompleteOptions | undefined
-  >(
-    () =>
-      autocompleteReady
-        ? {
-            bounds: VIZAG_AUTOCOMPLETE_BOUNDS,
-            componentRestrictions: { country: "in" },
-            fields: [
-              "name",
-              "address_components",
-              "geometry",
-              "formatted_address",
-            ],
-            // `geocode` surfaces neighborhoods, sublocalities, and
-            // localities (e.g. "Madhurawada", "Gajuwaka") which is
-            // what an "area name" picker should show.
-            types: ["geocode"],
-          }
-        : undefined,
-    [autocompleteReady],
+  // Randomized field name regenerated on every mount. Browsers can
+  // only learn / autofill fields by stable name — a fresh random
+  // suffix every page load means the contacts/address heuristic
+  // has nothing to latch onto.
+  const [areaInputName] = useState(
+    () => `area-${Math.random().toString(36).slice(2, 10)}`,
   );
+
+  // Custom prediction dropdown state.
+  type Prediction = google.maps.places.AutocompletePrediction;
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [showPredictions, setShowPredictions] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const autocompleteServiceRef =
+    useRef<google.maps.places.AutocompleteService | null>(null);
+  const sessionTokenRef =
+    useRef<google.maps.places.AutocompleteSessionToken | null>(null);
+  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+
+  // Initialize Places SDK objects once the loader resolves.
+  useEffect(() => {
+    if (!autocompleteReady) return;
+    if (typeof google === "undefined" || !google.maps?.places) return;
+    autocompleteServiceRef.current =
+      new google.maps.places.AutocompleteService();
+    sessionTokenRef.current =
+      new google.maps.places.AutocompleteSessionToken();
+    geocoderRef.current = new google.maps.Geocoder();
+  }, [autocompleteReady]);
+
+  // Debounced prediction fetch as the user types. 150ms is below the
+  // human-perception threshold yet still coalesces fast typing so we
+  // don't burn quota on every keystroke.
+  useEffect(() => {
+    const svc = autocompleteServiceRef.current;
+    if (!autocompleteReady || !svc) return;
+    const query = newAreas.trim();
+    if (query.length < 2) {
+      setPredictions([]);
+      setHighlightIdx(-1);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      svc.getPlacePredictions(
+        {
+          input: query,
+          bounds: VIZAG_AUTOCOMPLETE_BOUNDS,
+          componentRestrictions: { country: "in" },
+          types: ["geocode"],
+          sessionToken: sessionTokenRef.current ?? undefined,
+        },
+        (results) => {
+          setPredictions(results ?? []);
+          setHighlightIdx(-1);
+        },
+      );
+    }, 150);
+    return () => window.clearTimeout(handle);
+  }, [newAreas, autocompleteReady]);
+
+  // Resolve a picked prediction → set area name + pincode using the
+  // existing 3-step chain (postal_code → reverse geocode → suggest).
+  // We use Geocoder.geocode({ placeId }) instead of PlacesService
+  // because it returns address_components + geometry directly and
+  // doesn't require an attribution DOM element.
+  const pickPrediction = useCallback(
+    async (p: Prediction) => {
+      const pickedName =
+        p.structured_formatting?.main_text?.trim() || p.description;
+      placePickedRef.current = true;
+      setNewAreas(pickedName);
+      setPredictions([]);
+      setShowPredictions(false);
+      setHighlightIdx(-1);
+
+      const geocoder = geocoderRef.current;
+      if (!geocoder) return;
+
+      setSuggestBusy(true);
+      try {
+        const res = await geocoder.geocode({ placeId: p.place_id });
+        const r = res.results?.[0];
+
+        // Step 1: postal_code from address_components.
+        const postal = r?.address_components
+          ?.find((c) => c.types.includes("postal_code"))
+          ?.long_name?.replace(/\D/g, "");
+        if (postal && /^\d{6}$/.test(postal)) {
+          setNewPincode(postal);
+          showNotice(`Picked "${pickedName}" → pincode ${postal}`);
+          return;
+        }
+
+        // Step 2: client-side reverse geocode on coords.
+        const loc = r?.geometry?.location;
+        const lat = loc?.lat?.();
+        const lng = loc?.lng?.();
+        if (typeof lat === "number" && typeof lng === "number") {
+          const reversed = await clientReverseGeocode(lat, lng);
+          if (reversed) {
+            setNewPincode(reversed);
+            showNotice(`Picked "${pickedName}" → pincode ${reversed}`);
+            return;
+          }
+        }
+
+        // Step 3: server suggest-pincode (chains its own reverse-
+        // geocode fallback for tricky localities).
+        const lookup = await adminFetch<{ pincode: string | null }>(
+          `/api/admin/service-areas/suggest-pincode?area=${encodeURIComponent(pickedName)}`,
+        );
+        const resolved = (lookup.pincode ?? "").replace(/\D/g, "");
+        if (/^\d{6}$/.test(resolved)) {
+          setNewPincode(resolved);
+          showNotice(`Picked "${pickedName}" → pincode ${resolved}`);
+        }
+      } catch {
+        // Silent — admin can still type the pincode manually.
+      } finally {
+        setSuggestBusy(false);
+        // Rotate the session token after a selection — Google bills
+        // by session, and a session ends on the first details call.
+        if (
+          typeof google !== "undefined" &&
+          google.maps?.places?.AutocompleteSessionToken
+        ) {
+          sessionTokenRef.current =
+            new google.maps.places.AutocompleteSessionToken();
+        }
+      }
+    },
+    // showNotice + clientReverseGeocode are stable refs in this file;
+    // see definitions below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // Close the dropdown on outside click.
+  useEffect(() => {
+    if (!showPredictions) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (
+        areaInputRef.current?.contains(t) ||
+        dropdownRef.current?.contains(t)
+      ) {
+        return;
+      }
+      setShowPredictions(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [showPredictions]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -380,72 +489,6 @@ export default function ServiceAreasPage() {
     },
     [],
   );
-
-  // Robust pincode resolution when a place is picked from autocomplete:
-  //   1. postal_code from the place's address_components
-  //   2. reverse-geocode the place's lat/lng client-side (the JS SDK
-  //      is already loaded, so this is free)
-  //   3. suggest-pincode endpoint (now also reverse-chained server-
-  //      side, so it works for names that don't carry postal_code)
-  // Step 2 fixes the common case of smaller localities like
-  // "Maddilapalem" whose Places result omits postal_code but whose
-  // coords reverse-geocode cleanly to a 6-digit pincode.
-  const onPlaceChanged = useCallback(async () => {
-    if (!autocomplete) return;
-    const place = autocomplete.getPlace();
-    if (!place) return;
-    placePickedRef.current = true;
-
-    const pickedName = place.name?.trim();
-    if (pickedName) setNewAreas(pickedName);
-
-    // Step 1: postal_code from address_components.
-    const comps = place.address_components ?? [];
-    const postal = comps
-      .find((c) => c.types.includes("postal_code"))
-      ?.long_name?.replace(/\D/g, "");
-    if (postal && /^\d{6}$/.test(postal)) {
-      setNewPincode(postal);
-      showNotice(`Picked "${pickedName ?? "area"}" → pincode ${postal}`);
-      return;
-    }
-
-    setSuggestBusy(true);
-    try {
-      // Step 2: client-side reverse geocode on the place's coords.
-      const loc = place.geometry?.location;
-      const lat = loc?.lat?.();
-      const lng = loc?.lng?.();
-      if (typeof lat === "number" && typeof lng === "number") {
-        const reversed = await clientReverseGeocode(lat, lng);
-        if (reversed) {
-          setNewPincode(reversed);
-          showNotice(
-            `Picked "${pickedName ?? "area"}" → pincode ${reversed}`,
-          );
-          return;
-        }
-      }
-
-      // Step 3: name-based suggest-pincode (server now chains its own
-      // reverse-geocode fallback internally).
-      const lookupTerm = pickedName ?? newAreas.trim();
-      if (!lookupTerm) return;
-      const res = await adminFetch<{ pincode: string | null }>(
-        `/api/admin/service-areas/suggest-pincode?area=${encodeURIComponent(lookupTerm)}`,
-      );
-      const resolved = (res.pincode ?? "").replace(/\D/g, "");
-      if (/^\d{6}$/.test(resolved)) {
-        setNewPincode(resolved);
-        showNotice(`Picked "${lookupTerm}" → pincode ${resolved}`);
-      }
-    } catch {
-      // Silent — admin can still type the pincode manually or click
-      // Activate, which retries the chain with a clear error.
-    } finally {
-      setSuggestBusy(false);
-    }
-  }, [autocomplete, newAreas, clientReverseGeocode]);
 
   const submitNew = async () => {
     setAddError(null);
@@ -915,66 +958,154 @@ export default function ServiceAreasPage() {
               pointerEvents: "none",
             }}
           />
-          <div style={{ flex: 1, minWidth: 240 }}>
-            {autocompleteReady ? (
-              <Autocomplete
-                onLoad={setAutocomplete}
-                onPlaceChanged={onPlaceChanged}
-                options={autocompleteOptions}
-              >
-                <input
-                  ref={areaInputRef}
-                  type="text"
-                  // Neutral, non-semantic name/id so Chrome's address-
-                  // autofill heuristics don't latch onto it. "address",
-                  // "area", "city", "location" all trigger contact +
-                  // saved-address dropdowns; "cdx-area-search" doesn't.
-                  name="cdx-area-search"
-                  id="cdx-area-search"
-                  placeholder="Area name — required (e.g. Madhurawada)"
-                  aria-label="Area name (required)"
-                  // role + aria-autocomplete mark this as a custom
-                  // widget so assistive tech (and modern browsers)
-                  // skip the address-field treatment.
-                  role="combobox"
-                  aria-autocomplete="list"
-                  autoComplete="new-password"
-                  data-1p-ignore="true"
-                  data-lpignore="true"
-                  readOnly={areaReadOnly}
-                  onFocus={() => setAreaReadOnly(false)}
-                  value={newAreas}
-                  onChange={(e) => {
-                    placePickedRef.current = false;
-                    setNewAreas(e.target.value);
+          <div
+            style={{ flex: 1, minWidth: 240, position: "relative" }}
+          >
+            {/*
+              Custom combobox: a plain <input> (not bound to Google's
+              Autocomplete widget) plus a self-rendered listbox below.
+              The browser sees a generic search-style input with a
+              randomized name — no address/name heuristic matches —
+              and the dropdown lives in our DOM where Chrome/Safari
+              cannot overlay contact suggestions on top of it.
+            */}
+            <input
+              ref={areaInputRef}
+              type="search"
+              name={areaInputName}
+              id={areaInputName}
+              placeholder="Area name — required (e.g. Madhurawada)"
+              aria-label="Area name (required)"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={showPredictions && predictions.length > 0}
+              aria-controls="cdx-area-listbox"
+              aria-activedescendant={
+                highlightIdx >= 0
+                  ? `cdx-area-opt-${highlightIdx}`
+                  : undefined
+              }
+              autoComplete="off"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-form-type="other"
+              readOnly={areaReadOnly}
+              onFocus={() => {
+                setAreaReadOnly(false);
+                if (predictions.length > 0) setShowPredictions(true);
+              }}
+              value={newAreas}
+              onChange={(e) => {
+                placePickedRef.current = false;
+                setNewAreas(e.target.value);
+                setShowPredictions(true);
+              }}
+              onKeyDown={(e) => {
+                if (!showPredictions || predictions.length === 0) {
+                  if (e.key === "ArrowDown" && predictions.length > 0) {
+                    setShowPredictions(true);
+                    setHighlightIdx(0);
+                    e.preventDefault();
+                  }
+                  return;
+                }
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setHighlightIdx((i) =>
+                    Math.min(predictions.length - 1, i + 1),
+                  );
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setHighlightIdx((i) => Math.max(0, i - 1));
+                } else if (e.key === "Enter") {
+                  if (highlightIdx >= 0 && predictions[highlightIdx]) {
+                    e.preventDefault();
+                    void pickPrediction(predictions[highlightIdx]);
+                  }
+                } else if (e.key === "Escape") {
+                  setShowPredictions(false);
+                  setHighlightIdx(-1);
+                }
+              }}
+              onBlur={handleAreaBlur}
+              autoFocus
+              style={{ ...inputBase, width: "100%" }}
+            />
+            {autocompleteReady &&
+              showPredictions &&
+              predictions.length > 0 && (
+                <ul
+                  ref={dropdownRef}
+                  id="cdx-area-listbox"
+                  role="listbox"
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    left: 0,
+                    right: 0,
+                    zIndex: 50,
+                    margin: 0,
+                    padding: 4,
+                    listStyle: "none",
+                    background: "#0a0805",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 6,
+                    boxShadow: "0 12px 32px rgba(0,0,0,0.55)",
+                    maxHeight: 280,
+                    overflowY: "auto",
                   }}
-                  onBlur={handleAreaBlur}
-                  autoFocus
-                  style={{ ...inputBase, width: "100%" }}
-                />
-              </Autocomplete>
-            ) : (
-              <input
-                ref={areaInputRef}
-                type="text"
-                name="cdx-area-search"
-                id="cdx-area-search"
-                placeholder="Area name — required (e.g. Madhurawada)"
-                aria-label="Area name (required)"
-                role="combobox"
-                aria-autocomplete="list"
-                autoComplete="new-password"
-                data-1p-ignore="true"
-                data-lpignore="true"
-                readOnly={areaReadOnly}
-                onFocus={() => setAreaReadOnly(false)}
-                value={newAreas}
-                onChange={(e) => setNewAreas(e.target.value)}
-                onBlur={handleAreaBlur}
-                autoFocus
-                style={{ ...inputBase, width: "100%" }}
-              />
-            )}
+                >
+                  {predictions.map((p, i) => {
+                    const main =
+                      p.structured_formatting?.main_text ?? p.description;
+                    const secondary =
+                      p.structured_formatting?.secondary_text ?? "";
+                    const isActive = i === highlightIdx;
+                    return (
+                      <li
+                        key={p.place_id}
+                        id={`cdx-area-opt-${i}`}
+                        role="option"
+                        aria-selected={isActive}
+                        // mousedown (not click) so the input's
+                        // onBlur fires AFTER the pick — otherwise
+                        // the dropdown closes before the click
+                        // registers.
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          void pickPrediction(p);
+                        }}
+                        onMouseEnter={() => setHighlightIdx(i)}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 4,
+                          cursor: "pointer",
+                          background: isActive
+                            ? "rgba(245,158,11,0.15)"
+                            : "transparent",
+                          color: CREAM,
+                          fontFamily: "var(--font-body)",
+                          fontSize: 13,
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        <div style={{ fontWeight: 500 }}>{main}</div>
+                        {secondary && (
+                          <div
+                            style={{
+                              color: FADED,
+                              fontSize: 11,
+                              marginTop: 2,
+                            }}
+                          >
+                            {secondary}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
           </div>
           <input
             type="text"
