@@ -34,3 +34,6 @@ node_modules/
 tsconfig.tsbuildinfo
 
 /public/_originals/
+
+# Local Claude Code worktrees — these are submodule-like nested repos
+.claude/worktrees/
