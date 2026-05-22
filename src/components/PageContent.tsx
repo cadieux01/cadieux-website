@@ -2,6 +2,8 @@
 
 import { useRef, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
 import QASection from "./QASection";
 
 /* ── Helpers ── */
@@ -116,6 +118,20 @@ const GRAINS = Array.from({ length: 22 }, (_, i) => ({
 }));
 
 const N_C = INGREDIENTS.length;
+
+// ── Founder section (homepage bottom, above footer) ────────────────
+// Mirror of the app's home founder card. Foundation Green band,
+// rounded portrait, short personal note, gold signature, soft link
+// to /behind-cadieux. Kept as constants so non-engineers can edit
+// copy without touching JSX.
+const FOUNDER_HEADING = "Why I built Cadieux";
+const FOUNDER_PARAGRAPHS = [
+  "For a long time, eating well felt like a chore I had to survive. Same shake. Same eggs. Same bar. The discipline was working, but I\u2019d stopped enjoying any of it.",
+  "All I wanted was good protein bread. I searched everywhere \u2014 found it online, but never here in Vizag. Not in a single store. Not even to my door.",
+  "So I spent eighteen months making the bread I wished existed. This is it. I hope it makes your everyday a little better, the way it did mine.",
+];
+const FOUNDER_SIGNATURE = "\u2014 Sunny Raja, Founder";
+const FOUNDER_LINK_LABEL = "Read the full story \u2192 Behind Cadieux";
 
 export default function PageContent() {
   const router = useRouter();
@@ -747,12 +763,118 @@ export default function PageContent() {
             }}
             onClick={() => router.push("/shop")}
             >Shop Now</button>
+          </section>
 
-            {/* ── Brand / Company / Manufacturing footer ── */}
+          {/* ══ SECTION 6 — FOUNDER (homepage only, just above the footer) ══
+              Foundation Green band per brand bible. Portrait + short
+              personal note + gold signature + soft link to the full
+              /behind-cadieux page. Confidentiality: no premix/supplier
+              references — the recipe is framed as developed in-house. */}
+          <section style={{
+            background: "#024628",
+            padding: "96px clamp(24px,6vw,80px)",
+            position: "relative",
+            zIndex: 3,
+            display: "flex",
+            justifyContent: "center",
+          }}>
             <div style={{
-              position: "relative", zIndex: 3,
-              marginTop: 64, paddingTop: 28,
-              borderTop: "1px solid rgba(251,243,212,0.12)",
+              width: "100%",
+              maxWidth: 720,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
+            }}>
+              <div style={{
+                width: "min(220px, 60vw)",
+                aspectRatio: "4 / 5",
+                borderRadius: 10,
+                overflow: "hidden",
+                position: "relative",
+                background: "rgba(0,0,0,0.2)",
+                marginBottom: 32,
+              }}>
+                <Image
+                  src="/founder-home.jpg"
+                  alt="Sunny Raja, founder of Cadieux"
+                  fill
+                  sizes="(max-width: 640px) 60vw, 220px"
+                  style={{ objectFit: "cover" }}
+                />
+              </div>
+
+              <h2 style={{
+                margin: "0 0 24px",
+                fontFamily: "var(--font-heading)",
+                fontSize: "clamp(28px,5vw,40px)",
+                fontWeight: 300,
+                color: "#FBF3D4",
+                letterSpacing: "0.02em",
+                lineHeight: 1.15,
+              }}>
+                {FOUNDER_HEADING}
+              </h2>
+
+              {FOUNDER_PARAGRAPHS.map((p, i) => (
+                <p key={i} style={{
+                  margin: "0 0 16px",
+                  fontFamily: "var(--font-heading)",
+                  fontSize: "clamp(15px,1.8vw,18px)",
+                  fontWeight: 300,
+                  color: "rgba(251,243,212,0.92)",
+                  letterSpacing: "0.01em",
+                  lineHeight: 1.75,
+                  maxWidth: 560,
+                }}>
+                  {p}
+                </p>
+              ))}
+
+              <p style={{
+                margin: "24px 0 0",
+                fontFamily: "var(--font-body)",
+                fontSize: 12,
+                fontWeight: 500,
+                letterSpacing: "0.3em",
+                textTransform: "uppercase",
+                color: "#c9a96e",
+              }}>
+                {FOUNDER_SIGNATURE}
+              </p>
+
+              <Link
+                href="/behind-cadieux"
+                style={{
+                  marginTop: 32,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 11,
+                  fontWeight: 300,
+                  letterSpacing: "0.25em",
+                  textTransform: "uppercase",
+                  color: "rgba(251,243,212,0.75)",
+                  textDecoration: "none",
+                  borderBottom: "1px solid rgba(201,169,110,0.4)",
+                  paddingBottom: 3,
+                }}
+              >
+                {FOUNDER_LINK_LABEL}
+              </Link>
+            </div>
+          </section>
+
+          {/* ══ Brand / Company / Manufacturing footer ══
+              Extracted out of the closing CTA section so the Founder
+              band can sit between the CTA and the footer. Walnut bg
+              matches the closing CTA so the seam is invisible. */}
+          <footer style={{
+            background: "#060402",
+            padding: "56px 28px 80px",
+            display: "flex", justifyContent: "center",
+            position: "relative",
+            zIndex: 3,
+          }}>
+            <div style={{
               maxWidth: 520, width: "100%",
               display: "flex", flexDirection: "column", alignItems: "center", gap: 14,
               textAlign: "center",
@@ -826,7 +948,7 @@ export default function PageContent() {
                 ))}
               </div>
             </div>
-          </section>
+          </footer>
 
         </div>
       </div>
