@@ -52,7 +52,11 @@ export default function SiteMusic() {
         style={{
           position: "fixed",
           bottom: 20,
-          right: 20,
+          // Moved to the LEFT corner — the bottom-right is now owned by
+          // the FloatingCartButton. `max(...)` keeps the visual 20px gap
+          // on phones without a notch but pushes the button inward on
+          // iPhones with a left safe-area inset (landscape orientation).
+          left: "max(20px, env(safe-area-inset-left))",
           zIndex: 200,
           width: 42,
           height: 42,
