@@ -241,21 +241,52 @@ export default function ServiceAreasPage() {
 
   const submitNew = async () => {
     setAddError(null);
-    const pincode = newPincode.replace(/\D/g, "");
-    if (pincode.length !== 6) {
-      setAddError("Pincode must be 6 digits");
-      return;
-    }
     const area_names = newAreas
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
     if (area_names.length === 0) {
-      setAddError("Add at least one area name");
+      setAddError("Area name required");
       return;
     }
+
     setAddBusy(true);
     try {
+      // Resolve the pincode. Admin override (anything already in the
+      // field) wins — we only hit Google when the field is blank/short.
+      // This is the single source of truth for the activate path; the
+      // onBlur lookup is a convenience and can be skipped (e.g. the
+      // admin clicks Activate immediately after typing).
+      let pincode = newPincode.replace(/\D/g, "");
+      if (pincode.length !== 6) {
+        const firstArea = area_names[0]!;
+        try {
+          const lookup = await adminFetch<{ pincode: string | null }>(
+            `/api/admin/service-areas/suggest-pincode?area=${encodeURIComponent(firstArea)}`,
+          );
+          const resolved = (lookup.pincode ?? "").replace(/\D/g, "");
+          if (/^\d{6}$/.test(resolved)) {
+            pincode = resolved;
+            // Reflect the resolved value back into the field so the
+            // operator sees what we used (and can correct + re-submit
+            // if Google guessed wrong).
+            setNewPincode(resolved);
+          } else {
+            setAddError(
+              `Couldn't find a pincode for "${firstArea}". Please enter it manually.`,
+            );
+            return;
+          }
+        } catch (e) {
+          setAddError(
+            e instanceof AdminFetchError
+              ? `Pincode lookup failed: ${e.message}`
+              : `Couldn't find a pincode for "${firstArea}". Please enter it manually.`,
+          );
+          return;
+        }
+      }
+
       const res = await adminFetch<{
         ok: boolean;
         geocoded?: number;
@@ -665,7 +696,7 @@ export default function ServiceAreasPage() {
             className="uppercase"
             style={primaryBtn}
           >
-            {addBusy ? "Saving…" : "Activate Area"}
+            {addBusy ? "Activating…" : "Activate Area"}
           </button>
         </div>
         {addError && (
