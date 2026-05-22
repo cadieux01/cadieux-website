@@ -126,6 +126,7 @@ export default function Nav() {
             { label: "Cart",                action: () => nav("/cart") },
             { label: "Subscription",        action: () => nav("/subscription") },
             { label: "How We Bake",         action: () => nav("/making") },
+            { label: "Behind Cadieux",      action: () => nav("/behind-cadieux") },
             { label: "Blogs",               action: () => nav("/blogs") },
             { label: "Feedback & Reviews",  action: () => nav("/feedback") },
             { label: "Reports",             action: () => nav("/reports") },
