@@ -97,6 +97,32 @@ export default function ServiceAreasPage() {
   // (or we kicked off the place-specific fallback). Reset on the next
   // keystroke so subsequent edits behave normally.
   const placePickedRef = useRef<boolean>(false);
+  // Ref to the area-name input so we can re-assert `autocomplete` after
+  // the Google Places widget mounts (the widget rewrites the attribute
+  // to "off", but Chrome still treats address-like inputs as eligible
+  // for native address autofill and shows contacts/saved addresses on
+  // top of Google's dropdown).
+  const areaInputRef = useRef<HTMLInputElement | null>(null);
+  // Re-assert the suppression attributes after the Places widget has
+  // attached to the input. Google sets `autocomplete="off"` on mount,
+  // which Chrome ignores for inputs it heuristically classifies as
+  // address fields — so we set `autocomplete="new-password"` (Chrome
+  // honors this non-standard value as a hard "no autofill" signal,
+  // even for non-password inputs) after a microtask delay to outrun
+  // the widget's own writes. Re-runs whenever the loader state flips
+  // so the override survives Autocomplete's re-init too.
+  useEffect(() => {
+    const el = areaInputRef.current;
+    if (!el) return;
+    const apply = () => {
+      el.setAttribute("autocomplete", "new-password");
+      el.setAttribute("name", "cdx-area-search");
+    };
+    apply();
+    const t = window.setTimeout(apply, 80);
+    return () => window.clearTimeout(t);
+  }, [autocompleteReady]);
+
   const autocompleteOptions = useMemo<
     google.maps.places.AutocompleteOptions | undefined
   >(
@@ -828,9 +854,24 @@ export default function ServiceAreasPage() {
                 options={autocompleteOptions}
               >
                 <input
+                  ref={areaInputRef}
                   type="text"
+                  // Neutral, non-semantic name/id so Chrome's address-
+                  // autofill heuristics don't latch onto it. "address",
+                  // "area", "city", "location" all trigger contact +
+                  // saved-address dropdowns; "cdx-area-search" doesn't.
+                  name="cdx-area-search"
+                  id="cdx-area-search"
                   placeholder="Area name — required (e.g. Madhurawada)"
                   aria-label="Area name (required)"
+                  // role + aria-autocomplete mark this as a custom
+                  // widget so assistive tech (and modern browsers)
+                  // skip the address-field treatment.
+                  role="combobox"
+                  aria-autocomplete="list"
+                  autoComplete="new-password"
+                  data-1p-ignore="true"
+                  data-lpignore="true"
                   value={newAreas}
                   onChange={(e) => {
                     placePickedRef.current = false;
@@ -843,9 +884,17 @@ export default function ServiceAreasPage() {
               </Autocomplete>
             ) : (
               <input
+                ref={areaInputRef}
                 type="text"
+                name="cdx-area-search"
+                id="cdx-area-search"
                 placeholder="Area name — required (e.g. Madhurawada)"
                 aria-label="Area name (required)"
+                role="combobox"
+                aria-autocomplete="list"
+                autoComplete="new-password"
+                data-1p-ignore="true"
+                data-lpignore="true"
                 value={newAreas}
                 onChange={(e) => setNewAreas(e.target.value)}
                 onBlur={handleAreaBlur}
