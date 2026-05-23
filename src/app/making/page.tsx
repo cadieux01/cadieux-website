@@ -26,7 +26,7 @@ export default function MakingPage() {
             Precision Baking
           </h1>
           <p data-stagger style={{ margin: "0 0 56px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "#4369B2", lineHeight: 2.2 }}>
-            Six steps. No shortcuts.
+            Five steps. No shortcuts.
           </p>
         </ScrollReveal>
 
@@ -34,13 +34,9 @@ export default function MakingPage() {
           {PROCESS_STEPS.map((step, i) => (
             <ScrollReveal key={i}>
               <div style={{ borderTop: "1px solid rgba(240,223,200,0.08)", paddingTop: 32, paddingBottom: 40 }}>
-                <div data-stagger style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(251,243,212,0.3)" }}>{step.num}</span>
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 400, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(30,30,30,0.85)", background: step.tagColor, padding: "3px 10px", borderRadius: 20 }}>{step.tag}</span>
-                </div>
-                <p data-stagger style={{ margin: "0 0 8px", fontFamily: "var(--font-heading)", fontSize: "clamp(22px,5vw,38px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1.1 }}>{step.title}</p>
-                <p data-stagger style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, letterSpacing: "0.05em", color: "#4369B2" }}>{step.highlight}</p>
-                <p data-stagger style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, lineHeight: 1.85, color: "rgba(251,243,212,0.45)", maxWidth: 520 }}>{step.desc}</p>
+                <span data-stagger style={{ display: "block", marginBottom: 16, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(251,243,212,0.3)" }}>{step.num}</span>
+                <p data-stagger style={{ margin: "0 0 12px", fontFamily: "var(--font-heading)", fontSize: "clamp(22px,5vw,38px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.01em", lineHeight: 1.1 }}>{step.title}</p>
+                <p data-stagger style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, lineHeight: 1.85, color: "rgba(251,243,212,0.55)", maxWidth: 520 }}>{step.desc}</p>
               </div>
             </ScrollReveal>
           ))}

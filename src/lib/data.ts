@@ -198,54 +198,11 @@ That's what switching to better bread feels like. Not a revolution. Just a bette
 ];
 
 export const PROCESS_STEPS = [
-  {
-    num: "01",
-    tag: "Mixing",
-    tagColor: "#d0d8ff",
-    title: "Spiral Blend",
-    highlight: "4 min slow · 15–18 min fast",
-    desc: "Every ingredient is placed in the bowl before the first rotation begins. We use a hook attachment and build structure in two stages — low speed to bind, high speed to develop the gluten network fully.",
-  },
-  {
-    num: "02",
-    tag: "Dough Temp",
-    tagColor: "#f5e6c8",
-    title: "Temperature Control",
-    highlight: "24°C – 26°C",
-    desc: "Dough temperature is checked before and after every mix. Staying within this window ensures the fermentation that follows runs at the right pace — not too fast, never sluggish.",
-  },
-  {
-    num: "03",
-    tag: "Fermentation",
-    tagColor: "#c8e6d0",
-    title: "Bulk Rest",
-    highlight: "~15 minutes",
-    desc: "After mixing, the dough is left undisturbed at room temperature. This short bulk ferment allows the gluten to relax and the cultures to begin their work quietly.",
-  },
-  {
-    num: "04",
-    tag: "Scale",
-    tagColor: "#d0d8ff",
-    title: "Precise Portioning",
-    highlight: "240 g per loaf",
-    desc: "Each portion is weighed precisely to 240g before going into the mould. At this size, even a small deviation changes the bake — so we weigh every single one.",
-  },
-  {
-    num: "05",
-    tag: "Proofing",
-    tagColor: "#c8e6d0",
-    title: "Final Proof",
-    highlight: "40–50 min · 32°C / 75% RH",
-    desc: "Smaller loaves proof faster. We hold at 32°C with 75% humidity and watch the rise carefully — pulling at the right moment keeps the crumb tight and even throughout.",
-  },
-  {
-    num: "06",
-    tag: "Bake",
-    tagColor: "#f5d0d0",
-    title: "Falling Temperature Bake",
-    highlight: "230°C → 210°C over 30–35 min",
-    desc: "A 240g loaf bakes quicker and needs a shorter window. We start at 230°C to set the crust, then step down by 20°C every ten minutes — done in 30 to 35 minutes, not a moment more.",
-  },
+  { num: "01", title: "Mix",     desc: "Slow then fast. Every ingredient in before the first turn." },
+  { num: "02", title: "Rest",    desc: "Fifteen minutes, undisturbed. Gluten settles, cultures wake." },
+  { num: "03", title: "Portion", desc: "240g per loaf, weighed every time." },
+  { num: "04", title: "Proof",   desc: "32°C, 75% humidity. Pulled the moment it's right." },
+  { num: "05", title: "Bake",    desc: "Falling heat, 230°C down to 210°C. Thirty-five minutes, not a moment more." },
 ];
 
 export const VIZAG_AREAS = [
