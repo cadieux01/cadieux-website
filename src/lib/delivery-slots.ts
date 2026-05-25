@@ -315,15 +315,23 @@ export function validateBookingSlot(
 // ── Display helpers ─────────────────────────────────────────────────────
 
 /** Pretty label for ANY stored slot value:
- *    - New "HH:MM" → "7:30 AM"
- *    - Legacy "HH:MM-HH:MM" → "6 – 7 AM"  (preserved for legacy rows) */
+ *    - New "HH:MM" → "7:30–8:00 AM"  (30-min range)
+ *    - Legacy "HH:MM-HH:MM" → "6–7 AM"
+ *  Storage is the start "HH:MM"; display always shows the full 30-min span. */
 export function formatSlotForDisplay(value: string | null | undefined): string {
   if (!value) return "";
   // Legacy "HH:MM-HH:MM"
   const m = /^(\d{2}:\d{2})-(\d{2}:\d{2})$/.exec(value);
   if (m) return fmtRange(m[1], m[2]);
-  // New "HH:MM"
-  if (parseHHMM(value)) return fmt12(value);
+  // New "HH:MM" — compute end = start + SLOT_INTERVAL_MIN and render range.
+  const p = parseHHMM(value);
+  if (p) {
+    const endMins = (p.hour * 60 + p.minute + SLOT_INTERVAL_MIN) % (24 * 60);
+    const eh = Math.floor(endMins / 60);
+    const em = endMins % 60;
+    const endValue = `${pad2(eh)}:${pad2(em)}`;
+    return fmtRange(value, endValue);
+  }
   return value;
 }
 

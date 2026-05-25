@@ -993,9 +993,55 @@ export default function CheckoutPage() {
                     border: "1px solid rgba(240,223,200,0.12)",
                     padding: "18px 20px",
                     marginBottom: 16,
+                    position: "relative",
                   }}
                 >
-                  <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 17, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>
+                  {/* Inline Edit / Delete — directly on the address card so
+                      the customer doesn't have to scroll or hunt through a
+                      submenu to manage their saved address. */}
+                  <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => { setFormMode("edit"); setError(""); }}
+                      style={{
+                        background: "none", border: "1px solid rgba(240,223,200,0.18)",
+                        padding: "4px 10px", cursor: "pointer",
+                        fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
+                        letterSpacing: "0.3em", textTransform: "uppercase",
+                        color: "rgba(240,223,200,0.7)",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                      aria-label="Edit saved address"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!window.confirm("Delete saved details? You'll need to enter your address again next time.")) return;
+                        try { localStorage.removeItem("cadieux_phone"); } catch { /* private mode */ }
+                        try { sessionStorage.removeItem("cadieux_verified_phone"); } catch { /* private mode */ }
+                        setSavedCustomer(null);
+                        setCustomer(null);
+                        setFormMode("fresh");
+                        setName(""); setPhone(""); setAddressLine(""); setArea(""); setCity(""); setPincode("");
+                        setOtpVerified(false); setOtpSent(false); setOtpCode(""); setOtpError("");
+                        setError("");
+                      }}
+                      style={{
+                        background: "none", border: "1px solid rgba(245,75,75,0.35)",
+                        padding: "4px 10px", cursor: "pointer",
+                        fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
+                        letterSpacing: "0.3em", textTransform: "uppercase",
+                        color: "#f87171",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                      aria-label="Delete saved address"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                  <p style={{ margin: "0 0 6px", paddingRight: 120, fontFamily: "var(--font-body)", fontSize: 17, fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.04em" }}>
                     {savedCustomer.full_name}
                   </p>
                   <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(240,223,200,0.65)", letterSpacing: "0.04em" }}>
@@ -1180,6 +1226,36 @@ export default function CheckoutPage() {
         }}
       >
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "14px 20px" }}>
+          {/* Live price summary — visible above every CTA except the
+              unserviceable-pincode request flow (no fee to show there). */}
+          {!(step === "address" && pinStatus.state === "unserviceable") && cart.length > 0 && (
+            <div
+              style={{
+                display: "flex", alignItems: "baseline", justifyContent: "space-between",
+                gap: 12, marginBottom: 10,
+                paddingBottom: 10,
+                borderBottom: "1px solid rgba(240,223,200,0.08)",
+                fontFamily: "var(--font-body)",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                <span style={{ fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(240,223,200,0.4)" }}>
+                  Subtotal ₹{total} · Delivery {quoteLoading ? "…" : `₹${deliveryFee}`}
+                  {deliveryQuote?.distanceKm !== null && deliveryQuote?.distanceKm !== undefined && (
+                    <span style={{ color: "rgba(240,223,200,0.32)" }}>
+                      {" "}({deliveryQuote.distanceKm} km)
+                    </span>
+                  )}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 200, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(240,223,200,0.55)" }}>
+                  Total (incl. GST)
+                </span>
+              </div>
+              <span style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 300, color: "#FBF3D4", whiteSpace: "nowrap" }}>
+                ₹{grandTotal}
+              </span>
+            </div>
+          )}
           {step === "address" && pinStatus.state === "unserviceable" ? (
             <button
               onClick={submitDeliveryRequest}

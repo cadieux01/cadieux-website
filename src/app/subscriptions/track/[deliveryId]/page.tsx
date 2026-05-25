@@ -203,7 +203,7 @@ export default function DeliveryDetailPage() {
         {sub.product_name} × {sub.quantity_per_delivery}
       </div>
       <div style={{ color: "rgba(240,223,200,0.55)", fontSize: 13, marginBottom: 28 }}>
-        Scheduled {formatDate(delivery.scheduled_date)} · {delivery.scheduled_time_slot}
+        Scheduled {formatDate(delivery.scheduled_date)} · {formatSlot(delivery.scheduled_time_slot)}
       </div>
 
       {isCancelled ? (
@@ -512,7 +512,7 @@ function DirectEditPanel({
               style={inputStyle}
             />
           </Field>
-          <Field label={`New time slot (current: ${currentSlot})`}>
+          <Field label={`New time slot (current: ${formatSlot(currentSlot)})`}>
             <select
               value={slot}
               onChange={(e) => setSlot(e.target.value)}

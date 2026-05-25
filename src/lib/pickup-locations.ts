@@ -7,8 +7,9 @@
 // Cached aggressively because the marker set rarely changes — usually
 // only when a new stall opens or a partner pickup is added.
 
-import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
+
+import { supabaseAdmin } from "@/lib/admin-auth";
 
 export type PickupLocationType = "kitchen" | "stall" | "partner_pickup";
 
@@ -31,18 +32,17 @@ export type PickupLocationRow = {
   sort_order: number;
 };
 
-const supabaseAnon = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } },
-);
-
 // 5-minute revalidate window keeps Supabase reads bounded; the admin
 // CRUD routes also call `revalidateTag("pickup-locations")` after
 // every write so the operator sees their edit reflected within seconds.
+//
+// Uses service-role (admin) client because the table has RLS enabled
+// with no anon-read policy ("no policy = no access"). All callers are
+// server-side (API routes, server components, server lib utilities),
+// so the key never leaves the server.
 export const getActiveLocations = unstable_cache(
   async (): Promise<PickupLocationRow[]> => {
-    const { data, error } = await supabaseAnon
+    const { data, error } = await supabaseAdmin
       .from("pickup_locations")
       .select(
         "id, name, type, area, address, latitude, longitude, notes, pincode, google_place_id, sort_order",

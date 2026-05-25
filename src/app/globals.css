@@ -13,7 +13,34 @@
   --color-blue: #436cb4;
   --glass-bg: rgba(251, 243, 212, 0.05);
   --glass-border: rgba(192, 200, 206, 0.12);
+
+  /* Safe-area insets exposed as CSS variables. With
+     viewportFit:"cover" in layout.tsx, the browser fills the entire
+     screen including the notch / dynamic island / home-indicator
+     region. Any element that wants to avoid the cutouts can reference
+     these — e.g. `padding-top: var(--safe-top)` on sticky headers.
+     The 0px fallback keeps non-notched devices unaffected. */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
 }
+
+/* Horizontal insets applied at body level so landscape orientation
+   on notched phones (camera bezel on the side) never clips content.
+   Vertical insets are NOT applied here because top/bottom chrome
+   has element-level needs (sticky headers must overlap content). */
+body {
+  padding-left:  var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+/* Utility classes for any fixed/sticky element pinned to top or
+   bottom of the viewport on notched devices. Components opt in by
+   adding `cdx-safe-top` / `cdx-safe-bottom` instead of hand-rolling
+   the env() call each time. Both fall back to 0 on non-notched UAs. */
+.cdx-safe-top    { padding-top:    var(--safe-top); }
+.cdx-safe-bottom { padding-bottom: var(--safe-bottom); }
 
 * {
   box-sizing: border-box;

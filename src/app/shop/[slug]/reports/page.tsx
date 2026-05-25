@@ -24,8 +24,8 @@ export default function ProductReportsPage() {
         href={`/shop/${slug}`}
         style={{
           position: "fixed",
-          top: 24,
-          left: 20,
+          top: "calc(24px + env(safe-area-inset-top))",
+          left: "calc(20px + env(safe-area-inset-left))",
           zIndex: 101,
           fontFamily: "var(--font-body)",
           fontSize: 10,

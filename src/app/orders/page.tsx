@@ -94,7 +94,7 @@ export default function OrdersPage() {
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
 
       <Link href="/" style={{
-        position: "fixed", top: 24, left: 20, zIndex: 101,
+        position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
         fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
         letterSpacing: "0.35em", textTransform: "uppercase",
         color: "#4369B2", textDecoration: "none",
