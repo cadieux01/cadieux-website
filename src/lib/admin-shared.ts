@@ -75,6 +75,11 @@ export type AdminOrderRow = {
   delivery_slot: string | null;
   items: AdminOrderItemSnapshot[] | null;
   created_at: string;
+  /** GPS coords captured at checkout. Present on website orders after the
+   *  share-location feature shipped (commit a79fde5) and on app orders
+   *  once the new build is live. Null for everything before. */
+  latitude?: number | null;
+  longitude?: number | null;
   customers?: AdminCustomerSummary | null;
 };
 

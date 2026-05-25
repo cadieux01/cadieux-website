@@ -22,6 +22,7 @@ import {
   withinRange,
 } from "@/components/admin/DateRangePicker";
 import { ContactActions } from "@/components/admin/ContactActions";
+import { OrderLocationActions } from "@/components/admin/OrderLocationActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
@@ -614,6 +615,11 @@ function OrdersPageInner() {
                           {o.customers.city}
                         </div>
                       ) : null}
+                      <OrderLocationActions
+                        latitude={o.latitude}
+                        longitude={o.longitude}
+                        orderId={o.id}
+                      />
                     </td>
                     <td style={td}>
                       <span style={{ color: "#fbf3d4", fontSize: "0.85rem" }}>

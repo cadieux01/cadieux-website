@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, customer_id, total_amount, status, delivery_address, delivery_date, delivery_slot, items, created_at, customers(id, full_name, phone, city)"
+      "id, customer_id, total_amount, status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, customers(id, full_name, phone, city)"
     )
     .order("created_at", { ascending: false });
 
