@@ -93,8 +93,6 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { cart, cartTotal, clearCart } = useCart();
   const total = cartTotal;
-  const deliveryFee = DELIVERY_FEE_INR;
-  const grandTotal = total + deliveryFee;
 
   // Cart snapshot for place_order body.
   const orderItems = cart.map((c) => ({
@@ -151,6 +149,20 @@ export default function CheckoutPage() {
   // GPS coordinates captured from location or autocomplete
   const [orderLat, setOrderLat] = useState<number | null>(null);
   const [orderLng, setOrderLng] = useState<number | null>(null);
+
+  // Distance-based delivery fee quote (fetched from /api/delivery-quote)
+  type DeliveryQuote = {
+    serviceable: boolean | null;
+    feeInr: number | null;
+    distanceKm: number | null;
+  };
+  const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+
+  // Reactive fee + total — update immediately when quote arrives
+  const deliveryFee  = deliveryQuote?.feeInr  ?? DELIVERY_FEE_INR;
+  const grandTotal   = total + deliveryFee;
+  const distanceUnserviceable = deliveryQuote?.serviceable === false;
 
   // Pincode serviceability
   const [pinStatus, setPinStatus] = useState<PinState>({ state: "idle" });
@@ -255,6 +267,38 @@ export default function CheckoutPage() {
       ctrl.abort();
     };
   }, [effectivePincode]);
+
+  // Delivery-fee quote: fetch whenever GPS coords or pincode changes.
+  // Uses coords as primary; falls back to pincode centroid for returning customers.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (orderLat !== null && orderLng !== null) {
+      params.set("lat", String(orderLat));
+      params.set("lng", String(orderLng));
+    } else if (effectivePincode.length === 6) {
+      params.set("pincode", effectivePincode);
+    } else {
+      setDeliveryQuote(null);
+      return;
+    }
+    setQuoteLoading(true);
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetch(`/api/delivery-quote?${params.toString()}`, { signal: ctrl.signal })
+        .then((r) => r.json())
+        .then((d: { serviceable?: boolean | null; feeInr?: unknown; distanceKm?: unknown }) => {
+          setDeliveryQuote({
+            serviceable:  d.serviceable ?? null,
+            feeInr:       typeof d.feeInr    === "number" ? d.feeInr    : null,
+            distanceKm:   typeof d.distanceKm === "number" ? d.distanceKm : null,
+          });
+        })
+        .catch(() => { /* treat network failure as unknown fee */ })
+        .finally(() => setQuoteLoading(false));
+    }, 400);
+    return () => { window.clearTimeout(timer); ctrl.abort(); setQuoteLoading(false); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderLat, orderLng, effectivePincode]);
 
   // Pincode → city autofill: when the user types a full pincode, fill city
   // if it's currently blank. Only fires in fresh/edit mode (not returning —
@@ -408,6 +452,7 @@ export default function CheckoutPage() {
       if (!otpVerified) { setError("Please verify your phone number to continue."); return; }
       if (pinStatus.state === "checking") { setError("Checking pincode availability…"); return; }
       if (pinStatus.state === "unserviceable") { setError("We don't deliver to this pincode yet."); return; }
+      if (distanceUnserviceable) { setError("We don't deliver beyond 10 km yet. Please check our service area."); return; }
       setStep("delivery");
       return;
     }
@@ -421,6 +466,7 @@ export default function CheckoutPage() {
     if (pincode.replace(/\D/g, "").length !== 6) { setError("Enter a valid 6-digit pincode."); return; }
     if (pinStatus.state === "checking") { setError("Checking pincode availability…"); return; }
     if (pinStatus.state === "unserviceable") { setError("We don't deliver to this pincode yet."); return; }
+    if (distanceUnserviceable) { setError("We don't deliver beyond 10 km yet. Please check our service area."); return; }
 
     const fullAddress = `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
     setSubmitting(true);
@@ -584,6 +630,11 @@ export default function CheckoutPage() {
       setStep("address");
       return;
     }
+    if (distanceUnserviceable) {
+      setError("We don't deliver beyond 10 km yet. Please check our service area.");
+      setStep("address");
+      return;
+    }
     setOrderLoading(true); setError("");
     try {
       const res = await fetch("/api/checkout", {
@@ -633,18 +684,34 @@ export default function CheckoutPage() {
       setStep("address");
       return;
     }
+    if (distanceUnserviceable) {
+      setError("We don't deliver beyond 10 km yet. Please check our service area.");
+      setStep("address");
+      return;
+    }
     setOrderLoading(true); setError("");
     try {
       const res = await fetch("/api/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: grandTotal * 100 }),
+        body: JSON.stringify({
+          subtotal: total,
+          lat:      orderLat,
+          lng:      orderLng,
+          pincode:  effectivePincode || undefined,
+        }),
       });
       if (!res.ok) {
-        setError("Online payment unavailable. Please use Cash on Delivery.");
+        const errData = await res.json().catch(() => ({})) as { error?: string; code?: string };
+        if (errData.code === "distance_unserviceable") {
+          setError(errData.error ?? "We don't deliver beyond 10 km yet.");
+          setStep("address");
+        } else {
+          setError("Online payment unavailable. Please use Cash on Delivery.");
+        }
         return;
       }
-      const { order_id } = await res.json();
+      const { order_id, amount: serverAmount } = await res.json() as { order_id: string; amount: number };
 
       const loaded = await new Promise<boolean>((resolve) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -662,7 +729,7 @@ export default function CheckoutPage() {
       const { fullAddress, customerPhone, customerName } = resolveOrderIdentity();
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount: grandTotal * 100,
+        amount: serverAmount,  // server-computed paise — must match the Razorpay order
         currency: "INR",
         name: "Cadieux",
         description: "Protein Bread",
@@ -871,14 +938,36 @@ export default function CheckoutPage() {
             ))}
             <div
               style={{
-                display: "flex", justifyContent: "space-between",
+                display: "flex", justifyContent: "space-between", alignItems: "baseline",
                 borderTop: "1px solid rgba(240,223,200,0.07)",
                 padding: "12px 0",
               }}
             >
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.7)" }}>Delivery fee</span>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#FBF3D4" }}>₹{deliveryFee}</span>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(240,223,200,0.7)" }}>
+                Delivery fee
+                {deliveryQuote?.distanceKm !== null && deliveryQuote?.distanceKm !== undefined && (
+                  <span style={{ fontSize: 11, color: "rgba(240,223,200,0.38)", marginLeft: 6 }}>
+                    ({deliveryQuote.distanceKm} km)
+                  </span>
+                )}
+              </span>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: quoteLoading ? "rgba(240,223,200,0.4)" : "#FBF3D4" }}>
+                {quoteLoading ? "…" : `₹${deliveryFee}`}
+              </span>
             </div>
+            {distanceUnserviceable && (
+              <div
+                style={{
+                  padding: "10px 14px", marginBottom: 8,
+                  background: "rgba(245,75,75,0.08)",
+                  border: "1px solid rgba(245,75,75,0.3)",
+                  fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200,
+                  color: "#f87171", letterSpacing: "0.03em", lineHeight: 1.5,
+                }}
+              >
+                We don&apos;t deliver beyond 10 km yet. Please check our delivery area or choose a different address.
+              </div>
+            )}
             <div
               style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",

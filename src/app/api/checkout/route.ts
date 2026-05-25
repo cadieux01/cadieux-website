@@ -14,6 +14,9 @@ import {
 } from "@/lib/order-delivery";
 import { validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
+import { computeDeliveryFee } from "@/lib/deliveryFee";
+import { getDrivingDistanceKm, getStoreOrigin } from "@/lib/distanceMatrix";
+import { geocodePincode } from "@/lib/geocode";
 
 /** Parses a value as a finite number, returning null for absent/invalid. */
 function parseCoord(v: unknown): number | null {
@@ -305,7 +308,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const deliveryFee = DELIVERY_FEE_INR;
+    // Compute distance-based delivery fee (server-authoritative).
+    // Primary: GPS lat/lng sent by the client's address form.
+    // Fallback: geocode the pincode to a centroid and compute from that.
+    // If origin env vars are not configured, fall back to flat DELIVERY_FEE_INR
+    // so existing deployments degrade gracefully rather than hard-failing.
+    const orderLat = parseCoord(body.latitude);
+    const orderLng = parseCoord(body.longitude);
+    let deliveryFee = DELIVERY_FEE_INR;
+    let distanceKm: number | null = null;
+
+    if (getStoreOrigin()) {
+      if (orderLat !== null && orderLng !== null) {
+        distanceKm = await getDrivingDistanceKm(orderLat, orderLng);
+      } else if (pinFromAddress) {
+        const centroid = await geocodePincode(pinFromAddress);
+        if (centroid) {
+          distanceKm = await getDrivingDistanceKm(
+            centroid.latitude,
+            centroid.longitude,
+          );
+        }
+      }
+      if (distanceKm !== null) {
+        const feeResult = computeDeliveryFee(distanceKm);
+        if (!feeResult.serviceable) {
+          return NextResponse.json(
+            {
+              error:
+                "We don't deliver beyond 10 km yet. Please check our service area.",
+              code: "distance_unserviceable",
+            },
+            { status: 400 },
+          );
+        }
+        deliveryFee = feeResult.feeInr;
+      }
+    }
+
     const grandTotal = reconciled.subtotal + deliveryFee;
 
     const { data: cust } = await supabaseAdmin
@@ -326,12 +366,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // delivery_date + delivery_slot are now populated by the web
-    // checkout (tomorrow / day-after IST + one of 14 hourly slots).
-    // The mobile app populates both fields explicitly as well.
-    const orderLat = parseCoord(body.latitude);
-    const orderLng = parseCoord(body.longitude);
-
     const { data: order, error } = await supabaseAdmin
       .from("orders")
       .insert({
@@ -344,6 +378,7 @@ export async function POST(req: NextRequest) {
         delivery_date: deliveryDate,
         delivery_slot: deliverySlot,
         ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
+        ...(distanceKm !== null ? { distance_km: distanceKm } : {}),
       })
       .select("id")
       .single();

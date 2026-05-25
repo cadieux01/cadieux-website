@@ -27,6 +27,9 @@ import {
 } from "@/lib/order-delivery";
 import { validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
+import { computeDeliveryFee } from "@/lib/deliveryFee";
+import { getDrivingDistanceKm, getStoreOrigin } from "@/lib/distanceMatrix";
+import { geocodePincode } from "@/lib/geocode";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -235,35 +238,48 @@ export async function POST(req: NextRequest) {
   }
 
   // 7. Insert the order with the items snapshot + server-computed total.
-  // Total stored in orders.total_amount is inclusive of the flat delivery
-  // fee — that's the amount we charge and the amount the order screens
-  // display.
+  // Total stored in orders.total_amount is inclusive of the delivery fee.
   const subtotal = reconciled.total;
-  const deliveryFee = DELIVERY_FEE_INR;
-  const grandTotal = subtotal + deliveryFee;
 
-  // Defense-in-depth: if the client volunteered its expected grand total,
-  // reject any drift. reconcilePrices already catches per-line tampering;
-  // this catches the case where the client computed the total wrongly or
-  // tried to short-pay relative to the items it sent.
-  const clientTotal = (raw as { total_amount_inr?: unknown })?.total_amount_inr;
-  if (clientTotal !== undefined && clientTotal !== null) {
-    const clientTotalNum = Number(clientTotal);
-    if (!Number.isFinite(clientTotalNum) || clientTotalNum !== grandTotal) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Price mismatch — please refresh and retry",
-          code: "price_mismatch",
-        },
-        { status: 400 },
-      );
-    }
-  }
   // Extract GPS coordinates from the delivery_address object if the app sent them.
   const rawAddr = (raw as { delivery_address?: Record<string, unknown> })?.delivery_address ?? {};
   const orderLat = parseCoord(rawAddr.latitude);
   const orderLng = parseCoord(rawAddr.longitude);
+
+  // Compute distance-based delivery fee (server-authoritative).
+  let deliveryFee = DELIVERY_FEE_INR;
+  let distanceKm: number | null = null;
+
+  if (getStoreOrigin()) {
+    if (orderLat !== null && orderLng !== null) {
+      distanceKm = await getDrivingDistanceKm(orderLat, orderLng);
+    } else if (pincode) {
+      const centroid = await geocodePincode(pincode);
+      if (centroid) {
+        distanceKm = await getDrivingDistanceKm(
+          centroid.latitude,
+          centroid.longitude,
+        );
+      }
+    }
+    if (distanceKm !== null) {
+      const feeResult = computeDeliveryFee(distanceKm);
+      if (!feeResult.serviceable) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "We don't deliver beyond 10 km yet. Please check our service area.",
+            code: "distance_unserviceable",
+          },
+          { status: 400 },
+        );
+      }
+      deliveryFee = feeResult.feeInr;
+    }
+  }
+
+  const grandTotal = subtotal + deliveryFee;
 
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
@@ -280,6 +296,7 @@ export async function POST(req: NextRequest) {
       delivery_date: deliveryDate,
       delivery_slot: deliverySlot,
       ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
+      ...(distanceKm !== null ? { distance_km: distanceKm } : {}),
     })
     .select("id")
     .single();
