@@ -36,6 +36,13 @@ const supabaseAdmin = createClient(
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cadieux.in";
 
+/** Parses a value as a finite number, returning null for absent/invalid. */
+function parseCoord(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function POST(req: NextRequest) {
   // Fail closed if MOBILE_APP_KEY isn't configured.
   if (!process.env.MOBILE_APP_KEY) {
@@ -253,6 +260,11 @@ export async function POST(req: NextRequest) {
       );
     }
   }
+  // Extract GPS coordinates from the delivery_address object if the app sent them.
+  const rawAddr = (raw as { delivery_address?: Record<string, unknown> })?.delivery_address ?? {};
+  const orderLat = parseCoord(rawAddr.latitude);
+  const orderLng = parseCoord(rawAddr.longitude);
+
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
     .insert({
@@ -267,6 +279,7 @@ export async function POST(req: NextRequest) {
       // and the operator can patch via PATCH /api/admin/orders/[id].
       delivery_date: deliveryDate,
       delivery_slot: deliverySlot,
+      ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
     })
     .select("id")
     .single();

@@ -30,8 +30,14 @@ export async function GET(
 
   const ordersP = supabaseAdmin
     .from("orders")
-    .select("id, total_amount, status, delivery_address, created_at")
+    .select("id, total_amount, status, delivery_address, created_at, latitude, longitude")
     .eq("customer_id", id)
+    .order("created_at", { ascending: false });
+  const addressesP = supabaseAdmin
+    .from("addresses")
+    .select("id, label, full_name, line1, area, city, pincode, is_default, created_at, latitude, longitude")
+    .eq("customer_id", id)
+    .order("is_default", { ascending: false })
     .order("created_at", { ascending: false });
   const subsP = supabaseAdmin
     .from("subscriptions")
@@ -48,11 +54,12 @@ export async function GET(
     .eq("customer_id", id)
     .order("updated_at", { ascending: false });
 
-  const [oRes, sRes, tRes] = await Promise.all([ordersP, subsP, tokensP]);
+  const [oRes, aRes, sRes, tRes] = await Promise.all([ordersP, addressesP, subsP, tokensP]);
 
   return NextResponse.json({
     customer,
     orders: oRes.data ?? [],
+    addresses: aRes.data ?? [],
     subscriptions: sRes.data ?? [],
     push_tokens: tRes.error ? [] : tRes.data ?? [],
   });

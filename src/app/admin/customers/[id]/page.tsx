@@ -39,6 +39,22 @@ type OrderRow = {
   status: string | null;
   delivery_address: string | null;
   created_at: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+type AddressRow = {
+  id: string;
+  label: string;
+  full_name: string;
+  line1: string;
+  area: string;
+  city: string;
+  pincode: string;
+  is_default: boolean;
+  created_at: string;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 type SubRow = {
@@ -61,6 +77,7 @@ type PushToken = {
 type DetailResponse = {
   customer: CustomerDetail;
   orders: OrderRow[];
+  addresses: AddressRow[];
   subscriptions: SubRow[];
   push_tokens: PushToken[];
 };
@@ -299,17 +316,59 @@ export default function CustomerDetailPage() {
         />
       ) : null}
 
+      <h3 style={sectionHeading}>Saved addresses</h3>
+      {data.addresses.length === 0 ? (
+        <Placeholder>No saved addresses.</Placeholder>
+      ) : (
+        <Table headers={["Label", "Recipient", "Address", "Pincode", "Default", "Location", "Saved"]}>
+          {data.addresses.map((a) => (
+            <tr key={a.id}>
+              <td style={td}>{a.label}</td>
+              <td style={td}>{a.full_name}</td>
+              <td style={{ ...td, maxWidth: 260 }}>{a.line1}, {a.area}, {a.city}</td>
+              <td style={td}>{a.pincode}</td>
+              <td style={td}>{a.is_default ? "✓" : "—"}</td>
+              <td style={td}>
+                {a.latitude != null && a.longitude != null ? (
+                  <a
+                    href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={mapsLink}
+                  >
+                    Map ↗
+                  </a>
+                ) : "—"}
+              </td>
+              <td style={td}>{formatDate(a.created_at)}</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
       <h3 style={sectionHeading}>Order history</h3>
       {data.orders.length === 0 ? (
         <Placeholder>No orders yet.</Placeholder>
       ) : (
-        <Table headers={["Order", "Total", "Status", "Address", "Created"]}>
+        <Table headers={["Order", "Total", "Status", "Address", "Location", "Created"]}>
           {data.orders.map((o) => (
             <tr key={o.id}>
               <td style={td}>#{o.id.slice(0, 8)}</td>
               <td style={td}>{formatINR(o.total_amount)}</td>
               <td style={td}><StatusBadge status={o.status} /></td>
-              <td style={{ ...td, maxWidth: 360 }}>{o.delivery_address ?? "—"}</td>
+              <td style={{ ...td, maxWidth: 300 }}>{o.delivery_address ?? "—"}</td>
+              <td style={td}>
+                {o.latitude != null && o.longitude != null ? (
+                  <a
+                    href={`https://www.google.com/maps?q=${o.latitude},${o.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={mapsLink}
+                  >
+                    Map ↗
+                  </a>
+                ) : "—"}
+              </td>
               <td style={td}>{formatDateTime(o.created_at)}</td>
             </tr>
           ))}
@@ -661,4 +720,13 @@ const modalActions: React.CSSProperties = {
   display: "flex",
   gap: "0.6rem",
   justifyContent: "flex-end",
+};
+
+const mapsLink: React.CSSProperties = {
+  color: "#f59e0b",
+  textDecoration: "underline",
+  textUnderlineOffset: "2px",
+  fontSize: "0.82rem",
+  fontFamily: "var(--font-body)",
+  whiteSpace: "nowrap",
 };

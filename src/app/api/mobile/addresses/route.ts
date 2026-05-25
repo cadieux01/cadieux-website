@@ -24,7 +24,7 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
-const ADDRESS_COLS = "id, customer_id, label, full_name, phone, line1, area, city, pincode, is_default, created_at";
+const ADDRESS_COLS = "id, customer_id, label, full_name, phone, line1, area, city, pincode, is_default, created_at, latitude, longitude";
 
 const LABEL_MAX = 40;
 const PHONE_DIGITS_RE = /^\d{10}$/;
@@ -38,6 +38,13 @@ const CITY_MIN = 2;
 const CITY_MAX = 60;
 const PINCODE_RE = /^\d{6}$/;
 const MAX_ADDRESSES = 20;
+
+/** Parses a value as a finite number, returning null for absent/invalid. */
+function parseCoord(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 function fail(status: number, error: string, code?: string) {
   return NextResponse.json({ ok: false, error, code }, { status });
@@ -180,6 +187,14 @@ export async function POST(req: NextRequest) {
     return fail(400, "phone must be a valid 10-digit Indian number.", "phone");
   }
 
+  // Validate coordinates — both must be present and finite, or both absent.
+  const latitude = parseCoord(body.latitude);
+  const longitude = parseCoord(body.longitude);
+  const hasCoords = body.latitude != null || body.longitude != null;
+  if (hasCoords && (latitude === null || longitude === null)) {
+    return fail(400, "latitude and longitude must both be valid numbers when provided.", "coordinates");
+  }
+
   const makeDefault = body.make_default === true;
 
   // Resolve customer (creates stub if first interaction).
@@ -242,6 +257,7 @@ export async function POST(req: NextRequest) {
       city,
       pincode,
       is_default: setDefault,
+      ...(hasCoords ? { latitude, longitude } : {}),
     })
     .select(ADDRESS_COLS)
     .single();

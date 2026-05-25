@@ -26,7 +26,7 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
-const ADDRESS_COLS = "id, customer_id, label, full_name, phone, line1, area, city, pincode, is_default, created_at";
+const ADDRESS_COLS = "id, customer_id, label, full_name, phone, line1, area, city, pincode, is_default, created_at, latitude, longitude";
 
 const LABEL_MAX = 40;
 const PHONE_DIGITS_RE = /^\d{10}$/;
@@ -39,6 +39,13 @@ const AREA_MAX = 80;
 const CITY_MIN = 2;
 const CITY_MAX = 60;
 const PINCODE_RE = /^\d{6}$/;
+
+/** Parses a value as a finite number, returning null for absent/invalid. */
+function parseCoord(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 function fail(status: number, error: string, code?: string) {
   return NextResponse.json({ ok: false, error, code }, { status });
@@ -202,6 +209,17 @@ export async function PATCH(
       );
     }
     patch.phone = phoneDigits;
+  }
+
+  // Coordinates: both must be provided together or neither.
+  if (body.latitude !== undefined || body.longitude !== undefined) {
+    const lat = parseCoord(body.latitude);
+    const lng = parseCoord(body.longitude);
+    if (lat === null || lng === null) {
+      return fail(400, "latitude and longitude must both be valid numbers when provided.", "coordinates");
+    }
+    patch.latitude = lat;
+    patch.longitude = lng;
   }
 
   const makeDefault = body.make_default === true;
