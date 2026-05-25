@@ -47,6 +47,17 @@ export async function POST(req: NextRequest) {
 
   const to = normalizePhone(phone);
 
+  // ───────── Play review bypass — remove after approval ─────────
+  // When REVIEW_TEST_PHONE is set and the caller is that exact number,
+  // pretend the SMS was sent. Skips Upstash + Twilio so the reviewer
+  // never depends on a real SMS landing. No effect unless the env var
+  // is configured.
+  const reviewTestPhone = process.env.REVIEW_TEST_PHONE;
+  if (reviewTestPhone && to === normalizePhone(reviewTestPhone)) {
+    return NextResponse.json({ ok: true });
+  }
+  // ──────────────────────────────────────────────────────────────
+
   // Same Upstash key prefix as the web route -> shared 3/hr/phone budget.
   const { success, limit, remaining, reset } = await otpRateLimit.limit(to);
   if (!success) {

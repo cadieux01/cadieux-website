@@ -78,25 +78,43 @@ export async function POST(req: NextRequest) {
   }
 
   const to = normalizePhone(phone);
+
+  // ───────── Play review bypass — remove after approval ─────────
+  // When REVIEW_TEST_PHONE + REVIEW_TEST_CODE are set and both match,
+  // skip the Twilio VerificationCheck and fall through to the exact
+  // same success path a real "approved" response would run (age stamp
+  // + signed 30-day bearer token). No effect unless both env vars are
+  // configured.
+  const reviewTestPhone = process.env.REVIEW_TEST_PHONE;
+  const reviewTestCode = process.env.REVIEW_TEST_CODE;
+  const isReviewBypass =
+    !!reviewTestPhone &&
+    !!reviewTestCode &&
+    to === normalizePhone(reviewTestPhone) &&
+    code === reviewTestCode;
+  // ──────────────────────────────────────────────────────────────
+
   const auth = Buffer.from(`${ACCOUNT_SID}:${AUTH_TOKEN}`).toString("base64");
   const url = `https://verify.twilio.com/v2/Services/${SERVICE_SID}/VerificationCheck`;
 
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ To: to, Code: code }).toString(),
-    });
-    const data = await res.json().catch(() => ({}));
+    if (!isReviewBypass) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ To: to, Code: code }).toString(),
+      });
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok || data.status !== "approved") {
-      return NextResponse.json(
-        { ok: false, error: "Invalid code." },
-        { status: 401 }
-      );
+      if (!res.ok || data.status !== "approved") {
+        return NextResponse.json(
+          { ok: false, error: "Invalid code." },
+          { status: 401 }
+        );
+      }
     }
 
     // Stamp age_verified_at on the customer record once the OTP is approved.
