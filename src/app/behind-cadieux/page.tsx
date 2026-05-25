@@ -15,6 +15,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
+import { ShareButton } from "@/components/ShareButton";
 
 // ── Brand bible palette ─────────────────────────────────────────────
 const FOUNDATION_GREEN = "#024628";
@@ -237,9 +238,25 @@ export default function BehindCadieuxPage() {
               height: 1,
               background: GOLD,
               opacity: 0.7,
-              margin: "0 auto 56px",
+              margin: "0 auto 28px",
             }}
           />
+          <div
+            data-stagger
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginBottom: 56,
+            }}
+          >
+            <ShareButton
+              title="Behind Cadieux"
+              text="Behind Cadieux — 18 months of trials, three NABL labs, one high-protein bread engineered for absorption."
+              url="https://www.cadieux.in/behind-cadieux"
+              label="Share story"
+              size={42}
+            />
+          </div>
         </ScrollReveal>
 
         {/* Story sections */}

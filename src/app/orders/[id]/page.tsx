@@ -10,6 +10,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
+import { ShareButton } from "@/components/ShareButton";
+
 const GRAIN = "url(/grain.svg)";
 
 type OrderItem = {
@@ -334,19 +336,34 @@ export default function OrderDetailPage() {
               </span>
             </div>
 
-            <h1
+            <div
               style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                gap: 16,
                 margin: "0 0 36px",
-                fontFamily: "var(--font-heading)",
-                fontSize: "clamp(40px,9vw,72px)",
-                fontWeight: 300,
-                color: "#FBF3D4",
-                letterSpacing: "0.02em",
-                lineHeight: 1.05,
               }}
             >
-              Your Order
-            </h1>
+              <h1
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-heading)",
+                  fontSize: "clamp(40px,9vw,72px)",
+                  fontWeight: 300,
+                  color: "#FBF3D4",
+                  letterSpacing: "0.02em",
+                  lineHeight: 1.05,
+                }}
+              >
+                Your Order
+              </h1>
+              <ShareButton
+                title="Cadieux"
+                text="Just ordered Cadieux — high-protein bread, baked in Vizag. cadieux.in"
+                size={36}
+              />
+            </div>
 
             {/* Delivery details */}
             <Section title="Delivery">

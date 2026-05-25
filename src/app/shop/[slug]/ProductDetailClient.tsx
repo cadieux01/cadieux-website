@@ -13,6 +13,7 @@ import {
 import { useCart } from "@/context/CartContext";
 import { flyToCart } from "@/lib/fly-to-cart";
 import ReviewSection from "@/components/ReviewSection";
+import { ShareButton } from "@/components/ShareButton";
 import {
   PRODUCT_REPORT_CATEGORIES,
   PRODUCT_REPORT_CATEGORY_LABEL,
@@ -119,16 +120,31 @@ export default function ProductDetailClient({
           <div style={{ minWidth: 0 }}>
             <div
               style={{
-                fontFamily: "var(--font-body)",
-                fontSize: 10,
-                fontWeight: 500,
-                letterSpacing: "0.35em",
-                textTransform: "uppercase",
-                color: "#c9a96e",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
                 marginBottom: 14,
               }}
             >
-              {product.tag}
+              <div
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: 10,
+                  fontWeight: 500,
+                  letterSpacing: "0.35em",
+                  textTransform: "uppercase",
+                  color: "#c9a96e",
+                }}
+              >
+                {product.tag}
+              </div>
+              <ShareButton
+                title={`${product.title} — Cadieux`}
+                text={`${product.title}. ${product.subtitle}`}
+                url={`https://www.cadieux.in/shop/${product.slug}`}
+                size={36}
+              />
             </div>
             <h1
               style={{

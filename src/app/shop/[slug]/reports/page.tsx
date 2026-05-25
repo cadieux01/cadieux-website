@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import { PRODUCTS, type ProductSlug } from "@/lib/data";
+import { ShareButton } from "@/components/ShareButton";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -154,6 +155,13 @@ export default function ProductReportsPage() {
               flexWrap: "wrap",
             }}
           >
+            <ShareButton
+              title={`${product.title} — Test Reports`}
+              text={`${product.title}: independent lab reports from Cadieux.`}
+              url={`https://www.cadieux.in/shop/${slug}/reports`}
+              label="Share"
+              size={42}
+            />
             <Link
               href={`/shop/${slug}`}
               style={{

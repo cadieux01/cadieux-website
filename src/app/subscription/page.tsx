@@ -13,6 +13,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+import { ShareButton } from "@/components/ShareButton";
+
 const BG = "rgb(6,4,2)";
 const WALNUT = "#1a2e1a";
 const GOLD = "#c9a96e";
@@ -217,19 +219,34 @@ export default function SubscriptionHubPage() {
           margin: "0 auto",
         }}
       >
-        <h1
+        <div
           style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 16,
             margin: "0 0 12px",
-            fontFamily: "var(--font-heading)",
-            fontSize: "clamp(48px,11vw,88px)",
-            fontWeight: 300,
-            color: TEXT,
-            letterSpacing: "0.02em",
-            lineHeight: 1,
           }}
         >
-          Subscriptions
-        </h1>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-heading)",
+              fontSize: "clamp(48px,11vw,88px)",
+              fontWeight: 300,
+              color: TEXT,
+              letterSpacing: "0.02em",
+              lineHeight: 1,
+            }}
+          >
+            Subscriptions
+          </h1>
+          <ShareButton
+            title="Cadieux Subscriptions"
+            text="Fresh high-protein bread on a weekly schedule from Cadieux. cadieux.in"
+            size={36}
+          />
+        </div>
         <p
           style={{
             margin: "0 0 48px",
