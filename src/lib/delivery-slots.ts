@@ -1,7 +1,7 @@
 // Unified delivery-slot lib for ONE-OFF orders AND subscriptions.
 //
 // One source of truth for:
-//   - the slot universe (7:30 AM – 9:00 PM, every 30 min)
+//   - the slot universe (7:30 AM – 9:00 PM, every 30 min, lunch 1–2 PM skipped)
 //   - the 12 h 10 m BOOKING cutoff (placement)
 //   - the 14 h SELF-EDIT cutoff (customer-driven date/slot change)
 //   - the ADMIN_PHONE message shown to customers within 14 h
@@ -27,10 +27,16 @@
 
 /** "HH:MM" of the first bookable slot start. */
 export const SLOT_START = "07:30";
-/** "HH:MM" of the last bookable slot start (window is 21:00 → 21:30). */
-export const SLOT_END = "21:00";
+/** "HH:MM" of the last bookable slot start (window is 20:30 → 21:00). */
+export const SLOT_END = "20:30";
 /** Slot granularity in minutes. */
 export const SLOT_INTERVAL_MIN = 30;
+
+/** Slot START values to skip — the kitchen lunch break, 1 PM – 2 PM IST.
+ *  Drops the 13:00 (1–1:30 PM) and 13:30 (1:30–2 PM) slots; 12:30 is the
+ *  last before lunch and 14:00 is the first after. Stored as a Set for
+ *  O(1) lookup in the SLOTS generator. */
+export const LUNCH_SKIP_STARTS: ReadonlySet<string> = new Set(["13:00", "13:30"]);
 
 /** Booking lead time: 12 hours 10 minutes. New orders/subscriptions can't
  *  book a slot that starts within this window from "now" (IST). */
@@ -55,7 +61,7 @@ export type Slot = {
   label: string;
   /** 24-hour end time, e.g. "08:00" (start + SLOT_INTERVAL_MIN). */
   endValue: string;
-  /** Pretty 12-hour range label, e.g. "7:30 – 8:00 AM". */
+  /** Pretty 12-hour range label, e.g. "7:30–8:00 AM" (compact en-dash). */
   rangeLabel: string;
 };
 
@@ -82,7 +88,9 @@ function parseHHMM(hhmm: string): { hour: number; minute: number } | null {
   return { hour, minute };
 }
 
-/** Pretty 12-hour clock label for a single "HH:MM" point. e.g. "07:30" → "7:30 AM". */
+/** Pretty 12-hour clock label for a single "HH:MM" point.
+ *  Used for the standalone `label` field — strips `:00` for brevity
+ *  (e.g. "08:00" → "8 AM", "07:30" → "7:30 AM"). */
 function fmt12(hhmm: string): string {
   const p = parseHHMM(hhmm);
   if (!p) return hhmm;
@@ -92,22 +100,35 @@ function fmt12(hhmm: string): string {
   return `${h12}${mm} ${ampm}`;
 }
 
-/** Pretty range label, collapsing AM/PM on the start side when shared. */
+/** Like fmt12, but ALWAYS shows ":MM" — used inside fmtRange so a slot
+ *  ending on the hour reads "8:00 AM" rather than "8 AM". */
+function fmt12Full(hhmm: string): string {
+  const p = parseHHMM(hhmm);
+  if (!p) return hhmm;
+  const ampm = p.hour < 12 ? "AM" : "PM";
+  const h12 = p.hour % 12 === 0 ? 12 : p.hour % 12;
+  return `${h12}:${pad2(p.minute)} ${ampm}`;
+}
+
+/** Pretty range label using a compact en-dash (no surrounding spaces),
+ *  collapsing AM/PM on the start side when start and end share a period.
+ *  Examples: "7:30–8:00 AM", "12:30–1:00 PM", "8:30–9:00 PM". */
 function fmtRange(start: string, end: string): string {
   const ps = parseHHMM(start);
   const pe = parseHHMM(end);
-  if (!ps || !pe) return `${start} – ${end}`;
+  if (!ps || !pe) return `${start}–${end}`;
   const startPeriod = ps.hour < 12 ? "AM" : "PM";
   const endPeriod = pe.hour < 12 ? "AM" : "PM";
-  const startBare = fmt12(start).replace(/ (AM|PM)$/, "");
-  if (startPeriod === endPeriod) return `${startBare} – ${fmt12(end)}`;
-  return `${fmt12(start)} – ${fmt12(end)}`;
+  const startBare = fmt12Full(start).replace(/ (AM|PM)$/, "");
+  if (startPeriod === endPeriod) return `${startBare}–${fmt12Full(end)}`;
+  return `${fmt12Full(start)}–${fmt12Full(end)}`;
 }
 
 // ── Slot generation ─────────────────────────────────────────────────────
 
 /** All bookable slot starts from SLOT_START to SLOT_END inclusive, stepping
- *  by SLOT_INTERVAL_MIN. Memoised at module load. */
+ *  by SLOT_INTERVAL_MIN, with LUNCH_SKIP_STARTS filtered out. 25 entries
+ *  total (07:30, …, 12:30, 14:00, …, 20:30). Memoised at module load. */
 export const SLOTS: Slot[] = (() => {
   const startP = parseHHMM(SLOT_START);
   const endP = parseHHMM(SLOT_END);
@@ -119,6 +140,7 @@ export const SLOTS: Slot[] = (() => {
     const sh = Math.floor(m / 60);
     const sm = m % 60;
     const value = `${pad2(sh)}:${pad2(sm)}`;
+    if (LUNCH_SKIP_STARTS.has(value)) continue;
     const endM = m + SLOT_INTERVAL_MIN;
     const eh = Math.floor(endM / 60);
     const em = endM % 60;

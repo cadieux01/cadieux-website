@@ -70,9 +70,10 @@ export async function fetchSubscriptionPlans(): Promise<WizardProduct[]> {
   }
 }
 
-/** Canonical 30-minute slot START values ("HH:MM"). 29 entries:
- *  07:30, 08:00, …, 21:00. The previous "HH:MM-HH:MM" 1-hour windows
- *  are still rendered correctly by `formatSlot()` for legacy rows. */
+/** Canonical 30-minute slot START values ("HH:MM"). 25 entries:
+ *  07:30, …, 12:30, 14:00, …, 20:30 (kitchen lunch 1–2 PM excluded).
+ *  The previous "HH:MM-HH:MM" 1-hour windows are still rendered correctly
+ *  by `formatSlot()` for legacy rows. */
 export const TIME_SLOTS: string[] = SLOTS.map((s) => s.value);
 
 /** Pretty label for ANY stored slot value:
