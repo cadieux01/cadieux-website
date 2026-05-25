@@ -15,6 +15,13 @@ import {
 import { validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 
+/** Parses a value as a finite number, returning null for absent/invalid. */
+function parseCoord(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
 // SUPABASE_SERVICE_ROLE_KEY must be set in .env.local AND in the Vercel
@@ -322,6 +329,9 @@ export async function POST(req: NextRequest) {
     // delivery_date + delivery_slot are now populated by the web
     // checkout (tomorrow / day-after IST + one of 14 hourly slots).
     // The mobile app populates both fields explicitly as well.
+    const orderLat = parseCoord(body.latitude);
+    const orderLng = parseCoord(body.longitude);
+
     const { data: order, error } = await supabaseAdmin
       .from("orders")
       .insert({
@@ -333,6 +343,7 @@ export async function POST(req: NextRequest) {
         items: reconciled.items,
         delivery_date: deliveryDate,
         delivery_slot: deliverySlot,
+        ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
       })
       .select("id")
       .single();

@@ -8,8 +8,9 @@
 // /api/delivery-requests), date/slot picker, Razorpay + COD, subscription
 // fan-out — only the chrome changes.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
 import { useCart } from "@/context/CartContext";
 import { PRODUCTS } from "@/lib/data";
 import { DELIVERY_FEE_INR } from "@/lib/order-validation";
@@ -20,6 +21,8 @@ import {
 } from "@/lib/order-delivery";
 import { bookableSlots } from "@/lib/delivery-slots";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
+import { GOOGLE_MAPS_LOADER_ID, GOOGLE_MAPS_LIBRARIES } from "@/lib/google-maps-loader";
+import { reverseGeocodeClient, geocodePincodeClient } from "@/lib/clientGeocode";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -145,6 +148,10 @@ export default function CheckoutPage() {
     if (!stillOk) setDeliverySlot("");
   }, [deliveryDate, deliverySlot]);
 
+  // GPS coordinates captured from location or autocomplete
+  const [orderLat, setOrderLat] = useState<number | null>(null);
+  const [orderLng, setOrderLng] = useState<number | null>(null);
+
   // Pincode serviceability
   const [pinStatus, setPinStatus] = useState<PinState>({ state: "idle" });
   const [requestSubmitting, setRequestSubmitting] = useState(false);
@@ -248,6 +255,20 @@ export default function CheckoutPage() {
       ctrl.abort();
     };
   }, [effectivePincode]);
+
+  // Pincode → city autofill: when the user types a full pincode, fill city
+  // if it's currently blank. Only fires in fresh/edit mode (not returning —
+  // the saved customer's city is already correct).
+  useEffect(() => {
+    if (formMode === "returning") return;
+    if (!/^\d{6}$/.test(pincode)) return;
+    geocodePincodeClient(pincode).then((result) => {
+      if (!result) return;
+      if (!city.trim()) setCity(result.city);
+    });
+    // Intentionally omit `city` from deps so we only autofill blanks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincode, formMode]);
 
   function prefillAddress(raw: string) {
     const pincodeMatch = raw.match(/(\d{6})\s*$/);
@@ -577,6 +598,7 @@ export default function CheckoutPage() {
           delivery_slot: deliverySlot,
           total_amount: total,
           items: orderItems,
+          ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
         }),
       });
       const data = await res.json();
@@ -659,6 +681,7 @@ export default function CheckoutPage() {
               delivery_slot: deliverySlot,
               total_amount: total,
               items: orderItems,
+              ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
             }),
           });
           const d = await r.json();
@@ -1005,6 +1028,7 @@ export default function CheckoutPage() {
                 pinStatus={pinStatus}
                 setError={setError}
                 savedCustomer={savedCustomer}
+                onCoordsCapture={(lat, lng) => { setOrderLat(lat); setOrderLng(lng); }}
                 onBackToSaved={() => {
                   if (!savedCustomer) return;
                   setFormMode("returning");
@@ -1137,6 +1161,7 @@ function AddressForm(props: {
   pinStatus: PinState;
   setError: (s: string) => void;
   savedCustomer: Customer | null;
+  onCoordsCapture: (lat: number | null, lng: number | null) => void;
   onBackToSaved: () => void;
 }) {
   const {
@@ -1147,8 +1172,88 @@ function AddressForm(props: {
     turnstileRef, setTurnstileToken,
     addressLine, setAddressLine, area, setArea,
     city, setCity, pincode, setPincode,
-    pinStatus, setError, savedCustomer, onBackToSaved,
+    pinStatus, setError, savedCustomer, onCoordsCapture, onBackToSaved,
   } = props;
+
+  // Load Maps JS API (places library needed for Autocomplete).
+  const { isLoaded: mapsLoaded } = useJsApiLoader({
+    id: GOOGLE_MAPS_LOADER_ID,
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
+
+  // Location question state ("Are you at this delivery location?")
+  const [locQuestion, setLocQuestion] = useState<"unanswered" | "yes" | "no">("unanswered");
+  const [locating, setLocating] = useState(false);
+  const [locMsg, setLocMsg] = useState<string | null>(null);
+
+  // Autocomplete instance ref
+  const acRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  // Reverse-geocode GPS position → fill all address fields
+  const handleGpsLocation = useCallback(async () => {
+    if (locating) return;
+    if (!navigator.geolocation) {
+      setLocMsg("Location is not supported by your browser.");
+      return;
+    }
+    setLocating(true);
+    setLocMsg(null);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const result = await reverseGeocodeClient(pos.coords.latitude, pos.coords.longitude);
+        setLocating(false);
+        if (!result) {
+          setLocMsg("Couldn\u2019t detect your address. Please type it below.");
+          return;
+        }
+        if (result.line1) { setAddressLine(result.line1); setError(""); }
+        if (result.area) { setArea(result.area); setError(""); }
+        if (result.pincode) { setPincode(result.pincode); setError(""); }
+        if (result.city) { setCity(result.city); setError(""); }
+        onCoordsCapture(result.lat, result.lng);
+        setLocMsg(null);
+      },
+      (err) => {
+        setLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocMsg("Location access denied. Allow it in browser settings, or enter your address below.");
+        } else {
+          setLocMsg("Couldn\u2019t detect your location. Please type your address.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }, [locating, setAddressLine, setArea, setCity, setPincode, setError, onCoordsCapture]);
+
+  // Parse a Google Place into address fields + coords
+  const handlePlaceChanged = useCallback(() => {
+    const place = acRef.current?.getPlace();
+    if (!place || !place.address_components) return;
+    const pick = (type: string) =>
+      place.address_components!.find((c) => c.types.includes(type))?.long_name ?? "";
+    const streetNum = pick("street_number");
+    const route = pick("route");
+    const premise = pick("premise") || pick("subpremise");
+    const line1Parts = [premise, streetNum, route].filter(Boolean);
+    const line1 =
+      line1Parts.join(" ").trim() ||
+      (place.formatted_address ?? "").split(",")[0].trim();
+    const placeArea =
+      pick("sublocality_level_1") || pick("sublocality") ||
+      pick("neighborhood") || pick("sublocality_level_2") || "";
+    const placeCity =
+      pick("locality") || pick("administrative_area_level_3") ||
+      pick("administrative_area_level_2") || "";
+    const placePincode = pick("postal_code");
+    const lat = place.geometry?.location?.lat() ?? null;
+    const lng = place.geometry?.location?.lng() ?? null;
+    if (line1) { setAddressLine(line1); setError(""); }
+    if (placeArea) { setArea(placeArea); setError(""); }
+    if (placePincode) { setPincode(placePincode); setError(""); }
+    if (placeCity) { setCity(placeCity); setError(""); }
+    onCoordsCapture(lat, lng);
+  }, [setAddressLine, setArea, setCity, setPincode, setError, onCoordsCapture]);
 
   return (
     <section>
@@ -1268,15 +1373,89 @@ function AddressForm(props: {
         )}
       </div>
 
+      {/* ── Location question ──────────────────────────────────────── */}
+      <div style={{ marginBottom: 18 }}>
+        <span style={labelSt}>Are you at this delivery address right now?</span>
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          {(["yes", "no"] as const).map((choice) => (
+            <button
+              key={choice}
+              type="button"
+              onClick={() => { setLocQuestion(choice); setLocMsg(null); }}
+              style={{
+                flex: 1, minHeight: 40,
+                background: locQuestion === choice ? "rgba(200,144,58,0.18)" : "none",
+                border: `1px solid ${locQuestion === choice ? "rgba(200,144,58,0.75)" : "rgba(200,144,58,0.3)"}`,
+                cursor: "pointer",
+                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                letterSpacing: "0.3em", textTransform: "uppercase",
+                color: locQuestion === choice ? "rgba(200,144,58,0.95)" : "rgba(200,144,58,0.5)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              {choice === "yes" ? "Yes" : "No"}
+            </button>
+          ))}
+        </div>
+
+        {locQuestion === "yes" && (
+          <button
+            type="button"
+            onClick={() => void handleGpsLocation()}
+            disabled={locating}
+            style={{
+              display: "block", width: "100%", marginTop: 10,
+              minHeight: 44,
+              background: "none",
+              border: "1px solid rgba(200,144,58,0.5)",
+              cursor: locating ? "default" : "pointer",
+              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+              letterSpacing: "0.3em", textTransform: "uppercase",
+              color: locating ? "rgba(200,144,58,0.35)" : "rgba(200,144,58,0.9)",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            {locating ? "Detecting location…" : "📍 Send current location"}
+          </button>
+        )}
+
+        {locMsg && (
+          <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "#e09a5a", letterSpacing: "0.03em", lineHeight: 1.5 }}>
+            {locMsg}
+          </p>
+        )}
+      </div>
+
+      {/* ── Delivery Address (Places Autocomplete) ──────────────────── */}
       <label style={{ display: "block", marginBottom: 18 }}>
         <span style={labelSt}>Delivery Address *</span>
-        <input
-          type="text" value={addressLine}
-          onChange={(e) => { setAddressLine(e.target.value); setError(""); }}
-          placeholder="Flat no. / House no. / Building name"
-          autoComplete="address-line1"
-          style={inputSt}
-        />
+        {mapsLoaded ? (
+          <Autocomplete
+            onLoad={(ac) => { acRef.current = ac; }}
+            onPlaceChanged={handlePlaceChanged}
+            options={{
+              componentRestrictions: { country: "in" },
+              fields: ["geometry", "address_components", "formatted_address"],
+              types: ["geocode", "establishment"],
+            }}
+          >
+            <input
+              type="text" value={addressLine}
+              onChange={(e) => { setAddressLine(e.target.value); setError(""); onCoordsCapture(null, null); }}
+              placeholder="Flat no. / House no. / Building name"
+              autoComplete="off"
+              style={inputSt}
+            />
+          </Autocomplete>
+        ) : (
+          <input
+            type="text" value={addressLine}
+            onChange={(e) => { setAddressLine(e.target.value); setError(""); }}
+            placeholder="Flat no. / House no. / Building name"
+            autoComplete="address-line1"
+            style={inputSt}
+          />
+        )}
       </label>
 
       <label style={{ display: "block", marginBottom: 18 }}>
@@ -1290,29 +1469,28 @@ function AddressForm(props: {
         />
       </label>
 
-      <div style={{ display: "flex", gap: 14, marginBottom: 22 }}>
-        <label style={{ flex: 1 }}>
-          <span style={labelSt}>City *</span>
-          <input
-            type="text" value={city}
-            onChange={(e) => { setCity(e.target.value); setError(""); }}
-            placeholder="Visakhapatnam"
-            autoComplete="address-level2"
-            style={inputSt}
-          />
-        </label>
-        <label style={{ flex: "0 0 120px" }}>
-          <span style={labelSt}>Pincode *</span>
-          <input
-            type="text" inputMode="numeric" maxLength={6}
-            value={pincode}
-            onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
-            placeholder="530045"
-            autoComplete="postal-code"
-            style={inputSt}
-          />
-        </label>
-      </div>
+      <label style={{ display: "block", marginBottom: 18 }}>
+        <span style={labelSt}>Pincode *</span>
+        <input
+          type="text" inputMode="numeric" maxLength={6}
+          value={pincode}
+          onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+          placeholder="530045"
+          autoComplete="postal-code"
+          style={inputSt}
+        />
+      </label>
+
+      <label style={{ display: "block", marginBottom: 22 }}>
+        <span style={labelSt}>City *</span>
+        <input
+          type="text" value={city}
+          onChange={(e) => { setCity(e.target.value); setError(""); }}
+          placeholder="Visakhapatnam"
+          autoComplete="address-level2"
+          style={inputSt}
+        />
+      </label>
 
       <PincodeStatusStrip pinStatus={pinStatus} />
 
