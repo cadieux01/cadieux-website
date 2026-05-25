@@ -37,7 +37,10 @@ type Customer = {
 type PinState =
   | { state: "idle" }
   | { state: "checking" }
-  | { state: "serviceable"; area_names: string[] }
+  // via:"exact" → area_names belong to the entered pincode (correct to show).
+  // via:"proximity" → area_names are from the NEAREST active pincode, not the
+  //   entered one — suppress them in the UI so we don't show misleading areas.
+  | { state: "serviceable"; via: "exact" | "proximity"; area_names: string[] }
   | { state: "unserviceable" }
   | { state: "error" };
 
@@ -218,11 +221,18 @@ export default function CheckoutPage() {
     const timer = window.setTimeout(() => {
       fetch(`/api/service-areas/check?pincode=${pin}`, { signal: ctrl.signal })
         .then((r) => r.json())
-        .then((d: { serviceable?: boolean; area_names?: string[] }) => {
+        .then((d: { serviceable?: boolean; via?: string; area_names?: string[] }) => {
           if (d.serviceable) {
+            const via = d.via === "proximity" ? "proximity" : "exact";
             setPinStatus({
               state: "serviceable",
-              area_names: Array.isArray(d.area_names) ? d.area_names : [],
+              via,
+              // For proximity matches area_names belong to the nearest pincode
+              // (a different pincode than the customer entered). Pass an empty
+              // array so PincodeStatusStrip doesn't show misleading area names.
+              area_names: via === "exact" && Array.isArray(d.area_names)
+                ? d.area_names
+                : [],
             });
           } else {
             setPinStatus({ state: "unserviceable" });
@@ -1566,7 +1576,7 @@ function PincodeStatusStrip({ pinStatus }: { pinStatus: PinState }) {
     >
       {isChecking && "Checking pincode availability…"}
       {isOk &&
-        (pinStatus.area_names.length > 0
+        (pinStatus.state === "serviceable" && pinStatus.area_names.length > 0
           ? `✓ We deliver here · ${pinStatus.area_names.slice(0, 3).join(", ")}`
           : "✓ We deliver here.")}
       {isBad &&
