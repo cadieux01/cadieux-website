@@ -1,22 +1,23 @@
 /**
  * Google Distance Matrix API wrapper for server-side driving-distance lookup.
  *
- * Store origin is configured via env vars:
- *   STORE_ORIGIN_LAT   e.g. 17.7271677
- *   STORE_ORIGIN_LNG   e.g. 83.3007613
+ * Distance is measured from the CUSTOMER to the NEAREST active
+ * pickup_location. The previous STORE_ORIGIN_LAT / STORE_ORIGIN_LNG
+ * env-var origin has been removed — the source of truth is now the
+ * `pickup_locations` table (admin-managed at /admin/locations).
  *
- * Set these to the Cadieux kitchen's coordinates in Vercel / .env.local.
- * If the env vars are absent, getDrivingDistanceKm() returns null and callers
- * should fall back to the flat DELIVERY_FEE_INR.
- *
- * Primary path: Google Distance Matrix API (driving mode).
- * Fallback:     Haversine straight-line distance (haversineKm from geocode.ts).
- *               Haversine underestimates real driving distance, so fees may be
- *               slightly lower than actual — acceptable as a graceful degradation
- *               when the Distance Matrix API is unavailable.
+ * Primary path: Google Distance Matrix API (driving mode) with the
+ *               customer as origin and every active pickup as a
+ *               destination in a single request; take the minimum.
+ * Fallback:     Haversine straight-line distance to each pickup,
+ *               then take the minimum. Haversine underestimates real
+ *               driving distance, so fees may be slightly lower than
+ *               actual — acceptable as graceful degradation when the
+ *               Distance Matrix API is unavailable.
  */
 
 import { haversineKm } from "@/lib/geocode";
+import { getActiveLocations } from "@/lib/pickup-locations";
 
 function getApiKey(): string | null {
   return (
@@ -26,14 +27,14 @@ function getApiKey(): string | null {
   );
 }
 
-/** Returns the configured store origin, or null if env vars are not set. */
-export function getStoreOrigin(): { lat: number; lng: number } | null {
-  const lat = Number(process.env.STORE_ORIGIN_LAT);
-  const lng = Number(process.env.STORE_ORIGIN_LNG);
-  if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
-    return { lat, lng };
-  }
-  return null;
+/**
+ * Returns true when at least one active (non-archived) pickup_location
+ * exists. Replaces the previous getStoreOrigin() env-var gate that
+ * callers used to decide whether to apply distance-based fees.
+ */
+export async function hasActivePickups(): Promise<boolean> {
+  const pickups = await getActiveLocations();
+  return pickups.length > 0;
 }
 
 type MatrixElement = {
@@ -47,20 +48,21 @@ type MatrixResponse = {
 };
 
 /**
- * Returns the driving distance in km from the store to the given coordinates.
+ * Returns the driving distance in km from the customer to the NEAREST
+ * active pickup_location.
  *
  * Returns null when:
- *   - STORE_ORIGIN_LAT / STORE_ORIGIN_LNG are not configured
+ *   - No active pickup_locations are configured
  *   - Both the Distance Matrix API AND haversine fallback fail (shouldn't happen)
  */
 export async function getDrivingDistanceKm(
-  destLat: number,
-  destLng: number,
+  custLat: number,
+  custLng: number,
 ): Promise<number | null> {
-  const origin = getStoreOrigin();
-  if (!origin) {
+  const pickups = await getActiveLocations();
+  if (pickups.length === 0) {
     console.warn(
-      "[distanceMatrix] STORE_ORIGIN_LAT / STORE_ORIGIN_LNG not set — " +
+      "[distanceMatrix] no active pickup_locations — " +
       "distance-based delivery fee disabled; falling back to flat fee.",
     );
     return null;
@@ -72,8 +74,11 @@ export async function getDrivingDistanceKm(
       const url = new URL(
         "https://maps.googleapis.com/maps/api/distancematrix/json",
       );
-      url.searchParams.set("origins",      `${origin.lat},${origin.lng}`);
-      url.searchParams.set("destinations", `${destLat},${destLng}`);
+      url.searchParams.set("origins", `${custLat},${custLng}`);
+      url.searchParams.set(
+        "destinations",
+        pickups.map((p) => `${p.latitude},${p.longitude}`).join("|"),
+      );
       url.searchParams.set("mode",   "driving");
       url.searchParams.set("units",  "metric");
       url.searchParams.set("region", "in");
@@ -83,13 +88,19 @@ export async function getDrivingDistanceKm(
       if (res.ok) {
         const json = (await res.json()) as MatrixResponse;
         if (json.status === "OK") {
-          const el = json.rows?.[0]?.elements?.[0];
-          if (el?.status === "OK" && typeof el.distance?.value === "number") {
-            return el.distance.value / 1000;
+          const elements = json.rows?.[0]?.elements ?? [];
+          const distances = elements
+            .filter(
+              (el) =>
+                el.status === "OK" &&
+                typeof el.distance?.value === "number",
+            )
+            .map((el) => (el.distance!.value as number) / 1000);
+          if (distances.length > 0) {
+            return Math.min(...distances);
           }
           console.warn(
-            "[distanceMatrix] element status:", el?.status,
-            "— falling back to haversine",
+            "[distanceMatrix] no OK elements — falling back to haversine",
           );
         } else {
           console.warn(
@@ -106,9 +117,12 @@ export async function getDrivingDistanceKm(
     }
   }
 
-  // Haversine fallback — straight-line, slightly shorter than driving.
-  return haversineKm(
-    { latitude: origin.lat, longitude: origin.lng },
-    { latitude: destLat,    longitude: destLng    },
+  // Haversine fallback — straight-line distance to each pickup, take min.
+  const haversines = pickups.map((p) =>
+    haversineKm(
+      { latitude: custLat, longitude: custLng },
+      { latitude: p.latitude, longitude: p.longitude },
+    ),
   );
+  return haversines.length > 0 ? Math.min(...haversines) : null;
 }

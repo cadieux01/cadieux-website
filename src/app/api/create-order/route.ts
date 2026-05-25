@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { DELIVERY_FEE_INR } from "@/lib/order-validation";
 import { computeDeliveryFee } from "@/lib/deliveryFee";
-import { getDrivingDistanceKm, getStoreOrigin } from "@/lib/distanceMatrix";
+import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 
 export async function POST(req: NextRequest) {
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   let deliveryFee = DELIVERY_FEE_INR;
   let distanceKm: number | null = null;
 
-  if (getStoreOrigin()) {
+  if (await hasActivePickups()) {
     const lat     = Number(body.lat);
     const lng     = Number(body.lng);
     const pincode = typeof body.pincode === "string"

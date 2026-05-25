@@ -28,7 +28,7 @@ import {
 import { validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import { computeDeliveryFee } from "@/lib/deliveryFee";
-import { getDrivingDistanceKm, getStoreOrigin } from "@/lib/distanceMatrix";
+import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 
 const supabaseAdmin = createClient(
@@ -250,7 +250,7 @@ export async function POST(req: NextRequest) {
   let deliveryFee = DELIVERY_FEE_INR;
   let distanceKm: number | null = null;
 
-  if (getStoreOrigin()) {
+  if (await hasActivePickups()) {
     if (orderLat !== null && orderLng !== null) {
       distanceKm = await getDrivingDistanceKm(orderLat, orderLng);
     } else if (pincode) {

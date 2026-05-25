@@ -1,7 +1,8 @@
 // GET /api/delivery-quote?lat=&lng= (primary)
 // GET /api/delivery-quote?pincode=  (fallback when no GPS)
 //
-// Returns a delivery fee quote based on driving distance from the store.
+// Returns a delivery fee quote based on driving distance from the
+// customer to the NEAREST active pickup_location.
 // Used by the checkout UI to show the fee BEFORE the order is placed.
 // The server independently re-computes the same fee at place_order time —
 // the client MUST NOT pass back this fee; the server is authoritative.
@@ -11,12 +12,12 @@
 //   200  { serviceable: false, feeInr: 0,      distanceKm: number }   > 10 km
 //   200  { serviceable: null,  feeInr: null,   distanceKm: null,
 //          message: "..." }                                             no coords
-//   503  { error: "..." }                                               origin not configured
+//   503  { error: "..." }                                               no active pickups
 
 import { NextRequest, NextResponse } from "next/server";
 
 import { computeDeliveryFee } from "@/lib/deliveryFee";
-import { getDrivingDistanceKm, getStoreOrigin } from "@/lib/distanceMatrix";
+import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +28,12 @@ export async function GET(req: NextRequest) {
   const rawLng = searchParams.get("lng");
   const pincode = (searchParams.get("pincode") ?? "").replace(/\D/g, "");
 
-  if (!getStoreOrigin()) {
+  if (!(await hasActivePickups())) {
     return NextResponse.json(
       {
         error:
           "Delivery fee calculation is not yet configured. " +
-          "Set STORE_ORIGIN_LAT and STORE_ORIGIN_LNG environment variables.",
+          "Add at least one active pickup location in /admin/locations.",
       },
       { status: 503 },
     );
