@@ -1,20 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ScrollReveal from "@/components/ScrollReveal";
 import { useCart } from "@/context/CartContext";
 
 const GRAIN = "url(/grain.svg)";
-
-const REQUEST_KEY = "cadieux_delivery_request";
-const DISMISS_KEY = "cadieux_delivery_request_dismissed";
-
-type BannerState =
-  | { kind: "pending"; pincode: string }
-  | { kind: "serviceable"; pincode: string; area_name: string | null }
-  | null;
 
 function chip(selected: boolean) {
   return {
@@ -31,7 +22,6 @@ function chip(selected: boolean) {
 export default function CartPage() {
   const { cart, cartTotal, updateQty, removeFromCart } = useCart();
   const router = useRouter();
-  const banner = useDeliveryRequestBanner();
 
   return (
     <div style={{ minHeight: "100dvh", background: "#1D1D1F", position: "relative", overflowX: "clip" }}>
@@ -55,7 +45,11 @@ export default function CartPage() {
           </h1>
         </ScrollReveal>
 
-        {banner && <DeliveryRequestBanner banner={banner} />}
+        {/* No serviceability / "we deliver to X" banner here — that was
+            based on a cached pincode and misleadingly promised delivery
+            before the customer had entered an address for this order.
+            Serviceability is confirmed at the checkout address step,
+            where the real pincode + GPS distance check runs. */}
 
         {cart.length === 0 ? (
           <div>
@@ -146,141 +140,6 @@ export default function CartPage() {
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-/* ── Delivery request banner ─────────────────────────────────────────── */
-
-function useDeliveryRequestBanner(): BannerState {
-  const [banner, setBanner] = useState<BannerState>(null);
-
-  useEffect(() => {
-    // Always honour a fresh request submitted this session — show the
-    // amber "we got your request" banner once, then suppress until next
-    // session via the dismiss flag.
-    if (typeof window === "undefined") return;
-    const dismissed = sessionStorage.getItem(DISMISS_KEY) === "1";
-    let raw: string | null = null;
-    try {
-      raw = sessionStorage.getItem(REQUEST_KEY);
-    } catch {
-      raw = null;
-    }
-    if (raw && !dismissed) {
-      try {
-        const parsed = JSON.parse(raw) as { pincode?: string };
-        if (parsed.pincode) {
-          setBanner({ kind: "pending", pincode: parsed.pincode });
-          return;
-        }
-      } catch {
-        /* malformed — fall through */
-      }
-    }
-
-    // Otherwise check by saved phone whether the customer has an
-    // outstanding delivery request the admin may have already activated.
-    const phone =
-      (typeof localStorage !== "undefined" &&
-        localStorage.getItem("cadieux_phone")) ||
-      null;
-    if (!phone) return;
-    fetch(`/api/delivery-requests/by-phone?phone=${encodeURIComponent(phone)}`)
-      .then((r) => r.json())
-      .then((d: { request?: { pincode: string; status: string; area_name: string | null } | null }) => {
-        if (!d?.request) return;
-        if (d.request.status === "serviceable") {
-          setBanner({
-            kind: "serviceable",
-            pincode: d.request.pincode,
-            area_name: d.request.area_name ?? null,
-          });
-        } else if (d.request.status === "pending") {
-          setBanner({ kind: "pending", pincode: d.request.pincode });
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  return banner;
-}
-
-function DeliveryRequestBanner({ banner }: { banner: NonNullable<BannerState> }) {
-  const [dismissed, setDismissed] = useState(false);
-  if (dismissed) return null;
-  const isPending = banner.kind === "pending";
-  const accent = isPending ? "#f59e0b" : "#4ade80";
-  const bg = isPending ? "rgba(245,158,11,0.08)" : "rgba(74,222,128,0.08)";
-  return (
-    <div
-      style={{
-        marginBottom: 32,
-        padding: "18px 22px",
-        border: `1px solid ${accent}`,
-        background: bg,
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 16,
-        position: "relative",
-      }}
-    >
-      <div style={{ flex: 1 }}>
-        <p
-          style={{
-            margin: "0 0 6px",
-            fontFamily: "var(--font-body)",
-            fontSize: 10,
-            fontWeight: 300,
-            letterSpacing: "0.35em",
-            textTransform: "uppercase",
-            color: accent,
-          }}
-        >
-          {isPending ? "Request received" : "Good news"}
-        </p>
-        <p
-          style={{
-            margin: 0,
-            fontFamily: "var(--font-body)",
-            fontSize: 13,
-            fontWeight: 200,
-            lineHeight: 1.6,
-            color: "rgba(251,243,212,0.78)",
-            letterSpacing: "0.04em",
-          }}
-        >
-          {isPending
-            ? `Thanks — we've got your request to deliver to ${banner.pincode}. The team will reach out shortly on WhatsApp. Your cart is saved.`
-            : `We now deliver to ${banner.pincode}${
-                banner.area_name ? ` (${banner.area_name})` : ""
-              }. Tap "Proceed to Checkout" to complete your order.`}
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={() => {
-          try {
-            sessionStorage.setItem(DISMISS_KEY, "1");
-            sessionStorage.removeItem(REQUEST_KEY);
-          } catch {
-            /* private mode */
-          }
-          setDismissed(true);
-        }}
-        style={{
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          color: "rgba(251,243,212,0.4)",
-          fontSize: 16,
-          lineHeight: 1,
-          padding: 4,
-        }}
-        aria-label="Dismiss"
-      >
-        ✕
-      </button>
     </div>
   );
 }

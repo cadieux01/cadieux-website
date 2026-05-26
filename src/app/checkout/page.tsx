@@ -972,11 +972,11 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {/* Order summary — gated on `showSummary` so it only appears
-            once the address is confirmed (Continue pressed) AND a real
-            quote is in hand. Prevents the misleading ₹50 placeholder
-            from flashing while the user is still entering details. */}
-        {step === "address" && showSummary && (
+        {/* Order summary — shown on the delivery step (after the
+            address is confirmed AND a real quote is in hand). The
+            address step intentionally hides this so the form stays
+            clean; the payment step has its own PaymentReview block. */}
+        {step === "delivery" && showSummary && (
           <section style={{ marginBottom: 32 }}>
             <p style={sectionHead}>Your Order</p>
             {cart.map((item, i) => (
@@ -1276,10 +1276,11 @@ export default function CheckoutPage() {
         }}
       >
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "14px 20px" }}>
-          {/* Live price summary — only visible once the address is
-              confirmed (Continue pressed) AND a real quote is in hand,
-              matching the top-of-page summary gate. */}
-          {showSummary && cart.length > 0 && (
+          {/* Live price summary — only visible on delivery/payment
+              steps once the address is confirmed AND a real quote is
+              in hand. Hidden on the address step so the form stays
+              clean (no prices, no fee, no total). */}
+          {step !== "address" && showSummary && cart.length > 0 && (
             <div
               style={{
                 display: "flex", alignItems: "baseline", justifyContent: "space-between",
