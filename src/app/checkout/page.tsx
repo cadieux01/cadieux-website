@@ -202,19 +202,22 @@ export default function CheckoutPage() {
   const [pinStatus, setPinStatus] = useState<PinState>({ state: "idle" });
   const [requestSubmitting, setRequestSubmitting] = useState(false);
 
-  // Turnstile — OTP-send widget (rendered inside AddressForm)
+  // Turnstile — ONE widget per checkout session. The single token gates
+  // BOTH actions:
+  //   1. Send OTP            (server-verified via /api/verify/send)
+  //   2. Continue to Delivery (client-side gate on submitAddressStep)
+  // so the customer never has to solve the challenge twice. The widget
+  // renders once at the bottom of the address step, above the sticky
+  // "Continue to Delivery" button — see the <main> tail below.
   const [turnstileToken, setTurnstileToken] = useState<string>("");
   const turnstileRef = useRef<TurnstileHandle>(null);
+  // Reset the widget only on Turnstile expiry/error or on an OTP-send
+  // server failure. We do NOT reset after a successful OTP send — the
+  // token stays as the client-side gate for Continue.
   const refreshTurnstile = () => {
     setTurnstileToken("");
     turnstileRef.current?.reset();
   };
-
-  // Turnstile — proceed-to-delivery widget (gates Continue on BOTH the
-  // saved-details path AND the new-address form path). One solve per
-  // checkout session — we do NOT reset after consumption.
-  const [proceedToken, setProceedToken] = useState<string>("");
-  const proceedTurnstileRef = useRef<TurnstileHandle>(null);
 
   // Set just before finishOrder fires clearCart() so the empty-cart
   // bounce effect below doesn't race the /checkout/success redirect.
@@ -467,7 +470,9 @@ export default function CheckoutPage() {
       }
       setOtpSent(true);
       setOtpCode("");
-      refreshTurnstile();
+      // Intentionally NOT calling refreshTurnstile() here — the same
+      // solved token continues to satisfy the Continue-to-Delivery
+      // client gate so the customer never re-solves the captcha.
     } catch {
       setOtpError("Network error. Try again.");
       refreshTurnstile();
@@ -505,11 +510,11 @@ export default function CheckoutPage() {
   /* ── Address step → save_customer → delivery step ─────────────────────── */
   async function submitAddressStep() {
     setError("");
-    // Human-verification gate. Applies to BOTH the returning-customer
-    // saved-details fast path (which has no server call to enforce
-    // this) and the new-address form path. Must be solved before the
-    // first transition to step 2 (delivery).
-    if (!proceedToken) {
+    // Human-verification gate — uses the single Turnstile token that
+    // also gates Send OTP. Applies to BOTH the returning-customer
+    // saved-details fast path (no server call) and the new-address
+    // form path. The customer solves the challenge once per session.
+    if (!turnstileToken) {
       setError("Please complete the human-verification check below.");
       return;
     }
@@ -1167,8 +1172,6 @@ export default function CheckoutPage() {
                     verifyOtp={verifyOtp}
                     sendingOtp={sendingOtp}
                     verifyingOtp={verifyingOtp}
-                    turnstileRef={turnstileRef}
-                    setTurnstileToken={setTurnstileToken}
                   />
                 )}
                 {otpVerified && (
@@ -1240,8 +1243,6 @@ export default function CheckoutPage() {
                 verifyOtp={verifyOtp}
                 sendingOtp={sendingOtp}
                 verifyingOtp={verifyingOtp}
-                turnstileRef={turnstileRef}
-                setTurnstileToken={setTurnstileToken}
                 addressLine={addressLine}
                 setAddressLine={setAddressLine}
                 area={area}
@@ -1309,10 +1310,12 @@ export default function CheckoutPage() {
           </p>
         )}
 
-        {/* Proceed-to-delivery human check — rendered on BOTH the
-            saved-details panel and the new-address form so the
-            "Continue to Delivery" button below is gated by a fresh
-            Turnstile token on every path. One solve per session. */}
+        {/* Single Turnstile widget for the entire address step.
+            One solve here satisfies BOTH gates:
+              • Send OTP    (server-verified via /api/verify/send)
+              • Continue to Delivery (client-side gate)
+            so the customer never re-solves the captcha. Visible on
+            BOTH the saved-details and the new-address paths. */}
         {step === "address" && (
           <div
             style={{
@@ -1346,12 +1349,12 @@ export default function CheckoutPage() {
                 color: "rgba(240,223,200,0.55)",
               }}
             >
-              Please confirm you&apos;re human to continue to delivery.
+              Solve once to verify your phone and continue to delivery.
             </p>
             <TurnstileWidget
-              ref={proceedTurnstileRef}
-              onVerify={(t) => setProceedToken(t)}
-              onExpire={() => setProceedToken("")}
+              ref={turnstileRef}
+              onVerify={(t) => setTurnstileToken(t)}
+              onExpire={() => setTurnstileToken("")}
             />
           </div>
         )}
@@ -1414,12 +1417,12 @@ export default function CheckoutPage() {
               onClick={submitAddressStep}
               disabled={
                 submitting ||
-                !proceedToken ||
+                !turnstileToken ||
                 (formMode !== "returning" && locQuestion === "unanswered")
               }
               style={primaryBtn(
                 submitting ||
-                  !proceedToken ||
+                  !turnstileToken ||
                   (formMode !== "returning" && locQuestion === "unanswered"),
               )}
             >
@@ -1470,8 +1473,6 @@ function AddressForm(props: {
   verifyOtp: () => void;
   sendingOtp: boolean;
   verifyingOtp: boolean;
-  turnstileRef: React.Ref<TurnstileHandle>;
-  setTurnstileToken: (s: string) => void;
   addressLine: string; setAddressLine: (s: string) => void;
   area: string; setArea: (s: string) => void;
   city: string; setCity: (s: string) => void;
@@ -1493,7 +1494,6 @@ function AddressForm(props: {
     otpSent, setOtpSent, otpCode, setOtpCode,
     otpVerified, setOtpVerified, otpError, setOtpError,
     sendOtp, verifyOtp, sendingOtp, verifyingOtp,
-    turnstileRef, setTurnstileToken,
     addressLine, setAddressLine, area, setArea,
     city, setCity, pincode, setPincode,
     pinStatus, setError, savedCustomer, onCoordsCapture, onBackToSaved,
@@ -1860,19 +1860,10 @@ function AddressForm(props: {
         </button>
       )}
 
-      {/* Human-verification — pinned to the bottom of the form so it sits
-          underneath the address fields. Still gates "Send OTP" via the
-          turnstileToken check in sendOtp(); the widget only renders until
-          the OTP has been verified for this session. */}
-      {!otpVerified && (
-        <div style={{ marginTop: 22 }}>
-          <TurnstileWidget
-            ref={turnstileRef}
-            onVerify={(t) => setTurnstileToken(t)}
-            onExpire={() => setTurnstileToken("")}
-          />
-        </div>
-      )}
+      {/* Human-verification widget is rendered ONCE by the parent
+          CheckoutPage at the bottom of the address step (above the
+          "Continue to Delivery" CTA). The single token also gates
+          Send OTP above — no second widget is rendered here. */}
     </section>
   );
 }
@@ -1887,13 +1878,10 @@ function SavedCustomerOtpBlock(props: {
   verifyOtp: () => void;
   sendingOtp: boolean;
   verifyingOtp: boolean;
-  turnstileRef: React.Ref<TurnstileHandle>;
-  setTurnstileToken: (s: string) => void;
 }) {
   const {
     phone, otpSent, otpCode, setOtpCode, otpError, setOtpError,
     sendOtp, verifyOtp, sendingOtp, verifyingOtp,
-    turnstileRef, setTurnstileToken,
   } = props;
 
   const tail = phone.replace(/\D/g, "").slice(-4);
@@ -1913,11 +1901,8 @@ function SavedCustomerOtpBlock(props: {
         We&rsquo;ll send a 6-digit code to your saved number ending in {tail}. Verify once per session to continue.
       </p>
 
-      <TurnstileWidget
-        ref={turnstileRef}
-        onVerify={(t) => setTurnstileToken(t)}
-        onExpire={() => setTurnstileToken("")}
-      />
+      {/* Turnstile widget is rendered once by the parent at the bottom
+          of the address step; the same solved token gates Send OTP. */}
 
       <button
         onClick={sendOtp}
