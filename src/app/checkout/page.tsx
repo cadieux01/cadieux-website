@@ -197,8 +197,17 @@ export default function CheckoutPage() {
     turnstileRef.current?.reset();
   };
 
+  // Set just before finishOrder fires clearCart() so the empty-cart
+  // bounce effect below doesn't race the /checkout/success redirect.
+  // Without this guard, clearCart() flips cart.length to 0, the effect
+  // runs synchronously, and router.replace("/cart") clobbers the push
+  // we did to /checkout/success — landing the user on an empty cart
+  // page instead of the order confirmation.
+  const orderFinishingRef = useRef(false);
+
   // Bounce empty cart back to /cart to avoid placing zero-item orders.
   useEffect(() => {
+    if (orderFinishingRef.current) return;
     if (cart.length === 0) {
       router.replace("/cart");
     }
@@ -813,6 +822,10 @@ export default function CheckoutPage() {
     const shortId = orderId
       ? orderId.slice(0, 8).toUpperCase()
       : Math.random().toString(36).slice(2, 10).toUpperCase();
+    // Mark the order as finishing BEFORE clearing the cart so the
+    // empty-cart bounce effect doesn't fire router.replace("/cart")
+    // and clobber the success redirect below.
+    orderFinishingRef.current = true;
     clearCart();
     // Pass the full UUID alongside the short id so the success page can
     // deep-link into /orders/<id>. Short id stays for display only.
@@ -1517,16 +1530,6 @@ function AddressForm(props: {
           )}
         </div>
 
-        {!otpVerified && (
-          <div style={{ marginTop: 14 }}>
-            <TurnstileWidget
-              ref={turnstileRef}
-              onVerify={(t) => setTurnstileToken(t)}
-              onExpire={() => setTurnstileToken("")}
-            />
-          </div>
-        )}
-
         {otpSent && !otpVerified && (
           <div style={{ marginTop: 14 }}>
             <span style={labelSt}>Enter OTP *</span>
@@ -1713,6 +1716,20 @@ function AddressForm(props: {
         >
           ← Back to saved details
         </button>
+      )}
+
+      {/* Human-verification — pinned to the bottom of the form so it sits
+          underneath the address fields. Still gates "Send OTP" via the
+          turnstileToken check in sendOtp(); the widget only renders until
+          the OTP has been verified for this session. */}
+      {!otpVerified && (
+        <div style={{ marginTop: 22 }}>
+          <TurnstileWidget
+            ref={turnstileRef}
+            onVerify={(t) => setTurnstileToken(t)}
+            onExpire={() => setTurnstileToken("")}
+          />
+        </div>
       )}
     </section>
   );
