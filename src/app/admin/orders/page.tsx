@@ -49,14 +49,18 @@ type SortKey = "created_desc" | "delivery_asc";
 
 const NEXT_STATUS_FOR: Record<string, OrderStatus | null> = {
   pending_payment: "confirmed",
-  pending: "confirmed",
-  confirmed: "dispatched",
-  dispatched: "delivered",
+  placed: "confirmed",
+  confirmed: "preparing",
+  preparing: "out_for_delivery",
+  out_for_delivery: "delivered",
   delivered: null,
   cancelled: null,
+  // legacy aliases — handled so historic rows still get a sane "next"
+  pending: "confirmed",
+  dispatched: "delivered",
 };
 
-type BulkAction = "confirm" | "dispatch" | "deliver" | "cancel";
+type BulkAction = "confirm" | "prepare" | "dispatch" | "deliver" | "cancel";
 
 type BulkResult = {
   succeeded: string[];
@@ -752,14 +756,16 @@ function OrdersPageInner() {
 
 const ACTION_LABEL: Record<BulkAction, string> = {
   confirm: "Mark confirmed",
-  dispatch: "Mark dispatched",
+  prepare: "Mark preparing",
+  dispatch: "Mark out for delivery",
   deliver: "Mark delivered",
   cancel: "Cancel",
 };
 
 const ACTION_PAST: Record<BulkAction, string> = {
   confirm: "confirmed",
-  dispatch: "dispatched",
+  prepare: "preparing",
+  dispatch: "out_for_delivery",
   deliver: "delivered",
   cancel: "cancelled",
 };

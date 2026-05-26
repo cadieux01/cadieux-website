@@ -11,6 +11,13 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import { ShareButton } from "@/components/ShareButton";
+import {
+  ORDER_STAGES,
+  STAGE_LABEL,
+  isCancelled,
+  stageIndex,
+  toStage,
+} from "@/lib/order-stages";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -28,6 +35,7 @@ type Order = {
   total_amount: number;
   delivery_fee: number | null;
   status: string;
+  status_updated_at?: string | null;
   delivery_address: string | null;
   items: OrderItem[] | null;
   delivery_date: string | null;
@@ -365,6 +373,16 @@ export default function OrderDetailPage() {
               />
             </div>
 
+            {/* Status progress tracker. Hidden for cancelled orders —
+                the dedicated Cancellation section below already tells
+                the customer everything they need. */}
+            {!isCancelled(order.status) && (
+              <StatusTracker
+                status={order.status}
+                statusUpdatedAt={order.status_updated_at ?? null}
+              />
+            )}
+
             {/* Delivery details */}
             <Section title="Delivery">
               {order.delivery_date && (
@@ -574,6 +592,186 @@ function Section({
         {title}
       </h2>
       <div>{children}</div>
+    </section>
+  );
+}
+
+function StatusTracker({
+  status,
+  statusUpdatedAt,
+}: {
+  status: string;
+  statusUpdatedAt: string | null;
+}) {
+  const stage = toStage(status);
+  // Unknown / non-tracker state (e.g. pending_payment): fall back to
+  // a single status pill so we never render an empty progress bar.
+  if (!stage) {
+    return (
+      <section style={{ marginBottom: 36 }}>
+        <h2
+          style={{
+            margin: "0 0 14px",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 300,
+            letterSpacing: "0.4em",
+            textTransform: "uppercase",
+            color: "rgba(200,144,58,0.7)",
+          }}
+        >
+          Status
+        </h2>
+        <p
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-body)",
+            fontSize: 14,
+            fontWeight: 300,
+            letterSpacing: "0.05em",
+            color: "rgba(240,223,200,0.85)",
+            textTransform: "uppercase",
+          }}
+        >
+          {status}
+        </p>
+      </section>
+    );
+  }
+
+  const currentIdx = stageIndex(stage);
+
+  return (
+    <section style={{ marginBottom: 40 }}>
+      <h2
+        style={{
+          margin: "0 0 18px",
+          fontFamily: "var(--font-body)",
+          fontSize: 11,
+          fontWeight: 300,
+          letterSpacing: "0.4em",
+          textTransform: "uppercase",
+          color: "rgba(200,144,58,0.7)",
+        }}
+      >
+        Status
+      </h2>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${ORDER_STAGES.length}, 1fr)`,
+          alignItems: "start",
+          gap: 0,
+          position: "relative",
+        }}
+      >
+        {ORDER_STAGES.map((s, i) => {
+          const done = i < currentIdx;
+          const active = i === currentIdx;
+          const dotBg = done || active ? "rgba(74,222,128,0.85)" : "transparent";
+          const dotBorder = done || active
+            ? "rgba(74,222,128,0.85)"
+            : "rgba(240,223,200,0.25)";
+          const labelColor = active
+            ? "#FBF3D4"
+            : done
+            ? "rgba(240,223,200,0.7)"
+            : "rgba(240,223,200,0.35)";
+          return (
+            <div
+              key={s}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 8,
+                position: "relative",
+              }}
+            >
+              {/* Connector line to the previous dot. Coloured if the
+                  *previous* stage is done; uses absolute positioning so
+                  the dots stay centred in their grid cell. */}
+              {i > 0 && (
+                <span
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    top: 9,
+                    right: "50%",
+                    width: "100%",
+                    height: 2,
+                    background:
+                      i <= currentIdx
+                        ? "rgba(74,222,128,0.6)"
+                        : "rgba(240,223,200,0.12)",
+                  }}
+                />
+              )}
+              <span
+                aria-hidden
+                style={{
+                  position: "relative",
+                  width: 20,
+                  height: 20,
+                  borderRadius: 999,
+                  background: dotBg,
+                  border: `1.5px solid ${dotBorder}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#080604",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  lineHeight: 1,
+                  boxShadow: active
+                    ? "0 0 0 4px rgba(74,222,128,0.15)"
+                    : undefined,
+                }}
+              >
+                {done ? "✓" : active ? "•" : ""}
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: 10,
+                  fontWeight: 300,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  color: labelColor,
+                  textAlign: "center",
+                  lineHeight: 1.3,
+                }}
+              >
+                {STAGE_LABEL[s]}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {statusUpdatedAt && (
+        <p
+          style={{
+            margin: "20px 0 0",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 200,
+            letterSpacing: "0.25em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.4)",
+          }}
+        >
+          Updated{" "}
+          {new Date(statusUpdatedAt).toLocaleString("en-IN", {
+            day: "numeric",
+            month: "short",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </p>
+      )}
     </section>
   );
 }

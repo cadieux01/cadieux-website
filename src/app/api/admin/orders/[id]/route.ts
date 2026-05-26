@@ -4,22 +4,39 @@ import { recordAuditEvent } from "@/lib/audit-log";
 import { notifyCustomer } from "@/lib/push";
 import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/delivery-slots";
 
+// New canonical stages + legacy values that pre-date the
+// order-status-stages migration. The migration normalises existing
+// rows on the way through, but we keep the legacy strings accepted
+// here so any older admin tooling can still PATCH cleanly.
 const ALLOWED_STATUSES = new Set([
-  "pending",
+  "placed",
   "confirmed",
-  "dispatched",
+  "preparing",
+  "out_for_delivery",
   "delivered",
   "cancelled",
+  // legacy aliases — accepted on input, normalised on write below
+  "pending",
+  "dispatched",
 ]);
 
-// Customer-facing copy for the four push-triggering status transitions.
+const STATUS_ALIAS: Record<string, string> = {
+  pending: "placed",
+  dispatched: "out_for_delivery",
+};
+
+// Customer-facing copy for the push-triggering status transitions.
 // Kept here (not in lib/push) because the wording is admin-flow specific.
 const STATUS_PUSH_COPY: Record<string, { title: string; body: string }> = {
   confirmed: {
     title: "Order confirmed",
     body: "Your bread is being prepared.",
   },
-  dispatched: {
+  preparing: {
+    title: "Preparing your order",
+    body: "We're baking your bread now.",
+  },
+  out_for_delivery: {
     title: "On the way",
     body: "Your order is on the way!",
   },
@@ -45,11 +62,15 @@ export async function PATCH(
   const update: Record<string, unknown> = {};
 
   if (typeof body.status === "string") {
-    const s = body.status.toLowerCase();
-    if (!ALLOWED_STATUSES.has(s)) {
+    const raw = body.status.toLowerCase();
+    if (!ALLOWED_STATUSES.has(raw)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
+    const s = STATUS_ALIAS[raw] ?? raw;
     update.status = s;
+    // Stamp the moment the status changed so the customer Track Order
+    // page can show "Updated <relative>" beneath the stage tracker.
+    update.status_updated_at = new Date().toISOString();
   }
 
   if (typeof body.delivery_address === "string") {

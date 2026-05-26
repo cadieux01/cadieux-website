@@ -13,9 +13,10 @@ export const ADMIN_SESSION_KEY = "cadieux_admin_auth";
 export const ADMIN_PASSWORD = "cadieux2024";
 
 export const ORDER_STATUSES = [
-  "pending",
+  "placed",
   "confirmed",
-  "dispatched",
+  "preparing",
+  "out_for_delivery",
   "delivered",
   "cancelled",
 ] as const;
@@ -37,9 +38,10 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 export const ORDER_FILTER_VALUES = [
   "all",
   "pending_payment",
-  "pending",
+  "placed",
   "confirmed",
-  "dispatched",
+  "preparing",
+  "out_for_delivery",
   "delivered",
   "cancelled",
 ] as const;

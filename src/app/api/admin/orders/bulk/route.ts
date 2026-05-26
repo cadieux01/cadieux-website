@@ -16,14 +16,16 @@ import { notifyCustomer } from "@/lib/push";
 
 const ACTION_TO_STATUS: Record<string, string> = {
   confirm: "confirmed",
-  dispatch: "dispatched",
+  prepare: "preparing",
+  dispatch: "out_for_delivery",
   deliver: "delivered",
   cancel: "cancelled",
 };
 
 const STATUS_PUSH_COPY: Record<string, { title: string; body: string }> = {
   confirmed: { title: "Order confirmed", body: "Your bread is being prepared." },
-  dispatched: { title: "On the way", body: "Your order is on the way!" },
+  preparing: { title: "Preparing your order", body: "We're baking your bread now." },
+  out_for_delivery: { title: "On the way", body: "Your order is on the way!" },
   delivered: { title: "Delivered", body: "Your bread has been delivered. Enjoy!" },
   cancelled: { title: "Order cancelled", body: "Your order has been cancelled." },
 };
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
   for (const id of ids) {
     const { data, error } = await supabaseAdmin
       .from("orders")
-      .update({ status: nextStatus })
+      .update({ status: nextStatus, status_updated_at: new Date().toISOString() })
       .eq("id", id)
       .select("id, customer_id, status")
       .maybeSingle();

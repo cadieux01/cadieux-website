@@ -110,10 +110,13 @@ export async function sendCustomerEditSMS(args: {
 /** Maps lowercase DB status → capitalized notify status used by templates. */
 export function toNotifyStatus(status: string | null): OrderNotifyStatus | null {
   switch ((status ?? "").toLowerCase()) {
+    case "placed":
     case "pending":
       return "Pending";
     case "confirmed":
+    case "preparing":
       return "Confirmed";
+    case "out_for_delivery":
     case "dispatched":
       return "Dispatched";
     case "delivered":
