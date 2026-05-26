@@ -241,6 +241,15 @@ export default function CheckoutPage() {
     if (!saved) return;
     setPhone(saved);
 
+    // `?edit=1` deep-links from /account/addresses → lands the wizard
+    // in formMode="edit" right after prefill so the user can update
+    // their saved address inline. Read via window rather than
+    // useSearchParams to avoid forcing a Suspense bailout on the
+    // checkout page (the static prerender would otherwise fail).
+    const editParam =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("edit") === "1";
+
     const sessionPhone = sessionStorage.getItem("cadieux_verified_phone");
     if (sessionPhone === saved) setOtpVerified(true);
 
@@ -272,9 +281,15 @@ export default function CheckoutPage() {
         setName(c.full_name ?? "");
         setCity(c.city ?? "");
         prefillAddress(c.delivery_address ?? "");
-        setFormMode("returning");
+        // ?edit=1 (from /account/addresses → "Edit") drops the user
+        // straight into the editable address form pre-populated with
+        // their saved fields, skipping the read-only saved card.
+        setFormMode(editParam ? "edit" : "returning");
       })
       .catch(() => {});
+    // editParam is read once on mount; deps would re-fire the whole
+    // prefill if it changed mid-session, which we don't want.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Effective pincode for serviceability check.

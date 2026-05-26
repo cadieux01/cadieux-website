@@ -13,6 +13,12 @@ export default function Nav() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  // Soft "logged-in" signal: the rest of the site treats the presence
+  // of `cadieux_phone` in localStorage as proof the user has placed at
+  // least one order on this device. We use it here to gate account-only
+  // menu entries (e.g. "Your Address") so anonymous visitors don't see
+  // links to pages that would just bounce them to the cart anyway.
+  const [hasSavedPhone, setHasSavedPhone] = useState(false);
 
   // Restore menu state from localStorage on mount — so reload keeps the menu open
   useEffect(() => {
@@ -20,8 +26,22 @@ export default function Nav() {
       const savedOpen = localStorage.getItem("cadieux_menu_open");
       if (savedOpen === "1" && isHome) setMenuOpen(true);
     } catch { /* ignore */ }
+    try {
+      setHasSavedPhone(!!localStorage.getItem("cadieux_phone"));
+    } catch { /* ignore */ }
     setHydrated(true);
   }, [isHome]);
+
+  // Re-evaluate saved-phone presence whenever the drawer is opened so
+  // the user sees "Your Address" appear immediately after their first
+  // order without needing a full reload (localStorage changes from
+  // /checkout don't fire a `storage` event in the same tab).
+  useEffect(() => {
+    if (!menuOpen) return;
+    try {
+      setHasSavedPhone(!!localStorage.getItem("cadieux_phone"));
+    } catch { /* ignore */ }
+  }, [menuOpen]);
 
   // Persist menu state
   useEffect(() => {
@@ -124,6 +144,14 @@ export default function Nav() {
             { label: "Products of Cadieux", action: () => nav("/shop") },
             { label: "Orders",              action: () => nav("/orders") },
             { label: "Cart",                action: () => nav("/cart") },
+            // "Your Address" sits next to the other account-only links
+            // (Orders) and only appears once the device has placed an
+            // order (cadieux_phone in localStorage). Hidden for first-
+            // time visitors so we don't dangle a link that just bounces
+            // them to the cart.
+            ...(hasSavedPhone
+              ? [{ label: "Your Address", action: () => nav("/account/addresses") }]
+              : []),
             { label: "Subscription",        action: () => nav("/subscription") },
             { label: "Precision Baking",    action: () => nav("/making") },
             { label: "Behind Cadieux",      action: () => nav("/behind-cadieux") },
