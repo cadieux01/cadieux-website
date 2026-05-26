@@ -202,13 +202,19 @@ export default function CheckoutPage() {
   const [pinStatus, setPinStatus] = useState<PinState>({ state: "idle" });
   const [requestSubmitting, setRequestSubmitting] = useState(false);
 
-  // Turnstile
+  // Turnstile — OTP-send widget (rendered inside AddressForm)
   const [turnstileToken, setTurnstileToken] = useState<string>("");
   const turnstileRef = useRef<TurnstileHandle>(null);
   const refreshTurnstile = () => {
     setTurnstileToken("");
     turnstileRef.current?.reset();
   };
+
+  // Turnstile — proceed-to-delivery widget (gates Continue on BOTH the
+  // saved-details path AND the new-address form path). One solve per
+  // checkout session — we do NOT reset after consumption.
+  const [proceedToken, setProceedToken] = useState<string>("");
+  const proceedTurnstileRef = useRef<TurnstileHandle>(null);
 
   // Set just before finishOrder fires clearCart() so the empty-cart
   // bounce effect below doesn't race the /checkout/success redirect.
@@ -499,6 +505,14 @@ export default function CheckoutPage() {
   /* ── Address step → save_customer → delivery step ─────────────────────── */
   async function submitAddressStep() {
     setError("");
+    // Human-verification gate. Applies to BOTH the returning-customer
+    // saved-details fast path (which has no server call to enforce
+    // this) and the new-address form path. Must be solved before the
+    // first transition to step 2 (delivery).
+    if (!proceedToken) {
+      setError("Please complete the human-verification check below.");
+      return;
+    }
     // Returning customer using saved details just advances — BUT we
     // still require an in-session OTP (cookie). Without it the server
     // will reject `place_order` with "Phone verification required"
@@ -1294,6 +1308,53 @@ export default function CheckoutPage() {
             {error}
           </p>
         )}
+
+        {/* Proceed-to-delivery human check — rendered on BOTH the
+            saved-details panel and the new-address form so the
+            "Continue to Delivery" button below is gated by a fresh
+            Turnstile token on every path. One solve per session. */}
+        {step === "address" && (
+          <div
+            style={{
+              marginTop: 28,
+              padding: "18px 18px 16px",
+              border: "1px solid rgba(200,144,58,0.22)",
+              background: "rgba(200,144,58,0.04)",
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 10px",
+                fontFamily: "var(--font-body)",
+                fontSize: 10,
+                fontWeight: 300,
+                letterSpacing: "0.35em",
+                textTransform: "uppercase",
+                color: "rgba(200,144,58,0.85)",
+              }}
+            >
+              Human Check
+            </p>
+            <p
+              style={{
+                margin: "0 0 12px",
+                fontFamily: "var(--font-body)",
+                fontSize: 12,
+                fontWeight: 200,
+                lineHeight: 1.5,
+                letterSpacing: "0.02em",
+                color: "rgba(240,223,200,0.55)",
+              }}
+            >
+              Please confirm you&apos;re human to continue to delivery.
+            </p>
+            <TurnstileWidget
+              ref={proceedTurnstileRef}
+              onVerify={(t) => setProceedToken(t)}
+              onExpire={() => setProceedToken("")}
+            />
+          </div>
+        )}
       </main>
 
       {/* ── Sticky bottom CTA bar ──────────────────────────────────────── */}
@@ -1353,10 +1414,12 @@ export default function CheckoutPage() {
               onClick={submitAddressStep}
               disabled={
                 submitting ||
+                !proceedToken ||
                 (formMode !== "returning" && locQuestion === "unanswered")
               }
               style={primaryBtn(
                 submitting ||
+                  !proceedToken ||
                   (formMode !== "returning" && locQuestion === "unanswered"),
               )}
             >
