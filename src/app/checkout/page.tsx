@@ -105,6 +105,12 @@ export default function CheckoutPage() {
   const [step, setStep] = useState<Step>("address");
   const [formMode, setFormMode] = useState<FormMode>("fresh");
 
+  // Gates the Your-Order summary (top block + sticky bottom). False
+  // until the user has filled in a valid address AND pressed
+  // "Continue to Delivery". Keeps us from showing a misleading ₹50
+  // placeholder while they're still typing.
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
+
   // Form fields
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -163,6 +169,13 @@ export default function CheckoutPage() {
   const deliveryFee  = deliveryQuote?.feeInr  ?? DELIVERY_FEE_INR;
   const grandTotal   = total + deliveryFee;
   const distanceUnserviceable = deliveryQuote?.serviceable === false;
+
+  // Render the order summary only after the user has confirmed their
+  // address (Continue pressed) AND a real distance-based quote is in
+  // hand. `distanceUnserviceable` short-circuits the summary in favour
+  // of the standalone ">10 km" warning rendered above.
+  const showSummary =
+    addressConfirmed && deliveryQuote !== null && !distanceUnserviceable;
 
   // Pincode serviceability
   const [pinStatus, setPinStatus] = useState<PinState>({ state: "idle" });
@@ -453,6 +466,7 @@ export default function CheckoutPage() {
       if (pinStatus.state === "checking") { setError("Checking pincode availability…"); return; }
       if (pinStatus.state === "unserviceable") { setError("We don't deliver to this pincode yet."); return; }
       if (distanceUnserviceable) { setError("We don't deliver beyond 10 km yet. Please check our service area."); return; }
+      setAddressConfirmed(true);
       setStep("delivery");
       return;
     }
@@ -486,6 +500,7 @@ export default function CheckoutPage() {
       if (!res.ok) { setError(data.error ?? "Failed to save details."); return; }
       localStorage.setItem("cadieux_phone", phone.replace(/\D/g, ""));
       setCustomer(data.customer);
+      setAddressConfirmed(true);
       setStep("delivery");
     } catch {
       setError("Something went wrong. Try again.");
@@ -915,8 +930,28 @@ export default function CheckoutPage() {
           {step === "address" ? "Your Address" : step === "delivery" ? "Pick a Time" : "Payment"}
         </h1>
 
-        {/* Order summary (always visible at top of address step) */}
-        {step === "address" && (
+        {/* Standalone >10 km warning — surfaces independent of the
+            summary so the customer sees why we can't deliver even
+            before they've pressed Continue. */}
+        {step === "address" && distanceUnserviceable && (
+          <div
+            style={{
+              padding: "12px 16px", marginBottom: 24,
+              background: "rgba(245,75,75,0.08)",
+              border: "1px solid rgba(245,75,75,0.3)",
+              fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200,
+              color: "#f87171", letterSpacing: "0.03em", lineHeight: 1.5,
+            }}
+          >
+            We don&apos;t deliver beyond 10 km yet. Please check our delivery area or choose a different address.
+          </div>
+        )}
+
+        {/* Order summary — gated on `showSummary` so it only appears
+            once the address is confirmed (Continue pressed) AND a real
+            quote is in hand. Prevents the misleading ₹50 placeholder
+            from flashing while the user is still entering details. */}
+        {step === "address" && showSummary && (
           <section style={{ marginBottom: 32 }}>
             <p style={sectionHead}>Your Order</p>
             {cart.map((item, i) => (
@@ -955,19 +990,6 @@ export default function CheckoutPage() {
                 {quoteLoading ? "…" : `₹${deliveryFee}`}
               </span>
             </div>
-            {distanceUnserviceable && (
-              <div
-                style={{
-                  padding: "10px 14px", marginBottom: 8,
-                  background: "rgba(245,75,75,0.08)",
-                  border: "1px solid rgba(245,75,75,0.3)",
-                  fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200,
-                  color: "#f87171", letterSpacing: "0.03em", lineHeight: 1.5,
-                }}
-              >
-                We don&apos;t deliver beyond 10 km yet. Please check our delivery area or choose a different address.
-              </div>
-            )}
             <div
               style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1002,7 +1024,7 @@ export default function CheckoutPage() {
                   <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 8 }}>
                     <button
                       type="button"
-                      onClick={() => { setFormMode("edit"); setError(""); }}
+                      onClick={() => { setFormMode("edit"); setError(""); setAddressConfirmed(false); }}
                       style={{
                         background: "none", border: "1px solid rgba(240,223,200,0.18)",
                         padding: "4px 10px", cursor: "pointer",
@@ -1027,6 +1049,7 @@ export default function CheckoutPage() {
                         setName(""); setPhone(""); setAddressLine(""); setArea(""); setCity(""); setPincode("");
                         setOtpVerified(false); setOtpSent(false); setOtpCode(""); setOtpError("");
                         setError("");
+                        setAddressConfirmed(false);
                       }}
                       style={{
                         background: "none", border: "1px solid rgba(245,75,75,0.35)",
@@ -1088,7 +1111,7 @@ export default function CheckoutPage() {
                 )}
 
                 <button
-                  onClick={() => { setFormMode("edit"); setError(""); }}
+                  onClick={() => { setFormMode("edit"); setError(""); setAddressConfirmed(false); }}
                   style={{
                     display: "block", width: "100%",
                     background: "transparent",
@@ -1226,9 +1249,10 @@ export default function CheckoutPage() {
         }}
       >
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "14px 20px" }}>
-          {/* Live price summary — visible above every CTA except the
-              unserviceable-pincode request flow (no fee to show there). */}
-          {!(step === "address" && pinStatus.state === "unserviceable") && cart.length > 0 && (
+          {/* Live price summary — only visible once the address is
+              confirmed (Continue pressed) AND a real quote is in hand,
+              matching the top-of-page summary gate. */}
+          {showSummary && cart.length > 0 && (
             <div
               style={{
                 display: "flex", alignItems: "baseline", justifyContent: "space-between",
