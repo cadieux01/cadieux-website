@@ -119,6 +119,19 @@ export default function CheckoutPage() {
   // ask the question, so it's effectively bypassed there.
   const [locQuestion, setLocQuestion] = useState<"unanswered" | "yes" | "no">("unanswered");
 
+  // Swiggy-style address label (Home / Work / Other). Persisted with
+  // the delivery_address string as a `[Label] ` prefix so it survives
+  // the existing single-column orders.delivery_address schema. On
+  // returning customers we strip the prefix in prefillAddress so the
+  // fields populate cleanly and the chip picker re-reflects the saved
+  // choice.
+  const [addressLabel, setAddressLabel] = useState<"Home" | "Work" | "Other">("Home");
+  const [customLabel, setCustomLabel] = useState("");
+  const effectiveLabel =
+    addressLabel === "Other"
+      ? (customLabel.trim() || "Other")
+      : addressLabel;
+
   // Form fields
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -345,10 +358,25 @@ export default function CheckoutPage() {
   }, [pincode, formMode]);
 
   function prefillAddress(raw: string) {
-    const pincodeMatch = raw.match(/(\d{6})\s*$/);
+    // Strip optional "[Label] " prefix added by the label picker so the
+    // address fields populate cleanly. The label is fed back into the
+    // chip picker so the customer's saved choice is still reflected.
+    const labelMatch = raw.match(/^\[([^\]]{1,40})\]\s*(.+)$/);
+    if (labelMatch) {
+      const lbl = labelMatch[1].trim();
+      if (lbl === "Home" || lbl === "Work") {
+        setAddressLabel(lbl);
+        setCustomLabel("");
+      } else {
+        setAddressLabel("Other");
+        setCustomLabel(lbl);
+      }
+    }
+    const text = labelMatch ? labelMatch[2] : raw;
+    const pincodeMatch = text.match(/(\d{6})\s*$/);
     if (pincodeMatch) {
       setPincode(pincodeMatch[1]);
-      const withoutPincode = raw.replace(/[\s,–\-]+\d{6}\s*$/, "").trim();
+      const withoutPincode = text.replace(/[\s,–\-]+\d{6}\s*$/, "").trim();
       const parts = withoutPincode.split(",").map((p) => p.trim()).filter(Boolean);
       if (parts.length >= 2) {
         setAddressLine(parts[0]);
@@ -357,7 +385,7 @@ export default function CheckoutPage() {
         setAddressLine(withoutPincode);
       }
     } else {
-      setAddressLine(raw);
+      setAddressLine(text);
     }
   }
 
@@ -370,7 +398,7 @@ export default function CheckoutPage() {
       const phoneDigits = (isReturning ? savedCustomer!.phone : phone).replace(/\D/g, "");
       const fullAddress = isReturning
         ? (savedCustomer!.delivery_address ?? "")
-        : `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+        : `[${effectiveLabel}] ${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
       const pin =
         (isReturning
           ? fullAddress.match(/(\d{6})\s*$/)?.[1]
@@ -503,7 +531,7 @@ export default function CheckoutPage() {
     if (pinStatus.state === "unserviceable") { setError("We don't deliver to this pincode yet."); return; }
     if (distanceUnserviceable) { setError("We don't deliver beyond 10 km yet. Please check our service area."); return; }
 
-    const fullAddress = `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+    const fullAddress = `[${effectiveLabel}] ${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
     setSubmitting(true);
     try {
       const res = await fetch("/api/checkout", {
@@ -648,7 +676,7 @@ export default function CheckoutPage() {
     const isReturning = formMode === "returning" && savedCustomer;
     const fullAddress = isReturning
       ? (savedCustomer!.delivery_address ?? "")
-      : `${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+      : `[${effectiveLabel}] ${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
     const customerPhone = isReturning ? (savedCustomer!.phone ?? "") : phone;
     const customerName = isReturning ? (savedCustomer!.full_name ?? "") : name.trim();
     return { fullAddress, customerPhone, customerName };
@@ -1223,6 +1251,10 @@ export default function CheckoutPage() {
                 }}
                 locQuestion={locQuestion}
                 setLocQuestion={setLocQuestion}
+                addressLabel={addressLabel}
+                setAddressLabel={setAddressLabel}
+                customLabel={customLabel}
+                setCustomLabel={setCustomLabel}
               />
             )}
           </>
@@ -1250,7 +1282,7 @@ export default function CheckoutPage() {
             fullAddress={
               formMode === "returning" && savedCustomer
                 ? (savedCustomer.delivery_address ?? "")
-                : `${addressLine}, ${area}, ${city} - ${pincode}`
+                : `[${effectiveLabel}] ${addressLine}, ${area}, ${city} - ${pincode}`
             }
             deliveryDate={deliveryDate}
             deliverySlot={deliverySlot}
@@ -1388,6 +1420,10 @@ function AddressForm(props: {
   onBackToSaved: () => void;
   locQuestion: "unanswered" | "yes" | "no";
   setLocQuestion: (q: "unanswered" | "yes" | "no") => void;
+  addressLabel: "Home" | "Work" | "Other";
+  setAddressLabel: (l: "Home" | "Work" | "Other") => void;
+  customLabel: string;
+  setCustomLabel: (s: string) => void;
 }) {
   const {
     name, setName, phone, setPhone,
@@ -1399,6 +1435,7 @@ function AddressForm(props: {
     city, setCity, pincode, setPincode,
     pinStatus, setError, savedCustomer, onCoordsCapture, onBackToSaved,
     locQuestion, setLocQuestion,
+    addressLabel, setAddressLabel, customLabel, setCustomLabel,
   } = props;
 
   // Load Maps JS API (places library needed for Autocomplete).
@@ -1700,6 +1737,47 @@ function AddressForm(props: {
           style={inputSt}
         />
       </label>
+
+      {/* ── Address label (Home / Work / Other) ─────────────────────
+          Mirrors the mobile app's Swiggy-style chip picker. Saved
+          inline as a "[Label] " prefix on delivery_address. */}
+      <div style={{ marginBottom: 18 }}>
+        <span style={labelSt}>Label *</span>
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          {(["Home", "Work", "Other"] as const).map((opt) => {
+            const selected = addressLabel === opt;
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => { setAddressLabel(opt); setError(""); }}
+                style={{
+                  flex: 1, minHeight: 40,
+                  background: selected ? "rgba(200,144,58,0.18)" : "none",
+                  border: `1px solid ${selected ? "rgba(200,144,58,0.75)" : "rgba(200,144,58,0.3)"}`,
+                  cursor: "pointer",
+                  fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                  letterSpacing: "0.3em", textTransform: "uppercase",
+                  color: selected ? "rgba(200,144,58,0.95)" : "rgba(200,144,58,0.5)",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+        {addressLabel === "Other" && (
+          <input
+            type="text"
+            value={customLabel}
+            onChange={(e) => { setCustomLabel(e.target.value.slice(0, 40)); setError(""); }}
+            placeholder="e.g. Mom's place"
+            maxLength={40}
+            style={{ ...inputSt, marginTop: 10 }}
+          />
+        )}
+      </div>
 
       <PincodeStatusStrip pinStatus={pinStatus} />
 
