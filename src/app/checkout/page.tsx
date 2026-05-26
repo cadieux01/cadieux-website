@@ -22,7 +22,8 @@ import {
 import { bookableSlots } from "@/lib/delivery-slots";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import { GOOGLE_MAPS_LOADER_ID, GOOGLE_MAPS_LIBRARIES } from "@/lib/google-maps-loader";
-import { reverseGeocodeClient, geocodePincodeClient } from "@/lib/clientGeocode";
+import { geocodePincodeClient } from "@/lib/clientGeocode";
+import LocationPickerModal from "@/components/LocationPickerModal";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -110,6 +111,13 @@ export default function CheckoutPage() {
   // "Continue to Delivery". Keeps us from showing a misleading ₹50
   // placeholder while they're still typing.
   const [addressConfirmed, setAddressConfirmed] = useState(false);
+
+  // "Are you currently at this delivery address?" — must be answered
+  // before Continue is enabled. Lifted from AddressForm to the parent
+  // so submitAddressStep + the sticky CTA's disabled state can both
+  // observe it. Saved-customer flow (formMode === "returning") doesn't
+  // ask the question, so it's effectively bypassed there.
+  const [locQuestion, setLocQuestion] = useState<"unanswered" | "yes" | "no">("unanswered");
 
   // Form fields
   const [name, setName] = useState("");
@@ -474,6 +482,10 @@ export default function CheckoutPage() {
     if (!name.trim()) { setError("Please enter your name."); return; }
     if (phone.replace(/\D/g, "").length !== 10) { setError("Enter a valid 10-digit number."); return; }
     if (!otpVerified) { setError("Please verify your phone number."); return; }
+    if (locQuestion === "unanswered") {
+      setError("Please tell us whether you're currently at this delivery address.");
+      return;
+    }
     if (!addressLine.trim()) { setError("Please enter your delivery address."); return; }
     if (!area.trim()) { setError("Please enter your area / locality."); return; }
     if (!city.trim()) { setError("Please enter your city."); return; }
@@ -1196,6 +1208,8 @@ export default function CheckoutPage() {
                   prefillAddress(savedCustomer.delivery_address ?? "");
                   setOtpVerified(true); setOtpSent(false); setOtpCode(""); setOtpError(""); setError("");
                 }}
+                locQuestion={locQuestion}
+                setLocQuestion={setLocQuestion}
               />
             )}
           </>
@@ -1291,8 +1305,14 @@ export default function CheckoutPage() {
           ) : step === "address" ? (
             <button
               onClick={submitAddressStep}
-              disabled={submitting}
-              style={primaryBtn(submitting)}
+              disabled={
+                submitting ||
+                (formMode !== "returning" && locQuestion === "unanswered")
+              }
+              style={primaryBtn(
+                submitting ||
+                  (formMode !== "returning" && locQuestion === "unanswered"),
+              )}
             >
               {submitting ? "Saving…" : "Continue to Delivery"}
             </button>
@@ -1352,6 +1372,8 @@ function AddressForm(props: {
   savedCustomer: Customer | null;
   onCoordsCapture: (lat: number | null, lng: number | null) => void;
   onBackToSaved: () => void;
+  locQuestion: "unanswered" | "yes" | "no";
+  setLocQuestion: (q: "unanswered" | "yes" | "no") => void;
 }) {
   const {
     name, setName, phone, setPhone,
@@ -1362,6 +1384,7 @@ function AddressForm(props: {
     addressLine, setAddressLine, area, setArea,
     city, setCity, pincode, setPincode,
     pinStatus, setError, savedCustomer, onCoordsCapture, onBackToSaved,
+    locQuestion, setLocQuestion,
   } = props;
 
   // Load Maps JS API (places library needed for Autocomplete).
@@ -1371,49 +1394,30 @@ function AddressForm(props: {
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
-  // Location question state ("Are you at this delivery location?")
-  const [locQuestion, setLocQuestion] = useState<"unanswered" | "yes" | "no">("unanswered");
-  const [locating, setLocating] = useState(false);
+  // Map picker modal open state — opened only after the user answers "Yes"
+  // to the location question. The modal handles GPS + draggable pin + Places
+  // search itself; on Confirm it returns address fields + coords.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [locMsg, setLocMsg] = useState<string | null>(null);
 
   // Autocomplete instance ref
   const acRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  // Reverse-geocode GPS position → fill all address fields
-  const handleGpsLocation = useCallback(async () => {
-    if (locating) return;
-    if (!navigator.geolocation) {
-      setLocMsg("Location is not supported by your browser.");
-      return;
-    }
-    setLocating(true);
-    setLocMsg(null);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const result = await reverseGeocodeClient(pos.coords.latitude, pos.coords.longitude);
-        setLocating(false);
-        if (!result) {
-          setLocMsg("Couldn\u2019t detect your address. Please type it below.");
-          return;
-        }
-        if (result.line1) { setAddressLine(result.line1); setError(""); }
-        if (result.area) { setArea(result.area); setError(""); }
-        if (result.pincode) { setPincode(result.pincode); setError(""); }
-        if (result.city) { setCity(result.city); setError(""); }
-        onCoordsCapture(result.lat, result.lng);
-        setLocMsg(null);
-      },
-      (err) => {
-        setLocating(false);
-        if (err.code === err.PERMISSION_DENIED) {
-          setLocMsg("Location access denied. Allow it in browser settings, or enter your address below.");
-        } else {
-          setLocMsg("Couldn\u2019t detect your location. Please type your address.");
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  }, [locating, setAddressLine, setArea, setCity, setPincode, setError, onCoordsCapture]);
+  // Callback used by <LocationPickerModal> on Confirm — fills address fields
+  // and pushes the chosen pin's coords up to the parent so the delivery
+  // quote refreshes against the real GPS coordinate, not the pincode centroid.
+  const handlePickerConfirm = useCallback(
+    (result: { line1: string; area: string; city: string; pincode: string; lat: number; lng: number }) => {
+      if (result.line1) { setAddressLine(result.line1); setError(""); }
+      if (result.area) { setArea(result.area); setError(""); }
+      if (result.pincode) { setPincode(result.pincode); setError(""); }
+      if (result.city) { setCity(result.city); setError(""); }
+      onCoordsCapture(result.lat, result.lng);
+      setLocMsg(null);
+      setPickerOpen(false);
+    },
+    [setAddressLine, setArea, setCity, setPincode, setError, onCoordsCapture],
+  );
 
   // Parse a Google Place into address fields + coords
   const handlePlaceChanged = useCallback(() => {
@@ -1562,15 +1566,15 @@ function AddressForm(props: {
         )}
       </div>
 
-      {/* ── Location question ──────────────────────────────────────── */}
+      {/* ── Location question (REQUIRED) ───────────────────────────── */}
       <div style={{ marginBottom: 18 }}>
-        <span style={labelSt}>Are you at this delivery address right now?</span>
+        <span style={labelSt}>Are you at this delivery address right now? *</span>
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
           {(["yes", "no"] as const).map((choice) => (
             <button
               key={choice}
               type="button"
-              onClick={() => { setLocQuestion(choice); setLocMsg(null); }}
+              onClick={() => { setLocQuestion(choice); setLocMsg(null); setError(""); }}
               style={{
                 flex: 1, minHeight: 40,
                 background: locQuestion === choice ? "rgba(200,144,58,0.18)" : "none",
@@ -1590,22 +1594,27 @@ function AddressForm(props: {
         {locQuestion === "yes" && (
           <button
             type="button"
-            onClick={() => void handleGpsLocation()}
-            disabled={locating}
+            onClick={() => setPickerOpen(true)}
             style={{
               display: "block", width: "100%", marginTop: 10,
               minHeight: 44,
               background: "none",
               border: "1px solid rgba(200,144,58,0.5)",
-              cursor: locating ? "default" : "pointer",
+              cursor: "pointer",
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
               letterSpacing: "0.3em", textTransform: "uppercase",
-              color: locating ? "rgba(200,144,58,0.35)" : "rgba(200,144,58,0.9)",
+              color: "rgba(200,144,58,0.9)",
               WebkitTapHighlightColor: "transparent",
             }}
           >
-            {locating ? "Detecting location…" : "📍 Send current location"}
+            📍 Pick on map
           </button>
+        )}
+
+        {locQuestion === "no" && (
+          <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(240,223,200,0.55)", letterSpacing: "0.03em", lineHeight: 1.5 }}>
+            No problem — please enter the delivery address below.
+          </p>
         )}
 
         {locMsg && (
@@ -1614,6 +1623,13 @@ function AddressForm(props: {
           </p>
         )}
       </div>
+
+      {pickerOpen && (
+        <LocationPickerModal
+          onClose={() => setPickerOpen(false)}
+          onConfirm={handlePickerConfirm}
+        />
+      )}
 
       {/* ── Delivery Address (Places Autocomplete) ──────────────────── */}
       <label style={{ display: "block", marginBottom: 18 }}>
