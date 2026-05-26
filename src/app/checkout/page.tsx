@@ -250,12 +250,16 @@ export default function CheckoutPage() {
     fetch(`/api/checkout?phone=${encodeURIComponent(saved)}&slim=1`)
       .then((r) => r.json())
       .then((d) => {
-        // Server-side trust hint: if the request's verified-phone
-        // cookie still matches this number, the server already
-        // considers us verified for the next 30 min — mirror that
-        // into client state so we skip OTP entirely and keep the
-        // sessionStorage flag in sync for subsequent reloads.
-        if (d.phone_verified) {
+        // Server-side trust signal for skipping OTP. Two acceptance paths,
+        // mirroring the place_order/place_subscription gate on the API:
+        //   1. `phone_verified` — valid 30-min cookie / mobile bearer
+        //      (just-issued OTP this session).
+        //   2. `d.customer` present — a saved customer record exists for
+        //      this number. Customer rows are only created post-OTP, so
+        //      their existence is a longer-lived proof of past
+        //      verification: returning buyers whose 30-min cookie has
+        //      expired can still proceed without redoing the OTP step.
+        if (d.phone_verified || d.customer) {
           setOtpVerified(true);
           try {
             sessionStorage.setItem("cadieux_verified_phone", saved);

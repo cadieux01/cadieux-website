@@ -244,16 +244,17 @@ export async function POST(req: NextRequest) {
     const proximityHint =
       serviceability.via === "proximity" ? serviceability : null;
 
-    // Server-side OTP enforcement: cookie OR mobile bearer token must be
-    // present, valid, unexpired, and its phone must match the customer's
-    // stored phone.
+    // Server-side phone-verification gate. We accept EITHER:
+    //   1. A valid 30-min `cdx_phone_verified` cookie / mobile bearer
+    //      (just-issued OTP — used by new customers + same-session repeat
+    //      buyers), OR
+    //   2. A saved customer record matching `customer_id` (proof of past
+    //      verification — customer rows only get created after an OTP
+    //      check, so their existence is a longer-lived trust signal that
+    //      lets returning buyers skip the 30-min OTP refresh).
+    // The phone-match check below still runs, so a stale cookie can't be
+    // paired with someone else's customer_id.
     const verified = getVerifiedPhone(req);
-    if (!verified) {
-      return NextResponse.json(
-        { error: "Phone verification required." },
-        { status: 401 }
-      );
-    }
 
     if (!customer_id) {
       return NextResponse.json({ error: "Missing customer." }, { status: 400 });
@@ -354,11 +355,25 @@ export async function POST(req: NextRequest) {
       .eq("id", customer_id)
       .maybeSingle();
 
-    if (!cust || normalizePhone(cust.phone) !== verified.phone) {
+    if (!cust) {
+      // No matching customer means we have neither a fresh OTP nor a
+      // saved record to trust → reject with the same code the client
+      // already handles ("Please verify your phone number…").
+      return NextResponse.json(
+        { error: "Phone verification required." },
+        { status: 401 }
+      );
+    }
+
+    // Resolve the effective verified phone. Cookie path validates the
+    // cookie phone equals the customer record's phone; fallback path
+    // adopts the customer record itself as the verification signal.
+    const effectiveVerifiedPhone = verified?.phone ?? normalizePhone(cust.phone);
+    if (normalizePhone(cust.phone) !== effectiveVerifiedPhone) {
       console.warn("⚠️  place_order phone mismatch", {
         customer_id,
         cust_phone: cust?.phone,
-        verified_phone: verified.phone,
+        verified_phone: verified?.phone,
       });
       return NextResponse.json(
         { error: "Phone verification mismatch." },
@@ -439,21 +454,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid subscription payload." }, { status: 400 });
     }
 
-    // Single trust gate: the verified-phone cookie set at the OTP step. Both
-    // "saved" (returning customer reusing an existing address row) and "new"
-    // (fresh address just OTP-verified this session) flow through the same
-    // wizard step that requires OTP — Turnstile already gated /api/verify/send
-    // there, so by the time we get here, the cookie is the security control.
-    // The phone-match check below applies to both paths so a verified cookie
-    // can't be paired with someone else's customer_id.
+    // Phone-verification gate (mirrors place_order). Accept EITHER a
+    // valid OTP cookie/bearer OR a saved customer record — the latter is
+    // proof of past verification for returning subscribers whose 30-min
+    // cookie has expired. Phone-match check below still enforces that a
+    // valid cookie can't be paired with someone else's customer_id.
     const verified = getVerifiedPhone(req);
-    if (!verified) {
-      return NextResponse.json(
-        { error: "Phone verification required." },
-        { status: 401 }
-      );
-    }
-    const verifiedPhone = verified.phone;
 
     const { data: cust } = await supabaseAdmin
       .from("customers")
@@ -464,6 +470,8 @@ export async function POST(req: NextRequest) {
     if (!cust) {
       return NextResponse.json({ error: "Saved address not found." }, { status: 400 });
     }
+
+    const verifiedPhone = verified?.phone ?? normalizePhone(cust.phone);
 
     if (normalizePhone(cust.phone) !== verifiedPhone) {
       return NextResponse.json(
