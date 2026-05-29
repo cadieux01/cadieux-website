@@ -16,6 +16,7 @@ import {
   formValuesFromRow,
   valuesToPayload,
 } from "@/components/admin/ProductForm";
+import { useProductLock } from "@/components/admin/ProductLockModal";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime } from "@/lib/admin-formatting";
 import {
@@ -40,6 +41,15 @@ export default function EditProductPage() {
   const [busy, setBusy] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Product Lock — gates every change/delete to an existing product.
+  const { requireUnlock, modal: lockModal } = useProductLock();
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 2600);
+  }, []);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -66,16 +76,23 @@ export default function EditProductPage() {
   }, [load]);
 
   async function submit(values: ProductFormValues) {
-    if (!id) return;
+    if (!id || !product) return;
     setSaveErr(null);
+
+    // Require the Product Lock before any save touches the live catalogue.
+    const grant = await requireUnlock(product.name, "Edit product fields");
+    if (!grant) return; // operator cancelled
+
     setBusy(true);
     try {
       const payload = valuesToPayload(values);
       await adminFetch(`/api/admin/products/${id}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
+        headers: { "x-product-lock-grant": grant },
       });
       await load();
+      showToast("Changes saved");
     } catch (e) {
       const msg =
         e instanceof AdminFetchError ? e.message : "Failed to save product";
@@ -89,18 +106,20 @@ export default function EditProductPage() {
     if (!id || !product) return;
     const action = product.is_archived ? "unarchive" : "archive";
     const verb = product.is_archived ? "Unarchive" : "Archive";
-    if (
-      !window.confirm(`${verb} "${product.name}"? You can reverse this anytime.`)
-    ) {
-      return;
-    }
+
+    // Archive/unarchive change live visibility — require the Product Lock.
+    const grant = await requireUnlock(product.name, `${verb} product`);
+    if (!grant) return; // operator cancelled
+
     setArchiveBusy(true);
     setSaveErr(null);
     try {
       await adminFetch(`/api/admin/products/${id}/${action}`, {
         method: "POST",
+        headers: { "x-product-lock-grant": grant },
       });
       await load();
+      showToast(`Product ${product.is_archived ? "unarchived" : "archived"}`);
     } catch (e) {
       const msg =
         e instanceof AdminFetchError
@@ -156,8 +175,8 @@ export default function EditProductPage() {
               {archiveBusy
                 ? "Working…"
                 : product.is_archived
-                ? "Unarchive"
-                : "Archive"}
+                ? "🔒 Unarchive"
+                : "🔒 Archive"}
             </button>
           </>
         ) : (
@@ -189,7 +208,7 @@ export default function EditProductPage() {
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-8">
             <ProductForm
               initial={formValuesFromRow(product)}
-              submitLabel="Save changes"
+              submitLabel="🔒 Save changes"
               onSubmit={submit}
               busy={busy}
               error={saveErr}
@@ -199,6 +218,31 @@ export default function EditProductPage() {
           <LabReportsSection productId={product.id} />
         </>
       )}
+
+      {lockModal}
+
+      {toast ? (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            bottom: "1.5rem",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 410,
+            background: "#024628",
+            color: "#fbf3d4",
+            border: "1px solid rgba(251,243,212,0.3)",
+            padding: "0.7rem 1.2rem",
+            fontFamily: "var(--font-body)",
+            fontSize: "0.8rem",
+            letterSpacing: "0.08em",
+            boxShadow: "0 16px 40px -12px rgba(0,0,0,0.6)",
+          }}
+        >
+          ✓ {toast}
+        </div>
+      ) : null}
     </AdminShell>
   );
 }

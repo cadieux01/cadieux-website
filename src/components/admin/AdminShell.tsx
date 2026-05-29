@@ -103,7 +103,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "System",
-    items: [{ href: "/admin/audit-log", label: "Audit Log" }],
+    items: [
+      { href: "/admin/audit", label: "Audit Trail" },
+      { href: "/admin/audit-log", label: "Audit Log (site)" },
+    ],
   },
 ];
 
