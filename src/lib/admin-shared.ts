@@ -10,7 +10,7 @@ export const ADMIN_SESSION_KEY = "cadieux_admin_auth";
 // gate is the x-admin-token header sent on every API call — this
 // sessionStorage flag is just UX so the operator doesn't have to
 // retype the password every page-load.
-export const ADMIN_PASSWORD = "cadieux2024";
+export const ADMIN_PASSWORD = "Cadieuxadmin123";
 
 export const ORDER_STATUSES = [
   "placed",
