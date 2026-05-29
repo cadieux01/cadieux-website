@@ -96,6 +96,153 @@ function safeJson(value: unknown, indent = 2): string {
   }
 }
 
+// ── Human-readable diff helpers ────────────────────────────────────────────
+// Keys whose numeric values should be rendered as INR currency.
+const PRICE_KEYS = new Set([
+  "price",
+  "amount",
+  "total",
+  "total_amount",
+  "subtotal",
+  "tax",
+  "discount",
+  "discount_amount",
+  "paid",
+  "paid_amount",
+  "refund",
+  "refund_amount",
+  "fee",
+  "delivery_fee",
+  "delivery_charge",
+  "shipping",
+  "shipping_amount",
+  "mrp",
+  "cost",
+  "balance",
+  "wallet_credit",
+  "wallet_debit",
+  "gst",
+  "cgst",
+  "sgst",
+  "igst",
+]);
+
+function humanizeKey(key: string): string {
+  return key
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .map((w) => (w.length === 0 ? w : w[0].toUpperCase() + w.slice(1).toLowerCase()))
+    .join(" ");
+}
+
+function isIsoDateLike(s: string): boolean {
+  // ISO 8601 with date and (usually) time, or plain YYYY-MM-DD.
+  if (!/^\d{4}-\d{2}-\d{2}(T|\s|$)/.test(s)) return false;
+  const t = Date.parse(s);
+  return Number.isFinite(t);
+}
+
+function formatHumanDate(s: string): string {
+  try {
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return s;
+    const hasTime = /T|\s\d{2}:/.test(s);
+    return d.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      ...(hasTime ? { hour: "2-digit", minute: "2-digit" } : {}),
+    });
+  } catch {
+    return s;
+  }
+}
+
+function formatHumanValue(key: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "(none)";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") {
+    if (PRICE_KEYS.has(key.toLowerCase())) {
+      return `₹${value.toLocaleString("en-IN")}`;
+    }
+    return value.toLocaleString("en-IN");
+  }
+  if (typeof value === "string") {
+    if (PRICE_KEYS.has(key.toLowerCase()) && /^-?\d+(\.\d+)?$/.test(value)) {
+      return `₹${Number(value).toLocaleString("en-IN")}`;
+    }
+    if (isIsoDateLike(value)) return formatHumanDate(value);
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "(empty list)";
+    return value
+      .map((v) => formatHumanValue(key, v))
+      .join(", ");
+  }
+  if (typeof value === "object") {
+    try {
+      const entries = Object.entries(value as Record<string, unknown>);
+      if (entries.length === 0) return "(empty)";
+      return entries
+        .map(([k, v]) => `${humanizeKey(k)}: ${formatHumanValue(k, v)}`)
+        .join("; ");
+    } catch {
+      return "(complex value)";
+    }
+  }
+  return String(value);
+}
+
+type HumanEntry = { key: string; label: string; value: string };
+type HumanChange = { key: string; label: string; oldText: string; newText: string };
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function entriesOf(obj: Record<string, unknown> | null): HumanEntry[] {
+  if (!obj) return [];
+  return Object.entries(obj).map(([key, val]) => ({
+    key,
+    label: humanizeKey(key),
+    value: formatHumanValue(key, val),
+  }));
+}
+
+function changesBetween(
+  oldObj: Record<string, unknown> | null,
+  newObj: Record<string, unknown> | null,
+): HumanChange[] {
+  if (!oldObj || !newObj) return [];
+  const keys = Array.from(
+    new Set<string>([...Object.keys(oldObj), ...Object.keys(newObj)]),
+  );
+  const out: HumanChange[] = [];
+  for (const key of keys) {
+    const before = oldObj[key];
+    const after = newObj[key];
+    // Stable comparison via JSON; safe for these audit payloads.
+    let same = false;
+    try {
+      same = JSON.stringify(before) === JSON.stringify(after);
+    } catch {
+      same = before === after;
+    }
+    if (same) continue;
+    out.push({
+      key,
+      label: humanizeKey(key),
+      oldText: formatHumanValue(key, before),
+      newText: formatHumanValue(key, after),
+    });
+  }
+  return out;
+}
+
 export default function UnifiedAuditPage() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -490,10 +637,7 @@ function FragmentRow({
       {open && hasDiff ? (
         <tr style={{ background: "rgba(0,0,0,0.3)" }}>
           <td colSpan={7} style={{ padding: "0.85rem" }}>
-            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
-              <DiffBlock label="Before" value={r.old_values} tone="#ef4444" />
-              <DiffBlock label="After" value={r.new_values} tone="#4ade80" />
-            </div>
+            <HumanDiff oldValue={r.old_values} newValue={r.new_values} />
           </td>
         </tr>
       ) : null}
@@ -501,30 +645,123 @@ function FragmentRow({
   );
 }
 
-function DiffBlock({ label, value, tone }: { label: string; value: unknown; tone: string }) {
+function HumanDiff({ oldValue, newValue }: { oldValue: unknown; newValue: unknown }) {
+  const oldRec = asRecord(oldValue);
+  const newRec = asRecord(newValue);
+  const created = !oldRec && !!newRec;
+  const deleted = !!oldRec && !newRec;
+  const changes = changesBetween(oldRec, newRec);
+  const previously = entriesOf(oldRec);
+  const now = entriesOf(newRec);
+
   return (
-    <div style={{ border: `1px solid ${tone}55`, background: "rgba(0,0,0,0.25)", padding: "0.6rem 0.7rem" }}>
+    <div
+      style={{
+        border: `1px solid ${BORDER}`,
+        background: "rgba(0,0,0,0.25)",
+        padding: "0.9rem 1rem",
+        fontFamily: "var(--font-body)",
+        color: CREAM,
+        fontSize: "0.85rem",
+        lineHeight: 1.55,
+      }}
+    >
+      {created ? (
+        <DiffSection title="New record created" tone="#4ade80">
+          {now.length === 0 ? (
+            <PlainLine muted>No fields recorded.</PlainLine>
+          ) : (
+            <BulletList items={now.map((e) => `${e.label}: ${e.value}`)} />
+          )}
+        </DiffSection>
+      ) : deleted ? (
+        <DiffSection title="Record deleted" tone="#ef4444">
+          {previously.length === 0 ? (
+            <PlainLine muted>No fields recorded.</PlainLine>
+          ) : (
+            <BulletList items={previously.map((e) => `${e.label}: ${e.value}`)} />
+          )}
+        </DiffSection>
+      ) : (
+        <div className="flex flex-col" style={{ gap: "1rem" }}>
+          <DiffSection title="What changed" tone={GOLD}>
+            {changes.length === 0 ? (
+              <PlainLine muted>No field-level differences.</PlainLine>
+            ) : (
+              <BulletList
+                items={changes.map((c) => `${c.label}: ${c.oldText} → ${c.newText}`)}
+              />
+            )}
+          </DiffSection>
+
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}
+          >
+            <DiffSection title="Previously" tone="#ef4444">
+              {previously.length === 0 ? (
+                <PlainLine muted>(no prior values)</PlainLine>
+              ) : (
+                <BulletList items={previously.map((e) => `${e.label}: ${e.value}`)} />
+              )}
+            </DiffSection>
+            <DiffSection title="Now" tone="#4ade80">
+              {now.length === 0 ? (
+                <PlainLine muted>(no current values)</PlainLine>
+              ) : (
+                <BulletList items={now.map((e) => `${e.label}: ${e.value}`)} />
+              )}
+            </DiffSection>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiffSection({
+  title,
+  tone,
+  children,
+}: {
+  title: string;
+  tone: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
       <div
         className="uppercase"
-        style={{ color: tone, fontFamily: "var(--font-body)", fontSize: "0.6rem", letterSpacing: "0.2em", marginBottom: "0.4rem" }}
-      >
-        {label}
-      </div>
-      <pre
         style={{
-          margin: 0,
-          color: CREAM,
-          fontFamily: MONO,
-          fontSize: "0.72rem",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          maxHeight: 260,
-          overflow: "auto",
+          color: tone,
+          fontFamily: "var(--font-body)",
+          fontSize: "0.62rem",
+          letterSpacing: "0.22em",
+          marginBottom: "0.45rem",
         }}
       >
-        {safeJson(value)}
-      </pre>
+        {title}
+      </div>
+      {children}
     </div>
+  );
+}
+
+function BulletList({ items }: { items: string[] }) {
+  return (
+    <ul style={{ margin: 0, paddingLeft: "1.1rem", listStyle: "disc" }}>
+      {items.map((line, i) => (
+        <li key={i} style={{ marginBottom: "0.15rem", wordBreak: "break-word" }}>
+          {line}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PlainLine({ children, muted }: { children: React.ReactNode; muted?: boolean }) {
+  return (
+    <div style={{ color: muted ? FADED : CREAM, fontSize: "0.8rem" }}>{children}</div>
   );
 }
 
