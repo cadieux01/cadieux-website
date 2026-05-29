@@ -12,6 +12,14 @@ const nextConfig = {
       { source: "/shop/plain", destination: "/shop/high-protein", permanent: true },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/dashboard/:path*',
+        destination: 'https://cadieux-dashboard.vercel.app/dashboard/:path*',
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
