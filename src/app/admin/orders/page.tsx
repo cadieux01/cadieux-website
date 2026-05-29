@@ -195,7 +195,7 @@ function OrdersPageInner() {
   // Counts are scoped to the active date range so the chip badges
   // match the rows the operator is actually looking at.
   const counts = useMemo(() => {
-    const inRange = orders.filter((o) => withinRange(o.created_at, range));
+    const inRange = orders.filter((o) => withinDateRange(o.created_at, range));
     const c: Record<string, number> = { all: inRange.length };
     for (const o of inRange) {
       const k = (o.status ?? "").toLowerCase();

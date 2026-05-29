@@ -18,10 +18,10 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import {
-  DateRangePicker,
-  useDateRangeFromQuery,
-  type DateRange,
-} from "@/components/admin/DateRangePicker";
+  DateRangeDropdown,
+  resolvePreset,
+  type DateRangeValue,
+} from "@/components/admin/DateRangeDropdown";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import { formatDateTime } from "@/lib/admin-formatting";
@@ -74,19 +74,16 @@ function safeStringifyMeta(meta: unknown, indent?: number): string {
 // Convert a DateRange (date-only) to ISO bounds for the server. We
 // include the entire end day by passing tomorrow as exclusive upper
 // bound so the operator's "today" preset returns rows from today.
-function rangeToISO(r: DateRange): { from?: string; to?: string } {
-  const out: { from?: string; to?: string } = {};
-  if (r.from) out.from = `${r.from}T00:00:00.000Z`;
-  if (r.to) {
-    const d = new Date(`${r.to}T00:00:00.000Z`);
-    d.setUTCDate(d.getUTCDate() + 1);
-    out.to = d.toISOString();
-  }
-  return out;
+function rangeToISO(r: DateRangeValue): { from: string; to: string } {
+  return {
+    from: r.from.toISOString(),
+    // r.to is end-of-day (….999); +1ms gives an exclusive upper bound.
+    to: new Date(r.to.getTime() + 1).toISOString(),
+  };
 }
 
 function buildQuery(
-  range: DateRange,
+  range: DateRangeValue,
   entities: AuditEntity[],
   actions: AuditAction[],
   q: string,
@@ -133,7 +130,9 @@ function AdminLoading() {
 }
 
 function AuditLogPageInner() {
-  const range = useDateRangeFromQuery();
+  const [range, setRange] = useState<DateRangeValue>(() =>
+    resolvePreset("this_month"),
+  );
 
   const [entities, setEntities] = useState<AuditEntity[]>([]);
   const [actions, setActions] = useState<AuditAction[]>([]);
@@ -193,7 +192,7 @@ function AuditLogPageInner() {
   // Reset to page 0 whenever a filter changes; load on every change.
   useEffect(() => {
     setPage(0);
-  }, [range.from, range.to, entities, actions, q]);
+  }, [range, entities, actions, q]);
 
   useEffect(() => {
     void load();
@@ -290,7 +289,7 @@ function AuditLogPageInner() {
       }
     >
       <div className="flex flex-col gap-4">
-        <DateRangePicker value={range} />
+        <DateRangeDropdown onChange={setRange} />
 
         <FilterChips
           label="Entity"

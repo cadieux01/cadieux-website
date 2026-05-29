@@ -188,7 +188,6 @@ function OverviewPageInner() {
         <MetricDetail
           metricKey={selected}
           data={data}
-          range={range}
           onBack={() => setSelected(null)}
         />
       )}
@@ -395,12 +394,10 @@ function KpiStrip({
 function MetricDetail({
   metricKey,
   data,
-  range,
   onBack,
 }: {
   metricKey: MetricKey;
   data: OverviewResponse;
-  range: DateRangeValue;
   onBack: () => void;
 }) {
   const meta = METRICS.find((m) => m.key === metricKey)!;
@@ -450,7 +447,7 @@ function MetricDetail({
         >
           {meta.label}
         </h3>
-        <MetricChart metricKey={metricKey} data={data} range={range} />
+        <MetricChart metricKey={metricKey} data={data} />
       </div>
     </div>
   );
@@ -532,15 +529,12 @@ function headlineFor(
 function MetricChart({
   metricKey,
   data,
-  range,
 }: {
   metricKey: MetricKey;
   data: OverviewResponse;
-  range: DateRangeValue;
 }) {
   // Daily metrics render the full selected range (the date dropdown
   // controls the window; the API buckets one point per day in it).
-  void range;
   const dailyPoints = data.daily_revenue;
 
   switch (metricKey) {

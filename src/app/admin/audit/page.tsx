@@ -14,6 +14,11 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import {
+  DateRangeDropdown,
+  resolvePreset,
+  type DateRangeValue,
+} from "@/components/admin/DateRangeDropdown";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import { formatDateTime } from "@/lib/admin-formatting";
@@ -43,15 +48,6 @@ type AuditRow = {
   new_values: unknown;
   metadata: unknown;
 };
-
-const DATE_PRESETS = [
-  { key: "today", label: "Today", days: 1 },
-  { key: "7d", label: "7 days", days: 7 },
-  { key: "30d", label: "30 days", days: 30 },
-  { key: "all", label: "All", days: 0 },
-  { key: "custom", label: "Custom", days: -1 },
-] as const;
-type PresetKey = (typeof DATE_PRESETS)[number]["key"];
 
 const ACTIONS = ["all", "CREATE", "UPDATE", "DELETE", "LOGIN"];
 const SOURCES = ["all", "website", "dashboard"];
@@ -249,9 +245,9 @@ export default function UnifiedAuditPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [preset, setPreset] = useState<PresetKey>("30d");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  const [range, setRange] = useState<DateRangeValue>(() =>
+    resolvePreset("this_month"),
+  );
   const [action, setAction] = useState("all");
   const [source, setSource] = useState("all");
   const [category, setCategory] = useState("all");
@@ -261,23 +257,15 @@ export default function UnifiedAuditPage() {
 
   const buildParams = useCallback(() => {
     const sp = new URLSearchParams();
-    if (preset === "custom") {
-      if (customFrom) sp.set("from", `${customFrom}T00:00:00.000Z`);
-      if (customTo) {
-        const d = new Date(`${customTo}T00:00:00.000Z`);
-        d.setUTCDate(d.getUTCDate() + 1);
-        sp.set("to", d.toISOString());
-      }
-    } else {
-      const days = DATE_PRESETS.find((p) => p.key === preset)?.days ?? 0;
-      if (days > 0) sp.set("days", String(days));
-    }
+    sp.set("from", range.from.toISOString());
+    // range.to is end-of-day (….999); +1ms = exclusive upper bound.
+    sp.set("to", new Date(range.to.getTime() + 1).toISOString());
     if (action !== "all") sp.set("action", action);
     if (source !== "all") sp.set("source", source);
     if (category !== "all") sp.set("category", category);
     if (search.trim()) sp.set("search", search.trim());
     return sp;
-  }, [preset, customFrom, customTo, action, source, category, search]);
+  }, [range, action, source, category, search]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -308,7 +296,7 @@ export default function UnifiedAuditPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [preset, customFrom, customTo, action, source, category, search]);
+  }, [range, action, source, category, search]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
   const pageRows = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -389,36 +377,7 @@ export default function UnifiedAuditPage() {
       <div className="flex flex-col gap-3" style={{ marginBottom: "1.25rem" }}>
         <div className="flex items-center gap-2 flex-wrap">
           <FilterLabel>Date</FilterLabel>
-          {DATE_PRESETS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => setPreset(p.key)}
-              className="uppercase"
-              style={presetChip(preset === p.key)}
-            >
-              {p.label}
-            </button>
-          ))}
-          {preset === "custom" ? (
-            <>
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                aria-label="From date"
-                style={dateInput}
-              />
-              <span style={{ color: FADED }}>—</span>
-              <input
-                type="date"
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-                aria-label="To date"
-                style={dateInput}
-              />
-            </>
-          ) : null}
+          <DateRangeDropdown onChange={setRange} />
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -863,23 +822,3 @@ const pagerBtn: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   cursor: "pointer",
 };
-const dateInput: React.CSSProperties = {
-  background: "transparent",
-  border: `1px solid ${BORDER}`,
-  color: CREAM,
-  fontFamily: "var(--font-body)",
-  fontSize: "0.78rem",
-  padding: "0.3rem 0.5rem",
-};
-function presetChip(active: boolean): React.CSSProperties {
-  return {
-    fontFamily: "var(--font-body)",
-    fontSize: "0.62rem",
-    letterSpacing: "0.2em",
-    padding: "0.35rem 0.7rem",
-    color: active ? "#06120c" : GOLD_SOFT,
-    background: active ? GOLD : "transparent",
-    border: `1px solid ${active ? GOLD : "rgba(245,158,11,0.4)"}`,
-    cursor: "pointer",
-  };
-}
