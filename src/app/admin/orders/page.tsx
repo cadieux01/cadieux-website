@@ -17,10 +17,11 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import {
-  DateRangePicker,
-  useDateRangeFromQuery,
-  withinRange,
-} from "@/components/admin/DateRangePicker";
+  DateRangeDropdown,
+  resolvePreset,
+  withinDateRange,
+  type DateRangeValue,
+} from "@/components/admin/DateRangeDropdown";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { OrderLocationActions } from "@/components/admin/OrderLocationActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -108,7 +109,9 @@ function OrdersPageInner() {
   const [pendingBulk, setPendingBulk] = useState<BulkAction | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
-  const range = useDateRangeFromQuery();
+  const [range, setRange] = useState<DateRangeValue | null>(() =>
+    resolvePreset("this_month"),
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -159,7 +162,7 @@ function OrdersPageInner() {
     const q = query.trim().toLowerCase();
     return orders
       .filter((o) => {
-        if (!withinRange(o.created_at, range)) return false;
+        if (!withinDateRange(o.created_at, range)) return false;
         if (filter !== "all") {
           if ((o.status ?? "").toLowerCase() !== filter) return false;
         }
@@ -379,7 +382,7 @@ function OrdersPageInner() {
       }
     >
       <div className="mb-4">
-        <DateRangePicker value={range} />
+        <DateRangeDropdown onChange={setRange} />
       </div>
 
       {/* Status filters */}

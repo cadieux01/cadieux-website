@@ -33,9 +33,11 @@ import {
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import {
-  DateRangePicker,
-  useDateRangeFromQuery,
-} from "@/components/admin/DateRangePicker";
+  DateRangeDropdown,
+  resolvePreset,
+  toYMD,
+  type DateRangeValue,
+} from "@/components/admin/DateRangeDropdown";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatINR } from "@/lib/admin-formatting";
 
@@ -89,14 +91,6 @@ const METRICS: { key: MetricKey; label: string }[] = [
   { key: "new_stores", label: "New Stores in Vizag" },
 ];
 
-// Metrics that respond to the date-range picker. Monthly + placeholder
-// metrics use a fixed window, so the picker is hidden for them.
-const RANGE_DRIVEN = new Set<MetricKey>([
-  "daily_orders",
-  "daily_revenue",
-  "new_customers",
-]);
-
 export default function OverviewPage() {
   return (
     <Suspense fallback={<AdminLoading />}>
@@ -126,15 +120,17 @@ function OverviewPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<MetricKey | null>(null);
-  const range = useDateRangeFromQuery();
+  const [range, setRange] = useState<DateRangeValue>(() =>
+    resolvePreset("this_month"),
+  );
 
   const load = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
       const sp = new URLSearchParams();
-      if (range.from) sp.set("from", range.from);
-      if (range.to) sp.set("to", range.to);
+      sp.set("from", toYMD(range.from));
+      sp.set("to", toYMD(range.to));
       const qs = sp.toString();
       const res = await adminFetch<OverviewResponse>(
         qs ? `/api/admin/overview?${qs}` : "/api/admin/overview",
@@ -164,6 +160,10 @@ function OverviewPageInner() {
       subtitle={activeLabel ? activeLabel : "What do you want to see?"}
     >
       <TopSelector selected={selected} onSelect={setSelected} />
+
+      <div style={{ marginBottom: "1.5rem" }}>
+        <DateRangeDropdown onChange={setRange} />
+      </div>
 
       {error ? (
         <div
@@ -400,11 +400,10 @@ function MetricDetail({
 }: {
   metricKey: MetricKey;
   data: OverviewResponse;
-  range: { from: string | null; to: string | null };
+  range: DateRangeValue;
   onBack: () => void;
 }) {
   const meta = METRICS.find((m) => m.key === metricKey)!;
-  const showPicker = RANGE_DRIVEN.has(metricKey);
 
   return (
     <div>
@@ -430,19 +429,13 @@ function MetricDetail({
 
       <Headline metricKey={metricKey} data={data} />
 
-      {showPicker ? (
-        <div style={{ margin: "1.25rem 0" }}>
-          <DateRangePicker value={range} />
-        </div>
-      ) : null}
-
       <div
         style={{
           border: `1px solid ${BORDER}`,
           borderRadius: 12,
           background: "rgba(251,243,212,0.02)",
           padding: "1.25rem",
-          marginTop: showPicker ? 0 : "1.25rem",
+          marginTop: "1.25rem",
         }}
       >
         <h3
@@ -543,14 +536,12 @@ function MetricChart({
 }: {
   metricKey: MetricKey;
   data: OverviewResponse;
-  range: { from: string | null; to: string | null };
+  range: DateRangeValue;
 }) {
-  // For daily metrics, default to the last 7 days unless the operator has
-  // explicitly chosen a custom range via the picker.
-  const customRange = Boolean(range.from || range.to);
-  const dailyPoints = customRange
-    ? data.daily_revenue
-    : data.daily_revenue.slice(-7);
+  // Daily metrics render the full selected range (the date dropdown
+  // controls the window; the API buckets one point per day in it).
+  void range;
+  const dailyPoints = data.daily_revenue;
 
   switch (metricKey) {
     case "daily_orders":

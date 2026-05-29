@@ -9,10 +9,11 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import {
-  DateRangePicker,
-  useDateRangeFromQuery,
-  withinRange,
-} from "@/components/admin/DateRangePicker";
+  DateRangeDropdown,
+  resolvePreset,
+  withinDateRange,
+  type DateRangeValue,
+} from "@/components/admin/DateRangeDropdown";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
@@ -63,7 +64,9 @@ function CustomersPageInner() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const range = useDateRangeFromQuery();
+  const [range, setRange] = useState<DateRangeValue | null>(() =>
+    resolvePreset("this_month"),
+  );
 
   const load = useCallback(async (q: string) => {
     setError(null);
@@ -108,7 +111,7 @@ function CustomersPageInner() {
   // server doesn't accept a date filter today and adding one is
   // overkill given the customer table is small.
   const visible = useMemo(
-    () => rows.filter((c) => withinRange(c.created_at, range)),
+    () => rows.filter((c) => withinDateRange(c.created_at, range)),
     [rows, range],
   );
 
@@ -156,7 +159,7 @@ function CustomersPageInner() {
       }
     >
       <div className="mb-4">
-        <DateRangePicker value={range} />
+        <DateRangeDropdown onChange={setRange} />
       </div>
       <div className="flex flex-wrap gap-3 mb-6 items-center">
         <input

@@ -13,10 +13,11 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import {
-  DateRangePicker,
-  useDateRangeFromQuery,
-  withinRange,
-} from "@/components/admin/DateRangePicker";
+  DateRangeDropdown,
+  resolvePreset,
+  withinDateRange,
+  type DateRangeValue,
+} from "@/components/admin/DateRangeDropdown";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
@@ -86,7 +87,9 @@ function SubscriptionsPageInner() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterValue>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
-  const range = useDateRangeFromQuery();
+  const [range, setRange] = useState<DateRangeValue | null>(() =>
+    resolvePreset("this_month"),
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -137,7 +140,7 @@ function SubscriptionsPageInner() {
   );
 
   const filtered = useMemo(() => {
-    const inRange = subs.filter((s) => withinRange(s.created_at, range));
+    const inRange = subs.filter((s) => withinDateRange(s.created_at, range));
     if (filter !== "expiring_7d") return inRange;
     const today = isoLocalDate(new Date());
     const horizon = addDaysISO(today, 7);
@@ -202,7 +205,7 @@ function SubscriptionsPageInner() {
       }
     >
       <div className="mb-4">
-        <DateRangePicker value={range} />
+        <DateRangeDropdown onChange={setRange} />
       </div>
       <div className="flex flex-wrap gap-2 mb-6">
         {FILTERS.map((f) => {
