@@ -14,6 +14,7 @@ type CountByKey = { key: string; count: number }[];
 type RevenuePoint = { date: string; revenue: number; orders: number };
 type TopProduct = { name: string; subscriptions: number; revenue: number };
 type CohortPoint = { month: string; new_customers: number };
+type MonthlySalesPoint = { month: string; revenue: number; orders: number };
 
 export type OverviewResponse = {
   range: { from: string; to: string };
@@ -35,6 +36,7 @@ export type OverviewResponse = {
   top_products: TopProduct[];
   sub_lifecycle: CountByKey;
   customer_cohorts: CohortPoint[];
+  monthly_sales: MonthlySalesPoint[];
 };
 
 function pad2(n: number) {
@@ -114,11 +116,27 @@ export async function GET(req: NextRequest) {
     .gte("created_at", `${cohortStart}T00:00:00Z`)
     .limit(20000);
 
-  const [oRes, sRes, cRes, cohRes] = await Promise.all([
+  // Monthly sales & turnover pulls the last 6 calendar months of orders
+  // (independent of the range filter) so the monthly trend isn't empty
+  // for short ranges. Kept separate from `ordersP` to avoid widening the
+  // KPI/daily-revenue window.
+  const sixMonthStart = (() => {
+    const d = new Date(`${today}T00:00:00`);
+    d.setMonth(d.getMonth() - 5);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-01`;
+  })();
+  const monthlyOrdersP = supabaseAdmin
+    .from("orders")
+    .select("total_amount, status, created_at")
+    .gte("created_at", `${sixMonthStart}T00:00:00Z`)
+    .limit(20000);
+
+  const [oRes, sRes, cRes, cohRes, moRes] = await Promise.all([
     ordersP,
     subsP,
     customersP,
     cohortsP,
+    monthlyOrdersP,
   ]);
 
   if (oRes.error) {
@@ -271,6 +289,34 @@ export async function GET(req: NextRequest) {
     .map(([month, new_customers]) => ({ month, new_customers }))
     .sort((a, b) => a.month.localeCompare(b.month));
 
+  // ---------- monthly sales & turnover (last 6 months) ----------
+  type MonthlyOrderRow = {
+    total_amount: number | null;
+    status: string | null;
+    created_at: string;
+  };
+  const monthlyOrders = ((moRes.data ?? []) as MonthlyOrderRow[]) ?? [];
+  const monthlyMap = new Map<string, MonthlySalesPoint>();
+  {
+    const start = new Date(`${sixMonthStart}T00:00:00`);
+    for (let i = 0; i < 6; i++) {
+      const m = new Date(start.getFullYear(), start.getMonth() + i, 1);
+      const key = `${m.getFullYear()}-${pad2(m.getMonth() + 1)}`;
+      monthlyMap.set(key, { month: key, revenue: 0, orders: 0 });
+    }
+  }
+  for (const o of monthlyOrders) {
+    const key = isoMonth(o.created_at);
+    const bucket = monthlyMap.get(key);
+    if (!bucket) continue;
+    bucket.orders += 1;
+    if ((o.status ?? "").toLowerCase() !== "cancelled") {
+      bucket.revenue += Number(o.total_amount) || 0;
+    }
+  }
+  const monthly_sales: MonthlySalesPoint[] = Array.from(monthlyMap.values())
+    .sort((a, b) => a.month.localeCompare(b.month));
+
   const response: OverviewResponse = {
     range: { from, to },
     kpis: {
@@ -291,6 +337,7 @@ export async function GET(req: NextRequest) {
     top_products,
     sub_lifecycle,
     customer_cohorts,
+    monthly_sales,
   };
 
   return NextResponse.json(response);
