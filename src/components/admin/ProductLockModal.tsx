@@ -14,7 +14,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ADMIN_PASSWORD } from "@/lib/admin-shared";
 
 const GREEN = "#024628";
 const CREAM = "#fbf3d4";
@@ -104,10 +103,8 @@ function ProductLockModal({
     try {
       const res = await fetch("/api/admin/verify-product-lock", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-token": ADMIN_PASSWORD,
-        },
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           key,
           productName: ctx.productName,

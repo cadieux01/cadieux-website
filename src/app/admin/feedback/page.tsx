@@ -12,7 +12,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
-import { ADMIN_PASSWORD } from "@/lib/admin-shared";
 
 type Reply = {
   id: string;
@@ -137,11 +136,6 @@ export default function FeedbackPage() {
       setBusy((b) => ({ ...b, [`reply-${reviewId}`]: false }));
     }
   };
-
-  // Keep ADMIN_PASSWORD referenced so future direct fetches stay in
-  // sync with adminFetch's expectation. (Unused otherwise — adminFetch
-  // already pulls it.) — Intentionally not used here.
-  void ADMIN_PASSWORD;
 
   return (
     <AdminShell

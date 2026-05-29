@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 
 const supabaseAdmin = createClient(
@@ -14,9 +15,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const author_name = String(body?.author_name ?? "").trim();
   const text = String(body?.body ?? "").trim();
-  // is_admin only honored if the request carries the admin token
+  // is_admin only honored if the request carries a valid admin session
   const wantsAdmin = body?.is_admin === true;
-  const adminOk = req.headers.get("x-admin-token") === process.env.ADMIN_TOKEN;
+  const adminOk = isAdmin(req);
   const is_admin = wantsAdmin && adminOk;
 
   if (!author_name || author_name.length > 40) {

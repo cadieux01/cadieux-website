@@ -1,7 +1,10 @@
-// Client-only helpers for the new admin pages. Wraps fetch() with the
-// x-admin-token header so callers don't have to remember.
-
-import { ADMIN_PASSWORD } from "@/lib/admin-shared";
+// Client-only helper for the admin pages.
+//
+// Authentication is the HttpOnly `admin_session` cookie set by
+// /api/admin/login — it travels automatically on every same-origin
+// fetch, so this wrapper just adds JSON content-type + cache:"no-store"
+// semantics. We pass `credentials: "same-origin"` defensively in case
+// a caller overrides the default.
 
 export class AdminFetchError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -15,7 +18,6 @@ export async function adminFetch<T = unknown>(
   init: RequestInit = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set("x-admin-token", ADMIN_PASSWORD);
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -23,6 +25,7 @@ export async function adminFetch<T = unknown>(
     ...init,
     headers,
     cache: "no-store",
+    credentials: "same-origin",
   });
   const text = await res.text();
   let json: unknown = null;

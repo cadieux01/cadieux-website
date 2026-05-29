@@ -5,12 +5,11 @@
 // internally consistent without forcing a refactor of the existing
 // 2227-line src/app/admin/page.tsx.
 
+// localStorage flag indicating the operator has a valid admin_session
+// cookie. We can't read the HttpOnly cookie from JS, so we mirror its
+// expiry here purely as UX (skip the password gate UI for 24h). The
+// server-side cookie is the real credential.
 export const ADMIN_SESSION_KEY = "cadieux_admin_auth";
-// Plaintext password gate matches the existing admin page. The real
-// gate is the x-admin-token header sent on every API call — this
-// sessionStorage flag is just UX so the operator doesn't have to
-// retype the password every page-load.
-export const ADMIN_PASSWORD = "Cadieuxadmin123";
 
 export const ORDER_STATUSES = [
   "placed",

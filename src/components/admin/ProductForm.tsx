@@ -6,7 +6,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
-import { ADMIN_PASSWORD, AdminProductRow } from "@/lib/admin-shared";
+import { AdminProductRow } from "@/lib/admin-shared";
 
 const GOLD = "#f59e0b";
 const CREAM = "#fbf3d4";
@@ -130,10 +130,11 @@ export function ProductForm({
       const fd = new FormData();
       fd.append("file", file);
       // adminFetch sets Content-Type to JSON which would break multipart,
-      // so we call fetch directly and only borrow the admin token header.
+      // so we call fetch directly. The admin_session cookie is sent
+      // automatically as a same-origin credential.
       const res = await fetch("/api/admin/products/upload-image", {
         method: "POST",
-        headers: { "x-admin-token": ADMIN_PASSWORD },
+        credentials: "same-origin",
         body: fd,
       });
       const json = (await res.json().catch(() => ({}))) as {

@@ -18,12 +18,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 
-import { ADMIN_PASSWORD, ADMIN_SESSION_KEY } from "@/lib/admin-shared";
+import { ADMIN_SESSION_KEY } from "@/lib/admin-shared";
 
-// 30-day remember-me. We persist `{ expiresAt: <epoch-ms> }` in
-// localStorage so the operator only logs in once a month. The previous
-// sessionStorage flag is migrated transparently on first load.
-const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;
+// 24h UX remember-me — matches the server-side admin_session cookie
+// TTL. The cookie is the real credential; this localStorage flag just
+// lets us skip the password gate UI until the cookie also expires.
+// The previous sessionStorage flag is migrated transparently on first
+// load.
+const REMEMBER_MS = 24 * 60 * 60 * 1000;
 
 function readRememberedAuth(): boolean {
   if (typeof window === "undefined") return false;
@@ -280,6 +282,12 @@ export function AdminShell({
         pathname={pathname}
         onClose={() => setMenuOpen(false)}
         onSignOut={() => {
+          // Server cookie + local UX flag both need clearing.
+          void fetch("/api/admin/logout", {
+            method: "POST",
+            credentials: "same-origin",
+            cache: "no-store",
+          }).catch(() => {});
           clearRememberedAuth();
           setAuthed(false);
           setMenuOpen(false);
@@ -536,14 +544,34 @@ function GrainOverlay() {
 function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (value === ADMIN_PASSWORD) {
-      setError("");
-      onSuccess();
-    } else {
-      setError("Incorrect password");
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: value }),
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (res.ok) {
+        onSuccess();
+        return;
+      }
+      if (res.status === 429) {
+        setError("Too many attempts. Please wait a minute and try again.");
+      } else {
+        setError("Incorrect password");
+      }
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setBusy(false);
     }
   };
 

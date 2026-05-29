@@ -1,7 +1,7 @@
 // PATCH + DELETE for a single review.
 //
 // Two callers:
-//   - Admin (x-admin-token header). Same powers as before — PATCH any
+//   - Admin (admin_session cookie). Same powers as before — PATCH any
 //     field, DELETE hard-removes the row. Used by /admin tooling.
 //   - Author (OTP-verified via cookie or bearer header). Can only touch
 //     their OWN review (customer_phone match), only inside the 24h
@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { isWithinEditWindow, publicDisplayName } from "@/lib/review-display";
@@ -23,11 +24,6 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
-
-function isAdmin(req: NextRequest) {
-  const token = req.headers.get("x-admin-token");
-  return !!token && token === process.env.ADMIN_TOKEN;
-}
 
 /** Fetch the row needed for ownership / state checks. */
 async function loadReview(id: string) {

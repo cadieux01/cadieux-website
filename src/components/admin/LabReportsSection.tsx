@@ -10,7 +10,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime } from "@/lib/admin-formatting";
-import { ADMIN_PASSWORD } from "@/lib/admin-shared";
 import {
   PRODUCT_REPORT_CATEGORIES,
   PRODUCT_REPORT_CATEGORY_LABEL,
@@ -81,7 +80,7 @@ export function LabReportsSection({ productId }: { productId: string }) {
         `/api/admin/products/${productId}/reports`,
         {
           method: "POST",
-          headers: { "x-admin-token": ADMIN_PASSWORD },
+          credentials: "same-origin",
           body: fd,
         },
       );

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 
 const supabaseAdmin = createClient(
@@ -12,7 +13,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string; replyId: string } }
 ) {
-  if (req.headers.get("x-admin-token") !== process.env.ADMIN_TOKEN) {
+  if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { error } = await supabaseAdmin
@@ -37,7 +38,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; replyId: string } }
 ) {
-  if (req.headers.get("x-admin-token") !== process.env.ADMIN_TOKEN) {
+  if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   let payload: any;
