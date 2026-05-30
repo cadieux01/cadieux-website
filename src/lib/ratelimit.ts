@@ -75,6 +75,34 @@ export const addressCreateRateLimit = new Ratelimit({
   prefix: "ratelimit:address-create:mobile",
 });
 
+// Transactional SMS/WhatsApp triggers — keyed two ways so abuse is
+// caught from either the phone-spam vector (one target, many calls) or
+// the IP-spam vector (one bot, many targets).
+//   Phone bucket: 3 sends per recipient per hour.
+//   IP bucket:    10 sends per source IP per hour.
+export const smsPhoneRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(3, "1 h"),
+  analytics: true,
+  prefix: "ratelimit:sms:phone",
+});
+export const smsIpRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, "1 h"),
+  analytics: true,
+  prefix: "ratelimit:sms:ip",
+});
+
+// Admin review replies — bounded so a compromised admin session can't
+// spam reply rows across the catalogue. Keyed by the admin session
+// signature (falls back to IP).
+export const adminReplyRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, "1 m"),
+  analytics: true,
+  prefix: "ratelimit:admin:reply",
+});
+
 // Helper to get IP from request
 export function getClientIP(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");

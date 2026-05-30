@@ -19,6 +19,7 @@ import { usePathname } from "next/navigation";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ADMIN_SESSION_KEY } from "@/lib/admin-shared";
+import { IDLE, useIdleLogout } from "@/lib/session-timeout";
 
 // 24h UX remember-me — matches the server-side admin_session cookie
 // TTL. The cookie is the real credential; this localStorage flag just
@@ -131,12 +132,49 @@ export function AdminShell({
   const [authed, setAuthed] = useState(false);
   const [checking, setChecking] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [idleWarning, setIdleWarning] = useState<string | null>(null);
   const pathname = usePathname();
 
   useEffect(() => {
     if (readRememberedAuth()) setAuthed(true);
     setChecking(false);
   }, []);
+
+  // 30-minute idle auto-logout. Warning fires 5 min before, the timer
+  // itself signs out (POST /api/admin/logout to invalidate the server
+  // cookie + clear localStorage + drop back to the gate). Cross-tab
+  // safe via the shared localStorage timestamp inside useIdleLogout.
+  useIdleLogout({
+    enabled: authed,
+    timeoutMs: IDLE.SUPER_ADMIN,
+    warnBeforeMs: 5 * 60 * 1000,
+    onWarn: () =>
+      setIdleWarning(
+        "You'll be signed out in 5 minutes due to inactivity. Move the mouse or press a key to stay signed in.",
+      ),
+    onTimeout: () => {
+      void fetch("/api/admin/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+      }).catch(() => {});
+      clearRememberedAuth();
+      setAuthed(false);
+      setIdleWarning(null);
+    },
+  });
+
+  // Clear the warning once the operator actually interacts again — the
+  // hook itself re-arms behind the scenes, this just hides the banner.
+  useEffect(() => {
+    if (!idleWarning) return;
+    const reset = () => setIdleWarning(null);
+    const events = ["mousedown", "keydown", "touchstart"] as const;
+    for (const e of events) window.addEventListener(e, reset, { once: true });
+    return () => {
+      for (const e of events) window.removeEventListener(e, reset);
+    };
+  }, [idleWarning]);
 
   // Close the drawer whenever the route changes — clicking a nav link
   // already navigates, but route-level redirects shouldn't leave a
@@ -174,6 +212,27 @@ export function AdminShell({
   return (
     <main className="min-h-screen relative" style={{ background: "rgb(6,4,2)" }}>
       <GrainOverlay />
+      {idleWarning ? (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 400,
+            background: "rgba(245,158,11,0.95)",
+            color: "#0a0a0a",
+            padding: "0.65rem 1rem",
+            textAlign: "center",
+            fontFamily: "var(--font-body)",
+            fontSize: "0.78rem",
+            letterSpacing: "0.06em",
+          }}
+        >
+          {idleWarning}
+        </div>
+      ) : null}
       <div className="relative z-10">
         <header
           className="border-b"

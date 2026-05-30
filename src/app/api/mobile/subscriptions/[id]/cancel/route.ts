@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey, maskPhone } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
+import { internalJsonHeaders } from "@/lib/internal-secret";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -110,7 +111,7 @@ export async function POST(
   fireAndForget(
     fetch(`${SITE_URL}/api/send-whatsapp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: internalJsonHeaders(),
       body: JSON.stringify({ phone: phoneLocal, message: waMessage }),
     }),
     "send-whatsapp-cancel",

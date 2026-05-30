@@ -21,6 +21,7 @@ import {
 } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 import { editRateLimit } from "@/lib/ratelimit";
+import { internalJsonHeaders } from "@/lib/internal-secret";
 import {
   ADMIN_PHONE,
   SELF_EDIT_BLOCKED_MESSAGE,
@@ -242,7 +243,7 @@ export async function POST(
   fireAndForget(
     fetch(`${SITE_URL}/api/send-whatsapp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: internalJsonHeaders(),
       body: JSON.stringify({ phone: phoneLocal, message: waMessage }),
     }),
     "send-whatsapp-edit",

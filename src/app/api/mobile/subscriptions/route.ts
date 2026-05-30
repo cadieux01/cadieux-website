@@ -33,6 +33,7 @@ import {
   maskPhone,
 } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
+import { internalJsonHeaders } from "@/lib/internal-secret";
 import {
   DAY_KEYS,
   generateDeliveries,
@@ -871,7 +872,7 @@ export async function POST(req: NextRequest) {
   fireAndForget(
     fetch(`${SITE_URL}/api/send-sms`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: internalJsonHeaders(),
       body: JSON.stringify({
         type: "subscription_placed",
         phone: phoneLocal,
@@ -897,7 +898,7 @@ export async function POST(req: NextRequest) {
   fireAndForget(
     fetch(`${SITE_URL}/api/send-whatsapp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: internalJsonHeaders(),
       body: JSON.stringify({ phone: phoneLocal, message: waMessage }),
     }),
     "send-whatsapp-sub",

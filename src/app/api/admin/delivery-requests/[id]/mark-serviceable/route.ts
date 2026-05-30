@@ -14,6 +14,7 @@ import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { internalJsonHeaders } from "@/lib/internal-secret";
 import { SERVICE_AREAS_TAG } from "@/lib/service-areas";
 
 async function sendWhatsApp(req: NextRequest, phone: string, message: string) {
@@ -24,7 +25,7 @@ async function sendWhatsApp(req: NextRequest, phone: string, message: string) {
     const url = new URL("/api/send-whatsapp", req.nextUrl.origin);
     await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: internalJsonHeaders(),
       body: JSON.stringify({ phone, message }),
     });
   } catch (e) {

@@ -30,6 +30,7 @@ import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import { computeDeliveryFee } from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
+import { internalJsonHeaders } from "@/lib/internal-secret";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -333,7 +334,7 @@ export async function POST(req: NextRequest) {
   fireAndForget(
     fetch(`${SITE_URL}/api/send-sms`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: internalJsonHeaders(),
       body: JSON.stringify({
         type: "order_placed",
         phone: phoneLocal,
@@ -357,7 +358,7 @@ export async function POST(req: NextRequest) {
   fireAndForget(
     fetch(`${SITE_URL}/api/send-whatsapp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: internalJsonHeaders(),
       body: JSON.stringify({ phone: phoneLocal, message: waMessage }),
     }),
     "send-whatsapp",

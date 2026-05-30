@@ -12,6 +12,7 @@ import {
 import { recordAuditEvent } from "@/lib/audit-log";
 import { logLogisticsAudit } from "@/lib/logistics-audit";
 import { verifyGrant } from "@/lib/product-lock";
+import { parseBodyFromObject, ProductUpdateSchema } from "@/lib/validation";
 
 function bustProductCaches(): void {
   revalidateTag("products");
@@ -93,6 +94,13 @@ export async function PATCH(
   }
 
   const body = await req.json().catch(() => ({}));
+
+  // Shape-level guard: rejects unknown keys, bad types, out-of-range
+  // numbers, oversize strings, etc. before any DB work. The per-field
+  // coercion below (slug collision, auto-sync subscription price) still
+  // runs — this layer just makes sure we never reach it with garbage.
+  const shape = parseBodyFromObject(body, ProductUpdateSchema);
+  if (!shape.ok) return shape.response;
 
   const { data: before, error: beforeErr } = await supabaseAdmin
     .from("products")
