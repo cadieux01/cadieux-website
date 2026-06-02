@@ -56,6 +56,51 @@ export function adminAuthHeaders(base?: HeadersInit): Headers {
   return headers;
 }
 
+// Fired by the password gate the instant it stores a fresh token so any
+// in-flight `adminFetch` waiting for auth can proceed immediately rather
+// than waiting for the poll below to notice.
+export const ADMIN_AUTH_EVENT = "admin-auth-change";
+
+export function notifyAdminAuthChange(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(ADMIN_AUTH_EVENT));
+}
+
+// Every admin page fires its data `load()` on mount — which happens BEFORE
+// the operator types the password, since the page component wraps
+// <AdminShell> (the gate) rather than living inside it. Without this guard
+// that eager request hits /api/admin/* with an empty localStorage and 401s,
+// and because the effect never re-runs after login the page is left showing
+// a stale "Unauthorized". Here we simply hold the request until a valid
+// token exists (the gate is rendered on top meanwhile, so the user sees the
+// login screen, not a hang). It resolves the moment PasswordGate stores the
+// token. A ceiling prevents waiting forever if the operator never logs in —
+// the eventual 401 is harmless because the gate is still covering the page.
+function waitForAdminToken(timeoutMs = 10000): Promise<void> {
+  if (typeof window === "undefined" || adminTokenValid()) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearInterval(poll);
+      window.removeEventListener(ADMIN_AUTH_EVENT, onChange);
+      window.removeEventListener("storage", onChange);
+      resolve();
+    };
+    const onChange = () => {
+      if (adminTokenValid()) finish();
+    };
+    // Poll is the safety net in case the event is missed (e.g. login in
+    // another tab updating localStorage without dispatching here).
+    const poll = setInterval(onChange, 300);
+    const timer = setTimeout(finish, timeoutMs);
+    window.addEventListener(ADMIN_AUTH_EVENT, onChange);
+    window.addEventListener("storage", onChange);
+  });
+}
+
 export class AdminFetchError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -67,6 +112,10 @@ export async function adminFetch<T = unknown>(
   url: string,
   init: RequestInit = {},
 ): Promise<T> {
+  // Hold the request until the operator has logged in and a token exists,
+  // so the eager on-mount fetch every admin page runs doesn't 401 against
+  // an empty localStorage (see waitForAdminToken).
+  await waitForAdminToken();
   const headers = adminAuthHeaders(init.headers);
   // Never force JSON on FormData — the browser must set the multipart
   // boundary itself.

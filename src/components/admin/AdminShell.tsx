@@ -22,6 +22,7 @@ import { ADMIN_SESSION_KEY } from "@/lib/admin-shared";
 import {
   adminTokenValid,
   clearAdminToken,
+  notifyAdminAuthChange,
   setAdminToken,
 } from "@/lib/admin-client";
 import { IDLE, useIdleLogout } from "@/lib/session-timeout";
@@ -669,6 +670,8 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
         // Simple gate flag so the password screen is skipped on reload even
         // if the token round-trip is flaky.
         localStorage.setItem(ADMIN_AUTHED_FLAG, "true");
+        // Release any admin requests that mounted (and paused) before login.
+        notifyAdminAuthChange();
         onSuccess();
         return;
       }
