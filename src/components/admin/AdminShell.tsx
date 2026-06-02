@@ -611,21 +611,49 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
     setBusy(true);
     setError("");
     try {
+      // `credentials: "include"` (not "same-origin") so the Set-Cookie
+      // is honoured even when the host redirects apex -> www mid-POST.
+      // The cookie is scoped to `.cadieux.in` server-side so it then
+      // applies on whichever host the page is loaded from.
       const res = await fetch("/api/admin/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify({ password: value }),
-        credentials: "same-origin",
+        credentials: "include",
         cache: "no-store",
+        redirect: "follow",
       });
-      if (res.ok) {
+
+      let data: { ok?: boolean; error?: string } | null = null;
+      try {
+        data = (await res.json()) as { ok?: boolean; error?: string };
+      } catch {
+        // Non-JSON response (e.g. an HTML redirect page) — handled below.
+        data = null;
+      }
+
+      if (res.ok && data?.ok) {
         onSuccess();
         return;
       }
+
+      // Always surface something — never silently clear the field.
       if (res.status === 429) {
-        setError("Too many attempts. Please wait a minute and try again.");
-      } else {
+        setError(
+          data?.error ||
+            "Too many attempts. Please wait a minute and try again.",
+        );
+      } else if (res.status === 401) {
         setError("Incorrect password");
+      } else if (res.redirected || !data) {
+        setError(
+          "Login could not complete — please open https://www.cadieux.in/admin (with “www”) and try again.",
+        );
+      } else {
+        setError(data.error || `Login failed (status ${res.status}).`);
       }
     } catch {
       setError("Network error — please try again.");

@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getClientIP } from "@/lib/ratelimit";
 import {
   ADMIN_SESSION_COOKIE,
+  adminCookieDomain,
   adminSessionCookieMaxAgeSeconds,
   clearLoginAttempts,
   registerLoginAttempt,
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
     sameSite: "strict",
     path: "/",
     maxAge: adminSessionCookieMaxAgeSeconds(),
+    domain: adminCookieDomain(req.headers.get("host")),
   });
   return res;
 }

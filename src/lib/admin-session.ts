@@ -80,6 +80,26 @@ export function adminSessionCookieMaxAgeSeconds(): number {
   return Math.floor(SESSION_TTL_MS / 1000);
 }
 
+// Cookie domain for the admin session.
+//
+// Production serves the admin from both the apex (`cadieux.in`) and
+// `www.cadieux.in`, and the host 307-redirects apex → www. A host-only
+// cookie set on one of those hosts is NOT sent to the other, so the
+// login POST could succeed at the API level while the session silently
+// failed to apply on the page's host. Scoping the cookie to the
+// registrable domain (`.cadieux.in`) makes it valid on apex AND www.
+//
+// On localhost / Vercel preview hosts we return undefined so the cookie
+// stays host-only (a `.cadieux.in` domain would be rejected there).
+export function adminCookieDomain(
+  host: string | null | undefined,
+): string | undefined {
+  if (!host) return undefined;
+  const h = host.split(":")[0].toLowerCase();
+  if (h === "cadieux.in" || h.endsWith(".cadieux.in")) return ".cadieux.in";
+  return undefined;
+}
+
 // ── login throttle ─────────────────────────────────────────────────────
 // In-memory sliding window: 5 attempts per minute per IP. Best-effort
 // (per warm instance), enough to make password guessing painful. The
