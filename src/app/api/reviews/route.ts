@@ -72,7 +72,18 @@ export async function GET(req: NextRequest) {
       replies: byReview.get(r.id) ?? [],
     };
   });
-  return NextResponse.json({ reviews: out });
+  return NextResponse.json(
+    { reviews: out },
+    {
+      headers: {
+        // Private (browser-only) cache: the payload carries a per-user
+        // `is_owner` flag derived from the caller's verified-phone cookie,
+        // so it must NEVER be shared by a CDN. 60s smooths repeat loads
+        // without leaking one user's ownership flags to another.
+        "Cache-Control": "private, max-age=60",
+      },
+    },
+  );
 }
 
 export async function POST(req: NextRequest) {
