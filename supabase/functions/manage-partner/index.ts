@@ -33,6 +33,11 @@
 //   { "action": "delete",     "phone": "9876543210" }  // remove login, keep data
 //   { "action": "reactivate", "phone": "9876543210" }  // un-ban
 //
+//   // Approving profile change requests (admin any, sales partner-only):
+//   { "action": "change-password", "user_id": "<uuid>", "new_password": "min6" }
+//   { "action": "change-phone", "user_id": "<uuid>",
+//     "old_phone": "9876543210", "new_phone": "9123456780" }
+//
 // RESPONSE
 // --------
 //   200 { success: true, ... }
@@ -391,7 +396,141 @@ Deno.serve(async (req: Request) => {
     return json(200, { success: true, phone, status: "deleted" });
   }
 
+  // -----------------------------------------------------------------------
+  // CHANGE-PASSWORD — reset an existing user's password.
+  //   { action: "change-password", user_id, new_password }
+  // Used when an admin/sales approves a 'password' change request. The
+  // request row never carries the plaintext; the approver supplies it here.
+  // -----------------------------------------------------------------------
+  if (action === "change-password") {
+    const userId = typeof body.user_id === "string" ? body.user_id : "";
+    const newPassword = body.new_password;
+
+    if (!isNonEmptyString(userId)) {
+      return json(400, { error: "user_id is required" });
+    }
+    if (!isNonEmptyString(newPassword) || newPassword.length < 6) {
+      return json(400, { error: "new_password must be at least 6 characters" });
+    }
+
+    // Look up the target so we can enforce the sales→partner-only rule
+    // and produce a useful audit description.
+    const { data: target, error: lookupErr } = await admin
+      .schema("logistics")
+      .from("profiles")
+      .select("id, phone, role, full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    if (lookupErr) {
+      return json(500, { error: `Lookup failed: ${lookupErr.message}` });
+    }
+    if (!target) {
+      return json(404, { error: "No account found for that user" });
+    }
+    if (callerRole === "sales" && target.role !== "partner") {
+      return json(403, { error: "Sales can only manage partner accounts" });
+    }
+
+    const { error: pwErr } = await admin.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+    if (pwErr) {
+      return json(400, { error: `Failed to update password: ${pwErr.message}` });
+    }
+
+    await writeAudit({
+      action_type: "UPDATE",
+      entity_type: "user",
+      entity_id: userId,
+      description: `Reset password for ${target.full_name || target.phone || userId}`,
+      new_values: { password: "reset" },
+    });
+    return json(200, { success: true, user_id: userId });
+  }
+
+  // -----------------------------------------------------------------------
+  // CHANGE-PHONE — change an existing user's phone.
+  //   { action: "change-phone", user_id, old_phone, new_phone }
+  // Rewrites the synthetic auth email `<phone>@cadieux.<role>` and the
+  // profile's phone columns. Used when approving a 'phone' change request.
+  // -----------------------------------------------------------------------
+  if (action === "change-phone") {
+    const userId = typeof body.user_id === "string" ? body.user_id : "";
+    const newPhone = normaliseIndianMobile(body.new_phone);
+
+    if (!isNonEmptyString(userId)) {
+      return json(400, { error: "user_id is required" });
+    }
+    if (!newPhone) {
+      return json(400, {
+        error: "new_phone must be a 10-digit Indian mobile (leading 6-9)",
+      });
+    }
+
+    const { data: target, error: lookupErr } = await admin
+      .schema("logistics")
+      .from("profiles")
+      .select("id, email, phone, role, full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    if (lookupErr) {
+      return json(500, { error: `Lookup failed: ${lookupErr.message}` });
+    }
+    if (!target) {
+      return json(404, { error: "No account found for that user" });
+    }
+    if (!isManageableRole(target.role)) {
+      return json(403, {
+        error: "This endpoint only manages sales/partner accounts",
+      });
+    }
+    if (callerRole === "sales" && target.role !== "partner") {
+      return json(403, { error: "Sales can only manage partner accounts" });
+    }
+
+    const oldPhone = target.phone;
+    const newEmail = phoneToEmail(newPhone, target.role);
+
+    // 1. Update the synthetic auth email so login with the new phone works.
+    const { error: emailErr } = await admin.auth.admin.updateUserById(userId, {
+      email: newEmail,
+      email_confirm: true,
+      user_metadata: { phone: newPhone },
+    });
+    if (emailErr) {
+      const dupe = /already (registered|exists)/i.test(emailErr.message);
+      return json(400, {
+        error: dupe
+          ? `A ${target.role} with phone ${newPhone} already exists`
+          : `Failed to update login: ${emailErr.message}`,
+      });
+    }
+
+    // 2. Update the profile phone columns + email to match.
+    const { error: profileErr } = await admin
+      .schema("logistics")
+      .from("profiles")
+      .update({ phone: newPhone, phone_number: newPhone, email: newEmail })
+      .eq("id", userId);
+    if (profileErr) {
+      return json(400, {
+        error: `Login updated but profile update failed: ${profileErr.message}`,
+      });
+    }
+
+    await writeAudit({
+      action_type: "UPDATE",
+      entity_type: "user",
+      entity_id: userId,
+      description: `Changed phone for ${target.full_name || userId} (${oldPhone || "?"} → ${newPhone})`,
+      old_values: { phone: oldPhone, email: target.email },
+      new_values: { phone: newPhone, email: newEmail },
+    });
+    return json(200, { success: true, user_id: userId, phone: newPhone, email: newEmail });
+  }
+
   return json(400, {
-    error: 'action must be "create", "deactivate", "delete", or "reactivate"',
+    error:
+      'action must be "create", "deactivate", "delete", "reactivate", "change-password", or "change-phone"',
   });
 });
