@@ -6,6 +6,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
+import { adminAuthHeaders } from "@/lib/admin-client";
 import { AdminProductRow } from "@/lib/admin-shared";
 
 const GOLD = "#f59e0b";
@@ -129,12 +130,13 @@ export function ProductForm({
     try {
       const fd = new FormData();
       fd.append("file", file);
-      // adminFetch sets Content-Type to JSON which would break multipart,
-      // so we call fetch directly. The admin_session cookie is sent
-      // automatically as a same-origin credential.
+      // Raw fetch (not adminFetch) so the browser sets the multipart
+      // boundary itself — but still attach the admin bearer token via
+      // adminAuthHeaders so it authenticates when Safari drops the cookie.
       const res = await fetch("/api/admin/products/upload-image", {
         method: "POST",
-        credentials: "same-origin",
+        headers: adminAuthHeaders(),
+        credentials: "include",
         body: fd,
       });
       const json = (await res.json().catch(() => ({}))) as {

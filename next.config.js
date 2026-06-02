@@ -71,6 +71,23 @@ const nextConfig = {
     return [
       // Phase 1A: plain product slug renamed to high-protein to match DB.
       { source: "/shop/plain", destination: "/shop/high-protein", permanent: true },
+      // Force the admin onto www. localStorage is per-origin, so a bearer
+      // token saved on www.cadieux.in is invisible on the apex cadieux.in
+      // (and vice-versa) — landing on the apex looked "logged out". Sending
+      // all /admin traffic to www keeps the token on one consistent origin.
+      // No loop: the `has` host condition only matches the bare apex.
+      {
+        source: "/admin",
+        has: [{ type: "host", value: "cadieux.in" }],
+        destination: "https://www.cadieux.in/admin",
+        permanent: false,
+      },
+      {
+        source: "/admin/:path*",
+        has: [{ type: "host", value: "cadieux.in" }],
+        destination: "https://www.cadieux.in/admin/:path*",
+        permanent: false,
+      },
     ];
   },
   async rewrites() {

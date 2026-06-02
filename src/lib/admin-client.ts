@@ -41,6 +41,21 @@ export function adminTokenValid(token: string | null = getAdminToken()): boolean
   }
 }
 
+// Build a Headers object carrying the admin bearer token. Use this for the
+// few admin requests that can't go through `adminFetch` because they need
+// the raw Response (status-code branching) or send FormData — so the token
+// rides along on EVERY admin request, not just JSON ones routed via
+// adminFetch. Without this they fall back to the cookie, which Safari ITP
+// drops across the apex -> www redirect.
+export function adminAuthHeaders(base?: HeadersInit): Headers {
+  const headers = new Headers(base);
+  const token = getAdminToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  return headers;
+}
+
 export class AdminFetchError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -52,13 +67,15 @@ export async function adminFetch<T = unknown>(
   url: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) {
+  const headers = adminAuthHeaders(init.headers);
+  // Never force JSON on FormData — the browser must set the multipart
+  // boundary itself.
+  if (
+    init.body &&
+    !(init.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
     headers.set("Content-Type", "application/json");
-  }
-  const token = getAdminToken();
-  if (token && !headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer ${token}`);
   }
   const res = await fetch(url, {
     ...init,

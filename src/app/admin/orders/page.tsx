@@ -25,7 +25,7 @@ import {
 import { ContactActions } from "@/components/admin/ContactActions";
 import { OrderLocationActions } from "@/components/admin/OrderLocationActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import { adminAuthHeaders, adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import {
   formatDate,
@@ -1014,7 +1014,8 @@ function EditOrderModal({
         try {
           const r = await fetch("/api/send-whatsapp", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: adminAuthHeaders({ "Content-Type": "application/json" }),
+            credentials: "include",
             body: JSON.stringify({ phone: phone.trim(), message: waBody }),
           });
           if (!r.ok) {

@@ -33,6 +33,14 @@ import { IDLE, useIdleLogout } from "@/lib/session-timeout";
 // load.
 const REMEMBER_MS = 24 * 60 * 60 * 1000;
 
+// Simple client-side "I already logged in" flag. The REAL credential is the
+// bearer token / cookie the server verifies on every /api/admin request;
+// this flag only decides whether to show the password screen, so it being
+// forgeable in localStorage is harmless (a forged flag still gets 401s from
+// the API). Kept separate from the token so the gate also opens for sessions
+// where the token round-trip is flaky.
+const ADMIN_AUTHED_FLAG = "admin_authenticated";
+
 function readRememberedAuth(): boolean {
   if (typeof window === "undefined") return false;
   const session = sessionStorage.getItem(ADMIN_SESSION_KEY);
@@ -72,6 +80,7 @@ function clearRememberedAuth(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(ADMIN_SESSION_KEY);
   sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  localStorage.removeItem(ADMIN_AUTHED_FLAG);
   clearAdminToken();
 }
 
@@ -142,10 +151,13 @@ export function AdminShell({
   const pathname = usePathname();
 
   useEffect(() => {
-    // A valid bearer token is the real proof of auth; fall back to the
-    // legacy remembered-auth flag for sessions created before the token
-    // was introduced.
-    if (adminTokenValid() || readRememberedAuth()) setAuthed(true);
+    // Open the gate if any of: a valid bearer token, the simple
+    // logged-in flag, or the legacy remembered-auth record. The server
+    // still enforces real auth on every API call regardless.
+    const flagged =
+      typeof window !== "undefined" &&
+      localStorage.getItem(ADMIN_AUTHED_FLAG) === "true";
+    if (adminTokenValid() || flagged || readRememberedAuth()) setAuthed(true);
     setChecking(false);
   }, []);
 
@@ -654,6 +666,9 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
         // that only set the cookie won't return a token — that's fine, the
         // cookie path still applies there.
         if (data.token) setAdminToken(data.token);
+        // Simple gate flag so the password screen is skipped on reload even
+        // if the token round-trip is flaky.
+        localStorage.setItem(ADMIN_AUTHED_FLAG, "true");
         onSuccess();
         return;
       }

@@ -3,6 +3,12 @@
 // /api/send-sms endpoints. These mirror what the legacy
 // /admin/legacy/page.tsx used so the WhatsApp/SMS copy stays identical
 // to what customers have always received.
+//
+// These endpoints accept an admin caller, so they need the admin bearer
+// token (via adminAuthHeaders) + credentials:"include" — otherwise they
+// fall back to the cookie, which Safari ITP drops.
+
+import { adminAuthHeaders } from "@/lib/admin-client";
 
 export type OrderNotifyStatus =
   | "Pending"
@@ -38,7 +44,8 @@ export async function sendOrderWhatsApp(
   try {
     const res = await fetch("/api/send-whatsapp", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: adminAuthHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
       body: JSON.stringify({ phone, message }),
     });
     if (!res.ok) {
@@ -61,7 +68,8 @@ export async function sendOrderStatusSMS(args: {
   try {
     const res = await fetch("/api/send-sms", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: adminAuthHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
       body: JSON.stringify({
         type: "status_change",
         phone: args.phone,
@@ -89,7 +97,8 @@ export async function sendCustomerEditSMS(args: {
   try {
     const res = await fetch("/api/send-sms", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: adminAuthHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
       body: JSON.stringify({
         type: "customer_edit",
         phone: args.phone,

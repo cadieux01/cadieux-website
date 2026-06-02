@@ -14,6 +14,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { adminAuthHeaders } from "@/lib/admin-client";
+
 
 const GREEN = "#024628";
 const CREAM = "#fbf3d4";
@@ -103,8 +105,8 @@ function ProductLockModal({
     try {
       const res = await fetch("/api/admin/verify-product-lock", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
+        headers: adminAuthHeaders({ "Content-Type": "application/json" }),
+        credentials: "include",
         body: JSON.stringify({
           key,
           productName: ctx.productName,
