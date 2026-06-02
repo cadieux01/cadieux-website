@@ -132,9 +132,24 @@ function OverviewPageInner() {
       sp.set("from", toYMD(range.from));
       sp.set("to", toYMD(range.to));
       const qs = sp.toString();
-      const res = await adminFetch<OverviewResponse>(
-        qs ? `/api/admin/overview?${qs}` : "/api/admin/overview",
-      );
+      const path = qs
+        ? `/api/admin/overview?${qs}`
+        : "/api/admin/overview";
+      let res: OverviewResponse;
+      try {
+        res = await adminFetch<OverviewResponse>(path);
+      } catch (e) {
+        // One retry on 401 to cover the token-save race right after login:
+        // the bearer token can land in localStorage a tick after this first
+        // fetch fires. Wait briefly, then try once more before surfacing an
+        // error so the operator never sees a spurious "Unauthorized".
+        if (e instanceof AdminFetchError && e.status === 401) {
+          await new Promise((r) => setTimeout(r, 500));
+          res = await adminFetch<OverviewResponse>(path);
+        } else {
+          throw e;
+        }
+      }
       setData(res);
     } catch (e) {
       if (e instanceof AdminFetchError) setError(e.message);
