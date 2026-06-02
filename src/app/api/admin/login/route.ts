@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     value: token,
     httpOnly: true,
     secure: true,
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/",
     maxAge: adminSessionCookieMaxAgeSeconds(),
     domain: adminCookieDomain(req.headers.get("host")),

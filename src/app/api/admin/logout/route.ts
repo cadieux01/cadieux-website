@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     value: "",
     httpOnly: true,
     secure: true,
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/",
     maxAge: 0,
     domain: adminCookieDomain(req.headers.get("host")),
