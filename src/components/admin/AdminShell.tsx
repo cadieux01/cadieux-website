@@ -19,6 +19,11 @@ import { usePathname } from "next/navigation";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ADMIN_SESSION_KEY } from "@/lib/admin-shared";
+import {
+  adminTokenValid,
+  clearAdminToken,
+  setAdminToken,
+} from "@/lib/admin-client";
 import { IDLE, useIdleLogout } from "@/lib/session-timeout";
 
 // 24h UX remember-me — matches the server-side admin_session cookie
@@ -67,6 +72,7 @@ function clearRememberedAuth(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(ADMIN_SESSION_KEY);
   sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  clearAdminToken();
 }
 
 // Nav groups for the hamburger drawer. The order intentionally mirrors
@@ -136,7 +142,10 @@ export function AdminShell({
   const pathname = usePathname();
 
   useEffect(() => {
-    if (readRememberedAuth()) setAuthed(true);
+    // A valid bearer token is the real proof of auth; fall back to the
+    // legacy remembered-auth flag for sessions created before the token
+    // was introduced.
+    if (adminTokenValid() || readRememberedAuth()) setAuthed(true);
     setChecking(false);
   }, []);
 
@@ -627,15 +636,24 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
         redirect: "follow",
       });
 
-      let data: { ok?: boolean; error?: string } | null = null;
+      let data: { ok?: boolean; error?: string; token?: string } | null = null;
       try {
-        data = (await res.json()) as { ok?: boolean; error?: string };
+        data = (await res.json()) as {
+          ok?: boolean;
+          error?: string;
+          token?: string;
+        };
       } catch {
         // Non-JSON response (e.g. an HTML redirect page) — handled below.
         data = null;
       }
 
       if (res.ok && data?.ok) {
+        // Persist the bearer token so admin requests authenticate via the
+        // Authorization header (Safari ITP drops the cookie). Older servers
+        // that only set the cookie won't return a token — that's fine, the
+        // cookie path still applies there.
+        if (data.token) setAdminToken(data.token);
         onSuccess();
         return;
       }

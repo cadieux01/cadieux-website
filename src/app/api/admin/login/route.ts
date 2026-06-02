@@ -66,7 +66,11 @@ export async function POST(req: NextRequest) {
   clearLoginAttempts(ip);
 
   const token = signAdminSession();
-  const res = NextResponse.json({ ok: true });
+  // Return the signed session token in the body too (not just Set-Cookie).
+  // Safari ITP drops the cookie across the cadieux.in -> www redirect, so
+  // the client stores this token and sends it as a Bearer header. It is a
+  // 24h HMAC-signed session proof — it does NOT contain the password.
+  const res = NextResponse.json({ ok: true, token });
   res.cookies.set({
     name: ADMIN_SESSION_COOKIE,
     value: token,
