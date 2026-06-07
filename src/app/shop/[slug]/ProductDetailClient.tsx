@@ -29,14 +29,32 @@ const DIVIDER_STYLE: React.CSSProperties = {
   border: 0,
 };
 
+const pdpQtyBtnStyle: React.CSSProperties = {
+  fontFamily: "var(--font-body)",
+  fontSize: 22,
+  lineHeight: 1,
+  fontWeight: 400,
+  color: "#FBF3D4",
+  background: "rgba(201,169,110,0.12)",
+  border: "none",
+  padding: "10px 16px",
+  cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+};
+
 export default function ProductDetailClient({
   slug,
   outOfStock = false,
   reports = [],
+  price = null,
 }: {
   slug: string;
   outOfStock?: boolean;
   reports?: ProductReport[];
+  // Live DB price (products.price_inr). Falls back to the bundled PRODUCTS
+  // price only when the DB read was empty, so display + cart snapshot stay
+  // pinned to the products table — the single source of truth.
+  price?: number | null;
 }) {
   const typedSlug = slug as ProductSlug;
   const product = PRODUCTS.find((p) => p.slug === typedSlug);
@@ -44,6 +62,7 @@ export default function ProductDetailClient({
 
   const [activeMedia, setActiveMedia] = useState(0);
   const [orderType, setOrderType] = useState<"once" | "sub">("once");
+  const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
   const { addToCart } = useCart();
   const router = useRouter();
@@ -54,6 +73,7 @@ export default function ProductDetailClient({
   }
 
   const productIndex = PRODUCTS.findIndex((p) => p.slug === typedSlug);
+  const effectivePrice = price ?? product.price;
 
   const handleAdd = () => {
     if (outOfStock) return;
@@ -69,8 +89,8 @@ export default function ProductDetailClient({
     addToCart({
       productIndex,
       name: product.name,
-      price: product.price,
-      qty: 1,
+      price: effectivePrice,
+      qty,
       orderType,
     });
     flyToCart(addBtnRef.current);
@@ -225,7 +245,7 @@ export default function ProductDetailClient({
                   lineHeight: 1,
                 }}
               >
-                ₹{product.price}
+                ₹{effectivePrice}
               </div>
               <div
                 style={{
@@ -294,6 +314,64 @@ export default function ProductDetailClient({
                 Currently out of stock — please check back soon.
               </div>
             )}
+            {/* Quantity — one-time orders only (subscriptions set their
+                quantity inside the setup wizard). */}
+            {orderType === "once" && !outOfStock && (
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
+                <span
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10,
+                    fontWeight: 500,
+                    letterSpacing: "0.3em",
+                    textTransform: "uppercase",
+                    color: "rgba(245,240,232,0.55)",
+                  }}
+                >
+                  Quantity
+                </span>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    border: "1px solid rgba(201,169,110,0.4)",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-label="Decrease quantity"
+                    onClick={() => setQty((q) => Math.max(1, q - 1))}
+                    style={pdpQtyBtnStyle}
+                  >
+                    −
+                  </button>
+                  <span
+                    aria-live="polite"
+                    style={{
+                      minWidth: 40,
+                      textAlign: "center",
+                      fontFamily: "var(--font-body)",
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: "#FBF3D4",
+                    }}
+                  >
+                    {qty}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Increase quantity"
+                    onClick={() => setQty((q) => Math.min(99, q + 1))}
+                    style={pdpQtyBtnStyle}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <button
                 ref={addBtnRef}

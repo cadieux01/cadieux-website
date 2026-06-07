@@ -37,6 +37,11 @@ export default async function ProductDetailPage({
   const reports = productRow ? await getProductReports(productRow.id) : [];
 
   return (
-    <ProductDetailClient slug={slug} outOfStock={outOfStock} reports={reports} />
+    <ProductDetailClient
+      slug={slug}
+      outOfStock={outOfStock}
+      reports={reports}
+      price={productRow?.price_inr ?? null}
+    />
   );
 }

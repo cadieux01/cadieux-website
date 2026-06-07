@@ -4,9 +4,25 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRef, useState } from "react";
 import type { ProductMedia, ProductStat } from "@/lib/data";
+import { useCart } from "@/context/CartContext";
+
+const qtyBtnStyle: React.CSSProperties = {
+  fontFamily: "var(--font-body)",
+  fontSize: 18,
+  lineHeight: 1,
+  fontWeight: 400,
+  color: "#FBF3D4",
+  background: "rgba(251,243,212,0.06)",
+  border: "none",
+  padding: "8px 12px",
+  cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+};
 
 type Props = {
   slug: string;
+  productIndex: number;
+  name: string;
   tag: string;
   title: string;
   subtitle: string;
@@ -16,10 +32,32 @@ type Props = {
   outOfStock?: boolean;
 };
 
-export default function ProductTile({ slug, tag, title, subtitle, price, stats, media, outOfStock = false }: Props) {
+export default function ProductTile({ slug, productIndex, name, tag, title, subtitle, price, stats, media, outOfStock = false }: Props) {
   const [hover, setHover] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  // Per-tile quantity + add-to-cart. Lives inside the wrapping <Link>, so
+  // every control stops propagation + preventDefault to avoid navigating
+  // to the PDP when the customer is just choosing units here.
+  const { addToCart } = useCart();
+  const [qty, setQty] = useState(1);
+  const [added, setAdded] = useState(false);
+  const addedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stop = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleAdd = (e: React.MouseEvent) => {
+    stop(e);
+    if (outOfStock) return;
+    addToCart({ productIndex, name, price, qty, orderType: "once" });
+    setAdded(true);
+    if (addedTimer.current) clearTimeout(addedTimer.current);
+    addedTimer.current = setTimeout(() => setAdded(false), 1600);
+  };
 
   // Track pointer drag on the media so a horizontal swipe doesn't get interpreted
   // as a click on the wrapping <Link> (which would navigate mid-swipe).
@@ -350,14 +388,105 @@ export default function ProductTile({ slug, tag, title, subtitle, price, stats, 
 
         <div
           style={{
-            fontFamily: "var(--font-heading)",
-            fontSize: 28,
-            fontWeight: 500,
-            color: "#f5f0e8",
-            lineHeight: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
           }}
         >
-          ₹{price}
+          <div
+            style={{
+              fontFamily: "var(--font-heading)",
+              fontSize: 28,
+              fontWeight: 500,
+              color: "#f5f0e8",
+              lineHeight: 1,
+            }}
+          >
+            ₹{price}
+          </div>
+
+          {outOfStock ? (
+            <span
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 10,
+                fontWeight: 500,
+                letterSpacing: "0.2em",
+                textTransform: "uppercase",
+                color: "rgba(245,240,232,0.45)",
+              }}
+            >
+              Unavailable
+            </span>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {/* Quantity stepper */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  border: "1px solid rgba(251,243,212,0.25)",
+                  borderRadius: 8,
+                  overflow: "hidden",
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label="Decrease quantity"
+                  onClick={(e) => { stop(e); setQty((q) => Math.max(1, q - 1)); }}
+                  style={qtyBtnStyle}
+                >
+                  −
+                </button>
+                <span
+                  aria-live="polite"
+                  style={{
+                    minWidth: 26,
+                    textAlign: "center",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "#FBF3D4",
+                  }}
+                >
+                  {qty}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Increase quantity"
+                  onClick={(e) => { stop(e); setQty((q) => Math.min(99, q + 1)); }}
+                  style={qtyBtnStyle}
+                >
+                  +
+                </button>
+              </div>
+
+              {/* Add to cart */}
+              <button
+                type="button"
+                onClick={handleAdd}
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: "#FBF3D4",
+                  background: "#024628",
+                  border: "1px solid #024628",
+                  borderRadius: 8,
+                  padding: "10px 16px",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {added ? "Added ✓" : "Add"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

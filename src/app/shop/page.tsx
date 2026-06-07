@@ -5,11 +5,17 @@
 // the DB read returns nothing (network/RLS hiccup) so the shop never
 // goes dark.
 
-import { getProductAvailability } from "@/lib/products";
+import { getActiveProducts, getProductAvailability } from "@/lib/products";
 
 import ShopListClient from "./ShopListClient";
 
 export default async function ShopPage() {
   const availability = await getProductAvailability();
-  return <ShopListClient availability={availability} />;
+  // Live DB price per slug — the single source of truth shown on the
+  // catalogue and snapshotted into the cart. Both calls share the same
+  // 60s-cached getActiveProducts() read, so this is no extra DB hit.
+  const products = await getActiveProducts();
+  const priceBySlug: Record<string, number> = {};
+  for (const p of products) priceBySlug[p.slug] = p.price_inr;
+  return <ShopListClient availability={availability} priceBySlug={priceBySlug} />;
 }
