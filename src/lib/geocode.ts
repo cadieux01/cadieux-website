@@ -48,7 +48,7 @@ function pickComponent(
 }
 
 async function callGoogle(
-  address: string,
+  params: { address?: string; components?: string },
 ): Promise<GoogleGeocodeResult | null> {
   const key = getApiKey();
   if (!key) {
@@ -56,7 +56,8 @@ async function callGoogle(
     return null;
   }
   const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-  url.searchParams.set("address", address);
+  if (params.address) url.searchParams.set("address", params.address);
+  if (params.components) url.searchParams.set("components", params.components);
   url.searchParams.set("region", "in");
   url.searchParams.set("key", key);
   try {
@@ -94,7 +95,7 @@ export async function geocodeArea(
   if (pincode) parts.push(pincode);
   parts.push("Visakhapatnam", "India");
   const address = parts.filter(Boolean).join(", ");
-  const result = await callGoogle(address);
+  const result = await callGoogle({ address });
   if (!result?.geometry?.location) return null;
   return {
     latitude: result.geometry.location.lat,
@@ -160,8 +161,17 @@ export async function geocodePincode(
     return { latitude: cached.latitude, longitude: cached.longitude };
   }
 
-  // Cache miss → call Google.
-  const result = await callGoogle(`${pincode}, Visakhapatnam, India`);
+  // Cache miss → call Google. Resolve the EXACT postal code anywhere in
+  // India via the components filter — never anchor the query to a city.
+  // Anchoring on "Visakhapatnam" used to make Google fall back to the
+  // Vizag city centre for any non-Vizag pincode, so Delhi/Mumbai/Hyderabad
+  // pincodes looked ~1km from a Vizag area and were wrongly serviceable.
+  // With components=postal_code:<pin>|country:IN Google returns the true
+  // centroid of that pincode, or ZERO_RESULTS (→ null → not serviceable)
+  // when the pincode doesn't exist.
+  const result = await callGoogle({
+    components: `country:IN|postal_code:${pincode}`,
+  });
   if (!result?.geometry?.location) return null;
   const out = {
     latitude: result.geometry.location.lat,
