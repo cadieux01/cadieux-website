@@ -65,7 +65,32 @@ const nextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // The dashboard SPA shell is proxied (rewrite) to an external
+      // Vercel project. Vercel's edge was caching that proxied HTML and
+      // serving it stale (a pre-fix 404.html froze on some POPs, leaving
+      // users on a broken page after a hard refresh). Tell Vercel's CDN
+      // never to cache the shell. The immutable, content-hashed assets
+      // under /dashboard/assets/* are intentionally excluded so they stay
+      // edge-cached.
+      {
+        source: "/dashboard",
+        headers: [
+          { key: "Cache-Control", value: "no-store, must-revalidate" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+          { key: "Vercel-CDN-Cache-Control", value: "no-store" },
+        ],
+      },
+      {
+        source: "/dashboard/:path((?!assets/).*)",
+        headers: [
+          { key: "Cache-Control", value: "no-store, must-revalidate" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+          { key: "Vercel-CDN-Cache-Control", value: "no-store" },
+        ],
+      },
+    ];
   },
   async redirects() {
     return [
