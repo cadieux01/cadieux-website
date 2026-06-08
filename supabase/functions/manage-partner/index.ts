@@ -35,6 +35,8 @@
 //
 //   // Approving profile change requests (admin any, sales partner-only):
 //   { "action": "change-password", "user_id": "<uuid>", "new_password": "min6" }
+//   // Admin directly sets a password from the Edit Partner modal (ADMIN-ONLY):
+//   { "action": "admin-set-password", "user_id": "<uuid>", "new_password": "min6" }
 //   { "action": "change-phone", "user_id": "<uuid>",
 //     "old_phone": "9876543210", "new_phone": "9123456780" }
 //
@@ -449,6 +451,64 @@ Deno.serve(async (req: Request) => {
   }
 
   // -----------------------------------------------------------------------
+  // ADMIN-SET-PASSWORD — an admin directly sets a user's password.
+  //   { action: "admin-set-password", user_id, new_password }
+  // ADMIN-ONLY (stricter than change-password): used by the Edit Partner
+  // modal where the admin is the authority and sets the password directly,
+  // with no separate approval step. Sales/agents are rejected here even for
+  // partner targets — they must use the change-request approval flow instead.
+  // -----------------------------------------------------------------------
+  if (action === "admin-set-password") {
+    if (callerRole !== "admin") {
+      return json(403, { error: "Only an admin can set a user's password" });
+    }
+
+    const userId = typeof body.user_id === "string" ? body.user_id : "";
+    const newPassword = body.new_password;
+
+    if (!isNonEmptyString(userId)) {
+      return json(400, { error: "user_id is required" });
+    }
+    if (!isNonEmptyString(newPassword) || newPassword.length < 6) {
+      return json(400, { error: "new_password must be at least 6 characters" });
+    }
+
+    const { data: target, error: lookupErr } = await admin
+      .schema("logistics")
+      .from("profiles")
+      .select("id, phone, role, full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    if (lookupErr) {
+      return json(500, { error: `Lookup failed: ${lookupErr.message}` });
+    }
+    if (!target) {
+      return json(404, { error: "No account found for that user" });
+    }
+    if (!isManageableRole(target.role)) {
+      return json(403, {
+        error: "This endpoint only manages sales/partner accounts",
+      });
+    }
+
+    const { error: pwErr } = await admin.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+    if (pwErr) {
+      return json(400, { error: `Failed to update password: ${pwErr.message}` });
+    }
+
+    await writeAudit({
+      action_type: "UPDATE",
+      entity_type: "user",
+      entity_id: userId,
+      description: `Admin set password for ${target.full_name || target.phone || userId}`,
+      new_values: { password: "set" },
+    });
+    return json(200, { success: true, user_id: userId });
+  }
+
+  // -----------------------------------------------------------------------
   // CHANGE-PHONE — change an existing user's phone.
   //   { action: "change-phone", user_id, old_phone, new_phone }
   // Rewrites the synthetic auth email `<phone>@cadieux.<role>` and the
@@ -531,6 +591,6 @@ Deno.serve(async (req: Request) => {
 
   return json(400, {
     error:
-      'action must be "create", "deactivate", "delete", "reactivate", "change-password", or "change-phone"',
+      'action must be "create", "deactivate", "delete", "reactivate", "change-password", "admin-set-password", or "change-phone"',
   });
 });
