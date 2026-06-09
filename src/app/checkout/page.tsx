@@ -792,15 +792,23 @@ export default function CheckoutPage() {
       return;
     }
     setOrderLoading(true); setError("");
+    const { fullAddress, customerPhone, customerName } = resolveOrderIdentity();
     try {
+      // Create the Razorpay order AND the pending DB order row in one call.
+      // The server re-derives the authoritative grand total from the cart;
+      // `total` here is only a hint it compares against.
       const res = await fetch("/api/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subtotal: total,
-          lat:      orderLat,
-          lng:      orderLng,
-          pincode:  effectivePincode || undefined,
+          customer_id: customer?.id,
+          delivery_address: fullAddress,
+          pincode: fullAddress.match(/(\d{6})\s*$/)?.[1] ?? "",
+          delivery_date: deliveryDate,
+          delivery_slot: deliverySlot,
+          total_amount: total,
+          items: orderItems,
+          ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
         }),
       });
       if (!res.ok) {
@@ -808,12 +816,22 @@ export default function CheckoutPage() {
         if (errData.code === "distance_unserviceable") {
           setError(errData.error ?? "We don't deliver beyond 10 km yet.");
           setStep("address");
+        } else if (errData.code === "price_mismatch") {
+          setError(errData.error ?? "Price mismatch — please refresh and retry.");
         } else {
           setError("Online payment unavailable. Please use Cash on Delivery.");
         }
         return;
       }
-      const { order_id, amount: serverAmount } = await res.json() as { order_id: string; amount: number };
+      const {
+        db_order_id,
+        razorpay_order_id,
+        amount: serverAmount,
+      } = await res.json() as {
+        db_order_id: string;
+        razorpay_order_id: string;
+        amount: number;
+      };
 
       const loaded = await new Promise<boolean>((resolve) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -828,38 +846,43 @@ export default function CheckoutPage() {
       setOrderLoading(false);
       if (!loaded) { setError("Failed to load payment gateway. Please use Cash on Delivery."); return; }
 
-      const { fullAddress, customerPhone, customerName } = resolveOrderIdentity();
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: serverAmount,  // server-computed paise — must match the Razorpay order
         currency: "INR",
         name: "Cadieux",
         description: "Protein Bread",
-        order_id,
-        handler: async (response: { razorpay_payment_id: string }) => {
+        order_id: razorpay_order_id,
+        handler: async (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) => {
           setOrderLoading(true);
-          const r = await fetch("/api/checkout", {
+          // The order is marked paid ONLY after the server verifies the
+          // signature. Never trust this success callback by itself.
+          const r = await fetch("/api/verify-payment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              action: "place_order",
-              customer_id: customer?.id,
-              delivery_address: fullAddress,
-              pincode: fullAddress.match(/(\d{6})\s*$/)?.[1] ?? "",
-              delivery_date: deliveryDate,
-              delivery_slot: deliverySlot,
-              total_amount: total,
-              items: orderItems,
-              ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
+              db_order_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
             }),
           });
-          const d = await r.json();
+          const d = await r.json().catch(() => ({}));
           setOrderLoading(false);
-          console.log("[Payment] Success, Razorpay ID:", response.razorpay_payment_id);
-          const oid = d.order_id ?? "";
-          if (oid) {
-            sendOrderSMS(oid, fullAddress, customerPhone, customerName);
-            sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
+          if (!r.ok || !d.ok) {
+            setError(
+              "We received your payment but couldn't confirm it automatically. " +
+              "Don't worry — it'll be reconciled shortly. Contact support if your order doesn't appear.",
+            );
+            return;
+          }
+          if (db_order_id) {
+            sendOrderSMS(db_order_id, fullAddress, customerPhone, customerName);
+            sendOrderWhatsApp(db_order_id, fullAddress, customerPhone, customerName);
           }
           const { city: subCity, pincode: subPincode } = extractCityPincode(fullAddress);
           const subFailed = await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);
@@ -869,14 +892,32 @@ export default function CheckoutPage() {
             );
             return;
           }
-          finishOrder(oid);
+          finishOrder(db_order_id);
+        },
+        modal: {
+          // User closed the Razorpay sheet without paying. The pending DB
+          // row simply stays unpaid — nothing to clean up client-side.
+          ondismiss: () => {
+            setOrderLoading(false);
+            setError("Payment cancelled. Your order was not placed. You can try again or use Cash on Delivery.");
+          },
         },
         prefill: { name: customerName, contact: "+91" + customerPhone.replace(/\D/g, "") },
         theme: { color: "#024628" },
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      new (window as any).Razorpay(options).open();
+      const rzp = new (window as any).Razorpay(options);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rzp.on("payment.failed", (resp: any) => {
+        setOrderLoading(false);
+        setError(
+          resp?.error?.description
+            ? `Payment failed: ${resp.error.description}. Please try again or use Cash on Delivery.`
+            : "Payment failed. Please try again or use Cash on Delivery.",
+        );
+      });
+      rzp.open();
     } catch {
       setError("Something went wrong.");
       setOrderLoading(false);

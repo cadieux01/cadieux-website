@@ -2,28 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
-import {
-  DELIVERY_FEE_INR,
-  reconcileWebPrices,
-  validateWebOrderItemsShape,
-  type WebProductRow,
-} from "@/lib/order-validation";
-import {
-  isAcceptableDeliveryDate,
-  isAcceptableDeliverySlot,
-} from "@/lib/order-delivery";
 import { validateBookingSlot } from "@/lib/delivery-slots";
-import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
-import { computeDeliveryFee } from "@/lib/deliveryFee";
-import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
-import { geocodePincode } from "@/lib/geocode";
-
-/** Parses a value as a finite number, returning null for absent/invalid. */
-function parseCoord(v: unknown): number | null {
-  if (v === null || v === undefined) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
+import {
+  prepareOneTimeOrder,
+  orderInsertColumns,
+  logProximitySuggestion,
+} from "@/lib/order-checkout";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -182,218 +166,23 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === "place_order") {
-    const { customer_id, delivery_address, total_amount } = body;
-    if (!delivery_address || total_amount === undefined || total_amount === null) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    // All validation + server-authoritative pricing lives in the shared
+    // helper so the COD path here and the Razorpay path in /api/create-order
+    // derive an IDENTICAL grand total from the SAME logic. This route is the
+    // Cash-on-Delivery path: it inserts the order immediately as pending.
+    const prep = await prepareOneTimeOrder(body, req, supabaseAdmin);
+    if (!prep.ok) {
+      return NextResponse.json(prep.body, { status: prep.status });
     }
-
-    // Delivery date + slot are now required for one-shot orders.
-    // The customer picks tomorrow / day-after IST and one of 14 hourly
-    // slots in the checkout modal.
-    const deliveryDate =
-      typeof body.delivery_date === "string" ? body.delivery_date : "";
-    const deliverySlot =
-      typeof body.delivery_slot === "string" ? body.delivery_slot : "";
-    if (!isAcceptableDeliveryDate(deliveryDate)) {
-      return NextResponse.json(
-        { error: "Please pick a delivery date with at least one bookable slot." },
-        { status: 400 },
-      );
-    }
-    if (!isAcceptableDeliverySlot(deliverySlot)) {
-      return NextResponse.json(
-        { error: "Please pick a delivery time slot." },
-        { status: 400 },
-      );
-    }
-    // 12 h 10 m booking lead — server-side source of truth.
-    // The client greys disabled slots; this is the gate that actually
-    // refuses the order when a tampered or stale slot slips through.
-    const slotGate = validateBookingSlot(deliveryDate, deliverySlot);
-    if (slotGate) {
-      return NextResponse.json(
-        { error: slotGate.error, code: slotGate.code },
-        { status: slotGate.status },
-      );
-    }
-
-    // Re-check serviceability server-side. The client gates the CTA but
-    // a determined attacker could submit anyway.
-    const pinFromAddress = typeof body.pincode === "string"
-      ? normalizePincode(body.pincode)
-      : (delivery_address.match(/(\d{6})\s*$/)?.[1] ?? null);
-    if (!pinFromAddress) {
-      return NextResponse.json(
-        { error: "Invalid pincode." },
-        { status: 400 },
-      );
-    }
-    const serviceability = await resolveServiceability(pinFromAddress);
-    if (!serviceability.serviceable) {
-      return NextResponse.json(
-        {
-          error: "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
-          code: "pincode_unserviceable",
-        },
-        { status: 400 },
-      );
-    }
-    // ITEM 4: when the pincode was auto-approved via proximity (not an
-    // exact match), drop an "area suggestion" into delivery_requests so
-    // admin can one-click promote it to an Areas We Serve entry.
-    const proximityHint =
-      serviceability.via === "proximity" ? serviceability : null;
-
-    // Server-side phone-verification gate. We accept EITHER:
-    //   1. A valid 30-min `cdx_phone_verified` cookie / mobile bearer
-    //      (just-issued OTP — used by new customers + same-session repeat
-    //      buyers), OR
-    //   2. A saved customer record matching `customer_id` (proof of past
-    //      verification — customer rows only get created after an OTP
-    //      check, so their existence is a longer-lived trust signal that
-    //      lets returning buyers skip the 30-min OTP refresh).
-    // The phone-match check below still runs, so a stale cookie can't be
-    // paired with someone else's customer_id.
-    const verified = getVerifiedPhone(req);
-
-    if (!customer_id) {
-      return NextResponse.json({ error: "Missing customer." }, { status: 400 });
-    }
-
-    // Validate items shape — the client must declare what's in the cart so
-    // we can re-derive prices from the products table. Never trust the
-    // client-supplied total_amount.
-    const itemsShape = validateWebOrderItemsShape(body.items);
-    if (!itemsShape.ok) {
-      return NextResponse.json(
-        { error: itemsShape.error, code: itemsShape.code },
-        { status: itemsShape.status }
-      );
-    }
-
-    // Fetch authoritative product rows for every slug in the cart.
-    const slugs = Array.from(new Set(itemsShape.items.map((i) => i.slug)));
-    const { data: productRows, error: productsErr } = await supabaseAdmin
-      .from("products")
-      .select("slug, name, price_inr, is_active, is_archived, in_stock")
-      .in("slug", slugs);
-    if (productsErr) {
-      console.error("[checkout] products fetch failed:", productsErr);
-      return NextResponse.json(
-        { error: "Failed to validate cart" },
-        { status: 500 }
-      );
-    }
-
-    const reconciled = reconcileWebPrices(
-      itemsShape.items,
-      (productRows ?? []) as WebProductRow[],
-    );
-    if (!reconciled.ok) {
-      return NextResponse.json(
-        { error: reconciled.error, code: reconciled.code },
-        { status: reconciled.status }
-      );
-    }
-
-    // The client sends its idea of the subtotal in `total_amount` — we
-    // compare to the server-computed subtotal and reject any drift.
-    const clientSubtotal = Number(total_amount);
-    if (!Number.isFinite(clientSubtotal) || clientSubtotal !== reconciled.subtotal) {
-      return NextResponse.json(
-        {
-          error: "Price mismatch — please refresh and retry",
-          code: "price_mismatch",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Compute distance-based delivery fee (server-authoritative).
-    // Primary: GPS lat/lng sent by the client's address form.
-    // Fallback: geocode the pincode to a centroid and compute from that.
-    // If origin env vars are not configured, fall back to flat DELIVERY_FEE_INR
-    // so existing deployments degrade gracefully rather than hard-failing.
-    const orderLat = parseCoord(body.latitude);
-    const orderLng = parseCoord(body.longitude);
-    let deliveryFee = DELIVERY_FEE_INR;
-    let distanceKm: number | null = null;
-
-    if (await hasActivePickups()) {
-      if (orderLat !== null && orderLng !== null) {
-        distanceKm = await getDrivingDistanceKm(orderLat, orderLng);
-      } else if (pinFromAddress) {
-        const centroid = await geocodePincode(pinFromAddress);
-        if (centroid) {
-          distanceKm = await getDrivingDistanceKm(
-            centroid.latitude,
-            centroid.longitude,
-          );
-        }
-      }
-      if (distanceKm !== null) {
-        const feeResult = computeDeliveryFee(distanceKm);
-        if (!feeResult.serviceable) {
-          return NextResponse.json(
-            {
-              error:
-                "We don't deliver beyond 10 km yet. Please check our service area.",
-              code: "distance_unserviceable",
-            },
-            { status: 400 },
-          );
-        }
-        deliveryFee = feeResult.feeInr;
-      }
-    }
-
-    const grandTotal = reconciled.subtotal + deliveryFee;
-
-    const { data: cust } = await supabaseAdmin
-      .from("customers")
-      .select("id, phone")
-      .eq("id", customer_id)
-      .maybeSingle();
-
-    if (!cust) {
-      // No matching customer means we have neither a fresh OTP nor a
-      // saved record to trust → reject with the same code the client
-      // already handles ("Please verify your phone number…").
-      return NextResponse.json(
-        { error: "Phone verification required." },
-        { status: 401 }
-      );
-    }
-
-    // Resolve the effective verified phone. Cookie path validates the
-    // cookie phone equals the customer record's phone; fallback path
-    // adopts the customer record itself as the verification signal.
-    const effectiveVerifiedPhone = verified?.phone ?? normalizePhone(cust.phone);
-    if (normalizePhone(cust.phone) !== effectiveVerifiedPhone) {
-      console.warn("⚠️  place_order phone mismatch", {
-        customer_id,
-        cust_phone: cust?.phone,
-        verified_phone: verified?.phone,
-      });
-      return NextResponse.json(
-        { error: "Phone verification mismatch." },
-        { status: 401 }
-      );
-    }
+    const prepared = prep.data;
 
     const { data: order, error } = await supabaseAdmin
       .from("orders")
       .insert({
-        customer_id,
-        total_amount: grandTotal,
-        delivery_fee: deliveryFee,
-        delivery_address,
+        ...orderInsertColumns(prepared),
         status: "pending",
-        items: reconciled.items,
-        delivery_date: deliveryDate,
-        delivery_slot: deliverySlot,
-        ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
-        ...(distanceKm !== null ? { distance_km: distanceKm } : {}),
+        payment_method: "cod",
+        payment_status: "pending",
       })
       .select("id")
       .single();
@@ -406,28 +195,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Proximity match → log an area suggestion so admin can promote it
-    // to a formal Areas We Serve entry. Best-effort; failure here must
-    // never roll back the order.
-    if (proximityHint) {
-      const last10 = normalizePhone(cust.phone)?.replace(/\D/g, "").slice(-10) ?? "";
-      void supabaseAdmin
-        .from("delivery_requests")
-        .insert({
-          customer_id,
-          phone: last10,
-          pincode: pinFromAddress,
-          area_name: `Auto: near ${proximityHint.nearest_area} (${proximityHint.distance_km}km)`,
-          address: delivery_address,
-          status: "pending",
-          source: "proximity_order",
-        })
-        .then(({ error: e }) => {
-          if (e) console.warn("[checkout] proximity suggestion failed:", e.message);
-        });
-    }
+    // Proximity match → log an area suggestion (best-effort, non-blocking).
+    logProximitySuggestion(supabaseAdmin, prepared);
 
-    return NextResponse.json({ order_id: order.id, total_amount: grandTotal });
+    return NextResponse.json({
+      order_id: order.id,
+      total_amount: prepared.grandTotal,
+    });
   }
 
   if (body.action === "place_subscription") {
