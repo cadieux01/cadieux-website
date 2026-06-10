@@ -209,12 +209,23 @@ export default function CheckoutPage() {
   // so the customer never has to solve the challenge twice. The widget
   // renders once at the bottom of the address step, above the sticky
   // "Continue to Delivery" button — see the <main> tail below.
-  const [turnstileToken, setTurnstileToken] = useState<string>("");
+  // Preview-only Turnstile bypass. Cloudflare rejects the challenge on
+  // unlisted *.vercel.app preview domains, so the widget can't issue a
+  // token there. When NEXT_PUBLIC_TURNSTILE_BYPASS=1 (set on the Preview
+  // build only), we seed a sentinel token so the gates pass — the server
+  // independently allows it ONLY on non-production deploys with the
+  // matching TURNSTILE_BYPASS_PREVIEW flag. Production never sets either
+  // flag, so the real widget + server verification stay fully enforced.
+  const TURNSTILE_BYPASS = process.env.NEXT_PUBLIC_TURNSTILE_BYPASS === "1";
+  const [turnstileToken, setTurnstileToken] = useState<string>(
+    TURNSTILE_BYPASS ? "preview-bypass" : "",
+  );
   const turnstileRef = useRef<TurnstileHandle>(null);
   // Reset the widget only on Turnstile expiry/error or on an OTP-send
   // server failure. We do NOT reset after a successful OTP send — the
   // token stays as the client-side gate for Continue.
   const refreshTurnstile = () => {
+    if (TURNSTILE_BYPASS) return; // keep the sentinel; no real widget to reset
     setTurnstileToken("");
     turnstileRef.current?.reset();
   };
@@ -1409,13 +1420,17 @@ export default function CheckoutPage() {
                 color: "rgba(240,223,200,0.55)",
               }}
             >
-              Solve once to verify your phone and continue to delivery.
+              {TURNSTILE_BYPASS
+                ? "Human-verification is bypassed on this preview build for payment testing."
+                : "Solve once to verify your phone and continue to delivery."}
             </p>
-            <TurnstileWidget
-              ref={turnstileRef}
-              onVerify={(t) => setTurnstileToken(t)}
-              onExpire={() => setTurnstileToken("")}
-            />
+            {!TURNSTILE_BYPASS && (
+              <TurnstileWidget
+                ref={turnstileRef}
+                onVerify={(t) => setTurnstileToken(t)}
+                onExpire={() => setTurnstileToken("")}
+              />
+            )}
           </div>
         )}
       </main>
