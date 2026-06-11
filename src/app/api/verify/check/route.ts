@@ -5,10 +5,7 @@ import {
   normalizePhone,
   signPhoneCookie,
 } from "@/lib/phone-cookie";
-
-const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID ?? "";
-const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN ?? "";
-const SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE_SID ?? "";
+import { verifyOtp } from "@/lib/otp-store";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
@@ -18,29 +15,18 @@ export async function POST(req: NextRequest) {
   if (!phone || !code) {
     return NextResponse.json({ ok: false, error: "Missing fields" }, { status: 400 });
   }
-  if (!SERVICE_SID || !ACCOUNT_SID || !AUTH_TOKEN) {
-    return NextResponse.json(
-      { ok: false, error: "OTP service not configured." },
-      { status: 500 }
-    );
-  }
 
   const to = normalizePhone(phone);
-  const auth = Buffer.from(`${ACCOUNT_SID}:${AUTH_TOKEN}`).toString("base64");
-  const url = `https://verify.twilio.com/v2/Services/${SERVICE_SID}/VerificationCheck`;
 
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ To: to, Code: code }).toString(),
-    });
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok || data.status !== "approved") {
+    const result = await verifyOtp(to, code);
+    if (!result.ok) {
+      if (result.reason === "too_many_attempts") {
+        return NextResponse.json(
+          { ok: false, error: "Too many attempts. Try again later." },
+          { status: 429 }
+        );
+      }
       return NextResponse.json({ ok: false, error: "Invalid code." }, { status: 401 });
     }
 
