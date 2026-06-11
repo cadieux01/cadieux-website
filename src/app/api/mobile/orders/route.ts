@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
   const { data: orders, error: ordersErr } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, total_amount, status, status_updated_at, delivery_address, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status",
+      "id, total_amount, status, delivery_address, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status",
     )
     .eq("customer_id", customer.id)
     .order("created_at", { ascending: false })
