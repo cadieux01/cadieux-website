@@ -7,7 +7,9 @@
 //  - Order items snapshot persisted to orders.items jsonb (web loses item info)
 //  - No Razorpay flow (Phase 3d)
 //
-// Status starts as 'pending_payment'. Will transition to 'paid' in Phase 3d.
+// Cash-on-Delivery path: the order is inserted as 'pending' with
+// payment_method='cod' / payment_status='pending', mirroring the website
+// /api/checkout COD insert.
 //
 // MOBILE_APP_KEY is a friction layer, not a real secret. See phase 3b notes.
 
@@ -288,7 +290,13 @@ export async function POST(req: NextRequest) {
       customer_id: customerId,
       total_amount: grandTotal,
       delivery_fee: deliveryFee,
-      status: "pending_payment",
+      // Mobile checkout is the Cash-on-Delivery path (no Razorpay here),
+      // so mirror the website COD insert: a pending order paid on delivery.
+      // Stamping payment_method/payment_status keeps the tracking page from
+      // showing "Awaiting payment" for what is really a COD order.
+      status: "pending",
+      payment_method: "cod",
+      payment_status: "pending",
       delivery_address: addressString,
       items: reconciled.items,
       // Mobile clients can now optionally pass delivery_date + slot in
