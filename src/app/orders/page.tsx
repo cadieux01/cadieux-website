@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 const GRAIN = "url(/grain.svg)";
@@ -41,7 +41,7 @@ function buildRows(orders: RawOrder[], subs: RawSub[]): Row[] {
     description: o.delivery_address,
     status: o.status,
     created_at: o.created_at,
-    href: null,
+    href: `/orders/${encodeURIComponent(o.id)}`,
   }));
 
   const subRows: Row[] = subs.map((s) => {
@@ -74,7 +74,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(false);
   const [phoneMissing, setPhoneMissing] = useState(false);
 
-  async function fetchOrders(showLoading: boolean) {
+  const fetchOrders = useCallback(async (showLoading: boolean) => {
     const phone = typeof window !== "undefined" ? localStorage.getItem("cadieux_phone") : null;
     if (!phone) { setPhoneMissing(true); return; }
     setPhoneMissing(false);
@@ -85,9 +85,27 @@ export default function OrdersPage() {
       setRows(buildRows(d.orders ?? [], d.subscriptions ?? []));
     } catch { /* ignore */ }
     finally { if (showLoading) setLoading(false); }
-  }
+  }, []);
 
-  useEffect(() => { fetchOrders(true); }, []);
+  // Initial load + live refresh: poll every 20s and refetch on focus /
+  // visibility so dashboard status changes appear without a manual reload.
+  // Background refreshes are silent (no loading spinner).
+  useEffect(() => {
+    fetchOrders(true);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") fetchOrders(false);
+    }, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchOrders(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [fetchOrders]);
 
   return (
     <div style={{ minHeight: "100dvh", background: "rgb(6,4,2)", position: "relative", overflowX: "clip" }}>

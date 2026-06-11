@@ -6,7 +6,7 @@
 // otherwise /api/orders/[id] returns 404 and we render an "unavailable"
 // state with a path back to /orders (which prompts re-verification).
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -44,7 +44,32 @@ type Order = {
   cancelled_at: string | null;
   cancellation_reason: string | null;
   refund_status: string | null;
+  payment_method: string | null;
+  payment_status: string | null;
 };
+
+// Customer-facing label for how the order is being paid for.
+//   razorpay + paid    → "Paid"
+//   cod                → "Cash on Delivery"
+//   razorpay + failed  → "Payment failed"
+//   anything else      → "Awaiting payment" (razorpay 'created'/'pending')
+function paymentLabel(method: string | null, status: string | null): string {
+  const m = (method ?? "").toLowerCase();
+  const s = (status ?? "").toLowerCase();
+  if (s === "paid") return "Paid";
+  if (m === "cod") return "Cash on Delivery";
+  if (s === "failed") return "Payment failed";
+  return "Awaiting payment";
+}
+
+function paymentColor(method: string | null, status: string | null): string {
+  const m = (method ?? "").toLowerCase();
+  const s = (status ?? "").toLowerCase();
+  if (s === "paid") return "rgba(74,222,128,0.85)";
+  if (s === "failed") return "#ff8181";
+  if (m === "cod") return "rgba(240,223,200,0.85)";
+  return "rgba(200,144,58,0.85)";
+}
 
 function formatDeliveryDate(iso: string | null): string {
   if (!iso) return "";
@@ -91,38 +116,61 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      if (!id) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch(`/api/orders/${encodeURIComponent(id)}`, {
-          cache: "no-store",
-          credentials: "include",
-        });
-        if (r.status === 401) {
-          if (!cancelled) setError("verify");
-          return;
-        }
-        if (!r.ok) {
-          if (!cancelled) setError("notfound");
-          return;
-        }
-        const d = await r.json();
-        if (!cancelled) setOrder(d.order as Order);
-      } catch {
-        if (!cancelled) setError("notfound");
-      } finally {
-        if (!cancelled) setLoading(false);
+  // Guard so background polls/refetches can't run while a request is
+  // already in flight, and so we never flip back to the loading state
+  // after the first successful load.
+  const inFlightRef = useRef(false);
+  const loadedOnceRef = useRef(false);
+
+  const fetchOrder = useCallback(async () => {
+    if (!id || inFlightRef.current) return;
+    inFlightRef.current = true;
+    if (!loadedOnceRef.current) setLoading(true);
+    try {
+      const r = await fetch(`/api/orders/${encodeURIComponent(id)}`, {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (r.status === 401) {
+        if (!loadedOnceRef.current) setError("verify");
+        return;
       }
+      if (!r.ok) {
+        if (!loadedOnceRef.current) setError("notfound");
+        return;
+      }
+      const d = await r.json();
+      setOrder(d.order as Order);
+      setError(null);
+      loadedOnceRef.current = true;
+    } catch {
+      if (!loadedOnceRef.current) setError("notfound");
+    } finally {
+      inFlightRef.current = false;
+      setLoading(false);
     }
-    void run();
-    return () => {
-      cancelled = true;
-    };
   }, [id]);
+
+  // Initial load + live refresh: poll every 20s and refetch whenever the
+  // tab regains focus / becomes visible, so status changes made in the
+  // dashboard show up without a manual reload.
+  useEffect(() => {
+    loadedOnceRef.current = false;
+    void fetchOrder();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") void fetchOrder();
+    }, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void fetchOrder();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [fetchOrder]);
 
   const items = (order?.items ?? []).filter(
     (it) => it && typeof it.name === "string" && Number(it.qty) > 0,
@@ -523,6 +571,49 @@ export default function OrderDetailPage() {
                   }}
                 >
                   ₹{Number(order.total_amount).toLocaleString("en-IN")}
+                </span>
+              </div>
+            </Section>
+
+            {/* Payment */}
+            <Section title="Payment">
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
+                  gap: 16,
+                  padding: "8px 0",
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 11,
+                    fontWeight: 200,
+                    letterSpacing: "0.3em",
+                    textTransform: "uppercase",
+                    color: "rgba(240,223,200,0.4)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Status
+                </span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 13,
+                    fontWeight: 300,
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    color: paymentColor(
+                      order.payment_method,
+                      order.payment_status,
+                    ),
+                    textAlign: "right",
+                  }}
+                >
+                  {paymentLabel(order.payment_method, order.payment_status)}
                 </span>
               </div>
             </Section>

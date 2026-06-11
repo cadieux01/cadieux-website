@@ -937,19 +937,20 @@ export default function CheckoutPage() {
 
   /* ── Success bridge ───────────────────────────────────────────────────── */
   function finishOrder(orderId: string) {
-    const shortId = orderId
-      ? orderId.slice(0, 8).toUpperCase()
-      : Math.random().toString(36).slice(2, 10).toUpperCase();
     // Mark the order as finishing BEFORE clearing the cart so the
     // empty-cart bounce effect doesn't fire router.replace("/cart")
-    // and clobber the success redirect below.
+    // and clobber the redirect below.
     orderFinishingRef.current = true;
     clearCart();
-    // Pass the full UUID alongside the short id so the success page can
-    // deep-link into /orders/<id>. Short id stays for display only.
-    const qs = new URLSearchParams({ order: shortId });
-    if (orderId) qs.set("id", orderId);
-    router.push(`/checkout/success?${qs.toString()}`);
+    // Land the customer directly on the live tracking page for THIS order
+    // (both COD and online payment). Skips the old /checkout/success
+    // interstitial. router.replace so the back button doesn't return to
+    // the now-cleared checkout flow.
+    if (orderId) {
+      router.replace(`/orders/${encodeURIComponent(orderId)}`);
+    } else {
+      router.replace("/orders");
+    }
   }
 
   /* ── Header bits ──────────────────────────────────────────────────────── */
