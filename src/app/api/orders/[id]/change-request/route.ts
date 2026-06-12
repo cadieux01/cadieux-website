@@ -121,22 +121,32 @@ export async function POST(
     return NextResponse.json({ error: "Order not found." }, { status: 404 });
   }
 
-  // COD + not paid + not cancelled.
-  if ((order.payment_method ?? "").toLowerCase() !== "cod") {
+  // Editable scope:
+  //   - not cancelled (always required)
+  //   - date/slot: allowed on a PAID order (any method) OR a COD-unpaid order
+  //   - address: COD-unpaid only — it can change the delivery fee and a paid
+  //     order has already been charged.
+  const isPaid = (order.payment_status ?? "").toLowerCase() === "paid";
+  const isCod = (order.payment_method ?? "").toLowerCase() === "cod";
+  if ((order.status ?? "").toLowerCase() === "cancelled") {
+    return NextResponse.json(
+      { error: "This order is cancelled.", code: "cancelled" },
+      { status: 409 },
+    );
+  }
+  if (!isPaid && !isCod) {
     return NextResponse.json(
       { error: "Delivery changes are only available for Cash on Delivery orders.", code: "not_cod" },
       { status: 409 },
     );
   }
-  if ((order.payment_status ?? "").toLowerCase() === "paid") {
+  if (isPaid && reqAddress) {
     return NextResponse.json(
-      { error: "This order is already paid.", code: "already_paid" },
-      { status: 409 },
-    );
-  }
-  if ((order.status ?? "").toLowerCase() === "cancelled") {
-    return NextResponse.json(
-      { error: "This order is cancelled.", code: "cancelled" },
+      {
+        error:
+          "The delivery address can't be changed on a paid order. You can still change the date or time.",
+        code: "address_locked_paid",
+      },
       { status: 409 },
     );
   }

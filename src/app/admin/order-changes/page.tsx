@@ -17,6 +17,15 @@ import { ContactActions } from "@/components/admin/ContactActions";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 
+type OrderItem = {
+  slug?: string;
+  name?: string;
+  qty?: number;
+  kind?: "once" | "sub";
+  price_inr?: number;
+  line_total?: number;
+};
+
 type OrderInfo = {
   id: string;
   customer_id: string;
@@ -26,15 +35,20 @@ type OrderInfo = {
   delivery_date: string | null;
   delivery_slot: string | null;
   delivery_address: string | null;
+  items: OrderItem[] | null;
+  total_amount: number | null;
 } | null;
 
 type DeliveryRequest = {
   id: string;
   order_id: string;
   status: string;
+  type?: string | null;
   requested_delivery_date: string | null;
   requested_delivery_slot: string | null;
   requested_delivery_address: string | null;
+  requested_items: { slug: string; qty: number }[] | null;
+  requested_total_amount: number | null;
   reason: string | null;
   admin_response: string | null;
   created_at: string;
@@ -133,7 +147,7 @@ export default function OrderChangesPage() {
   return (
     <AdminShell
       title="Delivery Changes"
-      subtitle="COD delivery change queue"
+      subtitle="COD delivery & item change queue"
       actions={
         <button
           type="button"
@@ -315,6 +329,9 @@ export default function OrderChangesPage() {
                   </div>
                 </div>
 
+                {r.type === "items" ? (
+                  <ItemsDiff r={r} />
+                ) : (
                 <div
                   style={{
                     display: "grid",
@@ -385,6 +402,7 @@ export default function OrderChangesPage() {
                     ) : null}
                   </div>
                 </div>
+                )}
 
                 {r.reason ? (
                   <div
@@ -582,6 +600,85 @@ export default function OrderChangesPage() {
         </div>
       ) : null}
     </AdminShell>
+  );
+}
+
+function ItemsDiff({ r }: { r: DeliveryRequest }) {
+  const order = r.order;
+  const onceBySlug = new Map(
+    (order?.items ?? [])
+      .filter(
+        (it): it is OrderItem & { slug: string } =>
+          !!it && it.kind !== "sub" && typeof it.slug === "string",
+      )
+      .map((it) => [it.slug, it] as const),
+  );
+  const lines = (r.requested_items ?? []).map((ri) => {
+    const cur = onceBySlug.get(ri.slug);
+    return {
+      slug: ri.slug,
+      name: cur?.name ?? ri.slug,
+      from: Number(cur?.qty ?? 0),
+      to: Number(ri.qty),
+    };
+  });
+  const oldTotal = Number(order?.total_amount ?? 0);
+  const newTotal = Number(r.requested_total_amount ?? 0);
+  return (
+    <div
+      style={{
+        paddingTop: 6,
+        borderTop: "1px solid rgba(245,158,11,0.1)",
+        display: "grid",
+        gap: 6,
+      }}
+    >
+      <div style={{ ...smallLabel, color: "rgba(245,158,11,0.7)" }}>
+        Item quantities
+      </div>
+      {lines.map((l) => (
+        <div
+          key={l.slug}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            fontSize: "0.78rem",
+          }}
+        >
+          <span style={{ color: "#fbf3d4" }}>{l.name}</span>
+          <span style={{ whiteSpace: "nowrap", color: "rgba(251,243,212,0.85)" }}>
+            <span style={{ color: "rgba(251,243,212,0.45)", textDecoration: "line-through" }}>
+              Qty {l.from}
+            </span>
+            {"  →  "}
+            <span>Qty {l.to}</span>
+          </span>
+        </div>
+      ))}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          fontSize: "0.78rem",
+          marginTop: 4,
+          paddingTop: 6,
+          borderTop: "1px solid rgba(245,158,11,0.1)",
+        }}
+      >
+        <span style={{ ...smallLabel, marginBottom: 0 }}>Total</span>
+        <span style={{ whiteSpace: "nowrap", color: "rgba(251,243,212,0.85)" }}>
+          <span style={{ color: "rgba(251,243,212,0.45)", textDecoration: "line-through" }}>
+            ₹{oldTotal.toLocaleString("en-IN")}
+          </span>
+          {"  →  "}
+          <span style={{ color: "#fbf3d4" }}>
+            ₹{newTotal.toLocaleString("en-IN")}
+          </span>
+        </span>
+      </div>
+    </div>
   );
 }
 

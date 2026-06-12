@@ -57,9 +57,12 @@ type Order = {
 type ChangeRequest = {
   id: string;
   status: string;
+  type?: string | null;
   requested_delivery_date: string | null;
   requested_delivery_slot: string | null;
   requested_delivery_address: string | null;
+  requested_items: { slug: string; qty: number }[] | null;
+  requested_total_amount: number | null;
   reason: string | null;
   created_at: string;
 };
@@ -654,6 +657,13 @@ export default function OrderDetailPage() {
                   </div>
                 );
               })}
+              <ItemEditor
+                orderId={id}
+                order={order}
+                changeRequest={changeRequest}
+                deliveryFee={order.delivery_fee}
+                onChanged={fetchOrder}
+              />
             </Section>
 
             {/* Totals */}
@@ -1070,10 +1080,15 @@ function DeliveryEditor({
   changeRequest: ChangeRequest | null;
   onChanged: () => void;
 }) {
-  const editable =
-    (order.payment_method ?? "").toLowerCase() === "cod" &&
-    (order.payment_status ?? "").toLowerCase() !== "paid" &&
-    !isCancelled(order.status);
+  const paid = (order.payment_status ?? "").toLowerCase() === "paid";
+  const cod = (order.payment_method ?? "").toLowerCase() === "cod";
+  // Date/time can be changed on a paid order (any method) OR a COD-unpaid
+  // order; never on a cancelled one.
+  const editable = !isCancelled(order.status) && (paid || cod);
+  // The address can change the delivery fee, so it's only editable while the
+  // order is unpaid.
+  const canEditAddress = editable && !paid;
+  const reqType = (changeRequest?.type ?? "delivery").toLowerCase();
 
   const dates = useMemo(() => nextDeliveryDates(7), []);
 
@@ -1114,7 +1129,7 @@ function DeliveryEditor({
     const body: Record<string, string> = {};
     if (date && date !== (order.delivery_date ?? "")) body.requested_delivery_date = date;
     if (slot && slot !== (order.delivery_slot ?? "")) body.requested_delivery_slot = slot;
-    if (trimmedAddress && trimmedAddress !== (order.delivery_address ?? ""))
+    if (canEditAddress && trimmedAddress && trimmedAddress !== (order.delivery_address ?? ""))
       body.requested_delivery_address = trimmedAddress;
     if (Object.keys(body).length === 0) {
       setErr("Change at least one of date, slot or address.");
@@ -1169,6 +1184,26 @@ function DeliveryEditor({
       setBusy(false);
     }
   };
+
+  // A pending request of a DIFFERENT type (e.g. items) blocks editing here —
+  // only one pending request per order. Show a note instead of the editor.
+  if (changeRequest && reqType !== "delivery") {
+    return (
+      <p
+        style={{
+          marginTop: 14,
+          fontFamily: "var(--font-body)",
+          fontSize: 12,
+          fontWeight: 200,
+          lineHeight: 1.6,
+          color: "rgba(240,223,200,0.45)",
+        }}
+      >
+        You have a pending item change awaiting approval — cancel it to request
+        a delivery change.
+      </p>
+    );
+  }
 
   // ── Pending request card (old → new diff) ────────────────────────────
   if (changeRequest && !editing) {
@@ -1438,26 +1473,30 @@ function DeliveryEditor({
         )}
       </div>
 
-      {/* Address */}
-      <p style={{ ...editorLabel }}>Address</p>
-      <textarea
-        value={address}
-        onChange={(e) => setAddress(e.target.value)}
-        rows={3}
-        style={{
-          width: "100%",
-          boxSizing: "border-box",
-          padding: "10px 12px",
-          marginBottom: 16,
-          background: "rgba(0,0,0,0.25)",
-          border: "1px solid rgba(240,223,200,0.18)",
-          color: "#FBF3D4",
-          fontFamily: "var(--font-body)",
-          fontSize: 14,
-          fontWeight: 200,
-          resize: "vertical",
-        }}
-      />
+      {/* Address — hidden on paid orders (it can change the delivery fee). */}
+      {canEditAddress && (
+        <>
+          <p style={{ ...editorLabel }}>Address</p>
+          <textarea
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            rows={3}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "10px 12px",
+              marginBottom: 16,
+              background: "rgba(0,0,0,0.25)",
+              border: "1px solid rgba(240,223,200,0.18)",
+              color: "#FBF3D4",
+              fontFamily: "var(--font-body)",
+              fontSize: 14,
+              fontWeight: 200,
+              resize: "vertical",
+            }}
+          />
+        </>
+      )}
 
       {/* Reason (optional) */}
       <p style={{ ...editorLabel }}>Reason (optional)</p>
@@ -1544,6 +1583,584 @@ const editorLabel: React.CSSProperties = {
   textTransform: "uppercase",
   color: "rgba(200,144,58,0.7)",
 };
+
+// ItemEditor — customer-facing "change item quantities" control. Mirrors
+// DeliveryEditor. COD-unpaid-not-cancelled only (items are COD-only). Lets the
+// customer adjust the qty (1..99) of existing kind:"once" lines; sub lines are
+// read-only. The new total shown is informational only — the server recomputes
+// authoritatively from the order's own price snapshot on send and on approve.
+function ItemEditor({
+  orderId,
+  order,
+  changeRequest,
+  deliveryFee,
+  onChanged,
+}: {
+  orderId: string;
+  order: Order;
+  changeRequest: ChangeRequest | null;
+  deliveryFee: number | null;
+  onChanged: () => void;
+}) {
+  const editable =
+    (order.payment_method ?? "").toLowerCase() === "cod" &&
+    (order.payment_status ?? "").toLowerCase() !== "paid" &&
+    !isCancelled(order.status);
+
+  const reqType = (changeRequest?.type ?? "delivery").toLowerCase();
+
+  // Editable (once) lines and read-only (sub) lines from the order snapshot.
+  const onceLines = (order.items ?? []).filter(
+    (it): it is OrderItem & { slug: string } =>
+      !!it && it.kind !== "sub" && typeof it.slug === "string",
+  );
+  const subLineTotal = (order.items ?? [])
+    .filter((it) => it && it.kind === "sub")
+    .reduce(
+      (sum, it) =>
+        sum +
+        (typeof it.line_total === "number"
+          ? it.line_total
+          : Number(it.price_inr ?? 0) * Number(it.qty ?? 0)),
+      0,
+    );
+
+  const fee = Number(deliveryFee ?? 0);
+
+  const [editing, setEditing] = useState(false);
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (!editable) return null;
+  if (onceLines.length === 0 && reqType !== "items") return null;
+
+  const seedQty = () => {
+    const seed: Record<string, number> = {};
+    for (const it of onceLines) seed[it.slug] = Number(it.qty ?? 1);
+    return seed;
+  };
+
+  const openForm = () => {
+    setQty(seedQty());
+    setErr(null);
+    setEditing(true);
+  };
+
+  const setLineQty = (slug: string, next: number) => {
+    const clamped = Math.max(1, Math.min(99, Math.round(next)));
+    setQty((q) => ({ ...q, [slug]: clamped }));
+  };
+
+  // Live, display-only new total from the order's own per-line prices.
+  const liveSubtotal = onceLines.reduce(
+    (sum, it) => sum + Number(it.price_inr ?? 0) * (qty[it.slug] ?? Number(it.qty ?? 0)),
+    0,
+  );
+  const liveTotal = liveSubtotal + subLineTotal + fee;
+  const anyChanged = onceLines.some(
+    (it) => (qty[it.slug] ?? Number(it.qty ?? 0)) !== Number(it.qty ?? 0),
+  );
+
+  const submit = async () => {
+    if (busy) return;
+    if (!anyChanged) {
+      setErr("Adjust at least one quantity.");
+      return;
+    }
+    setErr(null);
+    setBusy(true);
+    try {
+      const items = onceLines.map((it) => ({
+        slug: it.slug,
+        qty: qty[it.slug] ?? Number(it.qty ?? 1),
+      }));
+      const r = await fetch(
+        `/api/orders/${encodeURIComponent(orderId)}/item-change-request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ items }),
+        },
+      );
+      const d = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) {
+        setErr(d.error ?? "Could not send your request. Please try again.");
+        setBusy(false);
+        return;
+      }
+      setEditing(false);
+      setBusy(false);
+      onChanged();
+    } catch {
+      setErr("Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  const cancelRequest = async () => {
+    if (busy) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `/api/orders/${encodeURIComponent(orderId)}/change-request/cancel`,
+        { method: "POST", credentials: "include" },
+      );
+      if (!r.ok) {
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
+        setErr(d.error ?? "Could not cancel the request. Please try again.");
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+      onChanged();
+    } catch {
+      setErr("Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  // A pending request of a DIFFERENT type (delivery) blocks editing here.
+  if (changeRequest && reqType !== "items") {
+    return (
+      <p
+        style={{
+          marginTop: 16,
+          fontFamily: "var(--font-body)",
+          fontSize: 12,
+          fontWeight: 200,
+          lineHeight: 1.6,
+          color: "rgba(240,223,200,0.45)",
+        }}
+      >
+        You have a pending delivery change awaiting approval — cancel it to
+        request an item change.
+      </p>
+    );
+  }
+
+  // ── Pending item-change card (per-line old → new qty + old → new total) ──
+  if (changeRequest && reqType === "items" && !editing) {
+    const reqMap = new Map(
+      (changeRequest.requested_items ?? []).map((r) => [r.slug, r.qty]),
+    );
+    const nameBySlug = new Map(onceLines.map((it) => [it.slug, it.name]));
+    const lines = Array.from(reqMap.entries()).map(([slug, newQty]) => {
+      const old = onceLines.find((it) => it.slug === slug);
+      return {
+        slug,
+        name: nameBySlug.get(slug) ?? slug,
+        from: Number(old?.qty ?? 0),
+        to: Number(newQty),
+      };
+    });
+    const newTotal = Number(changeRequest.requested_total_amount ?? 0);
+    return (
+      <div
+        style={{
+          marginTop: 16,
+          padding: "16px 18px",
+          border: "1px solid rgba(200,144,58,0.3)",
+          background: "rgba(200,144,58,0.06)",
+          borderRadius: 4,
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 12px",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(200,144,58,0.95)",
+          }}
+        >
+          Item change requested · awaiting approval
+        </p>
+        {lines.map((l) => (
+          <div
+            key={l.slug}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              gap: 16,
+              marginBottom: 8,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+                fontWeight: 300,
+                color: "#FBF3D4",
+              }}
+            >
+              {l.name}
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 13,
+                fontWeight: 200,
+                color: "rgba(240,223,200,0.85)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+                Qty {l.from}
+              </span>
+              {"  →  "}
+              <span style={{ color: "#FBF3D4" }}>Qty {l.to}</span>
+            </span>
+          </div>
+        ))}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: 16,
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: "1px solid rgba(240,223,200,0.12)",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "rgba(240,223,200,0.5)",
+            }}
+          >
+            New total
+          </span>
+          <span
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 14,
+              fontWeight: 200,
+              color: "rgba(240,223,200,0.85)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+              ₹{Number(order.total_amount).toLocaleString("en-IN")}
+            </span>
+            {"  →  "}
+            <span style={{ color: "#FBF3D4" }}>
+              ₹{newTotal.toLocaleString("en-IN")}
+            </span>
+          </span>
+        </div>
+        {changeRequest.reason && (
+          <p
+            style={{
+              margin: "10px 0 0",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              fontWeight: 200,
+              fontStyle: "italic",
+              color: "rgba(240,223,200,0.5)",
+              lineHeight: 1.6,
+            }}
+          >
+            “{changeRequest.reason}”
+          </p>
+        )}
+        {err && (
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181" }}>
+            {err}
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={cancelRequest}
+            disabled={busy}
+            style={{
+              height: 40,
+              padding: "0 18px",
+              background: "transparent",
+              border: "1px solid rgba(255,129,129,0.4)",
+              cursor: busy ? "default" : "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "#ff8181",
+            }}
+          >
+            {busy ? "Cancelling…" : "Cancel request"}
+          </button>
+          <button
+            type="button"
+            onClick={openForm}
+            disabled={busy}
+            style={{
+              height: 40,
+              padding: "0 18px",
+              background: "transparent",
+              border: "1px solid rgba(240,223,200,0.2)",
+              cursor: busy ? "default" : "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "rgba(240,223,200,0.6)",
+            }}
+          >
+            Edit again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Trigger button (no pending request, not yet editing) ─────────────
+  if (!editing) {
+    return (
+      <div style={{ marginTop: 14 }}>
+        <button
+          type="button"
+          onClick={openForm}
+          style={{
+            height: 40,
+            padding: "0 18px",
+            background: "transparent",
+            border: "1px solid rgba(240,223,200,0.2)",
+            cursor: "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 10,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.7)",
+          }}
+        >
+          Edit items
+        </button>
+      </div>
+    );
+  }
+
+  // ── Inline edit form (quantity steppers) ─────────────────────────────
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        padding: "18px",
+        border: "1px solid rgba(240,223,200,0.12)",
+        borderRadius: 4,
+      }}
+    >
+      <p
+        style={{
+          margin: "0 0 16px",
+          fontFamily: "var(--font-body)",
+          fontSize: 12,
+          fontWeight: 200,
+          lineHeight: 1.6,
+          color: "rgba(240,223,200,0.5)",
+        }}
+      >
+        Adjust the quantities of items in your order. Your order stays as-is
+        until we approve it.
+      </p>
+
+      {onceLines.map((it) => {
+        const q = qty[it.slug] ?? Number(it.qty ?? 1);
+        const line = Number(it.price_inr ?? 0) * q;
+        return (
+          <div
+            key={it.slug}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              padding: "10px 0",
+              borderBottom: "1px solid rgba(240,223,200,0.06)",
+            }}
+          >
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 14,
+                  fontWeight: 300,
+                  color: "#FBF3D4",
+                }}
+              >
+                {it.name}
+              </p>
+              <p
+                style={{
+                  margin: "2px 0 0",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 12,
+                  fontWeight: 200,
+                  color: "rgba(240,223,200,0.45)",
+                }}
+              >
+                ₹{Number(it.price_inr ?? 0).toLocaleString("en-IN")} · ₹
+                {line.toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setLineQty(it.slug, q - 1)}
+                disabled={q <= 1}
+                aria-label="Decrease quantity"
+                style={qtyButton(q <= 1)}
+              >
+                −
+              </button>
+              <span
+                style={{
+                  minWidth: 28,
+                  textAlign: "center",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 15,
+                  fontWeight: 300,
+                  color: "#FBF3D4",
+                }}
+              >
+                {q}
+              </span>
+              <button
+                type="button"
+                onClick={() => setLineQty(it.slug, q + 1)}
+                disabled={q >= 99}
+                aria-label="Increase quantity"
+                style={qtyButton(q >= 99)}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Live new total (display only — server is authoritative). */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 16,
+          marginTop: 12,
+          paddingTop: 12,
+          borderTop: "1px solid rgba(240,223,200,0.12)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 10,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.5)",
+          }}
+        >
+          New total{fee > 0 ? " · incl delivery" : ""}
+        </span>
+        <span
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontSize: 18,
+            fontWeight: 300,
+            color: "#FBF3D4",
+          }}
+        >
+          ₹{liveTotal.toLocaleString("en-IN")}
+        </span>
+      </div>
+
+      {err && (
+        <p style={{ margin: "12px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181", lineHeight: 1.6 }}>
+          {err}
+        </p>
+      )}
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy}
+          style={{
+            height: 44,
+            padding: "0 24px",
+            background: busy ? "rgba(245,158,11,0.5)" : "#f59e0b",
+            border: "none",
+            cursor: busy ? "default" : "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.35em",
+            textTransform: "uppercase",
+            color: "#080604",
+          }}
+        >
+          {busy ? "Sending…" : "Send request"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setErr(null);
+          }}
+          disabled={busy}
+          style={{
+            height: 44,
+            padding: "0 20px",
+            background: "transparent",
+            border: "1px solid rgba(240,223,200,0.18)",
+            cursor: busy ? "default" : "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.6)",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function qtyButton(disabled: boolean): React.CSSProperties {
+  return {
+    width: 32,
+    height: 32,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "transparent",
+    border: "1px solid rgba(240,223,200,0.25)",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.3 : 1,
+    fontFamily: "var(--font-body)",
+    fontSize: 18,
+    fontWeight: 300,
+    color: "#FBF3D4",
+    lineHeight: 1,
+  };
+}
 
 function Row({ label, value }: { label: string; value: string }) {
   return (

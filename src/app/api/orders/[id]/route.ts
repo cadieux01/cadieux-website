@@ -70,7 +70,7 @@ export async function GET(
   const { data: pendingRequest } = await supabaseAdmin
     .from("order_change_requests")
     .select(
-      "id, status, requested_delivery_date, requested_delivery_slot, requested_delivery_address, reason, created_at",
+      "id, status, type, requested_delivery_date, requested_delivery_slot, requested_delivery_address, requested_items, requested_total_amount, reason, created_at",
     )
     .eq("order_id", order.id)
     .eq("status", "pending")
