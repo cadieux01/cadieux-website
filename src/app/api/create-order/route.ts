@@ -29,6 +29,12 @@ import {
   orderInsertColumns,
   logProximitySuggestion,
 } from "@/lib/order-checkout";
+import {
+  normalizePhone,
+  signPhoneCookie,
+  PHONE_COOKIE_NAME,
+  PHONE_COOKIE_TTL_MS,
+} from "@/lib/phone-cookie";
 
 // Server-only admin client (service role, bypasses RLS).
 const supabaseAdmin = createClient(
@@ -111,11 +117,32 @@ export async function POST(req: NextRequest) {
 
   logProximitySuggestion(supabaseAdmin, prepared);
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     db_order_id: order.id,
     razorpay_order_id: rzp.id,
     amount: rzp.amount, // paise (server-confirmed)
     currency: rzp.currency,
     server_fee_inr: prepared.deliveryFee,
   });
+  // Re-issue the verified-phone cookie so that after the Razorpay modal
+  // succeeds and the client redirects to /orders/<id>, the tracking page's
+  // strict read gate sees a valid cookie instead of 401 ("Verify your
+  // phone"). Returning customers skip OTP (no cookie) and the 30-min cookie
+  // can lapse during the online flow. The order was just created for this
+  // customer; stamping the cookie for their own phone matches verify/check.
+  if (prepared.custPhone) {
+    const exp = Date.now() + PHONE_COOKIE_TTL_MS;
+    res.cookies.set(
+      PHONE_COOKIE_NAME,
+      signPhoneCookie(normalizePhone(prepared.custPhone), exp),
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: Math.floor(PHONE_COOKIE_TTL_MS / 1000),
+      },
+    );
+  }
+  return res;
 }

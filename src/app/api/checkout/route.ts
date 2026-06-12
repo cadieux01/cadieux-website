@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  normalizePhone,
+  signPhoneCookie,
+  PHONE_COOKIE_NAME,
+  PHONE_COOKIE_TTL_MS,
+} from "@/lib/phone-cookie";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
 import { validateBookingSlot } from "@/lib/delivery-slots";
 import {
@@ -198,10 +204,31 @@ export async function POST(req: NextRequest) {
     // Proximity match → log an area suggestion (best-effort, non-blocking).
     logProximitySuggestion(supabaseAdmin, prepared);
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       order_id: order.id,
       total_amount: prepared.grandTotal,
     });
+    // Re-issue the verified-phone cookie so the post-checkout redirect to
+    // /orders/<id> lands authenticated. Returning customers skip OTP (no
+    // cookie set) and the 30-min cookie can lapse during a long checkout;
+    // the tracking page's read gate is strict (401 → "Verify your phone").
+    // The order was just placed for this customer, so stamping the cookie
+    // for their own phone is safe and matches /api/verify/check.
+    if (prepared.custPhone) {
+      const exp = Date.now() + PHONE_COOKIE_TTL_MS;
+      res.cookies.set(
+        PHONE_COOKIE_NAME,
+        signPhoneCookie(normalizePhone(prepared.custPhone), exp),
+        {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/",
+          maxAge: Math.floor(PHONE_COOKIE_TTL_MS / 1000),
+        },
+      );
+    }
+    return res;
   }
 
   if (body.action === "place_subscription") {
