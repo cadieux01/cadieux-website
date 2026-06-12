@@ -115,6 +115,8 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
 
   // Guard so background polls/refetches can't run while a request is
   // already in flight, and so we never flip back to the loading state
@@ -171,6 +173,113 @@ export default function OrderDetailPage() {
       window.removeEventListener("focus", onVisible);
     };
   }, [fetchOrder]);
+
+  // "Pay Now" — convert a COD order to a paid Razorpay order without
+  // creating a new order. Mirrors the checkout page's payOnline() flow:
+  // create a Razorpay order for the existing order id, open the gateway,
+  // verify server-side, then refresh so the row flips to "Paid".
+  const payNow = useCallback(async () => {
+    if (!id || paying) return;
+    setPayError(null);
+    setPaying(true);
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(id)}/pay`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        razorpay_order_id?: string;
+        amount?: number;
+        currency?: string;
+        key_id?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.razorpay_order_id) {
+        setPayError(data.error ?? "Could not start payment. Please try again.");
+        setPaying(false);
+        return;
+      }
+
+      const loaded = await new Promise<boolean>((resolve) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((window as any).Razorpay) {
+          resolve(true);
+          return;
+        }
+        const s = document.createElement("script");
+        s.src = "https://checkout.razorpay.com/v1/checkout.js";
+        s.onload = () => resolve(true);
+        s.onerror = () => resolve(false);
+        document.body.appendChild(s);
+      });
+      if (!loaded) {
+        setPayError("Failed to load payment gateway. Please try again.");
+        setPaying(false);
+        return;
+      }
+
+      const options = {
+        key: data.key_id,
+        amount: data.amount, // server-computed paise
+        currency: data.currency ?? "INR",
+        name: "Cadieux",
+        description: "Protein Bread",
+        order_id: data.razorpay_order_id,
+        handler: async (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            const r = await fetch(
+              `/api/orders/${encodeURIComponent(id)}/pay/verify`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                }),
+              },
+            );
+            const d = (await r.json().catch(() => ({}))) as { ok?: boolean };
+            if (!r.ok || !d.ok) {
+              setPayError(
+                "We received your payment but couldn't confirm it automatically. " +
+                  "It'll be reconciled shortly — contact support if it doesn't update.",
+              );
+            } else {
+              setPayError(null);
+            }
+          } finally {
+            setPaying(false);
+            void fetchOrder();
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setPaying(false);
+            setPayError("Payment cancelled. Your order is unchanged.");
+          },
+        },
+        theme: { color: "#024628" },
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rzp = new (window as any).Razorpay(options);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rzp.on("payment.failed", () => {
+        setPaying(false);
+        setPayError("Payment failed. Your order is unchanged — you can try again.");
+      });
+      rzp.open();
+    } catch {
+      setPayError("Something went wrong starting the payment. Please try again.");
+      setPaying(false);
+    }
+  }, [id, paying, fetchOrder]);
 
   const items = (order?.items ?? []).filter(
     (it) => it && typeof it.name === "string" && Number(it.qty) > 0,
@@ -616,6 +725,54 @@ export default function OrderDetailPage() {
                   {paymentLabel(order.payment_method, order.payment_status)}
                 </span>
               </div>
+
+              {/* Pay Now — only for unpaid COD orders that aren't cancelled. */}
+              {(order.payment_method ?? "").toLowerCase() === "cod" &&
+                (order.payment_status ?? "").toLowerCase() !== "paid" &&
+                !isCancelled(order.status) && (
+                  <div style={{ marginTop: 16 }}>
+                    <button
+                      type="button"
+                      onClick={payNow}
+                      disabled={paying}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "100%",
+                        height: 50,
+                        padding: "0 28px",
+                        background: paying ? "rgba(245,158,11,0.5)" : "#f59e0b",
+                        border: "none",
+                        cursor: paying ? "default" : "pointer",
+                        fontFamily: "var(--font-body)",
+                        fontSize: 11,
+                        fontWeight: 400,
+                        letterSpacing: "0.4em",
+                        textTransform: "uppercase",
+                        color: "#080604",
+                      }}
+                    >
+                      {paying
+                        ? "Opening payment…"
+                        : `Pay Now · ₹${Number(order.total_amount).toLocaleString("en-IN")}`}
+                    </button>
+                    {payError && (
+                      <p
+                        style={{
+                          margin: "12px 0 0",
+                          fontFamily: "var(--font-body)",
+                          fontSize: 12,
+                          fontWeight: 200,
+                          lineHeight: 1.6,
+                          color: "#ff8181",
+                        }}
+                      >
+                        {payError}
+                      </p>
+                    )}
+                  </div>
+                )}
             </Section>
 
             {order.cancelled_at && (

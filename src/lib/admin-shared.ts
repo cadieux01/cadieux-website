@@ -71,6 +71,8 @@ export type AdminOrderRow = {
   total_amount: number | null;
   delivery_fee?: number | null;
   status: string | null;
+  payment_method?: string | null;
+  payment_status?: string | null;
   delivery_address: string | null;
   delivery_date: string | null;
   delivery_slot: string | null;
