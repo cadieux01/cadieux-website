@@ -6,7 +6,7 @@
 // otherwise /api/orders/[id] returns 404 and we render an "unavailable"
 // state with a path back to /orders (which prompts re-verification).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -18,6 +18,12 @@ import {
   stageIndex,
   toStage,
 } from "@/lib/order-stages";
+import {
+  bookableSlots,
+  dateLabel,
+  formatSlotForDisplay,
+  nextDeliveryDates,
+} from "@/lib/delivery-slots";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -46,6 +52,16 @@ type Order = {
   refund_status: string | null;
   payment_method: string | null;
   payment_status: string | null;
+};
+
+type ChangeRequest = {
+  id: string;
+  status: string;
+  requested_delivery_date: string | null;
+  requested_delivery_slot: string | null;
+  requested_delivery_address: string | null;
+  reason: string | null;
+  created_at: string;
 };
 
 // Customer-facing label for how the order is being paid for.
@@ -113,6 +129,7 @@ export default function OrderDetailPage() {
   const id = (params?.id || "").toString();
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [changeRequest, setChangeRequest] = useState<ChangeRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
@@ -143,6 +160,7 @@ export default function OrderDetailPage() {
       }
       const d = await r.json();
       setOrder(d.order as Order);
+      setChangeRequest((d.change_request as ChangeRequest) ?? null);
       setError(null);
       loadedOnceRef.current = true;
     } catch {
@@ -554,6 +572,12 @@ export default function OrderDetailPage() {
               {order.delivery_address && (
                 <Row label="Address" value={String(order.delivery_address)} />
               )}
+              <DeliveryEditor
+                orderId={id}
+                order={order}
+                changeRequest={changeRequest}
+                onChanged={fetchOrder}
+              />
             </Section>
 
             {/* Items */}
@@ -726,10 +750,12 @@ export default function OrderDetailPage() {
                 </span>
               </div>
 
-              {/* Pay Now — only for unpaid COD orders that aren't cancelled. */}
+              {/* Pay Now — only for unpaid COD orders that aren't cancelled,
+                  and never while a delivery change-request is pending. */}
               {(order.payment_method ?? "").toLowerCase() === "cod" &&
                 (order.payment_status ?? "").toLowerCase() !== "paid" &&
-                !isCancelled(order.status) && (
+                !isCancelled(order.status) &&
+                !changeRequest && (
                   <div style={{ marginTop: 16 }}>
                     <button
                       type="button"
@@ -1023,6 +1049,501 @@ function StatusTracker({
     </section>
   );
 }
+
+// Customer-driven delivery change-request UI for COD/unpaid orders.
+// Renders one of three states inside the Delivery section:
+//   • a pending "Request pending" card (old→new diff + Cancel) when a
+//     change-request is awaiting admin approval;
+//   • an "Edit delivery" trigger when no request is pending;
+//   • an inline form (date pills / slot pills / address / reason) once
+//     editing. Submitting POSTs a change-request; the order is untouched
+//     until an admin approves. Returns null for non-editable orders
+//     (paid, non-COD, or cancelled) so paid orders get no edit affordance.
+function DeliveryEditor({
+  orderId,
+  order,
+  changeRequest,
+  onChanged,
+}: {
+  orderId: string;
+  order: Order;
+  changeRequest: ChangeRequest | null;
+  onChanged: () => void;
+}) {
+  const editable =
+    (order.payment_method ?? "").toLowerCase() === "cod" &&
+    (order.payment_status ?? "").toLowerCase() !== "paid" &&
+    !isCancelled(order.status);
+
+  const dates = useMemo(() => nextDeliveryDates(7), []);
+
+  const [editing, setEditing] = useState(false);
+  const [date, setDate] = useState<string>(order.delivery_date ?? "");
+  const [slot, setSlot] = useState<string>(order.delivery_slot ?? "");
+  const [address, setAddress] = useState<string>(order.delivery_address ?? "");
+  const [reason, setReason] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const slots = useMemo(() => (date ? bookableSlots(date) : []), [date]);
+
+  if (!editable) return null;
+
+  const openForm = () => {
+    // Seed the form from the order, defaulting date to the first available
+    // pill when the stored date is no longer bookable.
+    const seedDate =
+      order.delivery_date && dates.includes(order.delivery_date)
+        ? order.delivery_date
+        : dates[0] ?? "";
+    setDate(seedDate);
+    setSlot(order.delivery_slot ?? "");
+    setAddress(order.delivery_address ?? "");
+    setReason("");
+    setErr(null);
+    setEditing(true);
+  };
+
+  const submit = async () => {
+    if (busy) return;
+    setErr(null);
+    const trimmedAddress = address.trim();
+    const trimmedReason = reason.trim();
+    // Send only the fields that differ from the current order; the API
+    // requires at least one change.
+    const body: Record<string, string> = {};
+    if (date && date !== (order.delivery_date ?? "")) body.requested_delivery_date = date;
+    if (slot && slot !== (order.delivery_slot ?? "")) body.requested_delivery_slot = slot;
+    if (trimmedAddress && trimmedAddress !== (order.delivery_address ?? ""))
+      body.requested_delivery_address = trimmedAddress;
+    if (Object.keys(body).length === 0) {
+      setErr("Change at least one of date, slot or address.");
+      return;
+    }
+    if (trimmedReason) body.reason = trimmedReason;
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `/api/orders/${encodeURIComponent(orderId)}/change-request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(body),
+        },
+      );
+      const d = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) {
+        setErr(d.error ?? "Could not send your request. Please try again.");
+        setBusy(false);
+        return;
+      }
+      setEditing(false);
+      setBusy(false);
+      onChanged();
+    } catch {
+      setErr("Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  const cancelRequest = async () => {
+    if (busy) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `/api/orders/${encodeURIComponent(orderId)}/change-request/cancel`,
+        { method: "POST", credentials: "include" },
+      );
+      if (!r.ok) {
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
+        setErr(d.error ?? "Could not cancel the request. Please try again.");
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+      onChanged();
+    } catch {
+      setErr("Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  // ── Pending request card (old → new diff) ────────────────────────────
+  if (changeRequest && !editing) {
+    const diffs: { label: string; from: string; to: string }[] = [];
+    if (changeRequest.requested_delivery_date) {
+      diffs.push({
+        label: "Date",
+        from: formatDeliveryDate(order.delivery_date),
+        to: formatDeliveryDate(changeRequest.requested_delivery_date),
+      });
+    }
+    if (changeRequest.requested_delivery_slot) {
+      diffs.push({
+        label: "Slot",
+        from: formatSlotForDisplay(order.delivery_slot),
+        to: formatSlotForDisplay(changeRequest.requested_delivery_slot),
+      });
+    }
+    if (changeRequest.requested_delivery_address) {
+      diffs.push({
+        label: "Address",
+        from: String(order.delivery_address ?? "—"),
+        to: String(changeRequest.requested_delivery_address),
+      });
+    }
+    return (
+      <div
+        style={{
+          marginTop: 16,
+          padding: "16px 18px",
+          border: "1px solid rgba(200,144,58,0.3)",
+          background: "rgba(200,144,58,0.06)",
+          borderRadius: 4,
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 12px",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(200,144,58,0.95)",
+          }}
+        >
+          Change requested · awaiting approval
+        </p>
+        {diffs.map((d) => (
+          <div key={d.label} style={{ marginBottom: 10 }}>
+            <p
+              style={{
+                margin: "0 0 2px",
+                fontFamily: "var(--font-body)",
+                fontSize: 10,
+                fontWeight: 200,
+                letterSpacing: "0.3em",
+                textTransform: "uppercase",
+                color: "rgba(240,223,200,0.4)",
+              }}
+            >
+              {d.label}
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+                fontWeight: 200,
+                color: "rgba(240,223,200,0.85)",
+                lineHeight: 1.5,
+              }}
+            >
+              <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+                {d.from}
+              </span>
+              {"  →  "}
+              <span style={{ color: "#FBF3D4" }}>{d.to}</span>
+            </p>
+          </div>
+        ))}
+        {changeRequest.reason && (
+          <p
+            style={{
+              margin: "8px 0 0",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              fontWeight: 200,
+              fontStyle: "italic",
+              color: "rgba(240,223,200,0.5)",
+              lineHeight: 1.6,
+            }}
+          >
+            “{changeRequest.reason}”
+          </p>
+        )}
+        {err && (
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181" }}>
+            {err}
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={cancelRequest}
+            disabled={busy}
+            style={{
+              height: 40,
+              padding: "0 18px",
+              background: "transparent",
+              border: "1px solid rgba(255,129,129,0.4)",
+              cursor: busy ? "default" : "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "#ff8181",
+            }}
+          >
+            {busy ? "Cancelling…" : "Cancel request"}
+          </button>
+          <button
+            type="button"
+            onClick={openForm}
+            disabled={busy}
+            style={{
+              height: 40,
+              padding: "0 18px",
+              background: "transparent",
+              border: "1px solid rgba(240,223,200,0.2)",
+              cursor: busy ? "default" : "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "rgba(240,223,200,0.6)",
+            }}
+          >
+            Edit again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Trigger button (no pending request, not yet editing) ─────────────
+  if (!editing) {
+    return (
+      <div style={{ marginTop: 14 }}>
+        <button
+          type="button"
+          onClick={openForm}
+          style={{
+            height: 40,
+            padding: "0 18px",
+            background: "transparent",
+            border: "1px solid rgba(240,223,200,0.2)",
+            cursor: "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 10,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.7)",
+          }}
+        >
+          Edit delivery
+        </button>
+      </div>
+    );
+  }
+
+  // ── Inline edit form ─────────────────────────────────────────────────
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        padding: "18px",
+        border: "1px solid rgba(240,223,200,0.12)",
+        borderRadius: 4,
+      }}
+    >
+      <p
+        style={{
+          margin: "0 0 16px",
+          fontFamily: "var(--font-body)",
+          fontSize: 12,
+          fontWeight: 200,
+          lineHeight: 1.6,
+          color: "rgba(240,223,200,0.5)",
+        }}
+      >
+        Request a change to your delivery. Your order stays as-is until we
+        approve it.
+      </p>
+
+      {/* Date pills */}
+      <p style={{ ...editorLabel }}>Date</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        {dates.map((d) => {
+          const sel = d === date;
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => {
+                setDate(d);
+                // Reset slot when changing date so we never keep a slot that's
+                // now too soon on the new date.
+                setSlot("");
+              }}
+              style={{
+                height: 36,
+                padding: "0 14px",
+                background: sel ? "rgba(74,222,128,0.18)" : "transparent",
+                border: `1px solid ${sel ? "rgba(74,222,128,0.6)" : "rgba(240,223,200,0.18)"}`,
+                cursor: "pointer",
+                fontFamily: "var(--font-body)",
+                fontSize: 11,
+                fontWeight: 300,
+                letterSpacing: "0.1em",
+                color: sel ? "#FBF3D4" : "rgba(240,223,200,0.6)",
+              }}
+            >
+              {dateLabel(d)}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Slot pills */}
+      <p style={{ ...editorLabel }}>Slot</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        {slots.map((s) => {
+          const sel = s.value === slot;
+          return (
+            <button
+              key={s.value}
+              type="button"
+              disabled={s.disabled}
+              onClick={() => setSlot(s.value)}
+              style={{
+                height: 36,
+                padding: "0 12px",
+                background: sel ? "rgba(74,222,128,0.18)" : "transparent",
+                border: `1px solid ${sel ? "rgba(74,222,128,0.6)" : "rgba(240,223,200,0.18)"}`,
+                cursor: s.disabled ? "not-allowed" : "pointer",
+                opacity: s.disabled ? 0.3 : 1,
+                fontFamily: "var(--font-body)",
+                fontSize: 11,
+                fontWeight: 300,
+                letterSpacing: "0.05em",
+                color: sel ? "#FBF3D4" : "rgba(240,223,200,0.6)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {s.rangeLabel}
+            </button>
+          );
+        })}
+        {date && slots.length === 0 && (
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(240,223,200,0.4)" }}>
+            No slots available for this date.
+          </span>
+        )}
+      </div>
+
+      {/* Address */}
+      <p style={{ ...editorLabel }}>Address</p>
+      <textarea
+        value={address}
+        onChange={(e) => setAddress(e.target.value)}
+        rows={3}
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "10px 12px",
+          marginBottom: 16,
+          background: "rgba(0,0,0,0.25)",
+          border: "1px solid rgba(240,223,200,0.18)",
+          color: "#FBF3D4",
+          fontFamily: "var(--font-body)",
+          fontSize: 14,
+          fontWeight: 200,
+          resize: "vertical",
+        }}
+      />
+
+      {/* Reason (optional) */}
+      <p style={{ ...editorLabel }}>Reason (optional)</p>
+      <input
+        type="text"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Why are you changing this?"
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "10px 12px",
+          marginBottom: 16,
+          background: "rgba(0,0,0,0.25)",
+          border: "1px solid rgba(240,223,200,0.18)",
+          color: "#FBF3D4",
+          fontFamily: "var(--font-body)",
+          fontSize: 14,
+          fontWeight: 200,
+        }}
+      />
+
+      {err && (
+        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181", lineHeight: 1.6 }}>
+          {err}
+        </p>
+      )}
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy}
+          style={{
+            height: 44,
+            padding: "0 24px",
+            background: busy ? "rgba(245,158,11,0.5)" : "#f59e0b",
+            border: "none",
+            cursor: busy ? "default" : "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.35em",
+            textTransform: "uppercase",
+            color: "#080604",
+          }}
+        >
+          {busy ? "Sending…" : "Send request"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setErr(null);
+          }}
+          disabled={busy}
+          style={{
+            height: 44,
+            padding: "0 20px",
+            background: "transparent",
+            border: "1px solid rgba(240,223,200,0.18)",
+            cursor: busy ? "default" : "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.6)",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const editorLabel: React.CSSProperties = {
+  margin: "0 0 8px",
+  fontFamily: "var(--font-body)",
+  fontSize: 10,
+  fontWeight: 300,
+  letterSpacing: "0.3em",
+  textTransform: "uppercase",
+  color: "rgba(200,144,58,0.7)",
+};
 
 function Row({ label, value }: { label: string; value: string }) {
   return (

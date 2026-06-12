@@ -64,8 +64,22 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Active (pending) delivery change-request, if any. The tracking page uses
+  // it to render the "Request pending" card (old→new diff) and to hide Pay Now
+  // while a change is awaiting admin approval.
+  const { data: pendingRequest } = await supabaseAdmin
+    .from("order_change_requests")
+    .select(
+      "id, status, requested_delivery_date, requested_delivery_slot, requested_delivery_address, reason, created_at",
+    )
+    .eq("order_id", order.id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   // Strip customer_id from the response — the client doesn't need it.
   const { customer_id: _omit, ...rest } = order;
   void _omit;
-  return NextResponse.json({ order: rest });
+  return NextResponse.json({ order: rest, change_request: pendingRequest ?? null });
 }

@@ -102,6 +102,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/orders", label: "Orders" },
       { href: "/admin/subscriptions", label: "Subscriptions" },
       { href: "/admin/delivery-requests", label: "Delivery Requests" },
+      { href: "/admin/order-changes", label: "Delivery Changes" },
     ],
   },
   {
