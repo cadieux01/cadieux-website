@@ -90,6 +90,31 @@ const nextConfig = {
           { key: "Vercel-CDN-Cache-Control", value: "no-store" },
         ],
       },
+      // The admin app is a client-rendered shell behind a password gate.
+      // Vercel's edge was caching the /admin document and serving it stale
+      // (a HIT with multi-hour age), so the cached HTML referenced hashed JS
+      // chunks no longer present on the current deployment — those 404'd,
+      // React never hydrated, and the login form's submit handler never ran
+      // ("submit does nothing, no error"). Tell Vercel's CDN never to cache
+      // the admin shell. Hashed assets under /_next/static/* are served off a
+      // different path and are intentionally untouched, so they stay
+      // edge-cached. Mirrors the /dashboard fix above.
+      {
+        source: "/admin",
+        headers: [
+          { key: "Cache-Control", value: "no-store, must-revalidate" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+          { key: "Vercel-CDN-Cache-Control", value: "no-store" },
+        ],
+      },
+      {
+        source: "/admin/:path*",
+        headers: [
+          { key: "Cache-Control", value: "no-store, must-revalidate" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+          { key: "Vercel-CDN-Cache-Control", value: "no-store" },
+        ],
+      },
     ];
   },
   async redirects() {
