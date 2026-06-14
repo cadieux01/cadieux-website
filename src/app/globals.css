@@ -340,57 +340,23 @@ select option:disabled {
   .immersive-breathe { animation: none; }
 }
 
-/* ── Premium artisan-loaf cursor (desktop only) ──────────────────────────
-   Activated by the `bread-cursor` class on <html>, set by the BreadCursor
-   component. The whole block is gated on:
-     • (hover: hover) and (pointer: fine)  → mouse/trackpad only, never touch
-     • (prefers-reduced-motion: no-preference) → reduced-motion users keep the
-       native cursor (the rules simply don't apply, so the base cursor wins)
-   Selectors are intentionally more specific than the base `body { cursor:none }`
-   so they override it.
-
-   Retina: image-set() is what actually does DPR selection — a plain url()
-   fallback chain does NOT. We pass the 40px art at 1x and the 80px art at 2x
-   so HiDPI screens fetch the sharp 2x file while it still displays at 40 CSS
-   px. A plain `url()` is kept as the final fallback for engines that lack
-   image-set, and `auto`/`pointer` as the last resort if the PNG fails to load.
-   Hotspot 9 12 sits on the loaf's upper-left crust (consistent rest/hover, so
-   the click point never jumps when the glow appears). */
+/* ── Animated cursor variants (desktop only) ─────────────────────────────
+   The magnetic / glow / spotlight effects are drawn by AnimatedCursor on a
+   fixed overlay; the native pointer stays hidden by the base `body{cursor:none}`.
+   Here we only restore sensible native cursors for text entry and disabled
+   controls. Gated to fine-pointer + no-reduced-motion so touch devices and
+   reduced-motion users keep their native cursor. AnimatedCursor adds the
+   `anim-cursor` class to <html>; selectors are more specific than
+   `body{cursor:none}` so they win. */
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-  html.bread-cursor,
-  html.bread-cursor body {
-    cursor: url(/cursors/loaf.png) 9 12, auto;
-    cursor: image-set(
-        url(/cursors/loaf.png) 1x,
-        url(/cursors/loaf@2x.png) 2x
-      ) 9 12, auto;
-  }
-
-  /* Clickable affordances → same loaf with a gold glow + ring behind it, so
-     hover reads as obviously different from the rest state. */
-  html.bread-cursor a,
-  html.bread-cursor button,
-  html.bread-cursor [role="button"],
-  html.bread-cursor label[for],
-  html.bread-cursor summary,
-  html.bread-cursor select,
-  html.bread-cursor .cursor-pointer {
-    cursor: url(/cursors/loaf-hover.png) 9 12, pointer;
-    cursor: image-set(
-        url(/cursors/loaf-hover.png) 1x,
-        url(/cursors/loaf-hover@2x.png) 2x
-      ) 9 12, pointer;
-  }
-
-  /* Preserve the I-beam on text entry and a sensible disabled affordance. */
-  html.bread-cursor input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
-  html.bread-cursor textarea,
-  html.bread-cursor [contenteditable="true"] {
+  html.anim-cursor input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
+  html.anim-cursor textarea,
+  html.anim-cursor [contenteditable="true"] {
     cursor: text;
   }
-  html.bread-cursor [disabled],
-  html.bread-cursor [aria-disabled="true"],
-  html.bread-cursor .cursor-not-allowed {
+  html.anim-cursor [disabled],
+  html.anim-cursor [aria-disabled="true"],
+  html.anim-cursor .cursor-not-allowed {
     cursor: not-allowed;
   }
 }

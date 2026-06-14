@@ -18,7 +18,7 @@ const SmoothScroll = dynamic(() => import("@/components/SmoothScroll"), {
 const CustomCursor = dynamic(() => import("@/components/CustomCursor"), {
   ssr: false,
 });
-const BreadCursor = dynamic(() => import("@/components/BreadCursor"), {
+const AnimatedCursor = dynamic(() => import("@/components/AnimatedCursor"), {
   ssr: false,
 });
 
@@ -44,7 +44,11 @@ export default function ClientLayoutChrome() {
   return (
     <>
       <SmoothScroll />
-      {variant === "classic" ? <CustomCursor /> : <BreadCursor />}
+      {variant === "classic" ? (
+        <CustomCursor />
+      ) : (
+        <AnimatedCursor variant={variant} />
+      )}
     </>
   );
 }
