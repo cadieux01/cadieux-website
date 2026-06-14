@@ -341,22 +341,33 @@ select option:disabled {
 }
 
 /* ── Animated cursor variants (desktop only) ─────────────────────────────
-   The magnetic / glow / spotlight effects are drawn by AnimatedCursor on a
-   fixed overlay; the native pointer stays hidden by the base `body{cursor:none}`.
-   Here we only restore sensible native cursors for text entry and disabled
-   controls. Gated to fine-pointer + no-reduced-motion so touch devices and
-   reduced-motion users keep their native cursor. AnimatedCursor adds the
-   `anim-cursor` class to <html>; selectors are more specific than
-   `body{cursor:none}` so they win. */
+   The dough / flour / ribbon / knead / steam / magnetic / glow / spotlight
+   effects are drawn on a fixed overlay; the native pointer must be hidden
+   EVERYWHERE so the OS hand/arrow never shows through. `body{cursor:none}`
+   alone isn't enough: `cursor` is inherited, but links/buttons (UA
+   `cursor:pointer`) and the Tailwind `.cursor-pointer` utility override the
+   inherited none, leaking the native hand. The universal rule below forces it
+   off on every element — `html.anim-cursor *` has specificity (0,1,1), beating
+   `.cursor-pointer` (0,1,0) and UA rules, and `!important` guards against
+   inline/utility `cursor` declarations.
+
+   Gated to fine-pointer + no-reduced-motion so touch devices and reduced-motion
+   users keep their native cursor (under reduced-motion the cursor components
+   never add the `anim-cursor` class anyway, and the block above restores
+   `body{cursor:auto}`). AnimatedCursor/BakeryCursor add `anim-cursor` to <html>. */
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-  html.anim-cursor input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
-  html.anim-cursor textarea,
-  html.anim-cursor [contenteditable="true"] {
-    cursor: text;
+  html.anim-cursor,
+  html.anim-cursor * {
+    cursor: none !important;
   }
-  html.anim-cursor [disabled],
-  html.anim-cursor [aria-disabled="true"],
-  html.anim-cursor .cursor-not-allowed {
-    cursor: not-allowed;
+
+  /* Keep the I-beam on real text entry ONLY, so typing still works. These
+     selectors are more specific than the universal rule, so they win even
+     against its !important. */
+  html.anim-cursor input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  html.anim-cursor textarea,
+  html.anim-cursor [contenteditable="true"],
+  html.anim-cursor [contenteditable=""] {
+    cursor: text !important;
   }
 }
