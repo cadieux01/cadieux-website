@@ -1,21 +1,34 @@
-// /api/mobile/checkout
+// POST /api/mobile/create-order
 //
-// Mobile-equivalent of website's /api/checkout (place_order action).
-// Differences from web:
-//  - Bearer token auth instead of cookie
-//  - Server-side price validation against products table (web trusts client)
-//  - Order items snapshot persisted to orders.items jsonb (web loses item info)
-//  - No Razorpay flow (Phase 3d)
+// Online-payment (Razorpay) counterpart to /api/mobile/checkout. Runs the
+// EXACT same auth + validation + server-authoritative pricing as the mobile
+// COD path, then:
+//   1. creates a Razorpay order for the server-derived grand total,
+//   2. inserts a `pending` orders row up-front tagged with the
+//      razorpay_order_id and payment_status='created'.
 //
-// Cash-on-Delivery path: the order is inserted as 'pending' with
-// payment_method='cod' / payment_status='pending', mirroring the website
-// /api/checkout COD insert.
+// The order is NEVER marked paid here — that only happens in
+// /api/mobile/verify-payment after a server-side HMAC signature check.
+// The amount sent to Razorpay is derived on the server; the client cannot
+// influence it. The Razorpay KEY SECRET never leaves the server — the app
+// only ever holds the public Key ID.
 //
-// MOBILE_APP_KEY is a friction layer, not a real secret. See phase 3b notes.
+// Auth (identical to /api/mobile/checkout):
+//   • X-App-Key friction header
+//   • Authorization: Bearer <30-day phone token>
+//
+// Request body (same shape as /api/mobile/checkout):
+//   { full_name, delivery_address: { line1, area, city, pincode,
+//     latitude?, longitude? }, items: [{ product_id, quantity,
+//     price_snapshot_inr }], delivery_date?, delivery_slot? }
+//
+// Response:
+//   { ok, db_order_id, razorpay_order_id, amount (paise), currency,
+//     subtotal_inr, delivery_fee_inr, total_amount_inr }
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone, isValidMobileAppKey, maskPhone } from "@/lib/phone-cookie";
+import { getVerifiedPhone, isValidMobileAppKey } from "@/lib/phone-cookie";
 import {
   DELIVERY_FEE_INR,
   reconcilePrices,
@@ -32,15 +45,12 @@ import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import { computeDeliveryFee } from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
-import { internalJsonHeaders } from "@/lib/internal-secret";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cadieux.in";
 
 /** Parses a value as a finite number, returning null for absent/invalid. */
 function parseCoord(v: unknown): number | null {
@@ -50,11 +60,23 @@ function parseCoord(v: unknown): number | null {
 }
 
 export async function POST(req: NextRequest) {
-  // Fail closed if MOBILE_APP_KEY isn't configured.
+  // Fail closed if the friction key isn't configured.
   if (!process.env.MOBILE_APP_KEY) {
     return NextResponse.json(
       { ok: false, error: "Server misconfigured" },
       { status: 500 },
+    );
+  }
+
+  // 0. Razorpay must be configured. Same keys as the web routes; secret
+  //    stays server-side only. 503 (no `code`) → the app treats this as
+  //    "online payment unavailable, use COD".
+  const key = process.env.RAZORPAY_KEY_ID;
+  const secret = process.env.RAZORPAY_KEY_SECRET;
+  if (!key || !secret) {
+    return NextResponse.json(
+      { ok: false, error: "Razorpay not configured" },
+      { status: 503 },
     );
   }
 
@@ -95,9 +117,7 @@ export async function POST(req: NextRequest) {
   }
   const { body, fullName, addressString } = shape;
 
-  // 4b. Pincode serviceability: refuse to place orders for pincodes we
-  // don't currently deliver to. Mobile clients should funnel the user
-  // into the same "send request" UX as web in this case.
+  // 4b. Pincode serviceability.
   const pincode = normalizePincode(body.delivery_address.pincode);
   if (!pincode) {
     return NextResponse.json(
@@ -110,22 +130,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        error: "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
+        error:
+          "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
         code: "pincode_unserviceable",
       },
       { status: 400 },
     );
   }
-  // When auto-approved via proximity, we'll log an area suggestion
-  // after the order insert succeeds (see below).
   const proximityHint =
     serviceability.via === "proximity" ? serviceability : null;
 
-  // 4c. Optional delivery date + slot. The mobile app will start sending
-  // these in a follow-up release; until then we accept null and store
-  // null. When present we validate them strictly so a stale or malformed
-  // value can't slip through.
-  const rawObj = (raw ?? {}) as { delivery_date?: unknown; delivery_slot?: unknown };
+  // 4c. Optional delivery date + slot (validated strictly when present).
+  const rawObj = (raw ?? {}) as {
+    delivery_date?: unknown;
+    delivery_slot?: unknown;
+  };
   let deliveryDate: string | null = null;
   let deliverySlot: string | null = null;
   if (rawObj.delivery_date !== undefined && rawObj.delivery_date !== null) {
@@ -152,10 +171,6 @@ export async function POST(req: NextRequest) {
     }
     deliverySlot = rawObj.delivery_slot;
   }
-  // 12 h 10 m booking lead — server-side source of truth. Applies only
-  // when BOTH date and slot are provided (legacy app builds that omit
-  // them still null-write — see comment block above). The mobile app
-  // now always sends both.
   if (deliveryDate && deliverySlot) {
     const gate = validateBookingSlot(deliveryDate, deliverySlot);
     if (gate) {
@@ -166,7 +181,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 5. Server-side price validation. Re-fetch authoritative product rows.
+  // 5. Server-side price validation against authoritative product rows.
   const productIds = Array.from(new Set(body.items.map((i) => i.product_id)));
   const { data: productRows, error: productsErr } = await supabaseAdmin
     .from("products")
@@ -174,7 +189,7 @@ export async function POST(req: NextRequest) {
     .in("id", productIds);
 
   if (productsErr) {
-    console.error("[mobile/checkout] products fetch failed:", productsErr);
+    console.error("[mobile/create-order] products fetch failed:", productsErr);
     return NextResponse.json(
       { ok: false, error: "Failed to validate cart" },
       { status: 500 },
@@ -199,7 +214,7 @@ export async function POST(req: NextRequest) {
     .eq("phone", phoneLocal)
     .maybeSingle();
   if (lookupErr) {
-    console.error("[mobile/checkout] customer lookup failed:", lookupErr);
+    console.error("[mobile/create-order] customer lookup failed:", lookupErr);
     return NextResponse.json(
       { ok: false, error: "Failed to resolve customer" },
       { status: 500 },
@@ -213,7 +228,7 @@ export async function POST(req: NextRequest) {
       .update({ full_name: fullName, city: body.delivery_address.city })
       .eq("id", existing.id);
     if (updateErr) {
-      console.error("[mobile/checkout] customer update failed:", updateErr);
+      console.error("[mobile/create-order] customer update failed:", updateErr);
       return NextResponse.json(
         { ok: false, error: "Failed to update customer" },
         { status: 500 },
@@ -231,7 +246,7 @@ export async function POST(req: NextRequest) {
       .select("id")
       .single();
     if (insertErr || !newCust) {
-      console.error("[mobile/checkout] customer insert failed:", insertErr);
+      console.error("[mobile/create-order] customer insert failed:", insertErr);
       return NextResponse.json(
         { ok: false, error: "Failed to create customer" },
         { status: 500 },
@@ -240,16 +255,14 @@ export async function POST(req: NextRequest) {
     customerId = newCust.id;
   }
 
-  // 7. Insert the order with the items snapshot + server-computed total.
-  // Total stored in orders.total_amount is inclusive of the delivery fee.
+  // 7. Server-authoritative distance-based delivery fee.
   const subtotal = reconciled.total;
-
-  // Extract GPS coordinates from the delivery_address object if the app sent them.
-  const rawAddr = (raw as { delivery_address?: Record<string, unknown> })?.delivery_address ?? {};
+  const rawAddr =
+    (raw as { delivery_address?: Record<string, unknown> })?.delivery_address ??
+    {};
   const orderLat = parseCoord(rawAddr.latitude);
   const orderLng = parseCoord(rawAddr.longitude);
 
-  // Compute distance-based delivery fee (server-authoritative).
   let deliveryFee = DELIVERY_FEE_INR;
   let distanceKm: number | null = null;
 
@@ -283,43 +296,70 @@ export async function POST(req: NextRequest) {
   }
 
   const grandTotal = subtotal + deliveryFee;
+  const amount = Math.round(grandTotal * 100); // paise, integer
 
+  // 8. Create the Razorpay order for the server-confirmed total.
+  const authHeader = Buffer.from(`${key}:${secret}`).toString("base64");
+  const rzpRes = await fetch("https://api.razorpay.com/v1/orders", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${authHeader}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      amount,
+      currency: "INR",
+      receipt: `cadieux_app_${Date.now()}`,
+    }),
+  });
+  const rzp = (await rzpRes.json()) as {
+    id?: string;
+    amount?: number;
+    currency?: string;
+    error?: { description?: string };
+  };
+  if (!rzpRes.ok || !rzp.id) {
+    console.error("[mobile/create-order] razorpay order failed:", rzp.error);
+    return NextResponse.json(
+      { ok: false, error: rzp.error?.description ?? "Razorpay error" },
+      { status: 502 },
+    );
+  }
+
+  // 9. Insert the pending order row up-front, tagged with the razorpay
+  //    order id. Stays payment_status='created' until a verified
+  //    signature in /api/mobile/verify-payment flips it to 'paid'.
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
     .insert({
       customer_id: customerId,
       total_amount: grandTotal,
       delivery_fee: deliveryFee,
-      // Mobile checkout is the Cash-on-Delivery path (no Razorpay here),
-      // so mirror the website COD insert: a pending order paid on delivery.
-      // Stamping payment_method/payment_status keeps the tracking page from
-      // showing "Awaiting payment" for what is really a COD order.
       status: "pending",
-      payment_method: "cod",
-      payment_status: "pending",
+      payment_method: "razorpay",
+      payment_status: "created",
+      razorpay_order_id: rzp.id,
       delivery_address: addressString,
       items: reconciled.items,
-      // Mobile clients can now optionally pass delivery_date + slot in
-      // the request body; absent fields stay null (legacy app builds)
-      // and the operator can patch via PATCH /api/admin/orders/[id].
       delivery_date: deliveryDate,
       delivery_slot: deliverySlot,
-      ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
+      ...(orderLat !== null && orderLng !== null
+        ? { latitude: orderLat, longitude: orderLng }
+        : {}),
       ...(distanceKm !== null ? { distance_km: distanceKm } : {}),
     })
     .select("id")
     .single();
 
   if (orderErr || !order) {
-    console.error("[mobile/checkout] order insert failed:", orderErr);
+    console.error("[mobile/create-order] order insert failed:", orderErr);
     return NextResponse.json(
       { ok: false, error: "Failed to create order" },
       { status: 500 },
     );
   }
 
-  // Proximity match → log an area suggestion so admin can promote it
-  // to a formal Areas We Serve entry. Best-effort.
+  // Proximity match → log an area suggestion (best-effort, non-blocking).
   if (proximityHint) {
     void supabaseAdmin
       .from("delivery_requests")
@@ -333,89 +373,22 @@ export async function POST(req: NextRequest) {
         source: "proximity_order",
       })
       .then(({ error: e }) => {
-        if (e) console.warn("[mobile/checkout] proximity suggestion failed:", e.message);
+        if (e)
+          console.warn(
+            "[mobile/create-order] proximity suggestion failed:",
+            e.message,
+          );
       });
   }
 
-  // 8. Fire-and-forget SMS + WhatsApp (mirror website's CheckoutModal calls).
-  //    We don't await these — they must not block or fail the order response.
-  fireAndForget(
-    fetch(`${SITE_URL}/api/send-sms`, {
-      method: "POST",
-      headers: internalJsonHeaders(),
-      body: JSON.stringify({
-        type: "order_placed",
-        phone: phoneLocal,
-        name: fullName,
-        orderId: order.id,
-        total: grandTotal,
-        address: addressString,
-      }),
-    }),
-    "send-sms",
-    { phone: phoneLocal },
-  );
-
-  const shortId = String(order.id).slice(0, 8).toUpperCase();
-  const waMessage =
-    `Hi ${fullName || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
-    `Order ID: ${shortId}\n` +
-    `Total: ₹${grandTotal}\n` +
-    `Delivery to: ${addressString}\n\n` +
-    `We will confirm your order shortly. Thank you for choosing Cadieux!`;
-  fireAndForget(
-    fetch(`${SITE_URL}/api/send-whatsapp`, {
-      method: "POST",
-      headers: internalJsonHeaders(),
-      body: JSON.stringify({ phone: phoneLocal, message: waMessage }),
-    }),
-    "send-whatsapp",
-    { phone: phoneLocal },
-  );
-
   return NextResponse.json({
     ok: true,
-    order_id: order.id,
+    db_order_id: order.id,
+    razorpay_order_id: rzp.id,
+    amount: rzp.amount, // paise (server-confirmed)
+    currency: rzp.currency,
     subtotal_inr: subtotal,
     delivery_fee_inr: deliveryFee,
     total_amount_inr: grandTotal,
-    items_summary: reconciled.itemsSummary,
-  });
-}
-
-/**
- * Detaches a fetch from the response lifecycle. Logs both network failures
- * AND non-2xx responses — Twilio errors come back as 4xx/5xx, which
- * `fetch` does NOT throw on, so the previous .catch-only path silently
- * dropped real delivery failures. Phone is masked to the last 4 digits.
- */
-function fireAndForget(
-  p: Promise<Response>,
-  label: string,
-  ctx: { phone: string },
-): void {
-  p.then(async (res) => {
-    if (!res.ok) {
-      // Pull only safe fields. Don't log the full response — Twilio echoes
-      // back the recipient phone and the message body, both sensitive.
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        code?: string | number;
-      };
-      console.error(
-        `[mobile/checkout] ${label} http_failed`,
-        {
-          status: res.status,
-          code: data.code,
-          error: data.error,
-          phone: maskPhone(ctx.phone),
-        },
-      );
-    }
-  }).catch((err) => {
-    console.error(
-      `[mobile/checkout] ${label} threw`,
-      { phone: maskPhone(ctx.phone), err: String(err) },
-    );
   });
 }

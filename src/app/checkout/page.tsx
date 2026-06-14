@@ -209,12 +209,23 @@ export default function CheckoutPage() {
   // so the customer never has to solve the challenge twice. The widget
   // renders once at the bottom of the address step, above the sticky
   // "Continue to Delivery" button — see the <main> tail below.
-  const [turnstileToken, setTurnstileToken] = useState<string>("");
+  // Preview-only Turnstile bypass. Cloudflare rejects the challenge on
+  // unlisted *.vercel.app preview domains, so the widget can't issue a
+  // token there. When NEXT_PUBLIC_TURNSTILE_BYPASS=1 (set on the Preview
+  // build only), we seed a sentinel token so the gates pass — the server
+  // independently allows it ONLY on non-production deploys with the
+  // matching TURNSTILE_BYPASS_PREVIEW flag. Production never sets either
+  // flag, so the real widget + server verification stay fully enforced.
+  const TURNSTILE_BYPASS = process.env.NEXT_PUBLIC_TURNSTILE_BYPASS === "1";
+  const [turnstileToken, setTurnstileToken] = useState<string>(
+    TURNSTILE_BYPASS ? "preview-bypass" : "",
+  );
   const turnstileRef = useRef<TurnstileHandle>(null);
   // Reset the widget only on Turnstile expiry/error or on an OTP-send
   // server failure. We do NOT reset after a successful OTP send — the
   // token stays as the client-side gate for Continue.
   const refreshTurnstile = () => {
+    if (TURNSTILE_BYPASS) return; // keep the sentinel; no real widget to reset
     setTurnstileToken("");
     turnstileRef.current?.reset();
   };
@@ -792,15 +803,23 @@ export default function CheckoutPage() {
       return;
     }
     setOrderLoading(true); setError("");
+    const { fullAddress, customerPhone, customerName } = resolveOrderIdentity();
     try {
+      // Create the Razorpay order AND the pending DB order row in one call.
+      // The server re-derives the authoritative grand total from the cart;
+      // `total` here is only a hint it compares against.
       const res = await fetch("/api/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subtotal: total,
-          lat:      orderLat,
-          lng:      orderLng,
-          pincode:  effectivePincode || undefined,
+          customer_id: customer?.id,
+          delivery_address: fullAddress,
+          pincode: fullAddress.match(/(\d{6})\s*$/)?.[1] ?? "",
+          delivery_date: deliveryDate,
+          delivery_slot: deliverySlot,
+          total_amount: total,
+          items: orderItems,
+          ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
         }),
       });
       if (!res.ok) {
@@ -808,12 +827,22 @@ export default function CheckoutPage() {
         if (errData.code === "distance_unserviceable") {
           setError(errData.error ?? "We don't deliver beyond 10 km yet.");
           setStep("address");
+        } else if (errData.code === "price_mismatch") {
+          setError(errData.error ?? "Price mismatch — please refresh and retry.");
         } else {
           setError("Online payment unavailable. Please use Cash on Delivery.");
         }
         return;
       }
-      const { order_id, amount: serverAmount } = await res.json() as { order_id: string; amount: number };
+      const {
+        db_order_id,
+        razorpay_order_id,
+        amount: serverAmount,
+      } = await res.json() as {
+        db_order_id: string;
+        razorpay_order_id: string;
+        amount: number;
+      };
 
       const loaded = await new Promise<boolean>((resolve) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -828,38 +857,43 @@ export default function CheckoutPage() {
       setOrderLoading(false);
       if (!loaded) { setError("Failed to load payment gateway. Please use Cash on Delivery."); return; }
 
-      const { fullAddress, customerPhone, customerName } = resolveOrderIdentity();
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: serverAmount,  // server-computed paise — must match the Razorpay order
         currency: "INR",
         name: "Cadieux",
         description: "Protein Bread",
-        order_id,
-        handler: async (response: { razorpay_payment_id: string }) => {
+        order_id: razorpay_order_id,
+        handler: async (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) => {
           setOrderLoading(true);
-          const r = await fetch("/api/checkout", {
+          // The order is marked paid ONLY after the server verifies the
+          // signature. Never trust this success callback by itself.
+          const r = await fetch("/api/verify-payment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              action: "place_order",
-              customer_id: customer?.id,
-              delivery_address: fullAddress,
-              pincode: fullAddress.match(/(\d{6})\s*$/)?.[1] ?? "",
-              delivery_date: deliveryDate,
-              delivery_slot: deliverySlot,
-              total_amount: total,
-              items: orderItems,
-              ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
+              db_order_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
             }),
           });
-          const d = await r.json();
+          const d = await r.json().catch(() => ({}));
           setOrderLoading(false);
-          console.log("[Payment] Success, Razorpay ID:", response.razorpay_payment_id);
-          const oid = d.order_id ?? "";
-          if (oid) {
-            sendOrderSMS(oid, fullAddress, customerPhone, customerName);
-            sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
+          if (!r.ok || !d.ok) {
+            setError(
+              "We received your payment but couldn't confirm it automatically. " +
+              "Don't worry — it'll be reconciled shortly. Contact support if your order doesn't appear.",
+            );
+            return;
+          }
+          if (db_order_id) {
+            sendOrderSMS(db_order_id, fullAddress, customerPhone, customerName);
+            sendOrderWhatsApp(db_order_id, fullAddress, customerPhone, customerName);
           }
           const { city: subCity, pincode: subPincode } = extractCityPincode(fullAddress);
           const subFailed = await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);
@@ -869,14 +903,32 @@ export default function CheckoutPage() {
             );
             return;
           }
-          finishOrder(oid);
+          finishOrder(db_order_id);
+        },
+        modal: {
+          // User closed the Razorpay sheet without paying. The pending DB
+          // row simply stays unpaid — nothing to clean up client-side.
+          ondismiss: () => {
+            setOrderLoading(false);
+            setError("Payment cancelled. Your order was not placed. You can try again or use Cash on Delivery.");
+          },
         },
         prefill: { name: customerName, contact: "+91" + customerPhone.replace(/\D/g, "") },
         theme: { color: "#024628" },
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      new (window as any).Razorpay(options).open();
+      const rzp = new (window as any).Razorpay(options);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rzp.on("payment.failed", (resp: any) => {
+        setOrderLoading(false);
+        setError(
+          resp?.error?.description
+            ? `Payment failed: ${resp.error.description}. Please try again or use Cash on Delivery.`
+            : "Payment failed. Please try again or use Cash on Delivery.",
+        );
+      });
+      rzp.open();
     } catch {
       setError("Something went wrong.");
       setOrderLoading(false);
@@ -885,19 +937,20 @@ export default function CheckoutPage() {
 
   /* ── Success bridge ───────────────────────────────────────────────────── */
   function finishOrder(orderId: string) {
-    const shortId = orderId
-      ? orderId.slice(0, 8).toUpperCase()
-      : Math.random().toString(36).slice(2, 10).toUpperCase();
     // Mark the order as finishing BEFORE clearing the cart so the
     // empty-cart bounce effect doesn't fire router.replace("/cart")
-    // and clobber the success redirect below.
+    // and clobber the redirect below.
     orderFinishingRef.current = true;
     clearCart();
-    // Pass the full UUID alongside the short id so the success page can
-    // deep-link into /orders/<id>. Short id stays for display only.
-    const qs = new URLSearchParams({ order: shortId });
-    if (orderId) qs.set("id", orderId);
-    router.push(`/checkout/success?${qs.toString()}`);
+    // Land the customer directly on the live tracking page for THIS order
+    // (both COD and online payment). Skips the old /checkout/success
+    // interstitial. router.replace so the back button doesn't return to
+    // the now-cleared checkout flow.
+    if (orderId) {
+      router.replace(`/orders/${encodeURIComponent(orderId)}`);
+    } else {
+      router.replace("/orders");
+    }
   }
 
   /* ── Header bits ──────────────────────────────────────────────────────── */
@@ -1368,13 +1421,17 @@ export default function CheckoutPage() {
                 color: "rgba(240,223,200,0.55)",
               }}
             >
-              Solve once to verify your phone and continue to delivery.
+              {TURNSTILE_BYPASS
+                ? "Human-verification is bypassed on this preview build for payment testing."
+                : "Solve once to verify your phone and continue to delivery."}
             </p>
-            <TurnstileWidget
-              ref={turnstileRef}
-              onVerify={(t) => setTurnstileToken(t)}
-              onExpire={() => setTurnstileToken("")}
-            />
+            {!TURNSTILE_BYPASS && (
+              <TurnstileWidget
+                ref={turnstileRef}
+                onVerify={(t) => setTurnstileToken(t)}
+                onExpire={() => setTurnstileToken("")}
+              />
+            )}
           </div>
         )}
       </main>

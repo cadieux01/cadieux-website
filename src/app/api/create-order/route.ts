@@ -1,32 +1,52 @@
 // POST /api/create-order
 //
-// Creates a Razorpay order for the online-payment flow.
-// Previously trusted the client-supplied `amount` — now computes the
-// delivery fee server-side from lat/lng (or pincode centroid) so the
-// Razorpay capture amount is authoritative and never client-tampered.
+// Online-payment (Razorpay) counterpart to /api/checkout `place_order`.
 //
-// Request body:
-//   { subtotal: number, lat?: number, lng?: number, pincode?: string }
+// Runs the SAME server-side validation + pricing as the COD path
+// (prepareOneTimeOrder), then:
+//   1. creates a Razorpay order for the server-authoritative grand total,
+//   2. inserts a `pending` orders row up-front with payment_status='created'
+//      and the razorpay_order_id, so both /api/verify-payment AND the
+//      /api/razorpay-webhook backup have a concrete row to reconcile against.
+//
+// The order is NEVER marked paid here — that only happens after a verified
+// signature in /api/verify-payment (or the webhook). The amount sent to
+// Razorpay is derived on the server; the client cannot influence it.
+//
+// Request body: the full order payload (same shape as place_order):
+//   { customer_id, delivery_address, total_amount (client subtotal, compared
+//     not trusted), pincode?, latitude?, longitude?, delivery_date,
+//     delivery_slot, items }
 //
 // Response:
-//   { order_id, amount (paise), currency, server_fee_inr }
+//   { db_order_id, razorpay_order_id, amount (paise), currency, server_fee_inr }
 
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-import { DELIVERY_FEE_INR } from "@/lib/order-validation";
-import { computeDeliveryFee } from "@/lib/deliveryFee";
-import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
-import { geocodePincode } from "@/lib/geocode";
+import {
+  prepareOneTimeOrder,
+  orderInsertColumns,
+  logProximitySuggestion,
+} from "@/lib/order-checkout";
+import {
+  normalizePhone,
+  signPhoneCookie,
+  PHONE_COOKIE_NAME,
+  PHONE_COOKIE_TTL_MS,
+} from "@/lib/phone-cookie";
+
+// Server-only admin client (service role, bypasses RLS).
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } },
+);
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({})) as {
-    subtotal?: unknown;
-    lat?: unknown;
-    lng?: unknown;
-    pincode?: unknown;
-  };
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
-  const key    = process.env.RAZORPAY_KEY_ID;
+  const key = process.env.RAZORPAY_KEY_ID;
   const secret = process.env.RAZORPAY_KEY_SECRET;
   if (!key || !secret) {
     return NextResponse.json(
@@ -35,85 +55,94 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const subtotal = Number(body.subtotal);
-  if (!Number.isFinite(subtotal) || subtotal < 0) {
-    return NextResponse.json({ error: "Invalid subtotal" }, { status: 400 });
+  // Identical validation + authoritative pricing as the COD path.
+  const prep = await prepareOneTimeOrder(body, req, supabaseAdmin);
+  if (!prep.ok) {
+    return NextResponse.json(prep.body, { status: prep.status });
   }
+  const prepared = prep.data;
 
-  // Server-compute delivery fee from coordinates or pincode.
-  // Falls back to flat DELIVERY_FEE_INR when origin env vars are absent.
-  let deliveryFee = DELIVERY_FEE_INR;
-  let distanceKm: number | null = null;
+  const amount = Math.round(prepared.grandTotal * 100); // paise, integer
 
-  if (await hasActivePickups()) {
-    const lat     = Number(body.lat);
-    const lng     = Number(body.lng);
-    const pincode = typeof body.pincode === "string"
-      ? body.pincode.replace(/\D/g, "")
-      : "";
-
-    if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
-      distanceKm = await getDrivingDistanceKm(lat, lng);
-    } else if (/^\d{6}$/.test(pincode)) {
-      const centroid = await geocodePincode(pincode);
-      if (centroid) {
-        distanceKm = await getDrivingDistanceKm(
-          centroid.latitude,
-          centroid.longitude,
-        );
-      }
-    }
-
-    if (distanceKm !== null) {
-      const feeResult = computeDeliveryFee(distanceKm);
-      if (!feeResult.serviceable) {
-        return NextResponse.json(
-          {
-            error:
-              "We don't deliver beyond 10 km yet. Please check our service area.",
-            code: "distance_unserviceable",
-          },
-          { status: 400 },
-        );
-      }
-      deliveryFee = feeResult.feeInr;
-    }
-  }
-
-  const grandTotal = subtotal + deliveryFee;
-  const amount = Math.round(grandTotal * 100); // paise, integer
-
+  // 1. Create the Razorpay order for the server-confirmed total.
   const auth = Buffer.from(`${key}:${secret}`).toString("base64");
-  const res = await fetch("https://api.razorpay.com/v1/orders", {
+  const rzpRes = await fetch("https://api.razorpay.com/v1/orders", {
     method: "POST",
     headers: {
-      Authorization:  `Basic ${auth}`,
+      Authorization: `Basic ${auth}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       amount,
       currency: "INR",
-      receipt:  `cadieux_${Date.now()}`,
+      receipt: `cadieux_${Date.now()}`,
     }),
   });
 
-  const data = await res.json() as {
+  const rzp = (await rzpRes.json()) as {
     id?: string;
     amount?: number;
     currency?: string;
     error?: { description?: string };
   };
-  if (!res.ok) {
+  if (!rzpRes.ok || !rzp.id) {
     return NextResponse.json(
-      { error: data.error?.description ?? "Razorpay error" },
+      { error: rzp.error?.description ?? "Razorpay error" },
       { status: 500 },
     );
   }
 
-  return NextResponse.json({
-    order_id:       data.id,
-    amount:         data.amount,   // paise (server-confirmed)
-    currency:       data.currency,
-    server_fee_inr: deliveryFee,   // so client can display the confirmed fee
+  // 2. Insert the pending order row up-front, tagged with the razorpay
+  //    order id. Stays `pending` / payment_status='created' until a
+  //    verified signature flips it to 'paid'.
+  const { data: order, error } = await supabaseAdmin
+    .from("orders")
+    .insert({
+      ...orderInsertColumns(prepared),
+      status: "pending",
+      payment_method: "razorpay",
+      payment_status: "created",
+      razorpay_order_id: rzp.id,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("❌ Razorpay order row insert failed:", error);
+    return NextResponse.json(
+      { error: "Failed to create order", details: error.message },
+      { status: 500 },
+    );
+  }
+
+  logProximitySuggestion(supabaseAdmin, prepared);
+
+  const res = NextResponse.json({
+    db_order_id: order.id,
+    razorpay_order_id: rzp.id,
+    amount: rzp.amount, // paise (server-confirmed)
+    currency: rzp.currency,
+    server_fee_inr: prepared.deliveryFee,
   });
+  // Re-issue the verified-phone cookie so that after the Razorpay modal
+  // succeeds and the client redirects to /orders/<id>, the tracking page's
+  // strict read gate sees a valid cookie instead of 401 ("Verify your
+  // phone"). Returning customers skip OTP (no cookie) and the 30-min cookie
+  // can lapse during the online flow. The order was just created for this
+  // customer; stamping the cookie for their own phone matches verify/check.
+  if (prepared.custPhone) {
+    const exp = Date.now() + PHONE_COOKIE_TTL_MS;
+    res.cookies.set(
+      PHONE_COOKIE_NAME,
+      signPhoneCookie(normalizePhone(prepared.custPhone), exp),
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: Math.floor(PHONE_COOKIE_TTL_MS / 1000),
+      },
+    );
+  }
+  return res;
 }

@@ -18,10 +18,7 @@ import {
   normalizePhone,
   signPhoneCookie,
 } from "@/lib/phone-cookie";
-
-const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID ?? "";
-const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN ?? "";
-const SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE_SID ?? "";
+import { verifyOtp } from "@/lib/otp-store";
 
 // Admin client used to stamp age_verified_at on the customer row when
 // the user ticks the 18+ confirmation during OTP verification. RLS is
@@ -70,21 +67,14 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!SERVICE_SID || !ACCOUNT_SID || !AUTH_TOKEN) {
-    return NextResponse.json(
-      { ok: false, error: "OTP service not configured." },
-      { status: 500 }
-    );
-  }
 
   const to = normalizePhone(phone);
 
   // ───────── Play review bypass — remove after approval ─────────
   // When REVIEW_TEST_PHONE + REVIEW_TEST_CODE are set and both match,
-  // skip the Twilio VerificationCheck and fall through to the exact
-  // same success path a real "approved" response would run (age stamp
-  // + signed 30-day bearer token). No effect unless both env vars are
-  // configured.
+  // skip the OTP verification and fall through to the exact same success
+  // path a real verified code would run (age stamp + signed 30-day bearer
+  // token). No effect unless both env vars are configured.
   const reviewTestPhone = process.env.REVIEW_TEST_PHONE;
   const reviewTestCode = process.env.REVIEW_TEST_CODE;
   const isReviewBypass =
@@ -94,22 +84,16 @@ export async function POST(req: NextRequest) {
     code === reviewTestCode;
   // ──────────────────────────────────────────────────────────────
 
-  const auth = Buffer.from(`${ACCOUNT_SID}:${AUTH_TOKEN}`).toString("base64");
-  const url = `https://verify.twilio.com/v2/Services/${SERVICE_SID}/VerificationCheck`;
-
   try {
     if (!isReviewBypass) {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${auth}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({ To: to, Code: code }).toString(),
-      });
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok || data.status !== "approved") {
+      const result = await verifyOtp(to, code);
+      if (!result.ok) {
+        if (result.reason === "too_many_attempts") {
+          return NextResponse.json(
+            { ok: false, error: "Too many attempts. Try again later." },
+            { status: 429 }
+          );
+        }
         return NextResponse.json(
           { ok: false, error: "Invalid code." },
           { status: 401 }

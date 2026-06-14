@@ -6,7 +6,7 @@
 // otherwise /api/orders/[id] returns 404 and we render an "unavailable"
 // state with a path back to /orders (which prompts re-verification).
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -18,6 +18,12 @@ import {
   stageIndex,
   toStage,
 } from "@/lib/order-stages";
+import {
+  bookableSlots,
+  dateLabel,
+  formatSlotForDisplay,
+  nextDeliveryDates,
+} from "@/lib/delivery-slots";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -44,7 +50,45 @@ type Order = {
   cancelled_at: string | null;
   cancellation_reason: string | null;
   refund_status: string | null;
+  payment_method: string | null;
+  payment_status: string | null;
 };
+
+type ChangeRequest = {
+  id: string;
+  status: string;
+  type?: string | null;
+  requested_delivery_date: string | null;
+  requested_delivery_slot: string | null;
+  requested_delivery_address: string | null;
+  requested_items: { slug: string; qty: number }[] | null;
+  requested_total_amount: number | null;
+  reason: string | null;
+  created_at: string;
+};
+
+// Customer-facing label for how the order is being paid for.
+//   razorpay + paid    → "Paid"
+//   cod                → "Cash on Delivery"
+//   razorpay + failed  → "Payment failed"
+//   anything else      → "Awaiting payment" (razorpay 'created'/'pending')
+function paymentLabel(method: string | null, status: string | null): string {
+  const m = (method ?? "").toLowerCase();
+  const s = (status ?? "").toLowerCase();
+  if (s === "paid") return "Paid";
+  if (m === "cod") return "Cash on Delivery";
+  if (s === "failed") return "Payment failed";
+  return "Awaiting payment";
+}
+
+function paymentColor(method: string | null, status: string | null): string {
+  const m = (method ?? "").toLowerCase();
+  const s = (status ?? "").toLowerCase();
+  if (s === "paid") return "rgba(74,222,128,0.85)";
+  if (s === "failed") return "#ff8181";
+  if (m === "cod") return "rgba(240,223,200,0.85)";
+  return "rgba(200,144,58,0.85)";
+}
 
 function formatDeliveryDate(iso: string | null): string {
   if (!iso) return "";
@@ -88,41 +132,175 @@ export default function OrderDetailPage() {
   const id = (params?.id || "").toString();
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [changeRequest, setChangeRequest] = useState<ChangeRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      if (!id) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch(`/api/orders/${encodeURIComponent(id)}`, {
-          cache: "no-store",
-          credentials: "include",
-        });
-        if (r.status === 401) {
-          if (!cancelled) setError("verify");
-          return;
-        }
-        if (!r.ok) {
-          if (!cancelled) setError("notfound");
-          return;
-        }
-        const d = await r.json();
-        if (!cancelled) setOrder(d.order as Order);
-      } catch {
-        if (!cancelled) setError("notfound");
-      } finally {
-        if (!cancelled) setLoading(false);
+  // Guard so background polls/refetches can't run while a request is
+  // already in flight, and so we never flip back to the loading state
+  // after the first successful load.
+  const inFlightRef = useRef(false);
+  const loadedOnceRef = useRef(false);
+
+  const fetchOrder = useCallback(async () => {
+    if (!id || inFlightRef.current) return;
+    inFlightRef.current = true;
+    if (!loadedOnceRef.current) setLoading(true);
+    try {
+      const r = await fetch(`/api/orders/${encodeURIComponent(id)}`, {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (r.status === 401) {
+        if (!loadedOnceRef.current) setError("verify");
+        return;
       }
+      if (!r.ok) {
+        if (!loadedOnceRef.current) setError("notfound");
+        return;
+      }
+      const d = await r.json();
+      setOrder(d.order as Order);
+      setChangeRequest((d.change_request as ChangeRequest) ?? null);
+      setError(null);
+      loadedOnceRef.current = true;
+    } catch {
+      if (!loadedOnceRef.current) setError("notfound");
+    } finally {
+      inFlightRef.current = false;
+      setLoading(false);
     }
-    void run();
-    return () => {
-      cancelled = true;
-    };
   }, [id]);
+
+  // Initial load + live refresh: poll every 20s and refetch whenever the
+  // tab regains focus / becomes visible, so status changes made in the
+  // dashboard show up without a manual reload.
+  useEffect(() => {
+    loadedOnceRef.current = false;
+    void fetchOrder();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") void fetchOrder();
+    }, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void fetchOrder();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [fetchOrder]);
+
+  // "Pay Now" — convert a COD order to a paid Razorpay order without
+  // creating a new order. Mirrors the checkout page's payOnline() flow:
+  // create a Razorpay order for the existing order id, open the gateway,
+  // verify server-side, then refresh so the row flips to "Paid".
+  const payNow = useCallback(async () => {
+    if (!id || paying) return;
+    setPayError(null);
+    setPaying(true);
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(id)}/pay`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        razorpay_order_id?: string;
+        amount?: number;
+        currency?: string;
+        key_id?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.razorpay_order_id) {
+        setPayError(data.error ?? "Could not start payment. Please try again.");
+        setPaying(false);
+        return;
+      }
+
+      const loaded = await new Promise<boolean>((resolve) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((window as any).Razorpay) {
+          resolve(true);
+          return;
+        }
+        const s = document.createElement("script");
+        s.src = "https://checkout.razorpay.com/v1/checkout.js";
+        s.onload = () => resolve(true);
+        s.onerror = () => resolve(false);
+        document.body.appendChild(s);
+      });
+      if (!loaded) {
+        setPayError("Failed to load payment gateway. Please try again.");
+        setPaying(false);
+        return;
+      }
+
+      const options = {
+        key: data.key_id,
+        amount: data.amount, // server-computed paise
+        currency: data.currency ?? "INR",
+        name: "Cadieux",
+        description: "Protein Bread",
+        order_id: data.razorpay_order_id,
+        handler: async (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            const r = await fetch(
+              `/api/orders/${encodeURIComponent(id)}/pay/verify`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                }),
+              },
+            );
+            const d = (await r.json().catch(() => ({}))) as { ok?: boolean };
+            if (!r.ok || !d.ok) {
+              setPayError(
+                "We received your payment but couldn't confirm it automatically. " +
+                  "It'll be reconciled shortly — contact support if it doesn't update.",
+              );
+            } else {
+              setPayError(null);
+            }
+          } finally {
+            setPaying(false);
+            void fetchOrder();
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setPaying(false);
+            setPayError("Payment cancelled. Your order is unchanged.");
+          },
+        },
+        theme: { color: "#024628" },
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rzp = new (window as any).Razorpay(options);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rzp.on("payment.failed", () => {
+        setPaying(false);
+        setPayError("Payment failed. Your order is unchanged — you can try again.");
+      });
+      rzp.open();
+    } catch {
+      setPayError("Something went wrong starting the payment. Please try again.");
+      setPaying(false);
+    }
+  }, [id, paying, fetchOrder]);
 
   const items = (order?.items ?? []).filter(
     (it) => it && typeof it.name === "string" && Number(it.qty) > 0,
@@ -397,6 +575,12 @@ export default function OrderDetailPage() {
               {order.delivery_address && (
                 <Row label="Address" value={String(order.delivery_address)} />
               )}
+              <DeliveryEditor
+                orderId={id}
+                order={order}
+                changeRequest={changeRequest}
+                onChanged={fetchOrder}
+              />
             </Section>
 
             {/* Items */}
@@ -473,6 +657,13 @@ export default function OrderDetailPage() {
                   </div>
                 );
               })}
+              <ItemEditor
+                orderId={id}
+                order={order}
+                changeRequest={changeRequest}
+                deliveryFee={order.delivery_fee}
+                onChanged={fetchOrder}
+              />
             </Section>
 
             {/* Totals */}
@@ -525,6 +716,99 @@ export default function OrderDetailPage() {
                   ₹{Number(order.total_amount).toLocaleString("en-IN")}
                 </span>
               </div>
+            </Section>
+
+            {/* Payment */}
+            <Section title="Payment">
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
+                  gap: 16,
+                  padding: "8px 0",
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 11,
+                    fontWeight: 200,
+                    letterSpacing: "0.3em",
+                    textTransform: "uppercase",
+                    color: "rgba(240,223,200,0.4)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Status
+                </span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 13,
+                    fontWeight: 300,
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    color: paymentColor(
+                      order.payment_method,
+                      order.payment_status,
+                    ),
+                    textAlign: "right",
+                  }}
+                >
+                  {paymentLabel(order.payment_method, order.payment_status)}
+                </span>
+              </div>
+
+              {/* Pay Now — only for unpaid COD orders that aren't cancelled,
+                  and never while a delivery change-request is pending. */}
+              {(order.payment_method ?? "").toLowerCase() === "cod" &&
+                (order.payment_status ?? "").toLowerCase() !== "paid" &&
+                !isCancelled(order.status) &&
+                !changeRequest && (
+                  <div style={{ marginTop: 16 }}>
+                    <button
+                      type="button"
+                      onClick={payNow}
+                      disabled={paying}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "100%",
+                        height: 50,
+                        padding: "0 28px",
+                        background: paying ? "rgba(245,158,11,0.5)" : "#f59e0b",
+                        border: "none",
+                        cursor: paying ? "default" : "pointer",
+                        fontFamily: "var(--font-body)",
+                        fontSize: 11,
+                        fontWeight: 400,
+                        letterSpacing: "0.4em",
+                        textTransform: "uppercase",
+                        color: "#080604",
+                      }}
+                    >
+                      {paying
+                        ? "Opening payment…"
+                        : `Pay Now · ₹${Number(order.total_amount).toLocaleString("en-IN")}`}
+                    </button>
+                    {payError && (
+                      <p
+                        style={{
+                          margin: "12px 0 0",
+                          fontFamily: "var(--font-body)",
+                          fontSize: 12,
+                          fontWeight: 200,
+                          lineHeight: 1.6,
+                          color: "#ff8181",
+                        }}
+                      >
+                        {payError}
+                      </p>
+                    )}
+                  </div>
+                )}
             </Section>
 
             {order.cancelled_at && (
@@ -774,6 +1058,1108 @@ function StatusTracker({
       )}
     </section>
   );
+}
+
+// Customer-driven delivery change-request UI for COD/unpaid orders.
+// Renders one of three states inside the Delivery section:
+//   • a pending "Request pending" card (old→new diff + Cancel) when a
+//     change-request is awaiting admin approval;
+//   • an "Edit delivery" trigger when no request is pending;
+//   • an inline form (date pills / slot pills / address / reason) once
+//     editing. Submitting POSTs a change-request; the order is untouched
+//     until an admin approves. Returns null for non-editable orders
+//     (paid, non-COD, or cancelled) so paid orders get no edit affordance.
+function DeliveryEditor({
+  orderId,
+  order,
+  changeRequest,
+  onChanged,
+}: {
+  orderId: string;
+  order: Order;
+  changeRequest: ChangeRequest | null;
+  onChanged: () => void;
+}) {
+  const paid = (order.payment_status ?? "").toLowerCase() === "paid";
+  const cod = (order.payment_method ?? "").toLowerCase() === "cod";
+  // Date/time can be changed on a paid order (any method) OR a COD-unpaid
+  // order; never on a cancelled one.
+  const editable = !isCancelled(order.status) && (paid || cod);
+  // The address can change the delivery fee, so it's only editable while the
+  // order is unpaid.
+  const canEditAddress = editable && !paid;
+  const reqType = (changeRequest?.type ?? "delivery").toLowerCase();
+
+  const dates = useMemo(() => nextDeliveryDates(7), []);
+
+  const [editing, setEditing] = useState(false);
+  const [date, setDate] = useState<string>(order.delivery_date ?? "");
+  const [slot, setSlot] = useState<string>(order.delivery_slot ?? "");
+  const [address, setAddress] = useState<string>(order.delivery_address ?? "");
+  const [reason, setReason] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const slots = useMemo(() => (date ? bookableSlots(date) : []), [date]);
+
+  if (!editable) return null;
+
+  const openForm = () => {
+    // Seed the form from the order, defaulting date to the first available
+    // pill when the stored date is no longer bookable.
+    const seedDate =
+      order.delivery_date && dates.includes(order.delivery_date)
+        ? order.delivery_date
+        : dates[0] ?? "";
+    setDate(seedDate);
+    setSlot(order.delivery_slot ?? "");
+    setAddress(order.delivery_address ?? "");
+    setReason("");
+    setErr(null);
+    setEditing(true);
+  };
+
+  const submit = async () => {
+    if (busy) return;
+    setErr(null);
+    const trimmedAddress = address.trim();
+    const trimmedReason = reason.trim();
+    // Send only the fields that differ from the current order; the API
+    // requires at least one change.
+    const body: Record<string, string> = {};
+    if (date && date !== (order.delivery_date ?? "")) body.requested_delivery_date = date;
+    if (slot && slot !== (order.delivery_slot ?? "")) body.requested_delivery_slot = slot;
+    if (canEditAddress && trimmedAddress && trimmedAddress !== (order.delivery_address ?? ""))
+      body.requested_delivery_address = trimmedAddress;
+    if (Object.keys(body).length === 0) {
+      setErr("Change at least one of date, slot or address.");
+      return;
+    }
+    if (trimmedReason) body.reason = trimmedReason;
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `/api/orders/${encodeURIComponent(orderId)}/change-request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(body),
+        },
+      );
+      const d = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) {
+        setErr(d.error ?? "Could not send your request. Please try again.");
+        setBusy(false);
+        return;
+      }
+      setEditing(false);
+      setBusy(false);
+      onChanged();
+    } catch {
+      setErr("Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  const cancelRequest = async () => {
+    if (busy) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `/api/orders/${encodeURIComponent(orderId)}/change-request/cancel`,
+        { method: "POST", credentials: "include" },
+      );
+      if (!r.ok) {
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
+        setErr(d.error ?? "Could not cancel the request. Please try again.");
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+      onChanged();
+    } catch {
+      setErr("Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  // A pending request of a DIFFERENT type (e.g. items) blocks editing here —
+  // only one pending request per order. Show a note instead of the editor.
+  if (changeRequest && reqType !== "delivery") {
+    return (
+      <p
+        style={{
+          marginTop: 14,
+          fontFamily: "var(--font-body)",
+          fontSize: 12,
+          fontWeight: 200,
+          lineHeight: 1.6,
+          color: "rgba(240,223,200,0.45)",
+        }}
+      >
+        You have a pending item change awaiting approval — cancel it to request
+        a delivery change.
+      </p>
+    );
+  }
+
+  // ── Pending request card (old → new diff) ────────────────────────────
+  if (changeRequest && !editing) {
+    const diffs: { label: string; from: string; to: string }[] = [];
+    if (changeRequest.requested_delivery_date) {
+      diffs.push({
+        label: "Date",
+        from: formatDeliveryDate(order.delivery_date),
+        to: formatDeliveryDate(changeRequest.requested_delivery_date),
+      });
+    }
+    if (changeRequest.requested_delivery_slot) {
+      diffs.push({
+        label: "Slot",
+        from: formatSlotForDisplay(order.delivery_slot),
+        to: formatSlotForDisplay(changeRequest.requested_delivery_slot),
+      });
+    }
+    if (changeRequest.requested_delivery_address) {
+      diffs.push({
+        label: "Address",
+        from: String(order.delivery_address ?? "—"),
+        to: String(changeRequest.requested_delivery_address),
+      });
+    }
+    return (
+      <div
+        style={{
+          marginTop: 16,
+          padding: "16px 18px",
+          border: "1px solid rgba(200,144,58,0.3)",
+          background: "rgba(200,144,58,0.06)",
+          borderRadius: 4,
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 12px",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(200,144,58,0.95)",
+          }}
+        >
+          Change requested · awaiting approval
+        </p>
+        {diffs.map((d) => (
+          <div key={d.label} style={{ marginBottom: 10 }}>
+            <p
+              style={{
+                margin: "0 0 2px",
+                fontFamily: "var(--font-body)",
+                fontSize: 10,
+                fontWeight: 200,
+                letterSpacing: "0.3em",
+                textTransform: "uppercase",
+                color: "rgba(240,223,200,0.4)",
+              }}
+            >
+              {d.label}
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+                fontWeight: 200,
+                color: "rgba(240,223,200,0.85)",
+                lineHeight: 1.5,
+              }}
+            >
+              <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+                {d.from}
+              </span>
+              {"  →  "}
+              <span style={{ color: "#FBF3D4" }}>{d.to}</span>
+            </p>
+          </div>
+        ))}
+        {changeRequest.reason && (
+          <p
+            style={{
+              margin: "8px 0 0",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              fontWeight: 200,
+              fontStyle: "italic",
+              color: "rgba(240,223,200,0.5)",
+              lineHeight: 1.6,
+            }}
+          >
+            “{changeRequest.reason}”
+          </p>
+        )}
+        {err && (
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181" }}>
+            {err}
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={cancelRequest}
+            disabled={busy}
+            style={{
+              height: 40,
+              padding: "0 18px",
+              background: "transparent",
+              border: "1px solid rgba(255,129,129,0.4)",
+              cursor: busy ? "default" : "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "#ff8181",
+            }}
+          >
+            {busy ? "Cancelling…" : "Cancel request"}
+          </button>
+          <button
+            type="button"
+            onClick={openForm}
+            disabled={busy}
+            style={{
+              height: 40,
+              padding: "0 18px",
+              background: "transparent",
+              border: "1px solid rgba(240,223,200,0.2)",
+              cursor: busy ? "default" : "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "rgba(240,223,200,0.6)",
+            }}
+          >
+            Edit again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Trigger button (no pending request, not yet editing) ─────────────
+  if (!editing) {
+    return (
+      <div style={{ marginTop: 14 }}>
+        <button
+          type="button"
+          onClick={openForm}
+          style={{
+            height: 40,
+            padding: "0 18px",
+            background: "transparent",
+            border: "1px solid rgba(240,223,200,0.2)",
+            cursor: "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 10,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.7)",
+          }}
+        >
+          Edit delivery
+        </button>
+      </div>
+    );
+  }
+
+  // ── Inline edit form ─────────────────────────────────────────────────
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        padding: "18px",
+        border: "1px solid rgba(240,223,200,0.12)",
+        borderRadius: 4,
+      }}
+    >
+      <p
+        style={{
+          margin: "0 0 16px",
+          fontFamily: "var(--font-body)",
+          fontSize: 12,
+          fontWeight: 200,
+          lineHeight: 1.6,
+          color: "rgba(240,223,200,0.5)",
+        }}
+      >
+        Request a change to your delivery. Your order stays as-is until we
+        approve it.
+      </p>
+
+      {/* Date pills */}
+      <p style={{ ...editorLabel }}>Date</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        {dates.map((d) => {
+          const sel = d === date;
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => {
+                setDate(d);
+                // Reset slot when changing date so we never keep a slot that's
+                // now too soon on the new date.
+                setSlot("");
+              }}
+              style={{
+                height: 36,
+                padding: "0 14px",
+                background: sel ? "rgba(74,222,128,0.18)" : "transparent",
+                border: `1px solid ${sel ? "rgba(74,222,128,0.6)" : "rgba(240,223,200,0.18)"}`,
+                cursor: "pointer",
+                fontFamily: "var(--font-body)",
+                fontSize: 11,
+                fontWeight: 300,
+                letterSpacing: "0.1em",
+                color: sel ? "#FBF3D4" : "rgba(240,223,200,0.6)",
+              }}
+            >
+              {dateLabel(d)}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Slot pills */}
+      <p style={{ ...editorLabel }}>Slot</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        {slots.map((s) => {
+          const sel = s.value === slot;
+          return (
+            <button
+              key={s.value}
+              type="button"
+              disabled={s.disabled}
+              onClick={() => setSlot(s.value)}
+              style={{
+                height: 36,
+                padding: "0 12px",
+                background: sel ? "rgba(74,222,128,0.18)" : "transparent",
+                border: `1px solid ${sel ? "rgba(74,222,128,0.6)" : "rgba(240,223,200,0.18)"}`,
+                cursor: s.disabled ? "not-allowed" : "pointer",
+                opacity: s.disabled ? 0.3 : 1,
+                fontFamily: "var(--font-body)",
+                fontSize: 11,
+                fontWeight: 300,
+                letterSpacing: "0.05em",
+                color: sel ? "#FBF3D4" : "rgba(240,223,200,0.6)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {s.rangeLabel}
+            </button>
+          );
+        })}
+        {date && slots.length === 0 && (
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(240,223,200,0.4)" }}>
+            No slots available for this date.
+          </span>
+        )}
+      </div>
+
+      {/* Address — hidden on paid orders (it can change the delivery fee). */}
+      {canEditAddress && (
+        <>
+          <p style={{ ...editorLabel }}>Address</p>
+          <textarea
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            rows={3}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "10px 12px",
+              marginBottom: 16,
+              background: "rgba(0,0,0,0.25)",
+              border: "1px solid rgba(240,223,200,0.18)",
+              color: "#FBF3D4",
+              fontFamily: "var(--font-body)",
+              fontSize: 14,
+              fontWeight: 200,
+              resize: "vertical",
+            }}
+          />
+        </>
+      )}
+
+      {/* Reason (optional) */}
+      <p style={{ ...editorLabel }}>Reason (optional)</p>
+      <input
+        type="text"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Why are you changing this?"
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "10px 12px",
+          marginBottom: 16,
+          background: "rgba(0,0,0,0.25)",
+          border: "1px solid rgba(240,223,200,0.18)",
+          color: "#FBF3D4",
+          fontFamily: "var(--font-body)",
+          fontSize: 14,
+          fontWeight: 200,
+        }}
+      />
+
+      {err && (
+        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181", lineHeight: 1.6 }}>
+          {err}
+        </p>
+      )}
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy}
+          style={{
+            height: 44,
+            padding: "0 24px",
+            background: busy ? "rgba(245,158,11,0.5)" : "#f59e0b",
+            border: "none",
+            cursor: busy ? "default" : "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.35em",
+            textTransform: "uppercase",
+            color: "#080604",
+          }}
+        >
+          {busy ? "Sending…" : "Send request"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setErr(null);
+          }}
+          disabled={busy}
+          style={{
+            height: 44,
+            padding: "0 20px",
+            background: "transparent",
+            border: "1px solid rgba(240,223,200,0.18)",
+            cursor: busy ? "default" : "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.6)",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const editorLabel: React.CSSProperties = {
+  margin: "0 0 8px",
+  fontFamily: "var(--font-body)",
+  fontSize: 10,
+  fontWeight: 300,
+  letterSpacing: "0.3em",
+  textTransform: "uppercase",
+  color: "rgba(200,144,58,0.7)",
+};
+
+// ItemEditor — customer-facing "change item quantities" control. Mirrors
+// DeliveryEditor. COD-unpaid-not-cancelled only (items are COD-only). Lets the
+// customer adjust the qty (1..99) of existing kind:"once" lines; sub lines are
+// read-only. The new total shown is informational only — the server recomputes
+// authoritatively from the order's own price snapshot on send and on approve.
+function ItemEditor({
+  orderId,
+  order,
+  changeRequest,
+  deliveryFee,
+  onChanged,
+}: {
+  orderId: string;
+  order: Order;
+  changeRequest: ChangeRequest | null;
+  deliveryFee: number | null;
+  onChanged: () => void;
+}) {
+  const editable =
+    (order.payment_method ?? "").toLowerCase() === "cod" &&
+    (order.payment_status ?? "").toLowerCase() !== "paid" &&
+    !isCancelled(order.status);
+
+  const reqType = (changeRequest?.type ?? "delivery").toLowerCase();
+
+  // Editable (once) lines and read-only (sub) lines from the order snapshot.
+  const onceLines = (order.items ?? []).filter(
+    (it): it is OrderItem & { slug: string } =>
+      !!it && it.kind !== "sub" && typeof it.slug === "string",
+  );
+  const subLineTotal = (order.items ?? [])
+    .filter((it) => it && it.kind === "sub")
+    .reduce(
+      (sum, it) =>
+        sum +
+        (typeof it.line_total === "number"
+          ? it.line_total
+          : Number(it.price_inr ?? 0) * Number(it.qty ?? 0)),
+      0,
+    );
+
+  const fee = Number(deliveryFee ?? 0);
+
+  const [editing, setEditing] = useState(false);
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (!editable) return null;
+  if (onceLines.length === 0 && reqType !== "items") return null;
+
+  const seedQty = () => {
+    const seed: Record<string, number> = {};
+    for (const it of onceLines) seed[it.slug] = Number(it.qty ?? 1);
+    return seed;
+  };
+
+  const openForm = () => {
+    setQty(seedQty());
+    setErr(null);
+    setEditing(true);
+  };
+
+  const setLineQty = (slug: string, next: number) => {
+    const clamped = Math.max(1, Math.min(99, Math.round(next)));
+    setQty((q) => ({ ...q, [slug]: clamped }));
+  };
+
+  // Live, display-only new total from the order's own per-line prices.
+  const liveSubtotal = onceLines.reduce(
+    (sum, it) => sum + Number(it.price_inr ?? 0) * (qty[it.slug] ?? Number(it.qty ?? 0)),
+    0,
+  );
+  const liveTotal = liveSubtotal + subLineTotal + fee;
+  const anyChanged = onceLines.some(
+    (it) => (qty[it.slug] ?? Number(it.qty ?? 0)) !== Number(it.qty ?? 0),
+  );
+
+  const submit = async () => {
+    if (busy) return;
+    if (!anyChanged) {
+      setErr("Adjust at least one quantity.");
+      return;
+    }
+    setErr(null);
+    setBusy(true);
+    try {
+      const items = onceLines.map((it) => ({
+        slug: it.slug,
+        qty: qty[it.slug] ?? Number(it.qty ?? 1),
+      }));
+      const r = await fetch(
+        `/api/orders/${encodeURIComponent(orderId)}/item-change-request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ items }),
+        },
+      );
+      const d = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) {
+        setErr(d.error ?? "Could not send your request. Please try again.");
+        setBusy(false);
+        return;
+      }
+      setEditing(false);
+      setBusy(false);
+      onChanged();
+    } catch {
+      setErr("Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  const cancelRequest = async () => {
+    if (busy) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `/api/orders/${encodeURIComponent(orderId)}/change-request/cancel`,
+        { method: "POST", credentials: "include" },
+      );
+      if (!r.ok) {
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
+        setErr(d.error ?? "Could not cancel the request. Please try again.");
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+      onChanged();
+    } catch {
+      setErr("Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  // A pending request of a DIFFERENT type (delivery) blocks editing here.
+  if (changeRequest && reqType !== "items") {
+    return (
+      <p
+        style={{
+          marginTop: 16,
+          fontFamily: "var(--font-body)",
+          fontSize: 12,
+          fontWeight: 200,
+          lineHeight: 1.6,
+          color: "rgba(240,223,200,0.45)",
+        }}
+      >
+        You have a pending delivery change awaiting approval — cancel it to
+        request an item change.
+      </p>
+    );
+  }
+
+  // ── Pending item-change card (per-line old → new qty + old → new total) ──
+  if (changeRequest && reqType === "items" && !editing) {
+    const reqMap = new Map(
+      (changeRequest.requested_items ?? []).map((r) => [r.slug, r.qty]),
+    );
+    const nameBySlug = new Map(onceLines.map((it) => [it.slug, it.name]));
+    const lines = Array.from(reqMap.entries()).map(([slug, newQty]) => {
+      const old = onceLines.find((it) => it.slug === slug);
+      return {
+        slug,
+        name: nameBySlug.get(slug) ?? slug,
+        from: Number(old?.qty ?? 0),
+        to: Number(newQty),
+      };
+    });
+    const newTotal = Number(changeRequest.requested_total_amount ?? 0);
+    return (
+      <div
+        style={{
+          marginTop: 16,
+          padding: "16px 18px",
+          border: "1px solid rgba(200,144,58,0.3)",
+          background: "rgba(200,144,58,0.06)",
+          borderRadius: 4,
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 12px",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(200,144,58,0.95)",
+          }}
+        >
+          Item change requested · awaiting approval
+        </p>
+        {lines.map((l) => (
+          <div
+            key={l.slug}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              gap: 16,
+              marginBottom: 8,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+                fontWeight: 300,
+                color: "#FBF3D4",
+              }}
+            >
+              {l.name}
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 13,
+                fontWeight: 200,
+                color: "rgba(240,223,200,0.85)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+                Qty {l.from}
+              </span>
+              {"  →  "}
+              <span style={{ color: "#FBF3D4" }}>Qty {l.to}</span>
+            </span>
+          </div>
+        ))}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: 16,
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: "1px solid rgba(240,223,200,0.12)",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "rgba(240,223,200,0.5)",
+            }}
+          >
+            New total
+          </span>
+          <span
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 14,
+              fontWeight: 200,
+              color: "rgba(240,223,200,0.85)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+              ₹{Number(order.total_amount).toLocaleString("en-IN")}
+            </span>
+            {"  →  "}
+            <span style={{ color: "#FBF3D4" }}>
+              ₹{newTotal.toLocaleString("en-IN")}
+            </span>
+          </span>
+        </div>
+        {changeRequest.reason && (
+          <p
+            style={{
+              margin: "10px 0 0",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              fontWeight: 200,
+              fontStyle: "italic",
+              color: "rgba(240,223,200,0.5)",
+              lineHeight: 1.6,
+            }}
+          >
+            “{changeRequest.reason}”
+          </p>
+        )}
+        {err && (
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181" }}>
+            {err}
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={cancelRequest}
+            disabled={busy}
+            style={{
+              height: 40,
+              padding: "0 18px",
+              background: "transparent",
+              border: "1px solid rgba(255,129,129,0.4)",
+              cursor: busy ? "default" : "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "#ff8181",
+            }}
+          >
+            {busy ? "Cancelling…" : "Cancel request"}
+          </button>
+          <button
+            type="button"
+            onClick={openForm}
+            disabled={busy}
+            style={{
+              height: 40,
+              padding: "0 18px",
+              background: "transparent",
+              border: "1px solid rgba(240,223,200,0.2)",
+              cursor: busy ? "default" : "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "rgba(240,223,200,0.6)",
+            }}
+          >
+            Edit again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Trigger button (no pending request, not yet editing) ─────────────
+  if (!editing) {
+    return (
+      <div style={{ marginTop: 14 }}>
+        <button
+          type="button"
+          onClick={openForm}
+          style={{
+            height: 40,
+            padding: "0 18px",
+            background: "transparent",
+            border: "1px solid rgba(240,223,200,0.2)",
+            cursor: "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 10,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.7)",
+          }}
+        >
+          Edit items
+        </button>
+      </div>
+    );
+  }
+
+  // ── Inline edit form (quantity steppers) ─────────────────────────────
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        padding: "18px",
+        border: "1px solid rgba(240,223,200,0.12)",
+        borderRadius: 4,
+      }}
+    >
+      <p
+        style={{
+          margin: "0 0 16px",
+          fontFamily: "var(--font-body)",
+          fontSize: 12,
+          fontWeight: 200,
+          lineHeight: 1.6,
+          color: "rgba(240,223,200,0.5)",
+        }}
+      >
+        Adjust the quantities of items in your order. Your order stays as-is
+        until we approve it.
+      </p>
+
+      {onceLines.map((it) => {
+        const q = qty[it.slug] ?? Number(it.qty ?? 1);
+        const line = Number(it.price_inr ?? 0) * q;
+        return (
+          <div
+            key={it.slug}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              padding: "10px 0",
+              borderBottom: "1px solid rgba(240,223,200,0.06)",
+            }}
+          >
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 14,
+                  fontWeight: 300,
+                  color: "#FBF3D4",
+                }}
+              >
+                {it.name}
+              </p>
+              <p
+                style={{
+                  margin: "2px 0 0",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 12,
+                  fontWeight: 200,
+                  color: "rgba(240,223,200,0.45)",
+                }}
+              >
+                ₹{Number(it.price_inr ?? 0).toLocaleString("en-IN")} · ₹
+                {line.toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setLineQty(it.slug, q - 1)}
+                disabled={q <= 1}
+                aria-label="Decrease quantity"
+                style={qtyButton(q <= 1)}
+              >
+                −
+              </button>
+              <span
+                style={{
+                  minWidth: 28,
+                  textAlign: "center",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 15,
+                  fontWeight: 300,
+                  color: "#FBF3D4",
+                }}
+              >
+                {q}
+              </span>
+              <button
+                type="button"
+                onClick={() => setLineQty(it.slug, q + 1)}
+                disabled={q >= 99}
+                aria-label="Increase quantity"
+                style={qtyButton(q >= 99)}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Live new total (display only — server is authoritative). */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 16,
+          marginTop: 12,
+          paddingTop: 12,
+          borderTop: "1px solid rgba(240,223,200,0.12)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 10,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.5)",
+          }}
+        >
+          New total{fee > 0 ? " · incl delivery" : ""}
+        </span>
+        <span
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontSize: 18,
+            fontWeight: 300,
+            color: "#FBF3D4",
+          }}
+        >
+          ₹{liveTotal.toLocaleString("en-IN")}
+        </span>
+      </div>
+
+      {err && (
+        <p style={{ margin: "12px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181", lineHeight: 1.6 }}>
+          {err}
+        </p>
+      )}
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy}
+          style={{
+            height: 44,
+            padding: "0 24px",
+            background: busy ? "rgba(245,158,11,0.5)" : "#f59e0b",
+            border: "none",
+            cursor: busy ? "default" : "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.35em",
+            textTransform: "uppercase",
+            color: "#080604",
+          }}
+        >
+          {busy ? "Sending…" : "Send request"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setErr(null);
+          }}
+          disabled={busy}
+          style={{
+            height: 44,
+            padding: "0 20px",
+            background: "transparent",
+            border: "1px solid rgba(240,223,200,0.18)",
+            cursor: busy ? "default" : "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.6)",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function qtyButton(disabled: boolean): React.CSSProperties {
+  return {
+    width: 32,
+    height: 32,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "transparent",
+    border: "1px solid rgba(240,223,200,0.25)",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.3 : 1,
+    fontFamily: "var(--font-body)",
+    fontSize: 18,
+    fontWeight: 300,
+    color: "#FBF3D4",
+    lineHeight: 1,
+  };
 }
 
 function Row({ label, value }: { label: string; value: string }) {

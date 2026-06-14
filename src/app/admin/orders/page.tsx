@@ -534,6 +534,7 @@ function OrdersPageInner() {
                 <th style={th}>Customer</th>
                 <th style={th}>Address</th>
                 <th style={th}>Total</th>
+                <th style={th}>Payment</th>
                 <th style={th}>Status</th>
                 <th style={th}>Delivery</th>
                 <th style={th}>Created</th>
@@ -632,6 +633,12 @@ function OrdersPageInner() {
                       <span style={{ color: "#fbf3d4", fontSize: "0.85rem" }}>
                         {formatINR(o.total_amount)}
                       </span>
+                    </td>
+                    <td style={td}>
+                      <PaymentBadge
+                        method={o.payment_method}
+                        status={o.payment_status}
+                      />
                     </td>
                     <td style={td}>
                       <select
@@ -1213,6 +1220,64 @@ function Placeholder({ children }: { children: React.ReactNode }) {
     >
       {children}
     </div>
+  );
+}
+
+// Payment status pill for the orders table. Paid = green, COD = grey,
+// Failed = red, anything else (razorpay created/pending) = amber.
+function PaymentBadge({
+  method,
+  status,
+}: {
+  method?: string | null;
+  status?: string | null;
+}) {
+  const m = (method ?? "").toLowerCase();
+  const s = (status ?? "").toLowerCase();
+
+  let label: string;
+  let color: string;
+  let bg: string;
+  if (s === "paid") {
+    label = "Paid";
+    color = "rgb(74,222,128)";
+    bg = "rgba(74,222,128,0.12)";
+  } else if (s === "failed") {
+    label = "Failed";
+    color = "#ff8181";
+    bg = "rgba(255,129,129,0.12)";
+  } else if (m === "cod") {
+    label = "COD";
+    color = "rgba(192,200,206,0.85)";
+    bg = "rgba(192,200,206,0.1)";
+  } else if (!m && !s) {
+    label = "—";
+    color = "rgba(192,200,206,0.5)";
+    bg = "transparent";
+  } else {
+    label = "Awaiting";
+    color = "rgb(245,158,11)";
+    bg = "rgba(245,158,11,0.12)";
+  }
+
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: 4,
+        background: bg,
+        color,
+        fontFamily: "var(--font-body)",
+        fontSize: "0.7rem",
+        fontWeight: 500,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </span>
   );
 }
 
