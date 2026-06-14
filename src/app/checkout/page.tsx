@@ -22,7 +22,7 @@ import {
 import { bookableSlots } from "@/lib/delivery-slots";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import { GOOGLE_MAPS_LOADER_ID, GOOGLE_MAPS_LIBRARIES } from "@/lib/google-maps-loader";
-import { geocodePincodeClient } from "@/lib/clientGeocode";
+import { geocodePincodeClient, reverseGeocodeClient } from "@/lib/clientGeocode";
 import LocationPickerModal from "@/components/LocationPickerModal";
 import Select from "@/components/ui/Select";
 
@@ -1590,9 +1590,57 @@ function AddressForm(props: {
   // search itself; on Confirm it returns address fields + coords.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [locMsg, setLocMsg] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
 
   // Autocomplete instance ref
   const acRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  // "Use current location" — browser GPS → reverse-geocode → fill the address
+  // fields directly (mirrors the mobile app's handleUseLocation). This is the
+  // fast path; the map picker remains for fine-tuning / manual pin.
+  const handleUseLocation = useCallback(() => {
+    if (locating) return;
+    setLocMsg(null);
+    setError("");
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocMsg("Your browser can't share location. Pin on the map or type your address below.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const result = await reverseGeocodeClient(latitude, longitude);
+        if (!result) {
+          // Still capture coords so the delivery quote uses the real GPS point,
+          // but ask the user to fine-tune the address manually.
+          onCoordsCapture(latitude, longitude);
+          setLocating(false);
+          setLocMsg("Got your location but couldn't read a full address. Pin on the map or type it in below.");
+          return;
+        }
+        if (result.line1) setAddressLine(result.line1);
+        if (result.area) setArea(result.area);
+        if (result.city) setCity(result.city);
+        if (result.pincode) setPincode(result.pincode);
+        onCoordsCapture(result.lat ?? latitude, result.lng ?? longitude);
+        setError("");
+        setLocMsg(null);
+        setLocating(false);
+      },
+      (err) => {
+        setLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocMsg("Location permission denied. Allow access in your browser, pin on the map, or type your address below.");
+        } else if (err.code === err.TIMEOUT) {
+          setLocMsg("Timed out getting your location. Try again, pin on the map, or type your address below.");
+        } else {
+          setLocMsg("Couldn't get your location. Pin on the map or type your address below.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  }, [locating, onCoordsCapture, setAddressLine, setArea, setCity, setPincode, setError]);
 
   // Callback used by <LocationPickerModal> on Confirm — fills address fields
   // and pushes the chosen pin's coords up to the parent so the delivery
@@ -1773,23 +1821,41 @@ function AddressForm(props: {
         </div>
 
         {locQuestion === "yes" && (
-          <button
-            type="button"
-            onClick={() => setPickerOpen(true)}
-            style={{
-              display: "block", width: "100%", marginTop: 10,
-              minHeight: 44,
-              background: "none",
-              border: "1px solid rgba(200,144,58,0.5)",
-              cursor: "pointer",
-              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
-              letterSpacing: "0.3em", textTransform: "uppercase",
-              color: "rgba(200,144,58,0.9)",
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            📍 Pick on map
-          </button>
+          <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={handleUseLocation}
+              disabled={locating}
+              style={{
+                flex: 1, minHeight: 44,
+                background: locating ? "rgba(200,144,58,0.12)" : "rgba(200,144,58,0.18)",
+                border: "1px solid rgba(200,144,58,0.75)",
+                cursor: locating ? "default" : "pointer",
+                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                letterSpacing: "0.3em", textTransform: "uppercase",
+                color: locating ? "rgba(200,144,58,0.5)" : "rgba(200,144,58,0.95)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              {locating ? "Locating…" : "🎯 Current location"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              style={{
+                flex: 1, minHeight: 44,
+                background: "none",
+                border: "1px solid rgba(200,144,58,0.5)",
+                cursor: "pointer",
+                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                letterSpacing: "0.3em", textTransform: "uppercase",
+                color: "rgba(200,144,58,0.9)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              📍 Pin on map
+            </button>
+          </div>
         )}
 
         {locQuestion === "no" && (
