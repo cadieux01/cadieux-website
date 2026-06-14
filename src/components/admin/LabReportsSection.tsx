@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import Select from "@/components/ui/Select";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime } from "@/lib/admin-formatting";
 import {
@@ -320,26 +321,16 @@ function ReportCard({
               fontSize: "0.85rem",
             }}
           />
-          <select
+          <Select
             value={category}
-            onChange={(e) =>
-              setCategory(e.target.value as ProductReportCategory)
-            }
-            className="w-full px-3 py-2"
-            style={{
-              border: `1px solid ${BORDER}`,
-              background: "rgb(6,4,2)",
-              color: CREAM,
-              fontFamily: "var(--font-body)",
-              fontSize: "0.85rem",
-            }}
-          >
-            {PRODUCT_REPORT_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {PRODUCT_REPORT_CATEGORY_LABEL[c]}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setCategory(v as ProductReportCategory)}
+            ariaLabel="Report category"
+            style={{ minHeight: 0, borderColor: BORDER, fontSize: "0.85rem" }}
+            options={PRODUCT_REPORT_CATEGORIES.map((c) => ({
+              value: c,
+              label: PRODUCT_REPORT_CATEGORY_LABEL[c],
+            }))}
+          />
           <div className="flex gap-2">
             <button
               type="button"
@@ -598,28 +589,23 @@ function AddReportModal({
             }}
           >
             Category
-            <select
-              value={category}
-              onChange={(e) =>
-                onCategory(e.target.value as ProductReportCategory)
-              }
-              className="mt-1 w-full px-3 py-2"
-              style={{
-                border: `1px solid ${BORDER}`,
-                background: "rgb(6,4,2)",
-                color: CREAM,
-                fontFamily: "var(--font-body)",
-                fontSize: "0.9rem",
-                textTransform: "none",
-                letterSpacing: "0.05em",
-              }}
-            >
-              {PRODUCT_REPORT_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {PRODUCT_REPORT_CATEGORY_LABEL[c]}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <Select
+                value={category}
+                onChange={(v) => onCategory(v as ProductReportCategory)}
+                ariaLabel="Report category"
+                style={{
+                  borderColor: BORDER,
+                  fontSize: "0.9rem",
+                  textTransform: "none",
+                  letterSpacing: "0.05em",
+                }}
+                options={PRODUCT_REPORT_CATEGORIES.map((c) => ({
+                  value: c,
+                  label: PRODUCT_REPORT_CATEGORY_LABEL[c],
+                }))}
+              />
+            </div>
           </label>
 
           <label

@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import BrandSelect from "@/components/ui/Select";
 import {
   DateRangeDropdown,
   resolvePreset,
@@ -772,25 +773,15 @@ function Select({
   options: string[];
 }) {
   return (
-    <select
+    <BrandSelect
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="capitalize"
-      style={{
-        background: "transparent",
-        color: CREAM,
-        border: `1px solid ${BORDER}`,
-        padding: "0.45rem 0.65rem",
-        fontFamily: "var(--font-body)",
-        fontSize: "0.8rem",
-      }}
-    >
-      {options.map((o) => (
-        <option key={o} value={o} style={{ background: "#0a0a0a", color: CREAM }}>
-          {o === "all" ? "All" : o}
-        </option>
-      ))}
-    </select>
+      onChange={onChange}
+      style={{ minHeight: 0, borderColor: BORDER, textTransform: "capitalize" }}
+      options={options.map((o) => ({
+        value: o,
+        label: o === "all" ? "All" : o,
+      }))}
+    />
   );
 }
 

@@ -21,6 +21,7 @@ import {
 } from "@/lib/subscription-setup";
 import { bookableSlots } from "@/lib/delivery-slots";
 import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
+import Select from "@/components/ui/Select";
 
 const BG = "#0e0e0e";
 const GOLD = "#c9a96e";
@@ -482,16 +483,15 @@ function Step3Slots({
         }}
       >
         <div style={{ fontSize: 13, color: FADED, flex: "0 0 auto" }}>Set same time for all:</div>
-        <select
-          value={bulkSlot}
-          onChange={(e) => setBulkSlot(e.target.value)}
-          style={selectStyle}
-        >
-          <option value="">— pick a slot —</option>
-          {TIME_SLOTS.map((s) => (
-            <option key={s} value={s}>{formatSlot(s)}</option>
-          ))}
-        </select>
+        <div style={{ minWidth: 180, flex: "0 0 auto" }}>
+          <Select
+            value={bulkSlot}
+            onChange={setBulkSlot}
+            ariaLabel="Set same slot for all deliveries"
+            placeholder="— pick a slot —"
+            options={TIME_SLOTS.map((s) => ({ value: s, label: formatSlot(s) }))}
+          />
+        </div>
         <button
           onClick={applyToAll}
           disabled={!bulkSlot}
@@ -550,19 +550,19 @@ function Step3Slots({
                   No slots available for this date — please choose another day.
                 </div>
               ) : (
-                <select
-                  value={slot}
-                  onChange={(e) => setSlot(r.date_iso, e.target.value)}
-                  style={{ ...selectStyle, minWidth: 170 }}
-                >
-                  <option value="">— pick a slot —</option>
-                  {daySlots.map((s) => (
-                    <option key={s.value} value={s.value} disabled={s.disabled}>
-                      {formatSlot(s.value)}
-                      {s.disabled ? " — too soon" : ""}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ minWidth: 170 }}>
+                  <Select
+                    value={slot}
+                    onChange={(v) => setSlot(r.date_iso, v)}
+                    ariaLabel={`Delivery slot for ${longDayLabel(r.date)}`}
+                    placeholder="— pick a slot —"
+                    options={daySlots.map((s) => ({
+                      value: s.value,
+                      label: `${formatSlot(s.value)}${s.disabled ? " — too soon" : ""}`,
+                      disabled: s.disabled,
+                    }))}
+                  />
+                </div>
               )}
             </div>
           );
@@ -572,15 +572,6 @@ function Step3Slots({
   );
 }
 
-const selectStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 8,
-  background: "#0a0a0a",
-  color: TEXT,
-  border: `1px solid ${FAINT}`,
-  fontSize: 13,
-  fontFamily: "var(--font-body)",
-};
 
 // ── Step 4: Review ───────────────────────────────────────────────────────
 

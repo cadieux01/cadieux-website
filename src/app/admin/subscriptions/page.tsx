@@ -12,6 +12,7 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import Select from "@/components/ui/Select";
 import {
   DateRangeDropdown,
   resolvePreset,
@@ -653,17 +654,13 @@ function SubscriptionDrawer({
             >
               Overall status
             </span>
-            <select
+            <Select
               value={subscription.status}
-              onChange={(e) => void updateOverallStatus(e.target.value)}
+              onChange={(v) => void updateOverallStatus(v)}
+              ariaLabel="Overall subscription status"
               style={drawerSelect}
-            >
-              {SUBSCRIPTION_STATUSES.map((opt) => (
-                <option key={opt} value={opt} style={{ color: "#000" }}>
-                  {opt}
-                </option>
-              ))}
-            </select>
+              options={SUBSCRIPTION_STATUSES.map((opt) => ({ value: opt, label: opt }))}
+            />
           </div>
           <div
             style={{
@@ -684,17 +681,13 @@ function SubscriptionDrawer({
             >
               Payment
             </span>
-            <select
+            <Select
               value={subscription.payment_status}
-              onChange={(e) => void updatePaymentStatus(e.target.value)}
+              onChange={(v) => void updatePaymentStatus(v)}
+              ariaLabel="Payment status"
               style={drawerSelect}
-            >
-              {SUBSCRIPTION_PAYMENT_STATUSES.map((opt) => (
-                <option key={opt} value={opt} style={{ color: "#000" }}>
-                  {opt}
-                </option>
-              ))}
-            </select>
+              options={SUBSCRIPTION_PAYMENT_STATUSES.map((opt) => ({ value: opt, label: opt }))}
+            />
           </div>
           <div
             style={{
@@ -819,17 +812,16 @@ function DeliveryCard({
         >
           Week {delivery.week_number}
         </span>
-        <select
+        <Select
           value={delivery.status}
-          onChange={(e) => onStatusChange(e.target.value)}
+          onChange={onStatusChange}
+          ariaLabel={`Week ${delivery.week_number} delivery status`}
           style={drawerSelect}
-        >
-          {DELIVERY_STATUS_OPTIONS.map((opt) => (
-            <option key={opt} value={opt} style={{ color: "#000" }}>
-              {DELIVERY_STATUS_LABELS[opt] ?? opt}
-            </option>
-          ))}
-        </select>
+          options={DELIVERY_STATUS_OPTIONS.map((opt) => ({
+            value: opt,
+            label: DELIVERY_STATUS_LABELS[opt] ?? opt,
+          }))}
+        />
       </div>
       <div style={{ fontSize: "0.85rem", color: "#fbf3d4" }}>
         {formatScheduledDate(delivery.scheduled_date)}
@@ -974,6 +966,9 @@ const drawerSelect: React.CSSProperties = {
   letterSpacing: "0.12em",
   textTransform: "uppercase",
   cursor: "pointer",
+  minHeight: 0,
+  borderRadius: 6,
+  minWidth: 150,
 };
 
 function exportSubsCsv(rows: AdminSubscriptionRow[]): void {

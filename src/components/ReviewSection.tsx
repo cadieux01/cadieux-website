@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import TurnstileWidget, { type TurnstileHandle } from "./TurnstileWidget";
+import Select from "./ui/Select";
 
 type Reply = {
   id: string;
@@ -379,11 +380,12 @@ export default function ReviewSection({ productSlug, scope }: Props) {
             style={inputStyle}
           />
           {scope === "all" && (
-            <select value={slugChoice} onChange={(e) => setSlugChoice(e.target.value)} style={inputStyle}>
-              {PRODUCT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value} style={{ background: "rgb(20,16,12)" }}>{o.label}</option>
-              ))}
-            </select>
+            <Select
+              value={slugChoice}
+              onChange={setSlugChoice}
+              ariaLabel="Which product is this feedback about?"
+              options={PRODUCT_OPTIONS}
+            />
           )}
           {(scope === "product" || slugChoice) && (
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

@@ -7,6 +7,8 @@ import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWid
 import { GOLD, formatDate } from "@/lib/subscription-ui";
 import { TIME_SLOTS, formatSlot } from "@/lib/subscription-setup";
 import { ADMIN_PHONE, canSelfEdit } from "@/lib/delivery-slots";
+import Select from "@/components/ui/Select";
+import DatePicker from "@/components/ui/DatePicker";
 
 type Delivery = {
   id: string;
@@ -504,27 +506,22 @@ function DirectEditPanel({
           }}
         >
           <Field label={`New date (current: ${formatDate(currentDate)})`}>
-            <input
-              type="date"
+            <DatePicker
               value={date}
               min={minDate}
-              onChange={(e) => setDate(e.target.value)}
-              style={inputStyle}
+              onChange={setDate}
+              ariaLabel="New delivery date"
+              placeholder="— Same as before —"
             />
           </Field>
           <Field label={`New time slot (current: ${formatSlot(currentSlot)})`}>
-            <select
+            <Select
               value={slot}
-              onChange={(e) => setSlot(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="">— Same as before —</option>
-              {TIME_SLOTS.map((t) => (
-                <option key={t} value={t}>
-                  {formatSlot(t)}
-                </option>
-              ))}
-            </select>
+              onChange={setSlot}
+              ariaLabel="New delivery time slot"
+              placeholder="— Same as before —"
+              options={TIME_SLOTS.map((t) => ({ value: t, label: formatSlot(t) }))}
+            />
           </Field>
 
           <TurnstileWidget
@@ -685,13 +682,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(240,223,200,0.18)",
-  borderRadius: 10,
-  color: "#FBF3D4",
-  fontSize: 14,
-  colorScheme: "dark",
-};

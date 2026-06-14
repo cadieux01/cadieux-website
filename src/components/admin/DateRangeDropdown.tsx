@@ -18,9 +18,11 @@
 
 import { useState } from "react";
 
+import Select from "@/components/ui/Select";
+import DatePicker from "@/components/ui/DatePicker";
+
 const GREEN = "#024628";
 const CREAM = "#fbf3d4";
-const BORDER = "rgba(251,243,212,0.28)";
 
 export type DateRangeValue = { from: Date; to: Date };
 
@@ -169,73 +171,48 @@ export function DateRangeDropdown({
 
   return (
     <div style={{ display: "inline-flex", flexDirection: "column", gap: "0.5rem" }}>
-      <select
-        aria-label="Date range"
-        value={preset}
-        onChange={(e) => selectPreset(e.target.value as PresetKey)}
-        style={{
-          appearance: "none",
-          WebkitAppearance: "none",
-          background: GREEN,
-          color: CREAM,
-          border: `1px solid ${GREEN}`,
-          borderRadius: 8,
-          padding: "0.45rem 2rem 0.45rem 0.8rem",
-          fontFamily: "var(--font-body)",
-          fontSize: "0.78rem",
-          letterSpacing: "0.06em",
-          cursor: "pointer",
-          backgroundImage:
-            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%23fbf3d4' stroke-width='1.5' fill='none'/></svg>\")",
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "right 0.7rem center",
-        }}
-      >
-        {PRESETS.map((p) => (
-          <option key={p.key} value={p.key} style={{ color: "#000" }}>
-            {p.label}
-          </option>
-        ))}
-        <option value="custom" style={{ color: "#000" }}>
-          Custom…
-        </option>
-      </select>
+      <div style={{ minWidth: 190 }}>
+        <Select
+          ariaLabel="Date range"
+          value={preset}
+          onChange={(v) => selectPreset(v as PresetKey)}
+          style={{ background: GREEN, borderColor: GREEN, minHeight: 0 }}
+          options={[
+            ...PRESETS.map((p) => ({ value: p.key, label: p.label })),
+            { value: "custom", label: "Custom…" },
+          ]}
+        />
+      </div>
 
       {preset === "custom" ? (
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-          <input
-            type="date"
-            value={customFrom}
-            aria-label="From date"
-            onChange={(e) => {
-              setCustomFrom(e.target.value);
-              emitCustom(e.target.value, customTo);
-            }}
-            style={dateInput}
-          />
+          <div style={{ minWidth: 170 }}>
+            <DatePicker
+              value={customFrom}
+              ariaLabel="From date"
+              placeholder="From…"
+              onChange={(v) => {
+                setCustomFrom(v);
+                emitCustom(v, customTo);
+              }}
+              style={{ minHeight: 0, fontSize: "0.85rem" }}
+            />
+          </div>
           <span style={{ color: CREAM, opacity: 0.6 }}>—</span>
-          <input
-            type="date"
-            value={customTo}
-            aria-label="To date"
-            onChange={(e) => {
-              setCustomTo(e.target.value);
-              emitCustom(customFrom, e.target.value);
-            }}
-            style={dateInput}
-          />
+          <div style={{ minWidth: 170 }}>
+            <DatePicker
+              value={customTo}
+              ariaLabel="To date"
+              placeholder="To…"
+              onChange={(v) => {
+                setCustomTo(v);
+                emitCustom(customFrom, v);
+              }}
+              style={{ minHeight: 0, fontSize: "0.85rem" }}
+            />
+          </div>
         </div>
       ) : null}
     </div>
   );
 }
-
-const dateInput: React.CSSProperties = {
-  background: "transparent",
-  border: `1px solid ${BORDER}`,
-  color: CREAM,
-  fontFamily: "var(--font-body)",
-  fontSize: "0.78rem",
-  padding: "0.35rem 0.5rem",
-  borderRadius: 6,
-};

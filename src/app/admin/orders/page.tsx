@@ -45,6 +45,7 @@ import {
   sendOrderWhatsApp,
   toNotifyStatus,
 } from "@/lib/admin-notify";
+import Select from "@/components/ui/Select";
 
 type SortKey = "created_desc" | "delivery_asc";
 
@@ -426,25 +427,17 @@ function OrdersPageInner() {
             minWidth: 240,
           }}
         />
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortKey)}
-          className="px-3 py-2 bg-transparent uppercase"
-          style={{
-            border: "1px solid rgba(245,158,11,0.3)",
-            color: "#fbf3d4",
-            fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
-            letterSpacing: "0.2em",
-          }}
-        >
-          <option value="created_desc" style={{ color: "#000" }}>
-            Newest first
-          </option>
-          <option value="delivery_asc" style={{ color: "#000" }}>
-            Delivery date ↑
-          </option>
-        </select>
+        <div style={{ minWidth: 190 }}>
+          <Select
+            value={sort}
+            onChange={(v) => setSort(v as SortKey)}
+            ariaLabel="Sort orders"
+            options={[
+              { value: "created_desc", label: "Newest first" },
+              { value: "delivery_asc", label: "Delivery date ↑" },
+            ]}
+          />
+        </div>
       </div>
 
       {selected.size > 0 ? (
@@ -641,30 +634,26 @@ function OrdersPageInner() {
                       />
                     </td>
                     <td style={td}>
-                      <select
+                      <Select
                         value={(o.status ?? "").toLowerCase()}
                         disabled={busy}
-                        onChange={(e) => {
-                          const next = e.target.value as OrderStatus;
+                        ariaLabel="Order status"
+                        style={statusSelect}
+                        onChange={(v) => {
+                          const next = v as OrderStatus;
                           if (next === "cancelled") {
                             if (!confirm("Cancel this order?")) return;
                           }
                           void patchStatus(o, next);
                         }}
-                        style={statusSelect}
-                      >
-                        {ORDER_STATUSES.map((s) => (
-                          <option key={s} value={s} style={{ color: "#000" }}>
-                            {s}
-                          </option>
-                        ))}
-                        {o.status &&
-                        !ORDER_STATUSES.includes(o.status as OrderStatus) ? (
-                          <option value={o.status} style={{ color: "#000" }}>
-                            {o.status}
-                          </option>
-                        ) : null}
-                      </select>
+                        options={[
+                          ...ORDER_STATUSES.map((s) => ({ value: s, label: s })),
+                          ...(o.status &&
+                          !ORDER_STATUSES.includes(o.status as OrderStatus)
+                            ? [{ value: o.status, label: o.status }]
+                            : []),
+                        ]}
+                      />
                       <div style={{ marginTop: 4 }}>
                         <StatusBadge status={o.status} />
                       </div>
@@ -1323,6 +1312,8 @@ const statusSelect: React.CSSProperties = {
   textTransform: "uppercase",
   cursor: "pointer",
   maxWidth: 140,
+  minHeight: 0,
+  borderRadius: 6,
 };
 
 const chipBase: React.CSSProperties = {

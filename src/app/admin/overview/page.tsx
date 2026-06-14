@@ -40,6 +40,7 @@ import {
 } from "@/components/admin/DateRangeDropdown";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatINR } from "@/lib/admin-formatting";
+import Select from "@/components/ui/Select";
 
 type OverviewResponse = {
   range: { from: string; to: string };
@@ -240,38 +241,19 @@ function TopSelector({
       >
         What do you want to see?
       </label>
-      <select
-        id="metric-select"
-        value={selected ?? ""}
-        onChange={(e) =>
-          onSelect(e.target.value ? (e.target.value as MetricKey) : null)
-        }
-        style={{
-          appearance: "none",
-          WebkitAppearance: "none",
-          background: GREEN,
-          color: CREAM,
-          border: `1px solid ${GREEN}`,
-          borderRadius: 8,
-          padding: "0.55rem 2.2rem 0.55rem 0.9rem",
-          fontFamily: "var(--font-body)",
-          fontSize: "0.8rem",
-          letterSpacing: "0.06em",
-          cursor: "pointer",
-          minWidth: "min(280px, 100%)",
-          backgroundImage:
-            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%23fbf3d4' stroke-width='1.5' fill='none'/></svg>\")",
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "right 0.85rem center",
-        }}
-      >
-        <option value="">Overview — all tiles</option>
-        {METRICS.map((m) => (
-          <option key={m.key} value={m.key} style={{ color: "#000" }}>
-            {m.label}
-          </option>
-        ))}
-      </select>
+      <div style={{ minWidth: "min(280px, 100%)" }}>
+        <Select
+          id="metric-select"
+          ariaLabel="What do you want to see?"
+          value={selected ?? ""}
+          onChange={(v) => onSelect(v ? (v as MetricKey) : null)}
+          style={{ background: GREEN, borderColor: GREEN }}
+          options={[
+            { value: "", label: "Overview — all tiles" },
+            ...METRICS.map((m) => ({ value: m.key, label: m.label })),
+          ]}
+        />
+      </div>
     </div>
   );
 }

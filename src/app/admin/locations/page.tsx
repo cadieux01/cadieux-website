@@ -25,6 +25,7 @@ import {
 } from "@react-google-maps/api";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import Select from "@/components/ui/Select";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import {
   GOOGLE_MAPS_LIBRARIES,
@@ -1163,15 +1164,16 @@ function LocationModal({
             </div>
             <div>
               <Label>Type</Label>
-              <select
+              <Select
                 value={type}
-                onChange={(e) => setType(e.target.value as PickupType)}
-                style={{ ...textInput, paddingRight: "2rem" }}
-              >
-                <option value="stall">Stall</option>
-                <option value="kitchen">Store</option>
-                <option value="partner_pickup">Other Place</option>
-              </select>
+                onChange={(v) => setType(v as PickupType)}
+                ariaLabel="Location type"
+                options={[
+                  { value: "stall", label: "Stall" },
+                  { value: "kitchen", label: "Store" },
+                  { value: "partner_pickup", label: "Other Place" },
+                ]}
+              />
             </div>
             <div>
               <Label>Area</Label>

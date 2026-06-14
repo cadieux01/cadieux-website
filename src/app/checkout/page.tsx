@@ -24,6 +24,7 @@ import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWid
 import { GOOGLE_MAPS_LOADER_ID, GOOGLE_MAPS_LIBRARIES } from "@/lib/google-maps-loader";
 import { geocodePincodeClient } from "@/lib/clientGeocode";
 import LocationPickerModal from "@/components/LocationPickerModal";
+import Select from "@/components/ui/Select";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -2305,36 +2306,17 @@ function SlotPicker({
   return (
     <label style={{ display: "block" }}>
       <span style={labelSt}>Time slot *</span>
-      <select
+      <Select
         value={deliverySlot}
-        onChange={(e) => onPickSlot(e.target.value)}
-        style={{
-          ...inputSt,
-          appearance: "none",
-          WebkitAppearance: "none",
-          background: "transparent",
-          color: deliverySlot ? "#FBF3D4" : "rgba(240,223,200,0.4)",
-          cursor: "pointer",
-        }}
-      >
-        <option value="" style={{ background: "#0e0e0e", color: "#FBF3D4" }}>
-          Select a delivery time…
-        </option>
-        {slots.map((s) => (
-          <option
-            key={s.value}
-            value={s.value}
-            disabled={s.disabled}
-            style={{
-              background: "#0e0e0e",
-              color: s.disabled ? "rgba(240,223,200,0.35)" : "#FBF3D4",
-            }}
-          >
-            {formatSlot12(s.value)}
-            {s.disabled ? " — too soon" : ""}
-          </option>
-        ))}
-      </select>
+        onChange={onPickSlot}
+        ariaLabel="Delivery time slot"
+        placeholder="Select a delivery time…"
+        options={slots.map((s) => ({
+          value: s.value,
+          label: `${formatSlot12(s.value)}${s.disabled ? " — too soon" : ""}`,
+          disabled: s.disabled,
+        }))}
+      />
     </label>
   );
 }
