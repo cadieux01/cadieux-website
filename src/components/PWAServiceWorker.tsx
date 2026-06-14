@@ -20,6 +20,23 @@ export default function PWAServiceWorker() {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
 
+    // The admin surface must NEVER be service-worker-controlled. A stale SW
+    // serving cached /_next/static chunks (CacheFirst) can break hydration of
+    // the login gate, leaving the form to do a native submit (page reload)
+    // instead of logging in — and hard-reload doesn't clear Cache Storage or
+    // unregister the SW, so it wedges indefinitely. On /admin we actively
+    // unregister any SW and skip registration so the page always runs fresh,
+    // exactly like Incognito.
+    if (window.location.pathname.startsWith("/admin")) {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((regs) => {
+          regs.forEach((r) => void r.unregister());
+        })
+        .catch(() => {});
+      return;
+    }
+
     // In dev, actively remove any SW that was installed during prod testing.
     // Otherwise dev requests get served from the prod cache and edits look
     // like they don't apply.

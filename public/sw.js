@@ -15,7 +15,7 @@
 // the new SW take over immediately. The page-side registration listens
 // for `controllerchange` and prompts the user to reload.
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const STATIC_CACHE  = `cadieux-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `cadieux-runtime-${CACHE_VERSION}`;
 
