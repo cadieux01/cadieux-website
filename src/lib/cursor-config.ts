@@ -1,32 +1,29 @@
-// Bread-cursor variant config.
+// Cursor config.
 //
-// One flag controls which cursor the whole site uses. Variants:
+// One flag controls which cursor the whole site uses:
+//   • "bread"   — premium artisan-loaf cursor (pure CSS, retina image-set,
+//                 gold glow/ring affordance on hover). This is the default.
 //   • "classic" — the original gold dot + ring GSAP overlay (CustomCursor)
-//   • "v1"      — subtle: cream bread loaf cursor; links show a gold loaf
-//   • "v2"      — loaf cursor; links show a wheat sprig
-//   • "v3"      — same as v1 + a light trailing-crumb effect (reduced-motion safe)
 //
 // To change the default for ALL visitors, edit DEFAULT_CURSOR_VARIANT below.
 //
-// To COMPARE variants on a single deploy without redeploying, append a query
-// param to any URL: ?cursor=v1 | ?cursor=v2 | ?cursor=v3 | ?cursor=classic
+// To compare the two on a single deploy without redeploying, append a query
+// param to any URL: ?cursor=bread | ?cursor=classic
 // The choice is persisted to localStorage so it sticks while you browse.
 
-export type CursorVariant = "classic" | "v1" | "v2" | "v3";
+export type CursorVariant = "classic" | "bread";
 
-export const DEFAULT_CURSOR_VARIANT: CursorVariant = "v1";
+export const DEFAULT_CURSOR_VARIANT: CursorVariant = "bread";
 
 export const CURSOR_VARIANTS: readonly CursorVariant[] = [
   "classic",
-  "v1",
-  "v2",
-  "v3",
+  "bread",
 ] as const;
 
 const STORAGE_KEY = "cadieux_cursor_variant";
 
 export function isCursorVariant(v: unknown): v is CursorVariant {
-  return v === "classic" || v === "v1" || v === "v2" || v === "v3";
+  return v === "classic" || v === "bread";
 }
 
 // Resolve the active variant client-side: a ?cursor= query param wins (and is

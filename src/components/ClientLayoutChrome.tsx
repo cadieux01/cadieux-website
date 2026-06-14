@@ -44,11 +44,7 @@ export default function ClientLayoutChrome() {
   return (
     <>
       <SmoothScroll />
-      {variant === "classic" ? (
-        <CustomCursor />
-      ) : (
-        <BreadCursor variant={variant} />
-      )}
+      {variant === "classic" ? <CustomCursor /> : <BreadCursor />}
     </>
   );
 }

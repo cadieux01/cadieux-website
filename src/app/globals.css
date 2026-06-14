@@ -340,88 +340,57 @@ select option:disabled {
   .immersive-breathe { animation: none; }
 }
 
-/* ── Bread cursor variants (desktop only) ────────────────────────────────
-   Activated by a class on <html> (bread-cursor-v1 | -v2 | -v3) set by the
-   BreadCursor component. The whole block is gated on:
+/* ── Premium artisan-loaf cursor (desktop only) ──────────────────────────
+   Activated by the `bread-cursor` class on <html>, set by the BreadCursor
+   component. The whole block is gated on:
      • (hover: hover) and (pointer: fine)  → mouse/trackpad only, never touch
      • (prefers-reduced-motion: no-preference) → reduced-motion users keep the
-       native cursor (the rules simply don't apply, so body's cursor wins)
+       native cursor (the rules simply don't apply, so the base cursor wins)
    Selectors are intentionally more specific than the base `body { cursor:none }`
-   so they override it. v3 reuses v1's art and adds the crumb trail below. */
+   so they override it.
+
+   Retina: image-set() is what actually does DPR selection — a plain url()
+   fallback chain does NOT. We pass the 40px art at 1x and the 80px art at 2x
+   so HiDPI screens fetch the sharp 2x file while it still displays at 40 CSS
+   px. A plain `url()` is kept as the final fallback for engines that lack
+   image-set, and `auto`/`pointer` as the last resort if the PNG fails to load.
+   Hotspot 9 12 sits on the loaf's upper-left crust (consistent rest/hover, so
+   the click point never jumps when the glow appears). */
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-  html.bread-cursor-v1,
-  html.bread-cursor-v1 body,
-  html.bread-cursor-v2,
-  html.bread-cursor-v2 body,
-  html.bread-cursor-v3,
-  html.bread-cursor-v3 body {
-    cursor: url(/cursors/loaf.png) 7 8, auto;
+  html.bread-cursor,
+  html.bread-cursor body {
+    cursor: url(/cursors/loaf.png) 9 12, auto;
+    cursor: image-set(
+        url(/cursors/loaf.png) 1x,
+        url(/cursors/loaf@2x.png) 2x
+      ) 9 12, auto;
   }
 
-  /* Clickable affordances. v1/v3 → a gold loaf; v2 → a wheat sprig. */
-  html.bread-cursor-v1 a,
-  html.bread-cursor-v1 button,
-  html.bread-cursor-v1 [role="button"],
-  html.bread-cursor-v1 label[for],
-  html.bread-cursor-v1 summary,
-  html.bread-cursor-v1 select,
-  html.bread-cursor-v1 .cursor-pointer,
-  html.bread-cursor-v3 a,
-  html.bread-cursor-v3 button,
-  html.bread-cursor-v3 [role="button"],
-  html.bread-cursor-v3 label[for],
-  html.bread-cursor-v3 summary,
-  html.bread-cursor-v3 select,
-  html.bread-cursor-v3 .cursor-pointer {
-    cursor: url(/cursors/loaf-gold.png) 7 8, pointer;
+  /* Clickable affordances → same loaf with a gold glow + ring behind it, so
+     hover reads as obviously different from the rest state. */
+  html.bread-cursor a,
+  html.bread-cursor button,
+  html.bread-cursor [role="button"],
+  html.bread-cursor label[for],
+  html.bread-cursor summary,
+  html.bread-cursor select,
+  html.bread-cursor .cursor-pointer {
+    cursor: url(/cursors/loaf-hover.png) 9 12, pointer;
+    cursor: image-set(
+        url(/cursors/loaf-hover.png) 1x,
+        url(/cursors/loaf-hover@2x.png) 2x
+      ) 9 12, pointer;
   }
 
-  html.bread-cursor-v2 a,
-  html.bread-cursor-v2 button,
-  html.bread-cursor-v2 [role="button"],
-  html.bread-cursor-v2 label[for],
-  html.bread-cursor-v2 summary,
-  html.bread-cursor-v2 select,
-  html.bread-cursor-v2 .cursor-pointer {
-    cursor: url(/cursors/wheat.png) 7 8, pointer;
-  }
-
-  /* Keep text editing and disabled states sensible across all variants. */
-  html[class*="bread-cursor-"] input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
-  html[class*="bread-cursor-"] textarea,
-  html[class*="bread-cursor-"] [contenteditable="true"] {
+  /* Preserve the I-beam on text entry and a sensible disabled affordance. */
+  html.bread-cursor input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
+  html.bread-cursor textarea,
+  html.bread-cursor [contenteditable="true"] {
     cursor: text;
   }
-  html[class*="bread-cursor-"] [disabled],
-  html[class*="bread-cursor-"] [aria-disabled="true"],
-  html[class*="bread-cursor-"] .cursor-not-allowed {
+  html.bread-cursor [disabled],
+  html.bread-cursor [aria-disabled="true"],
+  html.bread-cursor .cursor-not-allowed {
     cursor: not-allowed;
-  }
-}
-
-/* Trailing crumbs (v3). Spawned by BreadCursor; each removes itself on
-   animationend. Hidden entirely under reduced-motion (the JS also bails). */
-.bread-crumb {
-  position: fixed;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #e8c98f, #c9922e 70%, #8a5a17);
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  will-change: transform, opacity;
-  animation: bread-crumb-fade 0.9s ease-out forwards;
-}
-@keyframes bread-crumb-fade {
-  0% {
-    opacity: 0.85;
-    transform: translate(-50%, -50%) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, calc(-50% + 8px)) scale(0.4);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .bread-crumb {
-    display: none;
   }
 }
