@@ -17,13 +17,23 @@ import { recordAuditEvent } from "@/lib/audit-log";
 // Reject → marks the request rejected (+ admin_response) and leaves the order
 // untouched. Mirrors /api/admin/change-requests/[id].
 
+// An order line can be in either the WEB shape ({slug, kind, qty, price_inr,
+// line_total}) or the MOBILE shape ({product_id, quantity, unit_price_inr,
+// line_total_inr}). Both are accommodated so item approvals work for orders
+// placed from either client.
 type OrderItem = {
+  // web
   slug?: string;
-  name?: string;
   qty?: number;
   kind?: "once" | "sub";
   price_inr?: number;
   line_total?: number;
+  // mobile
+  product_id?: string;
+  quantity?: number;
+  unit_price_inr?: number;
+  line_total_inr?: number;
+  name?: string;
 };
 
 // Maps the RPC's raised messages to a human sentence + HTTP status.
@@ -88,30 +98,57 @@ export async function PATCH(
         return NextResponse.json({ error: "Order not found." }, { status: 404 });
       }
 
-      const reqMap = new Map(
-        ((cr.requested_items ?? []) as { slug: string; qty: number }[]).map(
-          (r) => [r.slug, Number(r.qty)] as const,
-        ),
-      );
+      // requested_items is keyed by slug (web) or product_id (mobile). Build a
+      // single lookup keyed by whichever identifier each entry carries.
+      const reqRows = (cr.requested_items ?? []) as {
+        slug?: string;
+        product_id?: string;
+        qty: number;
+      }[];
+      const bySlug = new Map<string, number>();
+      const byProductId = new Map<string, number>();
+      for (const r of reqRows) {
+        if (typeof r.slug === "string") bySlug.set(r.slug, Number(r.qty));
+        if (typeof r.product_id === "string")
+          byProductId.set(r.product_id, Number(r.qty));
+      }
+
       const orderItems = (order.items ?? []) as OrderItem[];
       let subtotal = 0;
       const newItems = orderItems.map((it) => {
+        // Web line: {slug, kind, price_inr, line_total} — sub lines untouched.
         if (
           it &&
           it.kind !== "sub" &&
           typeof it.slug === "string" &&
-          reqMap.has(it.slug)
+          bySlug.has(it.slug)
         ) {
-          const qty = reqMap.get(it.slug) as number;
+          const qty = bySlug.get(it.slug) as number;
           const price = Number(it.price_inr ?? 0);
           const lineTotal = price * qty;
           subtotal += lineTotal;
           return { ...it, qty, line_total: lineTotal };
         }
+        // Mobile line: {product_id, quantity, unit_price_inr, line_total_inr}.
+        if (
+          it &&
+          typeof it.product_id === "string" &&
+          byProductId.has(it.product_id)
+        ) {
+          const quantity = byProductId.get(it.product_id) as number;
+          const price = Number(it.unit_price_inr ?? 0);
+          const lineTotal = price * quantity;
+          subtotal += lineTotal;
+          return { ...it, quantity, line_total_inr: lineTotal };
+        }
+        // Pass-through line — count its existing line total (either shape).
         const line =
           typeof it?.line_total === "number"
             ? it.line_total
-            : Number(it?.price_inr ?? 0) * Number(it?.qty ?? 0);
+            : typeof it?.line_total_inr === "number"
+              ? it.line_total_inr
+              : Number(it?.price_inr ?? it?.unit_price_inr ?? 0) *
+                Number(it?.qty ?? it?.quantity ?? 0);
         subtotal += line;
         return it;
       });

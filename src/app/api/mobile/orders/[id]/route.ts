@@ -74,5 +74,25 @@ export async function GET(
   }
   if (!order) return fail(404, "Not found");
 
-  return NextResponse.json({ ok: true, order });
+  // ----- 4. Active pending change request (if any) -----
+  // The app shows a pending Pay Now / delivery / item change card and hides
+  // Pay Now while a request is outstanding. There is at most one pending
+  // request per order (DB partial-unique index), but order by created_at desc
+  // + limit 1 defensively.
+  const { data: pendingRequest } = await supabaseAdmin
+    .from("order_change_requests")
+    .select(
+      "id, status, type, requested_delivery_date, requested_delivery_slot, requested_delivery_address, requested_items, requested_total_amount, reason, created_at",
+    )
+    .eq("order_id", order.id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return NextResponse.json({
+    ok: true,
+    order,
+    change_request: pendingRequest ?? null,
+  });
 }
