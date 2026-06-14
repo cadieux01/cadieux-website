@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 
 import {
   type CursorVariant,
+  isBakeryVariant,
   resolveCursorVariant,
 } from "@/lib/cursor-config";
 
@@ -19,6 +20,9 @@ const CustomCursor = dynamic(() => import("@/components/CustomCursor"), {
   ssr: false,
 });
 const AnimatedCursor = dynamic(() => import("@/components/AnimatedCursor"), {
+  ssr: false,
+});
+const BakeryCursor = dynamic(() => import("@/components/BakeryCursor"), {
   ssr: false,
 });
 
@@ -46,6 +50,8 @@ export default function ClientLayoutChrome() {
       <SmoothScroll />
       {variant === "classic" ? (
         <CustomCursor />
+      ) : isBakeryVariant(variant) ? (
+        <BakeryCursor variant={variant} />
       ) : (
         <AnimatedCursor variant={variant} />
       )}

@@ -3,9 +3,7 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 
-import type { CursorVariant } from "@/lib/cursor-config";
-
-type AnimVariant = Exclude<CursorVariant, "classic">;
+type AnimVariant = "magnetic" | "glow" | "spotlight";
 
 const CLICKABLE =
   'a, button, [role="button"], label[for], summary, select, .cursor-pointer';

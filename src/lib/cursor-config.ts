@@ -1,39 +1,77 @@
 // Cursor config.
 //
 // One flag controls which cursor the whole site uses. All are pure animated
-// effects (no images) drawn on a GPU-friendly overlay:
-//   • "magnetic"  — gold dot + a spring-lagged ring that magnetically wraps
-//                   and hugs the hovered link/button's bounds. (default)
-//   • "glow"      — a warm gold blurred glow that eases after the pointer and
-//                   brightens/expands over clickables.
-//   • "spotlight" — a small gold dot + a faint soft spotlight that lightens
-//                   what it passes; a thin gold ring closes in over clickables.
+// effects (no images) drawn on a GPU-friendly overlay.
+//
+// Bakery-themed (BakeryCursor):
+//   • "dough"     — elastic dot that stretches/squishes with pointer velocity
+//                   and springs back to round when still. (default)
+//   • "flour"     — a flour-puff of cream particles bursts on click.
+//   • "ribbon"    — a golden crust-colored ribbon trails behind the pointer.
+//   • "knead"     — soft ripple expands on click; the cursor rises over clickables.
+//   • "steam"     — warm steam wisps curl up from the pointer as it moves.
+//
+// Motion overlay (AnimatedCursor):
+//   • "magnetic"  — gold dot + ring that wraps the hovered element's bounds.
+//   • "glow"      — warm gold blurred glow easing after the pointer.
+//   • "spotlight" — soft spotlight + a thin gold ring that closes in on hover.
+//
+// Original:
 //   • "classic"   — the original gold dot + ring GSAP overlay (CustomCursor).
 //
 // To change the default for ALL visitors, edit DEFAULT_CURSOR_VARIANT below.
 //
 // To compare them on a single deploy without redeploying, append a query
-// param to any URL: ?cursor=magnetic | ?cursor=glow | ?cursor=spotlight |
-// ?cursor=classic. The choice is persisted to localStorage so it sticks
-// while you browse.
+// param to any URL, e.g. ?cursor=dough | ?cursor=ribbon | ?cursor=classic.
+// The choice is persisted to localStorage so it sticks while you browse.
 
-export type CursorVariant = "classic" | "magnetic" | "glow" | "spotlight";
+export type CursorVariant =
+  | "classic"
+  | "magnetic"
+  | "glow"
+  | "spotlight"
+  | "dough"
+  | "flour"
+  | "ribbon"
+  | "knead"
+  | "steam";
 
-export const DEFAULT_CURSOR_VARIANT: CursorVariant = "magnetic";
+export const DEFAULT_CURSOR_VARIANT: CursorVariant = "dough";
 
 export const CURSOR_VARIANTS: readonly CursorVariant[] = [
   "classic",
   "magnetic",
   "glow",
   "spotlight",
+  "dough",
+  "flour",
+  "ribbon",
+  "knead",
+  "steam",
+] as const;
+
+// Variants handled by the bakery-themed overlay (BakeryCursor). The other
+// non-classic variants are handled by AnimatedCursor.
+export const BAKERY_VARIANTS = [
+  "dough",
+  "flour",
+  "ribbon",
+  "knead",
+  "steam",
 ] as const;
 
 const STORAGE_KEY = "cadieux_cursor_variant";
 
 export function isCursorVariant(v: unknown): v is CursorVariant {
   return (
-    v === "classic" || v === "magnetic" || v === "glow" || v === "spotlight"
+    typeof v === "string" && (CURSOR_VARIANTS as readonly string[]).includes(v)
   );
+}
+
+export function isBakeryVariant(
+  v: CursorVariant,
+): v is (typeof BAKERY_VARIANTS)[number] {
+  return (BAKERY_VARIANTS as readonly string[]).includes(v);
 }
 
 // Resolve the active variant client-side: a ?cursor= query param wins (and is
