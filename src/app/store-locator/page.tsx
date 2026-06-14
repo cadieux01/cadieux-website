@@ -182,6 +182,7 @@ export default function StoreLocatorPage() {
               id="area-dropdown"
               role="listbox"
               className="cdx-area-dropdown"
+              data-lenis-prevent
               style={{
                 position: "absolute", left: 0, right: 0, top: "calc(100% + 6px)",
                 background: "#0a0805",

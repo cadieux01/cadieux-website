@@ -129,8 +129,11 @@ export default function Nav() {
           <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)" }}>Menu</p>
         </div>
 
-        {/* Scrollable nav body — everything below the sticky header. */}
-        <div style={{
+        {/* Scrollable nav body — everything below the sticky header.
+            data-lenis-prevent keeps Lenis from hijacking the wheel here so
+            the drawer scrolls natively (smoothly) instead of fighting the
+            page-level smooth scroll. */}
+        <div data-lenis-prevent style={{
           position: "relative", zIndex: 1,
           flex: 1,
           minHeight: 0,

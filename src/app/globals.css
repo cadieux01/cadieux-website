@@ -114,6 +114,50 @@ body {
   }
 }
 
+/* ── Brand dropdowns / selects ──────────────────────────────────────
+   Unifies every native <select> across the site + admin to the brand
+   palette (Foundation Green / cream / gold). Individual selects set
+   their own background-color/width inline; this layer owns the parts
+   that previously looked generic or inconsistent: the dropdown arrow
+   (a gold chevron — some selects had the native arrow, some had none),
+   the gold border, the focus ring, and the option list colors (which
+   defaulted to a white menu with black text). `!important` is used
+   deliberately so a single design-system rule wins over the scattered
+   inline styles without having to edit ~16 call sites. */
+select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  border: 1px solid rgba(201, 169, 110, 0.4) !important; /* gold */
+  border-radius: 8px !important;
+  padding-right: 2.25rem !important; /* room for the chevron */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%23c9a96e' stroke-width='1.5' fill='none'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.8rem center !important;
+  background-size: 12px 8px !important;
+  font-family: var(--font-body);
+  cursor: pointer;
+}
+/* Dark fallback background only when a select doesn't set one inline. */
+select:not([style*="background"]) {
+  background-color: #0e0e0e;
+  color: var(--color-cream);
+}
+select:focus-visible {
+  outline: none !important;
+  border-color: #c9a96e !important;
+  box-shadow: 0 0 0 2px rgba(201, 169, 110, 0.25) !important;
+}
+/* The native option popup — force a dark, cream-on-dark list everywhere
+   instead of the OS default white menu. */
+select option {
+  background-color: #0e0e0e !important;
+  color: var(--color-cream) !important;
+}
+select option:disabled {
+  color: rgba(251, 243, 212, 0.35) !important;
+}
+
 /* Glass panel */
 .glass {
   background: var(--glass-bg);

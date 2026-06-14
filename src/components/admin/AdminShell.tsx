@@ -530,6 +530,7 @@ function AdminDrawer({
             its allocated track and trigger overflow. */}
         <nav
           aria-label="Admin sections"
+          data-lenis-prevent
           style={{
             flexGrow: 1,
             flexShrink: 1,
@@ -715,9 +716,27 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
         >
           Cadieux Admin
         </h1>
+        {/* Hidden username field — gives the browser password manager a
+            stable identity to associate the saved admin password with, so
+            "save password" + autofill work (a lone password field is often
+            ignored by managers). Off-screen, not display:none, so it stays
+            in the autofill flow without being interactive. */}
+        <input
+          type="text"
+          name="username"
+          autoComplete="username"
+          value="admin"
+          readOnly
+          tabIndex={-1}
+          aria-hidden="true"
+          style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", border: 0 }}
+        />
         <div className="relative">
           <input
             type={showPassword ? "text" : "password"}
+            name="password"
+            id="admin-password"
+            autoComplete="current-password"
             autoFocus
             value={value}
             onChange={(e) => setValue(e.target.value)}

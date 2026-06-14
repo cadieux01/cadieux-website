@@ -37,13 +37,16 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
   const [activeIdx, setActiveIdx] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  // Per-tile quantity + add-to-cart. Lives inside the wrapping <Link>, so
-  // every control stops propagation + preventDefault to avoid navigating
-  // to the PDP when the customer is just choosing units here.
-  const { addToCart } = useCart();
-  const [qty, setQty] = useState(1);
-  const [added, setAdded] = useState(false);
-  const addedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Per-tile add-to-cart. The stepper reflects the LIVE cart quantity for
+  // this product (0 when it isn't in the cart), so the controls are exact:
+  // "Add" goes 0 → 1, "+" increments, and "−" at 1 removes the line (1 → 0).
+  // Lives inside the wrapping <Link>, so every control stops propagation +
+  // preventDefault to avoid navigating to the PDP.
+  const { cart, addToCart, updateQty, removeFromCart } = useCart();
+  const cartIndex = cart.findIndex(
+    (c) => c.productIndex === productIndex && c.orderType === "once"
+  );
+  const inCartQty = cartIndex >= 0 ? cart[cartIndex].qty : 0;
 
   const stop = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -53,10 +56,20 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
   const handleAdd = (e: React.MouseEvent) => {
     stop(e);
     if (outOfStock) return;
-    addToCart({ productIndex, name, price, qty, orderType: "once" });
-    setAdded(true);
-    if (addedTimer.current) clearTimeout(addedTimer.current);
-    addedTimer.current = setTimeout(() => setAdded(false), 1600);
+    addToCart({ productIndex, name, price, qty: 1, orderType: "once" });
+  };
+
+  const handleIncrease = (e: React.MouseEvent) => {
+    stop(e);
+    if (outOfStock || cartIndex < 0) return;
+    updateQty(cartIndex, Math.min(99, inCartQty + 1));
+  };
+
+  const handleDecrease = (e: React.MouseEvent) => {
+    stop(e);
+    if (cartIndex < 0) return;
+    if (inCartQty <= 1) removeFromCart(cartIndex);
+    else updateQty(cartIndex, inCartQty - 1);
   };
 
   // Track pointer drag on the media so a horizontal swipe doesn't get interpreted
@@ -421,49 +434,8 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               Unavailable
             </span>
           ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {/* Quantity stepper */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  border: "1px solid rgba(251,243,212,0.25)",
-                  borderRadius: 8,
-                  overflow: "hidden",
-                }}
-              >
-                <button
-                  type="button"
-                  aria-label="Decrease quantity"
-                  onClick={(e) => { stop(e); setQty((q) => Math.max(1, q - 1)); }}
-                  style={qtyBtnStyle}
-                >
-                  −
-                </button>
-                <span
-                  aria-live="polite"
-                  style={{
-                    minWidth: 26,
-                    textAlign: "center",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: "#FBF3D4",
-                  }}
-                >
-                  {qty}
-                </span>
-                <button
-                  type="button"
-                  aria-label="Increase quantity"
-                  onClick={(e) => { stop(e); setQty((q) => Math.min(99, q + 1)); }}
-                  style={qtyBtnStyle}
-                >
-                  +
-                </button>
-              </div>
-
-              {/* Add to cart */}
+            inCartQty === 0 ? (
+              /* Not in cart — single Add button takes it 0 → 1. */
               <button
                 type="button"
                 onClick={handleAdd}
@@ -483,9 +455,50 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   whiteSpace: "nowrap",
                 }}
               >
-                {added ? "Added ✓" : "Add"}
+                Add
               </button>
-            </div>
+            ) : (
+              /* In cart — stepper reflects the live cart qty; − at 1 removes. */
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  border: "1px solid rgba(251,243,212,0.25)",
+                  borderRadius: 8,
+                  overflow: "hidden",
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label={inCartQty <= 1 ? "Remove from cart" : "Decrease quantity"}
+                  onClick={handleDecrease}
+                  style={qtyBtnStyle}
+                >
+                  −
+                </button>
+                <span
+                  aria-live="polite"
+                  style={{
+                    minWidth: 26,
+                    textAlign: "center",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "#FBF3D4",
+                  }}
+                >
+                  {inCartQty}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Increase quantity"
+                  onClick={handleIncrease}
+                  style={qtyBtnStyle}
+                >
+                  +
+                </button>
+              </div>
+            )
           )}
         </div>
       </div>

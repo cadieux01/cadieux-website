@@ -102,7 +102,7 @@ export default function CartPage() {
                       </span>
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid rgba(251,243,212,0.15)" }}>
-                        <button onClick={() => updateQty(i, Math.max(1, item.qty - 1))} style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}>−</button>
+                        <button onClick={() => (item.qty <= 1 ? removeFromCart(i) : updateQty(i, item.qty - 1))} style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}>−</button>
                         <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#FBF3D4", width: 34, textAlign: "center" }}>{item.qty}</span>
                         <button onClick={() => updateQty(i, item.qty + 1)} style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}>+</button>
                       </div>
