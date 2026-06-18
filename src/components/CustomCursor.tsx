@@ -1,15 +1,24 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import gsap from 'gsap'
+
+// Inner gold dot tracks the pointer 1:1; the outer ring eases (lags) behind it,
+// giving the elastic "dough" trail. Hovering a clickable grows the ring / shrinks
+// the dot; clicking pulses the ring. All of that is driven on ONE
+// requestAnimationFrame loop writing `transform: translate3d()` straight to the
+// DOM via refs — never animating left/top (layout) and never re-rendering React
+// on mousemove. This is the GPU-composited, 60fps version of the prior
+// gsap + left/top implementation; the look is intentionally identical.
+const INNER = 8
+const OUTER = 36
 
 export default function CustomCursor() {
   const innerRef = useRef<HTMLDivElement>(null)
   const outerRef = useRef<HTMLDivElement>(null)
   const [isTouchDevice, setIsTouchDevice] = useState(false)
-  const [visible, setVisible] = useState(false)
 
   useEffect(() => {
+    // Disable entirely on touch / no-hover devices — they use the native cursor.
     const mediaQuery = window.matchMedia('(hover: none)')
     if (mediaQuery.matches) {
       setIsTouchDevice(true)
@@ -20,54 +29,113 @@ export default function CustomCursor() {
     const outer = outerRef.current
     if (!inner || !outer) return
 
-    // Batch inner cursor writes through rAF — coalesces mousemove flurries
-    // (browsers can fire >120/sec on 120Hz pointers) into one paint per frame.
-    let pendingX = 0
-    let pendingY = 0
-    let rafId = 0
-    const flush = () => {
-      rafId = 0
-      inner.style.left = `${pendingX}px`
-      inner.style.top = `${pendingY}px`
+    // Raw pointer target (updated in mousemove only — no math, no layout reads).
+    let tx = 0
+    let ty = 0
+    // Outer ring eased position (trails the target).
+    let ox = 0
+    let oy = 0
+    // Eased scales. Targets flip on hover/leave/click; the loop springs to them.
+    let innerScale = 1
+    let outerScale = 1
+    let innerTarget = 1
+    let outerTarget = 1
+
+    let visible = false
+    let started = false
+
+    // Easing factors (per frame @60fps). POS_K reproduces the old ~0.15s
+    // power2.out ring lag; SCALE_K the ~0.3s hover/scale tween.
+    const POS_K = 0.18
+    const SCALE_K = 0.22
+
+    const write = () => {
+      // No offsetWidth/Height reads — sizes are known constants, so the loop
+      // never touches layout. translate3d keeps both elements GPU-composited.
+      inner.style.transform =
+        `translate3d(${tx - INNER / 2}px, ${ty - INNER / 2}px, 0) scale(${innerScale})`
+      outer.style.transform =
+        `translate3d(${ox - OUTER / 2}px, ${oy - OUTER / 2}px, 0) scale(${outerScale})`
     }
 
-    // gsap.quickTo creates the tween ONCE and reuses it. Replaces the prior
-    // per-mousemove gsap.to() which allocated a fresh tween up to 120/sec on
-    // 120Hz pointers — that allocation pressure was a major contributor to
-    // input lag and dropped frames during scroll.
-    const outerX = gsap.quickTo(outer, 'left', { duration: 0.15, ease: 'power2.out' })
-    const outerY = gsap.quickTo(outer, 'top', { duration: 0.15, ease: 'power2.out' })
+    let rafId = 0
+    let running = false
+    const frame = () => {
+      // Inner dot tracks the pointer exactly (1 frame coalesced, like before).
+      // Outer ring eases toward it → elastic trail.
+      ox += (tx - ox) * POS_K
+      oy += (ty - oy) * POS_K
+      innerScale += (innerTarget - innerScale) * SCALE_K
+      outerScale += (outerTarget - outerScale) * SCALE_K
+
+      const settled =
+        Math.abs(tx - ox) < 0.1 &&
+        Math.abs(ty - oy) < 0.1 &&
+        Math.abs(innerTarget - innerScale) < 0.001 &&
+        Math.abs(outerTarget - outerScale) < 0.001
+
+      if (settled) {
+        ox = tx
+        oy = ty
+        innerScale = innerTarget
+        outerScale = outerTarget
+        write()
+        running = false
+        rafId = 0
+        return
+      }
+
+      write()
+      rafId = requestAnimationFrame(frame)
+    }
+
+    const ensureLoop = () => {
+      if (!running) {
+        running = true
+        rafId = requestAnimationFrame(frame)
+      }
+    }
 
     const onMouseMove = (e: MouseEvent) => {
-      const { clientX: x, clientY: y } = e
-      pendingX = x
-      pendingY = y
-      setVisible(true)
-      if (!rafId) rafId = requestAnimationFrame(flush)
-
-      outerX(x)
-      outerY(y)
+      tx = e.clientX
+      ty = e.clientY
+      if (!started) {
+        // First move: jump the ring to the pointer so it doesn't slide in
+        // from the corner, then reveal both.
+        started = true
+        ox = tx
+        oy = ty
+      }
+      if (!visible) {
+        visible = true
+        inner.style.opacity = '1'
+        outer.style.opacity = '1'
+      }
+      ensureLoop()
     }
 
     const onMouseEnter = () => {
-      gsap.to(outer, { scale: 2.2, duration: 0.3, ease: 'power2.out' })
-      gsap.to(inner, { scale: 0.4, duration: 0.3, ease: 'power2.out' })
+      outerTarget = 2.2
+      innerTarget = 0.4
+      ensureLoop()
     }
 
     const onMouseLeave = () => {
-      gsap.to(outer, { scale: 1, duration: 0.3, ease: 'power2.out' })
-      gsap.to(inner, { scale: 1, duration: 0.3, ease: 'power2.out' })
+      outerTarget = 1
+      innerTarget = 1
+      ensureLoop()
     }
 
+    let clickTimer: number | undefined
     const onClick = () => {
-      gsap.to(outer, {
-        scale: 0.8,
-        duration: 0.1,
-        ease: 'power2.in',
-        onComplete: () => {
-          gsap.to(outer, { scale: 1, duration: 0.2, ease: 'power2.out' })
-        },
-      })
+      outerTarget = 0.8
+      ensureLoop()
+      if (clickTimer !== undefined) window.clearTimeout(clickTimer)
+      clickTimer = window.setTimeout(() => {
+        // Restore to whatever state the ring should rest in (hover vs idle).
+        outerTarget = innerTarget === 0.4 ? 2.2 : 1
+        ensureLoop()
+      }, 120)
     }
 
     let currentClickables: NodeListOf<Element> | Element[] = []
@@ -110,6 +178,7 @@ export default function CustomCursor() {
       })
       observer.disconnect()
       if (debounceId !== undefined) window.clearTimeout(debounceId)
+      if (clickTimer !== undefined) window.clearTimeout(clickTimer)
       if (rafId) cancelAnimationFrame(rafId)
     }
   }, [isTouchDevice])
@@ -122,28 +191,34 @@ export default function CustomCursor() {
         ref={innerRef}
         style={{
           position: 'fixed',
-          width: 8,
-          height: 8,
+          top: 0,
+          left: 0,
+          width: INNER,
+          height: INNER,
           borderRadius: '50%',
           backgroundColor: '#c9922e',
           pointerEvents: 'none',
           zIndex: 9999,
-          transform: 'translate(-50%, -50%)',
-          opacity: visible ? 1 : 0,
+          opacity: 0,
+          willChange: 'transform',
+          transform: 'translate3d(-100px, -100px, 0)',
         }}
       />
       <div
         ref={outerRef}
         style={{
           position: 'fixed',
-          width: 36,
-          height: 36,
+          top: 0,
+          left: 0,
+          width: OUTER,
+          height: OUTER,
           borderRadius: '50%',
           border: '1px solid rgba(201,146,46,0.4)',
           pointerEvents: 'none',
           zIndex: 9999,
-          transform: 'translate(-50%, -50%)',
-          opacity: visible ? 1 : 0,
+          opacity: 0,
+          willChange: 'transform',
+          transform: 'translate3d(-100px, -100px, 0)',
         }}
       />
     </>
