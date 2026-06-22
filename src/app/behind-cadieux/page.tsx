@@ -91,10 +91,10 @@ const STATS_LEAD =
   "Most \u201chigh protein\u201d products tell you what\u2019s in them. Cadieux is engineered for what your body can actually absorb.";
 
 const STATS: Stat[] = [
-  { value: "7.32g", label: "Protein per slice" },
-  { value: "22.94g", label: "Protein per 100g" },
-  { value: "58.6g", label: "Protein per loaf" },
-  { value: "6.46g", label: "Dietary fibre per 100g" },
+  { value: "High protein", label: "Per slice" },
+  { value: "Rich in fibre", label: "Per serving" },
+  { value: "Dense & nourishing", label: "Every loaf" },
+  { value: "Lab-verified", label: "Quality standard" },
   { value: "Zero", label: "Trans fat \u00b7 No animal fat \u00b7 Multigrain" },
 ];
 

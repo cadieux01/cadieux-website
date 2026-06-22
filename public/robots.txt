@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api
+Disallow: /account
+Disallow: /.next
+Disallow: /static
+
+# Sitemap
+Sitemap: https://www.cadieux.in/sitemap.xml
+
+# Crawl delay (optional - respectful rate limiting)
+Crawl-delay: 1

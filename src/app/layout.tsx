@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Cormorant_Garamond, Jost } from "next/font/google";
 import "./globals.css";
 import ClientLayoutChrome from "@/components/ClientLayoutChrome";
@@ -30,10 +31,32 @@ const jost = Jost({
 });
 
 export const metadata: Metadata = {
-  title: "Cadieux",
-  description: "Same Bread. Better Built.",
+  title: "Cadieux | Premium High-Protein Bread, Visakhapatnam",
+  description: "Premium high-protein bread baked fresh in Visakhapatnam. Lab-tested, nutrient-dense, delivered to your door. More protein, same routine.",
   applicationName: "Cadieux",
   manifest: "/manifest.json",
+  robots: "index, follow",
+  openGraph: {
+    type: "website",
+    url: "https://www.cadieux.in",
+    title: "Cadieux | Premium High-Protein Bread, Visakhapatnam",
+    description: "Premium high-protein bread baked fresh in Visakhapatnam. Lab-tested, nutrient-dense, delivered to your door.",
+    images: [
+      {
+        url: "https://www.cadieux.in/icons/icon-512.png",
+        width: 512,
+        height: 512,
+        alt: "Cadieux logo",
+      },
+    ],
+    siteName: "Cadieux",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Cadieux | Premium High-Protein Bread",
+    description: "Baked fresh in Visakhapatnam. Lab-tested. More protein, same routine.",
+    images: ["https://www.cadieux.in/icons/icon-512.png"],
+  },
   // Apple PWA: capable + black-translucent gives the immersive standalone
   // look that matches our walnut-green theme. Splash images are mapped to
   // every iPhone/iPad screen size we ship assets for; iOS picks the closest
@@ -101,8 +124,48 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Organization schema for homepage
+  const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Cadieux",
+    url: "https://www.cadieux.in",
+    logo: "https://www.cadieux.in/icons/icon-512.png",
+    sameAs: ["https://www.instagram.com/CadieuxIndia"],
+    foundingLocation: {
+      "@type": "City",
+      name: "Visakhapatnam",
+      addressCountry: "IN",
+    },
+    areaServed: "IN",
+  };
+
+  // LocalBusiness schema for Visakhapatnam-based operations
+  const localBusinessSchema = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: "Cadieux",
+    url: "https://www.cadieux.in",
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: "Visakhapatnam",
+      addressRegion: "AP",
+      addressCountry: "IN",
+    },
+    areaServed: "IN",
+  };
+
   return (
     <html lang="en" className={`${cormorant.variable} ${jost.variable}`} suppressHydrationWarning>
+      <head>
+        {/* JSON-LD structured data */}
+        <Script id="organization-schema" type="application/ld+json">
+          {JSON.stringify(organizationSchema)}
+        </Script>
+        <Script id="local-business-schema" type="application/ld+json">
+          {JSON.stringify(localBusinessSchema)}
+        </Script>
+      </head>
       <body className="font-body" suppressHydrationWarning>
         <CartProvider>
           {/* SmoothScroll + CustomCursor are loaded only on fine-pointer

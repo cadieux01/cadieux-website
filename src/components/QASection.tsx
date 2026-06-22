@@ -20,7 +20,7 @@ const QAS = [
   },
   {
     q: "Why protein bread?",
-    a: "Most bread takes from your body. Cadieux gives back — 7g protein and 6g fibre a slice, from real seeds and ancient grains. Same morning. Better fuel.",
+    a: "Most bread takes from your body. Cadieux gives back — high protein and rich fibre from real seeds and ancient grains. Same morning. Better fuel.",
   },
 ];
 

@@ -6,12 +6,72 @@
 // product because of a transient Supabase outage.
 
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 
-import { PRODUCTS } from "@/lib/data";
+import { PRODUCTS, PRODUCT_DETAILS } from "@/lib/data";
 import { getProductAvailability, getProductBySlug } from "@/lib/products";
 import { getProductReports } from "@/lib/product-reports";
 
 import ProductDetailClient from "./ProductDetailClient";
+
+// Dynamic metadata for product pages
+export async function generateMetadata({
+  params,
+}: {
+  params: { slug: string };
+}): Promise<Metadata> {
+  const { slug } = params;
+  const product = PRODUCTS.find((p) => p.slug === slug);
+  const productRow = await getProductBySlug(slug);
+
+  if (!product) {
+    return {
+      title: "Product Not Found",
+      description: "The product you're looking for is not available.",
+    };
+  }
+
+  const title =
+    slug === "multigrain"
+      ? "Cadieux Multi-Grain Bread | High Protein, Lab-Tested"
+      : slug === "high-protein"
+        ? "Cadieux Plain Bread | High Protein, Fresh Delivery"
+        : `${product.name} | Cadieux`;
+
+  const description =
+    slug === "multigrain"
+      ? "Cadieux Multi-Grain: Ancient grains with high protein and rich fibre. Lab-verified ingredients. Order fresh delivery in Vizag."
+      : slug === "high-protein"
+        ? "Cadieux Plain Bread: Clean, high-protein sandwich bread. Fresh-baked daily in Visakhapatnam. Perfect for every meal."
+        : product.subtitle || product.desc;
+
+  const price = productRow?.price_inr ?? product.price;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      type: "website",
+      url: `https://www.cadieux.in/shop/${slug}`,
+      title,
+      description,
+      images: [
+        {
+          url: product.image || "/hero.jpg",
+          width: 1200,
+          height: 630,
+          alt: product.name,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [product.image || "/hero.jpg"],
+    },
+  };
+}
 
 export default async function ProductDetailPage({
   params,

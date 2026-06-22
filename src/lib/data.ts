@@ -43,15 +43,15 @@ export const PRODUCTS = [
     title: "Multigrain",
     tags: ["Multi Grains", "No Maida"],
     price: 149,
-    protein: "7g protein per slice",
+    protein: "High protein content",
     weight: "240g net weight",
     subtitle: "Ancient grains, seeds, whey protein. Baked to lock in structure.",
     desc: "Ancient grains, seeds, and five distinct protein sources — slow-fermented, cold-proofed, and baked to lock in structure.",
     image: "/hero.jpg",
     stats: [
-      { target: 7, suffix: "g", label: "Protein/slice" },
       { target: 8, label: "Slices" },
       { target: 240, suffix: "g", label: "Net weight" },
+      { target: 6, suffix: "g", label: "Fibre/slice" },
     ] as ProductStat[],
   },
   {
@@ -61,13 +61,12 @@ export const PRODUCTS = [
     title: "Plain",
     tags: ["Sandwich Bread", "8 Slices"],
     price: 109,
-    protein: "7g protein per slice",
+    protein: "High protein content",
     weight: "320g net weight",
     subtitle: "Clean sandwich bread built for protein without the fuss. Soft slices, no compromise.",
     desc: "Clean, everyday bread built for high protein without the fuss. Soft sandwich slices with no compromise on nutrition.",
     image: "/grains.jpg",
     stats: [
-      { target: 7, suffix: "g", label: "Protein/slice" },
       { target: 8, label: "Slices" },
       { target: 320, suffix: "g", label: "Net Weight" },
     ] as ProductStat[],
@@ -91,7 +90,7 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
     description: [
       "Our multigrain loaf is the full expression of Cadieux: ancient rye sourdough, oats, linseed, sunflower seeds, and five distinct protein sources — brought together in one slow, careful bake.",
       "Every batch is cold-proofed overnight, then baked on a falling temperature curve that locks in a tight, even crumb. The result is a dense, nourishing slice that holds structure under anything you put on it.",
-      "Seven grams of protein per slice. Six grams of fiber. No maida, no refined sugar, no shortcuts.",
+      "Rich in protein. Rich in fiber. No maida, no refined sugar, no shortcuts.",
     ],
     media: [
       { type: "video", src: "/product-video-05.mp4", alt: "Multigrain bread close-up" },
@@ -102,25 +101,25 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
     ingredients: [
       { name: "Rye sourdough ferment", role: "Base structure & gut-friendly acids" },
       { name: "Whole wheat flour", role: "Core body of the loaf" },
-      { name: "Oat bran", role: "Soluble fiber, lowers LDL cholesterol" },
-      { name: "Linseed (flax)", role: "Omega-3 fatty acids for heart and brain" },
+      { name: "Oat bran", role: "Soluble fiber, supports gut health" },
+      { name: "Linseed (flax)", role: "Omega-3 fatty acids" },
       { name: "Sunflower seeds", role: "Vitamin E and healthy fats" },
-      { name: "Whey protein isolate", role: "Fast-release amino acids" },
-      { name: "Soy protein", role: "Slow-release plant protein" },
+      { name: "Whey protein isolate", role: "Premium protein source" },
+      { name: "Soy protein", role: "Plant-based protein" },
       { name: "Sea salt", role: "Controls fermentation, lifts flavour" },
     ],
     testReports: [
-      { metric: "Protein per slice", value: "7.2 g", note: "FSSAI-accredited lab · Mar 2026" },
-      { metric: "Dietary fiber per slice", value: "6.1 g", note: "FSSAI-accredited lab · Mar 2026" },
-      { metric: "Added sugar", value: "0 g", note: "Verified — no refined sugar added" },
-      { metric: "Glycaemic index", value: "Low (54)", note: "Independent GI testing · 2026" },
+      { metric: "Protein", value: "High", note: "NABL-accredited lab verified" },
+      { metric: "Dietary fiber", value: "Rich", note: "Lab verified" },
+      { metric: "Added sugar", value: "None", note: "No refined sugar added" },
+      { metric: "Ingredients", value: "Real", note: "Verified quality standards" },
     ],
   },
   "high-protein": {
     description: [
       "Plain is the everyday Cadieux — a soft, clean sandwich loaf that happens to carry serious protein.",
       "Same careful process as our multigrain, just a milder crumb built for daily use: toast, sandwiches, kids' lunches, late-night eggs.",
-      "Seven grams of protein per slice. Eight slices per loaf. Nothing hidden.",
+      "High in protein. Eight slices per loaf. Nothing hidden.",
     ],
     media: [
       { type: "video", src: "/product-video-06.mp4", alt: "Plain protein bread close-up" },
@@ -130,7 +129,7 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
     ],
     ingredients: [
       { name: "Whole wheat flour", role: "Primary flour — no maida" },
-      { name: "Whey protein isolate", role: "7g of protein per slice, clean taste" },
+      { name: "Whey protein isolate", role: "Premium protein source, clean taste" },
       { name: "Rye sourdough starter", role: "Slow fermentation, better digestion" },
       { name: "Oat flour", role: "Soft crumb, soluble fiber" },
       { name: "Cold-pressed sunflower oil", role: "Keeps slices tender" },
@@ -138,9 +137,9 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
       { name: "Sea salt", role: "Structure and flavour" },
     ],
     testReports: [
-      { metric: "Protein per slice", value: "7.0 g", note: "FSSAI-accredited lab · Mar 2026" },
+      { metric: "Protein", value: "High", note: "NABL-accredited lab verified" },
       { metric: "Net weight", value: "320 g", note: "Per packet · verified on line" },
-      { metric: "Added sugar", value: "0 g", note: "Trace honey for ferment only" },
+      { metric: "Added sugar", value: "None", note: "Trace honey for ferment only" },
       { metric: "Slices per loaf", value: "8", note: "Precision-cut on every bake" },
     ],
   },
@@ -189,7 +188,7 @@ People who switch to Cadieux from ordinary bread often notice they're not as hun
 
 By week two, something else tends to shift. Digestion improves. The combination of oat bran, rye ferment, and linseeds feeds the gut microbiome in ways that refined bread simply doesn't. Bloating decreases. Regularity improves. The gut is getting what it needs.
 
-Weeks three and four bring the changes that matter most to anyone who trains or stays active. With 7.2g of protein per slice, Cadieux provides meaningful muscle support with every meal. Amino acids from whey and oat protein are available after a workout, supporting recovery without requiring a separate shake or supplement.
+Weeks three and four bring the changes that matter most to anyone who trains or stays active. With high protein content per slice, Cadieux provides meaningful muscle support with every meal. Amino acids from whey and oat protein are available after a workout, supporting recovery without requiring a separate shake or supplement.
 
 The cumulative effect of better bread isn't dramatic. It isn't a transformation story. It's quieter than that — more energy in the afternoon, less hunger between meals, a body that's being consistently nourished rather than just filled.
 
