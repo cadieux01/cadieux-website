@@ -160,545 +160,606 @@ export type BlogPostType = {
 };
 
 export const BLOG_POSTS: BlogPostType[] = [
-  // Tier 1 posts
+  {
+    title: "Healthy Bread in Visakhapatnam: A Local Buyer's Guide",
+    slug: "healthy-bread-visakhapatnam-guide",
+    brief: "Every bread wrapper in Vizag claims to be the healthy one. Most of that claim is in the font size, not the ingredients.",
+    body: `Every bread wrapper in Vizag claims to be the healthy one. Most of that claim is in the font size, not the ingredients.
+
+Here's what actually separates a high-protein loaf from a loaf that just says so.
+
+**Check the protein-to-carb ratio, not just the protein number**
+
+A big protein number means nothing if the carbs are bigger. The ratio between the two tells you whether you're eating real protein bread or sweetened bread with a protein sticker on it.
+
+**Check the ingredient list length, not just the front label**
+
+Short list, recognizable ingredients — that's usually a good sign. A long list of stabilizers and gums is usually bread built for shelf life, not for you.
+
+**Check who tested it**
+
+"Lab-tested" should mean something specific — an actual lab, an actual report, not a number someone wrote on a design file. Ask the brand if they'll show you the report. If they won't, that tells you something.
+
+**Check where it's actually baked**
+
+Bread that travels far needs to survive the trip. That usually means more preservatives, less freshness, and a longer gap between oven and your kitchen.
+
+**Where Cadieux fits**
+
+We're not asking you to take our word for any of this. We're asking you to apply the same checklist to us that you'd apply to anyone else. Real ratio. Short ingredient list. Independent lab testing. Baked in Visakhapatnam, not shipped in.
+
+That's the whole pitch. No louder than that.
+
+**See for yourself**
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "What to actually look for in high-protein bread in Visakhapatnam, beyond the marketing on the wrapper. A buyer's guide, not a sales pitch.",
+    primary_keyword: "healthy bread Visakhapatnam",
+    secondary_keywords: ["healthy bread Vizag", "best bread Vizag", "premium bread Visakhapatnam"],
+    date: "2026-06-22",
+    author: "Cadieux",
+    pillar: "Protein Education",
+    tier: 1,
+  },
   {
     title: "Where to Buy High-Protein Bread in Visakhapatnam",
     slug: "high-protein-bread-visakhapatnam",
-    brief: "Visakhapatnam has exactly one place to find high-protein bread that's baked fresh every morning: our pickup points",
-    body: `Visakhapatnam has exactly one place to find high-protein bread that's baked fresh every morning: our pickup points across the city, plus direct delivery to your door.
+    brief: "Most \"high-protein\" bread on a Vizag shelf has traveled further than you have this week.",
+    body: `Most "high-protein" bread on a Vizag shelf has traveled further than you have this week.
 
-Most protein bread you'll find online ships from across the country — Delhi, Mumbai, Bangalore — which means it arrives days old. By the time it reaches your kitchen, the crumb has already begun to dry, the fermentation is stalled, and half the promise is already spent.
+Shipped from another state, sitting in transit, then sitting in a warehouse, then sitting on a shelf. By the time it reaches you, freshness is a marketing word, not a fact.
 
-Cadieux is different because we bake here, in Vizag. Every loaf is built overnight and on your porch by dawn, still warm enough to feel the sourdough fermentation working through it.
+Cadieux doesn't ship in. We bake in Visakhapatnam, for Visakhapatnam.
 
-## Pickup Locations
+**Why that matters more than the label**
 
-Our model is simple: baked fresh in small batches every morning, distributed to local retail partners who know their customers. Find us at select stores across MVP Colony, Madhurawada, and Chinna Waltair. Each location stocks both Plain and Multi-Grain.
+A loaf baked three states away has to survive the trip. That means preservatives, that means denser packaging, that means a shelf life built for a truck, not for your kitchen.
 
-The shelf window is 4–5 days from bake date. We stamp every loaf so you can verify freshness. No preservatives, no shelf-life tricks — just bread that is honest about what it is.
+A loaf baked here doesn't need any of that. It needs to survive your week, not a warehouse.
 
-## Delivery to Your Door
+**Where Cadieux reaches right now**
 
-We deliver across Vizag within 12 hours of a booking. Order by midnight for next-day morning delivery. Subscription keeps it even simpler: same day, same time, every week.
+We're rolling out delivery across Visakhapatnam in phases. Order through cadieux.in and we'll confirm whether your address is in today's delivery window.
 
-Distance-based fees apply (delivery logistics are real), but ordering a subscription locks in the lowest rate and ensures you never run out.
+If we're not there yet, we will be soon. Vizag first. Always.
 
-## Why Local Matters
+**What you're actually getting**
 
-A loaf shipped across India spends 3–5 days in transit. Cold chain breaks. Fermentation stalls. Moisture migrates. By the time it lands, it tastes like a loaf from last week, because it is one.
+High protein. Real fibre. Bread that tastes like bread, not like a supplement wearing a disguise.
 
-When you buy from us in Vizag, you're buying from the same day it was baked. Not yesterday. Not two days ago. Today.
+We didn't build Cadieux to be the loudest protein brand in India. We built it to be the one Vizag actually reaches for.
 
-That's what fresh bread means. Not a concept. Not a marketing claim. A physical fact you can taste.`,
-    meta_description: "Where to find Cadieux high-protein bread in Vizag. Pickup locations, delivery zones, and how fresh local baking beats shipped national brands.",
+**Ready to taste the difference?**
+
+[Order Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "High-protein bread, baked fresh in Visakhapatnam and delivered to your door. Here's where Cadieux reaches, and why local-baked beats shipped-in.",
     primary_keyword: "high protein bread Visakhapatnam",
     secondary_keywords: ["protein bread Vizag", "buy protein bread Vizag", "healthy bread Visakhapatnam"],
     date: "2026-06-22",
-    author: "Sunny Raja",
-    pillar: "Product-adjacent",
+    author: "Cadieux",
+    pillar: "The Cadieux Difference",
     tier: 1,
   },
   {
     title: "Multi-Grain vs Plain: Which Cadieux Loaf Fits Your Day",
     slug: "multigrain-vs-plain-cadieux",
-    brief: "Both Cadieux loaves are built for the same mission: protein without compromise on taste. But they solve different problems.",
-    body: `Both Cadieux loaves are built for the same mission: protein without compromise on taste. But they solve different problems.
+    brief: "Two loaves. One brand. Different jobs.",
+    body: `Two loaves. One brand. Different jobs.
 
-## Multi-Grain: The Full Expression
+Cadieux Multi-Grain and Cadieux Plain are both high-protein, both baked fresh, both built the same way — lab-tested, no shortcuts. The difference isn't quality. It's fit.
 
-Ancient grains. Seeds. Five protein sources. Dense, nourishing, structural — built to hold anything you put on it without collapsing into mush.
+**Multi-Grain: built for texture and staying power**
 
-This is bread as architecture. Every slice carries the weight of what goes on top. Toast a slice with eggs and watch the rye sourdough hold firm. The seeds don't slide, the fermentation doesn't give. You get structure.
+More grains, more fibre, more bite. This is the loaf for mornings that need to last — training days, long meetings, the kind of day where one slice has to do real work.
 
-Multi-Grain is for people who eat bread as a platform. Who build things on top of it. Who want every nutritional note singing: fiber, omega-3s from linseed, minerals from ancient grains, steady amino acids from the protein.
+If you like bread with character, this is yours.
 
-Pairs with: avocado, sardines, roasted vegetables, soft cheese. Breakfast, lunch, or the 3 PM moment when you need something real.
+**Plain: built for versatility**
 
-## Plain: The Everyday Loaf
+Soft, simple, high protein without the extra texture. This is the loaf that goes with everything — sandwiches, toast, whatever's already on your plate. It doesn't compete with the rest of the meal. It supports it.
 
-Clean. Soft. Built for the routine you already have. Toast, sandwiches, kids' lunches, late-night eggs on toast at 11 PM when you're not thinking about how many seeds are in there.
+If you want protein without thinking about it, this is yours.
 
-Plain is bread that doesn't make you work. It integrates. It becomes part of the day instead of announcing itself.
+**There's no wrong answer**
 
-But don't mistake quiet for weak. Every slice carries serious protein, from whey isolate. Amino acids are there. Digestion is steady. You're getting what Multi-Grain delivers, just without the textural announcement.
+Some people rotate between both depending on the day. Multi-Grain for the gym morning, Plain for the easy one. There's no rule that says you have to pick a side.
 
-Plain is for people who eat bread because it's part of the meal, not because they're studying the ingredients. It's the no-fuss answer.
+What matters is that either way, you're choosing real protein over empty carbs — and bread that still tastes like something worth eating.
 
-Pairs with: anything. Butter and jam. Turkey and mustard. Eggs. Peanut butter. Works with your day, not against it.
+**Try them both**
 
-## The Honest Truth
+[Shop Multi-Grain →] [Shop Plain →]
 
-Both loaves win. Both are built the same way — overnight fermentation, cold proofing, falling-temperature bake. Both carry serious protein and fiber. Both taste like bread, not a supplement bar.
+---
 
-The only difference is texture and the story you want to feel in your mouth. One is bold. One is quiet. Both are right.
-
-Try Multi-Grain if you're the person who reads ingredient labels for fun. Try Plain if you're the person who just wants good bread that happens to be high-protein. Or grab both and see what your body votes for after a week.
-
-That's the only answer that matters anyway.`,
-    meta_description: "Compare Cadieux Multi-Grain and Plain breads side-by-side. Macros, flavor, use-cases, and which one wins for your routine.",
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "Cadieux Multi-Grain and Plain both deliver high protein. Here's how to choose between them based on your day, not a diet plan.",
     primary_keyword: "multigrain vs plain protein bread",
-    secondary_keywords: ["cadieux multigrain", "cadieux plain", "which bread to choose"],
+    secondary_keywords: ["cadieux multigrain", "cadieux plain", "which protein bread"],
     date: "2026-06-22",
-    author: "Sunny Raja",
-    pillar: "Product-adjacent",
+    author: "Cadieux",
+    pillar: "Product Hero",
     tier: 1,
   },
   {
     title: "Protein Bread Delivery in Vizag: How It Works",
     slug: "protein-bread-delivery-vizag",
-    brief: "Delivery in Vizag works because we control the bake and the route. No middleman. No delay. No cold chain breaks.",
-    body: `Delivery in Vizag works because we control the bake and the route. No middleman. No delay. No cold chain breaks.
+    brief: "Freshness only matters if it survives the delivery. So we built ours around that one rule.",
+    body: `Freshness only matters if it survives the delivery. So we built ours around that one rule.
 
-## How to Order
+**The order**
 
-Visit cadieux.in/checkout. Choose Multi-Grain or Plain. Enter your delivery address. We instantly check serviceability — if you're within our delivery zone, you'll see available slots.
+Place your order on cadieux.in. Pick Multi-Grain, Plain, or both.
 
-Slots open for delivery 12 hours from now onwards. A midnight booking gets bread at your door by noon the next day. The latest slot closes at 8 PM — books after that land the following day.
+**The bake**
 
-Distance-based delivery fee applies. Closer to our bakery in central Vizag, the fee is lower. Further out — Pendurthi, Gajuwaka — it's higher because logistics are real. We don't hide this. The fee is clear before you click.
+We don't bake ahead and stockpile. Loaves are baked close to your delivery window, not sitting in a warehouse waiting for a buyer.
 
-## Why 12-Hour Lead Time
+**The delivery**
 
-Fermentation can't be rushed. Cold-proof overnight, bake at dawn. Slice and pack by mid-morning. Load the delivery van by noon. You get bread that's 6–8 hours old, still warm from the oven.
+Your loaf reaches your door, not a pickup point three localities away. We're expanding coverage across Visakhapatnam — confirm your address at checkout and we'll tell you straight if today's window includes you.
 
-If we promised same-day delivery, we'd have to bake without overnight rest. Fermentation wouldn't mature. Texture would collapse. We'd be shipping mediocre bread fast instead of quality bread slightly slower.
+**Subscriptions, if you want them**
 
-12 hours is the window where freshness and logistics align.
+If bread is a weekly habit, not a one-off, a subscription means one less thing to remember. Loaf, on schedule, no reordering.
 
-## Subscriptions: Set It and Forget It
+**Why this is worth the extra step**
 
-Order once: you pay the full delivery fee each time. Subscribe and lock in a weekly recurring order on the same day/slot? Fee drops 15% and you never run out.
+Most bread on a shelf has already lost its best days by the time you buy it. Ours hasn't even reached its best day until it reaches you.
 
-Subscriptions are weekly. You pick the day (Monday through Friday, morning or evening slot). We show up every week on that day. No thinking. No forgetting. Bread just arrives.
+That's the whole model. Bake close. Deliver fast. Skip the middle.
 
-Change anytime. Pause for a week. Upgrade from Plain to Multi-Grain. The subscription admin panel is built for living life, not for contracts.
+**Ready to order?**
 
-## Freshness Guarantee
+[Check delivery to your address on cadieux.in →]
 
-Every loaf is stamped with the bake date. If your bread arrives and it's older than 3 days from bake, contact us. Full refund, no questions.
+---
 
-We've never had a claim. Because we control the whole chain: bake, pack, route. Freshness isn't a promise. It's a system built into operations.
-
-That's why delivery is worth it. Not because it's convenient. Because it's fresh.`,
-    meta_description: "How Cadieux bread delivery works in Visakhapatnam. Booking windows, slots, distance-based fees, and subscription benefits.",
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "How Cadieux delivers fresh, high-protein bread across Visakhapatnam. Order, schedule, and what to expect at your door.",
     primary_keyword: "protein bread delivery Vizag",
-    secondary_keywords: ["bread delivery Visakhapatnam", "fresh bread delivery Vizag", "cadieux subscription"],
+    secondary_keywords: ["bread delivery Visakhapatnam", "fresh bread delivery Vizag"],
     date: "2026-06-22",
-    author: "Sunny Raja",
-    pillar: "Product-adjacent",
+    author: "Cadieux",
+    pillar: "The Cadieux Difference",
+    tier: 1,
+  },
+  {
+    title: "The 18-Month Build: How One Loaf Took Years to Get Right",
+    slug: "the-18-month-build",
+    brief: "Eighteen months. That's how long it took to get one loaf of bread right.",
+    body: `Eighteen months. That's how long it took to get one loaf of bread right.
+
+I didn't start as a baker, and I'm still not one today. What I am is someone who got tired of choosing between taste and protein, and decided that was a problem worth solving myself.
+
+**Where it started**
+
+I've always tried to manage my protein intake without giving up the food I actually enjoy. Some days that's clean. Some days it's chicken biryani and a bit of guilt the next morning. I'm not interested in pretending otherwise — that's real life.
+
+What I noticed was that bread never seemed to fit into that balance. Either it was just carbs dressed up as a meal, or the "protein" versions tasted like something you'd eat out of obligation, not enjoyment. I checked everywhere — Instagram, Google, every brand I could find across India, including the protein bread coming out of Bangalore.
+
+But the Bangalore brands couldn't reach me. They weren't serviceable in Vizag, in Visakhapatnam, in Andhra Pradesh at all. So I started tasting protein bread from different states, wherever I could get my hands on it, and realized two things at once: nobody was serving this region, and even what existed elsewhere could be better.
+
+That's when I thought — we can build something out of nowhere, right here.
+
+So I decided to build it.
+
+**Where it got hard**
+
+I come from business, not food science. BBA, years of sales experience, pitching products across every format — online meetings, offline meets, cold pitches. I know how to convince someone a product is good. I had no idea how to actually make one.
+
+So I found a consultant who did. We researched across India together, testing formulations, sending samples to labs, adjusting, testing again. Eighteen to twenty months of getting it wrong before getting it right. Not eighteen months of certainty — eighteen months of actually doing the work, including the parts that didn't work the first time.
+
+**What it taught me**
+
+The recipe wasn't the hard part, looking back. The hard part was sticking with something for almost two years before it was ready to put my name on.
+
+That's the same idea Cadieux is built around now. Strength isn't one big moment. It's eighteen months of small, unglamorous steps that nobody sees until the loaf is finally on the shelf.
+
+**Where it's going**
+
+Every product we build from here follows the same rule: taste and strength, together, no compromise on either. That was true for the first loaf. It'll be true for whatever comes next.
+
+**Taste the result**
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Follow the journey: [@dsunny_raja](https://instagram.com/dsunny_raja) · [@CadieuxIndia](https://instagram.com/cadieuxindia)*`,
+    meta_description: "The real story behind Cadieux's recipe — eighteen months, a consultant, and dozens of lab tests, told by founder Sunny Raja.",
+    primary_keyword: "how cadieux is made",
+    secondary_keywords: ["story of cadieux bread", "founder story protein bread"],
+    date: "2026-06-22",
+    author: "Sunny Raja, Founder",
+    pillar: "Founder Story",
     tier: 1,
   },
   {
     title: "Why Cadieux Bread Doesn't Compare Itself to Other Bread",
     slug: "why-cadieux-doesnt-compare",
-    brief: "The philosophy behind Cadieux: why we don't benchmark against competitors. Bread as art, not commodity.",
-    body: `I built Cadieux to be the answer to a question nobody was asking the right way.
+    brief: "People ask me how Cadieux compares to the other protein breads out there. The honest answer is — I never built it to compare.",
+    body: `People ask me how Cadieux compares to the other protein breads out there. The honest answer is — I never built it to compare.
 
-Everyone else in the protein bread space says: "We have more protein than our competitor." "We're cheaper." "We're faster."
+I started Cadieux because I wanted a bread I could actually enjoy while staying on track. Not a bread that tasted like punishment for skipping the gym. I'm a guy who loves a good chicken biryani, who falls off the wagon sometimes, who's still figuring out the balance like everyone else. I just didn't want to give up taste to get protein.
 
-That's commodity thinking. That's the mindset that turned bread into something soulless in the first place.
+I looked everywhere — Instagram, the web, every health store I could find. Nothing fit what I had in my head. I tasted protein bread from different states, including what was coming out of Bangalore — but none of it could even reach me here. It wasn't serviceable in Vizag, in Visakhapatnam, in Andhra Pradesh at all. So I had two problems in front of me: nobody was serving this region, and even what existed elsewhere had room to be better.
 
-Cadieux doesn't compare because comparison is the death of craftsmanship. The moment you start benchmarking against someone else's loaf, you've stopped making bread your way. You're making bread their way, but with one more gram of something.
+So I built it.
 
-## Bread is Art, Not Engineering
+I'm not a baker. I'm a business guy — BBA, years in sales, pitching products in every format you can imagine, online and offline. I know how to sell something. What I didn't know was how to make something worth selling. So I found a consultant, researched across India, and spent eighteen to twenty months getting the recipe right. Lab tests. Iterations. More iterations.
 
-A competitor's loaf with an extra gram of whey protein isn't better bread. It's bread with more of one ingredient. That's engineering. That's adding.
+That process taught me something I didn't expect: this was never about beating another brand. It was about building something that didn't need to.
 
-Cadieux is built around subtraction. Remove the middleman. Remove the preservatives. Remove the dead time between bake and your kitchen. Remove the excuse to compromise.
+Cadieux stands for strength — not just in the bread, but in the idea behind it. Small steps. Showing up again after you fall off. Choosing something a little better today, not because someone told you to, but because you wanted to.
 
-What's left is just bread. But real bread. Built the way bread was built when it mattered — slowly fermented, cold-proofed, baked on a temperature curve that locks in structure and flavor.
+That's not a pitch against anyone else's bread. It's just what we're for.
 
-The protein is there because we engineered the recipe to hold serious protein while staying bread. Not because we chased a number. The fiber is there because ancient grains happen to carry it. The taste is there because fermentation has had 18 hours to work.
+**Taste it for yourself**
 
-We didn't add those things to beat someone else's specification sheet. They're there because we believe bread should be more than a vehicle for convenience.
+[Shop Cadieux on cadieux.in →]
 
-## Why I Stopped Comparing
+---
 
-I spent the first three months of development doing exactly what every other brand does: looking at competitors' numbers. More protein than Brand X. Less sugar than Brand Y. Higher fiber than Brand Z.
-
-Then I realized something. No one who actually cares about food uses comparison shopping to decide what to eat. You don't choose an apple because it has more vitamin C than a banana. You choose it because you want an apple.
-
-The person who's going to buy Cadieux isn't comparing us to anyone else. They're asking: "Is this bread real? Can I trust it? Will it change how I feel?" Those aren't numbers. Those are feelings. Those are built into the process, not the specifications.
-
-## The Right Question
-
-So we stopped asking "How do we beat them?" and started asking "How do we make this bread irreplaceable?"
-
-That's a different kind of work. It means showing up at 4 AM to bake. It means tasting every batch and throwing out anything that doesn't read right. It means telling customers no when they ask for a longer shelf life, because a longer shelf life means more compromise.
-
-It means building in Vizag, serving Vizag, staying small, and refusing to scale faster than we can control quality.
-
-That's not a strategy to win a comparison. That's a strategy to make comparison pointless.
-
-If you're shopping by the numbers, we're probably not your bread. But if you're looking for bread that tastes like someone cared, that's built the way bread should be built, that proves it every time you taste it — we're the only choice.
-
-Not because we're better on a spec sheet. Because we stopped using spec sheets a long time ago.`,
-    meta_description: "The philosophy behind Cadieux: why we don't benchmark against competitors. Bread as art, not commodity.",
-    primary_keyword: "premium high-protein bread philosophy",
-    secondary_keywords: ["cadieux brand", "bread as art", "why cadieux"],
+*Follow the journey: [@dsunny_raja](https://instagram.com/dsunny_raja) · [@CadieuxIndia](https://instagram.com/cadieuxindia)*`,
+    meta_description: "Founder Sunny Raja on why Cadieux was never built to compete with other bread brands — and what it was built for instead.",
+    primary_keyword: "premium protein bread India",
+    secondary_keywords: ["high protein bread brand India", "artisan protein bread"],
     date: "2026-06-22",
-    author: "Sunny Raja",
-    pillar: "The Cadieux Difference",
-    tier: 1,
-  },
-  {
-    title: "The 18-Month Build: How One Loaf Took 70 Parameters",
-    slug: "the-18-month-build",
-    brief: "The real story behind Cadieux: 18 months of trials, three NABL labs, and why every number mattered.",
-    body: `The idea came in September 2024 in the middle of a fitness routine that had stopped feeling like anything but survival.
-
-Same shake. Same eggs. Same bar. Every day. The routine was working — strength was building, body composition was shifting — but eating well had become mechanical. No pleasure. No texture. No variation without guilt.
-
-I went looking for high-protein bread. Found it online. Tried a loaf shipped from Delhi. It arrived four days old, texture already compromised, taste like cardboard that happened to have protein added to it.
-
-That moment should have been simple: buy from a different company. But I made the decision that would define the next 18 months: I'd build it instead.
-
-## The First Hundred Trials
-
-Building bread isn't like building a software product where you ship, get feedback, iterate. Bread has a rhythm. Overnight fermentation. Cold proof. Bake on a curve. The feedback loop is 24 hours minimum.
-
-The first question was basic: what does high-protein bread taste like? Not as a concept. In reality. I had to bake it first, fail first.
-
-The answer was: it doesn't taste like anything good, not at first. Whey protein is bitter. Soy protein is flat. Mix them into a dough without understanding fermentation and you get dense, bitter loaves that trap moisture and collapse into gum.
-
-So I started measuring things. Sixty to seventy parameters on every batch.
-
-The obvious ones: protein content, fiber, sugar, sodium. The obscure ones: protein structure, amino acid profile, absorption rates. How the crust develops under different temperatures. How the crumb holds moisture over time. How fermentation interacts with different protein sources.
-
-I tasted every loaf. Threw away the ones that weren't right. Didn't matter that I'd spent all night baking them. If they weren't good, they weren't going anywhere.
-
-## Three Independent Labs
-
-At month six, I had loaves that tasted good. But I needed to know what I had actually built.
-
-So I went to three different NABL-accredited labs. Not because one was enough, but because I didn't want to trust my process to a single data point.
-
-Lab One tested protein and amino acid profiles. Lab Two tested absorption rates in digestive simulation. Lab Three tested fiber, sugar, sodium, and shelf-stability under different storage conditions.
-
-The data came back. The bread I'd built was holding what I thought it was holding. Sometimes better. Sometimes I found unexpected gaps.
-
-The labs also helped me understand something I didn't expect: most "high-protein" bread on the market doesn't optimize for absorption. They optimize for the number you can print on the package. What you actually absorb, what your body actually uses — that's a different measurement.
-
-Cadieux was built for absorption. Real protein. Real utilization. Real results.
-
-## Four States. Eighteen Months.
-
-I traveled through Karnataka, Maharashtra, Telangana, and Andhra Pradesh talking to bakers, fermentation specialists, nutritionists overseas who understood protein digestibility. The information was fragmented. No one had put it together for bread yet.
-
-By month 12, I had a loaf. It was right. It tasted right. The numbers were right. The process was right.
-
-Then I had to run it through a production scale-up. What works in a home kitchen with obsessive attention doesn't always work at 50 loaves a day. Ovens have different quirks. Ingredient batches vary. Small adjustments cascade.
-
-Months 12 through 18 were about making a craft process repeatable without losing its soul.
-
-## Why It Took This Long
-
-Because I couldn't ship mediocre bread and call it a business. Because "close enough" isn't how bread works. Because every customer deserves the same experience every time.
-
-The industry standard is: ship, get feedback, iterate. That works for software. For bread, it means putting mediocre loaves in people's kitchens. It means building a customer base that tolerates compromise. It means starting your brand on weak foundations.
-
-I chose different. I chose: perfect the process, then ship. No customer should ever wonder if this loaf is as good as the last one. Every loaf should be built the same way. Every loaf should work the same way.
-
-18 months sounds like a long time. It's the time it takes to do it right.
-
-The moment I ship the first less-than-perfect loaf is the moment I've admitted I'm okay with not caring. I'm not there yet. Maybe I never will be.
-
-That's not efficiency. That's respect for the customer.`,
-    meta_description: "The real story behind Cadieux: 18 months of trials, three NABL labs, and why every number mattered.",
-    primary_keyword: "cadieux bread development story",
-    secondary_keywords: ["how cadieux is made", "bread engineering", "quality standards"],
-    date: "2026-06-22",
-    author: "Sunny Raja",
+    author: "Sunny Raja, Founder",
     pillar: "Founder Story",
     tier: 1,
   },
   {
-    title: "Healthy Bread in Visakhapatnam: A Local Buyer's Guide",
-    slug: "healthy-bread-visakhapatnam-guide",
-    brief: "Healthy bread in Vizag exists. You just have to know what you're looking for.",
-    body: `Healthy bread in Vizag exists. You just have to know what you're looking for.
+    title: "Eating Well When Your Day Is Already Full",
+    slug: "eating-well-busy-professionals",
+    brief: "Most advice about eating well assumes you have an hour to spare. Most days don't give you that hour.",
+    body: `Most advice about eating well assumes you have an hour to spare. Most days don't give you that hour.
 
-The category doesn't exist yet in most shops. Bread is bread. It all sits in one corner. But within that corner, there are loaves that are built differently, and loaves that are just sliced air with preservatives.
+**The actual problem**
 
-This is a local buyer's guide to identifying the difference.
+It's not that people don't know what's good for them. It's that good food usually asks for time most schedules don't have — prepping, cooking, planning ahead. By the second skipped day, the whole plan falls apart.
 
-## What to Read First: The Label
+**What actually works instead**
 
-Start with the ingredient list, not the nutrition panel. Nutrition panels are required by law. Ingredient lists are where honesty lives.
+Fewer decisions, not more discipline. A breakfast that's the same most days. A lunch that doesn't need a recipe. Food that carries its own value without asking you to build a system around it.
 
-Real healthy bread has a short ingredient list. Flour, salt, water, yeast, sourdough culture. Maybe seeds. Maybe ancient grains. Maybe a protein source.
+**Where bread fits into a full schedule**
 
-If the ingredient list looks like a chemistry textbook — emulsifiers, dough conditioners, preservative cocktails, "natural flavoring" — that's industrial bread pretending to be wholesome. Move past it.
+Bread is already one of the fastest foods to prepare — no cooking required, no real decision involved. If that bread is also carrying real protein, you've solved part of the problem without adding a single extra step to your day.
 
-Count the ingredients. Cadieux has eight. Most shelf-stable industrial breads have 15+. Not all long lists are bad, but most are.
+**The tagline we live by**
 
-## What to Look For: Protein-to-Carb Ratio
+More protein. Same routine. Not a new routine. Not more effort. The same one you already have, just doing more for you.
 
-The label will show protein and carbohydrates. Do a quick mental math:
+**Where this leaves you**
 
-A healthy protein bread should have at least 0.15g protein per 1g of carbs. So if a slice has 20g carbs, it should have at least 3g protein.
+You don't need to overhaul your week to eat better. You need the food already in your routine to start pulling more weight.
 
-Most regular white bread has 2g protein and 30g carbs. That's 0.07. You're eating carbs with a protein afterthought.
+[Shop Cadieux on cadieux.in →]
 
-Better bread flips that relationship.
+---
 
-## Fermentation: The Invisible Metric
-
-You can't see fermentation on a label, but you can find evidence of it.
-
-Look for words: "sourdough fermented," "long fermentation," "overnight proofed," "natural starter." These aren't marketing buzzwords — they're signals that the bread sat for time. Long fermentation breaks down phytic acid (which blocks mineral absorption) and pre-digests starches.
-
-If the label says "rapid-rise" or "quick-bake," the bread had minimal fermentation. It'll taste airy. It'll digest fast. It'll leave you hungry.
-
-## Sugar: The Hidden Problem
-
-"No added sugar" is good. But read closer. Is there honey? Agave? Malt extract? These are sugars with fancy names.
-
-Healthy bread has minimal added sugar because fermentation does the sweetening. A well-fermented loaf tastes sweet without needing to add anything.
-
-Compare: regular bread might have 4g added sugar per loaf. Healthy bread has 0–1g. That's the difference between a loaf that keeps you steady and one that spikes your glucose.
-
-## Shelf Life: A Red Flag
-
-If a bread promises 3 weeks shelf life, it's full of preservatives. Real fermented bread keeps 4–5 days. That's it.
-
-Some brands will add citric acid, calcium propionate, or enzyme cocktails to stretch shelf life. Those aren't poison, but they're not food either.
-
-Buy bread that's honest about its lifespan.
-
-## Local Is Better Than Imported
-
-A loaf baked in Vizag yesterday is better than a loaf baked in Delhi five days ago, no matter what the label says.
-
-Fermentation doesn't pause in transit. The cold chain breaks. The texture shifts. The nutrition is there but the living aspect is gone.
-
-Local bakeries in Vizag who do proper fermentation are worth the search. We're one of them. But there are others worth finding.
-
-The point: you have choices in Vizag. Use them.
-
-## The Honest Test
-
-Best test for healthy bread? Eat a slice. How do you feel 2 hours later? Steady energy or a crash? Satiated or hungry again?
-
-Your body knows. Trust it more than you trust any label.`,
-    meta_description: "What to look for in healthy bread in Vizag. Label reading guide, ingredient standards, and where to find quality options.",
-    primary_keyword: "healthy bread Visakhapatnam",
-    secondary_keywords: ["healthy bread Vizag", "best bread Visakhapatnam", "bread label guide"],
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "You don't need an hour of meal prep to eat better. A practical approach to protein for people whose schedule doesn't leave room for it.",
+    primary_keyword: "protein for busy professionals",
+    secondary_keywords: ["high protein food for working people", "easy protein meals"],
     date: "2026-06-22",
-    author: "Sunny Raja",
-    pillar: "Product-adjacent",
-    tier: 1,
-  },
-  // Tier 2 posts (abbreviated for length - same structure)
-  {
-    title: "Protein Sources Beyond Chicken: 9 Foods That Pull Their Weight",
-    slug: "protein-sources-beyond-chicken",
-    brief: "Everyone asks the same question: where do you get protein without chicken getting boring? The answer isn't another meat.",
-    body: `Everyone asks the same question: where do you get protein without chicken getting boring? The answer isn't another meat. It's understanding that protein density isn't confined to animal sources. It's distributed across foods you already know.
-
-Ranked by practical utility for people who train: Whey Protein Isolate (30g per serving), Eggs (6g per egg), Paneer (25g per 100g), Lentils/Dal (9g per cooked cup), Greek Yogurt (10g per 100g), Sesame Seeds (9g per 30g serving), Soy Protein (20g per 50g serving), Chicken (35g per breast), Fish (25g per 100g).
-
-The actual point: Protein doesn't require chicken. It requires density, repetition, and pairing. Bread is the carrier. Cadieux exists because protein makes sense on bread.`,
-    meta_description: "Go beyond chicken for protein. 9 high-protein foods ranked by density, cost, and sustainability.",
-    primary_keyword: "protein sources besides chicken",
-    secondary_keywords: ["vegetarian protein", "protein alternatives", "high protein foods India"],
-    date: "2026-06-21",
-    author: "Sunny Raja",
-    pillar: "Protein Education",
-    tier: 2,
-  },
-  {
-    title: "How to Read a Bread Label Without Getting Fooled",
-    slug: "how-to-read-bread-label",
-    brief: "Bread labels lie without lying. They tell the truth in a way that makes bad bread sound good. Here's how to read past the hype.",
-    body: `Bread labels lie without lying. They tell the truth in a way that makes bad bread sound good.
-
-Key things to check: Serving Size (most brands trick you with tiny serving sizes), Protein-to-Carb Ratio (divide protein by carbs; should be at least 0.15), Sugar Hiding (honey, agave, malt are still sugar), Fiber Tricks (added fiber vs whole grain fiber), Sodium Trap (check sodium levels), Ingredient Order, No Preservatives Claim, and Fermentation (trust words like sourdough fermented).
-
-The test that never lies: Read the label. Check the ratio. Verify the fermentation. Then buy a loaf and eat it. Your body doesn't read labels. Trust your experience.`,
-    meta_description: "Decode bread labels like a pro. Protein claims, carb tricks, and how to spot real bread vs marketing hype.",
-    primary_keyword: "how to read bread label",
-    secondary_keywords: ["bread nutrition label", "bread label claims", "high protein bread"],
-    date: "2026-06-21",
-    author: "Sunny Raja",
-    pillar: "Protein Education",
-    tier: 2,
-  },
-  {
-    title: "Protein for People Who Lift Before Work",
-    slug: "protein-early-morning-workout",
-    brief: "You train at 5 AM. You work at 9 AM. Protein needs to arrive and get to work on time.",
-    body: `You train at 5 AM. You work at 9 AM. Protein needs to arrive and get to work on time.
-
-Pre-Workout (30 min before): One slice of bread with peanut butter (20 seconds, 12g protein).
-Post-Workout (0-30 min): Two slices with eggs (4 minutes, 20g protein).
-Waiting Period (2-3 hours post): Another slice with paneer (15-20g protein).
-
-Total before 9 AM: 50g protein. By lunch, you're already hit your morning protein target. Bread is the carrier that makes 30 minutes of eating possible when you're rushing.`,
-    meta_description: "Pre-workout + post-workout protein strategy for early morning training. What to eat, when, and why bread matters.",
-    primary_keyword: "protein for early morning workout",
-    secondary_keywords: ["pre workout breakfast", "post workout protein", "strength training nutrition"],
-    date: "2026-06-21",
-    author: "Sunny Raja",
-    pillar: "Lifestyle",
-    tier: 2,
-  },
-  {
-    title: "The 30-Gram Breakfast: Built on Two Slices",
-    slug: "protein-breakfasts-two-slices",
-    brief: "30g protein at breakfast stops you from hunting for snacks at 10 AM. Two slices of bread plus something else. Done in under 7 minutes.",
-    body: `30g protein at breakfast stops you from hunting for snacks at 10 AM.
-
-Five options: Bread + Eggs (7 min, 30g), Bread + Paneer (5 min, 32g), Bread + Peanut Butter + Banana (4 min, 30g), Bread + Leftover Chicken (3 min, 42g), Bread + Greek Yogurt + Granola (5 min, 25g).
-
-The rule: Two slices of high-protein bread is your baseline (12g). You need one more thing that's 18g+ to hit 30g. Pick one. Try it for a week. Watch the difference at 3 PM.`,
-    meta_description: "Five complete high-protein breakfast ideas, all built on two slices of high-protein bread. Ready in under 7 minutes.",
-    primary_keyword: "high protein breakfast ideas",
-    secondary_keywords: ["30g protein breakfast", "quick breakfast", "breakfast recipes"],
-    date: "2026-06-21",
-    author: "Sunny Raja",
-    pillar: "Lifestyle",
-    tier: 2,
-  },
-  {
-    title: "Protein Quality vs Protein Quantity: Why Absorption Wins",
-    slug: "protein-quality-vs-quantity",
-    brief: "Everyone counts grams. Nobody counts what their body actually uses. 20g of quality protein beats 30g of mediocre protein.",
-    body: `Everyone counts grams. Nobody counts what their body actually uses.
-
-Complete protein has all nine essential amino acids. Bioavailability is how much your body actually absorbs. Whey: 97-99% bioavailable. Eggs: 97%. Chicken: 93-98%. Lentils: 60-75%.
-
-Your goal: amino acids reaching muscle tissue, not sitting in digestive system being poorly absorbed. Quality over quantity. The practical test: Eat 30g mediocre, eat 20g quality, track how you feel 3 hours later.`,
-    meta_description: "Why 20g of quality protein beats 30g of mediocre protein. Understanding amino acid profiles and bioavailability.",
-    primary_keyword: "protein quality absorption",
-    secondary_keywords: ["complete protein", "amino acid profile", "protein bioavailability"],
-    date: "2026-06-21",
-    author: "Sunny Raja",
+    author: "Cadieux",
     pillar: "Protein Education",
     tier: 2,
   },
   {
     title: "Fibre and Protein in the Same Bite: Why It Matters",
     slug: "fibre-and-protein-same-bite",
-    brief: "Protein fills you. Fiber keeps you full. When they arrive in the same bite, something shifts.",
-    body: `Protein fills you. Fiber keeps you full. When they arrive in the same bite, something shifts.
+    brief: "Protein gets the spotlight. Fibre does the quieter work right next to it.",
+    body: `Protein gets the spotlight. Fibre does the quieter work right next to it.
 
-Protein signals fullness (2-3 hours). Fiber slows digestion (3-4 hours). Together: both messages simultaneously. Fullness that lasts 4+ hours.
+**What fibre actually does**
 
-Regular white bread spikes glucose → insulin crash → hungry 90 min later. High-protein, high-fiber bread: glucose rises steadily → mild insulin → stable 3+ hours. No crash. No hunger.
+Fibre slows things down — digestion, the glucose curve, how long a meal actually keeps you satisfied. Without it, even a protein-rich meal can leave you reaching for something else an hour later.
 
-One good meal beats three mediocre ones every time.`,
-    meta_description: "Why combining fiber and protein in one food creates better satiety, slower digestion, and steadier energy.",
-    primary_keyword: "fiber and protein together",
-    secondary_keywords: ["satiety", "slow digestion", "stable energy", "fiber benefits"],
-    date: "2026-06-21",
-    author: "Sunny Raja",
+**Why the combination matters more than either alone**
+
+A high-protein food with no fibre digests fast and burns through its benefit fast too. Pair real fibre with real protein, and the meal works for longer — steadier energy, longer satisfaction, less of that mid-morning crash.
+
+**Why bread is a strange place to find this combination**
+
+Most bread has almost none of either. It's built to be soft and fast to eat, not to carry nutrition. A loaf that brings both fibre and protein to the table is doing more than most bread is built to do.
+
+**What to actually check**
+
+Don't just look for the protein claim on the front. Check if fibre shows up on the back too. A loaf with one but not the other is only solving half the problem.
+
+**Where this leaves you**
+
+The goal isn't the biggest single number. It's a combination that actually keeps you full, steady, and not hunting for a snack two hours later.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "Protein gets all the attention, but fibre is doing quiet, important work alongside it. Here's why the combination matters more than either alone.",
+    primary_keyword: "high fibre high protein bread",
+    secondary_keywords: ["fibre protein combo", "fibre rich bread India"],
+    date: "2026-06-22",
+    author: "Cadieux",
     pillar: "Protein Education",
-    tier: 2,
-  },
-  {
-    title: "Eating Well When Your Day Is Already Full",
-    slug: "eating-well-busy-professionals",
-    brief: "You don't have time to meal prep. You have time for breakfast, lunch, and coffee. Eating well is built into your routine.",
-    body: `You don't have time to meal prep. You have time for breakfast, lunch, and coffee.
-
-Eating well isn't about perfection. It's about building it into your routine so it requires zero thinking.
-
-Breakfast (same every day): Two slices Cadieux + eggs (30g, 4 min).
-Lunch: Pre-made protein + bread (25g, no prep).
-3 PM: Coffee + bread + peanut butter (16g).
-Dinner: Takeout + bread (20g).
-Total: 91g protein without adding time.
-
-Busy people don't need time. They need one decision (what's breakfast every day?) and then habit does the work.`,
-    meta_description: "Nutrition for busy people. How to eat well without adding complexity to your day. Built on routine, not planning.",
-    primary_keyword: "nutrition for busy people",
-    secondary_keywords: ["easy healthy eating", "quick nutrition", "busy professional meals"],
-    date: "2026-06-21",
-    author: "Sunny Raja",
-    pillar: "Lifestyle",
     tier: 2,
   },
   {
     title: "Why Freshness Beats Shelf Life",
     slug: "freshness-vs-shelf-life",
-    brief: "The bread industry solved shelf life 50 years ago. And in solving it, they killed bread.",
-    body: `The bread industry solved shelf life 50 years ago. And in solving it, they killed bread.
+    brief: "A long shelf life sounds like a benefit. For most bread, it's actually a warning sign.",
+    body: `A long shelf life sounds like a benefit. For most bread, it's actually a warning sign.
 
-Shelf life requires: preservatives, emulsifiers, dough conditioners, often extra sugar. Bread that lasts 3 weeks. Bread that's technically dead the moment it came out of the oven.
+The longer a loaf can sit on a shelf, the more it's been built to survive sitting on a shelf — not to be eaten fresh. That usually means preservatives, denser packaging, and a recipe designed around a warehouse, not a kitchen.
 
-Freshness requires: 4-5 days max. No preservatives. No emulsifiers. What you get: loaf still settling, crumb developing, flavor deepening, texture needing no chemical intervention because it's still alive.
+When we built Cadieux, we made the opposite choice on purpose. Shorter shelf life. Less buffer. More pressure on us to get the bread to you while it's still at its best.
 
-Fermented bread continues working 24-48 hours after baking. Starches breaking down. Amino acids more bioavailable. Bread still becoming better.
+That's a harder business decision than it sounds. A longer shelf life means less waste, more flexibility, easier logistics. We chose the harder version because the alternative was selling you something that calls itself fresh but isn't, not really.
 
-Cadieux chose: bake here, deliver within 24 hours. Inconvenient? Yes. Worth it? Ask your body at 2 PM how long it stays satiated from fresh bread vs bread shipped 5 days ago.`,
-    meta_description: "Why local baking with a short shelf life is better than national distribution with preservatives. The tradeoff that matters.",
-    primary_keyword: "fresh bread shelf life",
-    secondary_keywords: ["local baking", "preservatives bread", "fresh vs packaged"],
-    date: "2026-06-21",
-    author: "Sunny Raja",
+This is the same idea behind everything else we've built. Bake close to delivery, not weeks ahead. Reach you fast, not eventually. Let the bread's actual freshness be the selling point, not a number printed on the wrapper.
+
+It's a smaller margin for error. We think it's the right one.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Follow the journey: [@dsunny_raja](https://instagram.com/dsunny_raja) · [@CadieuxIndia](https://instagram.com/cadieuxindia)*`,
+    meta_description: "A longer shelf life sounds like a benefit. Founder Sunny Raja on why Cadieux chose freshness instead, and what that trade-off actually means.",
+    primary_keyword: "fresh bread vs packaged bread",
+    secondary_keywords: ["preservative free bread India", "short shelf life bread"],
+    date: "2026-06-22",
+    author: "Sunny Raja, Founder",
     pillar: "The Cadieux Difference",
     tier: 2,
   },
-  // Keep the original 3 posts
   {
-    title: "Why Protein Bread Is the Future of Everyday Eating",
-    slug: "why-protein-bread-future",
-    brief: "Most people don't realise their bread is working against them. The future isn't eating less — it's eating smarter.",
-    body: `Most people grab bread without a second thought. Protein bread changes that equation entirely.
+    title: "How to Read a Bread Label Without Getting Fooled",
+    slug: "how-to-read-bread-label",
+    brief: "The front of a bread pack is marketing. The back is where the truth lives.",
+    body: `The front of a bread pack is marketing. The back is where the truth lives.
 
-When you replace empty carbohydrates with high-quality protein sources — whey, oat protein, seeds, and ancient grains — the same slice of bread becomes something functional. It slows digestion, feeds muscle tissue, supports your immune system, and keeps hunger at bay far longer.
+Here's what to actually check before you decide a loaf belongs in your basket.
 
-The shift doesn't require a new diet plan or a lifestyle overhaul. It just requires better bread.
+**Start with the ingredient list, not the protein number**
 
-Cadieux was created for exactly this reason. Choosing Cadieux over ordinary bread is one of those quiet decisions that change everything. Same routine. Better result. Every single day.`,
-    meta_description: "Why protein bread is the future of everyday eating and how Cadieux is leading the way.",
-    primary_keyword: "why protein bread matters",
-    secondary_keywords: ["protein bread benefits", "future of bread", "high protein nutrition"],
-    date: "2026-06-20",
-    author: "Sunny Raja",
+A short list of ingredients you recognize is a good sign. A long list of stabilizers, gums, and additives usually means the bread was built to survive a shelf, not to be eaten fresh.
+
+**Look at the order, not just the names**
+
+Ingredients are listed by quantity, highest first. If sugar or refined flour leads the list, the "protein" claim on the front is doing a lot of work to distract you.
+
+**Compare protein to carbs, not protein alone**
+
+A loaf can list a decent protein number and still be mostly carbs. Check the ratio. That tells you more than the number on its own ever will.
+
+**Check for an actual fibre count**
+
+Fibre slows digestion and helps the protein do its job properly. A bread with protein and no fibre is only telling half the story.
+
+**Ask if it's actually been tested**
+
+"Lab-tested" should come with a name attached — an actual laboratory, an actual report. If a brand can't point to one, that claim is just a sentence on a wrapper.
+
+**Where this leaves you**
+
+You don't need a nutrition degree to read a bread label well. You need five minutes and a habit of checking past the front of the pack.
+
+Apply this checklist to any bread you're considering — including ours.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "Most bread labels are designed to be skimmed, not read. Here's what actually matters when you check the back of the pack.",
+    primary_keyword: "how to read bread label",
+    secondary_keywords: ["protein bread label India", "bread ingredients to avoid"],
+    date: "2026-06-22",
+    author: "Cadieux",
     pillar: "Protein Education",
     tier: 2,
   },
   {
-    title: "The Ancient Grains We Swear By",
-    slug: "ancient-grains-cadieux",
-    brief: "Rye, oats, linseed, and sunflower seeds have been feeding people for thousands of years. We just brought them back together.",
-    body: `For most of human history, bread was made from whatever grains grew nearby. These grains weren't just calories. They were dense in fibre, minerals, and slow-digesting carbohydrates.
+    title: "Five Protein Breakfasts, Built on Two Slices",
+    slug: "protein-breakfasts-two-slices",
+    brief: "A good protein breakfast doesn't need a meal plan. It needs two slices of the right bread and whatever's already in your fridge.",
+    body: `A good protein breakfast doesn't need a meal plan. It needs two slices of the right bread and whatever's already in your fridge.
 
-At Cadieux, we've gone back. Rye sourdough ferment forms the base of every loaf. The fermentation process — slow, cold, and carefully timed — breaks down phytic acid and makes nutrients more bioavailable.
+Here are five ways to build one, all under seven minutes.
 
-Linseeds bring omega-3 fatty acids. Oat bran lowers LDL cholesterol. Sunflower seeds add vitamin E and healthy fats.
+**1. Eggs and bread, the classic**
 
-These aren't ingredients we chose because they're trendy. They're ingredients that have proven themselves over thousands of years.`,
-    meta_description: "The ancient grains used in Cadieux bread and why they matter for nutrition.",
-    primary_keyword: "ancient grains bread",
-    secondary_keywords: ["rye sourdough", "fermented grains", "nutritious bread"],
-    date: "2026-06-20",
-    author: "Sunny Raja",
+Two eggs, two slices, done. No measuring required. This is the breakfast that works on its worst day and its best day equally.
+
+**2. Peanut butter and banana**
+
+Spread, slice, eat. No stove needed. Good for the mornings you're already running late.
+
+**3. Paneer bhurji on toast**
+
+Crumble paneer with a little turmeric and chili, scramble it like eggs, pile it on. Takes five minutes longer than the classic, worth it on a slower morning.
+
+**4. Greek yoghurt and bread, side by side**
+
+Not every breakfast needs to be a sandwich. Sometimes it's just two things on a plate, eaten together.
+
+**5. Leftover dal on toast**
+
+If you've got dal from last night, this is the fastest breakfast on the list. Reheat, spread, eat.
+
+**The pattern across all five**
+
+None of these require planning ahead. None of them need a blender. They all start with two slices of bread that are already carrying protein, so the rest of the plate doesn't have to do all the work alone.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "Five high-protein breakfasts, all built around two slices of bread, all ready in under seven minutes. No meal prep required.",
+    primary_keyword: "high protein breakfast India",
+    secondary_keywords: ["protein breakfast ideas India", "easy protein breakfast"],
+    date: "2026-06-22",
+    author: "Cadieux",
     pillar: "Protein Education",
     tier: 2,
   },
   {
-    title: "What Happens to Your Body When You Switch to Better Bread",
-    slug: "body-changes-better-bread",
-    brief: "The first week feels subtle. By week four, the difference is hard to ignore.",
-    body: `Week one is usually the most surprising. People who switch to Cadieux often notice they're not as hungry mid-morning. The slice they had at breakfast is still working.
+    title: "Protein for People Who Lift Before Work",
+    slug: "protein-early-morning-workout",
+    brief: "5:30am isn't the time for a complicated breakfast. It's the time for something that works and gets out of the way.",
+    body: `5:30am isn't the time for a complicated breakfast. It's the time for something that works and gets out of the way.
 
-By week two, something else tends to shift. Digestion improves. The combination of oat bran, rye ferment, and linseeds feeds the gut microbiome in ways that refined bread simply doesn't.
+I train early myself, most days. Here's the version of breakfast that actually survives a morning like that.
 
-Weeks three and four bring the changes that matter most. Cadieux provides meaningful muscle support with every meal. Amino acids are available after a workout, supporting recovery.
+**Two eggs, two slices, six minutes**
 
-The cumulative effect isn't dramatic. It's quieter than that — more energy, less hunger, a body that's being consistently nourished rather than just filled.`,
-    meta_description: "What happens to your body when you switch from regular bread to high-protein bread.",
-    primary_keyword: "benefits of switching to protein bread",
-    secondary_keywords: ["energy levels", "digestion improvement", "body composition"],
-    date: "2026-06-20",
-    author: "Sunny Raja",
+Eggs on the stove. Bread in the toaster. Both done in the time it takes to refill your water bottle. No measuring, no blending, no cleanup beyond one pan.
+
+**Coffee, because mornings still need coffee**
+
+This isn't a routine that asks you to give anything up. It just makes sure protein shows up before the caffeine does all the talking.
+
+**Why bread earns a place in this routine**
+
+Most pre-gym breakfasts treat bread as an afterthought — something to fill space while the eggs do the real work. It doesn't have to be that way. The right loaf carries protein of its own, which means breakfast does more in less time.
+
+**The bigger point**
+
+You don't need a 6am meal-prep routine to train properly. You need a few things that work, that you'll actually do every day, even on the mornings you don't want to.
+
+Keep it simple. Keep it repeatable. That's the whole strategy.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "A simple, fast protein routine for people who train before the workday starts. No prep, no overthinking, just enough to get through the morning right.",
+    primary_keyword: "protein for early morning workout",
+    secondary_keywords: ["pre workout protein India", "breakfast protein lifters"],
+    date: "2026-06-22",
+    author: "Cadieux",
+    pillar: "Protein Education",
+    tier: 2,
+  },
+  {
+    title: "Protein Quality vs Protein Quantity: Why Absorption Wins",
+    slug: "protein-quality-vs-quantity",
+    brief: "A big protein number on a label feels like progress. It isn't always.",
+    body: `A big protein number on a label feels like progress. It isn't always.
+
+Protein only does its job if your body can actually use it. That's the part most labels skip.
+
+**What "quality" actually means**
+
+Protein is built from amino acids, and your body needs a full set of them to do anything useful with what you eat. A protein source missing key amino acids is incomplete — your body can't fully use it, no matter how big the number on the front looks.
+
+**What affects absorption**
+
+How the protein is processed, what it's combined with, and how digestible the rest of the food is — all of this decides how much of that protein number actually reaches your muscles versus how much just passes through.
+
+**Why this matters for bread specifically**
+
+Bread isn't naturally a protein-dense food. Brands that add protein to bread are making a choice about how to do that — and that choice affects whether the number on the front translates to anything your body can use.
+
+**The simple test**
+
+If a brand only talks about the protein number and never the source, the processing, or independent testing, that's worth noticing. The number alone is the easy part to print. The quality behind it is the harder part to get right.
+
+**Where this leaves you**
+
+Don't just chase the biggest number on the shelf. Ask what's behind it. That question matters more than the number itself.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "A high protein number means nothing if your body can't absorb it. Here's why protein quality matters more than the number on the wrapper.",
+    primary_keyword: "protein absorption vs protein content",
+    secondary_keywords: ["protein bioavailability India", "complete protein bread"],
+    date: "2026-06-22",
+    author: "Cadieux",
+    pillar: "Protein Education",
+    tier: 2,
+  },
+  {
+    title: "Protein Sources Beyond Chicken: 9 Foods That Pull Their Weight",
+    slug: "protein-sources-beyond-chicken",
+    brief: "Chicken gets all the credit. It's not the only one doing the work.",
+    body: `Chicken gets all the credit. It's not the only one doing the work.
+
+If you're trying to hit a protein number without eating the same grilled breast every single day, here are nine foods worth rotating in.
+
+**Eggs**
+
+Still one of the most complete proteins available, and one of the easiest to cook in under five minutes. Boiled, scrambled, in a sandwich — it doesn't ask for effort.
+
+**Paneer**
+
+A vegetarian staple that's earned its reputation. Works in a curry, on its own, or straight off the pan with a little salt and pepper.
+
+**Greek yoghurt**
+
+Thicker, more protein-dense than regular yoghurt. Works as breakfast, a snack, or a base for something else.
+
+**Lentils and dal**
+
+Slower to cook, but a real protein source that most Indian kitchens already have stocked. Combine with rice for a more complete amino acid profile.
+
+**Peanut butter**
+
+Easy to overlook because it's "just" a spread. A spoonful adds real protein without needing a separate meal.
+
+**Soy and tofu**
+
+Often underused outside specific cuisines, but a legitimate plant protein that takes on whatever flavor you cook it in.
+
+**Whey or plant protein powder**
+
+Not a meal replacement, but a quick top-up when the day doesn't leave room for a full plate.
+
+**Fish**
+
+Lighter than red meat, still a strong protein source, and a good rotation option if chicken is in every other meal already.
+
+**Bread — yes, bread**
+
+Most bread is just carbs. But not all of it has to be. The right loaf can carry real protein instead of just filling space on the plate — which means your sandwich is doing more than holding things together.
+
+**Where this leaves you**
+
+You don't need to eat the same three foods on repeat to hit your protein goals. Rotate. Mix it up. Let your bread carry weight too.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "Chicken isn't the only way to hit your protein goals. Nine foods that carry real protein without becoming the whole meal.",
+    primary_keyword: "protein sources besides chicken",
+    secondary_keywords: ["vegetarian protein sources India", "protein alternatives"],
+    date: "2026-06-22",
+    author: "Cadieux",
     pillar: "Protein Education",
     tier: 2,
   },
 ];
+
 
 export const PROCESS_STEPS = [
   { num: "01", title: "Mix",     desc: "Slow then fast. Every ingredient in before the first turn." },

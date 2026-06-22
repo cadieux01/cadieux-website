@@ -1,71 +1,50 @@
 ---
-title: "The 18-Month Build: How One Loaf Took 70 Parameters"
-slug: the-18-month-build
-meta_description: "The real story behind Cadieux: 18 months of trials, three NABL labs, and why every number mattered."
-primary_keyword: "cadieux bread development story"
-secondary_keywords: ["how cadieux is made", "bread engineering", "quality standards", "high-protein bread research"]
-date: 2026-06-22
-author: Sunny Raja
+title: "The 18-Month Build: How One Loaf Took Years to Get Right"
+slug: "the-18-month-build"
+meta_description: "The real story behind Cadieux's recipe — eighteen months, a consultant, and dozens of lab tests, told by founder Sunny Raja."
+primary_keyword: "how cadieux is made"
+secondary_keywords: ["story of cadieux bread", "founder story protein bread"]
+date: "2026-06-22"
+author: "Sunny Raja, Founder"
 pillar: "Founder Story"
-tier: 1
 ---
 
-The idea came in September 2024 in the middle of a fitness routine that had stopped feeling like anything but survival.
+Eighteen months. That's how long it took to get one loaf of bread right.
 
-Same shake. Same eggs. Same bar. Every day. The routine was working — strength was building, body composition was shifting — but eating well had become mechanical. No pleasure. No texture. No variation without guilt.
+I didn't start as a baker, and I'm still not one today. What I am is someone who got tired of choosing between taste and protein, and decided that was a problem worth solving myself.
 
-I went looking for high-protein bread. Found it online. Tried a loaf shipped from Delhi. It arrived four days old, texture already compromised, taste like cardboard that happened to have protein added to it.
+**Where it started**
 
-That moment should have been simple: buy from a different company. But I made the decision that would define the next 18 months: I'd build it instead.
+I've always tried to manage my protein intake without giving up the food I actually enjoy. Some days that's clean. Some days it's chicken biryani and a bit of guilt the next morning. I'm not interested in pretending otherwise — that's real life.
 
-## The First Hundred Trials
+What I noticed was that bread never seemed to fit into that balance. Either it was just carbs dressed up as a meal, or the "protein" versions tasted like something you'd eat out of obligation, not enjoyment. I checked everywhere — Instagram, Google, every brand I could find across India, including the protein bread coming out of Bangalore.
 
-Building bread isn't like building a software product where you ship, get feedback, iterate. Bread has a rhythm. Overnight fermentation. Cold proof. Bake on a curve. The feedback loop is 24 hours minimum.
+But the Bangalore brands couldn't reach me. They weren't serviceable in Vizag, in Visakhapatnam, in Andhra Pradesh at all. So I started tasting protein bread from different states, wherever I could get my hands on it, and realized two things at once: nobody was serving this region, and even what existed elsewhere could be better.
 
-The first question was basic: what does high-protein bread taste like? Not as a concept. In reality. I had to bake it first, fail first.
+That's when I thought — we can build something out of nowhere, right here.
 
-The answer was: it doesn't taste like anything good, not at first. Whey protein is bitter. Soy protein is flat. Mix them into a dough without understanding fermentation and you get dense, bitter loaves that trap moisture and collapse into gum.
+So I decided to build it.
 
-So I started measuring things. Sixty to seventy parameters on every batch.
+**Where it got hard**
 
-The obvious ones: protein content, fiber, sugar, sodium. The obscure ones: protein structure, amino acid profile, absorption rates. How the crust develops under different temperatures. How the crumb holds moisture over time. How fermentation interacts with different protein sources.
+I come from business, not food science. BBA, years of sales experience, pitching products across every format — online meetings, offline meets, cold pitches. I know how to convince someone a product is good. I had no idea how to actually make one.
 
-I tasted every loaf. Threw away the ones that weren't right. Didn't matter that I'd spent all night baking them. If they weren't good, they weren't going anywhere.
+So I found a consultant who did. We researched across India together, testing formulations, sending samples to labs, adjusting, testing again. Eighteen to twenty months of getting it wrong before getting it right. Not eighteen months of certainty — eighteen months of actually doing the work, including the parts that didn't work the first time.
 
-## Three Independent Labs
+**What it taught me**
 
-At month six, I had loaves that tasted good. But I needed to know what I had actually built.
+The recipe wasn't the hard part, looking back. The hard part was sticking with something for almost two years before it was ready to put my name on.
 
-Supabase searches returned nothing that satisfied me. So I went to three different NABL-accredited labs. Not because one was enough, but because I didn't want to trust my process to a single data point.
+That's the same idea Cadieux is built around now. Strength isn't one big moment. It's eighteen months of small, unglamorous steps that nobody sees until the loaf is finally on the shelf.
 
-Lab One tested protein and amino acid profiles. Lab Two tested absorption rates in digestive simulation. Lab Three tested fiber, sugar, sodium, and shelf-stability under different storage conditions.
+**Where it's going**
 
-The data came back. The bread I'd built was holding what I thought it was holding. Sometimes better. Sometimes I found unexpected gaps.
+Every product we build from here follows the same rule: taste and strength, together, no compromise on either. That was true for the first loaf. It'll be true for whatever comes next.
 
-The labs also helped me understand something I didn't expect: most "high-protein" bread on the market doesn't optimize for absorption. They optimize for the number you can print on the package. What you actually absorb, what your body actually uses — that's a different measurement.
+**Taste the result**
 
-Cadieux was built for absorption. Real protein. Real utilization. Real results.
+[Shop Cadieux on cadieux.in →]
 
-## Four States. Eighteen Months.
+---
 
-I traveled through Karnataka, Maharashtra, Telangana, and Andhra Pradesh talking to bakers, fermentation specialists, nutritionists overseas who understood protein digestibility. The information was fragmented. No one had put it together for bread yet.
-
-By month 12, I had a loaf. It was right. It tasted right. The numbers were right. The process was right.
-
-Then I had to run it through a production scale-up. What works in a home kitchen with obsessive attention doesn't always work at 50 loaves a day. Ovens have different quirks. Ingredient batches vary. Small adjustments cascade.
-
-Months 12 through 18 were about making a craft process repeatable without losing its soul.
-
-## Why It Took This Long
-
-Because I couldn't ship mediocre bread and call it a business. Because "close enough" isn't how bread works. Because every customer deserves the same experience every time.
-
-The industry standard is: ship, get feedback, iterate. That works for software. For bread, it means putting mediocre loaves in people's kitchens. It means building a customer base that tolerates compromise. It means starting your brand on weak foundations.
-
-I chose different. I chose: perfect the process, then ship. No customer should ever wonder if this loaf is as good as the last one. Every loaf should be built the same way. Every loaf should work the same way.
-
-18 months sounds like a long time. It's the time it takes to do it right.
-
-The moment I ship the first less-than-perfect loaf is the moment I've admitted I'm okay with not caring. I'm not there yet. Maybe I never will be.
-
-That's not efficiency. That's respect for the customer.
+*Follow the journey: [@dsunny_raja](https://instagram.com/dsunny_raja) · [@CadieuxIndia](https://instagram.com/cadieuxindia)*
