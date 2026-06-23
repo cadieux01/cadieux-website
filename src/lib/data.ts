@@ -278,6 +278,8 @@ What matters is that either way, you're choosing real protein over empty carbs �
 
 [Shop Multi-Grain →] [Shop Plain →]
 
+Want to dive deeper into what makes high-protein bread actually work? [Read our complete guide →](/blogs/high-protein-bread-india-complete-guide)
+
 ---
 
 *Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
@@ -401,7 +403,7 @@ That process taught me something I didn't expect: this was never about beating a
 
 Cadieux stands for strength — not just in the bread, but in the idea behind it. Small steps. Showing up again after you fall off. Choosing something a little better today, not because someone told you to, but because you wanted to.
 
-That's not a pitch against anyone else's bread. It's just what we're for.
+That's not a pitch against anyone else's bread. It's just what we're for. [Read more about the strength nutrition philosophy we're built on →](/blogs/strength-nutrition-philosophy)
 
 **Taste it for yourself**
 
@@ -481,7 +483,7 @@ Don't just look for the protein claim on the front. Check if fibre shows up on t
 
 **Where this leaves you**
 
-The goal isn't the biggest single number. It's a combination that actually keeps you full, steady, and not hunting for a snack two hours later.
+The goal isn't the biggest single number. It's a combination that actually keeps you full, steady, and not hunting for a snack two hours later. Understanding how to evaluate both protein and fibre together is essential when choosing any bread — [learn more in our complete guide →](/blogs/high-protein-bread-india-complete-guide)
 
 [Shop Cadieux on cadieux.in →]
 
@@ -557,7 +559,7 @@ Fibre slows digestion and helps the protein do its job properly. A bread with pr
 
 You don't need a nutrition degree to read a bread label well. You need five minutes and a habit of checking past the front of the pack.
 
-Apply this checklist to any bread you're considering — including ours.
+Apply this checklist to any bread you're considering — including ours. For a deeper dive into what high-protein bread actually is and how to evaluate it across the whole market, [check out our complete guide →](/blogs/high-protein-bread-india-complete-guide)
 
 [Shop Cadieux on cadieux.in →]
 
@@ -641,7 +643,7 @@ Most pre-gym breakfasts treat bread as an afterthought — something to fill spa
 
 You don't need a 6am meal-prep routine to train properly. You need a few things that work, that you'll actually do every day, even on the mornings you don't want to.
 
-Keep it simple. Keep it repeatable. That's the whole strategy.
+Keep it simple. Keep it repeatable. That's the whole strategy. This is exactly what we call strength nutrition — small, repeatable choices that add up. [Learn more about the philosophy behind it →](/blogs/strength-nutrition-philosophy)
 
 [Shop Cadieux on cadieux.in →]
 
@@ -682,7 +684,7 @@ If a brand only talks about the protein number and never the source, the process
 
 **Where this leaves you**
 
-Don't just chase the biggest number on the shelf. Ask what's behind it. That question matters more than the number itself.
+Don't just chase the biggest number on the shelf. Ask what's behind it. That question matters more than the number itself. Want to understand the full landscape of high-protein bread and how to evaluate quality across different brands? [Read the complete guide →](/blogs/high-protein-bread-india-complete-guide)
 
 [Shop Cadieux on cadieux.in →]
 
@@ -757,6 +759,287 @@ You don't need to eat the same three foods on repeat to hit your protein goals. 
     author: "Cadieux",
     pillar: "Protein Education",
     tier: 2,
+  },
+  {
+    title: "Premium Bread Brands in Andhra Pradesh: The Short List",
+    slug: "premium-bread-brands-andhra-pradesh",
+    brief: "Andhra Pradesh doesn't have a long list of premium bread brands. It has a short one, and most of it is shipped in from somewhere else.",
+    body: `Andhra Pradesh doesn't have a long list of premium bread brands. It has a short one, and most of it is shipped in from somewhere else.
+
+Here's an honest look at what's actually available, and where the gaps are.
+
+**What "premium" usually means here**
+
+In most of AP, premium bread means imported packaging and a higher price tag — not necessarily better ingredients or fresher bread. The product underneath is often the same mass-produced loaf, just marketed differently.
+
+**What's missing from the list**
+
+A bread brand that's actually built in Andhra Pradesh, for Andhra Pradesh. Most "premium" options are national brands treating the state as a delivery zone, not a market they built for.
+
+**Where Cadieux fits**
+
+We started in Visakhapatnam because that's where we are, not because a market study told us to. Lab-tested, high protein, baked locally instead of shipped in from three states away.
+
+We're not trying to be the loudest brand on this list. We're trying to be the one actually built here.
+
+**See for yourself**
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "A short, honest look at premium bread brands serving Andhra Pradesh, and where Cadieux fits as a Visakhapatnam-grown entrant.",
+    primary_keyword: "premium bread brands Andhra Pradesh",
+    secondary_keywords: ["best bread brands AP", "healthy bread Andhra"],
+    date: "2026-06-22",
+    author: "Cadieux",
+    pillar: "Location Expansion",
+    tier: 3,
+  },
+  {
+    title: "Protein Food Options in Vizag: A Working List",
+    slug: "protein-food-options-vizag",
+    brief: "A practical list of where Visakhapatnam actually gets its protein — gyms, grocers, supplements, and the bread row most people skip.",
+    body: `If you're building a protein-forward routine in Visakhapatnam, here's a working list of where the city actually delivers.
+
+**Gyms and trainers**
+
+Most serious gyms in the city now stock or recommend supplements directly. Worth asking your trainer what they actually use, not just what they sell.
+
+**Local grocers and meat shops**
+
+Chicken, eggs, paneer — the basics are easy to find fresh almost anywhere in the city. The harder part is variety, not availability.
+
+**Supplement stores**
+
+Whey, casein, plant protein — most major brands have a presence in Vizag now. Good for the gap-filling, not a replacement for real food.
+
+**Dairy and paneer suppliers**
+
+Local dairies often have better, fresher paneer than packaged options. Worth seeking out if you're cooking at home.
+
+**The bread row, usually skipped**
+
+Most people don't think to check bread when building a protein list. That's because most bread isn't built to belong on one. We think it should be.
+
+**Where this leaves you**
+
+Vizag has more protein options than people give it credit for. The list just needs updating — and bread deserves a spot on it.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "A practical list of where Visakhapatnam actually gets its protein — gyms, grocers, supplements, and the bread row most people skip.",
+    primary_keyword: "protein food Vizag",
+    secondary_keywords: ["high protein food Visakhapatnam", "protein options Vizag"],
+    date: "2026-06-22",
+    author: "Cadieux",
+    pillar: "Location Expansion",
+    tier: 3,
+  },
+  {
+    title: "Healthy Food Brands Born in Vizag",
+    slug: "healthy-food-brands-born-in-vizag",
+    brief: "Visakhapatnam is quietly building a healthy food scene of its own. A look at the city's growing list of homegrown brands, including Cadieux.",
+    body: `Vizag doesn't get talked about as a food-startup city. It should.
+
+There's a quiet, growing list of brands building real, honest food right here — not shipping in from Bangalore or Hyderabad and calling it local. I'm biased, obviously, because Cadieux is one of them. But the city deserves more credit than it gets.
+
+**Why this matters**
+
+Most "healthy food" options reaching Tier 2 cities like Vizag are afterthoughts — national brands treating the city as a delivery zone, not a market worth building for directly. That gap is exactly why I started Cadieux here instead of trying to launch somewhere with more buzz.
+
+**Where Cadieux fits into that list**
+
+High-protein bread, built from scratch over eighteen months, lab-tested, baked fresh in the city it's named for. We didn't start here because it was easy. We started here because nobody else was doing it properly, and I live here.
+
+**The bigger point**
+
+A city doesn't need a hundred startups to have a real food scene. It needs a few people willing to build something honest and stick with it. Vizag has more of that than people realize.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Follow the journey: [@dsunny_raja](https://instagram.com/dsunny_raja) · [@CadieuxIndia](https://instagram.com/cadieuxindia)*`,
+    meta_description: "Visakhapatnam is quietly building a healthy food scene of its own. A look at the city's growing list of homegrown brands, including Cadieux.",
+    primary_keyword: "healthy food brands Visakhapatnam",
+    secondary_keywords: ["local food brands Vizag", "Vizag startups food"],
+    date: "2026-06-22",
+    author: "Sunny Raja, Founder",
+    pillar: "Location Expansion",
+    tier: 3,
+  },
+  {
+    title: "High-Protein Bread Delivery, Right Across Visakhapatnam",
+    slug: "protein-bread-delivery-across-visakhapatnam",
+    brief: "Cadieux delivers fresh, high-protein bread across Visakhapatnam. Check your address at checkout to confirm coverage.",
+    body: `Wherever you are in Visakhapatnam, the question is simple: does Cadieux reach you yet?
+
+We're expanding delivery across the city in phases, prioritizing the areas where demand is strongest first. Rather than guess at your area's coverage, check directly.
+
+**How to check**
+
+Head to cadieux.in, start an order, and enter your address at checkout. We'll confirm immediately whether today's delivery window includes you.
+
+**If we're not there yet**
+
+We will be. Vizag is the whole point of Cadieux — this isn't a city we're passing through on the way to somewhere bigger. Coverage is growing every few weeks.
+
+**Why we're rolling out in phases instead of everywhere at once**
+
+Freshness is the whole product. Expanding too fast, too thin, means stretching delivery windows past the point where the bread is still at its best. We'd rather grow carefully than promise something we can't keep fresh.
+
+**Stay close**
+
+Follow [@CadieuxIndia](https://instagram.com/cadieuxindia) for coverage updates as we expand, or just check back at checkout — it updates as we grow.
+
+[Check your address on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "Cadieux delivers fresh, high-protein bread across Visakhapatnam. Check your address at checkout to confirm coverage.",
+    primary_keyword: "protein bread Visakhapatnam delivery",
+    secondary_keywords: ["high protein bread near me Vizag", "bread delivery Visakhapatnam areas"],
+    date: "2026-06-22",
+    author: "Cadieux",
+    pillar: "Location Expansion",
+    tier: 3,
+  },
+  {
+    title: "Bringing Cadieux to Hyderabad and Bengaluru — Coming Soon",
+    slug: "cadieux-hyderabad-bengaluru-coming-soon",
+    brief: "Cadieux started in Visakhapatnam. Hyderabad and Bengaluru are next. Join the waitlist to be first in line when we expand.",
+    body: `Cadieux started in Visakhapatnam, and Visakhapatnam will always come first. But it won't be the only city for long.
+
+**Why Hyderabad and Bengaluru**
+
+Both cities already have an appetite for high-protein food — gyms, fitness communities, people already doing the work to eat better. What's missing in both is a bread that actually belongs in that routine, made with the same care we put into the Vizag loaf.
+
+**What "coming soon" actually means**
+
+We're not launching everywhere overnight. Freshness is the entire product, and that means each new city needs its own local production before delivery can start there properly. We'd rather get there right than get there fast.
+
+**How to be first in line**
+
+Join the waitlist, and you'll be the first to know when delivery opens in your city. No spam, no constant updates — just the one message that matters, when it's actually time.
+
+[Join the waitlist on cadieux.in →]
+
+**In the meantime**
+
+If you're in Visakhapatnam already, you don't have to wait at all.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "Cadieux started in Visakhapatnam. Hyderabad and Bengaluru are next. Join the waitlist to be first in line when we expand.",
+    primary_keyword: "protein bread Hyderabad",
+    secondary_keywords: ["protein bread Bengaluru", "premium bread Hyderabad"],
+    date: "2026-06-22",
+    author: "Cadieux",
+    pillar: "Location Expansion",
+    tier: 3,
+  },
+  {
+    title: "High-Protein Bread in India: The Complete Guide",
+    slug: "high-protein-bread-india-complete-guide",
+    brief: "Everything worth knowing about high-protein bread in India — what it actually is, how to choose one, and what most labels leave out.",
+    body: `High-protein bread is one of the most misused phrases on a grocery shelf in India right now. This guide exists to cut through that.
+
+**What "high-protein bread" actually means**
+
+It should mean a loaf where the protein content is meaningfully higher than standard bread, and where that protein is balanced against carbs, not buried under them. In practice, it often just means a brand printed "protein" somewhere on the front and called it a day.
+
+**Why this category exploded**
+
+India's fitness and wellness shift has been real over the last several years — more people training, more people tracking what they eat, more people looking for food that fits a goal instead of working against it. Bread, traditionally seen as "just carbs," became an obvious gap to fill.
+
+**What to actually check before buying**
+
+*Protein-to-carb ratio.* A high protein number next to an even higher carb number isn't a win. Check the relationship between the two, not either number alone.
+
+*Ingredient list length.* Shorter, recognizable ingredients are usually a better sign than a long list of stabilizers and gums.
+
+*Fibre content.* Protein without fibre digests fast and satisfies for a short window. The combination matters more than either alone.
+
+*Independent lab testing.* "Lab-tested" should point to an actual lab and an actual report — not just a phrase on a wrapper.
+
+*Where it's actually made.* Bread shipped long distances usually trades freshness for shelf stability. Locally-baked options skip that trade-off entirely.
+
+**Common mistakes people make**
+
+Choosing based on the biggest number on the front, without checking the ratio or the ingredient list behind it. Assuming "protein bread" means the same thing across every brand — it doesn't, and the gap between brands is often larger than people expect.
+
+**How to actually use high-protein bread in a routine**
+
+It's not a supplement and shouldn't be treated as one. It's a carrier — something your eggs, your paneer, your peanut butter sit on top of, doing more work than standard bread would in the same slot. The goal isn't to eat more bread. It's to make the bread you're already eating count for something.
+
+**Where Cadieux fits into this guide**
+
+We'd rather you apply this exact checklist to us than take our word for it. Real ratio, short ingredient list, independent testing, baked fresh in Visakhapatnam rather than shipped in. That's the standard we're holding ourselves to — the same one this guide just laid out.
+
+**Go deeper**
+
+This guide connects to several others worth reading: how Multi-Grain and Plain differ, how to read a label properly, why protein quality matters more than the number, and the role fibre plays alongside it.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Cadieux is high-protein bread, baked fresh in Visakhapatnam. More protein. Same routine.*`,
+    meta_description: "Everything worth knowing about high-protein bread in India — what it actually is, how to choose one, and what most labels leave out.",
+    primary_keyword: "high protein bread India",
+    secondary_keywords: ["protein bread India", "best protein bread India"],
+    date: "2026-06-22",
+    author: "Cadieux",
+    pillar: "Pillar Page",
+    tier: 4,
+  },
+  {
+    title: "Strength Nutrition: Building a Plate That Earns Its Calories",
+    slug: "strength-nutrition-philosophy",
+    brief: "Founder Sunny Raja on what 'strength nutrition' actually means at Cadieux — not a diet, a way of choosing food that earns its place on your plate.",
+    body: `I don't think about food in terms of diets. I think about it in terms of strength — does this earn its place on my plate, or is it just filling space.
+
+That idea is the actual foundation Cadieux is built on, more than any single recipe.
+
+**What strength nutrition means to me**
+
+It's not about eating perfectly. I still eat chicken biryani. I still fall off track some days, like everyone does. Strength nutrition isn't about avoiding that — it's about most of your plate, most of the time, doing real work instead of just taking up space.
+
+**Why "earns its place" matters more than "is healthy"**
+
+"Healthy" gets thrown around until it means nothing. "Earns its place" is a sharper question — does this food give you something back, or does it just sit there. A slice of bread that's mostly empty carbs doesn't earn its place. A slice that's carrying real protein does.
+
+**How this shows up in what we build**
+
+Every Cadieux product follows the same rule: taste and strength together, not one traded for the other. I didn't want a protein bread that felt like a sacrifice. I wanted one that earned a spot on the plate next to the food you actually enjoy.
+
+**Strength isn't one big decision**
+
+It's small, repeated ones. The bread you reach for most mornings. The breakfast that takes six minutes instead of an hour. None of it is dramatic. All of it adds up.
+
+That's the whole philosophy, really. Build a plate that earns its calories, one ordinary choice at a time.
+
+[Shop Cadieux on cadieux.in →]
+
+---
+
+*Follow the journey: [@dsunny_raja](https://instagram.com/dsunny_raja) · [@CadieuxIndia](https://instagram.com/cadieuxindia)*`,
+    meta_description: "Founder Sunny Raja on what 'strength nutrition' actually means at Cadieux — not a diet, a way of choosing food that earns its place on your plate.",
+    primary_keyword: "strength nutrition India",
+    secondary_keywords: ["nutrition for strength training", "eating for strength"],
+    date: "2026-06-22",
+    author: "Sunny Raja, Founder",
+    pillar: "Pillar Page",
+    tier: 4,
   },
 ];
 
