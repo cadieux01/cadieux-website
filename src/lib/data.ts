@@ -62,13 +62,13 @@ export const PRODUCTS = [
     tags: ["Sandwich Bread", "8 Slices"],
     price: 109,
     protein: "High protein content",
-    weight: "320g net weight",
+    weight: "240g net weight",
     subtitle: "Clean sandwich bread built for protein without the fuss. Soft slices, no compromise.",
     desc: "Clean, everyday bread built for high protein without the fuss. Soft sandwich slices with no compromise on nutrition.",
     image: "/grains.jpg",
     stats: [
       { target: 8, label: "Slices" },
-      { target: 320, suffix: "g", label: "Net Weight" },
+      { target: 240, suffix: "g", label: "Net Weight" },
     ] as ProductStat[],
   },
 ];
@@ -138,7 +138,7 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
     ],
     testReports: [
       { metric: "Protein", value: "High", note: "NABL-accredited lab verified" },
-      { metric: "Net weight", value: "320 g", note: "Per packet · verified on line" },
+      { metric: "Net weight", value: "240 g", note: "Per packet · verified on line" },
       { metric: "Added sugar", value: "None", note: "Trace honey for ferment only" },
       { metric: "Slices per loaf", value: "8", note: "Precision-cut on every bake" },
     ],
