@@ -20,22 +20,51 @@ CREATE TABLE customers (
 -- Migration for existing deployments (run once):
 -- ALTER TABLE customers ADD COLUMN IF NOT EXISTS push_token TEXT;
 
+-- Customer Addresses (multi-address per customer)
+-- Replaces the single address model where delivery_address was stored in orders.
+-- Each customer can have multiple labeled addresses (Home/Work/Other) with one marked default.
+CREATE TABLE customer_addresses (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id       UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  label             TEXT NOT NULL CHECK (label IN ('home', 'work', 'other')),
+  address_line      TEXT NOT NULL,
+  city              TEXT NOT NULL,
+  state             TEXT,
+  pincode           TEXT,
+  is_default        BOOLEAN DEFAULT false NOT NULL,
+  created_at        TIMESTAMPTZ DEFAULT now(),
+
+  -- Ensure only one default per customer
+  CONSTRAINT one_default_per_customer UNIQUE (customer_id, is_default) WHERE is_default = true
+);
+
+CREATE INDEX customer_addresses_customer_id_idx
+  ON customer_addresses(customer_id);
+CREATE INDEX customer_addresses_default_idx
+  ON customer_addresses(customer_id, is_default);
+
 -- Orders
 -- Cancellation columns (cancelled_at, cancellation_reason, refund_status)
 -- support the 1-hour customer-cancel window. See
 -- src/lib/order-cancellation.ts and /api/mobile/orders/[id]/cancel.
+-- delivery_address is kept for backwards-compatibility (stores full address string).
+-- customer_address_id references customer_addresses for multi-address model (nullable during transition).
 CREATE TABLE orders (
-  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id         UUID REFERENCES customers(id),
-  total_amount        DECIMAL(10, 2),   -- inclusive of delivery_fee
-  delivery_fee        DECIMAL(10, 2) NOT NULL DEFAULT 50,
-  status              TEXT DEFAULT 'pending',
-  delivery_address    TEXT,
-  created_at          TIMESTAMPTZ DEFAULT now(),
-  cancelled_at        TIMESTAMPTZ,
-  cancellation_reason TEXT,
-  refund_status       TEXT CHECK (refund_status IN ('pending', 'processed', 'failed'))
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id           UUID REFERENCES customers(id),
+  customer_address_id   UUID REFERENCES customer_addresses(id) ON DELETE SET NULL,
+  total_amount          DECIMAL(10, 2),   -- inclusive of delivery_fee
+  delivery_fee          DECIMAL(10, 2) NOT NULL DEFAULT 50,
+  status                TEXT DEFAULT 'pending',
+  delivery_address      TEXT,
+  created_at            TIMESTAMPTZ DEFAULT now(),
+  cancelled_at          TIMESTAMPTZ,
+  cancellation_reason   TEXT,
+  refund_status         TEXT CHECK (refund_status IN ('pending', 'processed', 'failed'))
 );
+
+CREATE INDEX orders_customer_address_id_idx
+  ON orders(customer_address_id);
 
 -- Blog Posts
 CREATE TABLE blog_posts (
