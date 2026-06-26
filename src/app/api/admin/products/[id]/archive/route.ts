@@ -5,6 +5,7 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { writeAuditEntries } from "@/lib/admin-product-audit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { logLogisticsAudit } from "@/lib/logistics-audit";
+import { hasValidPinGrant } from "@/lib/pin-grant";
 
 // POST /api/admin/products/[id]/archive
 //   Soft-deletes the product by flipping is_archived=true and stamping
@@ -17,6 +18,15 @@ export async function POST(
 ) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // PIN gate: archiving (soft-delete) an existing product requires a valid
+  // PIN grant. Enforced server-side.
+  if (!hasValidPinGrant(req)) {
+    return NextResponse.json(
+      { error: "PIN verification required.", code: "pin_required" },
+      { status: 401 },
+    );
   }
 
   const { data: before, error: beforeErr } = await supabaseAdmin
@@ -75,13 +85,13 @@ export async function POST(
     meta: { archived_at: after.archived_at },
   });
 
-  // Unified audit trail (logistics.audit_logs).
+  // Unified audit trail (logistics.audit_logs) — PIN verified.
   void logLogisticsAudit({
     actionType: "DELETE",
     entityType: "product",
     entityId: after.id,
     category: "product",
-    description: `Product archived by Super Admin ("${after.slug}")`,
+    description: `Product archived by Super Admin — PIN verified ("${after.slug}")`,
     oldValues: { is_archived: false },
     newValues: { is_archived: true, archived_at: after.archived_at },
     metadata: { slug: after.slug },

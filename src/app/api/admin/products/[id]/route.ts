@@ -11,6 +11,7 @@ import {
 } from "@/lib/admin-product-audit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { logLogisticsAudit } from "@/lib/logistics-audit";
+import { hasValidPinGrant } from "@/lib/pin-grant";
 import { parseBodyFromObject, ProductUpdateSchema } from "@/lib/validation";
 
 function bustProductCaches(): void {
@@ -77,6 +78,17 @@ export async function PATCH(
 ) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // PIN gate: editing an existing product requires a valid PIN grant
+  // (header `x-pin-grant` or the `pin_verified` cookie), minted by
+  // /api/admin/pin { action: "verify" } against website_admin_pin.
+  // Enforced server-side so a direct API call cannot bypass the prompt.
+  if (!hasValidPinGrant(req)) {
+    return NextResponse.json(
+      { error: "PIN verification required.", code: "pin_required" },
+      { status: 401 },
+    );
   }
 
   const body = await req.json().catch(() => ({}));
@@ -215,15 +227,15 @@ export async function PATCH(
     },
   });
 
-  // Unified audit trail (logistics.audit_logs).
+  // Unified audit trail (logistics.audit_logs) — PIN verified.
   void logLogisticsAudit({
     actionType: "UPDATE",
     entityType: "product",
     entityId: after.id,
     category: "product",
     description: priceChanged
-      ? `Product price changed by Super Admin ("${after.name}": ₹${before.price_inr} → ₹${after.price_inr})`
-      : `Product updated by Super Admin ("${after.name}")`,
+      ? `Product price changed by Super Admin — PIN verified ("${after.name}": ₹${before.price_inr} → ₹${after.price_inr})`
+      : `Product updated by Super Admin — PIN verified ("${after.name}")`,
     oldValues: before,
     newValues: after,
     metadata: { slug: after.slug, fields: Object.keys(update), priceChanged },

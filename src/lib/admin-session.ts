@@ -11,6 +11,9 @@
 // the cookie, re-derives the HMAC, and rejects expired or tampered
 // tokens. There is no other accepted credential — the legacy
 // x-admin-token header is no longer honoured on /api/admin/*.
+//
+// (The HMAC signing key, ADMIN_TOKEN, is the same one used to sign the
+// short-lived PIN grants for sensitive mutations.)
 
 import crypto from "crypto";
 import type { NextRequest } from "next/server";
@@ -22,7 +25,7 @@ export const ADMIN_SESSION_COOKIE = "admin_session";
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 function signingSecret(): string {
-  // Server-only signing key.
+  // Same key as the PIN grants — server-only.
   return process.env.ADMIN_TOKEN || "cadieux-admin-session-unconfigured";
 }
 

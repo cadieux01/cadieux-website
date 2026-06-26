@@ -16,6 +16,7 @@ import {
   formValuesFromRow,
   valuesToPayload,
 } from "@/components/admin/ProductForm";
+import { usePinGate } from "@/components/admin/PinGateModal";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime } from "@/lib/admin-formatting";
 import {
@@ -41,6 +42,10 @@ export default function EditProductPage() {
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  // PIN gate — gates every change/delete to an existing product against the
+  // single website_admin_pin (the same PIN /admin/profile manages).
+  const { requirePin, modal: pinModal } = usePinGate();
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -75,12 +80,17 @@ export default function EditProductPage() {
     if (!id || !product) return;
     setSaveErr(null);
 
+    // Require the security PIN before any save touches the live catalogue.
+    const grant = await requirePin();
+    if (!grant) return; // operator cancelled
+
     setBusy(true);
     try {
       const payload = valuesToPayload(values);
       await adminFetch(`/api/admin/products/${id}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
+        headers: { "x-pin-grant": grant },
       });
       await load();
       showToast("Changes saved");
@@ -96,12 +106,18 @@ export default function EditProductPage() {
   async function toggleArchive() {
     if (!id || !product) return;
     const action = product.is_archived ? "unarchive" : "archive";
+    const verb = product.is_archived ? "Unarchive" : "Archive";
+
+    // Archive/unarchive change live visibility — require the security PIN.
+    const grant = await requirePin();
+    if (!grant) return; // operator cancelled
 
     setArchiveBusy(true);
     setSaveErr(null);
     try {
       await adminFetch(`/api/admin/products/${id}/${action}`, {
         method: "POST",
+        headers: { "x-pin-grant": grant },
       });
       await load();
       showToast(`Product ${product.is_archived ? "unarchived" : "archived"}`);
@@ -160,8 +176,8 @@ export default function EditProductPage() {
               {archiveBusy
                 ? "Working…"
                 : product.is_archived
-                ? "Unarchive"
-                : "Archive"}
+                ? "🔒 Unarchive"
+                : "🔒 Archive"}
             </button>
           </>
         ) : (
@@ -193,7 +209,7 @@ export default function EditProductPage() {
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-8">
             <ProductForm
               initial={formValuesFromRow(product)}
-              submitLabel="Save changes"
+              submitLabel="🔒 Save changes"
               onSubmit={submit}
               busy={busy}
               error={saveErr}
@@ -203,6 +219,8 @@ export default function EditProductPage() {
           <LabReportsSection productId={product.id} />
         </>
       )}
+
+      {pinModal}
 
       {toast ? (
         <div
