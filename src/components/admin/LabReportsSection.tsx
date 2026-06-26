@@ -197,6 +197,21 @@ export function LabReportsSection({ productId }: { productId: string }) {
         </button>
       </div>
 
+      <p
+        className="mb-4"
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: "0.85rem",
+          letterSpacing: "0.04em",
+          color: GOLD,
+          border: `1px solid ${BORDER}`,
+          background: "rgba(245,158,11,0.06)",
+          padding: "0.6rem 0.9rem",
+        }}
+      >
+        Final trials are under process.
+      </p>
+
       {loadErr ? (
         <p style={{ color: "#fecaca", fontFamily: "var(--font-body)" }}>
           {loadErr}

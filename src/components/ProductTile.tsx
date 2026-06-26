@@ -379,8 +379,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   lineHeight: 1,
                 }}
               >
-                {s.target}
-                {s.suffix}
+                {s.blank ? "—" : <>{s.target}{s.suffix}</>}
               </div>
               <div
                 style={{

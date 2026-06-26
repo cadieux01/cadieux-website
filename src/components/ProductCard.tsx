@@ -32,7 +32,7 @@ function useCountUp(target: number, duration = 800, delay = 0) {
   return value;
 }
 
-export type ProductCardStat = { target: number; suffix?: string; label: string };
+export type ProductCardStat = { target: number; suffix?: string; label: string; blank?: boolean };
 
 export type ProductCardProps = {
   productIndex: number;
@@ -377,7 +377,7 @@ export default function ProductCard({
             }}
           >
             {stats.map((s, i) => ({
-              v: `${statValues[i]}${s.suffix ?? ""}`,
+              v: s.blank ? "—" : `${statValues[i]}${s.suffix ?? ""}`,
               l: s.label,
             })).map((s, i) => (
               <div

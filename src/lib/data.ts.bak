@@ -29,7 +29,7 @@ export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export const TIMES = ["7 – 9 am", "9 – 11 am", "12 – 2 pm", "5 – 7 pm", "7 – 9 pm"];
 export const SUB_WEEKS = [2, 3, 4, 6];
 
-export type ProductStat = { target: number; suffix?: string; label: string };
+export type ProductStat = { target: number; suffix?: string; label: string; blank?: boolean };
 
 // @deprecated: prefer getActiveProducts() from @/lib/products for live
 // price/name/weight (Supabase-backed). PRODUCTS stays as a typed shape used
@@ -51,7 +51,7 @@ export const PRODUCTS = [
     stats: [
       { target: 8, label: "Slices" },
       { target: 240, suffix: "g", label: "Net weight" },
-      { target: 6, suffix: "g", label: "Fibre/slice" },
+      { target: 6, suffix: "g", label: "Fibre/slice", blank: true },
     ] as ProductStat[],
   },
   {

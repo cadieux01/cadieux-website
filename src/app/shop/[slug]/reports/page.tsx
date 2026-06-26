@@ -93,6 +93,19 @@ export default function ProductReportsPage() {
             Test Reports
           </h1>
 
+          <p
+            style={{
+              margin: "0 0 20px",
+              fontFamily: "var(--font-body)",
+              fontSize: 13,
+              fontWeight: 300,
+              letterSpacing: "0.04em",
+              color: "#c9a96e",
+            }}
+          >
+            Final trials are under process.
+          </p>
+
           <div
             aria-hidden="true"
             style={{

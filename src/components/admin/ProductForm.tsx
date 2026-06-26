@@ -261,12 +261,15 @@ export function ProductForm({
         />
       </Field>
 
-      <Field label="Highlights" hint="One per line.">
+      <Field
+        label="Highlights"
+        hint="One per line. Final trials are under process — do not enter specific nutrition figures until lab-verified."
+      >
         <Textarea
           value={values.highlights}
           onChange={(v) => patch({ highlights: v })}
           rows={4}
-          placeholder={"High protein\nSourdough fermented\n400g"}
+          placeholder={"High protein\nSourdough fermented\n240g"}
         />
       </Field>
 

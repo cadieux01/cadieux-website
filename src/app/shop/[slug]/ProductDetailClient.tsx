@@ -215,8 +215,7 @@ export default function ProductDetailClient({
                       lineHeight: 1,
                     }}
                   >
-                    {s.target}
-                    {s.suffix}
+                    {s.blank ? "—" : <>{s.target}{s.suffix}</>}
                   </div>
                   <div
                     style={{
@@ -234,6 +233,20 @@ export default function ProductDetailClient({
                 </div>
               ))}
             </div>
+
+            <p
+              style={{
+                marginTop: -20,
+                marginBottom: 32,
+                fontFamily: "var(--font-body)",
+                fontSize: 11,
+                fontWeight: 300,
+                letterSpacing: "0.04em",
+                color: "rgba(201,169,110,0.85)",
+              }}
+            >
+              Final trials are under process.
+            </p>
 
             <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 20 }}>
               <div
@@ -491,6 +504,22 @@ export default function ProductDetailClient({
           <>
             <hr style={DIVIDER_STYLE} />
             <Section label="Independently tested" title="Lab Reports & Certifications">
+              <div
+                style={{
+                  marginBottom: 24,
+                  padding: "12px 16px",
+                  border: "0.5px solid rgba(201,169,110,0.3)",
+                  borderRadius: 4,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 13,
+                  fontWeight: 300,
+                  letterSpacing: "0.04em",
+                  color: "#c9a96e",
+                  background: "rgba(201,169,110,0.06)",
+                }}
+              >
+                Final trials are under process.
+              </div>
               <ReportsList reports={reports} />
             </Section>
             <hr style={DIVIDER_STYLE} />
