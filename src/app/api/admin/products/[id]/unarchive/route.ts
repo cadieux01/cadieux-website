@@ -5,7 +5,6 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { writeAuditEntries } from "@/lib/admin-product-audit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { logLogisticsAudit } from "@/lib/logistics-audit";
-import { verifyGrant } from "@/lib/product-lock";
 
 // POST /api/admin/products/[id]/unarchive
 //   Reverses an archive: is_archived=false, archived_at=null. The product
@@ -17,17 +16,6 @@ export async function POST(
 ) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Product Lock: changing product visibility/status requires a grant.
-  if (!verifyGrant(req.headers.get("x-product-lock-grant"))) {
-    return NextResponse.json(
-      {
-        error: "Product Lock verification required.",
-        code: "product_lock_required",
-      },
-      { status: 403 },
-    );
   }
 
   const { data: before, error: beforeErr } = await supabaseAdmin
@@ -84,13 +72,13 @@ export async function POST(
     context: `Unarchived product "${after.slug}"`,
   });
 
-  // Unified audit trail (logistics.audit_logs) — Product Lock verified.
+  // Unified audit trail (logistics.audit_logs).
   void logLogisticsAudit({
     actionType: "UPDATE",
     entityType: "product",
     entityId: after.id,
     category: "product",
-    description: `Product unarchived by Super Admin — Product Lock verified ("${after.slug}")`,
+    description: `Product unarchived by Super Admin ("${after.slug}")`,
     oldValues: { is_archived: true },
     newValues: { is_archived: false },
     metadata: { slug: after.slug },

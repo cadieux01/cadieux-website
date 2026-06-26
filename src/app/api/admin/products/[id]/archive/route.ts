@@ -5,7 +5,6 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { writeAuditEntries } from "@/lib/admin-product-audit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { logLogisticsAudit } from "@/lib/logistics-audit";
-import { verifyGrant } from "@/lib/product-lock";
 
 // POST /api/admin/products/[id]/archive
 //   Soft-deletes the product by flipping is_archived=true and stamping
@@ -18,18 +17,6 @@ export async function POST(
 ) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Product Lock: archiving (soft-delete) an existing product requires a
-  // valid grant. Enforced server-side.
-  if (!verifyGrant(req.headers.get("x-product-lock-grant"))) {
-    return NextResponse.json(
-      {
-        error: "Product Lock verification required.",
-        code: "product_lock_required",
-      },
-      { status: 403 },
-    );
   }
 
   const { data: before, error: beforeErr } = await supabaseAdmin
@@ -88,13 +75,13 @@ export async function POST(
     meta: { archived_at: after.archived_at },
   });
 
-  // Unified audit trail (logistics.audit_logs) — Product Lock verified.
+  // Unified audit trail (logistics.audit_logs).
   void logLogisticsAudit({
     actionType: "DELETE",
     entityType: "product",
     entityId: after.id,
     category: "product",
-    description: `Product archived by Super Admin — Product Lock verified ("${after.slug}")`,
+    description: `Product archived by Super Admin ("${after.slug}")`,
     oldValues: { is_archived: false },
     newValues: { is_archived: true, archived_at: after.archived_at },
     metadata: { slug: after.slug },

@@ -11,7 +11,6 @@ import {
 } from "@/lib/admin-product-audit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { logLogisticsAudit } from "@/lib/logistics-audit";
-import { verifyGrant } from "@/lib/product-lock";
 import { parseBodyFromObject, ProductUpdateSchema } from "@/lib/validation";
 
 function bustProductCaches(): void {
@@ -78,19 +77,6 @@ export async function PATCH(
 ) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Product Lock: editing an existing product requires a valid grant
-  // issued by /api/admin/verify-product-lock. Enforced server-side so a
-  // direct API call cannot bypass the modal.
-  if (!verifyGrant(req.headers.get("x-product-lock-grant"))) {
-    return NextResponse.json(
-      {
-        error: "Product Lock verification required.",
-        code: "product_lock_required",
-      },
-      { status: 403 },
-    );
   }
 
   const body = await req.json().catch(() => ({}));
@@ -229,15 +215,15 @@ export async function PATCH(
     },
   });
 
-  // Unified audit trail (logistics.audit_logs) — Product Lock verified.
+  // Unified audit trail (logistics.audit_logs).
   void logLogisticsAudit({
     actionType: "UPDATE",
     entityType: "product",
     entityId: after.id,
     category: "product",
     description: priceChanged
-      ? `Product price changed by Super Admin — Product Lock verified ("${after.name}": ₹${before.price_inr} → ₹${after.price_inr})`
-      : `Product updated by Super Admin — Product Lock verified ("${after.name}")`,
+      ? `Product price changed by Super Admin ("${after.name}": ₹${before.price_inr} → ₹${after.price_inr})`
+      : `Product updated by Super Admin ("${after.name}")`,
     oldValues: before,
     newValues: after,
     metadata: { slug: after.slug, fields: Object.keys(update), priceChanged },
