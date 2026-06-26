@@ -8,6 +8,7 @@ import {
   writeAuditEntries,
 } from "@/lib/admin-product-audit";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { hasValidPinGrant } from "@/lib/pin-grant";
 
 // Bust the unstable_cache entries that key off the same product rows.
 // "products" is consumed by getActiveProducts() (lib/products.ts).
@@ -69,6 +70,16 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // PIN gate: creating a product writes to the live catalogue — require a
+  // valid PIN grant (header `x-pin-grant` or the `pin_verified` cookie).
+  // Enforced server-side so a direct API call cannot bypass the prompt.
+  if (!hasValidPinGrant(req)) {
+    return NextResponse.json(
+      { error: "PIN verification required.", code: "pin_required" },
+      { status: 401 },
+    );
   }
 
   const body = await req.json().catch(() => ({}));

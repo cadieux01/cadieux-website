@@ -16,7 +16,7 @@ import {
   formValuesFromRow,
   valuesToPayload,
 } from "@/components/admin/ProductForm";
-import { useProductLock } from "@/components/admin/ProductLockModal";
+import { usePinGate } from "@/components/admin/PinGateModal";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime } from "@/lib/admin-formatting";
 import {
@@ -43,8 +43,9 @@ export default function EditProductPage() {
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Product Lock — gates every change/delete to an existing product.
-  const { requireUnlock, modal: lockModal } = useProductLock();
+  // PIN gate — gates every change/delete to an existing product against the
+  // single website_admin_pin (the same PIN /admin/profile manages).
+  const { requirePin, modal: pinModal } = usePinGate();
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -79,8 +80,8 @@ export default function EditProductPage() {
     if (!id || !product) return;
     setSaveErr(null);
 
-    // Require the Product Lock before any save touches the live catalogue.
-    const grant = await requireUnlock(product.name, "Edit product fields");
+    // Require the security PIN before any save touches the live catalogue.
+    const grant = await requirePin();
     if (!grant) return; // operator cancelled
 
     setBusy(true);
@@ -89,7 +90,7 @@ export default function EditProductPage() {
       await adminFetch(`/api/admin/products/${id}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
-        headers: { "x-product-lock-grant": grant },
+        headers: { "x-pin-grant": grant },
       });
       await load();
       showToast("Changes saved");
@@ -107,8 +108,8 @@ export default function EditProductPage() {
     const action = product.is_archived ? "unarchive" : "archive";
     const verb = product.is_archived ? "Unarchive" : "Archive";
 
-    // Archive/unarchive change live visibility — require the Product Lock.
-    const grant = await requireUnlock(product.name, `${verb} product`);
+    // Archive/unarchive change live visibility — require the security PIN.
+    const grant = await requirePin();
     if (!grant) return; // operator cancelled
 
     setArchiveBusy(true);
@@ -116,7 +117,7 @@ export default function EditProductPage() {
     try {
       await adminFetch(`/api/admin/products/${id}/${action}`, {
         method: "POST",
-        headers: { "x-product-lock-grant": grant },
+        headers: { "x-pin-grant": grant },
       });
       await load();
       showToast(`Product ${product.is_archived ? "unarchived" : "archived"}`);
@@ -219,7 +220,7 @@ export default function EditProductPage() {
         </>
       )}
 
-      {lockModal}
+      {pinModal}
 
       {toast ? (
         <div

@@ -23,6 +23,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/admin-auth";
 import { isAdmin } from "@/lib/admin-auth";
+import { adminCookieDomain } from "@/lib/admin-session";
+import {
+  PIN_GRANT_COOKIE,
+  pinGrantCookieMaxAgeSeconds,
+  signPinGrant,
+} from "@/lib/pin-grant";
 import { getClientIP } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
@@ -317,7 +323,20 @@ export async function POST(req: NextRequest) {
       crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(existing.pin_hash));
     if (match) {
       await clearPinFailures();
-      return NextResponse.json({ ok: true });
+      // Mint a short-lived grant for sensitive mutations (e.g. product
+      // edits) and mirror it into an httpOnly cookie. The grant is the
+      // single source of truth — it is keyed to this same PIN row.
+      const grant = signPinGrant();
+      const res = NextResponse.json({ ok: true, grant });
+      res.cookies.set(PIN_GRANT_COOKIE, grant, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+        maxAge: pinGrantCookieMaxAgeSeconds(),
+        domain: adminCookieDomain(req.headers.get("host")),
+      });
+      return res;
     }
     await incrementPinFailures(existing);
     return NextResponse.json({ ok: false, error: "Incorrect PIN." }, { status: 401 });

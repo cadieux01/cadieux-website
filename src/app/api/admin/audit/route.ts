@@ -5,7 +5,7 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 // GET /api/admin/audit
 //   Reads the UNIFIED cross-panel audit trail from logistics.audit_logs
 //   (fed by both the dashboard and the website super-admin via triggers
-//   + the product-lock flow). This is distinct from /api/admin/audit-log,
+//   + sensitive-mutation gating). This is distinct from /api/admin/audit-log,
 //   which reads the website-only public.audit_log table.
 //
 //   Query params (all optional):

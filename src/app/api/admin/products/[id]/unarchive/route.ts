@@ -5,7 +5,7 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { writeAuditEntries } from "@/lib/admin-product-audit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { logLogisticsAudit } from "@/lib/logistics-audit";
-import { verifyGrant } from "@/lib/product-lock";
+import { hasValidPinGrant } from "@/lib/pin-grant";
 
 // POST /api/admin/products/[id]/unarchive
 //   Reverses an archive: is_archived=false, archived_at=null. The product
@@ -19,14 +19,11 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Product Lock: changing product visibility/status requires a grant.
-  if (!verifyGrant(req.headers.get("x-product-lock-grant"))) {
+  // PIN gate: changing product visibility/status requires a valid grant.
+  if (!hasValidPinGrant(req)) {
     return NextResponse.json(
-      {
-        error: "Product Lock verification required.",
-        code: "product_lock_required",
-      },
-      { status: 403 },
+      { error: "PIN verification required.", code: "pin_required" },
+      { status: 401 },
     );
   }
 
@@ -84,13 +81,13 @@ export async function POST(
     context: `Unarchived product "${after.slug}"`,
   });
 
-  // Unified audit trail (logistics.audit_logs) — Product Lock verified.
+  // Unified audit trail (logistics.audit_logs) — PIN verified.
   void logLogisticsAudit({
     actionType: "UPDATE",
     entityType: "product",
     entityId: after.id,
     category: "product",
-    description: `Product unarchived by Super Admin — Product Lock verified ("${after.slug}")`,
+    description: `Product unarchived by Super Admin — PIN verified ("${after.slug}")`,
     oldValues: { is_archived: true },
     newValues: { is_archived: false },
     metadata: { slug: after.slug },

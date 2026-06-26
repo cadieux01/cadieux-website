@@ -13,6 +13,7 @@ import {
   emptyFormValues,
   valuesToPayload,
 } from "@/components/admin/ProductForm";
+import { usePinGate } from "@/components/admin/PinGateModal";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { AdminProductRow } from "@/lib/admin-shared";
 
@@ -21,8 +22,16 @@ export default function NewProductPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // PIN gate — creating a product writes to the live catalogue.
+  const { requirePin, modal: pinModal } = usePinGate();
+
   async function submit(values: ProductFormValues) {
     setError(null);
+
+    // Require the security PIN before creating a live catalogue entry.
+    const grant = await requirePin();
+    if (!grant) return; // operator cancelled
+
     setBusy(true);
     try {
       // For create, omit slug entirely when blank so the server can
@@ -34,6 +43,7 @@ export default function NewProductPage() {
         {
           method: "POST",
           body: JSON.stringify(payload),
+          headers: { "x-pin-grant": grant },
         },
       );
       router.push(`/admin/products/${res.product.id}`);
@@ -54,6 +64,7 @@ export default function NewProductPage() {
         busy={busy}
         error={error}
       />
+      {pinModal}
     </AdminShell>
   );
 }

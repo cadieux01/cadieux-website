@@ -5,12 +5,15 @@
 // to /api/admin/login; on success we set `admin_session` — an
 // HttpOnly, Secure, SameSite=Strict cookie carrying an HMAC-signed
 // payload `{p:"admin", exp:<epoch-ms>}`. The HMAC is keyed on
-// ADMIN_TOKEN (server-only), mirroring the product-lock grant flow.
+// ADMIN_TOKEN (server-only).
 //
 // All admin API routes call verifyAdminSession(req); the helper reads
 // the cookie, re-derives the HMAC, and rejects expired or tampered
 // tokens. There is no other accepted credential — the legacy
 // x-admin-token header is no longer honoured on /api/admin/*.
+//
+// (The HMAC signing key, ADMIN_TOKEN, is the same one used to sign the
+// short-lived PIN grants for sensitive mutations.)
 
 import crypto from "crypto";
 import type { NextRequest } from "next/server";
@@ -22,7 +25,7 @@ export const ADMIN_SESSION_COOKIE = "admin_session";
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 function signingSecret(): string {
-  // Same key as product-lock grants — server-only.
+  // Same key as the PIN grants — server-only.
   return process.env.ADMIN_TOKEN || "cadieux-admin-session-unconfigured";
 }
 

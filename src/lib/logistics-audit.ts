@@ -9,8 +9,8 @@
 
 import { supabaseAdmin } from "@/lib/admin-auth";
 
-// action_type values accepted by logistics.audit_logs after
-// security/product-lock-audit.sql widens the CHECK.
+// action_type values accepted by logistics.audit_logs after the CHECK
+// constraint was widened to include BLOCKED and LOCKOUT.
 export type LogisticsAction =
   | "CREATE"
   | "UPDATE"
