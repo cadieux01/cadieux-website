@@ -124,6 +124,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "System",
     items: [
       { href: "/admin/audit", label: "Audit" },
+      { href: "/admin/profile", label: "Profile" },
     ],
   },
 ];
