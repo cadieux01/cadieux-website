@@ -3,7 +3,7 @@
 // /admin/audit — UNIFIED audit trail.
 //
 // Reads logistics.audit_logs (the cross-panel log fed by the dashboard,
-// the public-schema triggers, and the product-lock flow) via
+// the public-schema triggers, and the website super-admin) via
 // /api/admin/audit. Distinct from /admin/audit-log, which reads the
 // website-only public.audit_log table.
 //
