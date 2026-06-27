@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { hasValidPinGrant } from "@/lib/pin-grant";
 import {
   PRODUCT_REPORT_CATEGORIES,
   ProductReportCategory,
@@ -18,7 +19,7 @@ import {
 
 const BUCKET = "product-reports";
 const REPORT_SELECT =
-  "id, product_id, title, category, file_url, file_name, mime_type, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, archived_at";
+  "id, product_id, title, report_number, report_name, summary, category, file_url, file_name, mime_type, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, archived_at";
 
 function bust(productId: string): void {
   revalidateTag("product-reports");
@@ -32,10 +33,48 @@ export async function PATCH(
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!hasValidPinGrant(req)) {
+    return NextResponse.json(
+      { error: "PIN verification required.", code: "pin_required" },
+      { status: 401 },
+    );
+  }
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
   const update: Record<string, unknown> = {};
+  if ("report_name" in body) {
+    if (typeof body.report_name !== "string" || !body.report_name.trim()) {
+      return NextResponse.json(
+        { error: "report_name must be a non-empty string" },
+        { status: 400 },
+      );
+    }
+    // report_name is the heading; keep title in sync for back-compat.
+    update.report_name = body.report_name.trim();
+    update.title = body.report_name.trim();
+  }
+  if ("report_number" in body) {
+    if (body.report_number !== null && typeof body.report_number !== "string") {
+      return NextResponse.json(
+        { error: "report_number must be a string or null" },
+        { status: 400 },
+      );
+    }
+    const v =
+      typeof body.report_number === "string" ? body.report_number.trim() : "";
+    update.report_number = v || null;
+  }
+  if ("summary" in body) {
+    if (body.summary !== null && typeof body.summary !== "string") {
+      return NextResponse.json(
+        { error: "summary must be a string or null" },
+        { status: 400 },
+      );
+    }
+    const v = typeof body.summary === "string" ? body.summary.trim() : "";
+    update.summary = v || null;
+  }
   if ("title" in body) {
     if (typeof body.title !== "string" || !body.title.trim()) {
       return NextResponse.json(
@@ -110,6 +149,12 @@ export async function DELETE(
 ) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!hasValidPinGrant(req)) {
+    return NextResponse.json(
+      { error: "PIN verification required.", code: "pin_required" },
+      { status: 401 },
+    );
   }
 
   const { data: row, error: fetchErr } = await supabaseAdmin

@@ -11,6 +11,7 @@ import type { Metadata } from "next";
 import { PRODUCTS, PRODUCT_DETAILS } from "@/lib/data";
 import { getProductAvailability, getProductBySlug } from "@/lib/products";
 import { getProductReports } from "@/lib/product-reports";
+import { getProductIngredients } from "@/lib/ingredients";
 
 import ProductDetailClient from "./ProductDetailClient";
 
@@ -96,11 +97,16 @@ export default async function ProductDetailPage({
   const productRow = await getProductBySlug(slug);
   const reports = productRow ? await getProductReports(productRow.id) : [];
 
+  // Ingredients are DB-driven (product_ingredients, keyed by slug == id).
+  // products.id == slug, so the slug is the product_id directly.
+  const ingredients = await getProductIngredients(slug);
+
   return (
     <ProductDetailClient
       slug={slug}
       outOfStock={outOfStock}
       reports={reports}
+      ingredients={ingredients}
       price={productRow?.price_inr ?? null}
     />
   );

@@ -4,7 +4,9 @@
 // Loads, uploads, edits, archives, unarchives and deletes rows in the
 // product_reports table via /api/admin/products/[id]/reports. File
 // uploads use a raw fetch (not adminFetch) so the multipart Content-Type
-// boundary is set by the browser.
+// boundary is set by the browser. Every mutation is gated by the security
+// PIN — requirePin() is owned by the parent page and passed down; the
+// returned grant rides as the `x-pin-grant` header.
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -23,14 +25,22 @@ const CREAM = "#fbf3d4";
 const FADED = "rgba(192,200,206,0.6)";
 const BORDER = "rgba(245,158,11,0.18)";
 
-export function LabReportsSection({ productId }: { productId: string }) {
+export function LabReportsSection({
+  productId,
+  requirePin,
+}: {
+  productId: string;
+  requirePin: () => Promise<string | null>;
+}) {
   const [reports, setReports] = useState<ProductReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   // Add-modal state
   const [showAdd, setShowAdd] = useState(false);
-  const [addTitle, setAddTitle] = useState("");
+  const [addName, setAddName] = useState("");
+  const [addNumber, setAddNumber] = useState("");
+  const [addSummary, setAddSummary] = useState("");
   const [addCategory, setAddCategory] = useState<ProductReportCategory>("other");
   const [addFile, setAddFile] = useState<File | null>(null);
   const [addBusy, setAddBusy] = useState(false);
@@ -45,7 +55,7 @@ export function LabReportsSection({ productId }: { productId: string }) {
     setLoadErr(null);
     try {
       const res = await adminFetch<{ reports: ProductReport[] }>(
-        `/api/admin/products/${productId}/reports`,
+        `/api/admin/products/${productId}/reports?include_archived=1`,
       );
       setReports(res.reports ?? []);
     } catch (e) {
@@ -63,25 +73,34 @@ export function LabReportsSection({ productId }: { productId: string }) {
 
   async function submitAdd() {
     if (!addFile) {
-      setAddErr("Select a file");
+      setAddErr("Select a PDF file");
       return;
     }
-    if (!addTitle.trim()) {
-      setAddErr("Title is required");
+    if (addFile.type !== "application/pdf") {
+      setAddErr("File must be a PDF");
       return;
     }
+    if (!addName.trim()) {
+      setAddErr("Report name is required");
+      return;
+    }
+    const grant = await requirePin();
+    if (!grant) return;
     setAddBusy(true);
     setAddErr(null);
     try {
       const fd = new FormData();
       fd.append("file", addFile);
-      fd.append("title", addTitle.trim());
+      fd.append("report_name", addName.trim());
+      fd.append("report_number", addNumber.trim());
+      fd.append("summary", addSummary.trim());
       fd.append("category", addCategory);
       const res = await fetch(
         `/api/admin/products/${productId}/reports`,
         {
           method: "POST",
           credentials: "same-origin",
+          headers: { "x-pin-grant": grant },
           body: fd,
         },
       );
@@ -90,7 +109,9 @@ export function LabReportsSection({ productId }: { productId: string }) {
         throw new Error(json.error ?? `Upload failed (${res.status})`);
       }
       setShowAdd(false);
-      setAddTitle("");
+      setAddName("");
+      setAddNumber("");
+      setAddSummary("");
       setAddCategory("other");
       setAddFile(null);
       await load();
@@ -102,12 +123,15 @@ export function LabReportsSection({ productId }: { productId: string }) {
   }
 
   async function patchRow(id: string, patch: Partial<ProductReport>) {
+    const grant = await requirePin();
+    if (!grant) return;
     setRowBusy(id);
     setRowErr(null);
     try {
       await adminFetch(`/api/admin/products/${productId}/reports/${id}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
+        headers: { "x-pin-grant": grant },
       });
       await load();
     } catch (e) {
@@ -120,6 +144,8 @@ export function LabReportsSection({ productId }: { productId: string }) {
   }
 
   async function archiveRow(id: string, archived: boolean) {
+    const grant = await requirePin();
+    if (!grant) return;
     setRowBusy(id);
     setRowErr(null);
     try {
@@ -127,7 +153,7 @@ export function LabReportsSection({ productId }: { productId: string }) {
         `/api/admin/products/${productId}/reports/${id}/${
           archived ? "unarchive" : "archive"
         }`,
-        { method: "POST" },
+        { method: "POST", headers: { "x-pin-grant": grant } },
       );
       await load();
     } catch (e) {
@@ -139,19 +165,22 @@ export function LabReportsSection({ productId }: { productId: string }) {
     }
   }
 
-  async function deleteRow(id: string, title: string) {
+  async function deleteRow(id: string, label: string) {
     if (
       !window.confirm(
-        `Permanently delete "${title}"? The file will be removed from storage and cannot be undone.`,
+        `Permanently delete "${label}"? The file will be removed from storage and cannot be undone.`,
       )
     ) {
       return;
     }
+    const grant = await requirePin();
+    if (!grant) return;
     setRowBusy(id);
     setRowErr(null);
     try {
       await adminFetch(`/api/admin/products/${productId}/reports/${id}`, {
         method: "DELETE",
+        headers: { "x-pin-grant": grant },
       });
       await load();
     } catch (e) {
@@ -162,7 +191,7 @@ export function LabReportsSection({ productId }: { productId: string }) {
   }
 
   return (
-    <section className="mt-10">
+    <section className="mt-2">
       <div className="flex items-baseline justify-between gap-3 mb-4 flex-wrap">
         <h3
           className="uppercase"
@@ -193,7 +222,7 @@ export function LabReportsSection({ productId }: { productId: string }) {
             background: "transparent",
           }}
         >
-          + Add Report
+          + Add Lab Report
         </button>
       </div>
 
@@ -228,7 +257,7 @@ export function LabReportsSection({ productId }: { productId: string }) {
             fontSize: "0.9rem",
           }}
         >
-          No reports uploaded yet.
+          No lab reports uploaded yet.
         </p>
       ) : (
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -239,7 +268,9 @@ export function LabReportsSection({ productId }: { productId: string }) {
               busy={rowBusy === r.id}
               onPatch={(p) => patchRow(r.id, p)}
               onArchive={() => archiveRow(r.id, r.is_archived)}
-              onDelete={() => deleteRow(r.id, r.title)}
+              onDelete={() =>
+                deleteRow(r.id, r.report_name ?? r.title)
+              }
             />
           ))}
         </ul>
@@ -256,8 +287,12 @@ export function LabReportsSection({ productId }: { productId: string }) {
 
       {showAdd ? (
         <AddReportModal
-          title={addTitle}
-          onTitle={setAddTitle}
+          name={addName}
+          onName={setAddName}
+          number={addNumber}
+          onNumber={setAddNumber}
+          summary={addSummary}
+          onSummary={setAddSummary}
           category={addCategory}
           onCategory={setAddCategory}
           file={addFile}
@@ -286,8 +321,19 @@ function ReportCard({
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(report.title);
-  const [category, setCategory] = useState<ProductReportCategory>(report.category);
+  const [name, setName] = useState(report.report_name ?? report.title);
+  const [number, setNumber] = useState(report.report_number ?? "");
+  const [summary, setSummary] = useState(report.summary ?? "");
+  const [category, setCategory] = useState<ProductReportCategory>(
+    report.category,
+  );
+
+  function resetDrafts() {
+    setName(report.report_name ?? report.title);
+    setNumber(report.report_number ?? "");
+    setSummary(report.summary ?? "");
+    setCategory(report.category);
+  }
 
   return (
     <li
@@ -324,36 +370,70 @@ function ReportCard({
 
       {editing ? (
         <div className="flex flex-col gap-2">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3 py-2"
-            style={{
-              border: `1px solid ${BORDER}`,
-              background: "transparent",
-              color: CREAM,
-              fontFamily: "var(--font-body)",
-              fontSize: "0.85rem",
-            }}
-          />
-          <Select
-            value={category}
-            onChange={(v) => setCategory(v as ProductReportCategory)}
-            ariaLabel="Report category"
-            style={{ minHeight: 0, borderColor: BORDER, fontSize: "0.85rem" }}
-            options={PRODUCT_REPORT_CATEGORIES.map((c) => ({
-              value: c,
-              label: PRODUCT_REPORT_CATEGORY_LABEL[c],
-            }))}
-          />
+          <label style={fieldLabel}>
+            Report Name
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 w-full px-3 py-2"
+              style={fieldInput}
+            />
+          </label>
+          <label style={fieldLabel}>
+            Report Number
+            <input
+              value={number}
+              onChange={(e) => setNumber(e.target.value)}
+              placeholder="Optional"
+              className="mt-1 w-full px-3 py-2"
+              style={fieldInput}
+            />
+          </label>
+          <label style={fieldLabel}>
+            Summary
+            <textarea
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              placeholder="Optional"
+              rows={3}
+              className="mt-1 w-full px-3 py-2"
+              style={{ ...fieldInput, resize: "vertical" }}
+            />
+          </label>
+          <label style={fieldLabel}>
+            Category
+            <div className="mt-1">
+              <Select
+                value={category}
+                onChange={(v) => setCategory(v as ProductReportCategory)}
+                ariaLabel="Report category"
+                style={{
+                  minHeight: 0,
+                  borderColor: BORDER,
+                  fontSize: "0.85rem",
+                  textTransform: "none",
+                  letterSpacing: "0.05em",
+                }}
+                options={PRODUCT_REPORT_CATEGORIES.map((c) => ({
+                  value: c,
+                  label: PRODUCT_REPORT_CATEGORY_LABEL[c],
+                }))}
+              />
+            </div>
+          </label>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => {
-                onPatch({ title: title.trim(), category });
+                onPatch({
+                  report_name: name.trim(),
+                  report_number: number.trim() || null,
+                  summary: summary.trim() || null,
+                  category,
+                });
                 setEditing(false);
               }}
-              disabled={busy || !title.trim()}
+              disabled={busy || !name.trim()}
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
@@ -363,7 +443,7 @@ function ReportCard({
                 border: `1px solid ${GOLD}`,
                 padding: "0.35rem 0.7rem",
                 background: "transparent",
-                opacity: busy || !title.trim() ? 0.5 : 1,
+                opacity: busy || !name.trim() ? 0.5 : 1,
               }}
             >
               {busy ? "Saving…" : "Save"}
@@ -371,8 +451,7 @@ function ReportCard({
             <button
               type="button"
               onClick={() => {
-                setTitle(report.title);
-                setCategory(report.category);
+                resetDrafts();
                 setEditing(false);
               }}
               className="uppercase"
@@ -392,6 +471,19 @@ function ReportCard({
         </div>
       ) : (
         <>
+          {report.report_number ? (
+            <div
+              style={{
+                fontFamily: "var(--font-body)",
+                color: FADED,
+                fontSize: "0.7rem",
+                letterSpacing: "0.08em",
+                marginBottom: "0.15rem",
+              }}
+            >
+              {report.report_number}
+            </div>
+          ) : null}
           <div
             style={{
               fontFamily: "var(--font-body)",
@@ -400,8 +492,21 @@ function ReportCard({
               marginBottom: "0.35rem",
             }}
           >
-            {report.title}
+            {report.report_name ?? report.title}
           </div>
+          {report.summary ? (
+            <p
+              style={{
+                fontFamily: "var(--font-body)",
+                color: FADED,
+                fontSize: "0.8rem",
+                lineHeight: 1.5,
+                marginBottom: "0.5rem",
+              }}
+            >
+              {report.summary}
+            </p>
+          ) : null}
           <a
             href={report.file_url}
             target="_blank"
@@ -490,8 +595,12 @@ function ReportCard({
 }
 
 function AddReportModal({
-  title,
-  onTitle,
+  name,
+  onName,
+  number,
+  onNumber,
+  summary,
+  onSummary,
   category,
   onCategory,
   file,
@@ -501,8 +610,12 @@ function AddReportModal({
   onCancel,
   onSubmit,
 }: {
-  title: string;
-  onTitle: (s: string) => void;
+  name: string;
+  onName: (s: string) => void;
+  number: string;
+  onNumber: (s: string) => void;
+  summary: string;
+  onSummary: (s: string) => void;
   category: ProductReportCategory;
   onCategory: (c: ProductReportCategory) => void;
   file: File | null;
@@ -551,7 +664,7 @@ function AddReportModal({
               fontWeight: 300,
             }}
           >
-            Add Report
+            Add Lab Report
           </h4>
         </div>
 
@@ -565,44 +678,41 @@ function AddReportModal({
             padding: "1rem 1.5rem",
           }}
         >
-          <label
-            className="block mb-3"
-            style={{
-              fontFamily: "var(--font-body)",
-              color: FADED,
-              fontSize: "0.7rem",
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-            }}
-          >
-            Title
+          <label className="block mb-3" style={fieldLabel}>
+            Report Name
             <input
-              value={title}
-              onChange={(e) => onTitle(e.target.value)}
-              placeholder="e.g. FSSAI License 2025"
+              value={name}
+              onChange={(e) => onName(e.target.value)}
+              placeholder="e.g. Nutrition Analysis"
               className="mt-1 w-full px-3 py-2"
-              style={{
-                border: `1px solid ${BORDER}`,
-                background: "transparent",
-                color: CREAM,
-                fontFamily: "var(--font-body)",
-                fontSize: "0.9rem",
-                letterSpacing: "0.05em",
-                textTransform: "none",
-              }}
+              style={fieldInput}
             />
           </label>
 
-          <label
-            className="block mb-3"
-            style={{
-              fontFamily: "var(--font-body)",
-              color: FADED,
-              fontSize: "0.7rem",
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-            }}
-          >
+          <label className="block mb-3" style={fieldLabel}>
+            Report Number
+            <input
+              value={number}
+              onChange={(e) => onNumber(e.target.value)}
+              placeholder="Optional"
+              className="mt-1 w-full px-3 py-2"
+              style={fieldInput}
+            />
+          </label>
+
+          <label className="block mb-3" style={fieldLabel}>
+            Summary
+            <textarea
+              value={summary}
+              onChange={(e) => onSummary(e.target.value)}
+              placeholder="Optional"
+              rows={3}
+              className="mt-1 w-full px-3 py-2"
+              style={{ ...fieldInput, resize: "vertical" }}
+            />
+          </label>
+
+          <label className="block mb-3" style={fieldLabel}>
             Category
             <div className="mt-1">
               <Select
@@ -623,19 +733,11 @@ function AddReportModal({
             </div>
           </label>
 
-          <label
-            className="block mb-4"
-            style={{
-              fontFamily: "var(--font-body)",
-              color: FADED,
-              fontSize: "0.7rem",
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-            }}
-          >
-            File (any type · max 10MB)
+          <label className="block mb-4" style={fieldLabel}>
+            PDF File (max 10MB)
             <input
               type="file"
+              accept="application/pdf"
               onChange={(e) => onFile(e.target.files?.[0] ?? null)}
               className="mt-1 w-full"
               style={{
@@ -727,6 +829,24 @@ function AddReportModal({
     </div>
   );
 }
+
+const fieldLabel: React.CSSProperties = {
+  fontFamily: "var(--font-body)",
+  color: FADED,
+  fontSize: "0.7rem",
+  letterSpacing: "0.2em",
+  textTransform: "uppercase",
+};
+
+const fieldInput: React.CSSProperties = {
+  border: `1px solid ${BORDER}`,
+  background: "transparent",
+  color: CREAM,
+  fontFamily: "var(--font-body)",
+  fontSize: "0.9rem",
+  letterSpacing: "0.05em",
+  textTransform: "none",
+};
 
 function formatBytes(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";

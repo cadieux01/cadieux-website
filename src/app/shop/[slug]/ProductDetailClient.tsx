@@ -46,11 +46,16 @@ export default function ProductDetailClient({
   slug,
   outOfStock = false,
   reports = [],
+  ingredients = [],
   price = null,
 }: {
   slug: string;
   outOfStock?: boolean;
   reports?: ProductReport[];
+  // DB-driven ingredient names (product_ingredients), ordered. The bundled
+  // PRODUCT_DETAILS.ingredients is no longer rendered — this list is the
+  // single source of truth, editable from the admin product editor.
+  ingredients?: string[];
   // Live DB price (products.price_inr). Falls back to the bundled PRODUCTS
   // price only when the DB read was empty, so display + cart snapshot stay
   // pinned to the products table — the single source of truth.
@@ -437,68 +442,58 @@ export default function ProductDetailClient({
           </div>
         </div>
 
-        <hr style={DIVIDER_STYLE} />
+        {ingredients.length > 0 && (
+          <>
+            <hr style={DIVIDER_STYLE} />
 
-        {/* Ingredients */}
-        <Section label="Inside the loaf" title="Ingredients">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 20,
-            }}
-          >
-            {detail.ingredients.map((ing) => (
+            {/* Ingredients — DB-driven (product_ingredients table). */}
+            <Section label="Inside the loaf" title="Ingredients">
               <div
-                key={ing.name}
                 style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 14,
-                  padding: "18px 18px",
-                  background: "rgba(10,8,5,0.35)",
-                  border: "0.5px solid rgba(201,169,110,0.15)",
-                  borderRadius: 8,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: 20,
                 }}
               >
-                <span
-                  style={{
-                    flex: "0 0 8px",
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: "#c9a96e",
-                    marginTop: 8,
-                  }}
-                />
-                <div style={{ minWidth: 0 }}>
+                {ingredients.map((name) => (
                   <div
+                    key={name}
                     style={{
-                      fontFamily: "var(--font-heading)",
-                      fontSize: 18,
-                      color: "#FBF3D4",
-                      lineHeight: 1.2,
-                      marginBottom: 4,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 14,
+                      padding: "18px 18px",
+                      background: "rgba(10,8,5,0.35)",
+                      border: "0.5px solid rgba(201,169,110,0.15)",
+                      borderRadius: 8,
                     }}
                   >
-                    {ing.name}
+                    <span
+                      style={{
+                        flex: "0 0 8px",
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: "#c9a96e",
+                      }}
+                    />
+                    <div
+                      style={{
+                        minWidth: 0,
+                        fontFamily: "var(--font-heading)",
+                        fontSize: 18,
+                        color: "#FBF3D4",
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {name}
+                    </div>
                   </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-body)",
-                      fontSize: 12,
-                      lineHeight: 1.55,
-                      fontWeight: 300,
-                      color: "rgba(245,240,232,0.55)",
-                    }}
-                  >
-                    {ing.role}
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </Section>
+            </Section>
+          </>
+        )}
 
         {reports.length > 0 ? (
           <>
@@ -865,6 +860,19 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                     color: "#FBF3D4",
                   }}
                 >
+                  {r.report_number ? (
+                    <div
+                      style={{
+                        fontFamily: "var(--font-body)",
+                        fontSize: 10,
+                        letterSpacing: "0.12em",
+                        color: "rgba(251,243,212,0.55)",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {r.report_number}
+                    </div>
+                  ) : null}
                   <div
                     style={{
                       fontFamily: "var(--font-body)",
@@ -874,8 +882,21 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                       marginBottom: 6,
                     }}
                   >
-                    {r.title}
+                    {r.report_name ?? r.title}
                   </div>
+                  {r.summary ? (
+                    <div
+                      style={{
+                        fontFamily: "var(--font-body)",
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        color: "rgba(251,243,212,0.75)",
+                        marginBottom: 8,
+                      }}
+                    >
+                      {r.summary}
+                    </div>
+                  ) : null}
                   <div
                     style={{
                       fontFamily: "var(--font-body)",

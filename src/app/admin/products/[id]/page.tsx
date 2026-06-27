@@ -9,6 +9,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { IngredientsSection } from "@/components/admin/IngredientsSection";
 import { LabReportsSection } from "@/components/admin/LabReportsSection";
 import {
   ProductForm,
@@ -29,9 +30,19 @@ const CREAM = "#fbf3d4";
 const FADED = "rgba(192,200,206,0.6)";
 const BORDER = "rgba(245,158,11,0.18)";
 
+type EditorTab = "details" | "ingredients" | "reports";
+
+const TABS: { key: EditorTab; label: string }[] = [
+  { key: "details", label: "Product Details" },
+  { key: "ingredients", label: "Ingredients" },
+  { key: "reports", label: "Lab Reports" },
+];
+
 export default function EditProductPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
+
+  const [tab, setTab] = useState<EditorTab>("details");
 
   const [product, setProduct] = useState<AdminProductRow | null>(null);
   const [history, setHistory] = useState<AdminProductChangeRow[]>([]);
@@ -206,17 +217,56 @@ export default function EditProductPage() {
         <p style={{ color: FADED, fontFamily: "var(--font-body)" }}>Loading…</p>
       ) : (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-8">
-            <ProductForm
-              initial={formValuesFromRow(product)}
-              submitLabel="🔒 Save changes"
-              onSubmit={submit}
-              busy={busy}
-              error={saveErr}
-            />
-            <HistoryPanel history={history} />
+          <div
+            className="flex gap-1 mb-8 flex-wrap"
+            style={{ borderBottom: `1px solid ${BORDER}` }}
+          >
+            {TABS.map((t) => {
+              const active = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className="uppercase"
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.72rem",
+                    letterSpacing: "0.25em",
+                    color: active ? CREAM : FADED,
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: `2px solid ${active ? GOLD : "transparent"}`,
+                    padding: "0.6rem 1rem",
+                    marginBottom: "-1px",
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
-          <LabReportsSection productId={product.id} />
+
+          {tab === "details" ? (
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-8">
+              <ProductForm
+                initial={formValuesFromRow(product)}
+                submitLabel="🔒 Save changes"
+                onSubmit={submit}
+                busy={busy}
+                error={saveErr}
+              />
+              <HistoryPanel history={history} />
+            </div>
+          ) : null}
+
+          {tab === "ingredients" ? (
+            <IngredientsSection productId={product.id} requirePin={requirePin} />
+          ) : null}
+
+          {tab === "reports" ? (
+            <LabReportsSection productId={product.id} requirePin={requirePin} />
+          ) : null}
         </>
       )}
 

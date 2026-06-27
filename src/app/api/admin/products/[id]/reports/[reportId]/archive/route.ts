@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { hasValidPinGrant } from "@/lib/pin-grant";
 import { productReportsTag } from "@/lib/product-reports";
 
 // Soft-archive a lab report. Public PDP only renders is_archived=false
@@ -13,6 +14,12 @@ export async function POST(
 ) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!hasValidPinGrant(req)) {
+    return NextResponse.json(
+      { error: "PIN verification required.", code: "pin_required" },
+      { status: 401 },
+    );
   }
 
   const { data, error } = await supabaseAdmin

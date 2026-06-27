@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { hasValidPinGrant } from "@/lib/pin-grant";
 import {
   PRODUCT_REPORT_CATEGORIES,
   ProductReportCategory,
@@ -21,7 +22,7 @@ const BUCKET = "product-reports";
 const MAX_BYTES = 10 * 1024 * 1024;
 
 const REPORT_SELECT =
-  "id, product_id, title, category, file_url, file_name, mime_type, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, archived_at";
+  "id, product_id, title, report_number, report_name, summary, category, file_url, file_name, mime_type, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, archived_at";
 
 function bust(productId: string): void {
   revalidateTag("product-reports");
@@ -75,6 +76,15 @@ export async function POST(
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // Lab-report uploads mutate live PDP content — require the security PIN
+  // grant (header `x-pin-grant` or `pin_verified` cookie), same gate as the
+  // product PATCH route.
+  if (!hasValidPinGrant(req)) {
+    return NextResponse.json(
+      { error: "PIN verification required.", code: "pin_required" },
+      { status: 401 },
+    );
+  }
 
   // Confirm product exists before consuming the upload body.
   const { data: product, error: prodErr } = await supabaseAdmin
@@ -100,7 +110,12 @@ export async function POST(
   }
 
   const file = form.get("file");
-  const title = String(form.get("title") ?? "").trim();
+  // Editable fields. report_name is the heading; title is kept for
+  // back-compat and defaults to report_name. report_number + summary
+  // are optional.
+  const reportName = String(form.get("report_name") ?? "").trim();
+  const reportNumber = String(form.get("report_number") ?? "").trim();
+  const summary = String(form.get("summary") ?? "").trim();
   const category = String(form.get("category") ?? "other") as ProductReportCategory;
   const sortRaw = form.get("sort_order");
   const sortOrder = Number.isFinite(Number(sortRaw)) ? Number(sortRaw) : 0;
@@ -108,12 +123,22 @@ export async function POST(
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Missing file" }, { status: 400 });
   }
-  if (!title) {
-    return NextResponse.json({ error: "Title is required" }, { status: 400 });
+  if (!reportName) {
+    return NextResponse.json(
+      { error: "Report name is required" },
+      { status: 400 },
+    );
   }
   if (!PRODUCT_REPORT_CATEGORIES.includes(category)) {
     return NextResponse.json(
       { error: `Invalid category "${category}"` },
+      { status: 400 },
+    );
+  }
+  // Lab reports must be PDFs.
+  if (file.type !== "application/pdf") {
+    return NextResponse.json(
+      { error: "File must be a PDF" },
       { status: 400 },
     );
   }
@@ -124,9 +149,7 @@ export async function POST(
     );
   }
 
-  // No MIME allowlist — admin is trusted, and the spec wants any file
-  // type accepted up to the 10 MB cap. Extension is derived from the
-  // upload's filename so the stored path stays human-readable.
+  const title = reportName;
   const ext = extFromName(file.name);
   const stamp = Date.now();
   const rand = Math.random().toString(36).slice(2, 10);
@@ -161,6 +184,9 @@ export async function POST(
     .insert({
       product_id: params.id,
       title,
+      report_name: reportName,
+      report_number: reportNumber || null,
+      summary: summary || null,
       category,
       file_url: pub.publicUrl,
       file_name: file.name || `report.${ext}`,

@@ -21,6 +21,11 @@ export type ProductReport = {
   id: string;
   product_id: string;
   title: string;
+  // Editable display fields (report_name is the heading shown on the PDP;
+  // title is kept for back-compat and defaults to report_name on create).
+  report_number: string | null;
+  report_name: string | null;
+  summary: string | null;
   category: ProductReportCategory;
   file_url: string;
   file_name: string;
@@ -70,7 +75,7 @@ export const getProductReports = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("product_reports")
       .select(
-        "id, product_id, title, category, file_url, file_name, mime_type, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, archived_at",
+        "id, product_id, title, report_number, report_name, summary, category, file_url, file_name, mime_type, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, archived_at",
       )
       .eq("product_id", productId)
       .eq("is_archived", false)
