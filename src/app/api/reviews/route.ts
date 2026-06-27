@@ -4,6 +4,7 @@ import { verifyTurnstileToken } from "@/lib/turnstile";
 import { reviewRateLimit, getClientIP } from "@/lib/ratelimit";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { publicDisplayName } from "@/lib/review-display";
+import { isAdmin } from "@/lib/admin-auth";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,6 +15,12 @@ const supabaseAdmin = createClient(
 export async function GET(req: NextRequest) {
   const product = req.nextUrl.searchParams.get("product");
 
+  // Admin callers (valid x-admin session/bearer) get the full moderation
+  // view: soft-deleted rows are INCLUDED (so a row deleted by mistake can
+  // be restored) and the raw author_name is returned (so edits round-trip).
+  // Public callers (web + mobile app) get the existing filtered payload.
+  const admin = isAdmin(req);
+
   // Verified phone identifies the caller for the is_owner flag. Not
   // required — anonymous browsers still get the full public list.
   const verified = getVerifiedPhone(req);
@@ -22,10 +29,11 @@ export async function GET(req: NextRequest) {
   let q = supabaseAdmin
     .from("reviews")
     .select(
-      "id, product_slug, author_name, rating, body, likes_count, created_at, edited_at, customer_phone"
+      "id, product_slug, author_name, rating, body, likes_count, created_at, edited_at, is_edited, is_deleted, deleted_at, customer_phone"
     )
-    .eq("is_deleted", false)
     .order("created_at", { ascending: false });
+  // Public never sees soft-deleted reviews; admins see everything.
+  if (!admin) q = q.eq("is_deleted", false);
   if (product) q = q.eq("product_slug", product);
   const { data: reviews, error } = await q;
   if (error) {
@@ -34,13 +42,18 @@ export async function GET(req: NextRequest) {
   }
 
   const ids = (reviews ?? []).map((r) => r.id);
-  let replies: { id: string; review_id: string; author_name: string; is_admin: boolean; body: string; likes_count: number; created_at: string; edited_at: string | null }[] = [];
+  let replies: { id: string; review_id: string; author_name: string; is_admin: boolean; body: string; likes_count: number; created_at: string; edited_at: string | null; is_edited: boolean; is_deleted: boolean; deleted_at: string | null }[] = [];
   if (ids.length) {
-    const { data: rdata, error: rerr } = await supabaseAdmin
+    let rq = supabaseAdmin
       .from("review_replies")
-      .select("id, review_id, author_name, is_admin, body, likes_count, created_at, edited_at")
+      .select("id, review_id, author_name, is_admin, body, likes_count, created_at, edited_at, is_edited, is_deleted, deleted_at")
       .in("review_id", ids)
       .order("created_at", { ascending: true });
+    // Hide soft-deleted replies from the public web + mobile app so an
+    // admin delete actually removes them. Admins keep seeing them (with a
+    // deleted badge) so they can restore.
+    if (!admin) rq = rq.eq("is_deleted", false);
+    const { data: rdata, error: rerr } = await rq;
     if (rerr) {
       console.error("replies fetch failed:", rerr);
       return NextResponse.json({ error: rerr.message }, { status: 500 });
@@ -53,6 +66,21 @@ export async function GET(req: NextRequest) {
     const arr = byReview.get(r.review_id) ?? [];
     arr.push(r);
     byReview.set(r.review_id, arr);
+  }
+
+  if (admin) {
+    // Admin moderation payload: raw author_name + moderation flags exposed
+    // so the editor can pre-fill and round-trip. customer_phone is STILL
+    // dropped — moderation never needs it. Never cached.
+    const out = (reviews ?? []).map((r) => {
+      const { customer_phone: _omit, ...rest } = r;
+      void _omit;
+      return { ...rest, is_owner: false, replies: byReview.get(r.id) ?? [] };
+    });
+    return NextResponse.json(
+      { reviews: out },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   // Shape the public payload: replace author_name with first-name-only,
