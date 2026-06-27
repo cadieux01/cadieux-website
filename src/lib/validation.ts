@@ -81,6 +81,12 @@ export const ProductUpdateSchema = z
     in_stock: z.boolean().optional(),
     is_active: z.boolean().optional(),
     sort_order: z.number().int().min(0).max(100000).optional(),
+    // Subscription plan catalogue. Title/blurb are wizard-only display
+    // strings (shorter than the product name + brand copy). is_subscription_plan
+    // is the new DB-driven whitelist consumed by /api/subscription-plans.
+    is_subscription_plan: z.boolean().optional(),
+    subscription_title: boundedText(80).nullable().optional(),
+    subscription_blurb: boundedText(200).nullable().optional(),
   })
   .strict()
   .refine((o) => Object.keys(o).length > 0, { message: "No fields to update" });

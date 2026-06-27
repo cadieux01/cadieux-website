@@ -27,6 +27,10 @@ export type ProductFormValues = {
   in_stock: boolean;
   is_active: boolean;
   sort_order: string;
+  // Subscription plan catalogue (consumed by /api/subscription-plans).
+  is_subscription_plan: boolean;
+  subscription_title: string;
+  subscription_blurb: string;
 };
 
 export function emptyFormValues(): ProductFormValues {
@@ -43,6 +47,9 @@ export function emptyFormValues(): ProductFormValues {
     in_stock: true,
     is_active: true,
     sort_order: "",
+    is_subscription_plan: false,
+    subscription_title: "",
+    subscription_blurb: "",
   };
 }
 
@@ -63,6 +70,9 @@ export function formValuesFromRow(row: AdminProductRow): ProductFormValues {
     in_stock: row.in_stock,
     is_active: row.is_active,
     sort_order: String(row.sort_order ?? ""),
+    is_subscription_plan: row.is_subscription_plan,
+    subscription_title: row.subscription_title ?? "",
+    subscription_blurb: row.subscription_blurb ?? "",
   };
 }
 
@@ -94,6 +104,9 @@ export function valuesToPayload(v: ProductFormValues): Record<string, unknown> {
   if (v.sort_order.trim() !== "") {
     payload.sort_order = Number(v.sort_order);
   }
+  payload.is_subscription_plan = v.is_subscription_plan;
+  payload.subscription_title = v.subscription_title.trim() || null;
+  payload.subscription_blurb = v.subscription_blurb.trim() || null;
   return payload;
 }
 
@@ -367,6 +380,56 @@ export function ProductForm({
           onChange={(v) => patch({ is_active: v })}
           hint="Uncheck to hide from the public catalogue."
         />
+      </div>
+
+      {/* Subscription plan catalogue — toggles the product onto the
+          /subscriptions/setup wizard. Title + blurb are the wizard-only
+          display strings; per-loaf price comes from the field above. */}
+      <div
+        className="flex flex-col gap-4 p-4"
+        style={{ border: `1px solid ${BORDER}` }}
+      >
+        <span
+          className="uppercase"
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "0.72rem",
+            letterSpacing: "0.25em",
+            color: GOLD,
+          }}
+        >
+          Subscription plan
+        </span>
+        <Checkbox
+          label="Offer as a subscription plan"
+          checked={values.is_subscription_plan}
+          onChange={(v) => patch({ is_subscription_plan: v })}
+          hint="When on, this product appears in the /subscriptions/setup wizard at the per-loaf price above."
+        />
+        {values.is_subscription_plan ? (
+          <>
+            <Field
+              label="Wizard title"
+              hint="Short label for the wizard picker (e.g. Multigrain). Defaults to the product name if blank."
+            >
+              <Input
+                value={values.subscription_title}
+                onChange={(v) => patch({ subscription_title: v })}
+                placeholder="Multigrain"
+              />
+            </Field>
+            <Field
+              label="Wizard blurb"
+              hint="One-line description shown under the title. Avoid nutrition figures until lab-verified."
+            >
+              <Input
+                value={values.subscription_blurb}
+                onChange={(v) => patch({ subscription_blurb: v })}
+                placeholder="Ancient grains, seeds, whey protein."
+              />
+            </Field>
+          </>
+        ) : null}
       </div>
 
       <div className="flex gap-3 pt-2">

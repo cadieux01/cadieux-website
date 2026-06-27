@@ -2,9 +2,14 @@
 //
 // Public, cached reader the /subscriptions/setup wizard hits so its price
 // preview tracks DB changes without a redeploy. Returns one row per active,
-// unarchived, in-stock product that the wizard supports (slug must appear in
-// SETUP_PRODUCTS — title/blurb are wizard-specific display strings kept in
-// lib/subscription-setup.ts).
+// unarchived, in-stock product flagged `is_subscription_plan=true`.
+//
+// As of Merge 4 the whitelist + title/blurb are DB-driven: admins toggle
+// products onto the wizard via /admin/subscriptions/plans (which sets
+// is_subscription_plan + subscription_title + subscription_blurb on the
+// products row). SETUP_PRODUCTS in lib/subscription-setup.ts is now only
+// a NETWORK-FALLBACK reference — its values are still served if a row's
+// title/blurb is null AND its slug matches a hardcoded fallback entry.
 //
 // price === subscription_per_loaf_inr (falls back to price_inr if not set).
 // This is the same precedence the server-side place_subscription handler
@@ -21,10 +26,14 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 
-import { SETUP_PRODUCTS, type ProductSlug } from "@/lib/subscription-setup";
+import { SETUP_PRODUCTS } from "@/lib/subscription-setup";
 
+// Slug is intentionally widened to plain `string` — once plans are
+// catalogued in the DB, the API can return slugs the wizard's literal
+// `ProductSlug` union doesn't know about. The wizard merges by slug
+// string so this stays type-safe at the call site.
 export type SubscriptionPlanDTO = {
-  slug: ProductSlug;
+  slug: string;
   name: string;
   title: string;
   price: number;
@@ -37,13 +46,17 @@ const supabaseAnon = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
-const WIZARD_META: Record<ProductSlug, { title: string; blurb: string }> =
+// Hardcoded SETUP_PRODUCTS now acts purely as a per-slug fallback for
+// title/blurb when the DB row hasn't populated them yet. New plans
+// added via the admin UI MUST set their own title/blurb (the form
+// requires it) so this map only ever matters for the seeded pair.
+const FALLBACK_META: Record<string, { title: string; blurb: string }> =
   SETUP_PRODUCTS.reduce(
     (acc, p) => {
       acc[p.slug] = { title: p.title, blurb: p.blurb };
       return acc;
     },
-    {} as Record<ProductSlug, { title: string; blurb: string }>,
+    {} as Record<string, { title: string; blurb: string }>,
   );
 
 const getSubscriptionPlans = unstable_cache(
@@ -51,11 +64,12 @@ const getSubscriptionPlans = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "slug, name, price_inr, subscription_per_loaf_inr, is_active, is_archived, in_stock, sort_order",
+        "slug, name, price_inr, subscription_per_loaf_inr, is_active, is_archived, in_stock, sort_order, is_subscription_plan, subscription_title, subscription_blurb",
       )
       .eq("is_active", true)
       .eq("is_archived", false)
       .eq("in_stock", true)
+      .eq("is_subscription_plan", true)
       .order("sort_order", { ascending: true });
 
     if (error) {
@@ -66,21 +80,34 @@ const getSubscriptionPlans = unstable_cache(
     const out: SubscriptionPlanDTO[] = [];
     for (const row of data ?? []) {
       const slug = row.slug as string;
-      if (!(slug in WIZARD_META)) continue;
       const subPrice = row.subscription_per_loaf_inr ?? row.price_inr;
       if (typeof subPrice !== "number" || subPrice <= 0) continue;
-      const meta = WIZARD_META[slug as ProductSlug];
+      const fallback = FALLBACK_META[slug];
+      // Prefer DB-supplied title/blurb. Fall back to the hardcoded SETUP
+      // entry when present (for the seeded multigrain / high-protein
+      // pair); else use the product name + empty blurb so newly-flagged
+      // plans surface even before the admin enters wizard copy.
+      const title =
+        (typeof row.subscription_title === "string" &&
+          row.subscription_title.trim().length > 0)
+          ? row.subscription_title.trim()
+          : fallback?.title ?? row.name;
+      const blurb =
+        (typeof row.subscription_blurb === "string" &&
+          row.subscription_blurb.trim().length > 0)
+          ? row.subscription_blurb.trim()
+          : fallback?.blurb ?? "";
       out.push({
-        slug: slug as ProductSlug,
+        slug,
         name: row.name,
-        title: meta.title,
+        title,
         price: subPrice,
-        blurb: meta.blurb,
+        blurb,
       });
     }
     return out;
   },
-  ["subscription-plans-v1"],
+  ["subscription-plans-v2"],
   { revalidate: 60, tags: ["subscription-plans"] },
 );
 

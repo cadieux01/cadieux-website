@@ -24,7 +24,7 @@ function bustProductCaches(): void {
 }
 
 const PRODUCT_SELECT =
-  "id, slug, name, price_inr, subscription_per_loaf_inr, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at";
+  "id, slug, name, price_inr, subscription_per_loaf_inr, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
 
 // GET /api/admin/products/[id]
 //   Returns { product, history } where history is the last 50 audit

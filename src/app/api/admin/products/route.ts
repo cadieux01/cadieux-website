@@ -7,8 +7,11 @@ import {
   slugify,
   writeAuditEntries,
 } from "@/lib/admin-product-audit";
+import { seedDefaultProductContent } from "@/lib/admin-product-content-seed";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { logLogisticsAudit } from "@/lib/logistics-audit";
 import { hasValidPinGrant } from "@/lib/pin-grant";
+import { CONTENT_CACHE_TAG } from "@/lib/content";
 
 // Bust the unstable_cache entries that key off the same product rows.
 // "products" is consumed by getActiveProducts() (lib/products.ts).
@@ -18,10 +21,13 @@ import { hasValidPinGrant } from "@/lib/pin-grant";
 function bustProductCaches(): void {
   revalidateTag("products");
   revalidateTag("subscription-plans");
+  // Newly-seeded content rows are read through getPageContent() — bust
+  // its cache so a fresh product's PDP reflects the seed immediately.
+  revalidateTag(CONTENT_CACHE_TAG);
 }
 
 const PRODUCT_SELECT =
-  "id, slug, name, price_inr, subscription_per_loaf_inr, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at";
+  "id, slug, name, price_inr, subscription_per_loaf_inr, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
 
 // GET /api/admin/products?include_archived=1
 //   Returns every product (newest first) so the admin can scroll the
@@ -135,7 +141,40 @@ export async function POST(req: NextRequest) {
     nextSort = (maxRow?.sort_order ?? 0) + 1;
   }
 
+  // The id column is a TEXT primary key seeded with the slug — every
+  // existing product follows the slug=id convention (see DB row history).
+  // Mirror that so /shop/[slug] + admin URLs both resolve consistently.
+  const id = slug;
+
+  // `weight` is NOT NULL in the schema; fall back to an empty string when
+  // the operator hasn't entered one yet so the insert doesn't fail. The
+  // editor exposes the field and the admin can fill it on the next save.
+  const weightVal =
+    typeof body.weight === "string" && body.weight.trim().length > 0
+      ? body.weight.trim()
+      : "";
+
+  // Optional subscription-plan fields. Default OFF — a new product is NOT
+  // a wizard plan until the operator opts it in. title/blurb only matter
+  // when is_subscription_plan=true; we still accept them on create so the
+  // form can persist them in one round-trip.
+  const isPlan =
+    typeof body.is_subscription_plan === "boolean"
+      ? body.is_subscription_plan
+      : false;
+  const subTitle =
+    typeof body.subscription_title === "string" &&
+    body.subscription_title.trim().length > 0
+      ? body.subscription_title.trim()
+      : null;
+  const subBlurb =
+    typeof body.subscription_blurb === "string" &&
+    body.subscription_blurb.trim().length > 0
+      ? body.subscription_blurb.trim()
+      : null;
+
   const insertRow = {
+    id,
     slug,
     name,
     price_inr: priceRaw,
@@ -143,7 +182,7 @@ export async function POST(req: NextRequest) {
       typeof body.subscription_per_loaf_inr === "number"
         ? body.subscription_per_loaf_inr
         : priceRaw,
-    weight: typeof body.weight === "string" ? body.weight : null,
+    weight: weightVal,
     description:
       typeof body.description === "string" ? body.description : null,
     tagline: typeof body.tagline === "string" ? body.tagline : null,
@@ -158,6 +197,9 @@ export async function POST(req: NextRequest) {
     is_active: typeof body.is_active === "boolean" ? body.is_active : true,
     is_archived: false,
     sort_order: nextSort,
+    is_subscription_plan: isPlan,
+    subscription_title: subTitle,
+    subscription_blurb: subBlurb,
   };
 
   const { data: inserted, error: insertErr } = await supabaseAdmin
@@ -173,6 +215,18 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+
+  // Seed default content rows (content_strings, product_stat_tiles,
+  // product_app_test_reports) so the PDP renders a complete layout
+  // immediately. All numerics use "—" — no speculative figures.
+  // Failures here are non-fatal: the admin can re-seed via the content
+  // tabs. We log but don't roll back the product row.
+  await seedDefaultProductContent(inserted.id).catch((e) => {
+    console.warn(
+      "[admin/products POST] content seed failed:",
+      e instanceof Error ? e.message : e,
+    );
+  });
 
   // Audit: one row per non-default field so the history page can show
   // exactly what the creator set. We pass an empty "before" so every
@@ -201,6 +255,22 @@ export async function POST(req: NextRequest) {
       price_inr: inserted.price_inr,
       in_stock: inserted.in_stock,
       is_active: inserted.is_active,
+      is_subscription_plan: inserted.is_subscription_plan,
+    },
+  });
+
+  // Unified logistics audit trail (same channel as PATCH / archive).
+  void logLogisticsAudit({
+    actionType: "CREATE",
+    entityType: "product",
+    entityId: inserted.id,
+    category: "product",
+    description: `Product created by Super Admin — PIN verified ("${inserted.name}", slug ${inserted.slug})`,
+    newValues: inserted,
+    metadata: {
+      slug: inserted.slug,
+      price_inr: inserted.price_inr,
+      is_subscription_plan: inserted.is_subscription_plan,
     },
   });
 

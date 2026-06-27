@@ -103,6 +103,9 @@ export type AdminProductRow = {
   archived_at: string | null;
   sort_order: number;
   updated_at: string | null;
+  is_subscription_plan: boolean;
+  subscription_title: string | null;
+  subscription_blurb: string | null;
 };
 
 export type AdminProductChangeRow = {

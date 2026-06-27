@@ -33,6 +33,12 @@ export const AUDITED_FIELDS = [
   "in_stock",
   "is_archived",
   "sort_order",
+  // Subscription plan catalogue (consumed by /api/subscription-plans).
+  // `is_subscription_plan` flips the product into / out of the wizard's
+  // visible plan list; title/blurb are the wizard-only display strings.
+  "is_subscription_plan",
+  "subscription_title",
+  "subscription_blurb",
 ] as const;
 
 export type AuditedField = (typeof AUDITED_FIELDS)[number];
