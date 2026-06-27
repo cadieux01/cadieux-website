@@ -29,7 +29,7 @@ const GRAIN = "url(/grain.svg)";
 export const metadata: Metadata = {
   title: "Behind Cadieux | Cadieux",
   description:
-    "Behind Cadieux — the 18-month story of building India's high-protein bread. From a chore-like routine to a recipe engineered for absorption, refined in-house and verified by NABL-accredited laboratories.",
+    "Behind Cadieux — the two-year story of building India's high-protein bread. From a chore-like routine to a recipe engineered for absorption, refined in-house and verified by NABL-accredited laboratories.",
 };
 
 // ── Page title ──────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ const SECTIONS: StorySection[] = [
   {
     heading: "The work nobody sees",
     paragraphs: [
-      "The idea came in September 2024. Core Element was registered four months later. What ran for the next eighteen months was the work.",
+      "The idea came in September 2024. Core Element was registered four months later. What ran for the next two years was the work.",
       "Hundreds of trials. Sixty to seventy parameters measured on every fresh batch — from the obvious (protein, fibre, sodium) to the obscure (protein structure, amino acid profile, absorption). Each parameter retested around ten times.",
       "Three independent NABL-accredited laboratories. Travel through four Indian states. Consultations with specialists overseas. Competitor breads taken apart, parameter by parameter, to understand what \u201chigh protein\u201d was actually supposed to mean.",
     ],
@@ -77,10 +77,10 @@ const SECTIONS: StorySection[] = [
 type Milestone = { marker: string; label: string };
 
 const MILESTONES: Milestone[] = [
-  { marker: "Sep 2024", label: "The idea" },
-  { marker: "Jan 2025", label: "Core Element registered" },
-  { marker: "18 months", label: "Trials, labs, refinement" },
-  { marker: "Apr 2026", label: "Cadieux" },
+  { marker: "September 2024", label: "The Idea" },
+  { marker: "January 2025", label: "Core Element registered" },
+  { marker: "24 months", label: "Recipe development and trials" },
+  { marker: "September 2026", label: "Cadieux launches" },
 ];
 
 // ── Stat callouts ───────────────────────────────────────────────────
@@ -91,12 +91,14 @@ const STATS_LEAD =
   "Most \u201chigh protein\u201d products tell you what\u2019s in them. Cadieux is engineered for what your body can actually absorb.";
 
 const STATS: Stat[] = [
-  { value: "High protein", label: "Per slice" },
-  { value: "Rich in fibre", label: "Per serving" },
+  { value: "\u2014", label: "Protein" },
+  { value: "\u2014", label: "Fibre" },
   { value: "Dense & nourishing", label: "Every loaf" },
   { value: "Lab-verified", label: "Quality standard" },
-  { value: "Zero", label: "Trans fat \u00b7 No animal fat \u00b7 Multigrain" },
+  { value: "\u2014", label: "Trans fat \u00b7 No animal fat \u00b7 Multigrain" },
 ];
+
+const STATS_TRIALS_NOTE = "Final trials are under process.";
 
 const STATS_FOOTNOTE =
   "Verified by three independent NABL-accredited laboratories.";
@@ -251,7 +253,7 @@ export default function BehindCadieuxPage() {
           >
             <ShareButton
               title="Behind Cadieux"
-              text="Behind Cadieux — 18 months of trials, three NABL labs, one high-protein bread engineered for absorption."
+              text="Behind Cadieux — two years of trials, three NABL labs, one high-protein bread engineered for absorption."
               url="https://www.cadieux.in/behind-cadieux"
               label="Share story"
               size={42}
@@ -401,6 +403,24 @@ export default function BehindCadieuxPage() {
             >
               {STATS_LEAD}
             </p>
+
+            <div
+              data-stagger
+              style={{
+                marginBottom: 24,
+                padding: "12px 16px",
+                border: "0.5px solid rgba(201,169,110,0.3)",
+                borderRadius: 4,
+                fontFamily: "var(--font-body)",
+                fontSize: 13,
+                fontWeight: 300,
+                letterSpacing: "0.04em",
+                color: GOLD,
+                background: "rgba(201,169,110,0.06)",
+              }}
+            >
+              {STATS_TRIALS_NOTE}
+            </div>
 
             <div
               data-stagger
