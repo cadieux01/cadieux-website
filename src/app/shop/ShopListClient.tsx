@@ -17,15 +17,24 @@ import type { AvailabilityMap } from "@/lib/products";
 
 const GRAIN = "url(/grain.svg)";
 
+export type ShopContentBySlug = Record<
+  string,
+  { name: string; tag: string; title: string; subtitle: string }
+>;
+
 export default function ShopListClient({
   availability,
   priceBySlug,
+  contentBySlug,
 }: {
   availability: AvailabilityMap | null;
   // Live DB price per slug. Falls back to the bundled PRODUCTS price only
   // when a slug is missing (offline / fetch failure) so display + cart can
   // never silently disagree with the products table.
   priceBySlug?: Record<string, number>;
+  // Per-slug content (name/tag/title/subtitle) sourced from
+  // content_strings via getPageContent with critical-string fallbacks.
+  contentBySlug?: ShopContentBySlug;
 }) {
   const visibleProducts = availability
     ? PRODUCTS.filter((p) => availability.listed.has(p.slug))
@@ -73,22 +82,25 @@ export default function ShopListClient({
               alignItems: "stretch",
             }}
           >
-            {visibleProducts.map((p) => (
-              <div data-stagger key={p.slug}>
-                <ProductTile
-                  slug={p.slug}
-                  productIndex={PRODUCTS.findIndex((x) => x.slug === p.slug)}
-                  name={p.name}
-                  tag={p.tag}
-                  title={p.title}
-                  subtitle={p.subtitle}
-                  price={priceBySlug?.[p.slug] ?? p.price}
-                  stats={p.stats}
-                  media={PRODUCT_DETAILS[p.slug as ProductSlug].media}
-                  outOfStock={availability?.outOfStock.has(p.slug) ?? false}
-                />
-              </div>
-            ))}
+            {visibleProducts.map((p) => {
+              const c = contentBySlug?.[p.slug];
+              return (
+                <div data-stagger key={p.slug}>
+                  <ProductTile
+                    slug={p.slug}
+                    productIndex={PRODUCTS.findIndex((x) => x.slug === p.slug)}
+                    name={c?.name || p.name}
+                    tag={c?.tag || p.tag}
+                    title={c?.title || p.title}
+                    subtitle={c?.subtitle || p.subtitle}
+                    price={priceBySlug?.[p.slug] ?? p.price}
+                    stats={p.stats}
+                    media={PRODUCT_DETAILS[p.slug as ProductSlug].media}
+                    outOfStock={availability?.outOfStock.has(p.slug) ?? false}
+                  />
+                </div>
+              );
+            })}
           </div>
         </ScrollReveal>
       </div>

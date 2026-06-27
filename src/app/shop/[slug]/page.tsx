@@ -1,17 +1,18 @@
 // Server entry for the product detail page. Looks up the slug in the
-// live products table (filtered for is_active=true, is_archived=
-// false) and surfaces an `outOfStock` flag to the client so the Add-
-// to-Cart button can be disabled. Falls back to "everything live"
-// when the DB read returns nothing so the PDP never 404s on a real
-// product because of a transient Supabase outage.
+// live products table (is_active=true, is_archived=false) and surfaces
+// an `outOfStock` flag. Now also reads PageContent (content_strings +
+// stat_tiles + ingredients + app_reports) via getPageContent and hands
+// it to the client. pickString applies critical-string fallbacks so
+// the heading / SEO / section titles never go blank.
 
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
-import { PRODUCTS, PRODUCT_DETAILS } from "@/lib/data";
+import { PRODUCTS } from "@/lib/data";
 import { getProductAvailability, getProductBySlug } from "@/lib/products";
 import { getProductReports } from "@/lib/product-reports";
 import { getProductIngredients } from "@/lib/ingredients";
+import { getPageContent, pickString } from "@/lib/content";
 
 import ProductDetailClient from "./ProductDetailClient";
 
@@ -23,7 +24,6 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = params;
   const product = PRODUCTS.find((p) => p.slug === slug);
-  const productRow = await getProductBySlug(slug);
 
   if (!product) {
     return {
@@ -32,21 +32,12 @@ export async function generateMetadata({
     };
   }
 
-  const title =
-    slug === "multigrain"
-      ? "Cadieux Multi-Grain Bread | High Protein, Lab-Tested"
-      : slug === "high-protein"
-        ? "Cadieux Plain Bread | High Protein, Fresh Delivery"
-        : `${product.name} | Cadieux`;
-
-  const description =
-    slug === "multigrain"
-      ? "Cadieux Multi-Grain: Ancient grains with high protein and rich fibre. Lab-verified ingredients. Order fresh delivery in Vizag."
-      : slug === "high-protein"
-        ? "Cadieux Plain Bread: Clean, high-protein sandwich bread. Fresh-baked daily in Visakhapatnam. Perfect for every meal."
-        : product.subtitle || product.desc;
-
-  const price = productRow?.price_inr ?? product.price;
+  // Content-backed SEO with critical fallbacks (CRITICAL_FALLBACKS map
+  // in lib/content.ts guarantees a non-empty title/description per slug).
+  const content = await getPageContent({ page: "pdp", productId: slug });
+  const title = pickString(content, "pdp.seo.title", slug);
+  const description = pickString(content, "pdp.seo.description", slug);
+  const ogName = pickString(content, "pdp.name", slug) || product.name;
 
   return {
     title,
@@ -61,7 +52,7 @@ export async function generateMetadata({
           url: product.image || "/hero.jpg",
           width: 1200,
           height: 630,
-          alt: product.name,
+          alt: ogName,
         },
       ],
     },
@@ -86,20 +77,34 @@ export default async function ProductDetailPage({
 
   const availability = await getProductAvailability();
   if (availability && !availability.listed.has(slug)) {
-    // Active products table says this slug is archived / inactive.
     notFound();
   }
 
   const outOfStock = availability?.outOfStock.has(slug) ?? false;
 
-  // Fetch lab reports for this product (empty array if the products table
-  // is unreachable or the slug isn't tracked in Supabase yet).
-  const productRow = await getProductBySlug(slug);
+  // Live product row + lab reports + ingredients (DB) + content.
+  const [productRow, ingredients, content] = await Promise.all([
+    getProductBySlug(slug),
+    getProductIngredients(slug),
+    getPageContent({ page: "pdp", productId: slug }),
+  ]);
   const reports = productRow ? await getProductReports(productRow.id) : [];
 
-  // Ingredients are DB-driven (product_ingredients, keyed by slug == id).
-  // products.id == slug, so the slug is the product_id directly.
-  const ingredients = await getProductIngredients(slug);
+  // Resolve PDP strings (with critical fallbacks per slug) here so the
+  // client doesn't have to import lib/content (server-only Supabase).
+  const pdpStrings = {
+    name: pickString(content, "pdp.name", slug),
+    tag: pickString(content, "pdp.tag", slug),
+    title: pickString(content, "pdp.title", slug),
+    subtitle: pickString(content, "pdp.subtitle", slug),
+    description: pickString(content, "pdp.description", slug),
+    aboutEyebrow: pickString(content, "pdp.section.about.eyebrow"),
+    aboutTitle: pickString(content, "pdp.section.about.title"),
+    reportsEyebrow: pickString(content, "pdp.section.reports.eyebrow"),
+    reportsTitle: pickString(content, "pdp.section.reports.title"),
+    trialsBanner: pickString(content, "compliance.trials_banner"),
+    outOfStockBanner: pickString(content, "pdp.out_of_stock_banner"),
+  };
 
   return (
     <ProductDetailClient
@@ -108,6 +113,8 @@ export default async function ProductDetailPage({
       reports={reports}
       ingredients={ingredients}
       price={productRow?.price_inr ?? null}
+      pdpStrings={pdpStrings}
+      statTiles={content.stat_tiles}
     />
   );
 }

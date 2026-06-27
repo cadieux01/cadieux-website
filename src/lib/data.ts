@@ -45,8 +45,8 @@ export type ProductStat = {
 export const PRODUCTS = [
   {
     slug: "multigrain",
-    name: "Multi-Grain High Protein Bread",
-    tag: "Protein Bread",
+    name: "Protein Bread",
+    tag: "Multigrain Edition",
     title: "Multigrain",
     tags: ["Multi Grains", "No Maida"],
     price: 149,
@@ -63,8 +63,8 @@ export const PRODUCTS = [
   },
   {
     slug: "high-protein",
-    name: "High Protein Bread",
-    tag: "Protein Bread",
+    name: "Protein Bread",
+    tag: "Plain Edition",
     title: "Plain",
     tags: ["Sandwich Bread", "8 Slices"],
     price: 109,

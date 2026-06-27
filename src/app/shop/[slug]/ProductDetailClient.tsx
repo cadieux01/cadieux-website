@@ -42,12 +42,36 @@ const pdpQtyBtnStyle: React.CSSProperties = {
   WebkitTapHighlightColor: "transparent",
 };
 
+export type PdpStrings = {
+  name: string;
+  tag: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  aboutEyebrow: string;
+  aboutTitle: string;
+  reportsEyebrow: string;
+  reportsTitle: string;
+  trialsBanner: string;
+  outOfStockBanner: string;
+};
+
+export type PdpStatTile = {
+  id: string;
+  tile_key: string;
+  value: string;
+  label: string;
+  sort_order: number;
+};
+
 export default function ProductDetailClient({
   slug,
   outOfStock = false,
   reports = [],
   ingredients = [],
   price = null,
+  pdpStrings,
+  statTiles = [],
 }: {
   slug: string;
   outOfStock?: boolean;
@@ -60,10 +84,30 @@ export default function ProductDetailClient({
   // price only when the DB read was empty, so display + cart snapshot stay
   // pinned to the products table — the single source of truth.
   price?: number | null;
+  // Atomic PDP strings (server-resolved with critical fallbacks).
+  pdpStrings?: PdpStrings;
+  // Stat tiles (content-driven). When empty, fall back to the bundled
+  // PRODUCTS[].stats array so the page still renders sensible numbers.
+  statTiles?: PdpStatTile[];
 }) {
   const typedSlug = slug as ProductSlug;
   const product = PRODUCTS.find((p) => p.slug === typedSlug);
   const detail = product ? PRODUCT_DETAILS[typedSlug] : undefined;
+
+  // Resolve display strings with PRODUCTS-bundled fallbacks (in case the
+  // server didn't pass pdpStrings — e.g. a stale call site).
+  const s = pdpStrings;
+  const dispTag = s?.tag || product?.tag || "";
+  const dispTitle = s?.title || product?.title || "";
+  const dispName = s?.name || product?.name || "";
+  const dispSubtitle = s?.subtitle || product?.subtitle || "";
+  const dispDescription = s?.description || "";
+  const dispAboutEyebrow = s?.aboutEyebrow || "Inside the loaf";
+  const dispAboutTitle = s?.aboutTitle || "Ingredients";
+  const dispReportsEyebrow = s?.reportsEyebrow || "Independently tested";
+  const dispReportsTitle = s?.reportsTitle || "Lab Reports & Certifications";
+  const dispTrialsBanner = s?.trialsBanner || "Final trials are under process.";
+  const dispOutOfStock = s?.outOfStockBanner || "Out of stock";
 
   const [activeMedia, setActiveMedia] = useState(0);
   const [orderType, setOrderType] = useState<"once" | "sub">("once");
@@ -93,7 +137,7 @@ export default function ProductDetailClient({
     }
     addToCart({
       productIndex,
-      name: product.name,
+      name: dispName || product.name,
       price: effectivePrice,
       qty,
       orderType,
@@ -162,11 +206,11 @@ export default function ProductDetailClient({
                   color: "#c9a96e",
                 }}
               >
-                {product.tag}
+                {dispTag}
               </div>
               <ShareButton
-                title={`${product.title} — Cadieux`}
-                text={`${product.title}. ${product.subtitle}`}
+                title={`${dispTitle} — Cadieux`}
+                text={`${dispTitle}. ${dispSubtitle}`}
                 url={`https://www.cadieux.in/shop/${product.slug}`}
                 size={36}
               />
@@ -182,7 +226,7 @@ export default function ProductDetailClient({
                 letterSpacing: "0.01em",
               }}
             >
-              {product.title}
+              {dispTitle}
             </h1>
             <p
               style={{
@@ -195,7 +239,7 @@ export default function ProductDetailClient({
                 maxWidth: 460,
               }}
             >
-              {product.subtitle}
+              {dispSubtitle}
             </p>
 
             <div
@@ -209,8 +253,19 @@ export default function ProductDetailClient({
                 marginBottom: 32,
               }}
             >
-              {product.stats.map((s) => (
-                <div key={s.label}>
+              {(statTiles.length > 0
+                ? statTiles.map((t) => ({
+                    key: t.id,
+                    value: t.value,
+                    label: t.label,
+                  }))
+                : product.stats.map((s) => ({
+                    key: s.label,
+                    value: s.blank ? "—" : `${s.target}${s.suffix ?? ""}`,
+                    label: s.label,
+                  }))
+              ).map((tile) => (
+                <div key={tile.key}>
                   <div
                     style={{
                       fontFamily: "var(--font-heading)",
@@ -220,7 +275,7 @@ export default function ProductDetailClient({
                       lineHeight: 1,
                     }}
                   >
-                    {s.blank ? "—" : <>{s.target}{s.suffix}</>}
+                    {tile.value}
                   </div>
                   <div
                     style={{
@@ -233,7 +288,7 @@ export default function ProductDetailClient({
                       color: "rgba(245,240,232,0.55)",
                     }}
                   >
-                    {s.label}
+                    {tile.label}
                   </div>
                 </div>
               ))}
@@ -250,7 +305,7 @@ export default function ProductDetailClient({
                 color: "rgba(201,169,110,0.85)",
               }}
             >
-              Final trials are under process.
+              {dispTrialsBanner}
             </p>
 
             <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 20 }}>
@@ -329,7 +384,7 @@ export default function ProductDetailClient({
                   borderRadius: 4,
                 }}
               >
-                Currently out of stock — please check back soon.
+                {dispOutOfStock}
               </div>
             )}
             {/* Quantity — one-time orders only (subscriptions set their
@@ -423,7 +478,10 @@ export default function ProductDetailClient({
             </div>
 
             <div style={{ marginTop: 32 }}>
-              {detail.description.map((para, i) => (
+              {(dispDescription
+                ? dispDescription.split(/\n\n+/)
+                : detail.description
+              ).map((para, i) => (
                 <p
                   key={i}
                   style={{
@@ -447,7 +505,7 @@ export default function ProductDetailClient({
             <hr style={DIVIDER_STYLE} />
 
             {/* Ingredients — DB-driven (product_ingredients table). */}
-            <Section label="Inside the loaf" title="Ingredients">
+            <Section label={dispAboutEyebrow} title={dispAboutTitle}>
               <div
                 style={{
                   display: "grid",
@@ -498,7 +556,7 @@ export default function ProductDetailClient({
         {reports.length > 0 ? (
           <>
             <hr style={DIVIDER_STYLE} />
-            <Section label="Independently tested" title="Lab Reports & Certifications">
+            <Section label={dispReportsEyebrow} title={dispReportsTitle}>
               <div
                 style={{
                   marginBottom: 24,
@@ -513,7 +571,7 @@ export default function ProductDetailClient({
                   background: "rgba(201,169,110,0.06)",
                 }}
               >
-                Final trials are under process.
+                {dispTrialsBanner}
               </div>
               <ReportsList reports={reports} />
             </Section>

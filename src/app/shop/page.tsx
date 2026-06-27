@@ -1,21 +1,43 @@
-// Server component. Fetches live product availability from the
-// Supabase products table (filtered by is_active=true, is_archived=
-// false) and passes it down so the catalogue can hide archived rows
-// and badge out-of-stock items. Falls back to "everything live" when
-// the DB read returns nothing (network/RLS hiccup) so the shop never
-// goes dark.
+// Server component. Fetches live product availability + content
+// (PageContent per slug from the new content_strings system) and
+// hands them down. Hides archived rows, badges OOS items. Falls back
+// to bundled PRODUCTS values + critical fallbacks if Supabase is dark.
 
 import { getActiveProducts, getProductAvailability } from "@/lib/products";
+import { getPageContent, pickString } from "@/lib/content";
 
-import ShopListClient from "./ShopListClient";
+import ShopListClient, { type ShopContentBySlug } from "./ShopListClient";
+
+const SLUGS = ["multigrain", "high-protein"] as const;
 
 export default async function ShopPage() {
   const availability = await getProductAvailability();
-  // Live DB price per slug — the single source of truth shown on the
-  // catalogue and snapshotted into the cart. Both calls share the same
-  // 60s-cached getActiveProducts() read, so this is no extra DB hit.
+  // Live DB price per slug — single source of truth for the catalogue.
   const products = await getActiveProducts();
   const priceBySlug: Record<string, number> = {};
   for (const p of products) priceBySlug[p.slug] = p.price_inr;
-  return <ShopListClient availability={availability} priceBySlug={priceBySlug} />;
+
+  // Content per slug (parallel). pickString applies critical fallbacks
+  // so name/tag/subtitle are never empty.
+  const contents = await Promise.all(
+    SLUGS.map((slug) => getPageContent({ page: "shop", productId: slug })),
+  );
+  const contentBySlug: ShopContentBySlug = {};
+  SLUGS.forEach((slug, i) => {
+    const c = contents[i];
+    contentBySlug[slug] = {
+      name: pickString(c, "pdp.name", slug),
+      tag: pickString(c, "pdp.tag", slug),
+      title: pickString(c, "pdp.title", slug),
+      subtitle: pickString(c, "pdp.subtitle", slug),
+    };
+  });
+
+  return (
+    <ShopListClient
+      availability={availability}
+      priceBySlug={priceBySlug}
+      contentBySlug={contentBySlug}
+    />
+  );
 }

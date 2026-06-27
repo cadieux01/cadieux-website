@@ -16,6 +16,7 @@ import Image from "next/image";
 import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
 import { ShareButton } from "@/components/ShareButton";
+import { getPageContent } from "@/lib/content";
 
 // ── Brand bible palette ─────────────────────────────────────────────
 const FOUNDATION_GREEN = "#024628";
@@ -74,9 +75,11 @@ const SECTIONS: StorySection[] = [
 ];
 
 // ── Milestones (visual timeline under "The work nobody sees") ──────
+// Bundled fallback used when behind_milestones is empty (DB unreachable
+// or freshly seeded). Content-driven via getPageContent otherwise.
 type Milestone = { marker: string; label: string };
 
-const MILESTONES: Milestone[] = [
+const MILESTONES_FALLBACK: Milestone[] = [
   { marker: "September 2024", label: "The Idea" },
   { marker: "January 2025", label: "Core Element registered" },
   { marker: "24 months", label: "Recipe development and trials" },
@@ -90,7 +93,8 @@ const STATS_HEADING = "Engineered for absorption, not just content";
 const STATS_LEAD =
   "Most \u201chigh protein\u201d products tell you what\u2019s in them. Cadieux is engineered for what your body can actually absorb.";
 
-const STATS: Stat[] = [
+// Bundled fallback used when behind_stats is empty.
+const STATS_FALLBACK: Stat[] = [
   { value: "\u2014", label: "Protein" },
   { value: "\u2014", label: "Fibre" },
   { value: "Dense & nourishing", label: "Every loaf" },
@@ -119,7 +123,19 @@ const SIGNATURE = "— Sunny Raja, Founder";
 // with viewport via clamp().
 const CONTENT_MAX = 720;
 
-export default function BehindCadieuxPage() {
+export default async function BehindCadieuxPage() {
+  // Content-driven milestones + stat callouts (with bundled fallbacks
+  // if the DB read returns empty).
+  const content = await getPageContent({ page: "behind" });
+  const milestones: Milestone[] =
+    content.milestones.length > 0
+      ? content.milestones.map((m) => ({ marker: m.marker, label: m.label }))
+      : MILESTONES_FALLBACK;
+  const stats: Stat[] =
+    content.stats.length > 0
+      ? content.stats.map((s) => ({ value: s.value, label: s.label }))
+      : STATS_FALLBACK;
+
   return (
     <div
       style={{
@@ -317,7 +333,7 @@ export default function BehindCadieuxPage() {
                       background: "rgba(201,169,110,0.35)",
                     }}
                   />
-                  {MILESTONES.map((m) => (
+                  {milestones.map((m) => (
                     <div
                       key={m.marker}
                       style={{
@@ -429,7 +445,7 @@ export default function BehindCadieuxPage() {
                 borderTop: "1px solid rgba(201,169,110,0.25)",
               }}
             >
-              {STATS.map((s) => (
+              {stats.map((s) => (
                 <div
                   key={s.label}
                   style={{

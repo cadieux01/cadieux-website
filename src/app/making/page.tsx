@@ -1,10 +1,25 @@
+// Making — five-step process page. Reads process_steps via
+// getPageContent (content-driven); falls back to PROCESS_STEPS in
+// lib/data.ts when the DB read returns empty so the page never blanks.
+
 import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
 import { PROCESS_STEPS } from "@/lib/data";
+import { getPageContent } from "@/lib/content";
 
 const GRAIN = "url(/grain.svg)";
 
-export default function MakingPage() {
+export default async function MakingPage() {
+  const content = await getPageContent({ page: "making" });
+  const steps =
+    content.process_steps.length > 0
+      ? content.process_steps.map((s) => ({
+          num: s.step_num,
+          title: s.title,
+          desc: s.body,
+        }))
+      : PROCESS_STEPS.map((s) => ({ num: s.num, title: s.title, desc: s.desc }));
+
   return (
     <div style={{ minHeight: "100dvh", background: "rgb(6,4,2)", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
@@ -31,7 +46,7 @@ export default function MakingPage() {
         </ScrollReveal>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-          {PROCESS_STEPS.map((step, i) => (
+          {steps.map((step, i) => (
             <ScrollReveal key={i}>
               <div style={{ borderTop: "1px solid rgba(240,223,200,0.08)", paddingTop: 32, paddingBottom: 40 }}>
                 <span data-stagger style={{ display: "block", marginBottom: 16, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(251,243,212,0.3)" }}>{step.num}</span>
