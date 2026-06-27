@@ -5,18 +5,21 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import { PRODUCT_INGREDIENTS_TAG } from "@/lib/ingredients";
+import { CONTENT_CACHE_TAG } from "@/lib/content";
 
 // Ingredients for a single product.
-//   GET  → list all (ordered by sort_order asc).
-//   POST → create one { name } appended at max(sort_order)+1.
+//   GET  → list all (ordered by sort_order asc) incl. role + is_visible.
+//   POST → create one { name, role?, is_visible? } at max(sort_order)+1.
 //
 // product_ingredients.product_id == products.id == slug, so we use
 // params.id directly as the product_id.
 
-const INGREDIENT_SELECT = "id, product_id, name, sort_order";
+const INGREDIENT_SELECT =
+  "id, product_id, name, sort_order, role, is_visible, locale";
 
 function bust(): void {
   revalidateTag(PRODUCT_INGREDIENTS_TAG);
+  revalidateTag(CONTENT_CACHE_TAG);
 }
 
 export async function GET(
@@ -72,6 +75,29 @@ export async function POST(
   if (!name) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
+  const role =
+    typeof body.role === "string" && body.role.trim()
+      ? body.role.trim()
+      : null;
+  const isVisible =
+    typeof body.is_visible === "boolean" ? body.is_visible : true;
+  const locale =
+    typeof body.locale === "string" && body.locale.trim()
+      ? body.locale.trim()
+      : "en";
+  // ingredient_key auto-derives from name slug if not provided — keeps the
+  // natural-key column populated for the content_audit trigger.
+  const explicitKey =
+    typeof body.ingredient_key === "string" && body.ingredient_key.trim()
+      ? body.ingredient_key.trim()
+      : null;
+  const ingredientKey =
+    explicitKey ??
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60);
 
   // Append at the end: max(sort_order)+1 (0 when empty).
   const { data: last } = await supabaseAdmin
@@ -85,7 +111,15 @@ export async function POST(
 
   const { data: row, error: insertErr } = await supabaseAdmin
     .from("product_ingredients")
-    .insert({ product_id: params.id, name, sort_order: nextSort })
+    .insert({
+      product_id: params.id,
+      name,
+      role,
+      is_visible: isVisible,
+      locale,
+      ingredient_key: ingredientKey,
+      sort_order: nextSort,
+    })
     .select(INGREDIENT_SELECT)
     .single();
 

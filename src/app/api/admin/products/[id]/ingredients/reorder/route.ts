@@ -5,6 +5,7 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import { PRODUCT_INGREDIENTS_TAG } from "@/lib/ingredients";
+import { CONTENT_CACHE_TAG } from "@/lib/content";
 
 // POST /api/admin/products/[id]/ingredients/reorder
 //   body { orderedIds: string[] } — rewrites sort_order = index for each id.
@@ -59,6 +60,7 @@ export async function POST(
   );
 
   revalidateTag(PRODUCT_INGREDIENTS_TAG);
+  revalidateTag(CONTENT_CACHE_TAG);
 
   void recordAuditEvent({
     req,

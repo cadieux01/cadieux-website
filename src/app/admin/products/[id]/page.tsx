@@ -9,6 +9,12 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import {
+  APP_REPORTS_SPEC,
+  ContentTableEditor,
+  STAT_TILES_SPEC,
+} from "@/components/admin/ContentTableEditor";
+import { ContentStringsSection } from "@/components/admin/ContentStringsSection";
 import { IngredientsSection } from "@/components/admin/IngredientsSection";
 import { LabReportsSection } from "@/components/admin/LabReportsSection";
 import {
@@ -30,11 +36,20 @@ const CREAM = "#fbf3d4";
 const FADED = "rgba(192,200,206,0.6)";
 const BORDER = "rgba(245,158,11,0.18)";
 
-type EditorTab = "details" | "ingredients" | "reports";
+type EditorTab =
+  | "details"
+  | "strings"
+  | "tiles"
+  | "ingredients"
+  | "app_reports"
+  | "reports";
 
 const TABS: { key: EditorTab; label: string }[] = [
   { key: "details", label: "Product Details" },
+  { key: "strings", label: "Strings" },
+  { key: "tiles", label: "Stat Tiles" },
   { key: "ingredients", label: "Ingredients" },
+  { key: "app_reports", label: "Test Reports (App)" },
   { key: "reports", label: "Lab Reports" },
 ];
 
@@ -260,8 +275,40 @@ export default function EditProductPage() {
             </div>
           ) : null}
 
+          {tab === "strings" ? (
+            <ContentStringsSection
+              locale="en"
+              productId={product.id}
+              requirePin={requirePin}
+              title="Per-product strings"
+              subtitle="Strings scoped to this product (PDP name, tag, description, SEO, etc.)"
+            />
+          ) : null}
+
+          {tab === "tiles" ? (
+            <ContentTableEditor
+              spec={STAT_TILES_SPEC}
+              productId={product.id}
+              locale="en"
+              requirePin={requirePin}
+              title="Stat tiles"
+              subtitle="Small value/label tiles shown above the fold on the PDP."
+            />
+          ) : null}
+
           {tab === "ingredients" ? (
             <IngredientsSection productId={product.id} requirePin={requirePin} />
+          ) : null}
+
+          {tab === "app_reports" ? (
+            <ContentTableEditor
+              spec={APP_REPORTS_SPEC}
+              productId={product.id}
+              locale="en"
+              requirePin={requirePin}
+              title="Test reports (app)"
+              subtitle="Mobile-app test-report tiles (metric + value + optional note)."
+            />
           ) : null}
 
           {tab === "reports" ? (

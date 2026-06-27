@@ -13,10 +13,14 @@ import { recordAuditEvent } from "@/lib/audit-log";
 import { logLogisticsAudit } from "@/lib/logistics-audit";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import { parseBodyFromObject, ProductUpdateSchema } from "@/lib/validation";
+import { CONTENT_CACHE_TAG } from "@/lib/content";
 
 function bustProductCaches(): void {
   revalidateTag("products");
   revalidateTag("subscription-plans");
+  // Shop list + PDP now read name/description/tagline through getPageContent,
+  // which falls back to the products row — bust it too so admin edits show.
+  revalidateTag(CONTENT_CACHE_TAG);
 }
 
 const PRODUCT_SELECT =

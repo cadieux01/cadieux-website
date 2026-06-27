@@ -23,8 +23,9 @@ export const getProductIngredients = unstable_cache(
   async (productSlug: string): Promise<string[]> => {
     const { data, error } = await supabaseAnon
       .from("product_ingredients")
-      .select("name, sort_order")
+      .select("name, sort_order, is_visible")
       .eq("product_id", productSlug)
+      .eq("is_visible", true)
       .order("sort_order", { ascending: true });
 
     if (error) {

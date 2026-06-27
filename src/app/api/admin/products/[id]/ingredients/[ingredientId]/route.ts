@@ -5,16 +5,19 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import { PRODUCT_INGREDIENTS_TAG } from "@/lib/ingredients";
+import { CONTENT_CACHE_TAG } from "@/lib/content";
 
 // Edit / delete a single ingredient.
-//   PATCH  → update name and/or sort_order.
+//   PATCH  → update name, role, is_visible, and/or sort_order.
 //   DELETE → remove the row, then re-pack remaining sort_order so there
 //            are no gaps (0..n-1 in their current order).
 
-const INGREDIENT_SELECT = "id, product_id, name, sort_order";
+const INGREDIENT_SELECT =
+  "id, product_id, name, sort_order, role, is_visible, locale";
 
 function bust(): void {
   revalidateTag(PRODUCT_INGREDIENTS_TAG);
+  revalidateTag(CONTENT_CACHE_TAG);
 }
 
 export async function PATCH(
@@ -42,6 +45,28 @@ export async function PATCH(
       );
     }
     update.name = body.name.trim();
+  }
+  if ("role" in body) {
+    if (body.role === null) {
+      update.role = null;
+    } else if (typeof body.role === "string") {
+      const r = body.role.trim();
+      update.role = r.length === 0 ? null : r;
+    } else {
+      return NextResponse.json(
+        { error: "role must be a string or null" },
+        { status: 400 },
+      );
+    }
+  }
+  if ("is_visible" in body) {
+    if (typeof body.is_visible !== "boolean") {
+      return NextResponse.json(
+        { error: "is_visible must be a boolean" },
+        { status: 400 },
+      );
+    }
+    update.is_visible = body.is_visible;
   }
   if ("sort_order" in body) {
     const n = Number(body.sort_order);

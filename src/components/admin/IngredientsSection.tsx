@@ -20,7 +20,11 @@ type Ingredient = {
   product_id: string;
   name: string;
   sort_order: number;
+  role: string | null;
+  is_visible: boolean;
 };
+
+type Draft = { name: string; role: string };
 
 export function IngredientsSection({
   productId,
@@ -35,9 +39,10 @@ export function IngredientsSection({
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Per-row draft names so renames are explicit (Save appears when changed).
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Per-row drafts (name + role) so edits feel local until Save is pressed.
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [newName, setNewName] = useState("");
+  const [newRole, setNewRole] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,7 +53,11 @@ export function IngredientsSection({
       );
       const list = res.ingredients ?? [];
       setRows(list);
-      setDrafts(Object.fromEntries(list.map((r) => [r.id, r.name])));
+      setDrafts(
+        Object.fromEntries(
+          list.map((r) => [r.id, { name: r.name, role: r.role ?? "" }]),
+        ),
+      );
     } catch (e) {
       setLoadErr(
         e instanceof AdminFetchError ? e.message : "Failed to load ingredients",
@@ -85,6 +94,7 @@ export function IngredientsSection({
 
   async function addIngredient() {
     const name = newName.trim();
+    const role = newRole.trim();
     if (!name) {
       setErr("Enter an ingredient name");
       return;
@@ -92,18 +102,22 @@ export function IngredientsSection({
     const ok = await withPin(async (grant) => {
       await adminFetch(`/api/admin/products/${productId}/ingredients`, {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, role: role || null }),
         headers: { "x-pin-grant": grant },
       });
     });
     if (ok) {
       setNewName("");
+      setNewRole("");
       await load();
     }
   }
 
-  async function rename(id: string) {
-    const name = (drafts[id] ?? "").trim();
+  async function saveRow(id: string) {
+    const draft = drafts[id];
+    if (!draft) return;
+    const name = (draft.name ?? "").trim();
+    const role = (draft.role ?? "").trim();
     if (!name) {
       setErr("Name cannot be empty");
       return;
@@ -113,7 +127,21 @@ export function IngredientsSection({
         `/api/admin/products/${productId}/ingredients/${id}`,
         {
           method: "PATCH",
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name, role: role.length === 0 ? null : role }),
+          headers: { "x-pin-grant": grant },
+        },
+      );
+    });
+    if (ok) await load();
+  }
+
+  async function toggleVisible(row: Ingredient) {
+    const ok = await withPin(async (grant) => {
+      await adminFetch(
+        `/api/admin/products/${productId}/ingredients/${row.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ is_visible: !row.is_visible }),
           headers: { "x-pin-grant": grant },
         },
       );
@@ -199,129 +227,173 @@ export function IngredientsSection({
           ) : (
             <ul className="flex flex-col gap-2 mb-4">
               {rows.map((r, i) => {
-                const changed = (drafts[r.id] ?? "") !== r.name;
+                const draft = drafts[r.id] ?? { name: r.name, role: r.role ?? "" };
+                const changed =
+                  draft.name !== r.name || draft.role !== (r.role ?? "");
                 return (
                   <li
                     key={r.id}
-                    className="flex items-center gap-2 p-2"
+                    className="p-3"
                     style={{
                       border: `1px solid ${BORDER}`,
-                      background: "rgba(0,0,0,0.18)",
+                      background: r.is_visible
+                        ? "rgba(0,0,0,0.18)"
+                        : "rgba(120,30,30,0.12)",
                     }}
                   >
-                    <div className="flex flex-col">
+                    <div className="flex items-start gap-2">
+                      <div className="flex flex-col">
+                        <button
+                          type="button"
+                          aria-label="Move up"
+                          disabled={busy || i === 0}
+                          onClick={() => move(i, -1)}
+                          style={arrowStyle(busy || i === 0)}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Move down"
+                          disabled={busy || i === rows.length - 1}
+                          onClick={() => move(i, 1)}
+                          style={arrowStyle(busy || i === rows.length - 1)}
+                        >
+                          ▼
+                        </button>
+                      </div>
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <label className="flex flex-col gap-1">
+                          <span style={labelStyle}>Name</span>
+                          <input
+                            value={draft.name}
+                            onChange={(e) =>
+                              setDrafts((d) => ({
+                                ...d,
+                                [r.id]: { ...draft, name: e.target.value },
+                              }))
+                            }
+                            className="px-3 py-2"
+                            style={fieldStyle}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span style={labelStyle}>Role (optional)</span>
+                          <input
+                            value={draft.role}
+                            onChange={(e) =>
+                              setDrafts((d) => ({
+                                ...d,
+                                [r.id]: { ...draft, role: e.target.value },
+                              }))
+                            }
+                            placeholder="e.g. flour, seed, leaven"
+                            className="px-3 py-2"
+                            style={fieldStyle}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-3 justify-end flex-wrap">
                       <button
                         type="button"
-                        aria-label="Move up"
-                        disabled={busy || i === 0}
-                        onClick={() => move(i, -1)}
-                        style={arrowStyle(busy || i === 0)}
+                        onClick={() => toggleVisible(r)}
+                        disabled={busy}
+                        className="uppercase"
+                        style={pillStyle(r.is_visible ? GOLD : "#9ca3af", busy)}
                       >
-                        ▲
+                        {r.is_visible ? "Visible" : "Hidden"}
                       </button>
+                      {changed ? (
+                        <button
+                          type="button"
+                          onClick={() => saveRow(r.id)}
+                          disabled={busy || !draft.name.trim()}
+                          className="uppercase"
+                          style={pillStyle(GOLD, busy)}
+                        >
+                          Save
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        aria-label="Move down"
-                        disabled={busy || i === rows.length - 1}
-                        onClick={() => move(i, 1)}
-                        style={arrowStyle(busy || i === rows.length - 1)}
+                        onClick={() => remove(r.id, r.name)}
+                        disabled={busy}
+                        className="uppercase"
+                        style={pillStyle("#ef4444", busy)}
                       >
-                        ▼
+                        Delete
                       </button>
                     </div>
-                    <input
-                      value={drafts[r.id] ?? ""}
-                      onChange={(e) =>
-                        setDrafts((d) => ({ ...d, [r.id]: e.target.value }))
-                      }
-                      className="flex-1 px-3 py-2"
-                      style={{
-                        border: `1px solid ${BORDER}`,
-                        background: "transparent",
-                        color: CREAM,
-                        fontFamily: "var(--font-body)",
-                        fontSize: "0.9rem",
-                      }}
-                    />
-                    {changed ? (
-                      <button
-                        type="button"
-                        onClick={() => rename(r.id)}
-                        disabled={busy || !(drafts[r.id] ?? "").trim()}
-                        className="uppercase"
-                        style={{
-                          fontFamily: "var(--font-body)",
-                          fontSize: "0.62rem",
-                          letterSpacing: "0.25em",
-                          color: GOLD,
-                          border: `1px solid ${GOLD}`,
-                          padding: "0.3rem 0.65rem",
-                          background: "transparent",
-                          opacity: busy ? 0.5 : 1,
-                        }}
-                      >
-                        Save
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => remove(r.id, r.name)}
-                      disabled={busy}
-                      className="uppercase"
-                      style={{
-                        fontFamily: "var(--font-body)",
-                        fontSize: "0.62rem",
-                        letterSpacing: "0.25em",
-                        color: "#ef4444",
-                        border: "1px solid #ef4444",
-                        padding: "0.3rem 0.65rem",
-                        background: "transparent",
-                        opacity: busy ? 0.5 : 1,
-                      }}
-                    >
-                      Delete
-                    </button>
                   </li>
                 );
               })}
             </ul>
           )}
 
-          <div className="flex items-center gap-2">
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void addIngredient();
-              }}
-              placeholder="New ingredient name"
-              className="flex-1 px-3 py-2"
-              style={{
-                border: `1px solid ${BORDER}`,
-                background: "transparent",
-                color: CREAM,
-                fontFamily: "var(--font-body)",
-                fontSize: "0.9rem",
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => void addIngredient()}
-              disabled={busy || !newName.trim()}
+          <div
+            className="p-3"
+            style={{
+              border: `1px dashed ${BORDER}`,
+              background: "rgba(0,0,0,0.12)",
+            }}
+          >
+            <p
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
                 fontSize: "0.7rem",
                 letterSpacing: "0.25em",
                 color: GOLD,
-                border: `1px solid ${GOLD}`,
-                padding: "0.45rem 0.9rem",
-                background: "transparent",
-                opacity: busy || !newName.trim() ? 0.5 : 1,
+                marginBottom: "0.5rem",
               }}
             >
-              + Add Ingredient
-            </button>
+              Add ingredient
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+              <label className="flex flex-col gap-1">
+                <span style={labelStyle}>Name *</span>
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void addIngredient();
+                  }}
+                  className="px-3 py-2"
+                  style={fieldStyle}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span style={labelStyle}>Role (optional)</span>
+                <input
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  placeholder="e.g. flour, seed, leaven"
+                  className="px-3 py-2"
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => void addIngredient()}
+                disabled={busy || !newName.trim()}
+                className="uppercase"
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.7rem",
+                  letterSpacing: "0.25em",
+                  color: GOLD,
+                  border: `1px solid ${GOLD}`,
+                  padding: "0.45rem 0.9rem",
+                  background: "transparent",
+                  opacity: busy || !newName.trim() ? 0.5 : 1,
+                }}
+              >
+                + Add Ingredient
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -338,15 +410,44 @@ export function IngredientsSection({
   );
 }
 
+const fieldStyle: React.CSSProperties = {
+  border: `1px solid ${BORDER}`,
+  background: "transparent",
+  color: CREAM,
+  fontFamily: "var(--font-body)",
+  fontSize: "0.9rem",
+};
+
+const labelStyle: React.CSSProperties = {
+  color: FADED,
+  fontFamily: "var(--font-body)",
+  fontSize: "0.66rem",
+  letterSpacing: "0.22em",
+  textTransform: "uppercase",
+};
+
 function arrowStyle(disabled: boolean): React.CSSProperties {
   return {
     fontFamily: "var(--font-body)",
-    fontSize: "0.6rem",
+    fontSize: "0.65rem",
     lineHeight: 1.1,
     color: disabled ? "rgba(192,200,206,0.25)" : FADED,
     background: "transparent",
     border: "none",
     cursor: disabled ? "not-allowed" : "pointer",
-    padding: "0 0.3rem",
+    padding: "0.15rem 0.4rem",
+  };
+}
+
+function pillStyle(color: string, busy: boolean): React.CSSProperties {
+  return {
+    fontFamily: "var(--font-body)",
+    fontSize: "0.62rem",
+    letterSpacing: "0.25em",
+    color,
+    border: `1px solid ${color}`,
+    padding: "0.3rem 0.65rem",
+    background: "transparent",
+    opacity: busy ? 0.5 : 1,
   };
 }
