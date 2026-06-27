@@ -153,7 +153,10 @@ export default function Nav() {
             // time visitors so we don't dangle a link that just bounces
             // them to the cart.
             ...(hasSavedPhone
-              ? [{ label: "Your Address", action: () => nav("/account/addresses") }]
+              ? [
+                  { label: "Your Address", action: () => nav("/account/addresses") },
+                  { label: "Your Requests", action: () => nav("/account/requests") },
+                ]
               : []),
             { label: "Subscription",        action: () => nav("/subscription") },
             { label: "Precision Baking",    action: () => nav("/making") },
