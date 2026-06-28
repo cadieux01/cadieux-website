@@ -581,6 +581,12 @@ export default function OrderDetailPage() {
                 changeRequest={changeRequest}
                 onChanged={fetchOrder}
               />
+              <AddressEditor
+                orderId={id}
+                order={order}
+                changeRequest={changeRequest}
+                onChanged={fetchOrder}
+              />
             </Section>
 
             {/* Items */}
@@ -1185,9 +1191,11 @@ function DeliveryEditor({
     }
   };
 
-  // A pending request of a DIFFERENT type (e.g. items) blocks editing here —
-  // only one pending request per order. Show a note instead of the editor.
+  // A pending request of a DIFFERENT type (items or address) blocks editing
+  // here — only one pending request per order. Show a note instead of the
+  // editor.
   if (changeRequest && reqType !== "delivery") {
+    const otherLabel = reqType === "address" ? "address" : "item";
     return (
       <p
         style={{
@@ -1199,8 +1207,8 @@ function DeliveryEditor({
           color: "rgba(240,223,200,0.45)",
         }}
       >
-        You have a pending item change awaiting approval — cancel it to request
-        a delivery change.
+        You have a pending {otherLabel} change awaiting approval — cancel it to
+        request a delivery change.
       </p>
     );
   }
@@ -1722,8 +1730,10 @@ function ItemEditor({
     }
   };
 
-  // A pending request of a DIFFERENT type (delivery) blocks editing here.
+  // A pending request of a DIFFERENT type (delivery or address) blocks
+  // editing here.
   if (changeRequest && reqType !== "items") {
+    const otherLabel = reqType === "address" ? "address" : "delivery";
     return (
       <p
         style={{
@@ -1735,7 +1745,7 @@ function ItemEditor({
           color: "rgba(240,223,200,0.45)",
         }}
       >
-        You have a pending delivery change awaiting approval — cancel it to
+        You have a pending {otherLabel} change awaiting approval — cancel it to
         request an item change.
       </p>
     );
@@ -2095,6 +2105,383 @@ function ItemEditor({
       )}
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy}
+          style={{
+            height: 44,
+            padding: "0 24px",
+            background: busy ? "rgba(245,158,11,0.5)" : "#f59e0b",
+            border: "none",
+            cursor: busy ? "default" : "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.35em",
+            textTransform: "uppercase",
+            color: "#080604",
+          }}
+        >
+          {busy ? "Sending…" : "Send request"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setErr(null);
+          }}
+          disabled={busy}
+          style={{
+            height: 44,
+            padding: "0 20px",
+            background: "transparent",
+            border: "1px solid rgba(240,223,200,0.18)",
+            cursor: busy ? "default" : "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.6)",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// AddressEditor — customer-facing "change just the delivery address" control.
+// Broader gate than DeliveryEditor: works on ANY UNPAID order (payment_status
+// != 'paid'), not just COD. Paid orders LOCK the address (no edit affordance).
+// Submits as type='address' so it stays cleanly separated from delivery
+// (date/slot) edits and item-qty edits. Single-pending per order is enforced
+// at the DB level by the partial unique index across ALL types.
+function AddressEditor({
+  orderId,
+  order,
+  changeRequest,
+  onChanged,
+}: {
+  orderId: string;
+  order: Order;
+  changeRequest: ChangeRequest | null;
+  onChanged: () => void;
+}) {
+  const paid = (order.payment_status ?? "").toLowerCase() === "paid";
+  const editable = !isCancelled(order.status) && !paid;
+  const reqType = (changeRequest?.type ?? "delivery").toLowerCase();
+
+  const [editing, setEditing] = useState(false);
+  const [address, setAddress] = useState<string>(order.delivery_address ?? "");
+  const [reason, setReason] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (!editable) return null;
+
+  const openForm = () => {
+    setAddress(order.delivery_address ?? "");
+    setReason("");
+    setErr(null);
+    setEditing(true);
+  };
+
+  const submit = async () => {
+    if (busy) return;
+    setErr(null);
+    const trimmedAddress = address.trim();
+    if (!trimmedAddress) {
+      setErr("Enter a new address.");
+      return;
+    }
+    if (trimmedAddress === (order.delivery_address ?? "")) {
+      setErr("Enter a different address.");
+      return;
+    }
+    const body: Record<string, string> = {
+      requested_delivery_address: trimmedAddress,
+    };
+    const trimmedReason = reason.trim();
+    if (trimmedReason) body.reason = trimmedReason;
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `/api/orders/${encodeURIComponent(orderId)}/address-change-request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(body),
+        },
+      );
+      const d = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) {
+        setErr(d.error ?? "Could not send your request. Please try again.");
+        setBusy(false);
+        return;
+      }
+      setEditing(false);
+      setBusy(false);
+      onChanged();
+    } catch {
+      setErr("Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  const cancelRequest = async () => {
+    if (busy) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `/api/orders/${encodeURIComponent(orderId)}/change-request/cancel`,
+        { method: "POST", credentials: "include" },
+      );
+      if (!r.ok) {
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
+        setErr(d.error ?? "Could not cancel the request. Please try again.");
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+      onChanged();
+    } catch {
+      setErr("Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  // A pending request of a DIFFERENT type (delivery or items) blocks this
+  // editor — only one pending request per order. DeliveryEditor / ItemEditor
+  // surface their own pending cards; here we render nothing extra so the
+  // section doesn't double up on the cross-type note.
+  if (changeRequest && reqType !== "address") return null;
+
+  // ── Pending address-change card ──────────────────────────────────────
+  if (changeRequest && reqType === "address" && !editing) {
+    const from = String(order.delivery_address ?? "—");
+    const to = String(changeRequest.requested_delivery_address ?? "");
+    return (
+      <div
+        style={{
+          marginTop: 16,
+          padding: "16px 18px",
+          border: "1px solid rgba(200,144,58,0.3)",
+          background: "rgba(200,144,58,0.06)",
+          borderRadius: 4,
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 12px",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(200,144,58,0.95)",
+          }}
+        >
+          Address change requested · awaiting approval
+        </p>
+        <p
+          style={{
+            margin: "0 0 6px",
+            fontFamily: "var(--font-body)",
+            fontSize: 10,
+            fontWeight: 200,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.4)",
+          }}
+        >
+          Address
+        </p>
+        <p
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-body)",
+            fontSize: 14,
+            fontWeight: 200,
+            color: "rgba(240,223,200,0.85)",
+            lineHeight: 1.6,
+          }}
+        >
+          <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+            {from}
+          </span>
+          <br />
+          <span style={{ color: "#FBF3D4" }}>{to}</span>
+        </p>
+        {changeRequest.reason && (
+          <p
+            style={{
+              margin: "10px 0 0",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              fontWeight: 200,
+              fontStyle: "italic",
+              color: "rgba(240,223,200,0.5)",
+              lineHeight: 1.6,
+            }}
+          >
+            “{changeRequest.reason}”
+          </p>
+        )}
+        {err && (
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181" }}>
+            {err}
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={cancelRequest}
+            disabled={busy}
+            style={{
+              height: 40,
+              padding: "0 18px",
+              background: "transparent",
+              border: "1px solid rgba(255,129,129,0.4)",
+              cursor: busy ? "default" : "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "#ff8181",
+            }}
+          >
+            {busy ? "Cancelling…" : "Cancel request"}
+          </button>
+          <button
+            type="button"
+            onClick={openForm}
+            disabled={busy}
+            style={{
+              height: 40,
+              padding: "0 18px",
+              background: "transparent",
+              border: "1px solid rgba(240,223,200,0.2)",
+              cursor: busy ? "default" : "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 300,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "rgba(240,223,200,0.6)",
+            }}
+          >
+            Edit again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Trigger button (no pending request, not yet editing) ─────────────
+  if (!editing) {
+    return (
+      <div style={{ marginTop: 10 }}>
+        <button
+          type="button"
+          onClick={openForm}
+          style={{
+            height: 40,
+            padding: "0 18px",
+            background: "transparent",
+            border: "1px solid rgba(240,223,200,0.2)",
+            cursor: "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 10,
+            fontWeight: 300,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "rgba(240,223,200,0.7)",
+          }}
+        >
+          Edit address
+        </button>
+      </div>
+    );
+  }
+
+  // ── Inline edit form ─────────────────────────────────────────────────
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        padding: "18px",
+        border: "1px solid rgba(240,223,200,0.12)",
+        borderRadius: 4,
+      }}
+    >
+      <p
+        style={{
+          margin: "0 0 16px",
+          fontFamily: "var(--font-body)",
+          fontSize: 12,
+          fontWeight: 200,
+          lineHeight: 1.6,
+          color: "rgba(240,223,200,0.5)",
+        }}
+      >
+        Request a change to your delivery address. Your order stays as-is
+        until we approve it.
+      </p>
+
+      <p style={{ ...editorLabel }}>Address</p>
+      <textarea
+        value={address}
+        onChange={(e) => setAddress(e.target.value)}
+        rows={3}
+        placeholder="Door no, street, area, city, pincode"
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "10px 12px",
+          marginBottom: 16,
+          background: "rgba(0,0,0,0.25)",
+          border: "1px solid rgba(240,223,200,0.18)",
+          color: "#FBF3D4",
+          fontFamily: "var(--font-body)",
+          fontSize: 14,
+          fontWeight: 200,
+          resize: "vertical",
+        }}
+      />
+
+      <p style={{ ...editorLabel }}>Reason (optional)</p>
+      <input
+        type="text"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Why are you changing this?"
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "10px 12px",
+          marginBottom: 16,
+          background: "rgba(0,0,0,0.25)",
+          border: "1px solid rgba(240,223,200,0.18)",
+          color: "#FBF3D4",
+          fontFamily: "var(--font-body)",
+          fontSize: 14,
+          fontWeight: 200,
+        }}
+      />
+
+      {err && (
+        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181", lineHeight: 1.6 }}>
+          {err}
+        </p>
+      )}
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <button
           type="button"
           onClick={submit}

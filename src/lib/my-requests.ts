@@ -60,10 +60,27 @@ export type PaymentRow = {
   created_at: string;
 };
 
+// "Unserviceable pincode" requests filed by this customer from
+// /api/delivery-requests. Customers can submit these from the checkout
+// CTA before any customer record may exist, so we scope by phone — and
+// by customer_id when present — to surface both pre- and post-account
+// rows.
+export type DeliveryRequestRow = {
+  id: string;
+  pincode: string;
+  area_name: string | null;
+  address: string;
+  status: string;
+  resolved_at: string | null;
+  resolution_note: string | null;
+  created_at: string;
+};
+
 export type MyRequestsPayload = {
   order_change_requests: OrderChangeRequestRow[];
   subscription_change_requests: SubscriptionChangeRequestRow[];
   payments: PaymentRow[];
+  delivery_requests: DeliveryRequestRow[];
 };
 
 /**
@@ -76,6 +93,7 @@ export type MyRequestsPayload = {
 export async function loadMyRequests(
   supabase: SupabaseClient,
   customerId: string,
+  phoneLocal10: string | null = null,
 ): Promise<MyRequestsPayload> {
   // 1) Pull the customer's orders (ids only for the change-request join,
   //    plus the columns we surface as "Payment history").
@@ -156,9 +174,32 @@ export async function loadMyRequests(
     created_at: o.created_at,
   }));
 
+  // 6) Unserviceable-pincode requests. Scope by customer_id when known
+  //    AND by phone when provided, so we still surface rows the customer
+  //    filed before any customer record existed. Either column matching
+  //    is fine — owner auth was already enforced upstream.
+  let deliveryRequests: DeliveryRequestRow[] = [];
+  const drFilters: string[] = [];
+  if (customerId) drFilters.push(`customer_id.eq.${customerId}`);
+  if (phoneLocal10 && /^\d{10}$/.test(phoneLocal10)) {
+    drFilters.push(`phone.eq.${phoneLocal10}`);
+  }
+  if (drFilters.length > 0) {
+    const { data, error } = await supabase
+      .from("delivery_requests")
+      .select(
+        "id, pincode, area_name, address, status, resolved_at, resolution_note, created_at",
+      )
+      .or(drFilters.join(","))
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(`delivery_requests: ${error.message}`);
+    deliveryRequests = (data ?? []) as DeliveryRequestRow[];
+  }
+
   return {
     order_change_requests: orderCRs,
     subscription_change_requests: subCRs,
     payments,
+    delivery_requests: deliveryRequests,
   };
 }

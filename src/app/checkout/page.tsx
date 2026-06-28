@@ -203,6 +203,16 @@ export default function CheckoutPage() {
   const [pinStatus, setPinStatus] = useState<PinState>({ state: "idle" });
   const [requestSubmitting, setRequestSubmitting] = useState(false);
 
+  // Race-condition guard for the payment step: the address-step gate
+  // blocks unserviceable pincodes, but stale cache / cleared service-area
+  // / direct nav can still get a user to "Pay" with an unserviceable
+  // pincode. The server's shared validator hard-blocks with
+  // code:'pincode_unserviceable' on both COD (/api/checkout) and online
+  // (/api/create-order). When that fires, surface the same "Send Request
+  // to Deliver Here" CTA the address step uses, posting to the existing
+  // /api/delivery-requests capture endpoint via submitDeliveryRequest().
+  const [unserviceableAtPayment, setUnserviceableAtPayment] = useState(false);
+
   // Turnstile — ONE widget per checkout session. The single token gates
   // BOTH actions:
   //   1. Send OTP            (server-verified via /api/verify/send)
@@ -767,7 +777,18 @@ export default function CheckoutPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Order failed."); return; }
+      if (!res.ok) {
+        if (data.code === "pincode_unserviceable") {
+          setUnserviceableAtPayment(true);
+          setError(
+            data.error ??
+              "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
+          );
+        } else {
+          setError(data.error ?? "Order failed.");
+        }
+        return;
+      }
       const oid = data.order_id ?? "";
       if (oid) {
         sendOrderSMS(oid, fullAddress, customerPhone, customerName);
@@ -828,6 +849,12 @@ export default function CheckoutPage() {
         if (errData.code === "distance_unserviceable") {
           setError(errData.error ?? "We don't deliver beyond 10 km yet.");
           setStep("address");
+        } else if (errData.code === "pincode_unserviceable") {
+          setUnserviceableAtPayment(true);
+          setError(
+            errData.error ??
+              "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
+          );
         } else if (errData.code === "price_mismatch") {
           setError(errData.error ?? "Price mismatch — please refresh and retry.");
         } else {
@@ -968,8 +995,14 @@ export default function CheckoutPage() {
         : "Payment (3 of 3)";
 
   function onBack() {
-    if (step === "payment") setStep("delivery");
-    else if (step === "delivery") setStep("address");
+    // Clear the unserviceable-at-payment guard whenever the user steps
+    // back, so a corrected address on the address step re-arms the
+    // normal Pay flow on return.
+    if (step === "payment") {
+      setUnserviceableAtPayment(false);
+      setError("");
+      setStep("delivery");
+    } else if (step === "delivery") setStep("address");
     else router.push("/cart");
   }
 
@@ -1508,6 +1541,14 @@ export default function CheckoutPage() {
           ) : step === "delivery" ? (
             <button onClick={submitDeliveryStep} style={primaryBtn(false)}>
               Continue to Payment
+            </button>
+          ) : unserviceableAtPayment ? (
+            <button
+              onClick={submitDeliveryRequest}
+              disabled={requestSubmitting}
+              style={primaryBtn(requestSubmitting)}
+            >
+              {requestSubmitting ? "Sending…" : "Send Request to Deliver Here"}
             </button>
           ) : (
             <PaymentButtons

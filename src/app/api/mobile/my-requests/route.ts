@@ -63,16 +63,25 @@ export async function GET(req: NextRequest) {
     );
   }
   if (!customer) {
-    return NextResponse.json({
-      ok: true,
-      order_change_requests: [],
-      subscription_change_requests: [],
-      payments: [],
-    });
+    // No customer record yet — but the verified phone may already have
+    // submitted an unserviceable-pincode request from the checkout CTA
+    // before any account was created. Still surface those.
+    try {
+      const payload = await loadMyRequests(supabaseAdmin, "", phoneLocal);
+      return NextResponse.json({ ok: true, ...payload });
+    } catch {
+      return NextResponse.json({
+        ok: true,
+        order_change_requests: [],
+        subscription_change_requests: [],
+        payments: [],
+        delivery_requests: [],
+      });
+    }
   }
 
   try {
-    const payload = await loadMyRequests(supabaseAdmin, customer.id);
+    const payload = await loadMyRequests(supabaseAdmin, customer.id, phoneLocal);
     return NextResponse.json({ ok: true, ...payload });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

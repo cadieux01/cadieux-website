@@ -10,6 +10,9 @@ import { recordAuditEvent } from "@/lib/audit-log";
 //     approve_order_change_request, which atomically re-checks eligibility
 //     (not cancelled; paid OR COD-unpaid; address not on a paid order) and
 //     applies the requested delivery fields.
+//   - type 'address': calls apply_order_address_change, which atomically
+//     re-checks STRICT UNPAID (any payment method) and writes only the new
+//     delivery_address. Date/slot untouched.
 //   - type 'items': recomputes the full items array + total SERVER-SIDE from
 //     the order's CURRENT price snapshot + requested quantities, then calls
 //     apply_order_item_change to atomically re-check (COD/unpaid/not-cancelled)
@@ -44,6 +47,8 @@ const RPC_ERRORS: Record<string, { status: number; message: string }> = {
   order_not_cod: { status: 409, message: "Order is no longer Cash on Delivery." },
   order_already_paid: { status: 409, message: "Order has already been paid." },
   order_cancelled: { status: 409, message: "Order has been cancelled." },
+  request_wrong_type: { status: 409, message: "Request type mismatch." },
+  address_required: { status: 400, message: "No address provided." },
 };
 
 export async function PATCH(
@@ -160,6 +165,14 @@ export async function PATCH(
         p_total: total,
       });
       rpcErr = error;
+    } else if (cr.type === "address") {
+      // Address-only approve: atomic re-check (STRICT UNPAID) + apply inside
+      // the RPC transaction. Date/slot untouched.
+      const { error } = await supabaseAdmin.rpc(
+        "apply_order_address_change",
+        { p_id: params.id },
+      );
+      rpcErr = error;
     } else {
       // Delivery approve: atomic re-check + apply inside the RPC transaction.
       const { error } = await supabaseAdmin.rpc("approve_order_change_request", {
@@ -200,14 +213,19 @@ export async function PATCH(
     }
   }
 
-  const isItems = cr.type === "items";
+  const typeLabel =
+    cr.type === "items"
+      ? "Item"
+      : cr.type === "address"
+        ? "Address"
+        : "Delivery";
   void recordAuditEvent({
     req,
     entity: "delivery_request",
     action: "update",
     targetId: cr.order_id,
     targetLabel: `#${cr.order_id.slice(0, 8)}`,
-    context: `${isItems ? "Item" : "Delivery"} change request ${action === "approve" ? "approved" : "rejected"}`,
+    context: `${typeLabel} change request ${action === "approve" ? "approved" : "rejected"}`,
     meta: {
       change_request_id: params.id,
       type: cr.type ?? "delivery",
