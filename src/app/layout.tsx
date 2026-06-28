@@ -31,16 +31,16 @@ const jost = Jost({
 });
 
 export const metadata: Metadata = {
-  title: "Cadieux | Premium High-Protein Bread, Visakhapatnam",
-  description: "Premium high-protein bread baked fresh in Visakhapatnam. Lab-tested, nutrient-dense, delivered to your door. More protein, same routine.",
+  title: "Cadieux | Premium Protein Bread, Visakhapatnam",
+  description: "Premium protein bread baked fresh in Visakhapatnam. Lab-tested, nutrient-dense, delivered to your door. More Protein. Same Routine.",
   applicationName: "Cadieux",
   manifest: "/manifest.json",
   robots: "index, follow",
   openGraph: {
     type: "website",
     url: "https://www.cadieux.in",
-    title: "Cadieux | Premium High-Protein Bread, Visakhapatnam",
-    description: "Premium high-protein bread baked fresh in Visakhapatnam. Lab-tested, nutrient-dense, delivered to your door.",
+    title: "Cadieux | Premium Protein Bread, Visakhapatnam",
+    description: "Premium protein bread baked fresh in Visakhapatnam. Lab-tested, nutrient-dense, delivered to your door.",
     images: [
       {
         url: "https://www.cadieux.in/icons/icon-512.png",
@@ -53,8 +53,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Cadieux | Premium High-Protein Bread",
-    description: "Baked fresh in Visakhapatnam. Lab-tested. More protein, same routine.",
+    title: "Cadieux | Premium Protein Bread",
+    description: "Baked fresh in Visakhapatnam. Lab-tested. More Protein. Same Routine.",
     images: ["https://www.cadieux.in/icons/icon-512.png"],
   },
   // Apple PWA: capable + black-translucent gives the immersive standalone

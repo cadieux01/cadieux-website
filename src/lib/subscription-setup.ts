@@ -32,14 +32,14 @@ export type WizardProduct = {
 export const SETUP_PRODUCTS: WizardProduct[] = [
   {
     slug: "multigrain",
-    name: "Multi-Grain High Protein Bread",
+    name: "Protein Bread — Multigrain",
     title: "Multigrain",
     price: 135,
     blurb: "Ancient grains, seeds, whey protein.",
   },
   {
     slug: "high-protein",
-    name: "High Protein Bread",
+    name: "Protein Bread — Plain",
     title: "Plain",
     price: 99,
     blurb: "Soft sandwich slices, clean build.",
