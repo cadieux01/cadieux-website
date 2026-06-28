@@ -200,6 +200,18 @@ export function AdminShell({
     };
   }, [idleWarning]);
 
+  // Restore the native cursor on admin pages. globals.css sets
+  // `body { cursor: none }` globally; BakeryCursor / AnimatedCursor
+  // (which would add `html.anim-cursor`) are NOT mounted here
+  // (ClientLayoutChrome returns null on /admin). Adding admin-page
+  // lets the CSS rule `html.admin-page body { cursor: auto }` win.
+  useEffect(() => {
+    document.documentElement.classList.add("admin-page");
+    return () => {
+      document.documentElement.classList.remove("admin-page");
+    };
+  }, []);
+
   // Close the drawer whenever the route changes — clicking a nav link
   // already navigates, but route-level redirects shouldn't leave a
   // dangling open drawer.

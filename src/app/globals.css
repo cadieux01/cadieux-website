@@ -71,6 +71,14 @@ body {
   color: var(--color-cream);
 }
 
+/* Admin pages: restore native cursor. ClientLayoutChrome returns null on
+   /admin so no custom cursor component mounts, but `body { cursor: none }`
+   above is still active. AdminShell adds `admin-page` to <html> so this
+   rule wins and the operator sees their OS pointer. */
+html.admin-page body {
+  cursor: auto !important;
+}
+
 /* Design system utility classes */
 
 .heading-xl {

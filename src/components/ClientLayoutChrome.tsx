@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 
 import {
   type CursorVariant,
@@ -27,6 +28,9 @@ const BakeryCursor = dynamic(() => import("@/components/BakeryCursor"), {
 });
 
 export default function ClientLayoutChrome() {
+  const pathname = usePathname();
+  const isAdmin = pathname?.startsWith("/admin") ?? false;
+
   const [finePointer, setFinePointer] = useState(false);
   // Resolved client-side (reads ?cursor= / localStorage / configured default).
   const [variant, setVariant] = useState<CursorVariant | null>(null);
@@ -43,6 +47,12 @@ export default function ClientLayoutChrome() {
   useEffect(() => {
     setVariant(resolveCursorVariant());
   }, []);
+
+  // Skip SmoothScroll (Lenis) and all cursor variants on admin pages —
+  // both add continuous GSAP 60fps tickers that make admin data tables
+  // sluggish. The native cursor is restored via the `admin-page` class
+  // set by AdminShell.
+  if (isAdmin) return null;
 
   if (!finePointer || variant === null) return null;
   return (
