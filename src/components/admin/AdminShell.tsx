@@ -27,12 +27,12 @@ import {
 } from "@/lib/admin-client";
 import { IDLE, useIdleLogout } from "@/lib/session-timeout";
 
-// 24h UX remember-me — matches the server-side admin_session cookie
+// 30-day UX remember-me — matches the server-side admin_session cookie
 // TTL. The cookie is the real credential; this localStorage flag just
 // lets us skip the password gate UI until the cookie also expires.
 // The previous sessionStorage flag is migrated transparently on first
 // load.
-const REMEMBER_MS = 24 * 60 * 60 * 1000;
+const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Simple client-side "I already logged in" flag. The REAL credential is the
 // bearer token / cookie the server verifies on every /api/admin request;
@@ -238,6 +238,11 @@ export function AdminShell({
         <PasswordGate
           onSuccess={() => {
             writeRememberedAuth();
+            // Stamp "just logged in" so the idle hook doesn't immediately
+            // fire on a stale cross-tab cdx_last_activity timestamp.
+            try {
+              localStorage.setItem("cdx_last_activity", String(Date.now()));
+            } catch { /* storage unavailable; in-memory timer still works */ }
             setAuthed(true);
           }}
         />

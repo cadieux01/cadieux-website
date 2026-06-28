@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 export const IDLE = {
-  SUPER_ADMIN: 30 * 60 * 1000, // 30 minutes
+  SUPER_ADMIN: 12 * 60 * 60 * 1000, // 12 hours
   DASHBOARD: 60 * 60 * 1000, // 60 minutes (kept here for parity / future use)
 } as const;
 
@@ -98,11 +98,16 @@ export function useIdleLogout({
       if (Number.isFinite(stored) && stored > 0) {
         const elapsed = Date.now() - stored;
         if (elapsed >= timeoutMs) {
-          firedRef.current = true;
-          void onTimeout();
-          return;
+          // Stale timestamp — reset to now so a fresh login always gets
+          // a full idle window instead of immediately logging out again.
+          // (Mirrors the dashboard's session-timeout behaviour.)
+          try {
+            localStorage.setItem(LS_KEY, String(Date.now()));
+          } catch { /* ignore */ }
+          // initialDelay stays at timeoutMs — fall through to set timer
+        } else {
+          initialDelay = timeoutMs - elapsed;
         }
-        initialDelay = timeoutMs - elapsed;
       }
     } catch {
       /* ignore */

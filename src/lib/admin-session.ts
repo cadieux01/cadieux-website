@@ -20,9 +20,9 @@ import type { NextRequest } from "next/server";
 
 export const ADMIN_SESSION_COOKIE = "admin_session";
 
-// 24h sliding window. Long enough to outlast a single ops day, short
-// enough that a stolen cookie's blast radius stays bounded.
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+// 30-day sliding window. Long enough to survive weekends and holidays
+// without forcing re-login; a stolen cookie still expires within a month.
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function signingSecret(): string {
   // Same key as the PIN grants — server-only.
