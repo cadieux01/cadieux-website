@@ -765,44 +765,6 @@ export default function PageContent() {
             >Shop Now</button>
           </section>
 
-          {/* ══ SECTION 5b — SHOWCASE VIDEO (Column Drift, 1:1) ══
-              Silent, looping brand loop sitting just above the Founder
-              band. Autoplay-safe (muted + playsInline). Capped width so
-              it never dominates the viewport. */}
-          <section style={{
-            background: "#024628",
-            padding: "72px clamp(24px,6vw,80px) 0",
-            position: "relative",
-            zIndex: 3,
-            display: "flex",
-            justifyContent: "center",
-          }}>
-            <div style={{
-              width: "100%",
-              maxWidth: 640,
-              aspectRatio: "1 / 1",
-              borderRadius: 10,
-              overflow: "hidden",
-              background: "rgba(0,0,0,0.2)",
-            }}>
-              <video
-                src="/column-drift.mp4"
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="metadata"
-                aria-label="Cadieux column drift showcase"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  display: "block",
-                  objectFit: "cover",
-                }}
-              />
-            </div>
-          </section>
-
           {/* ══ SECTION 6 — FOUNDER (homepage only, just above the footer) ══
               Foundation Green band per brand bible. Portrait + short
               personal note + gold signature + soft link to the full
