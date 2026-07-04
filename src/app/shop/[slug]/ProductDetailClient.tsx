@@ -339,7 +339,7 @@ export default function ProductDetailClient({
                 padding: 4,
                 borderRadius: 999,
                 border: "1px solid rgba(201,169,110,0.3)",
-                background: "rgba(10,8,5,0.35)",
+                background: "rgba(29,29,31,0.35)",
                 marginBottom: 18,
               }}
             >
@@ -521,7 +521,7 @@ export default function ProductDetailClient({
                       alignItems: "center",
                       gap: 14,
                       padding: "18px 18px",
-                      background: "rgba(10,8,5,0.35)",
+                      background: "rgba(29,29,31,0.35)",
                       border: "0.5px solid rgba(201,169,110,0.15)",
                       borderRadius: 8,
                     }}
@@ -730,7 +730,7 @@ function Gallery({
               textTransform: "uppercase",
               color: "rgba(245,240,232,0.75)",
               padding: "6px 12px",
-              background: "rgba(10,8,5,0.6)",
+              background: "rgba(29,29,31,0.6)",
               border: "0.5px solid rgba(245,240,232,0.22)",
               borderRadius: 4,
               display: "inline-flex",

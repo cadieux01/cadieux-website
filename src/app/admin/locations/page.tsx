@@ -519,7 +519,7 @@ export default function AdminLocationsPage() {
             right: 0,
             bottom: 0,
             zIndex: 400,
-            background: "rgba(6,4,2,0.96)",
+            background: "rgba(29,29,31,0.96)",
             borderTop: `1px solid ${BORDER}`,
             padding: "0.75rem 1.25rem",
             display: "flex",

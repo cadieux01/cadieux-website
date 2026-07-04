@@ -867,7 +867,7 @@ export default function ServiceAreasPage() {
         style={{
           marginBottom: 28,
           padding: 18,
-          background: "rgba(10,8,5,0.5)",
+          background: "rgba(29,29,31,0.5)",
           border: `1px solid ${BORDER}`,
           borderRadius: 8,
         }}
@@ -1227,7 +1227,7 @@ export default function ServiceAreasPage() {
               }}
             >
               <thead>
-                <tr style={{ background: "rgba(10,8,5,0.6)" }}>
+                <tr style={{ background: "rgba(29,29,31,0.6)" }}>
                   <th style={{ ...th, width: 40, paddingRight: 6 }}>
                     <input
                       type="checkbox"
@@ -1339,7 +1339,7 @@ export default function ServiceAreasPage() {
             right: 0,
             bottom: 0,
             zIndex: 200,
-            background: "rgba(6,4,2,0.96)",
+            background: "rgba(29,29,31,0.96)",
             borderTop: `1px solid ${DARK_GREEN}`,
             padding:
               "0.9rem clamp(1rem, 4vw, 1.5rem) calc(0.9rem + env(safe-area-inset-bottom))",
@@ -1785,7 +1785,7 @@ export default function ServiceAreasPage() {
 }
 
 const inputBase: React.CSSProperties = {
-  background: "rgba(6,4,2,0.6)",
+  background: "rgba(29,29,31,0.6)",
   border: `1px solid ${BORDER}`,
   borderRadius: 4,
   padding: "8px 12px",

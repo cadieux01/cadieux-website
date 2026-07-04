@@ -59,7 +59,7 @@ export default function ProductReportsPage() {
             maxWidth: 620,
             textAlign: "center",
             padding: "clamp(32px,6vw,56px) clamp(24px,5vw,48px)",
-            background: "rgba(10,8,5,0.55)",
+            background: "rgba(29,29,31,0.55)",
             border: "0.5px solid rgba(201,169,110,0.25)",
             borderRadius: 16,
             backdropFilter: "blur(6px)",

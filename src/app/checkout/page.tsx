@@ -1025,7 +1025,7 @@ export default function CheckoutPage() {
       <header
         style={{
           position: "sticky", top: 0, zIndex: 50,
-          background: "rgba(14,14,14,0.92)",
+          background: "rgba(29,29,31,0.92)",
           backdropFilter: "saturate(140%) blur(12px)",
           WebkitBackdropFilter: "saturate(140%) blur(12px)",
           borderBottom: "1px solid rgba(240,223,200,0.06)",
@@ -1474,7 +1474,7 @@ export default function CheckoutPage() {
       <div
         style={{
           position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 60,
-          background: "rgba(14,14,14,0.96)",
+          background: "rgba(29,29,31,0.96)",
           backdropFilter: "saturate(140%) blur(12px)",
           WebkitBackdropFilter: "saturate(140%) blur(12px)",
           borderTop: "1px solid rgba(240,223,200,0.08)",
@@ -1820,7 +1820,7 @@ function AddressForm(props: {
                 cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                 letterSpacing: "0.4em", textTransform: "uppercase",
-                color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(8,6,4,0.35)" : "#1D1D1F",
+                color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(29,29,31,0.35)" : "#1D1D1F",
                 WebkitTapHighlightColor: "transparent",
               }}
             >
@@ -2130,7 +2130,7 @@ function SavedCustomerOtpBlock(props: {
               cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
               letterSpacing: "0.4em", textTransform: "uppercase",
-              color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(8,6,4,0.35)" : "#1D1D1F",
+              color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(29,29,31,0.35)" : "#1D1D1F",
               WebkitTapHighlightColor: "transparent",
             }}
           >

@@ -1388,7 +1388,7 @@ const bulkButton: React.CSSProperties = {
 const modalBackdrop: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(6,4,2,0.78)",
+  background: "rgba(29,29,31,0.78)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

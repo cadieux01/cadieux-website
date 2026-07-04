@@ -206,7 +206,7 @@ export default function QASection() {
         </video>
 
         {/* Dark video overlay */}
-        <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.78)", zIndex: 1, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.78)", zIndex: 1, pointerEvents: "none" }} />
 
         {/* Phase 1 → 2 top blend */}
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "30vh", background: "linear-gradient(to bottom, #1D1D1F, transparent)", zIndex: 6, pointerEvents: "none" }} />

@@ -63,8 +63,8 @@ export default function ImmersiveEntry() {
         {/* Vignette — tighter on mobile for drama */}
         <div style={{ position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none",
           background: isMobile
-            ? "radial-gradient(ellipse 90% 60% at 50% 60%, transparent 18%, rgba(6,4,2,0.92) 100%)"
-            : "radial-gradient(ellipse 72% 72% at 50% 50%, transparent 20%, rgba(6,4,2,0.90) 100%)" }} />
+            ? "radial-gradient(ellipse 90% 60% at 50% 60%, transparent 18%, rgba(29,29,31,0.92) 100%)"
+            : "radial-gradient(ellipse 72% 72% at 50% 50%, transparent 20%, rgba(29,29,31,0.90) 100%)" }} />
 
         {/* Film grain */}
         <div style={{ position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none",

@@ -61,7 +61,7 @@ export default function SiteMusic() {
           width: 42,
           height: 42,
           borderRadius: "50%",
-          background: "rgba(6,4,2,0.65)",
+          background: "rgba(29,29,31,0.65)",
           border: "1px solid rgba(240,223,200,0.25)",
           color: "#FBF3D4",
           cursor: "pointer",

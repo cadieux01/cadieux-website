@@ -256,7 +256,7 @@ export function ServiceabilityPanel() {
               key={r.id}
               style={{
                 padding: 18,
-                background: "rgba(10,8,5,0.5)",
+                background: "rgba(29,29,31,0.5)",
                 border: `1px solid ${BORDER}`,
                 borderRadius: 8,
                 display: "flex",
@@ -416,7 +416,7 @@ function statusBg(s: RequestRow["status"]): string {
 }
 
 const inputBase: React.CSSProperties = {
-  background: "rgba(6,4,2,0.6)",
+  background: "rgba(29,29,31,0.6)",
   border: `1px solid ${BORDER}`,
   borderRadius: 4,
   padding: "8px 12px",

@@ -140,7 +140,7 @@ export default function LocationPickerModal(props: {
       aria-modal="true"
       style={{
         position: "fixed", inset: 0, zIndex: 200,
-        background: "rgba(8,6,4,0.78)",
+        background: "rgba(29,29,31,0.78)",
         backdropFilter: "blur(4px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: "calc(20px + env(safe-area-inset-top)) 16px calc(20px + env(safe-area-inset-bottom))",
@@ -273,7 +273,7 @@ export default function LocationPickerModal(props: {
               cursor: (confirming || !isLoaded) ? "default" : "pointer",
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
               letterSpacing: "0.4em", textTransform: "uppercase",
-              color: (confirming || !isLoaded) ? "rgba(8,6,4,0.35)" : "#1D1D1F",
+              color: (confirming || !isLoaded) ? "rgba(29,29,31,0.35)" : "#1D1D1F",
               WebkitTapHighlightColor: "transparent",
             }}
           >

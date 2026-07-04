@@ -566,7 +566,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
 
 const formStyle: React.CSSProperties = {
   padding: "20px 22px",
-  background: "rgba(10,8,5,0.4)",
+  background: "rgba(29,29,31,0.4)",
   border: "0.5px solid rgba(201,169,110,0.14)",
   borderRadius: 10,
   marginBottom: 24,
@@ -575,7 +575,7 @@ const formStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
-  background: "rgba(6,4,2,0.6)",
+  background: "rgba(29,29,31,0.6)",
   border: "1px solid rgba(201,169,110,0.2)",
   borderRadius: 6,
   color: "#FBF3D4",
@@ -602,7 +602,7 @@ const btnPrimary: React.CSSProperties = {
 
 const cardStyle: React.CSSProperties = {
   padding: "22px 22px",
-  background: "rgba(10,8,5,0.4)",
+  background: "rgba(29,29,31,0.4)",
   border: "0.5px solid rgba(201,169,110,0.14)",
   borderRadius: 10,
 };

@@ -353,7 +353,7 @@ export default function FeedbackPage() {
                   padding: 18,
                   background: rev.is_deleted
                     ? "rgba(40,8,8,0.4)"
-                    : "rgba(10,8,5,0.5)",
+                    : "rgba(29,29,31,0.5)",
                   border: rev.is_deleted
                     ? "1px solid rgba(239,68,68,0.45)"
                     : "1px solid rgba(245,158,11,0.18)",
@@ -762,7 +762,7 @@ export default function FeedbackPage() {
                     style={{
                       flex: 1,
                       padding: "8px 10px",
-                      background: "rgba(6,4,2,0.6)",
+                      background: "rgba(29,29,31,0.6)",
                       border: "1px solid rgba(245,158,11,0.25)",
                       borderRadius: 4,
                       color: "#fbf3d4",
@@ -808,7 +808,7 @@ const fieldLabel: React.CSSProperties = {
 const textInput: React.CSSProperties = {
   width: "100%",
   padding: "8px 10px",
-  background: "rgba(6,4,2,0.6)",
+  background: "rgba(29,29,31,0.6)",
   border: "1px solid rgba(245,158,11,0.25)",
   borderRadius: 4,
   color: "#fbf3d4",

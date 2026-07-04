@@ -365,7 +365,7 @@ function MonthPickerOverlay({
       style={{
         position: "absolute",
         inset: 0,
-        background: "rgba(14,14,14,0.85)",
+        background: "rgba(29,29,31,0.85)",
         backdropFilter: "blur(6px)",
         borderRadius: 16,
         zIndex: 5,

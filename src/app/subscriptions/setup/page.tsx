@@ -264,7 +264,7 @@ function NavRow({
         left: 0,
         right: 0,
         bottom: 0,
-        background: "rgba(14,14,14,0.95)",
+        background: "rgba(29,29,31,0.95)",
         backdropFilter: "blur(8px)",
         borderTop: `1px solid ${FAINT}`,
         padding: "16px 20px",

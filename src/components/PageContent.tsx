@@ -426,7 +426,7 @@ export default function PageContent() {
                 <source src="/product-video-05.mp4" type="video/mp4" />
               </video>
               {/* Dark overlay */}
-              <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.62)", zIndex: 0, pointerEvents: "none" }} />
+              <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.62)", zIndex: 0, pointerEvents: "none" }} />
               {/* Shared grain overlay */}
               <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
 
@@ -574,7 +574,7 @@ export default function PageContent() {
                 <source src="/bread-eating-01.mp4" type="video/mp4" />
               </video>
               {/* Dark overlay — matched to Phase 3 */}
-              <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.62)", zIndex: 0, pointerEvents: "none" }} />
+              <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.62)", zIndex: 0, pointerEvents: "none" }} />
               {/* Bottom blend to closing section */}
               <div style={{
                 position: "absolute", bottom: 0, left: 0, right: 0,
@@ -722,7 +722,7 @@ export default function PageContent() {
               <source src="/bread-making-01.mp4" type="video/mp4" />
             </video>
             {/* Dark overlay */}
-            <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.70)", zIndex: 1, pointerEvents: "none" }} />
+            <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.70)", zIndex: 1, pointerEvents: "none" }} />
             <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 2 }} />
 
             <img
