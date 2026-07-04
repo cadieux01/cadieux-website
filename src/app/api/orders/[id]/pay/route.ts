@@ -17,7 +17,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 
 const supabaseAdmin = createClient(
@@ -146,10 +149,12 @@ export async function POST(
     return NextResponse.json({ error: "Failed to start payment" }, { status: 500 });
   }
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     razorpay_order_id: rzp.id,
     amount: rzp.amount, // paise (server-confirmed)
     currency: rzp.currency,
     key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
   });
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
 }

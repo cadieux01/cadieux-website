@@ -8,7 +8,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 
 const supabaseAdmin = createClient(
@@ -67,5 +70,7 @@ export async function POST(
     return NextResponse.json({ error: "Failed to cancel request" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
 }

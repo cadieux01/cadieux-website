@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  normalizePhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -40,7 +44,9 @@ export async function POST(
   }
 
   if (sub.status === "cancelled" || sub.status === "completed") {
-    return NextResponse.json({ ok: true, already: true });
+    const res = NextResponse.json({ ok: true, already: true });
+    rollPhoneCookieOnWebRequest(req, res);
+    return res;
   }
 
   const now = new Date().toISOString();
@@ -59,5 +65,7 @@ export async function POST(
     .eq("subscription_id", params.id)
     .not("status", "in", "(delivered,cancelled)");
 
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
 }

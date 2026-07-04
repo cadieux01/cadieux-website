@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  normalizePhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -140,5 +144,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true, id: cr.id });
+  const res = NextResponse.json({ ok: true, id: cr.id });
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
 }

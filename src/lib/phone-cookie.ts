@@ -1,10 +1,17 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import type { NextRequest } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 
 const SECRET = process.env.OTP_SECRET ?? "cadieux_otp_fallback_secret";
 
 export const PHONE_COOKIE_NAME = "cdx_phone_verified";
-export const PHONE_COOKIE_TTL_MS = 30 * 60 * 1000; // 30 min — web cookie
+// Web session lifetime. 7 days chosen so an active customer doesn't get
+// re-prompted for OTP on routine actions (Edit delivery date/time, Pay
+// Now, address changes). Ownership is still enforced by the HMAC in
+// every request — this is only a session length, not a trust widening.
+// Each successful WRITE endpoint (see rollPhoneCookieOnWebRequest below)
+// also re-issues the cookie with a fresh 7-day expiry, so a customer
+// who keeps using the site rolls forward indefinitely.
+export const PHONE_COOKIE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — web cookie
 export const MOBILE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — mobile bearer
 
 export function signPhoneCookie(phone: string, exp: number): string {
@@ -54,6 +61,38 @@ export function getVerifiedPhone(
   }
 
   return null;
+}
+
+/**
+ * Rolling session helper. Call at the very end of a SUCCESSFUL web write
+ * response to re-issue `cdx_phone_verified` with a fresh 7-day expiry, so
+ * an actively-using customer never gets re-prompted for OTP.
+ *
+ * No-op when:
+ *   - request had no cookie (mobile bearer only, or unauth) — mobile
+ *     bearer is validated by its own 30-day HMAC and does NOT need a
+ *     cookie rewrite
+ *   - cookie is invalid/expired — we do NOT resurrect it
+ *
+ * Same attributes as /api/verify/check (single source of set-cookie config
+ * lives inline here + at the two initial-issue sites).
+ */
+export function rollPhoneCookieOnWebRequest(
+  req: NextRequest,
+  res: NextResponse
+): void {
+  const cookieValue = req.cookies.get(PHONE_COOKIE_NAME)?.value;
+  if (!cookieValue) return;
+  const verified = verifyPhoneCookie(cookieValue);
+  if (!verified) return;
+  const exp = Date.now() + PHONE_COOKIE_TTL_MS;
+  res.cookies.set(PHONE_COOKIE_NAME, signPhoneCookie(verified.phone, exp), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: Math.floor(PHONE_COOKIE_TTL_MS / 1000),
+  });
 }
 
 /**

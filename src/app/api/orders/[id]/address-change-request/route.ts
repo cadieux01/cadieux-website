@@ -18,7 +18,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 
@@ -195,5 +198,7 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({ ok: true, request: cr });
+  const res = NextResponse.json({ ok: true, request: cr });
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
 }

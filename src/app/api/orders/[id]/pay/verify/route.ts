@@ -23,7 +23,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
-import { getVerifiedPhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 
 const supabaseAdmin = createClient(
@@ -133,7 +136,9 @@ export async function POST(
 
   // Idempotent: already paid → success without re-writing.
   if (order.payment_status === "paid") {
-    return NextResponse.json({ ok: true, order_id: order.id, already: true });
+    const res = NextResponse.json({ ok: true, order_id: order.id, already: true });
+    rollPhoneCookieOnWebRequest(req, res);
+    return res;
   }
 
   // 3. Independently confirm the payment with Razorpay.
@@ -191,5 +196,7 @@ export async function POST(
     return NextResponse.json({ error: "Failed to mark order paid" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, order_id: order.id });
+  const res = NextResponse.json({ ok: true, order_id: order.id });
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
 }

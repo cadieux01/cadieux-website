@@ -25,7 +25,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 
 const supabaseAdmin = createClient(
@@ -234,10 +237,12 @@ export async function POST(
   // The freshly-built items are not persisted on the order (admin recomputes
   // again on approve), but we return them + the total so the client can show
   // the post-send summary without trusting its own arithmetic.
-  return NextResponse.json({
+  const res = NextResponse.json({
     ok: true,
     request: cr,
     new_total_amount: newTotal,
     new_items: newItems,
   });
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
 }

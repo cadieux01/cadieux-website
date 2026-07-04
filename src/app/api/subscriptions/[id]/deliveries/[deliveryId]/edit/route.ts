@@ -11,7 +11,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  normalizePhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { editRateLimit } from "@/lib/ratelimit";
 import {
@@ -215,5 +219,7 @@ export async function PATCH(
     );
   }
 
-  return NextResponse.json({ ok: true, delivery: updated });
+  const res = NextResponse.json({ ok: true, delivery: updated });
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
 }
