@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { Cormorant_Garamond, Jost } from "next/font/google";
+import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import ClientLayoutChrome from "@/components/ClientLayoutChrome";
 import NavGate from "@/components/NavGate";
@@ -12,20 +12,19 @@ import IOSInstallHint from "@/components/IOSInstallHint";
 import FloatingCartButton from "@/components/FloatingCartButton";
 import { CartProvider } from "@/context/CartContext";
 
-const cormorant = Cormorant_Garamond({
+// Unified on DM Sans for both headings and body (serif dropped). One family,
+// multiple weights covers every call site — --font-heading and --font-body
+// both resolve to DM Sans so existing var(--font-*) references keep working.
+const dmSans = DM_Sans({
   subsets: ["latin"],
-  // Audit shows only 300/400/600 are actually used in styles. 700 was loaded
-  // but never referenced — dropped to save one font file. fontWeight:500
-  // sites (9) substitute to 400/600 just as before since 500 was never
-  // loaded.
-  weight: ["300", "400", "600"],
+  weight: ["300", "400", "500", "600", "700"],
   variable: "--font-heading",
   display: "swap",
 });
 
-const jost = Jost({
+const dmSansBody = DM_Sans({
   subsets: ["latin"],
-  weight: ["300", "400", "500"],
+  weight: ["300", "400", "500", "600", "700"],
   variable: "--font-body",
   display: "swap",
 });
@@ -163,7 +162,7 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" className={`${cormorant.variable} ${jost.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${dmSans.variable} ${dmSansBody.variable}`} suppressHydrationWarning>
       <head>
         {/* JSON-LD structured data */}
         <Script id="organization-schema" type="application/ld+json">

@@ -3,7 +3,7 @@ import Link from "next/link";
 // Shared chrome for Termly-generated legal documents.
 // - Reads pre-cleaned HTML at build time and injects via dangerouslySetInnerHTML.
 // - Overrides Termly's hard-coded Arial / hex colours with Cadieux brand fonts
-//   (Cormorant Garamond headings, Jost body) and cream-on-walnut palette.
+//   (DM Sans headings + body) and cream-on-walnut palette.
 // - Layout: ~800 px max-width column, generous padding, "Back to Home" link.
 type Props = {
   title: string;

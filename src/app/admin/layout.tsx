@@ -1,5 +1,5 @@
 // Admin-only layout. Scopes the Nunito font to /admin/* so the
-// customer-facing site keeps its Cormorant + Jost pairing untouched.
+// customer-facing site keeps its DM Sans typography untouched.
 //
 // AdminShell pages and many sub-components set fontFamily inline (e.g.
 // "var(--font-body)" or a MONO stack). Without !important, those inline
