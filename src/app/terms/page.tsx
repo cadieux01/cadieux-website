@@ -6,7 +6,7 @@ import LegalPage from "@/app/components/LegalPage";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Terms & Conditions · Cadieux",
+  title: "Terms & Conditions | Cadieux",
   description:
     "Terms governing your use of the Cadieux website, mobile app, and bread delivery service.",
   alternates: { canonical: "/terms" },

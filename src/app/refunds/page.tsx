@@ -6,7 +6,7 @@ import LegalPage from "@/app/components/LegalPage";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Return Policy · Cadieux",
+  title: "Return Policy | Cadieux",
   description:
     "Cadieux's return and refund policy for bread orders and subscription deliveries.",
   alternates: { canonical: "/refunds" },

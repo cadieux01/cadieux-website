@@ -50,6 +50,48 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.6,
     },
     {
+      url: `${baseUrl}/making`,
+      lastModified: "2026-06-22",
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/find-us`,
+      lastModified: "2026-06-22",
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/subscriptions/setup`,
+      lastModified: "2026-06-22",
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/refunds`,
+      lastModified: "2026-06-08",
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/shipping`,
+      lastModified: "2026-06-08",
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/cookies`,
+      lastModified: "2026-06-08",
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/delete-account`,
+      lastModified: "2026-06-08",
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
       url: `${baseUrl}/terms`,
       lastModified: "2026-06-08",
       changeFrequency: "yearly",

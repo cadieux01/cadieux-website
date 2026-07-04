@@ -7,7 +7,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Offline — Cadieux",
+  title: "Offline | Cadieux",
   description: "You're offline. Reconnect to keep browsing Cadieux.",
 };
 

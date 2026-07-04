@@ -4,7 +4,7 @@ import LegalPage from "@/app/components/LegalPage";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Delete Your Account · Cadieux",
+  title: "Delete Your Account | Cadieux",
   description:
     "How to request deletion of your Cadieux account and associated personal data, and what we retain as required by law.",
   alternates: { canonical: "/delete-account" },

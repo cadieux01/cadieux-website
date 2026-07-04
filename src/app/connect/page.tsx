@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Connect | Cadieux",
+  description:
+    "Get in touch with Cadieux — Instagram, WhatsApp, email, and phone. We reply personally.",
+};
 
 const GRAIN = "url(/grain.svg)";
 

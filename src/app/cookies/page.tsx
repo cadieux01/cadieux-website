@@ -6,7 +6,7 @@ import LegalPage from "@/app/components/LegalPage";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy · Cadieux",
+  title: "Cookie Policy | Cadieux",
   description:
     "How Cadieux uses cookies and similar tracking technologies on our website.",
   alternates: { canonical: "/cookies" },

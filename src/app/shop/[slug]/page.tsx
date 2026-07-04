@@ -42,6 +42,7 @@ export async function generateMetadata({
   return {
     title,
     description,
+    alternates: { canonical: `/shop/${slug}` },
     openGraph: {
       type: "website",
       url: `https://www.cadieux.in/shop/${slug}`,

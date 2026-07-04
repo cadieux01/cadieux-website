@@ -16,7 +16,7 @@ import Image from "next/image";
 import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
 import { ShareButton } from "@/components/ShareButton";
-import { getPageContent } from "@/lib/content";
+import { getPageContent, pickString } from "@/lib/content";
 
 // ── Brand bible palette ─────────────────────────────────────────────
 const FOUNDATION_GREEN = "#024628";
@@ -27,11 +27,27 @@ const ENDURANCE_BLUE = "#4369B2";
 const GRAIN = "url(/grain.svg)";
 
 // ── SEO ─────────────────────────────────────────────────────────────
-export const metadata: Metadata = {
-  title: "Behind Cadieux | Cadieux",
-  description:
-    "Behind Cadieux — the two-year story of building India's high-protein bread. From a chore-like routine to a recipe engineered for absorption, refined in-house and verified by NABL-accredited laboratories.",
-};
+// Reads behind.seo.title + behind.seo.description from content_strings so
+// non-engineers can edit meta copy in the admin CMS. Inline fallbacks keep
+// tags meaningful even if the DB row is empty (pickString returns "" when
+// no CRITICAL_FALLBACKS entry exists).
+const BEHIND_TITLE_FALLBACK = "Behind Cadieux | Cadieux";
+const BEHIND_DESCRIPTION_FALLBACK =
+  "Behind Cadieux — the two-year story of building India's high-protein bread. From a chore-like routine to a recipe engineered for absorption, refined in-house and verified by NABL-accredited laboratories.";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const content = await getPageContent({ page: "behind" });
+  const title =
+    pickString(content, "behind.seo.title") || BEHIND_TITLE_FALLBACK;
+  const description =
+    pickString(content, "behind.seo.description") ||
+    BEHIND_DESCRIPTION_FALLBACK;
+  return {
+    title,
+    description,
+    alternates: { canonical: "/behind-cadieux" },
+  };
+}
 
 // ── Page title ──────────────────────────────────────────────────────
 const PAGE_TITLE = "Behind Cadieux";

@@ -2,12 +2,20 @@
 // getPageContent (content-driven); falls back to PROCESS_STEPS in
 // lib/data.ts when the DB read returns empty so the page never blanks.
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
 import { PROCESS_STEPS } from "@/lib/data";
 import { getPageContent } from "@/lib/content";
 
 const GRAIN = "url(/grain.svg)";
+
+export const metadata: Metadata = {
+  title: "How It's Made | Cadieux",
+  description:
+    "How Cadieux protein bread is made — the five-step process from grain and dough to lab-verified loaves baked fresh in Visakhapatnam.",
+  alternates: { canonical: "/making" },
+};
 
 export default async function MakingPage() {
   const content = await getPageContent({ page: "making" });

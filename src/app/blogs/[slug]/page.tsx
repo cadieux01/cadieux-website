@@ -28,9 +28,10 @@ export async function generateMetadata({
   }
 
   return {
-    title: `${post.title} | Cadieux Blog`,
+    title: `${post.title} | Cadieux`,
     description: post.meta_description,
     keywords: [post.primary_keyword, ...(post.secondary_keywords || [])],
+    alternates: { canonical: `/blogs/${post.slug}` },
     openGraph: {
       type: "article",
       url: `https://www.cadieux.in/blogs/${post.slug}`,

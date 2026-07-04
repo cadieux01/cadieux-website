@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import ReviewSection from "@/components/ReviewSection";
+
+export const metadata: Metadata = {
+  title: "Reviews & Feedback | Cadieux",
+  description:
+    "Read customer reviews and share your feedback on Cadieux protein bread.",
+};
 
 const GRAIN = "url(/grain.svg)";
 

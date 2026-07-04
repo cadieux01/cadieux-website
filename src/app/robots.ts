@@ -15,5 +15,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/admin", "/admin/", "/api/"],
       },
     ],
+    sitemap: "https://www.cadieux.in/sitemap.xml",
   };
 }

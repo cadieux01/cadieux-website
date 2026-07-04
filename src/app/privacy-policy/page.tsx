@@ -9,7 +9,7 @@ import LegalPage from "@/app/components/LegalPage";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy · Cadieux",
+  title: "Privacy Policy | Cadieux",
   description:
     "How Cadieux collects, uses, and protects your personal information.",
   alternates: { canonical: "/privacy-policy" },

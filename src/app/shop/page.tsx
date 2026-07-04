@@ -3,12 +3,20 @@
 // hands them down. Hides archived rows, badges OOS items. Falls back
 // to bundled PRODUCTS values + critical fallbacks if Supabase is dark.
 
+import type { Metadata } from "next";
 import { getActiveProducts, getProductAvailability } from "@/lib/products";
 import { getPageContent, pickString } from "@/lib/content";
 
 import ShopListClient, { type ShopContentBySlug } from "./ShopListClient";
 
 const SLUGS = ["multigrain", "high-protein"] as const;
+
+export const metadata: Metadata = {
+  title: "Shop | Cadieux",
+  description:
+    "Shop Cadieux protein bread — Multigrain and High Protein loaves baked fresh in Visakhapatnam. Same-day delivery in Vizag.",
+  alternates: { canonical: "/shop" },
+};
 
 export default async function ShopPage() {
   const availability = await getProductAvailability();

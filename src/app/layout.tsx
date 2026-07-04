@@ -31,6 +31,7 @@ const jost = Jost({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.cadieux.in"),
   title: "Cadieux | Premium Protein Bread, Visakhapatnam",
   description: "Premium protein bread baked fresh in Visakhapatnam. Lab-tested, nutrient-dense, delivered to your door. More Protein. Same Routine.",
   applicationName: "Cadieux",
@@ -157,7 +158,7 @@ export default function RootLayout({
       addressCountry: "IN",
     },
     image: "https://www.cadieux.in/icons/icon-512.png",
-    priceRange: "₹109-₹149",
+    priceRange: "₹119-₹150",
     areaServed: "IN",
   };
 
