@@ -325,7 +325,7 @@ export default function FeedbackPage() {
                 padding: "6px 12px",
                 borderRadius: 99,
                 cursor: "pointer",
-                color: active ? "#0a0805" : "#024628",
+                color: active ? "#1D1D1F" : "#024628",
                 background: active ? "#024628" : "transparent",
                 border: "1px solid rgba(201,169,110,0.5)",
               }}

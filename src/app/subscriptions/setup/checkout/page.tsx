@@ -12,7 +12,7 @@ import {
   type SetupAddress,
 } from "@/lib/subscription-setup";
 
-const BG = "#0e0e0e";
+const BG = "#1D1D1F";
 const GOLD = "#024628";
 const TEXT = "#FBF3D4";
 const FADED = "rgba(240,223,200,0.6)";

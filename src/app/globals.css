@@ -148,7 +148,7 @@ select {
 }
 /* Dark fallback background only when a select doesn't set one inline. */
 select:not([style*="background"]) {
-  background-color: #0e0e0e;
+  background-color: #1D1D1F;
   color: var(--color-cream);
 }
 select:focus-visible {
@@ -159,7 +159,7 @@ select:focus-visible {
 /* The native option popup — force a dark, cream-on-dark list everywhere
    instead of the OS default white menu. */
 select option {
-  background-color: #0e0e0e !important;
+  background-color: #1D1D1F !important;
   color: var(--color-cream) !important;
 }
 select option:disabled {

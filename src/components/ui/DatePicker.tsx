@@ -11,7 +11,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 const GOLD = "#024628";
 const CREAM = "#FBF3D4";
-const MENU_BG = "#0e0e0e";
+const MENU_BG = "#1D1D1F";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",

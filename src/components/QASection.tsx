@@ -198,7 +198,7 @@ export default function QASection() {
           poster="/product-video-06.poster.jpg"
           style={{
             position: "absolute", inset: 0, width: "100%", height: "100%",
-            objectFit: "cover", zIndex: 0, backgroundColor: "#060402",
+            objectFit: "cover", zIndex: 0, backgroundColor: "#1D1D1F",
           }}
         >
           <source src="/product-video-06.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
@@ -209,7 +209,7 @@ export default function QASection() {
         <div style={{ position: "absolute", inset: 0, background: "rgba(6,4,2,0.78)", zIndex: 1, pointerEvents: "none" }} />
 
         {/* Phase 1 → 2 top blend */}
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "30vh", background: "linear-gradient(to bottom, #060402, transparent)", zIndex: 6, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "30vh", background: "linear-gradient(to bottom, #1D1D1F, transparent)", zIndex: 6, pointerEvents: "none" }} />
 
         {/* Grain */}
         <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.07, pointerEvents: "none", zIndex: 2 }} />

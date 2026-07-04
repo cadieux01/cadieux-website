@@ -58,7 +58,7 @@ export interface SelectProps {
 
 const GOLD = "#024628";
 const CREAM = "#FBF3D4";
-const MENU_BG = "#0e0e0e";
+const MENU_BG = "#1D1D1F";
 
 export default function Select({
   value,

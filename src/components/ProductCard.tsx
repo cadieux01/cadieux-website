@@ -142,7 +142,7 @@ export default function ProductCard({
           position: "relative",
           width: "100%",
           maxWidth: 360,
-          background: "#0a0805",
+          background: "#1D1D1F",
           border: "0.5px solid rgba(201,169,110,0.25)",
           borderRadius: 16,
           overflow: "hidden",

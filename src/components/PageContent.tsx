@@ -315,7 +315,7 @@ export default function PageContent() {
                   width: "100%", height: "100%",
                   objectFit: "cover",
                   zIndex: 1,
-                  backgroundColor: "#060402",
+                  backgroundColor: "#1D1D1F",
                 }}
               >
                 <source src="/bread-intro.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
@@ -396,7 +396,7 @@ export default function PageContent() {
           <div style={{
             position: "relative", marginTop: "-35vh", height: "35vh",
             zIndex: 2, pointerEvents: "none",
-            background: "linear-gradient(to bottom, transparent, #060402)",
+            background: "linear-gradient(to bottom, transparent, #1D1D1F)",
           }} />
 
           {/* ══ Q&A SECTION ══ */}
@@ -707,7 +707,7 @@ export default function PageContent() {
             padding: "80px 28px", textAlign: "center", position: "relative",
             overflow: "hidden",
             zIndex: 3,
-            backgroundColor: "#060402",
+            backgroundColor: "#1D1D1F",
           }}>
             {/* Background video — preload="none" because this is the deepest
                 section with the largest video (15.6 MB); we don't want it
@@ -716,7 +716,7 @@ export default function PageContent() {
               poster="/bread-making-01.poster.jpg"
               style={{
                 position: "absolute", inset: 0, width: "100%", height: "100%",
-                objectFit: "cover", zIndex: 0, backgroundColor: "#060402",
+                objectFit: "cover", zIndex: 0, backgroundColor: "#1D1D1F",
               }}>
               <source src="/bread-making-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
               <source src="/bread-making-01.mp4" type="video/mp4" />
@@ -868,7 +868,7 @@ export default function PageContent() {
               band can sit between the CTA and the footer. Walnut bg
               matches the closing CTA so the seam is invisible. */}
           <footer style={{
-            background: "#060402",
+            background: "#1D1D1F",
             padding: "56px 28px 80px",
             display: "flex", justifyContent: "center",
             position: "relative",

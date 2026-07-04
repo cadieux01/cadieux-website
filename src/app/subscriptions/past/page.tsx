@@ -18,7 +18,7 @@ type Sub = {
   deliveries_count: number;
 };
 
-const BG = "#0e0e0e";
+const BG = "#1D1D1F";
 const GREEN = "#7dd3a0";
 const RED = "#ff8181";
 const TEXT = "#FBF3D4";

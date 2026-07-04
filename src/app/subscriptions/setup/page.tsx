@@ -25,7 +25,7 @@ import { bookableSlots } from "@/lib/delivery-slots";
 import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 import Select from "@/components/ui/Select";
 
-const BG = "#0e0e0e";
+const BG = "#1D1D1F";
 const GOLD = "#024628";
 const TEXT = "#FBF3D4";
 const FADED = "rgba(240,223,200,0.6)";

@@ -1012,7 +1012,7 @@ export default function CheckoutPage() {
   if (cart.length === 0) return null;
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#0e0e0e", position: "relative", overflowX: "clip" }}>
+    <div style={{ minHeight: "100dvh", background: "#1D1D1F", position: "relative", overflowX: "clip" }}>
       <style>{`
         input::placeholder { color: rgba(240,223,200,0.32); }
         select::-ms-expand { display: none; }
@@ -1573,7 +1573,7 @@ function primaryBtn(disabled: boolean): React.CSSProperties {
     cursor: disabled ? "default" : "pointer",
     fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400,
     letterSpacing: "0.4em", textTransform: "uppercase",
-    color: "#080604",
+    color: "#1D1D1F",
     WebkitTapHighlightColor: "transparent",
   };
 }
@@ -1820,7 +1820,7 @@ function AddressForm(props: {
                 cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                 letterSpacing: "0.4em", textTransform: "uppercase",
-                color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(8,6,4,0.35)" : "#080604",
+                color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(8,6,4,0.35)" : "#1D1D1F",
                 WebkitTapHighlightColor: "transparent",
               }}
             >
@@ -2130,7 +2130,7 @@ function SavedCustomerOtpBlock(props: {
               cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
               letterSpacing: "0.4em", textTransform: "uppercase",
-              color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(8,6,4,0.35)" : "#080604",
+              color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(8,6,4,0.35)" : "#1D1D1F",
               WebkitTapHighlightColor: "transparent",
             }}
           >

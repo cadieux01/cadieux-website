@@ -544,7 +544,7 @@ function SubscriptionDrawer({
           width: "min(620px, 100%)",
           maxHeight: "100dvh",
           height: "100dvh",
-          background: "#0e0e0e",
+          background: "#1D1D1F",
           borderLeft: "1px solid rgba(245,158,11,0.25)",
           overflowY: "auto",
           overscrollBehavior: "contain",
