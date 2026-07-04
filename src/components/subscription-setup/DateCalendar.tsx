@@ -7,6 +7,7 @@
 
 import { useMemo, useState } from "react";
 import { isoDate } from "@/lib/subscription-setup";
+import { dateHasAnyBookable } from "@/lib/delivery-slots";
 
 const GOLD = "#c9a96e";
 const TEXT = "#FBF3D4";
@@ -21,6 +22,7 @@ type Cell = {
   inMonth: boolean;
   isPast: boolean;
   isToday: boolean;
+  noSlots: boolean;
 };
 
 function atMidnight(d: Date): Date {
@@ -28,7 +30,7 @@ function atMidnight(d: Date): Date {
 }
 
 /** Build six rows (42 cells) starting from the Sunday on/before the 1st of (y,m). */
-function buildMonthCells(y: number, m: number, today: Date): Cell[][] {
+function buildMonthCells(y: number, m: number, today: Date, now: Date): Cell[][] {
   const first = new Date(y, m, 1);
   const gridStart = new Date(first);
   gridStart.setDate(first.getDate() - first.getDay());
@@ -38,12 +40,19 @@ function buildMonthCells(y: number, m: number, today: Date): Cell[][] {
     for (let c = 0; c < 7; c++) {
       const d = new Date(gridStart);
       d.setDate(gridStart.getDate() + r * 7 + c);
+      const iso = isoDate(d);
+      const isPast = d < today;
+      // A future date always has at least one bookable slot (>12h10m
+      // away); today is the only date that can go fully-blocked once
+      // enough of the day has passed. Skip the check on past dates.
+      const noSlots = !isPast && !dateHasAnyBookable(iso, now);
       cells.push({
         date: d,
-        iso: isoDate(d),
+        iso,
         inMonth: d.getMonth() === m,
-        isPast: d < today,
+        isPast,
         isToday: d.getTime() === today.getTime(),
+        noSlots,
       });
     }
     rows.push(cells);
@@ -72,7 +81,8 @@ export function DateCalendar({
   deliveriesCount: number;
   totalAmount: number;
 }) {
-  const today = useMemo(() => atMidnight(new Date()), []);
+  const now = useMemo(() => new Date(), []);
+  const today = useMemo(() => atMidnight(now), [now]);
   const baseY = today.getFullYear();
   const baseM = today.getMonth();
   const [offset, setOffset] = useState(0);
@@ -83,8 +93,8 @@ export function DateCalendar({
   const viewM = viewDate.getMonth();
 
   const rows = useMemo(
-    () => buildMonthCells(viewY, viewM, today),
-    [viewY, viewM, today]
+    () => buildMonthCells(viewY, viewM, today, now),
+    [viewY, viewM, today, now]
   );
   const selectedSet = useMemo(() => new Set(selectedDates), [selectedDates]);
 
@@ -188,9 +198,10 @@ export function DateCalendar({
       >
         {rows.flat().map((cell) => {
           const selected = selectedSet.has(cell.iso);
+          const blocked = cell.isPast || cell.noSlots;
           const fg = selected
             ? CHARCOAL
-            : cell.isPast
+            : blocked
             ? "rgba(240,223,200,0.22)"
             : cell.inMonth
             ? TEXT
@@ -198,10 +209,17 @@ export function DateCalendar({
           return (
             <button
               key={cell.iso}
-              onClick={() => !cell.isPast && onToggleDate(cell.iso)}
-              disabled={cell.isPast}
+              onClick={() => !blocked && onToggleDate(cell.iso)}
+              disabled={blocked}
               aria-pressed={selected}
-              aria-label={`${cell.date.toDateString()}${selected ? " (selected)" : ""}`}
+              aria-label={`${cell.date.toDateString()}${
+                cell.noSlots ? " (no delivery slots left today — please pick another date)" : ""
+              }${selected ? " (selected)" : ""}`}
+              title={
+                cell.noSlots
+                  ? "We bake fresh — pick a date at least 12 hours from now."
+                  : undefined
+              }
               style={{
                 minHeight: 44,
                 minWidth: 0,
@@ -209,7 +227,7 @@ export function DateCalendar({
                 border: "none",
                 background: selected ? GOLD : "transparent",
                 color: fg,
-                cursor: cell.isPast ? "not-allowed" : "pointer",
+                cursor: blocked ? "not-allowed" : "pointer",
                 borderRadius: 999,
                 fontFamily: "var(--font-body)",
                 fontSize: 15,
@@ -221,7 +239,7 @@ export function DateCalendar({
                 justifyContent: "center",
               }}
             >
-              {cell.isToday && !selected && (
+              {cell.isToday && !selected && !cell.noSlots && (
                 <span
                   aria-hidden
                   style={{

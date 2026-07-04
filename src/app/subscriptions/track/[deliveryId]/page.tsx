@@ -5,8 +5,13 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import { GOLD, formatDate } from "@/lib/subscription-ui";
-import { TIME_SLOTS, formatSlot } from "@/lib/subscription-setup";
-import { ADMIN_PHONE, canSelfEdit } from "@/lib/delivery-slots";
+import { formatSlot } from "@/lib/subscription-setup";
+import {
+  ADMIN_PHONE,
+  bookableSlots,
+  canSelfEdit,
+  nextDeliveryDates,
+} from "@/lib/delivery-slots";
 import Select from "@/components/ui/Select";
 import DatePicker from "@/components/ui/DatePicker";
 
@@ -391,15 +396,33 @@ function DirectEditPanel({
   const [turnstileToken, setTurnstileToken] = useState("");
   const turnstileRef = useRef<TurnstileHandle>(null);
 
-  // Today (IST) is allowed — server's 12 h 10 m booking gate decides per
-  // slot whether the chosen date+slot is acceptable.
+  // Client bakes fresh: no delivery can start earlier than now + 12 h 10 m.
+  // `nextDeliveryDates(1)` returns the first date IN IST that still has any
+  // bookable slot — this correctly skips today once its last slot has passed
+  // the lead-time cutoff. The server re-checks on save.
+  const now = useMemo(() => new Date(), []);
   const minDate = useMemo(() => {
+    const next = nextDeliveryDates(1, now)[0];
+    if (next) return next;
     const t = new Date();
     const yyyy = t.getFullYear();
     const mm = String(t.getMonth() + 1).padStart(2, "0");
     const dd = String(t.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
-  }, []);
+  }, [now]);
+
+  // Slot list is date-aware: any slot that would fall inside the 12 h 10 m
+  // lead-time window is marked `disabled` so the picker greys it out. When
+  // the user hasn't picked a new date, base slots on the current scheduled
+  // date so today's stale slots stay hidden.
+  const slotOptions = useMemo(() => {
+    const forDate = date || currentDate;
+    return bookableSlots(forDate, now).map((s) => ({
+      value: s.value,
+      label: formatSlot(s.value),
+      disabled: s.disabled,
+    }));
+  }, [date, currentDate, now]);
 
   function reset() {
     setDate("");
@@ -505,6 +528,21 @@ function DirectEditPanel({
             gap: 14,
           }}
         >
+          <div
+            style={{
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: "rgba(240,223,200,0.65)",
+              padding: "10px 12px",
+              border: "1px solid rgba(201,169,110,0.25)",
+              borderRadius: 8,
+              background: "rgba(201,169,110,0.05)",
+            }}
+          >
+            We bake fresh for you — please pick a delivery time at least
+            12 hours from now so your loaf comes straight from the oven.
+          </div>
+
           <Field label={`New date (current: ${formatDate(currentDate)})`}>
             <DatePicker
               value={date}
@@ -520,7 +558,7 @@ function DirectEditPanel({
               onChange={setSlot}
               ariaLabel="New delivery time slot"
               placeholder="— Same as before —"
-              options={TIME_SLOTS.map((t) => ({ value: t, label: formatSlot(t) }))}
+              options={slotOptions}
             />
           </Field>
 

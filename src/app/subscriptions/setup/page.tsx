@@ -415,8 +415,12 @@ function Step2Dates({
   return (
     <section>
       <StepTitle>Choose your delivery dates</StepTitle>
-      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 18 }}>
+      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 6 }}>
         Pick any dates that work for you. We&apos;ll deliver fresh on each.
+      </p>
+      <p style={{ color: FADED, fontSize: 13, marginTop: 0, marginBottom: 18 }}>
+        We bake fresh for you — please pick a delivery time at least 12 hours
+        from now so your loaf comes straight from the oven.
       </p>
       <DateCalendar
         selectedDates={selectedDates}
@@ -465,8 +469,12 @@ function Step3Slots({
   return (
     <section>
       <StepTitle>Pick a time slot for each delivery</StepTitle>
-      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 18 }}>
-        30-minute delivery windows from 7:30 AM to 9:00 PM. Same-day slots need at least 12 h 10 m lead time.
+      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 6 }}>
+        30-minute delivery windows from 7:30 AM to 9:00 PM.
+      </p>
+      <p style={{ color: FADED, fontSize: 13, marginTop: 0, marginBottom: 18 }}>
+        We bake fresh for you — please pick a delivery time at least 12 hours
+        from now so your loaf comes straight from the oven.
       </p>
 
       <div
