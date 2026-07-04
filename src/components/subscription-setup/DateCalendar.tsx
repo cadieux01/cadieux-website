@@ -14,7 +14,7 @@ const TEXT = "#FBF3D4";
 const FADED = "rgba(240,223,200,0.6)";
 const FAINT = "rgba(240,223,200,0.12)";
 const CHARCOAL = "#0d0d0d";
-const WALNUT = "#1a2e1a";
+const WALNUT = "#024628";
 
 type Cell = {
   date: Date;

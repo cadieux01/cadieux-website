@@ -291,7 +291,7 @@ select option:disabled {
 .cdx-hub-card:hover {
   border-color: #024628 !important;
   transform: translateY(-2px);
-  background: #1f3520 !important;
+  background: #024628 !important;
 }
 .cdx-hub-card:focus-visible {
   outline: 1px solid #024628;

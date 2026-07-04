@@ -16,7 +16,7 @@ import Link from "next/link";
 import { ShareButton } from "@/components/ShareButton";
 
 const BG = "rgb(6,4,2)";
-const WALNUT = "#1a2e1a";
+const WALNUT = "#024628";
 const GOLD = "#024628";
 const CREAM = "#f5f0e8";
 const TEXT = "#FBF3D4";

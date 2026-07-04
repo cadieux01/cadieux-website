@@ -153,7 +153,7 @@ export default function QASection() {
           top: 0,
           height: "100dvh",
           overflow: "hidden",
-          background: "linear-gradient(135deg,#013820 0%,#024628 40%,#035c35 70%,#024628 100%)",
+          background: "linear-gradient(135deg,#024628 0%,#024628 40%,#035c35 70%,#024628 100%)",
           backgroundSize: "300% 300%",
           animation: "qa-glow 8s ease-in-out infinite alternate",
           willChange: "transform",

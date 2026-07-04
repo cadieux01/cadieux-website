@@ -127,7 +127,7 @@ export default function AndroidInstallPrompt() {
         zIndex: 9000,
         maxWidth: 420,
         margin: "0 auto",
-        background: "#1a2e1a",
+        background: "#024628",
         color: "#f5f0e8",
         border: "1px solid rgba(201,169,110,0.28)",
         borderRadius: 6,
@@ -169,7 +169,7 @@ export default function AndroidInstallPrompt() {
         onClick={install}
         style={{
           background: "#024628",
-          color: "#1a2e1a",
+          color: "#024628",
           border: "none",
           padding: "8px 14px",
           fontSize: 11,
