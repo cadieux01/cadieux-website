@@ -17,7 +17,7 @@ import { ShareButton } from "@/components/ShareButton";
 
 const BG = "rgb(6,4,2)";
 const WALNUT = "#1a2e1a";
-const GOLD = "#c9a96e";
+const GOLD = "#024628";
 const CREAM = "#f5f0e8";
 const TEXT = "#FBF3D4";
 

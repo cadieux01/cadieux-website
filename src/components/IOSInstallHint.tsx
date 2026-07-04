@@ -98,14 +98,14 @@ export default function IOSInstallHint() {
           <div style={{ fontSize: 11, color: "rgba(245,240,232,0.7)", marginTop: 6, lineHeight: 1.5 }}>
             Tap{" "}
             <span aria-hidden style={{ display: "inline-flex", alignItems: "center", verticalAlign: "middle" }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c9a96e" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#024628" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M12 3v12" />
                 <path d="M7 8l5-5 5 5" />
                 <rect x="4" y="13" width="16" height="8" rx="2" />
               </svg>
             </span>{" "}
             in Safari, then choose{" "}
-            <span style={{ color: "#c9a96e" }}>Add to Home Screen</span>.
+            <span style={{ color: "#024628" }}>Add to Home Screen</span>.
           </div>
         </div>
         <button

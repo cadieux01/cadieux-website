@@ -50,7 +50,7 @@ export function flyToCart(source: HTMLElement | null): void {
     height: "24px",
     borderRadius: "50%",
     background:
-      "radial-gradient(circle at 35% 30%, #f3dca6 0%, #c9a96e 55%, #8b6d3a 100%)",
+      "radial-gradient(circle at 35% 30%, #f3dca6 0%, #024628 55%, #8b6d3a 100%)",
     boxShadow: "0 8px 18px rgba(201,169,110,0.45)",
     pointerEvents: "none",
     zIndex: "999",

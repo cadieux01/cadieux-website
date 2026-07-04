@@ -9,7 +9,7 @@
 //
 // Each function returns { subject, html, text }. Brand styling:
 //   - dark green #2F6A3A (Cadieux primary)
-//   - gold #C9A96E (accent)
+//   - gold #024628 (accent)
 //   - cream #FBF3D4 (paper)
 //   - charcoal #0a0a0a (text on cream)
 
@@ -33,7 +33,7 @@ export interface ReminderEmail {
 }
 
 const GREEN = "#2F6A3A";
-const GOLD = "#C9A96E";
+const GOLD = "#024628";
 const CREAM = "#FBF3D4";
 const INK = "#0a0a0a";
 const MUTED = "#5b5b5b";

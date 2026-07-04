@@ -325,8 +325,8 @@ export default function FeedbackPage() {
                 padding: "6px 12px",
                 borderRadius: 99,
                 cursor: "pointer",
-                color: active ? "#0a0805" : "#c9a96e",
-                background: active ? "#c9a96e" : "transparent",
+                color: active ? "#0a0805" : "#024628",
+                background: active ? "#024628" : "transparent",
                 border: "1px solid rgba(201,169,110,0.5)",
               }}
             >
@@ -395,7 +395,7 @@ export default function FeedbackPage() {
                     {rev.rating != null && (
                       <span
                         style={{
-                          color: "#c9a96e",
+                          color: "#024628",
                           fontFamily: "var(--font-body)",
                           fontSize: "0.85rem",
                         }}
@@ -499,7 +499,7 @@ export default function FeedbackPage() {
                               background: "transparent",
                               border: "none",
                               cursor: "pointer",
-                              color: "#c9a96e",
+                              color: "#024628",
                               fontSize: "1.2rem",
                               lineHeight: 1,
                               padding: 0,
@@ -821,7 +821,7 @@ const tagPill: React.CSSProperties = {
   fontSize: "0.6rem",
   letterSpacing: "0.25em",
   textTransform: "uppercase",
-  color: "#c9a96e",
+  color: "#024628",
   border: "1px solid rgba(201,169,110,0.4)",
   borderRadius: 99,
   padding: "2px 8px",

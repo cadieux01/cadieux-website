@@ -72,7 +72,7 @@ export default function ProductReportsPage() {
               fontWeight: 500,
               letterSpacing: "0.4em",
               textTransform: "uppercase",
-              color: "#c9a96e",
+              color: "#024628",
               marginBottom: 18,
             }}
           >
@@ -100,7 +100,7 @@ export default function ProductReportsPage() {
               fontSize: 13,
               fontWeight: 300,
               letterSpacing: "0.04em",
-              color: "#c9a96e",
+              color: "#024628",
             }}
           >
             Final trials are under process.
@@ -114,7 +114,7 @@ export default function ProductReportsPage() {
               margin: "8px auto 24px",
               borderRadius: "50%",
               border: "1.5px solid rgba(201,169,110,0.35)",
-              borderTopColor: "#c9a96e",
+              borderTopColor: "#024628",
               animation: "reports-spin 1.4s linear infinite",
             }}
           />
@@ -153,7 +153,7 @@ export default function ProductReportsPage() {
               fontWeight: 400,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "#c9a96e",
+              color: "#024628",
             }}
           >
             Thank you for trusting Cadieux.
@@ -179,7 +179,7 @@ export default function ProductReportsPage() {
               href={`/shop/${slug}`}
               style={{
                 padding: "14px 26px",
-                border: "1px solid #c9a96e",
+                border: "1px solid #024628",
                 color: "#FBF3D4",
                 fontFamily: "var(--font-body)",
                 fontSize: 10,

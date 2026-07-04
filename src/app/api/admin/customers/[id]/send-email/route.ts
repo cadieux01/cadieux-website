@@ -50,7 +50,7 @@ function wrapBody(text: string): string {
     .join("");
   return (
     `<!doctype html><html><body style="font-family:Georgia,serif;color:#111;line-height:1.55;max-width:560px;margin:0 auto;padding:24px;">` +
-    `<div style="border-top:3px solid #c9a96e;padding-top:16px;">` +
+    `<div style="border-top:3px solid #024628;padding-top:16px;">` +
     paragraphs +
     `<p style="margin:2em 0 0;font-size:0.85em;color:#666;">— The Cadieux team</p>` +
     `</div></body></html>`

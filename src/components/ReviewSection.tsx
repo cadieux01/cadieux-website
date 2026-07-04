@@ -64,7 +64,7 @@ function formatDate(iso: string) {
 function Stars({ rating, size = 14, onChange }: { rating: number; size?: number; onChange?: (n: number) => void }) {
   const interactive = !!onChange;
   return (
-    <div style={{ display: "inline-flex", gap: 2, color: "#c9a96e", fontSize: size, lineHeight: 1 }}>
+    <div style={{ display: "inline-flex", gap: 2, color: "#024628", fontSize: size, lineHeight: 1 }}>
       {[0, 1, 2, 3, 4].map((i) => (
         <span
           key={i}
@@ -83,7 +83,7 @@ function Stars({ rating, size = 14, onChange }: { rating: number; size?: number;
 
 function Heart({ filled }: { filled: boolean }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill={filled ? "#c9a96e" : "none"} stroke="#c9a96e" strokeWidth="1.6">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill={filled ? "#024628" : "none"} stroke="#024628" strokeWidth="1.6">
       <path d="M12 21s-7-4.35-7-10a4.5 4.5 0 0 1 8-2.83A4.5 4.5 0 0 1 19 11c0 5.65-7 10-7 10z" />
     </svg>
   );
@@ -367,7 +367,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
 
       {/* Submission form */}
       <form onSubmit={submitReview} style={formStyle}>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#c9a96e", marginBottom: 14 }}>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628", marginBottom: 14 }}>
           {scope === "product" ? "Leave a review" : "Share your feedback"}
         </div>
         <div style={{ display: "grid", gap: 10 }}>
@@ -639,7 +639,7 @@ const pillStyle: React.CSSProperties = {
   fontWeight: 400,
   letterSpacing: "0.25em",
   textTransform: "uppercase",
-  color: "#c9a96e",
+  color: "#024628",
   border: "1px solid rgba(201,169,110,0.4)",
   borderRadius: 99,
   padding: "2px 8px",

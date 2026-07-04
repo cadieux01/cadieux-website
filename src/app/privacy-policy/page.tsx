@@ -102,7 +102,7 @@ export default function PrivacyPolicyPage() {
             href="mailto:sunny@cadieux.in"
             style={{
               fontFamily: "var(--font-body)",
-              color: "#c9a96e",
+              color: "#024628",
               textDecoration: "underline",
               textUnderlineOffset: "0.2em",
             }}

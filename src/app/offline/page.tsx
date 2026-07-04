@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 const BG = "rgb(6,4,2)";
 const TEXT = "#FBF3D4";
-const GOLD = "#c9a96e";
+const GOLD = "#024628";
 
 export default function OfflinePage() {
   return (

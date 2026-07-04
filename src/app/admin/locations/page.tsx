@@ -41,7 +41,7 @@ const DANGER = "#ef4444";
 
 // Pin colours per type — matches /find-us legend.
 const COLOR_KITCHEN = "#16a34a";
-const COLOR_STALL = "#c9a96e";
+const COLOR_STALL = "#024628";
 const COLOR_PARTNER = "#3b82f6";
 
 const VIZAG_CENTER = { lat: 17.74, lng: 83.3 };

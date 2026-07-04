@@ -24,7 +24,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const GRAIN_CREAM = "#FBF3D4";
-const GOLD = "#c9a96e";
+const GOLD = "#024628";
 const FOUNDATION_GREEN = "#024628";
 const BORDER = "rgba(201,169,110,0.4)";
 

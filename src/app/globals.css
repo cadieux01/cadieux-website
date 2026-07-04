@@ -153,7 +153,7 @@ select:not([style*="background"]) {
 }
 select:focus-visible {
   outline: none !important;
-  border-color: #c9a96e !important;
+  border-color: #024628 !important;
   box-shadow: 0 0 0 2px rgba(201, 169, 110, 0.25) !important;
 }
 /* The native option popup — force a dark, cream-on-dark list everywhere
@@ -289,12 +289,12 @@ select option:disabled {
   transition: border-color 220ms ease, transform 220ms ease, background 220ms ease;
 }
 .cdx-hub-card:hover {
-  border-color: #c9a96e !important;
+  border-color: #024628 !important;
   transform: translateY(-2px);
   background: #1f3520 !important;
 }
 .cdx-hub-card:focus-visible {
-  outline: 1px solid #c9a96e;
+  outline: 1px solid #024628;
   outline-offset: 4px;
 }
 /* Shimmer block for the data-loading caption inside Track / Past cards */

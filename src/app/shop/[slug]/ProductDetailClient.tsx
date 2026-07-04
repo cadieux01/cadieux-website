@@ -203,7 +203,7 @@ export default function ProductDetailClient({
                   fontWeight: 500,
                   letterSpacing: "0.35em",
                   textTransform: "uppercase",
-                  color: "#c9a96e",
+                  color: "#024628",
                 }}
               >
                 {dispTag}
@@ -271,7 +271,7 @@ export default function ProductDetailClient({
                       fontFamily: "var(--font-heading)",
                       fontSize: 26,
                       fontWeight: 500,
-                      color: "#c9a96e",
+                      color: "#024628",
                       lineHeight: 1,
                     }}
                   >
@@ -455,7 +455,7 @@ export default function ProductDetailClient({
                   flex: "1 1 220px",
                   padding: "16px 26px",
                   background: added ? "rgba(201,169,110,0.25)" : "transparent",
-                  border: `1px solid ${outOfStock ? "rgba(201,169,110,0.3)" : "#c9a96e"}`,
+                  border: `1px solid ${outOfStock ? "rgba(201,169,110,0.3)" : "#024628"}`,
                   color: outOfStock ? "rgba(245,240,232,0.45)" : "#FBF3D4",
                   fontFamily: "var(--font-body)",
                   fontSize: 11,
@@ -532,7 +532,7 @@ export default function ProductDetailClient({
                         width: 8,
                         height: 8,
                         borderRadius: "50%",
-                        background: "#c9a96e",
+                        background: "#024628",
                       }}
                     />
                     <div
@@ -567,7 +567,7 @@ export default function ProductDetailClient({
                   fontSize: 13,
                   fontWeight: 300,
                   letterSpacing: "0.04em",
-                  color: "#c9a96e",
+                  color: "#024628",
                   background: "rgba(201,169,110,0.06)",
                 }}
               >
@@ -765,7 +765,7 @@ function Gallery({
                   width: i === active ? 20 : 6,
                   height: 6,
                   borderRadius: 999,
-                  background: i === active ? "#c9a96e" : "rgba(245,240,232,0.45)",
+                  background: i === active ? "#024628" : "rgba(245,240,232,0.45)",
                   transition: "all 0.25s ease",
                 }}
               />
@@ -792,7 +792,7 @@ function Gallery({
               width: 74,
               height: 92,
               padding: 0,
-              border: `1.5px solid ${i === active ? "#c9a96e" : "rgba(201,169,110,0.2)"}`,
+              border: `1.5px solid ${i === active ? "#024628" : "rgba(201,169,110,0.2)"}`,
               borderRadius: 8,
               overflow: "hidden",
               cursor: "pointer",
@@ -845,7 +845,7 @@ function Section({ label, title, children }: { label: string; title: string; chi
           fontWeight: 500,
           letterSpacing: "0.4em",
           textTransform: "uppercase",
-          color: "#c9a96e",
+          color: "#024628",
           marginBottom: 12,
         }}
       >
@@ -887,7 +887,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
               fontWeight: 500,
               letterSpacing: "0.4em",
               textTransform: "uppercase",
-              color: "#c9a96e",
+              color: "#024628",
               marginBottom: 12,
             }}
           >
@@ -961,7 +961,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                       fontSize: 11,
                       letterSpacing: "0.2em",
                       textTransform: "uppercase",
-                      color: "#c9a96e",
+                      color: "#024628",
                     }}
                   >
                     View {fileKind(r.mime_type)} →

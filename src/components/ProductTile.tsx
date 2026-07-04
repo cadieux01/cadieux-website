@@ -217,7 +217,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             fontWeight: 500,
             letterSpacing: "0.2em",
             textTransform: "uppercase",
-            color: "#c9a96e",
+            color: "#024628",
             padding: "5px 10px",
             background: "rgba(10,8,5,0.7)",
             border: "0.5px solid rgba(201,169,110,0.4)",
@@ -309,7 +309,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   width: i === activeIdx ? 18 : 6,
                   height: 6,
                   borderRadius: 999,
-                  background: i === activeIdx ? "#c9a96e" : "rgba(245,240,232,0.45)",
+                  background: i === activeIdx ? "#024628" : "rgba(245,240,232,0.45)",
                   transition: "all 0.25s ease",
                 }}
               />
@@ -327,7 +327,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "#c9a96e",
+            color: "#024628",
             marginBottom: 8,
           }}
         >
@@ -375,7 +375,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   fontFamily: "var(--font-heading)",
                   fontSize: 20,
                   fontWeight: 500,
-                  color: "#c9a96e",
+                  color: "#024628",
                   lineHeight: 1,
                 }}
               >

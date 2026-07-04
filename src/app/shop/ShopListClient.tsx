@@ -22,7 +22,7 @@ import {
 } from "@/lib/subscription-setup";
 
 const GRAIN = "url(/grain.svg)";
-const GOLD = "#c9a96e";
+const GOLD = "#024628";
 
 type ShopMode = "onetime" | "subscribe";
 

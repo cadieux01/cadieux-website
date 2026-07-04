@@ -168,7 +168,7 @@ export default function AndroidInstallPrompt() {
         type="button"
         onClick={install}
         style={{
-          background: "#c9a96e",
+          background: "#024628",
           color: "#1a2e1a",
           border: "none",
           padding: "8px 14px",

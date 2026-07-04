@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import { isoDate } from "@/lib/subscription-setup";
 import { dateHasAnyBookable } from "@/lib/delivery-slots";
 
-const GOLD = "#c9a96e";
+const GOLD = "#024628";
 const TEXT = "#FBF3D4";
 const FADED = "rgba(240,223,200,0.6)";
 const FAINT = "rgba(240,223,200,0.12)";

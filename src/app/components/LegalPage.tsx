@@ -138,7 +138,7 @@ export default function LegalPage({ title, html, children }: Props) {
         .legal-page__body [data-custom-class='link'] *,
         .legal-page__body a {
           font-family: var(--font-body) !important;
-          color: #c9a96e !important;
+          color: #024628 !important;
           text-decoration: underline;
           text-underline-offset: 0.2em;
           word-break: break-word;

@@ -21,7 +21,7 @@ import { getPageContent, pickString } from "@/lib/content";
 // ── Brand bible palette ─────────────────────────────────────────────
 const FOUNDATION_GREEN = "#024628";
 const GRAIN_CREAM = "#FBF3D4";
-const GOLD = "#c9a96e";
+const GOLD = "#024628";
 const ENDURANCE_BLUE = "#4369B2";
 
 const GRAIN = "url(/grain.svg)";

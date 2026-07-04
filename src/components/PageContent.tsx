@@ -484,7 +484,7 @@ export default function PageContent() {
                         {/* Gold fill — scales within this segment */}
                         <div style={{
                           position: "absolute", inset: 0,
-                          background: "#c9a96e",
+                          background: "#024628",
                           boxShadow: "0 0 8px rgba(201,169,110,0.45)",
                           transformOrigin: "top",
                           transform: `scaleY(${segP})`,
@@ -635,7 +635,7 @@ export default function PageContent() {
                         }} />
                         <div style={{
                           position: "absolute", inset: 0,
-                          background: "#c9a96e",
+                          background: "#024628",
                           boxShadow: "0 0 8px rgba(201,169,110,0.45)",
                           transformOrigin: "top",
                           transform: `scaleY(${segP})`,
@@ -838,7 +838,7 @@ export default function PageContent() {
                 fontWeight: 500,
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
-                color: "#c9a96e",
+                color: "#024628",
               }}>
                 {FOUNDER_SIGNATURE}
               </p>

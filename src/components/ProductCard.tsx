@@ -186,7 +186,7 @@ export default function ProductCard({
               fontWeight: 500,
               letterSpacing: "2px",
               textTransform: "uppercase",
-              color: "#c9a96e",
+              color: "#024628",
               padding: "5px 10px",
               background: "rgba(201,169,110,0.08)",
               border: "0.5px solid rgba(201,169,110,0.35)",
@@ -213,7 +213,7 @@ export default function ProductCard({
                 width: 2,
                 height: 2,
                 borderRadius: "50%",
-                background: "#c9a96e",
+                background: "#024628",
                 opacity: 0.5,
                 animation: `pc-particle 3.6s ease-in-out ${p.d} infinite`,
                 ["--pc-dx" as string]: p.dx,
@@ -276,7 +276,7 @@ export default function ProductCard({
                   bottom: 0,
                   width: 140,
                   height: 80,
-                  background: "linear-gradient(165deg, #c9a96e, #8b6d3a)",
+                  background: "linear-gradient(165deg, #024628, #8b6d3a)",
                   borderRadius: "50% 50% 8px 8px / 60% 60% 15% 15%",
                   boxShadow:
                     "inset 0 -10px 20px rgba(0,0,0,0.3), 0 10px 24px rgba(0,0,0,0.5)",
@@ -290,7 +290,7 @@ export default function ProductCard({
                   top: 20,
                   width: 130,
                   height: 45,
-                  background: "linear-gradient(160deg, #d4b87a, #c9a96e)",
+                  background: "linear-gradient(160deg, #d4b87a, #024628)",
                   borderRadius: "50%",
                   boxShadow: "inset 0 -4px 10px rgba(0,0,0,0.15)",
                 }}
@@ -393,7 +393,7 @@ export default function ProductCard({
                     fontFamily: "var(--font-heading)",
                     fontSize: 20,
                     fontWeight: 500,
-                    color: "#c9a96e",
+                    color: "#024628",
                     lineHeight: 1,
                   }}
                 >
@@ -463,7 +463,7 @@ export default function ProductCard({
                 fontWeight: 400,
                 letterSpacing: "2px",
                 textTransform: "uppercase",
-                color: "#c9a96e",
+                color: "#024628",
                 background: "transparent",
                 border: "0.5px solid rgba(201,169,110,0.5)",
                 padding: "10px 18px",

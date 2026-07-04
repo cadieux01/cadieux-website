@@ -56,7 +56,7 @@ export interface SelectProps {
   fullWidth?: boolean;
 }
 
-const GOLD = "#c9a96e";
+const GOLD = "#024628";
 const CREAM = "#FBF3D4";
 const MENU_BG = "#0e0e0e";
 

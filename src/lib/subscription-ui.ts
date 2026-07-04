@@ -1,6 +1,6 @@
 // Shared display helpers for the customer-facing subscription pages.
 
-export const GOLD = "#c9a96e";
+export const GOLD = "#024628";
 
 export const DAY_LABEL: Record<string, string> = {
   mon: "Monday", tue: "Tuesday", wed: "Wednesday",

@@ -22,7 +22,7 @@ import type {
 
 const GOLD_RGB = "201,169,110";
 const GREEN_HEX = "#16a34a"; // kitchen
-const GOLD_HEX = "#c9a96e"; // stall
+const GOLD_HEX = "#024628"; // stall
 const BLUE_HEX = "#3b82f6"; // partner pickup
 const VIZAG_CENTER = { lat: 17.74, lng: 83.3 };
 
