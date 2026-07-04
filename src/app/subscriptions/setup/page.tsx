@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   SETUP_PRODUCTS,
   TIME_SLOTS,
+  MIN_UNITS_PER_DELIVERY,
   fetchSubscriptionPlans,
   formatSlot,
   parseIso,
@@ -15,8 +16,9 @@ import {
   saveSetupState,
   buildDeliveries,
   listWeekDayRows,
+  totalUnitsPerDelivery,
+  amountPerDelivery,
   type SetupState,
-  type ProductSlug,
   type WizardProduct,
 } from "@/lib/subscription-setup";
 import { bookableSlots } from "@/lib/delivery-slots";
@@ -82,19 +84,18 @@ export default function SetupPage() {
     if (step > 1) setStep(step - 1);
   }
 
-  const selectedProduct = plans.find((p) => p.slug === state.productSlug) || null;
   const deliveries = useMemo(() => buildDeliveries(state), [state]);
-  const totalAmount = selectedProduct ? selectedProduct.price * state.qty * deliveries.length : 0;
+  const perDelivery = useMemo(() => amountPerDelivery(state, plans), [state, plans]);
+  const totalUnits = totalUnitsPerDelivery(state);
+  const totalAmount = perDelivery * deliveries.length;
 
   // Live total used by the calendar bill bar — uses selectedDates count
   // because the user hasn't picked slots yet at step 2.
-  const liveTotal = selectedProduct
-    ? selectedProduct.price * state.qty * state.selectedDates.length
-    : 0;
+  const liveTotal = perDelivery * state.selectedDates.length;
 
   const canNext = useMemo(() => {
     switch (step) {
-      case 1: return Boolean(state.productSlug) && state.qty >= 1;
+      case 1: return totalUnitsPerDelivery(state) >= MIN_UNITS_PER_DELIVERY;
       case 2: return state.selectedDates.length >= 1;
       case 3: {
         const rows = listWeekDayRows(state);
@@ -152,11 +153,17 @@ export default function SetupPage() {
         {step === 1 && (
           <Step1Product
             plans={plans}
-            slug={state.productSlug}
-            qty={state.qty}
-            onPickProduct={(slug) => update({ productSlug: slug })}
-            onAdjustQty={(delta) =>
-              setState((s) => ({ ...s, qty: Math.min(5, Math.max(1, s.qty + delta)) }))
+            qtyBySlug={state.qtyBySlug}
+            totalUnits={totalUnits}
+            onAdjustQty={(slug, delta) =>
+              setState((s) => {
+                const cur = s.qtyBySlug[slug] ?? 0;
+                const nextQty = Math.min(5, Math.max(0, cur + delta));
+                const nextMap = { ...s.qtyBySlug };
+                if (nextQty <= 0) delete nextMap[slug];
+                else nextMap[slug] = nextQty;
+                return { ...s, qtyBySlug: nextMap };
+              })
             }
           />
         )}
@@ -176,8 +183,9 @@ export default function SetupPage() {
         )}
         {step === 4 && (
           <Step4Review
-            product={selectedProduct}
-            qty={state.qty}
+            plans={plans}
+            qtyBySlug={state.qtyBySlug}
+            perDelivery={perDelivery}
             deliveries={deliveries}
             totalAmount={totalAmount}
           />
@@ -317,72 +325,120 @@ function NavRow({
 
 function Step1Product({
   plans,
-  slug,
-  qty,
-  onPickProduct,
+  qtyBySlug,
+  totalUnits,
   onAdjustQty,
 }: {
   plans: WizardProduct[];
-  slug: ProductSlug | null;
-  qty: number;
-  onPickProduct: (slug: ProductSlug) => void;
-  onAdjustQty: (delta: number) => void;
+  qtyBySlug: Record<string, number>;
+  totalUnits: number;
+  onAdjustQty: (slug: string, delta: number) => void;
 }) {
+  const short = MIN_UNITS_PER_DELIVERY - totalUnits;
   return (
     <section>
-      <StepTitle>Choose your bread</StepTitle>
-      <div style={{ display: "grid", gap: 12, marginBottom: 28 }}>
+      <StepTitle>Choose your breads</StepTitle>
+      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 18 }}>
+        Mix any combination — a subscription needs at least{" "}
+        {MIN_UNITS_PER_DELIVERY} loaves per delivery in total.
+      </p>
+      <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
         {plans.map((p) => {
-          const selected = slug === p.slug;
+          const qty = qtyBySlug[p.slug] ?? 0;
+          const selected = qty > 0;
+          const mrp = typeof p.mrp_inr === "number" ? p.mrp_inr : null;
+          const showStrike = mrp !== null && mrp > p.price;
+          const savings =
+            typeof p.subscription_savings_inr === "number"
+              ? p.subscription_savings_inr
+              : mrp !== null
+              ? mrp - p.price
+              : 0;
+          const pct =
+            typeof p.subscription_discount_pct === "number"
+              ? p.subscription_discount_pct
+              : mrp && mrp > 0
+              ? Math.round((savings / mrp) * 100)
+              : 0;
           return (
-            <button
+            <div
               key={p.slug}
-              onClick={() => onPickProduct(p.slug)}
               style={{
-                textAlign: "left",
                 padding: 18,
                 borderRadius: 14,
                 border: `1px solid ${selected ? GOLD : FAINT}`,
                 background: selected ? "rgba(201,169,110,0.08)" : "rgba(255,255,255,0.03)",
                 color: TEXT,
-                cursor: "pointer",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
                 <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 22, letterSpacing: "0.02em" }}>
                   {p.title}
                 </div>
-                <div style={{ fontSize: 14, color: GOLD }}>₹{p.price}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  {showStrike && (
+                    <span style={{ fontSize: 13, color: FADED, textDecoration: "line-through" }}>
+                      ₹{fmtMoney(mrp!)}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 15, color: GOLD }}>₹{fmtMoney(p.price)}</span>
+                </div>
               </div>
               <div style={{ marginTop: 4, fontSize: 13, color: FADED }}>{p.blurb}</div>
-            </button>
+              {savings > 0 && (
+                <div style={{ marginTop: 6, fontSize: 12, color: "#8fce9b" }}>
+                  You save ₹{fmtMoney(savings)}{pct > 0 ? ` (${pct}%)` : ""} per loaf
+                </div>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14 }}>
+                <button
+                  onClick={() => onAdjustQty(p.slug, -1)}
+                  disabled={qty <= 0}
+                  aria-label={`Decrease ${p.title}`}
+                  style={qtyBtnStyle(qty <= 0)}
+                >
+                  −
+                </button>
+                <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 28, minWidth: 34, textAlign: "center" }}>
+                  {qty}
+                </div>
+                <button
+                  onClick={() => onAdjustQty(p.slug, 1)}
+                  disabled={qty >= 5}
+                  aria-label={`Increase ${p.title}`}
+                  style={qtyBtnStyle(qty >= 5)}
+                >
+                  +
+                </button>
+                <div style={{ fontSize: 13, color: FADED, marginLeft: 4 }}>per delivery</div>
+              </div>
+            </div>
           );
         })}
       </div>
 
-      <StepTitle>Quantity per delivery</StepTitle>
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <button
-          onClick={() => onAdjustQty(-1)}
-          disabled={qty <= 1}
-          style={qtyBtnStyle(qty <= 1)}
-        >
-          −
-        </button>
-        <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 32, minWidth: 40, textAlign: "center" }}>
-          {qty}
-        </div>
-        <button
-          onClick={() => onAdjustQty(1)}
-          disabled={qty >= 5}
-          style={qtyBtnStyle(qty >= 5)}
-        >
-          +
-        </button>
-        <div style={{ fontSize: 13, color: FADED, marginLeft: 8 }}>loaves per delivery</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: short > 0 ? "rgba(200,144,58,0.9)" : "#8fce9b",
+          letterSpacing: "0.02em",
+        }}
+        role="status"
+      >
+        {short > 0
+          ? `Add ${short} more ${short === 1 ? "loaf" : "loaves"} to reach the ${MIN_UNITS_PER_DELIVERY}-loaf minimum.`
+          : `${totalUnits} loaves per delivery.`}
       </div>
     </section>
   );
+}
+
+/** Money formatter that drops the decimals for whole numbers but keeps
+ *  two places for fractional prices (e.g. ₹107.10). */
+function fmtMoney(n: number): string {
+  return Number.isInteger(n)
+    ? n.toLocaleString("en-IN")
+    : n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function qtyBtnStyle(disabled: boolean): React.CSSProperties {
@@ -584,17 +640,26 @@ function Step3Slots({
 // ── Step 4: Review ───────────────────────────────────────────────────────
 
 function Step4Review({
-  product,
-  qty,
+  plans,
+  qtyBySlug,
+  perDelivery,
   deliveries,
   totalAmount,
 }: {
-  product: { title: string; name: string; price: number } | null;
-  qty: number;
+  plans: WizardProduct[];
+  qtyBySlug: Record<string, number>;
+  perDelivery: number;
   deliveries: ReturnType<typeof buildDeliveries>;
   totalAmount: number;
 }) {
-  if (!product) return null;
+  const lines = plans
+    .filter((p) => (qtyBySlug[p.slug] ?? 0) > 0)
+    .map((p) => ({ product: p, qty: qtyBySlug[p.slug] }));
+  if (lines.length === 0) return null;
+  const totalSavings = lines.reduce((sum, l) => {
+    const mrp = typeof l.product.mrp_inr === "number" ? l.product.mrp_inr : l.product.price;
+    return sum + (mrp - l.product.price) * l.qty * deliveries.length;
+  }, 0);
   return (
     <section>
       <StepTitle>Review & confirm</StepTitle>
@@ -607,16 +672,32 @@ function Step4Review({
           marginBottom: 20,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-          <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 22 }}>
-            {product.title}
+        <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
+          {lines.map((l) => (
+            <div
+              key={l.product.slug}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}
+            >
+              <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 20 }}>
+                {l.product.title} × {l.qty}
+              </div>
+              <div style={{ fontSize: 14, color: GOLD }}>
+                ₹{fmtMoney(l.product.price * l.qty)}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderTop: `1px solid ${FAINT}`, paddingTop: 10 }}>
+          <div style={{ fontSize: 13, color: FADED }}>
+            ₹{fmtMoney(perDelivery)} / delivery × {deliveries.length}
           </div>
-          <div style={{ fontSize: 14, color: GOLD }}>₹{product.price} × {qty}</div>
+          <div style={{ fontSize: 15, color: GOLD }}>₹{totalAmount.toLocaleString("en-IN")} total</div>
         </div>
-        <div style={{ fontSize: 13, color: FADED }}>
-          {deliveries.length} {deliveries.length === 1 ? "delivery" : "deliveries"} · ₹
-          {totalAmount.toLocaleString("en-IN")} total
-        </div>
+        {totalSavings > 0 && (
+          <div style={{ marginTop: 8, fontSize: 12, color: "#8fce9b" }}>
+            You save ₹{fmtMoney(totalSavings)} versus one-time prices.
+          </div>
+        )}
       </div>
 
       <div style={{ fontSize: 12, color: FADED, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>

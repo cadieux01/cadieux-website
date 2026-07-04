@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   SETUP_PRODUCTS,
+  MIN_UNITS_PER_DELIVERY,
   buildDeliveries,
   clearSetupState,
   fetchSubscriptionPlans,
@@ -13,6 +14,8 @@ import {
   loadAddress,
   loadSetupState,
   parseIso,
+  totalUnitsPerDelivery,
+  amountPerDelivery,
   type SetupAddress,
   type SetupState,
   type WizardProduct,
@@ -44,7 +47,7 @@ export default function PaymentPage() {
     setHydrated(true);
     const s = loadSetupState();
     const a = loadAddress();
-    if (!s.productSlug || s.selectedDates.length === 0) {
+    if (totalUnitsPerDelivery(s) < MIN_UNITS_PER_DELIVERY || s.selectedDates.length === 0) {
       router.replace("/subscriptions/setup");
       return;
     }
@@ -57,15 +60,24 @@ export default function PaymentPage() {
     fetchSubscriptionPlans().then(setPlans);
   }, [router]);
 
-  const product = useMemo(
-    () => (state ? plans.find((p) => p.slug === state.productSlug) ?? null : null),
-    [state, plans]
-  );
+  // Per-variant lines for the summary + the checkout payload. Filtered to
+  // positive quantities, ordered by the plan list.
+  const lines = useMemo(() => {
+    if (!state) return [] as Array<{ product: WizardProduct; qty: number }>;
+    return plans
+      .filter((p) => (state.qtyBySlug[p.slug] ?? 0) > 0)
+      .map((p) => ({ product: p, qty: state.qtyBySlug[p.slug] }));
+  }, [state, plans]);
   const deliveries = useMemo(() => (state ? buildDeliveries(state) : []), [state]);
-  const totalAmount = product && state ? product.price * state.qty * deliveries.length : 0;
+  const perDelivery = useMemo(
+    () => (state ? amountPerDelivery(state, plans) : 0),
+    [state, plans],
+  );
+  const totalUnits = state ? totalUnitsPerDelivery(state) : 0;
+  const totalAmount = perDelivery * deliveries.length;
 
   async function placeOrder() {
-    if (!state || !product || !address) return;
+    if (!state || !address || lines.length === 0) return;
     if (method !== "cod") { setError("Please pick a payment method."); return; }
 
     setSubmitting(true); setError("");
@@ -81,6 +93,16 @@ export default function PaymentPage() {
       if (!slotsByDay[d.day_key]) slotsByDay[d.day_key] = d.slot;
     }
 
+    // V10 multi-variant payload: `items` triggers the multi-variant
+    // checkout branch (server recomputes price + enforces the 2-unit
+    // minimum). The legacy top-level bread_* fields mirror the PRIMARY
+    // variant so older admin readers still render a sensible plan row.
+    const primary = lines[0].product;
+    const items = lines.map((l) => ({
+      product_slug: l.product.slug,
+      quantity_per_delivery: l.qty,
+    }));
+
     try {
       const r = await fetch("/api/checkout", {
         method: "POST",
@@ -88,13 +110,15 @@ export default function PaymentPage() {
         body: JSON.stringify({
           action: "place_subscription",
           customer_id: address.customer_id,
+          // V10 multi-variant list — takes precedence server-side.
+          items,
           // planId is the canonical key the server uses to look up
           // pricing in lib/subscription-pricing.ts. bread_slug is kept
           // for back-compat with older callers; they're always equal.
-          planId: product.slug,
-          bread_slug: product.slug,
-          bread_name: product.name,
-          bread_price: product.price,
+          planId: primary.slug,
+          bread_slug: primary.slug,
+          bread_name: primary.name,
+          bread_price: primary.price,
           weeks: new Set(deliveries.map((d) => d.week_number)).size,
           days,
           slot_mode: "custom",
@@ -105,7 +129,7 @@ export default function PaymentPage() {
           // validates against. We send both `total` (legacy) and the
           // new explicit field so the route can prefer it.
           clientAmount: totalAmount,
-          quantity_per_delivery: state.qty,
+          quantity_per_delivery: totalUnits,
           frequency: "weekly",
           customer_name: address.full_name,
           customer_phone: address.phone,
@@ -178,10 +202,32 @@ export default function PaymentPage() {
             marginBottom: 22,
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 18 }}>
-              {product?.title} × {state.qty}
-            </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {lines.map((l) => (
+              <div
+                key={l.product.slug}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}
+              >
+                <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 18 }}>
+                  {l.product.title} × {l.qty}
+                </div>
+                <div style={{ fontSize: 13, color: FADED }}>
+                  ₹{(l.product.price * l.qty).toLocaleString("en-IN")} / delivery
+                </div>
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginTop: 8,
+              paddingTop: 8,
+              borderTop: `1px solid ${FAINT}`,
+            }}
+          >
+            <div style={{ fontSize: 14, color: TEXT }}>Total</div>
             <div style={{ fontSize: 14, color: GOLD }}>₹{totalAmount.toLocaleString("en-IN")}</div>
           </div>
           <div style={{ marginTop: 4, fontSize: 13, color: FADED }}>

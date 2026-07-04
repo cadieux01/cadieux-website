@@ -8,6 +8,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 import { adminAuthHeaders } from "@/lib/admin-client";
 import { AdminProductRow } from "@/lib/admin-shared";
+import { subscriptionUnitPrice, subscriptionSavingsInr } from "@/lib/subscription-pricing";
 
 const GOLD = "#f59e0b";
 const CREAM = "#fbf3d4";
@@ -18,7 +19,9 @@ export type ProductFormValues = {
   slug: string;
   name: string;
   price_inr: string;
-  subscription_per_loaf_inr: string;
+  // V10: admin sets a discount %, not a raw sub price. The subscription
+  // price is derived (read-only preview) from price_inr × (1 − pct/100).
+  subscription_discount_pct: string;
   weight: string;
   description: string;
   tagline: string;
@@ -38,7 +41,7 @@ export function emptyFormValues(): ProductFormValues {
     slug: "",
     name: "",
     price_inr: "",
-    subscription_per_loaf_inr: "",
+    subscription_discount_pct: "10",
     weight: "",
     description: "",
     tagline: "",
@@ -58,10 +61,11 @@ export function formValuesFromRow(row: AdminProductRow): ProductFormValues {
     slug: row.slug,
     name: row.name,
     price_inr: String(row.price_inr ?? ""),
-    subscription_per_loaf_inr:
-      row.subscription_per_loaf_inr === null
-        ? ""
-        : String(row.subscription_per_loaf_inr),
+    subscription_discount_pct:
+      row.subscription_discount_pct === null ||
+      row.subscription_discount_pct === undefined
+        ? "10"
+        : String(row.subscription_discount_pct),
     weight: row.weight ?? "",
     description: row.description ?? "",
     tagline: row.tagline ?? "",
@@ -96,10 +100,11 @@ export function valuesToPayload(v: ProductFormValues): Record<string, unknown> {
     in_stock: v.in_stock,
     is_active: v.is_active,
   };
-  if (v.subscription_per_loaf_inr.trim() === "") {
-    payload.subscription_per_loaf_inr = null;
-  } else {
-    payload.subscription_per_loaf_inr = Number(v.subscription_per_loaf_inr);
+  // V10: send the discount %, not a raw sub price. Empty → default 10.
+  {
+    const raw = v.subscription_discount_pct.trim();
+    const pct = raw === "" ? 10 : Number(raw);
+    payload.subscription_discount_pct = Number.isFinite(pct) ? pct : 10;
   }
   if (v.sort_order.trim() !== "") {
     payload.sort_order = Number(v.sort_order);
@@ -225,19 +230,24 @@ export function ProductForm({
           />
         </Field>
         <Field
-          label="Subscription per loaf (₹)"
-          hint="Leave blank to match the one-time price."
+          label="Subscription discount (%)"
+          hint="Applied to the MRP for subscription orders. Default 10."
         >
           <Input
             type="number"
-            value={values.subscription_per_loaf_inr}
-            onChange={(v) => patch({ subscription_per_loaf_inr: v })}
-            placeholder="135"
+            value={values.subscription_discount_pct}
+            onChange={(v) => patch({ subscription_discount_pct: v })}
+            placeholder="10"
             min={0}
-            step={1}
+            step={0.1}
           />
         </Field>
       </div>
+
+      <SubPricePreview
+        priceInr={values.price_inr}
+        discountPct={values.subscription_discount_pct}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Weight">
@@ -452,6 +462,54 @@ export function ProductForm({
         </button>
       </div>
     </form>
+  );
+}
+
+// Read-only derived subscription price preview. Mirrors exactly what the
+// server (lib/subscription-pricing.ts) will charge — admins never type a
+// raw sub price anymore.
+function SubPricePreview({
+  priceInr,
+  discountPct,
+}: {
+  priceInr: string;
+  discountPct: string;
+}) {
+  const mrp = Number(priceInr);
+  const pct = discountPct.trim() === "" ? 10 : Number(discountPct);
+  const valid = Number.isFinite(mrp) && mrp > 0 && Number.isFinite(pct);
+  const input = { price_inr: mrp, subscription_discount_pct: pct };
+  const unit = valid ? subscriptionUnitPrice(input) : 0;
+  const savings = valid ? subscriptionSavingsInr(input) : 0;
+  return (
+    <div
+      className="flex flex-col gap-1 p-3"
+      style={{ border: `1px solid ${BORDER}` }}
+    >
+      <span
+        className="uppercase"
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: "0.68rem",
+          letterSpacing: "0.22em",
+          color: FADED,
+        }}
+      >
+        Subscription price (derived, read-only)
+      </span>
+      {valid ? (
+        <span style={{ fontFamily: "var(--font-body)", color: CREAM, fontSize: "0.95rem" }}>
+          ₹{unit.toFixed(2)} / loaf{" "}
+          <span style={{ color: FADED }}>
+            (MRP ₹{mrp} · save ₹{savings.toFixed(2)} · {pct}% off)
+          </span>
+        </span>
+      ) : (
+        <span style={{ fontFamily: "var(--font-body)", color: FADED, fontSize: "0.85rem" }}>
+          Enter a valid one-time price to preview the subscription price.
+        </span>
+      )}
+    </div>
   );
 }
 

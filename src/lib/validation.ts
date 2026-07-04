@@ -73,6 +73,10 @@ export const ProductUpdateSchema = z
       .max(100000)
       .nullable()
       .optional(),
+    // V10: per-product subscription discount %, [0, 100]. The sub price is
+    // derived from price_inr × (1 − pct/100); the raw column above is
+    // vestigial and no longer written by the admin form.
+    subscription_discount_pct: z.number().min(0).max(100).optional(),
     weight: boundedText(40).nullable().optional(),
     description: boundedText(4000).nullable().optional(),
     tagline: boundedText(200).nullable().optional(),

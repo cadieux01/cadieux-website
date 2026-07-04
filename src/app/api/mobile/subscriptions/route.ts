@@ -39,6 +39,7 @@ import {
   generateDeliveries,
   type DayKey,
 } from "@/lib/subscription-dates";
+import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -165,39 +166,17 @@ function parseLocalDate(s: string): Date | null {
 }
 
 /**
- * Validates the common fields shared by both modes: product_id,
- * price_snapshot_inr, full_name, delivery_address. Returns either the
- * validated common parts or a typed failure.
+ * Validates full_name + delivery_address (shared by single-variant and
+ * V10 multi-variant paths). Returns the validated parts or a typed failure.
  */
-function validateCommon(r: Record<string, unknown>):
+function validateNameAndAddress(r: Record<string, unknown>):
   | {
       ok: true;
-      product_id: string;
-      price_snapshot_inr: number;
       full_name: string;
       delivery_address: DeliveryAddress;
       addressString: string;
     }
   | { ok: false; status: number; error: string; code: string } {
-  // product_id
-  if (!isString(r.product_id) || !r.product_id.trim()) {
-    return { ok: false, status: 400, error: "product_id is required.", code: "product_id" };
-  }
-  const product_id = r.product_id.trim();
-  if (product_id.length > 64) {
-    return { ok: false, status: 400, error: "product_id is invalid.", code: "product_id" };
-  }
-
-  // price_snapshot_inr — reconciled later, just shape-check here.
-  if (!isFiniteNumber(r.price_snapshot_inr) || r.price_snapshot_inr < 0) {
-    return {
-      ok: false,
-      status: 400,
-      error: "price_snapshot_inr must be a non-negative number.",
-      code: "price_snapshot_inr",
-    };
-  }
-
   // full_name
   if (!isString(r.full_name)) {
     return { ok: false, status: 400, error: "full_name is required.", code: "full_name" };
@@ -250,11 +229,56 @@ function validateCommon(r: Record<string, unknown>):
 
   return {
     ok: true,
-    product_id,
-    price_snapshot_inr: r.price_snapshot_inr as number,
     full_name,
     delivery_address: { line1, area, city, pincode },
     addressString: `${line1}, ${area}, ${city} - ${pincode}`,
+  };
+}
+
+/**
+ * Validates the common fields shared by both modes: product_id,
+ * price_snapshot_inr, full_name, delivery_address. Returns either the
+ * validated common parts or a typed failure.
+ */
+function validateCommon(r: Record<string, unknown>):
+  | {
+      ok: true;
+      product_id: string;
+      price_snapshot_inr: number;
+      full_name: string;
+      delivery_address: DeliveryAddress;
+      addressString: string;
+    }
+  | { ok: false; status: number; error: string; code: string } {
+  // product_id
+  if (!isString(r.product_id) || !r.product_id.trim()) {
+    return { ok: false, status: 400, error: "product_id is required.", code: "product_id" };
+  }
+  const product_id = r.product_id.trim();
+  if (product_id.length > 64) {
+    return { ok: false, status: 400, error: "product_id is invalid.", code: "product_id" };
+  }
+
+  // price_snapshot_inr — reconciled later, just shape-check here.
+  if (!isFiniteNumber(r.price_snapshot_inr) || r.price_snapshot_inr < 0) {
+    return {
+      ok: false,
+      status: 400,
+      error: "price_snapshot_inr must be a non-negative number.",
+      code: "price_snapshot_inr",
+    };
+  }
+
+  const na = validateNameAndAddress(r);
+  if (!na.ok) return na;
+
+  return {
+    ok: true,
+    product_id,
+    price_snapshot_inr: r.price_snapshot_inr as number,
+    full_name: na.full_name,
+    delivery_address: na.delivery_address,
+    addressString: na.addressString,
   };
 }
 
@@ -343,17 +367,14 @@ function validatePatternShape(
   };
 }
 
-function validateCalendarShape(
-  r: Record<string, unknown>,
-  common: {
-    product_id: string;
-    price_snapshot_inr: number;
-    full_name: string;
-    delivery_address: DeliveryAddress;
-    addressString: string;
-  },
-): ValidatedShape {
-  if (!Array.isArray(r.deliveries) || r.deliveries.length === 0) {
+/**
+ * Validates a `deliveries: [{date, time_slot}]` array (calendar mode).
+ * Shared by single-variant calendar mode and the V10 multi-variant path.
+ */
+function validateCalendarDeliveries(deliveriesRaw: unknown):
+  | { ok: true; deliveries: CalendarDelivery[] }
+  | { ok: false; status: number; error: string; code: string } {
+  if (!Array.isArray(deliveriesRaw) || deliveriesRaw.length === 0) {
     return {
       ok: false,
       status: 400,
@@ -361,7 +382,7 @@ function validateCalendarShape(
       code: "deliveries",
     };
   }
-  if (r.deliveries.length < CAL_DELIVERIES_MIN || r.deliveries.length > CAL_DELIVERIES_MAX) {
+  if (deliveriesRaw.length < CAL_DELIVERIES_MIN || deliveriesRaw.length > CAL_DELIVERIES_MAX) {
     return {
       ok: false,
       status: 400,
@@ -377,8 +398,8 @@ function validateCalendarShape(
   const seenDates = new Set<string>();
   const parsed: CalendarDelivery[] = [];
 
-  for (let i = 0; i < r.deliveries.length; i++) {
-    const raw = r.deliveries[i] as unknown;
+  for (let i = 0; i < deliveriesRaw.length; i++) {
+    const raw = deliveriesRaw[i] as unknown;
     if (!raw || typeof raw !== "object") {
       return {
         ok: false,
@@ -461,6 +482,23 @@ function validateCalendarShape(
 
   // Sort by date ascending so storage order is deterministic.
   parsed.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  return { ok: true, deliveries: parsed };
+}
+
+function validateCalendarShape(
+  r: Record<string, unknown>,
+  common: {
+    product_id: string;
+    price_snapshot_inr: number;
+    full_name: string;
+    delivery_address: DeliveryAddress;
+    addressString: string;
+  },
+): ValidatedShape {
+  const dv = validateCalendarDeliveries(r.deliveries);
+  if (!dv.ok) return dv;
+  const parsed = dv.deliveries;
 
   return {
     ok: true,
@@ -589,6 +627,317 @@ type DeliveryRow = {
   scheduled_time_slot: string | null;
 };
 
+/**
+ * V10 multi-variant subscription placement (calendar mode only).
+ * Accepts `items: [{ product_slug, quantity_per_delivery }]` plus the same
+ * calendar `deliveries`, name and address as the single-variant path. Each
+ * variant is priced server-side via subscriptionUnitPrice (price_inr ×
+ * (1 − discount%)); the per-delivery total must be ≥ 2 units across all
+ * variants (mirrors the DB trigger). Writes one subscription row (primary
+ * variant + blended totals for legacy admin views) plus per-variant
+ * subscription_items rows carrying a price snapshot. Auth already checked
+ * by the caller; phoneLocal is the verified 10-digit customer phone.
+ */
+async function handleMultiVariant(
+  raw: Record<string, unknown>,
+  phoneLocal: string,
+): Promise<NextResponse> {
+  // Name + address.
+  const na = validateNameAndAddress(raw);
+  if (!na.ok) return fail(na.status, na.error, na.code);
+
+  // Calendar deliveries.
+  const dv = validateCalendarDeliveries(raw.deliveries);
+  if (!dv.ok) return fail(dv.status, dv.error, dv.code);
+  const deliveries = dv.deliveries;
+
+  // Items: [{ product_slug, quantity_per_delivery }].
+  const rawItems = raw.items as Array<{
+    product_slug?: unknown;
+    quantity_per_delivery?: unknown;
+  }>;
+  const items = rawItems
+    .map((it) => ({
+      slug: isString(it.product_slug) ? it.product_slug.trim() : "",
+      qty: Number(it.quantity_per_delivery),
+    }))
+    .filter((it) => it.slug.length > 0 && Number.isFinite(it.qty) && it.qty > 0);
+  if (items.length === 0) {
+    return fail(400, "No valid subscription items.", "items");
+  }
+
+  // Server-side price reconcile per variant.
+  const slugs = Array.from(new Set(items.map((i) => i.slug)));
+  const { data: rows, error: rowsErr } = await supabaseAdmin
+    .from("products")
+    .select(
+      "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived",
+    )
+    .in("slug", slugs);
+  if (rowsErr) {
+    console.error("[mobile/subscriptions] multi-variant plan lookup:", rowsErr);
+    return fail(500, "Failed to validate subscription");
+  }
+  const bySlug = new Map((rows ?? []).map((r) => [r.slug as string, r]));
+
+  type SnapItem = {
+    product_slug: string;
+    product_name: string;
+    quantity_per_delivery: number;
+    price_snapshot_inr: number;
+  };
+  const snapItems: SnapItem[] = [];
+  let amountPerDelivery = 0;
+  let totalUnits = 0;
+  for (const it of items) {
+    const row = bySlug.get(it.slug);
+    if (!row || row.is_archived) {
+      return fail(400, "Unknown subscription plan.", "product_unavailable");
+    }
+    if (!row.is_active) {
+      return fail(400, "This subscription is no longer available.", "product_unavailable");
+    }
+    if (row.in_stock === false) {
+      return fail(400, `This bread is currently out of stock: ${row.name}`, "out_of_stock");
+    }
+    const unit = subscriptionUnitPrice(row);
+    if (!Number.isFinite(unit) || unit <= 0) {
+      return fail(
+        400,
+        "Subscription price is not configured for this product.",
+        "subscription_unavailable",
+      );
+    }
+    amountPerDelivery += unit * it.qty;
+    totalUnits += it.qty;
+    snapItems.push({
+      product_slug: row.slug as string,
+      product_name: row.name as string,
+      quantity_per_delivery: it.qty,
+      price_snapshot_inr: unit,
+    });
+  }
+
+  // Multi-variant minimum: ≥ 2 units per delivery across all variants.
+  if (totalUnits < 2) {
+    return fail(
+      400,
+      "A subscription must include at least 2 units per delivery.",
+      "min_units",
+    );
+  }
+
+  const serverAmount = amountPerDelivery * deliveries.length;
+
+  // Optional client-price cross-check (hint-only; server is authoritative).
+  // The app sends price_snapshot_inr = per-delivery amount.
+  if (raw.price_snapshot_inr !== undefined && raw.price_snapshot_inr !== null) {
+    const clientPerDelivery = Number(raw.price_snapshot_inr);
+    if (
+      !Number.isFinite(clientPerDelivery) ||
+      Math.abs(clientPerDelivery - amountPerDelivery) > 0.5
+    ) {
+      return fail(
+        400,
+        "Price mismatch — please refresh and retry.",
+        "price_mismatch",
+      );
+    }
+  }
+
+  // Delivery rows from the calendar dates (one row per date).
+  const distinctKeys = new Set<DayKey>();
+  for (const item of deliveries) {
+    const dt = parseLocalDate(item.date);
+    if (dt) {
+      const key = JS_WEEKDAY_TO_KEY[dt.getDay()];
+      if (key) distinctKeys.add(key);
+    }
+  }
+  const daysSorted = Array.from(distinctKeys).sort(
+    (a, b) => DAY_KEYS.indexOf(a) - DAY_KEYS.indexOf(b),
+  );
+  const deliveryRowsTemplate: Omit<DeliveryRow, "subscription_id">[] =
+    deliveries.map((item, i) => {
+      const dt = parseLocalDate(item.date)!;
+      const key = JS_WEEKDAY_TO_KEY[dt.getDay()];
+      return {
+        sequence: i + 1,
+        week_number: 1,
+        day_key: key,
+        slot: null,
+        delivery_date: item.date,
+        status: "pending_confirmation" as const,
+        scheduled_date: item.date,
+        scheduled_time_slot: item.time_slot,
+      };
+    });
+  const startDate = deliveries[0].date; // already sorted ascending
+  const firstDayKey = daysSorted[0] ?? "mon";
+
+  // Customer upsert by phone.
+  const { data: existing, error: lookupErr } = await supabaseAdmin
+    .from("customers")
+    .select("id")
+    .eq("phone", phoneLocal)
+    .maybeSingle();
+  if (lookupErr) {
+    console.error("[mobile/subscriptions] multi customer lookup:", lookupErr);
+    return fail(500, "Failed to resolve customer");
+  }
+  let customerId: string;
+  if (existing) {
+    const { error: updateErr } = await supabaseAdmin
+      .from("customers")
+      .update({ full_name: na.full_name, city: na.delivery_address.city })
+      .eq("id", existing.id);
+    if (updateErr) {
+      console.error("[mobile/subscriptions] multi customer update:", updateErr);
+      return fail(500, "Failed to update customer");
+    }
+    customerId = existing.id;
+  } else {
+    const { data: newCust, error: insertErr } = await supabaseAdmin
+      .from("customers")
+      .insert({
+        full_name: na.full_name,
+        phone: phoneLocal,
+        city: na.delivery_address.city,
+      })
+      .select("id")
+      .single();
+    if (insertErr || !newCust) {
+      console.error("[mobile/subscriptions] multi customer insert:", insertErr);
+      return fail(500, "Failed to create customer");
+    }
+    customerId = newCust.id;
+  }
+
+  const deliveryAddressJson = {
+    name: na.full_name,
+    phone: phoneLocal,
+    line1: na.delivery_address.line1,
+    line2: null,
+    city: na.delivery_address.city,
+    pincode: na.delivery_address.pincode,
+  };
+
+  const primary = snapItems[0];
+  const { data: sub, error: subErr } = await supabaseAdmin
+    .from("subscriptions")
+    .insert({
+      // Legacy mirror columns — primary variant + blended totals so old
+      // admin views still render. Per-variant truth lives in subscription_items.
+      bread_slug: primary.product_slug,
+      bread_name: primary.product_name,
+      bread_price: primary.price_snapshot_inr,
+      weeks: 0, // 0 marks calendar mode
+      days: daysSorted,
+      slot_mode: "same",
+      slot: null,
+      slots_by_day: null,
+      total: serverAmount,
+      customer_name: na.full_name,
+      customer_phone: phoneLocal,
+      customer_address: na.addressString,
+      customer_city: na.delivery_address.city,
+      customer_pincode: na.delivery_address.pincode,
+      status: "pending_confirmation",
+      start_date: startDate,
+      customer_id: customerId,
+      product_slug: primary.product_slug,
+      product_name: primary.product_name,
+      quantity_per_delivery: totalUnits,
+      frequency: "custom",
+      day_of_week: firstDayKey,
+      time_slot: null,
+      total_weeks: 0,
+      delivery_address: deliveryAddressJson,
+      total_amount: serverAmount,
+      payment_status: "pending",
+      payment_method: null,
+    })
+    .select("id")
+    .single();
+  if (subErr || !sub) {
+    console.error("[mobile/subscriptions] multi subscription insert:", subErr);
+    return fail(500, "Failed to create subscription");
+  }
+
+  const { error: itemsErr } = await supabaseAdmin
+    .from("subscription_items")
+    .insert(snapItems.map((s) => ({ subscription_id: sub.id, ...s })));
+  if (itemsErr) {
+    console.error("[mobile/subscriptions] subscription_items insert:", itemsErr);
+    return fail(500, "Failed to create subscription items");
+  }
+
+  const deliveryRows: DeliveryRow[] = deliveryRowsTemplate.map((r) => ({
+    subscription_id: sub.id,
+    ...r,
+  }));
+  const { error: delErr } = await supabaseAdmin
+    .from("subscription_deliveries")
+    .insert(deliveryRows);
+  if (delErr) {
+    console.error("[mobile/subscriptions] multi delivery insert:", delErr);
+    return fail(500, "Failed to create deliveries");
+  }
+
+  const firstDeliveryDate = deliveryRows[0]?.delivery_date ?? startDate;
+
+  fireAndForget(
+    fetch(`${SITE_URL}/api/send-sms`, {
+      method: "POST",
+      headers: internalJsonHeaders(),
+      body: JSON.stringify({
+        type: "subscription_placed",
+        phone: phoneLocal,
+        name: na.full_name,
+        subscriptionId: sub.id,
+        total: serverAmount,
+        deliveries: deliveryRows.length,
+        firstDeliveryDate,
+      }),
+    }),
+    "send-sms-sub",
+    { phone: phoneLocal },
+  );
+
+  const shortId = String(sub.id).slice(0, 8).toUpperCase();
+  const waMessage =
+    `Hi ${na.full_name || "there"}! 🍞 Your Cadieux subscription has been scheduled.\n\n` +
+    `Subscription ID: ${shortId}\n` +
+    `${deliveryRows.length} deliveries, first on ${firstDeliveryDate}\n` +
+    `Total: ₹${serverAmount}\n` +
+    `Delivery to: ${na.addressString}\n\n` +
+    `We will confirm your subscription shortly. Thank you for choosing Cadieux!`;
+  fireAndForget(
+    fetch(`${SITE_URL}/api/send-whatsapp`, {
+      method: "POST",
+      headers: internalJsonHeaders(),
+      body: JSON.stringify({ phone: phoneLocal, message: waMessage }),
+    }),
+    "send-whatsapp-sub",
+    { phone: phoneLocal },
+  );
+
+  console.log("[mobile/subscriptions] created (multi-variant)", {
+    subscription_id: sub.id,
+    items: snapItems.length,
+    deliveries: deliveryRows.length,
+    total: serverAmount,
+  });
+
+  return NextResponse.json({
+    ok: true,
+    subscription_id: sub.id,
+    delivery_count: deliveryRows.length,
+    first_delivery_date: firstDeliveryDate,
+    total_amount_inr: serverAmount,
+  });
+}
+
 export async function POST(req: NextRequest) {
   // Fail closed if MOBILE_APP_KEY isn't configured.
   if (!process.env.MOBILE_APP_KEY) {
@@ -612,8 +961,18 @@ export async function POST(req: NextRequest) {
     return fail(400, "Verified phone is not in expected format");
   }
 
-  // 4. Validate body shape (pattern or calendar).
+  // 4. Parse body. A V10 multi-variant subscription sends `items: [...]`
+  //    (calendar mode). Legacy single-variant clients (v8 app) do not — they
+  //    fall through to the UNCHANGED pattern/calendar path below.
   const raw = await req.json().catch(() => null);
+  const rawItemsList =
+    raw && typeof raw === "object" && Array.isArray((raw as Record<string, unknown>).items)
+      ? ((raw as Record<string, unknown>).items as unknown[])
+      : null;
+  if (rawItemsList && rawItemsList.length > 0) {
+    return handleMultiVariant(raw as Record<string, unknown>, phoneLocal);
+  }
+
   const shape = validateShape(raw);
   if (!shape.ok) {
     return fail(shape.status, shape.error, shape.code);
@@ -628,7 +987,7 @@ export async function POST(req: NextRequest) {
   const { data: product, error: productErr } = await supabaseAdmin
     .from("products")
     .select(
-      "id, slug, name, price_inr, subscription_per_loaf_inr, is_active, is_archived, in_stock",
+      "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock",
     )
     .eq("id", body.product_id)
     .maybeSingle();
@@ -647,25 +1006,40 @@ export async function POST(req: NextRequest) {
       "out_of_stock",
     );
   }
-  const subPriceRaw = product.subscription_per_loaf_inr;
-  const subPrice =
-    subPriceRaw !== null && subPriceRaw !== undefined
-      ? Number(subPriceRaw)
+  // V10 back-compat bridge: the authoritative subscription price is now
+  // DERIVED from price_inr × (1 − subscription_discount_pct/100). The v8 app
+  // still sends the legacy stored price (subscription_per_loaf_inr ?? price_inr).
+  // Accept EITHER so both client generations pass reconcile; persist the
+  // derived price as the authoritative value going forward.
+  const derivedPrice = subscriptionUnitPrice(product);
+  const legacyRaw = product.subscription_per_loaf_inr;
+  const legacyPrice =
+    legacyRaw !== null && legacyRaw !== undefined
+      ? Number(legacyRaw)
       : Number(product.price_inr);
-  if (!Number.isFinite(subPrice) || subPrice <= 0) {
+  if (!Number.isFinite(derivedPrice) || derivedPrice <= 0) {
     return fail(
       400,
       "Subscription price is not configured for this product.",
       "subscription_unavailable",
     );
   }
-  if (subPrice !== body.price_snapshot_inr) {
+  const clientPrice = Number(body.price_snapshot_inr);
+  const EPS = 0.5;
+  const matchesDerived = Math.abs(clientPrice - derivedPrice) <= EPS;
+  const matchesLegacy =
+    Number.isFinite(legacyPrice) &&
+    legacyPrice > 0 &&
+    Math.abs(clientPrice - legacyPrice) <= EPS;
+  if (!matchesDerived && !matchesLegacy) {
     return fail(
       400,
       `Price mismatch: ${body.product_id} — please refresh and retry`,
       "price_mismatch",
     );
   }
+  // Persist the authoritative derived price regardless of which the client sent.
+  const subPrice = derivedPrice;
 
   // 6. Compute delivery rows + subscription-level columns based on mode.
   //    For calendar mode the rows are derived directly from the picked

@@ -24,7 +24,7 @@ function bustProductCaches(): void {
 }
 
 const PRODUCT_SELECT =
-  "id, slug, name, price_inr, subscription_per_loaf_inr, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
+  "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
 
 // GET /api/admin/products/[id]
 //   Returns { product, history } where history is the last 50 audit
@@ -154,10 +154,20 @@ export async function PATCH(
       return NextResponse.json({ error: "price_inr must be a non-negative number" }, { status: 400 });
     }
     update.price_inr = n;
-    // Auto-sync subscription pricing when only the one-time price moved.
-    if (!("subscription_per_loaf_inr" in update)) {
-      update.subscription_per_loaf_inr = n;
+    // V10: the subscription price is DERIVED from price_inr ×
+    // (1 − subscription_discount_pct/100) at read/validation time, so we
+    // NO LONGER auto-sync subscription_per_loaf_inr here. The column is
+    // left untouched (vestigial) to avoid disturbing legacy readers.
+  }
+  if ("subscription_discount_pct" in update) {
+    const n = Number(update.subscription_discount_pct);
+    if (!Number.isFinite(n) || n < 0 || n > 100) {
+      return NextResponse.json(
+        { error: "subscription_discount_pct must be between 0 and 100" },
+        { status: 400 },
+      );
     }
+    update.subscription_discount_pct = n;
   }
   if ("subscription_per_loaf_inr" in update) {
     if (update.subscription_per_loaf_inr === null) {

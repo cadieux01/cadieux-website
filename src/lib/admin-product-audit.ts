@@ -24,6 +24,7 @@ export const AUDITED_FIELDS = [
   "name",
   "price_inr",
   "subscription_per_loaf_inr",
+  "subscription_discount_pct",
   "weight",
   "description",
   "tagline",

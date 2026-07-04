@@ -7,6 +7,8 @@ import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWid
 import {
   loadSetupState,
   saveAddress,
+  totalUnitsPerDelivery,
+  MIN_UNITS_PER_DELIVERY,
   type SetupAddress,
 } from "@/lib/subscription-setup";
 
@@ -36,7 +38,8 @@ export default function CheckoutPage() {
   useEffect(() => {
     setHydrated(true);
     const s = loadSetupState();
-    const ok = Boolean(s.productSlug) && s.selectedDates.length > 0;
+    const ok =
+      totalUnitsPerDelivery(s) >= MIN_UNITS_PER_DELIVERY && s.selectedDates.length > 0;
     setHasSetup(ok);
     if (!ok) {
       router.replace("/subscriptions/setup");

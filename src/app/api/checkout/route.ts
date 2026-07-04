@@ -14,6 +14,7 @@ import {
   orderInsertColumns,
   logProximitySuggestion,
 } from "@/lib/order-checkout";
+import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -392,6 +393,210 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── V10 multi-variant branch ────────────────────────────────────────
+    // When the client sends an explicit `items: [{product_slug,
+    // quantity_per_delivery}]` list (the new wizard), price + persist each
+    // variant independently and write per-variant subscription_items rows
+    // with a price snapshot. Legacy single-variant payloads (no `items`)
+    // fall through to the UNCHANGED path below, preserving exact behavior
+    // for older clients. Isolated on purpose — this block never runs for
+    // legacy requests.
+    type MultiItem = { slug: string; qty: number };
+    const rawItems = Array.isArray(body.items)
+      ? (body.items as Array<{ product_slug?: string; quantity_per_delivery?: number }>)
+      : null;
+    const multiItems: MultiItem[] | null = rawItems
+      ? rawItems
+          .map((it) => ({
+            slug: String(it.product_slug ?? "").trim(),
+            qty: Number(it.quantity_per_delivery),
+          }))
+          .filter((it) => it.slug.length > 0 && Number.isFinite(it.qty) && it.qty > 0)
+      : null;
+
+    if (multiItems && multiItems.length > 0) {
+      const deliveryCount = deliveryTemplate.length;
+      if (deliveryCount <= 0) {
+        return NextResponse.json(
+          { error: "No valid deliveries." },
+          { status: 400 },
+        );
+      }
+
+      const slugs = Array.from(new Set(multiItems.map((i) => i.slug)));
+      const { data: rows, error: rowsErr } = await supabaseAdmin
+        .from("products")
+        .select(
+          "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived",
+        )
+        .in("slug", slugs);
+      if (rowsErr) {
+        console.error("[checkout] multi-variant plan lookup failed:", rowsErr.message);
+        return NextResponse.json(
+          { error: "Failed to validate subscription" },
+          { status: 500 },
+        );
+      }
+      const bySlug = new Map((rows ?? []).map((r) => [r.slug as string, r]));
+
+      type SnapItem = {
+        product_slug: string;
+        product_name: string;
+        quantity_per_delivery: number;
+        price_snapshot_inr: number;
+      };
+      const snapItems: SnapItem[] = [];
+      let amountPerDelivery = 0;
+      let totalUnits = 0;
+      for (const it of multiItems) {
+        const row = bySlug.get(it.slug);
+        if (!row || row.is_archived) {
+          return NextResponse.json(
+            { error: "Unknown subscription plan." },
+            { status: 400 },
+          );
+        }
+        if (!row.is_active) {
+          return NextResponse.json(
+            { error: "This subscription is no longer available." },
+            { status: 400 },
+          );
+        }
+        if (!row.in_stock) {
+          return NextResponse.json(
+            { error: "This bread is currently out of stock." },
+            { status: 400 },
+          );
+        }
+        const unit = subscriptionUnitPrice(row);
+        if (!Number.isFinite(unit) || unit <= 0) {
+          return NextResponse.json(
+            { error: "Subscription price is not configured for this product." },
+            { status: 400 },
+          );
+        }
+        amountPerDelivery += unit * it.qty;
+        totalUnits += it.qty;
+        snapItems.push({
+          product_slug: row.slug as string,
+          product_name: row.name as string,
+          quantity_per_delivery: it.qty,
+          price_snapshot_inr: unit,
+        });
+      }
+
+      // Multi-variant minimum: at least 2 units per delivery across all
+      // variants (mirrors the DB trigger enforce_min_two_units).
+      if (totalUnits < 2) {
+        return NextResponse.json(
+          {
+            error: "A subscription must include at least 2 units per delivery.",
+            code: "min_units",
+          },
+          { status: 400 },
+        );
+      }
+
+      const serverAmount = amountPerDelivery * deliveryCount;
+      const clientAmount = Number(body.clientAmount ?? total);
+      if (!Number.isFinite(clientAmount) || Math.abs(clientAmount - serverAmount) > 0.5) {
+        const phoneForLog = verifiedPhone ?? customer_phone ?? null;
+        console.warn(
+          `[PRICE_TAMPERING] phone=${phoneForLog} multi=1 client=${clientAmount} server=${serverAmount}`,
+        );
+        return NextResponse.json(
+          {
+            error: "price_mismatch",
+            code: "price_mismatch",
+            message:
+              "The subscription price has changed. Please refresh the page and try again.",
+          },
+          { status: 400 },
+        );
+      }
+
+      const primary = snapItems[0];
+      const { data: sub, error: subErr } = await supabaseAdmin
+        .from("subscriptions")
+        .insert({
+          // Legacy mirror columns — primary variant + blended totals so old
+          // admin views still render. Per-variant truth lives in subscription_items.
+          bread_slug: primary.product_slug,
+          bread_name: primary.product_name,
+          bread_price: primary.price_snapshot_inr,
+          weeks,
+          days: dayKeys,
+          slot_mode,
+          slot: slot_mode === "same" ? slot : null,
+          slots_by_day: slot_mode === "custom" ? slots_by_day : null,
+          total: serverAmount,
+          customer_name,
+          customer_phone,
+          customer_address,
+          customer_city,
+          customer_pincode,
+          status: subStatus,
+          customer_id,
+          product_slug: primary.product_slug,
+          product_name: primary.product_name,
+          quantity_per_delivery: totalUnits,
+          frequency,
+          day_of_week: dayKeys[0] ?? null,
+          time_slot: slot_mode === "same" ? slot : (slots_by_day?.[dayKeys[0]] ?? null),
+          total_weeks: weeks,
+          delivery_address: deliveryAddressJson,
+          total_amount: serverAmount,
+          payment_status: "pending",
+          payment_method: paymentMethod,
+        })
+        .select("id")
+        .single();
+
+      if (subErr || !sub) {
+        console.error("❌ Subscription insert failed:", subErr);
+        return NextResponse.json(
+          { error: "Failed to create subscription", details: subErr?.message },
+          { status: 500 },
+        );
+      }
+
+      const { error: itemsErr } = await supabaseAdmin
+        .from("subscription_items")
+        .insert(
+          snapItems.map((s) => ({ subscription_id: sub.id, ...s })),
+        );
+      if (itemsErr) {
+        console.error("❌ subscription_items insert failed:", itemsErr);
+        return NextResponse.json(
+          { error: "Failed to create subscription items", details: itemsErr.message },
+          { status: 500 },
+        );
+      }
+
+      const deliveryRows = deliveryTemplate.map((d) => ({
+        subscription_id: sub.id,
+        ...d,
+      }));
+      if (deliveryRows.length > 0) {
+        const { error: delErr } = await supabaseAdmin
+          .from("subscription_deliveries")
+          .insert(deliveryRows);
+        if (delErr) {
+          console.error("❌ Delivery insert failed:", delErr);
+          return NextResponse.json(
+            { error: "Failed to create deliveries", details: delErr.message },
+            { status: 500 },
+          );
+        }
+      }
+
+      return NextResponse.json({
+        subscription_id: sub.id,
+        deliveries: deliveryRows.length,
+        items: snapItems.length,
+      });
+    }
+
     // Server-side price validation. The plan id (bread_slug) is looked up
     // in the products table — the admin editor at /admin/products is now
     // the single source of truth for both the per-loaf subscription price
@@ -410,7 +615,7 @@ export async function POST(req: NextRequest) {
     const { data: planRow, error: planErr } = await supabaseAdmin
       .from("products")
       .select(
-        "slug, name, price_inr, subscription_per_loaf_inr, is_active, in_stock, is_archived",
+        "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived",
       )
       .eq("slug", planId)
       .maybeSingle();
@@ -439,9 +644,10 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const pricePerLoaf = Number(
-      planRow.subscription_per_loaf_inr ?? planRow.price_inr,
-    );
+    // V10: derive the per-loaf subscription price from MRP × (1 − disc%)
+    // via the single-source helper so this matches the wizard preview and
+    // /api/subscription-plans exactly.
+    const pricePerLoaf = subscriptionUnitPrice(planRow);
     if (!Number.isFinite(pricePerLoaf) || pricePerLoaf <= 0) {
       return NextResponse.json(
         { error: "Subscription price is not configured for this product." },

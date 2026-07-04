@@ -27,7 +27,7 @@ function bustProductCaches(): void {
 }
 
 const PRODUCT_SELECT =
-  "id, slug, name, price_inr, subscription_per_loaf_inr, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
+  "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
 
 // GET /api/admin/products?include_archived=1
 //   Returns every product (newest first) so the admin can scroll the
@@ -182,6 +182,13 @@ export async function POST(req: NextRequest) {
       typeof body.subscription_per_loaf_inr === "number"
         ? body.subscription_per_loaf_inr
         : priceRaw,
+    // V10: per-product subscription discount %. Clamp to [0, 100];
+    // default 10 when not supplied.
+    subscription_discount_pct:
+      typeof body.subscription_discount_pct === "number" &&
+      Number.isFinite(body.subscription_discount_pct)
+        ? Math.min(100, Math.max(0, body.subscription_discount_pct))
+        : 10,
     weight: weightVal,
     description:
       typeof body.description === "string" ? body.description : null,

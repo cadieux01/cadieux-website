@@ -27,6 +27,11 @@ import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 
 import { SETUP_PRODUCTS } from "@/lib/subscription-setup";
+import {
+  subscriptionUnitPrice,
+  subscriptionDiscountPct,
+  subscriptionSavingsInr,
+} from "@/lib/subscription-pricing";
 
 // Slug is intentionally widened to plain `string` — once plans are
 // catalogued in the DB, the API can return slugs the wizard's literal
@@ -36,8 +41,14 @@ export type SubscriptionPlanDTO = {
   slug: string;
   name: string;
   title: string;
+  // `price` = the DERIVED per-unit subscription price (MRP × (1 − disc%)).
+  // Kept named `price` for back-compat with the existing wizard callers.
   price: number;
   blurb: string;
+  // V10 additive fields — safe for older clients to ignore.
+  mrp_inr: number;
+  subscription_discount_pct: number;
+  subscription_savings_inr: number;
 };
 
 const supabaseAnon = createClient(
@@ -64,7 +75,7 @@ const getSubscriptionPlans = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "slug, name, price_inr, subscription_per_loaf_inr, is_active, is_archived, in_stock, sort_order, is_subscription_plan, subscription_title, subscription_blurb",
+        "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock, sort_order, is_subscription_plan, subscription_title, subscription_blurb",
       )
       .eq("is_active", true)
       .eq("is_archived", false)
@@ -80,8 +91,13 @@ const getSubscriptionPlans = unstable_cache(
     const out: SubscriptionPlanDTO[] = [];
     for (const row of data ?? []) {
       const slug = row.slug as string;
-      const subPrice = row.subscription_per_loaf_inr ?? row.price_inr;
+      // V10: subscription price is DERIVED from MRP × (1 − discount%).
+      // The stored `subscription_per_loaf_inr` column is now vestigial —
+      // the discount helper is the single source of truth so the wizard
+      // preview matches what /api/checkout will validate.
+      const subPrice = subscriptionUnitPrice(row);
       if (typeof subPrice !== "number" || subPrice <= 0) continue;
+      const mrp = Number(row.price_inr) || 0;
       const fallback = FALLBACK_META[slug];
       // Prefer DB-supplied title/blurb. Fall back to the hardcoded SETUP
       // entry when present (for the seeded multigrain / high-protein
@@ -103,6 +119,9 @@ const getSubscriptionPlans = unstable_cache(
         title,
         price: subPrice,
         blurb,
+        mrp_inr: mrp,
+        subscription_discount_pct: subscriptionDiscountPct(row),
+        subscription_savings_inr: subscriptionSavingsInr(row),
       });
     }
     return out;

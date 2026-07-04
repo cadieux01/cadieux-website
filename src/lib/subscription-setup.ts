@@ -10,8 +10,14 @@ export type WizardProduct = {
   slug: ProductSlug;
   name: string;
   title: string;
+  // `price` = the DERIVED per-unit subscription price (MRP × (1 − disc%)).
   price: number;
   blurb: string;
+  // V10 additive fields (mirror the /api/subscription-plans DTO). Optional
+  // so older cached shapes / hand-built products still type-check.
+  mrp_inr?: number;
+  subscription_discount_pct?: number;
+  subscription_savings_inr?: number;
 };
 
 /** Hardcoded wizard catalogue used as a NETWORK-FAILURE FALLBACK.
@@ -36,13 +42,19 @@ export const SETUP_PRODUCTS: WizardProduct[] = [
     title: "Multigrain",
     price: 135,
     blurb: "Ancient grains, seeds, whey protein.",
+    mrp_inr: 150,
+    subscription_discount_pct: 10,
+    subscription_savings_inr: 15,
   },
   {
     slug: "high-protein",
     name: "Protein Bread — Plain",
     title: "Plain",
-    price: 99,
+    price: 107.1,
     blurb: "Soft sandwich slices, clean build.",
+    mrp_inr: 119,
+    subscription_discount_pct: 10,
+    subscription_savings_inr: 11.9,
   },
 ];
 
@@ -132,21 +144,64 @@ const LEGACY_V2_KEY = "cadieux_setup_v2";
 const LEGACY_V1_KEY = "cadieux_setup_v1";
 export const ADDRESS_KEY = "cadieux_setup_address_v1";
 
+// V10 multi-variant: quantity is now PER SLUG (independent qty for each
+// bread), and a subscription must total at least 2 units per delivery
+// across all variants. `qtyBySlug` maps a product slug → units per
+// delivery (>0 means selected). The old single-variant shape
+// ({ productSlug, qty }) is migrated transparently on load.
 export type SetupState = {
-  productSlug: ProductSlug | null;
-  qty: number;                                // 1..5
+  qtyBySlug: Record<string, number>;          // slug -> units per delivery (>0)
   selectedDates: string[];                    // ISO dates, sorted ascending
   slotByDate: Record<string, string>;         // ISO date -> "06:00-07:00"
 };
 
+export const MIN_UNITS_PER_DELIVERY = 2;
+
 export function emptySetupState(): SetupState {
   return {
-    productSlug: null,
-    qty: 1,
+    qtyBySlug: {},
     selectedDates: [],
     slotByDate: {},
   };
 }
+
+/** Total units per delivery across every selected variant. */
+export function totalUnitsPerDelivery(state: SetupState): number {
+  return Object.values(state.qtyBySlug).reduce(
+    (sum, n) => sum + (Number.isFinite(n) && n > 0 ? n : 0),
+    0,
+  );
+}
+
+/** Slugs with a positive quantity, in a stable order. */
+export function selectedSlugs(state: SetupState): string[] {
+  return Object.keys(state.qtyBySlug).filter((s) => (state.qtyBySlug[s] ?? 0) > 0);
+}
+
+/** Per-delivery bill = Σ(qty × derived unit price) over selected variants.
+ *  `plans` supplies the DB-derived unit prices; unknown slugs contribute 0. */
+export function amountPerDelivery(
+  state: SetupState,
+  plans: WizardProduct[],
+): number {
+  const priceBySlug = new Map(plans.map((p) => [p.slug, p.price]));
+  let sum = 0;
+  for (const [slug, qty] of Object.entries(state.qtyBySlug)) {
+    if (!(qty > 0)) continue;
+    const unit = priceBySlug.get(slug as ProductSlug);
+    if (typeof unit === "number") sum += unit * qty;
+  }
+  return sum;
+}
+
+// The old single-variant shape, kept only so a wizard session in progress
+// across the deploy boundary migrates instead of resetting.
+type LegacySingleVariant = {
+  productSlug?: ProductSlug | null;
+  qty?: number;
+  selectedDates?: string[];
+  slotByDate?: Record<string, string>;
+};
 
 type LegacyV2 = {
   productSlug?: ProductSlug | null;
@@ -155,13 +210,30 @@ type LegacyV2 = {
   slotByDate?: Record<string, string>;
 };
 
+/** Migrate a stored single-variant { productSlug, qty } shape into the
+ *  multi-variant qtyBySlug map. */
+function migrateSingleVariant(legacy: LegacySingleVariant): SetupState {
+  const qtyBySlug: Record<string, number> = {};
+  if (legacy.productSlug && (legacy.qty ?? 0) > 0) {
+    qtyBySlug[legacy.productSlug] = legacy.qty as number;
+  }
+  return {
+    qtyBySlug,
+    selectedDates: Array.isArray(legacy.selectedDates) ? legacy.selectedDates : [],
+    slotByDate: legacy.slotByDate ?? {},
+  };
+}
+
 /** Flatten the old { weekIso → [dayIso,...] } map into a sorted, deduped list. */
 function migrateFromV2(legacy: LegacyV2): SetupState {
   const dates = Object.values(legacy.daysByWeek ?? {}).flat();
   const sorted = Array.from(new Set(dates)).sort();
+  const qtyBySlug: Record<string, number> = {};
+  if (legacy.productSlug && (legacy.qty ?? 0) > 0) {
+    qtyBySlug[legacy.productSlug] = legacy.qty as number;
+  }
   return {
-    productSlug: legacy.productSlug ?? null,
-    qty: legacy.qty ?? 1,
+    qtyBySlug,
     selectedDates: sorted,
     slotByDate: legacy.slotByDate ?? {},
   };
@@ -172,7 +244,13 @@ export function loadSetupState(): SetupState {
   try {
     const raw = sessionStorage.getItem(SETUP_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<SetupState>;
+      const parsed = JSON.parse(raw) as Partial<SetupState> & LegacySingleVariant;
+      // A stored v3 blob may be either the new multi-variant shape or the
+      // old single-variant one (same SETUP_KEY). If qtyBySlug is absent
+      // but productSlug is present, migrate it forward.
+      if (!parsed.qtyBySlug && "productSlug" in parsed) {
+        return migrateSingleVariant(parsed);
+      }
       return { ...emptySetupState(), ...parsed };
     }
     // Try migrating from older shapes so an in-progress user doesn't lose

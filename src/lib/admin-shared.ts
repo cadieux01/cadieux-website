@@ -92,6 +92,9 @@ export type AdminProductRow = {
   name: string;
   price_inr: number;
   subscription_per_loaf_inr: number | null;
+  // V10: per-product subscription discount %. The sub price is DERIVED
+  // from price_inr × (1 − pct/100) via lib/subscription-pricing.ts.
+  subscription_discount_pct: number;
   weight: string | null;
   description: string | null;
   tagline: string | null;
