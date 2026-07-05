@@ -26,7 +26,7 @@ const GOLD = "#024628";
 const TEXT = "#024628";
 const FADED = "rgba(2,70,40,0.6)";
 const FAINT = "rgba(2,70,40,0.2)";
-const RED = "#ff8181";
+const RED = "#991B1B";
 
 type Method = "cod" | null;
 
@@ -269,7 +269,7 @@ export default function PaymentPage() {
             borderRadius: 999,
             border: "none",
             background: !submitting && method === "cod" ? GOLD : FAINT,
-            color: !submitting && method === "cod" ? "#0a0a0a" : FADED,
+            color: !submitting && method === "cod" ? "#FBF3D4" : FADED,
             fontSize: 14,
             fontWeight: 600,
             letterSpacing: "0.1em",

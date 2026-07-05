@@ -19,8 +19,8 @@ type Sub = {
 };
 
 const BG = "#C0C8CE";
-const GREEN = "#7dd3a0";
-const RED = "#ff8181";
+const GREEN = "#024628";
+const RED = "#991B1B";
 const TEXT = "#024628";
 const FADED = "rgba(2,70,40,0.6)";
 const FAINT = "rgba(2,70,40,0.2)";

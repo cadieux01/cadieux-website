@@ -16,11 +16,11 @@ export const DELIVERY_STATUS_LABEL: Record<string, string> = {
 };
 
 export const DELIVERY_STATUS_COLOR: Record<string, string> = {
-  pending_confirmation: "rgba(240,223,200,0.4)",
-  confirmed: "#e3b341",
-  out_for_delivery: "#5fa8ff",
+  pending_confirmation: "rgba(2,70,40,0.5)",
+  confirmed: "#436CB4",
+  out_for_delivery: "#436CB4",
   delivered: GOLD,
-  cancelled: "#ff8181",
+  cancelled: "#991B1B",
 };
 
 export const SUB_STATUS_LABEL: Record<string, string> = {

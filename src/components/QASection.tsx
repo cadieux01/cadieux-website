@@ -208,8 +208,10 @@ export default function QASection() {
         {/* Dark video overlay */}
         <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.78)", zIndex: 1, pointerEvents: "none" }} />
 
-        {/* Phase 1 → 2 top blend */}
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "30vh", background: "linear-gradient(to bottom, #024628, transparent)", zIndex: 6, pointerEvents: "none" }} />
+        {/* FIX 1 (Task F v2 follow-up): removed Phase 1 → 2 top blend
+            (linear-gradient(to bottom, #024628, transparent)) — was
+            reading as a green wash rising up into the hero video from
+            below. The QA section's own background handles the seam. */}
 
         {/* Grain */}
         <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.07, pointerEvents: "none", zIndex: 2 }} />

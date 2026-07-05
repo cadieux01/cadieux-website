@@ -53,9 +53,9 @@ export default function FloatingCartButton() {
     <>
       <style>{`
         @keyframes cdx-fcb-pulse {
-          0%   { transform: scale(1); box-shadow: 0 12px 28px rgba(0,0,0,0.4), 0 0 0 0 rgba(201,169,110,0.45); }
-          40%  { transform: scale(1.12); box-shadow: 0 14px 32px rgba(0,0,0,0.45), 0 0 0 12px rgba(201,169,110,0); }
-          100% { transform: scale(1); box-shadow: 0 12px 28px rgba(0,0,0,0.4), 0 0 0 0 rgba(201,169,110,0); }
+          0%   { transform: scale(1); box-shadow: 0 12px 28px rgba(0,0,0,0.4), 0 0 0 0 rgba(2,70,40,0.45); }
+          40%  { transform: scale(1.12); box-shadow: 0 14px 32px rgba(0,0,0,0.45), 0 0 0 12px rgba(2,70,40,0); }
+          100% { transform: scale(1); box-shadow: 0 12px 28px rgba(0,0,0,0.4), 0 0 0 0 rgba(2,70,40,0); }
         }
         @keyframes cdx-fcb-in {
           from { opacity: 0; transform: translateY(8px) scale(0.9); }

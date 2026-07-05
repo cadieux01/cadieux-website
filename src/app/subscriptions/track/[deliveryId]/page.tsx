@@ -42,7 +42,7 @@ type ChangeRequest = {
 };
 
 const BG = "#C0C8CE";
-const FADED = "#f5f0e8";
+const FADED = "rgba(2,70,40,0.4)";
 const REASON_MAX = 200;
 
 const STEPS = [
@@ -164,7 +164,7 @@ export default function DeliveryDetailPage() {
   if (loading) {
     return (
       <Shell>
-        <div style={{ color: "rgba(240,223,200,0.5)" }}>Loading…</div>
+        <div style={{ color: "rgba(2,70,40,0.55)" }}>Loading…</div>
       </Shell>
     );
   }
@@ -172,7 +172,7 @@ export default function DeliveryDetailPage() {
   if (notFound || !delivery || !sub) {
     return (
       <Shell>
-        <div style={{ color: "rgba(240,223,200,0.5)", marginBottom: 16 }}>
+        <div style={{ color: "rgba(2,70,40,0.55)", marginBottom: 16 }}>
           We couldn&apos;t find that delivery.
         </div>
         <Link href="/subscriptions/track" style={{ color: GOLD, fontSize: 14 }}>
@@ -206,10 +206,10 @@ export default function DeliveryDetailPage() {
       >
         Week {delivery.week_number}
       </h1>
-      <div style={{ color: "rgba(240,223,200,0.6)", fontSize: 14, marginBottom: 4 }}>
+      <div style={{ color: "rgba(2,70,40,0.65)", fontSize: 14, marginBottom: 4 }}>
         {sub.product_name} × {sub.quantity_per_delivery}
       </div>
-      <div style={{ color: "rgba(240,223,200,0.55)", fontSize: 13, marginBottom: 28 }}>
+      <div style={{ color: "rgba(2,70,40,0.6)", fontSize: 13, marginBottom: 28 }}>
         Scheduled {formatDate(delivery.scheduled_date)} · {formatSlot(delivery.scheduled_time_slot)}
       </div>
 
@@ -217,10 +217,10 @@ export default function DeliveryDetailPage() {
         <div
           style={{
             padding: "20px 22px",
-            border: "1px solid rgba(255,129,129,0.45)",
-            background: "rgba(255,129,129,0.05)",
+            border: "1px solid #991B1B",
+            background: "transparent",
             borderRadius: 12,
-            color: "#ff8181",
+            color: "#991B1B",
             letterSpacing: "0.06em",
             textTransform: "uppercase",
             fontSize: 12,
@@ -257,11 +257,11 @@ export default function DeliveryDetailPage() {
           style={{
             marginTop: 12,
             padding: "14px 18px",
-            border: "1px solid rgba(240,223,200,0.12)",
+            border: "1px solid rgba(2,70,40,0.2)",
             borderRadius: 12,
-            background: "rgba(251,243,212,0.025)",
+            background: "transparent",
             fontSize: 13,
-            color: "rgba(240,223,200,0.6)",
+            color: "rgba(2,70,40,0.65)",
           }}
         >
           This delivery can no longer be changed.
@@ -278,8 +278,8 @@ export default function DeliveryDetailPage() {
             transform: "translateX(-50%)",
             padding: "10px 18px",
             borderRadius: 999,
-            background: "rgba(123,216,143,0.95)",
-            color: "#0a0a0a",
+            background: "#024628",
+            color: "#FBF3D4",
             fontSize: 13,
             fontWeight: 600,
             letterSpacing: "0.04em",
@@ -299,7 +299,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       style={{
         minHeight: "100dvh",
         background: BG,
-        color: "#FBF3D4",
+        color: "#024628",
         padding: "60px 20px 100px",
         fontFamily: "var(--font-body)",
       }}
@@ -325,14 +325,14 @@ function Timeline({ currentStep }: { currentStep: number }) {
           top: 12,
           bottom: 12,
           width: 2,
-          background: "rgba(240,223,200,0.12)",
+          background: "rgba(2,70,40,0.2)",
         }}
       />
       {STEPS.map((s, i) => {
         const idx = i + 1;
         const reached = idx <= currentStep;
         const dotColor = reached ? GOLD : FADED;
-        const labelColor = reached ? "#FBF3D4" : "rgba(245,240,232,0.45)";
+        const labelColor = reached ? "#024628" : "rgba(2,70,40,0.5)";
         return (
           <div
             key={s.key}
@@ -512,7 +512,7 @@ function DirectEditPanel({
         <span style={{ fontSize: 18 }}>{open ? "▴" : "▾"}</span>
       </button>
 
-      <div style={{ marginTop: 8, fontSize: 12, color: "rgba(240,223,200,0.5)" }}>
+      <div style={{ marginTop: 8, fontSize: 12, color: "rgba(2,70,40,0.55)" }}>
         Changes apply instantly while you&apos;re more than 14 hours out.
       </div>
 
@@ -521,9 +521,9 @@ function DirectEditPanel({
           style={{
             marginTop: 12,
             padding: 18,
-            border: "1px solid rgba(240,223,200,0.12)",
+            border: "1px solid rgba(2,70,40,0.2)",
             borderRadius: 12,
-            background: "rgba(251,243,212,0.025)",
+            background: "transparent",
             display: "grid",
             gap: 14,
           }}
@@ -532,7 +532,7 @@ function DirectEditPanel({
             style={{
               fontSize: 12,
               lineHeight: 1.5,
-              color: "rgba(240,223,200,0.65)",
+              color: "rgba(2,70,40,0.7)",
               padding: "10px 12px",
               border: "1px solid rgba(2,70,40,0.25)",
               borderRadius: 8,
@@ -569,7 +569,7 @@ function DirectEditPanel({
             theme="dark"
           />
 
-          {err && <div style={{ color: "#ff9b9b", fontSize: 13 }}>{err}</div>}
+          {err && <div style={{ color: "#991B1B", fontSize: 13 }}>{err}</div>}
 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button
@@ -581,9 +581,9 @@ function DirectEditPanel({
               style={{
                 padding: "10px 18px",
                 background: "transparent",
-                border: "1px solid rgba(240,223,200,0.25)",
+                border: "1px solid rgba(2,70,40,0.35)",
                 borderRadius: 999,
-                color: "#FBF3D4",
+                color: "#024628",
                 fontSize: 13,
                 cursor: "pointer",
                 fontFamily: "inherit",
@@ -597,10 +597,10 @@ function DirectEditPanel({
               disabled={busy || !turnstileToken}
               style={{
                 padding: "10px 22px",
-                background: !busy && turnstileToken ? GOLD : "rgba(240,223,200,0.12)",
+                background: !busy && turnstileToken ? GOLD : "rgba(2,70,40,0.2)",
                 border: "none",
                 borderRadius: 999,
-                color: !busy && turnstileToken ? "#0a0a0a" : "rgba(240,223,200,0.5)",
+                color: !busy && turnstileToken ? "#FBF3D4" : "rgba(2,70,40,0.55)",
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: busy || !turnstileToken ? "not-allowed" : "pointer",
@@ -661,7 +661,7 @@ function CallAdminPanel({
           </a>
           .
         </div>
-        <div style={{ fontSize: 12, color: "rgba(240,223,200,0.55)" }}>
+        <div style={{ fontSize: 12, color: "rgba(2,70,40,0.6)" }}>
           Need same-day changes? A quick call is faster — we&apos;ll update
           your delivery on the spot.
         </div>
@@ -671,11 +671,11 @@ function CallAdminPanel({
           style={{
             marginTop: 12,
             padding: "12px 16px",
-            background: "rgba(227,179,65,0.06)",
-            border: "1px solid rgba(227,179,65,0.4)",
+            background: "transparent",
+            border: "1px solid #991B1B",
             borderRadius: 12,
             fontSize: 13,
-            color: "rgba(240,223,200,0.85)",
+            color: "rgba(2,70,40,0.85)",
           }}
         >
           A change request from{" "}
@@ -686,11 +686,11 @@ function CallAdminPanel({
           style={{
             marginTop: 12,
             padding: "12px 16px",
-            background: "rgba(251,243,212,0.025)",
-            border: "1px solid rgba(240,223,200,0.12)",
+            background: "transparent",
+            border: "1px solid rgba(2,70,40,0.2)",
             borderRadius: 12,
             fontSize: 12,
-            color: "rgba(240,223,200,0.55)",
+            color: "rgba(2,70,40,0.6)",
           }}
         >
           Previous request was {lastResolvedCR.status}.
@@ -709,7 +709,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
           fontSize: 11,
           letterSpacing: "0.2em",
           textTransform: "uppercase",
-          color: "rgba(240,223,200,0.5)",
+          color: "rgba(2,70,40,0.55)",
           marginBottom: 6,
         }}
       >

@@ -297,8 +297,11 @@ export default function PageContent() {
             <section style={{
               position: "absolute", inset: 0, overflow: "hidden",
               display: "flex", flexDirection: "column", justifyContent: "flex-start",
-              maskImage: "linear-gradient(to bottom, black 45%, transparent 88%)",
-              WebkitMaskImage: "linear-gradient(to bottom, black 45%, transparent 88%)",
+              // FIX 1 (Task F v2 follow-up): removed maskImage that faded
+              // the video to transparent at 88% — was revealing the
+              // #024628 wrapper bg below, reading as a green gradient
+              // rising up into the hero. Section now sits edge-to-edge
+              // and hands off cleanly to the QA section that follows.
             }}>
               <video
                 ref={videoRef}

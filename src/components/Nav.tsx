@@ -111,13 +111,14 @@ export default function Nav() {
       <div style={{
         position: "fixed", top: 0, left: 0, zIndex: 205,
         width: "min(360px, 92vw)", height: "100dvh", maxHeight: "100dvh",
-        background: "#0a0a0a",
+        background: "#C0C8CE",
+        borderRight: "1px solid rgba(2,70,40,0.25)",
         transform: menuOpen ? "translateX(0)" : "translateX(-100%)",
         transition: "transform 0.45s cubic-bezier(0.22,1,0.36,1)",
         display: "flex", flexDirection: "column",
         overflow: "hidden",
       }}>
-        <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.05, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.04, pointerEvents: "none", mixBlendMode: "multiply" }} />
 
         {/* Sticky header — sits at top, never scrolls. Leaves room for
             the hamburger button overlay (positioned at top:20px). */}
@@ -126,7 +127,7 @@ export default function Nav() {
           padding: "calc(100px + env(safe-area-inset-top)) calc(28px + env(safe-area-inset-right)) 24px calc(28px + env(safe-area-inset-left))",
           flexShrink: 0,
         }}>
-          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase", color: "rgba(200,144,58,0.55)" }}>Menu</p>
+          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase", color: "#024628" }}>Menu</p>
         </div>
 
         {/* Scrollable nav body — everything below the sticky header.
@@ -169,9 +170,9 @@ export default function Nav() {
           ].map(({ label, action }) => (
             <button key={label} onClick={action} style={{
               background: "none", border: "none", cursor: "pointer", padding: "12px 0",
-              textAlign: "left", borderBottom: "1px solid rgba(240,223,200,0.06)",
+              textAlign: "left", borderBottom: "1px solid rgba(2,70,40,0.15)",
               fontFamily: "var(--font-heading)", fontSize: "clamp(16px,2.6vw,20px)", fontWeight: 300,
-              color: "#FBF3D4", letterSpacing: "0.03em",
+              color: "#024628", letterSpacing: "0.03em",
               display: "block", width: "100%",
               flexShrink: 0,
               WebkitTapHighlightColor: "transparent",

@@ -264,9 +264,8 @@ function NavRow({
         left: 0,
         right: 0,
         bottom: 0,
-        background: "rgba(29,29,31,0.95)",
-        backdropFilter: "blur(8px)",
-        borderTop: `1px solid ${FAINT}`,
+        background: "#C0C8CE",
+        borderTop: `1px solid #024628`,
         padding: "16px 20px",
         zIndex: 50,
       }}
@@ -306,7 +305,7 @@ function NavRow({
             background: canNext ? GOLD : FAINT,
             border: "none",
             borderRadius: 999,
-            color: canNext ? "#0a0a0a" : FADED,
+            color: canNext ? "#FBF3D4" : FADED,
             fontSize: 13,
             fontWeight: 600,
             cursor: canNext ? "pointer" : "not-allowed",
@@ -367,7 +366,7 @@ function Step1Product({
                 padding: 18,
                 borderRadius: 14,
                 border: `1px solid ${selected ? GOLD : FAINT}`,
-                background: selected ? "rgba(2,70,40,0.08)" : "rgba(251,243,212,0.03)",
+                background: selected ? "rgba(2,70,40,0.08)" : "transparent",
                 color: TEXT,
               }}
             >
@@ -386,7 +385,7 @@ function Step1Product({
               </div>
               <div style={{ marginTop: 4, fontSize: 13, color: FADED }}>{p.blurb}</div>
               {savings > 0 && (
-                <div style={{ marginTop: 6, fontSize: 12, color: "#8fce9b" }}>
+                <div style={{ marginTop: 6, fontSize: 12, color: "#1D1D1F", fontWeight: 500 }}>
                   You save ₹{fmtMoney(savings)}{pct > 0 ? ` (${pct}%)` : ""} per loaf
                 </div>
               )}
@@ -420,7 +419,7 @@ function Step1Product({
       <div
         style={{
           fontSize: 13,
-          color: short > 0 ? "rgba(200,144,58,0.9)" : "#8fce9b",
+          color: short > 0 ? "#991B1B" : "#1D1D1F", fontWeight: 500,
           letterSpacing: "0.02em",
         }}
         role="status"
@@ -537,7 +536,7 @@ function Step3Slots({
         style={{
           padding: 14,
           borderRadius: 12,
-          background: "rgba(251,243,212,0.03)",
+          background: "transparent",
           border: `1px solid ${FAINT}`,
           marginBottom: 18,
           display: "flex",
@@ -564,7 +563,7 @@ function Step3Slots({
             borderRadius: 999,
             border: "none",
             background: bulkSlot ? GOLD : FAINT,
-            color: bulkSlot ? "#0a0a0a" : FADED,
+            color: bulkSlot ? "#FBF3D4" : FADED,
             fontSize: 12,
             fontWeight: 600,
             cursor: bulkSlot ? "pointer" : "not-allowed",
@@ -587,7 +586,7 @@ function Step3Slots({
               style={{
                 padding: "12px 14px",
                 borderRadius: 10,
-                background: "rgba(251,243,212,0.025)",
+                background: "transparent",
                 border: `1px solid ${FAINT}`,
                 display: "flex",
                 gap: 10,
@@ -605,7 +604,7 @@ function Step3Slots({
                   style={{
                     minWidth: 170,
                     fontSize: 12,
-                    color: "rgba(200,144,58,0.85)",
+                    color: "#991B1B",
                     letterSpacing: "0.02em",
                     lineHeight: 1.4,
                   }}
@@ -694,7 +693,7 @@ function Step4Review({
           <div style={{ fontSize: 15, color: GOLD }}>₹{totalAmount.toLocaleString("en-IN")} total</div>
         </div>
         {totalSavings > 0 && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#8fce9b" }}>
+          <div style={{ marginTop: 8, fontSize: 12, color: "#1D1D1F", fontWeight: 500 }}>
             You save ₹{fmtMoney(totalSavings)} versus one-time prices.
           </div>
         )}
@@ -710,7 +709,7 @@ function Step4Review({
             style={{
               padding: "12px 14px",
               borderRadius: 10,
-              background: "rgba(251,243,212,0.025)",
+              background: "transparent",
               border: `1px solid ${FAINT}`,
               display: "flex",
               justifyContent: "space-between",

@@ -123,7 +123,7 @@ export default function TrackPage() {
       style={{
         minHeight: "100dvh",
         background: BG,
-        color: "#FBF3D4",
+        color: "#024628",
         padding: "60px 20px 100px",
         fontFamily: "var(--font-body)",
       }}
@@ -155,7 +155,7 @@ export default function TrackPage() {
           </Link>
         </div>
 
-        {loading && <div style={{ color: "rgba(240,223,200,0.5)" }}>Loading…</div>}
+        {loading && <div style={{ color: "rgba(2,70,40,0.55)" }}>Loading…</div>}
 
         {!loading && !phone && (
           <Empty
@@ -180,8 +180,8 @@ export default function TrackPage() {
               <section
                 key={s.id}
                 style={{
-                  background: "rgba(251,243,212,0.03)",
-                  border: "1px solid rgba(240,223,200,0.12)",
+                  background: "transparent",
+                  border: "1px solid rgba(2,70,40,0.2)",
                   borderRadius: 14,
                   padding: 20,
                 }}
@@ -210,7 +210,7 @@ export default function TrackPage() {
                       style={{
                         marginTop: 4,
                         fontSize: 13,
-                        color: "rgba(240,223,200,0.6)",
+                        color: "rgba(2,70,40,0.65)",
                       }}
                     >
                       {s.frequency === "bi-weekly" ? "Every 2 weeks" : "Weekly"} ·{" "}
@@ -223,7 +223,7 @@ export default function TrackPage() {
                       style={{
                         marginTop: 8,
                         fontSize: 13,
-                        color: "rgba(240,223,200,0.5)",
+                        color: "rgba(2,70,40,0.55)",
                       }}
                     >
                       {s.total_weeks} wk · ₹
@@ -234,7 +234,7 @@ export default function TrackPage() {
 
                 <div style={{ display: "grid", gap: 10 }}>
                   {deliveries.length === 0 && (
-                    <div style={{ fontSize: 13, color: "rgba(240,223,200,0.5)" }}>
+                    <div style={{ fontSize: 13, color: "rgba(2,70,40,0.55)" }}>
                       Loading deliveries…
                     </div>
                   )}
@@ -263,7 +263,7 @@ export default function TrackPage() {
 
 function WeekCard({ delivery }: { delivery: Delivery }) {
   const step = statusStep(delivery.status);
-  const ringColor = DELIVERY_STATUS_COLOR[delivery.status] ?? "rgba(240,223,200,0.4)";
+  const ringColor = DELIVERY_STATUS_COLOR[delivery.status] ?? "rgba(2,70,40,0.5)";
   const isCancelled = delivery.status === "cancelled";
   const label = DELIVERY_STATUS_LABEL[delivery.status] ?? delivery.status;
   const mode = classifyEdit(delivery);
@@ -277,11 +277,11 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
         alignItems: "center",
         gap: 14,
         padding: "14px 16px",
-        background: "rgba(251,243,212,0.025)",
-        border: "1px solid rgba(240,223,200,0.1)",
+        background: "transparent",
+        border: "1px solid rgba(2,70,40,0.2)",
         borderRadius: 10,
         textDecoration: "none",
-        color: "#FBF3D4",
+        color: "#024628",
         transition: "background 0.15s ease",
       }}
     >
@@ -302,7 +302,7 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
             color:
               mode === "direct"
                 ? "rgba(2,70,40,0.85)"
-                : "rgba(227,179,65,0.85)",
+                : "#991B1B",
             letterSpacing: 0,
           }}
         >
@@ -320,7 +320,7 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
         >
           Week {delivery.week_number}
         </div>
-        <div style={{ marginTop: 4, fontSize: 13, color: "rgba(240,223,200,0.6)" }}>
+        <div style={{ marginTop: 4, fontSize: 13, color: "rgba(2,70,40,0.65)" }}>
           {formatDate(delivery.scheduled_date)} · {delivery.scheduled_time_slot}
         </div>
         {!isCancelled && (
@@ -336,7 +336,7 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
         aria-hidden
         style={{
           fontSize: 18,
-          color: "rgba(240,223,200,0.4)",
+          color: "rgba(2,70,40,0.5)",
           paddingLeft: 4,
         }}
       >
@@ -357,7 +357,7 @@ function ProgressBar({ step }: { step: number }) {
             width: 28,
             height: 4,
             borderRadius: 2,
-            background: i <= step ? GOLD : "rgba(240,223,200,0.12)",
+            background: i <= step ? GOLD : "rgba(2,70,40,0.2)",
           }}
         />
       ))}
@@ -380,14 +380,14 @@ function Empty({
     <div
       style={{
         padding: "40px 24px",
-        background: "rgba(251,243,212,0.03)",
-        border: "1px solid rgba(240,223,200,0.1)",
+        background: "transparent",
+        border: "1px solid #024628",
         borderRadius: 14,
         textAlign: "center",
       }}
     >
       <div style={{ fontSize: 17, marginBottom: 8 }}>{title}</div>
-      <div style={{ color: "rgba(240,223,200,0.6)", marginBottom: cta ? 20 : 0 }}>
+      <div style={{ color: "rgba(2,70,40,0.65)", marginBottom: cta ? 20 : 0 }}>
         {body}
       </div>
       {cta && href && (
@@ -398,7 +398,7 @@ function Empty({
             padding: "12px 22px",
             background: GOLD,
             borderRadius: 999,
-            color: "#0a0a0a",
+            color: "#FBF3D4",
             fontWeight: 600,
             fontSize: 14,
             textDecoration: "none",
@@ -465,7 +465,7 @@ function PlacedToast() {
         borderRadius: 999,
         background: "rgba(2,70,40,0.12)",
         border: `1px solid ${GOLD}`,
-        color: "#FBF3D4",
+        color: "#024628",
         fontSize: 13,
         fontFamily: "var(--font-body)",
         letterSpacing: "0.02em",
@@ -499,9 +499,9 @@ function CancelButton({ subId, onCancelled }: { subId: string; onCancelled: () =
         onClick={() => setConfirmOpen(true)}
         style={{
           background: "transparent",
-          border: "1px solid rgba(255,129,129,0.4)",
+          border: "1px solid #991B1B",
           borderRadius: 999,
-          color: "#ff8181",
+          color: "#991B1B",
           padding: "8px 16px",
           fontSize: 12,
           cursor: "pointer",
@@ -515,14 +515,14 @@ function CancelButton({ subId, onCancelled }: { subId: string; onCancelled: () =
   }
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <span style={{ fontSize: 13, color: "rgba(240,223,200,0.7)" }}>Are you sure?</span>
+      <span style={{ fontSize: 13, color: "rgba(2,70,40,0.7)" }}>Are you sure?</span>
       <button
         onClick={() => setConfirmOpen(false)}
         style={{
           background: "transparent",
-          border: "1px solid rgba(240,223,200,0.25)",
+          border: "1px solid rgba(2,70,40,0.35)",
           borderRadius: 999,
-          color: "#FBF3D4",
+          color: "#024628",
           padding: "6px 14px",
           fontSize: 12,
           cursor: "pointer",
@@ -534,10 +534,10 @@ function CancelButton({ subId, onCancelled }: { subId: string; onCancelled: () =
         onClick={doCancel}
         disabled={busy}
         style={{
-          background: "#ff8181",
+          background: "#991B1B",
           border: "none",
           borderRadius: 999,
-          color: "#0a0a0a",
+          color: "#FBF3D4",
           padding: "6px 14px",
           fontSize: 12,
           fontWeight: 600,

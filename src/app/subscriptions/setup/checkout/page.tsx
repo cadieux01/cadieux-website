@@ -17,7 +17,7 @@ const GOLD = "#024628";
 const TEXT = "#024628";
 const FADED = "rgba(2,70,40,0.6)";
 const FAINT = "rgba(2,70,40,0.2)";
-const RED = "#ff8181";
+const RED = "#991B1B";
 
 type SavedCustomer = {
   id: string;
@@ -465,7 +465,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
-  background: "#0a0a0a",
+  background: "#FBF3D4",
   border: `1px solid ${FAINT}`,
   borderRadius: 8,
   color: TEXT,
@@ -479,7 +479,7 @@ function primaryBtnStyle(active: boolean): React.CSSProperties {
     borderRadius: 999,
     border: "none",
     background: active ? GOLD : FAINT,
-    color: active ? "#0a0a0a" : FADED,
+    color: active ? "#FBF3D4" : FADED,
     fontSize: 13,
     fontWeight: 600,
     letterSpacing: "0.05em",

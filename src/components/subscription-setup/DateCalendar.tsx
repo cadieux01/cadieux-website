@@ -10,10 +10,10 @@ import { isoDate } from "@/lib/subscription-setup";
 import { dateHasAnyBookable } from "@/lib/delivery-slots";
 
 const GOLD = "#024628";
-const TEXT = "#FBF3D4";
-const FADED = "rgba(240,223,200,0.6)";
-const FAINT = "rgba(240,223,200,0.12)";
-const CHARCOAL = "#024628";
+const TEXT = "#024628";
+const FADED = "rgba(2,70,40,0.6)";
+const FAINT = "rgba(2,70,40,0.2)";
+const CHARCOAL = "#FBF3D4";
 const WALNUT = "#024628";
 
 type Cell = {
@@ -105,7 +105,7 @@ export function DateCalendar({
     <div
       style={{
         position: "relative",
-        background: "rgba(251,243,212,0.03)",
+        background: "transparent",
         border: `1px solid ${FAINT}`,
         borderRadius: 16,
         padding: 16,
@@ -202,10 +202,10 @@ export function DateCalendar({
           const fg = selected
             ? CHARCOAL
             : blocked
-            ? "rgba(240,223,200,0.22)"
+            ? "rgba(2,70,40,0.3)"
             : cell.inMonth
             ? TEXT
-            : "rgba(240,223,200,0.35)";
+            : "rgba(2,70,40,0.4)";
           return (
             <button
               key={cell.iso}
@@ -296,7 +296,7 @@ function BillBar({ count, total }: { count: number; total: number }) {
         padding: "14px 18px",
         borderRadius: 14,
         background: WALNUT,
-        border: `1px solid ${GOLD}`,
+        border: `1px solid rgba(251,243,212,0.25)`,
         display: "flex",
         alignItems: "baseline",
         justifyContent: "space-between",
@@ -309,7 +309,7 @@ function BillBar({ count, total }: { count: number; total: number }) {
             fontFamily: "var(--font-heading)",
             fontWeight: 300,
             fontSize: 28,
-            color: GOLD,
+            color: "#FBF3D4",
             lineHeight: 1,
           }}
         >
@@ -321,7 +321,7 @@ function BillBar({ count, total }: { count: number; total: number }) {
             fontSize: 12,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            color: FADED,
+            color: "rgba(251,243,212,0.7)",
           }}
         >
           {count === 1 ? "delivery" : "deliveries"}
@@ -332,7 +332,7 @@ function BillBar({ count, total }: { count: number; total: number }) {
           fontFamily: "var(--font-heading)",
           fontWeight: 300,
           fontSize: 22,
-          color: TEXT,
+          color: "#FBF3D4",
         }}
       >
         ₹{total.toLocaleString("en-IN")}
@@ -365,7 +365,7 @@ function MonthPickerOverlay({
       style={{
         position: "absolute",
         inset: 0,
-        background: "rgba(29,29,31,0.85)",
+        background: "rgba(192,200,206,0.92)",
         backdropFilter: "blur(6px)",
         borderRadius: 16,
         zIndex: 5,
@@ -396,7 +396,7 @@ function MonthPickerOverlay({
                 padding: "18px 10px",
                 borderRadius: 12,
                 border: `1px solid ${active ? GOLD : FAINT}`,
-                background: active ? "rgba(2,70,40,0.14)" : "rgba(251,243,212,0.04)",
+                background: active ? "rgba(2,70,40,0.14)" : "transparent",
                 color: TEXT,
                 cursor: "pointer",
                 display: "flex",
@@ -452,7 +452,7 @@ function NavArrow({
         height: 36,
         borderRadius: 999,
         background: "transparent",
-        border: `1px solid ${disabled ? FAINT : "rgba(240,223,200,0.25)"}`,
+        border: `1px solid ${disabled ? FAINT : "rgba(2,70,40,0.35)"}`,
         color: disabled ? FAINT : GOLD,
         cursor: disabled ? "not-allowed" : "pointer",
         fontSize: 18,

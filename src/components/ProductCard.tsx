@@ -143,7 +143,7 @@ export default function ProductCard({
           width: "100%",
           maxWidth: 360,
           background: "#024628",
-          border: "0.5px solid rgba(201,169,110,0.25)",
+          border: "0.5px solid rgba(251,243,212,0.25)",
           borderRadius: 16,
           overflow: "hidden",
           transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
@@ -188,8 +188,8 @@ export default function ProductCard({
               textTransform: "uppercase",
               color: "#024628",
               padding: "5px 10px",
-              background: "rgba(201,169,110,0.08)",
-              border: "0.5px solid rgba(201,169,110,0.35)",
+              background: "rgba(251,243,212,0.08)",
+              border: "0.5px solid rgba(251,243,212,0.35)",
               borderRadius: 4,
               opacity: 0,
               animation: "pc-slideUp 0.6s ease 0.3s forwards",
@@ -242,7 +242,7 @@ export default function ProductCard({
                 left: 0,
                 width: "55%",
                 background:
-                  "linear-gradient(105deg, transparent 40%, rgba(201,169,110,0.08) 50%, transparent 60%)",
+                  "linear-gradient(105deg, transparent 40%, rgba(251,243,212,0.08) 50%, transparent 60%)",
                 animation: hovered ? "pc-shine 1.1s ease forwards" : "none",
                 transform: "translateX(-100%)",
               }}
@@ -370,8 +370,8 @@ export default function ProductCard({
               display: "flex",
               padding: "16px 0",
               marginBottom: 22,
-              borderTop: "0.5px solid rgba(201,169,110,0.14)",
-              borderBottom: "0.5px solid rgba(201,169,110,0.14)",
+              borderTop: "0.5px solid rgba(251,243,212,0.14)",
+              borderBottom: "0.5px solid rgba(251,243,212,0.14)",
               opacity: 0,
               animation: "pc-slideUp 0.6s ease 0.5s forwards",
             }}
@@ -385,7 +385,7 @@ export default function ProductCard({
                 style={{
                   flex: 1,
                   textAlign: "center",
-                  borderLeft: i > 0 ? "0.5px solid rgba(201,169,110,0.14)" : "none",
+                  borderLeft: i > 0 ? "0.5px solid rgba(251,243,212,0.14)" : "none",
                 }}
               >
                 <div
@@ -442,13 +442,13 @@ export default function ProductCard({
               ref={addBtnRef}
               onClick={handleAdd}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(201,169,110,0.1)";
-                e.currentTarget.style.borderColor = "rgba(201,169,110,0.8)";
+                e.currentTarget.style.background = "rgba(251,243,212,0.1)";
+                e.currentTarget.style.borderColor = "rgba(251,243,212,0.8)";
                 e.currentTarget.style.transform = "scale(1.02)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.borderColor = "rgba(201,169,110,0.5)";
+                e.currentTarget.style.borderColor = "rgba(251,243,212,0.5)";
                 e.currentTarget.style.transform = "scale(1)";
               }}
               onMouseDown={(e) => {
@@ -465,7 +465,7 @@ export default function ProductCard({
                 textTransform: "uppercase",
                 color: "#024628",
                 background: "transparent",
-                border: "0.5px solid rgba(201,169,110,0.5)",
+                border: "0.5px solid rgba(251,243,212,0.5)",
                 padding: "10px 18px",
                 borderRadius: 6,
                 cursor: "pointer",

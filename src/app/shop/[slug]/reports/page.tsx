@@ -60,7 +60,7 @@ export default function ProductReportsPage() {
             textAlign: "center",
             padding: "clamp(32px,6vw,56px) clamp(24px,5vw,48px)",
             background: "rgba(29,29,31,0.55)",
-            border: "0.5px solid rgba(201,169,110,0.25)",
+            border: "0.5px solid rgba(251,243,212,0.25)",
             borderRadius: 16,
             backdropFilter: "blur(6px)",
           }}
@@ -113,7 +113,7 @@ export default function ProductReportsPage() {
               height: 56,
               margin: "8px auto 24px",
               borderRadius: "50%",
-              border: "1.5px solid rgba(201,169,110,0.35)",
+              border: "1.5px solid rgba(251,243,212,0.35)",
               borderTopColor: "#024628",
               animation: "reports-spin 1.4s linear infinite",
             }}
@@ -196,8 +196,8 @@ export default function ProductReportsPage() {
               href="/shop"
               style={{
                 padding: "14px 26px",
-                background: "rgba(201,169,110,0.08)",
-                border: "1px solid rgba(201,169,110,0.3)",
+                background: "rgba(251,243,212,0.08)",
+                border: "1px solid rgba(251,243,212,0.3)",
                 color: "rgba(245,240,232,0.7)",
                 fontFamily: "var(--font-body)",
                 fontSize: 10,

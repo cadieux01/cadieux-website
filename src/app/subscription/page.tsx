@@ -278,7 +278,7 @@ export default function SubscriptionHubPage() {
                 gap: 14,
                 padding: "28px 24px 26px",
                 background: WALNUT,
-                border: "1px solid rgba(201,169,110,0.18)",
+                border: "1px solid rgba(251,243,212,0.15)",
                 borderRadius: 4,
                 color: CREAM,
                 textDecoration: "none",
@@ -289,18 +289,6 @@ export default function SubscriptionHubPage() {
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 {c.icon}
-                <span
-                  style={{
-                    fontFamily: "var(--font-body)",
-                    fontSize: 10,
-                    fontWeight: 300,
-                    letterSpacing: "0.35em",
-                    textTransform: "uppercase",
-                    color: "rgba(201,169,110,0.7)",
-                  }}
-                >
-                  →
-                </span>
               </div>
               <div
                 style={{
