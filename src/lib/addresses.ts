@@ -93,3 +93,100 @@ export function formatAddressPreview(
   if (address.pincode) parts.push(address.pincode);
   return parts.join(", ");
 }
+
+/**
+ * Best-effort mirror of a checkout-entered address into the customer's
+ * address book (`customer_addresses`). Called from the checkout address
+ * step so an address typed there also appears at /account/addresses and
+ * prefills future checkouts — closing the round-trip.
+ *
+ * Contract: NEVER throws, NEVER rethrows. All failures — bad phone,
+ * network error, 4xx/5xx from the API, JSON parse — are swallowed. This
+ * function must not block or break the checkout submit / payment flow;
+ * the order + Razorpay path is the priority, address-book mirroring is
+ * secondary.
+ *
+ * Dedup: fetches existing addresses first and skips the insert when a
+ * whitespace-normalized case-insensitive match on (label, address_line,
+ * city, pincode) already exists.
+ */
+export async function upsertAddressToBookBestEffort(
+  phone: string,
+  input: {
+    label: string;           // "Home" | "Work" | "Other" | custom text
+    addressLine: string;     // may be free-form (checkout's addressLine)
+    area?: string;           // checkout has a separate area/locality — folded in
+    city: string;
+    pincode: string;
+  },
+): Promise<void> {
+  try {
+    const phoneDigits = (phone || "").replace(/\D/g, "");
+    if (phoneDigits.length !== 10) return;
+
+    // The customer_addresses.label column is a tri-value enum
+    // ('home' | 'work' | 'other'). Custom labels from checkout ("Mom's
+    // place") map to 'other' — the string itself isn't persisted here,
+    // but the order still carries the label prefix in delivery_address.
+    const raw = (input.label || "").trim().toLowerCase();
+    const label: "home" | "work" | "other" =
+      raw === "home" ? "home" : raw === "work" ? "work" : "other";
+
+    // Combine addressLine + area into one line — customer_addresses has
+    // no separate area column and the standalone page treats
+    // address_line as the full free-form line.
+    const line = input.addressLine.trim();
+    const area = (input.area ?? "").trim();
+    const address_line = area ? `${line}, ${area}` : line;
+    const city = input.city.trim();
+    const pincode = input.pincode.trim();
+
+    if (!address_line || !city) return;
+
+    // Dedup — fetch existing rows and short-circuit on a match. If the
+    // GET fails we still attempt the POST; worst case is a duplicate row
+    // (rare and non-destructive).
+    let existing: CustomerAddress[] = [];
+    try {
+      const r = await fetch(
+        `/api/customer-addresses?phone=${encodeURIComponent(phoneDigits)}`,
+      );
+      if (r.ok) {
+        const data = await r.json();
+        existing = data.addresses || [];
+      }
+    } catch { /* ignore, proceed to POST */ }
+
+    const norm = (s: string | null | undefined) =>
+      (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+    const dup = existing.some(
+      (a) =>
+        a.label === label &&
+        norm(a.address_line) === norm(address_line) &&
+        norm(a.city) === norm(city) &&
+        (a.pincode ?? "") === pincode,
+    );
+    if (dup) return;
+
+    await fetch(
+      `/api/customer-addresses?phone=${encodeURIComponent(phoneDigits)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label,
+          address_line,
+          city,
+          state: null,
+          pincode: pincode || null,
+          // Never overwrite a user's chosen default — an address entered
+          // at checkout enters the book as non-default so their existing
+          // default (if any) stays authoritative.
+          is_default: false,
+        }),
+      },
+    );
+  } catch {
+    /* swallow — best-effort */
+  }
+}

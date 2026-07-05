@@ -25,6 +25,7 @@ import { GOOGLE_MAPS_LOADER_ID, GOOGLE_MAPS_LIBRARIES } from "@/lib/google-maps-
 import { geocodePincodeClient, reverseGeocodeClient } from "@/lib/clientGeocode";
 import LocationPickerModal from "@/components/LocationPickerModal";
 import Select from "@/components/ui/Select";
+import { upsertAddressToBookBestEffort } from "@/lib/addresses";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -613,6 +614,26 @@ export default function CheckoutPage() {
       if (!res.ok) { setError(data.error ?? "Failed to save details."); return; }
       localStorage.setItem("cadieux_phone", phone.replace(/\D/g, ""));
       setCustomer(data.customer);
+
+      // ── Address-book round-trip (best-effort, fire-and-forget) ─────
+      // Mirror the entered address into customer_addresses so it shows
+      // up at /account/addresses and prefills the next checkout. This
+      // is intentionally NOT awaited: the helper is contractually silent
+      // on all failures (network, 4xx/5xx, bad phone, JSON parse) and
+      // must never block or delay advancing to the delivery step or the
+      // downstream Razorpay / COD path. Order creation + payment are
+      // the priority; address-book mirroring is secondary.
+      // Runs only on fresh/edit form paths — returning customers with
+      // saved details short-circuit above at line ~573 and never reach
+      // here, so we don't duplicate their existing book entries.
+      void upsertAddressToBookBestEffort(phone.replace(/\D/g, ""), {
+        label: effectiveLabel,
+        addressLine,
+        area,
+        city,
+        pincode,
+      });
+
       setAddressConfirmed(true);
       setStep("delivery");
     } catch {
