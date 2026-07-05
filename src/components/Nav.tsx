@@ -156,8 +156,8 @@ export default function Nav() {
               { label: "Orders",         action: () => nav("/orders") },
               ...(hasSavedPhone
                 ? [
-                    { label: "Addresses", action: () => nav("/account/addresses") },
-                    { label: "Requests",  action: () => nav("/account/requests") },
+                    { label: "Address",  action: () => nav("/account/addresses") },
+                    { label: "Requests", action: () => nav("/account/requests") },
                   ]
                 : []),
               { label: "Cart",           action: () => nav("/cart") },

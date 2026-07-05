@@ -32,6 +32,10 @@ export default function AddressesPage() {
   const [pincode, setPincode] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  // Page-level notice used by delete guard — surfaces messages like
+  // "address is tied to an active order" instead of a silent no-op.
+  const [pageNotice, setPageNotice] = useState<string | null>(null);
 
   // Initialize phone and fetch addresses
   useEffect(() => {
@@ -62,6 +66,8 @@ export default function AddressesPage() {
     setPincode("");
     setIsDefault(addresses.length === 0); // Default if first address
     setEditingId(null);
+    setFormError(null);
+    setPageNotice(null);
     setFormMode("add");
   }
 
@@ -73,16 +79,35 @@ export default function AddressesPage() {
     setPincode(addr.pincode || "");
     setIsDefault(addr.is_default);
     setEditingId(addr.id);
+    setFormError(null);
+    setPageNotice(null);
     setFormMode("edit");
   }
 
   function cancelForm() {
     setFormMode("view");
     setEditingId(null);
+    setFormError(null);
   }
 
   async function saveAddress() {
-    if (!phone || !addressLine || !city) return;
+    if (!phone) return;
+    // Validation mirrors checkout: address line + city required, pincode
+    // must be 6 numeric digits (matches Indian postal format enforced on
+    // the checkout add-address form).
+    if (!addressLine.trim()) {
+      setFormError("Please enter a street address.");
+      return;
+    }
+    if (!city.trim()) {
+      setFormError("Please enter a city.");
+      return;
+    }
+    if (!/^\d{6}$/.test(pincode)) {
+      setFormError("Pincode must be 6 digits.");
+      return;
+    }
+    setFormError(null);
 
     setFormLoading(true);
     try {
@@ -122,9 +147,14 @@ export default function AddressesPage() {
     if (!phone) return;
     if (!window.confirm("Delete this address?")) return;
 
-    const success = await deleteAddress(phone, id);
-    if (success) {
+    setPageNotice(null);
+    const result = await deleteAddress(phone, id);
+    if (result.ok) {
       await loadAddresses(phone);
+    } else {
+      // Server refused (e.g. address_in_use). Show the reason inline so
+      // the customer knows why the delete didn't take.
+      setPageNotice(result.error);
     }
   }
 
@@ -282,6 +312,25 @@ export default function AddressesPage() {
 
         {!loading && phone && (
           <>
+            {pageNotice && (
+              <div
+                style={{
+                  padding: "12px 14px",
+                  border: "1px solid #991B1B",
+                  background: "rgba(153,27,27,0.08)",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 12,
+                  fontWeight: 300,
+                  color: "#991B1B",
+                  letterSpacing: "0.04em",
+                  lineHeight: 1.5,
+                  marginBottom: 20,
+                }}
+              >
+                {pageNotice}
+              </div>
+            )}
+
             {/* Address List */}
             {formMode === "view" && (
               <>
@@ -519,9 +568,14 @@ export default function AddressesPage() {
                     <label style={labelStyle}>Pincode</label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      maxLength={6}
                       value={pincode}
-                      onChange={(e) => setPincode(e.target.value)}
-                      placeholder="Pincode"
+                      onChange={(e) =>
+                        setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      placeholder="530045"
+                      autoComplete="postal-code"
                       style={inputStyle}
                     />
                   </div>
@@ -548,6 +602,25 @@ export default function AddressesPage() {
                     Set as default address
                   </label>
                 </div>
+
+                {formError && (
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      border: "1px solid #991B1B",
+                      background: "rgba(153,27,27,0.08)",
+                      fontFamily: "var(--font-body)",
+                      fontSize: 12,
+                      fontWeight: 300,
+                      color: "#991B1B",
+                      letterSpacing: "0.04em",
+                      lineHeight: 1.5,
+                      marginBottom: 16,
+                    }}
+                  >
+                    {formError}
+                  </div>
+                )}
 
                 <div style={{ display: "flex", gap: 12 }}>
                   <button

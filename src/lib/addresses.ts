@@ -60,15 +60,29 @@ export async function updateAddress(
   return data.address || null;
 }
 
+export type DeleteAddressResult =
+  | { ok: true }
+  | { ok: false; error: string; code?: string };
+
 export async function deleteAddress(
   phone: string,
   id: string,
-): Promise<boolean> {
+): Promise<DeleteAddressResult> {
   const response = await fetch(
     `/api/customer-addresses/${id}?phone=${encodeURIComponent(phone)}`,
     { method: "DELETE" },
   );
-  return response.ok;
+  if (response.ok) return { ok: true };
+  // Try to surface the server's reason (e.g. "address_in_use"). Fall back
+  // to a generic message when the body isn't JSON.
+  let error = "Could not delete address.";
+  let code: string | undefined;
+  try {
+    const data = await response.json();
+    if (data?.error) error = data.error;
+    if (data?.code) code = data.code;
+  } catch { /* ignore */ }
+  return { ok: false, error, code };
 }
 
 export function formatAddressPreview(

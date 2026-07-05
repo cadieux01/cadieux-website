@@ -130,6 +130,31 @@ export async function DELETE(
       );
     }
 
+    // DELETE GUARD — block if this address is bound to an order that is
+    // still active (not delivered / cancelled / refunded). orders has
+    // `customer_address_id ON DELETE SET NULL` so a hard delete would not
+    // fail, but it would orphan the shipping address on live orders and
+    // break tracking/receipts. We refuse instead and surface a message
+    // the customer can act on.
+    const TERMINAL = ["delivered", "cancelled", "refunded"];
+    const { data: activeOrders } = await supabase
+      .from("orders")
+      .select("id, status")
+      .eq("customer_address_id", id)
+      .not("status", "in", `(${TERMINAL.join(",")})`)
+      .limit(1);
+
+    if (activeOrders && activeOrders.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "This address is tied to an active order. Wait until it's delivered, or cancel it first.",
+          code: "address_in_use",
+        },
+        { status: 409 },
+      );
+    }
+
     // Delete the address
     const { error: deleteError } = await supabase
       .from("customer_addresses")
