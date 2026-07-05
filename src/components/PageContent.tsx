@@ -390,12 +390,10 @@ export default function PageContent() {
               }}>Shop Now</button>
           </div>
 
-          {/* Phase 1→2 bridge: fades Phase 1 bottom to dark, matching Phase 2's video overlay */}
-          <div style={{
-            position: "relative", marginTop: "-35vh", height: "35vh",
-            zIndex: 2, pointerEvents: "none",
-            background: "linear-gradient(to bottom, transparent, #024628)",
-          }} />
+          {/* FIX 6: removed Phase 1→2 gradient bridge — was creating a visible
+              green bleed at the bottom of the hero video. The masked video
+              already fades to transparent at 88%, and the container's own
+              #024628 background provides the clean edge without a gradient. */}
 
           {/* ══ Q&A SECTION ══ */}
           <QASection />

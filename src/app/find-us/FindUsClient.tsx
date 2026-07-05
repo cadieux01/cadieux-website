@@ -324,7 +324,7 @@ export default function FindUsClient({
                       onClick={() => navigateTo(selected)}
                       style={{
                         background: GREEN_HEX,
-                        color: "#fff",
+                        color: "#FBF3D4",
                         border: "none",
                         borderRadius: 4,
                         padding: "6px 10px",

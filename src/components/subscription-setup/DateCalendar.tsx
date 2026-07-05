@@ -105,7 +105,7 @@ export function DateCalendar({
     <div
       style={{
         position: "relative",
-        background: "rgba(255,255,255,0.03)",
+        background: "rgba(251,243,212,0.03)",
         border: `1px solid ${FAINT}`,
         borderRadius: 16,
         padding: 16,
@@ -396,7 +396,7 @@ function MonthPickerOverlay({
                 padding: "18px 10px",
                 borderRadius: 12,
                 border: `1px solid ${active ? GOLD : FAINT}`,
-                background: active ? "rgba(201,169,110,0.14)" : "rgba(255,255,255,0.04)",
+                background: active ? "rgba(2,70,40,0.14)" : "rgba(251,243,212,0.04)",
                 color: TEXT,
                 cursor: "pointer",
                 display: "flex",

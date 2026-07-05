@@ -259,7 +259,7 @@ export default function DeliveryDetailPage() {
             padding: "14px 18px",
             border: "1px solid rgba(240,223,200,0.12)",
             borderRadius: 12,
-            background: "rgba(255,255,255,0.025)",
+            background: "rgba(251,243,212,0.025)",
             fontSize: 13,
             color: "rgba(240,223,200,0.6)",
           }}
@@ -352,7 +352,7 @@ function Timeline({ currentStep }: { currentStep: number }) {
                 borderRadius: "50%",
                 border: `2px solid ${dotColor}`,
                 background: reached ? GOLD : "transparent",
-                boxShadow: reached ? `0 0 0 4px rgba(201,169,110,0.12)` : "none",
+                boxShadow: reached ? `0 0 0 4px rgba(2,70,40,0.12)` : "none",
               }}
             />
             <div
@@ -494,7 +494,7 @@ function DirectEditPanel({
         style={{
           width: "100%",
           padding: "14px 18px",
-          background: "rgba(201,169,110,0.08)",
+          background: "rgba(2,70,40,0.08)",
           border: `1px solid ${GOLD}`,
           borderRadius: 12,
           color: GOLD,
@@ -523,7 +523,7 @@ function DirectEditPanel({
             padding: 18,
             border: "1px solid rgba(240,223,200,0.12)",
             borderRadius: 12,
-            background: "rgba(255,255,255,0.025)",
+            background: "rgba(251,243,212,0.025)",
             display: "grid",
             gap: 14,
           }}
@@ -534,9 +534,9 @@ function DirectEditPanel({
               lineHeight: 1.5,
               color: "rgba(240,223,200,0.65)",
               padding: "10px 12px",
-              border: "1px solid rgba(201,169,110,0.25)",
+              border: "1px solid rgba(2,70,40,0.25)",
               borderRadius: 8,
-              background: "rgba(201,169,110,0.05)",
+              background: "rgba(2,70,40,0.05)",
             }}
           >
             We bake fresh for you — please pick a delivery time at least
@@ -634,7 +634,7 @@ function CallAdminPanel({
         style={{
           padding: "20px 22px",
           border: `1px solid ${GOLD}`,
-          background: "rgba(201,169,110,0.08)",
+          background: "rgba(2,70,40,0.08)",
           borderRadius: 12,
           color: FADED,
           lineHeight: 1.55,
@@ -686,7 +686,7 @@ function CallAdminPanel({
           style={{
             marginTop: 12,
             padding: "12px 16px",
-            background: "rgba(255,255,255,0.025)",
+            background: "rgba(251,243,212,0.025)",
             border: "1px solid rgba(240,223,200,0.12)",
             borderRadius: 12,
             fontSize: 12,

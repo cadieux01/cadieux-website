@@ -367,7 +367,7 @@ function Step1Product({
                 padding: 18,
                 borderRadius: 14,
                 border: `1px solid ${selected ? GOLD : FAINT}`,
-                background: selected ? "rgba(201,169,110,0.08)" : "rgba(255,255,255,0.03)",
+                background: selected ? "rgba(2,70,40,0.08)" : "rgba(251,243,212,0.03)",
                 color: TEXT,
               }}
             >
@@ -537,7 +537,7 @@ function Step3Slots({
         style={{
           padding: 14,
           borderRadius: 12,
-          background: "rgba(255,255,255,0.03)",
+          background: "rgba(251,243,212,0.03)",
           border: `1px solid ${FAINT}`,
           marginBottom: 18,
           display: "flex",
@@ -587,7 +587,7 @@ function Step3Slots({
               style={{
                 padding: "12px 14px",
                 borderRadius: 10,
-                background: "rgba(255,255,255,0.025)",
+                background: "rgba(251,243,212,0.025)",
                 border: `1px solid ${FAINT}`,
                 display: "flex",
                 gap: 10,
@@ -667,7 +667,7 @@ function Step4Review({
         style={{
           padding: 18,
           borderRadius: 14,
-          background: "rgba(201,169,110,0.06)",
+          background: "rgba(2,70,40,0.06)",
           border: `1px solid ${GOLD}`,
           marginBottom: 20,
         }}
@@ -710,7 +710,7 @@ function Step4Review({
             style={{
               padding: "12px 14px",
               borderRadius: 10,
-              background: "rgba(255,255,255,0.025)",
+              background: "rgba(251,243,212,0.025)",
               border: `1px solid ${FAINT}`,
               display: "flex",
               justifyContent: "space-between",

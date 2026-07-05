@@ -24,18 +24,21 @@ const GRAIN = "url(/grain.svg)";
 
 const DIVIDER_STYLE: React.CSSProperties = {
   height: 1,
-  background: "rgba(201, 169, 110, 0.15)",
+  background: "rgba(2,70,40,0.25)",
   margin: "48px 0",
   border: 0,
 };
 
+// Task F v2 cleanup: pill controls follow FIX 4 pattern —
+// unselected = transparent + FG text (border lives on the wrapping container);
+// no rgba() alpha backgrounds on interactive controls.
 const pdpQtyBtnStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: 22,
   lineHeight: 1,
   fontWeight: 400,
   color: "#024628",
-  background: "rgba(201,169,110,0.12)",
+  background: "transparent",
   border: "none",
   padding: "10px 16px",
   cursor: "pointer",
@@ -235,7 +238,7 @@ export default function ProductDetailClient({
                 fontSize: 14,
                 lineHeight: 1.65,
                 fontWeight: 300,
-                color: "rgba(251, 243, 212, 0.7)",
+                color: "#024628",
                 maxWidth: 460,
               }}
             >
@@ -248,8 +251,8 @@ export default function ProductDetailClient({
                 gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                 gap: 12,
                 padding: "18px 0",
-                borderTop: "0.5px solid rgba(201,169,110,0.2)",
-                borderBottom: "0.5px solid rgba(201,169,110,0.2)",
+                borderTop: "1px solid rgba(2,70,40,0.25)",
+                borderBottom: "1px solid rgba(2,70,40,0.25)",
                 marginBottom: 32,
               }}
             >
@@ -282,10 +285,10 @@ export default function ProductDetailClient({
                       marginTop: 6,
                       fontFamily: "var(--font-body)",
                       fontSize: 9,
-                      fontWeight: 300,
+                      fontWeight: 400,
                       letterSpacing: "0.22em",
                       textTransform: "uppercase",
-                      color: "rgba(2,70,40,0.75)",
+                      color: "#024628",
                     }}
                   >
                     {tile.label}
@@ -300,9 +303,9 @@ export default function ProductDetailClient({
                 marginBottom: 32,
                 fontFamily: "var(--font-body)",
                 fontSize: 11,
-                fontWeight: 300,
+                fontWeight: 400,
                 letterSpacing: "0.04em",
-                color: "rgba(201,169,110,0.85)",
+                color: "#1D1D1F",
               }}
             >
               {dispTrialsBanner}
@@ -324,22 +327,22 @@ export default function ProductDetailClient({
                 style={{
                   fontFamily: "var(--font-body)",
                   fontSize: 11,
-                  fontWeight: 300,
-                  color: "rgba(2,70,40,0.7)",
+                  fontWeight: 400,
+                  color: "#024628",
                 }}
               >
                 {orderType === "sub" ? "per delivery" : "one-time"}
               </div>
             </div>
 
-            {/* Order type toggle */}
+            {/* Order type toggle — FIX 4: selected=solid FG+ash label, unselected=transparent+FG+FG border */}
             <div
               style={{
                 display: "inline-flex",
                 padding: 4,
                 borderRadius: 999,
-                border: "1px solid rgba(201,169,110,0.3)",
-                background: "rgba(29,29,31,0.35)",
+                border: "1px solid #024628",
+                background: "transparent",
                 marginBottom: 18,
               }}
             >
@@ -351,8 +354,8 @@ export default function ProductDetailClient({
                     padding: "8px 18px",
                     borderRadius: 999,
                     border: "none",
-                    background: orderType === type ? "rgba(201,169,110,0.2)" : "transparent",
-                    color: orderType === type ? "#024628" : "rgba(2,70,40,0.75)",
+                    background: orderType === type ? "#024628" : "transparent",
+                    color: orderType === type ? "#C0C8CE" : "#024628",
                     fontFamily: "var(--font-body)",
                     fontSize: 10,
                     fontWeight: 500,
@@ -398,7 +401,7 @@ export default function ProductDetailClient({
                     fontWeight: 500,
                     letterSpacing: "0.3em",
                     textTransform: "uppercase",
-                    color: "rgba(2,70,40,0.75)",
+                    color: "#024628",
                   }}
                 >
                   Quantity
@@ -407,7 +410,7 @@ export default function ProductDetailClient({
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    border: "1px solid rgba(201,169,110,0.4)",
+                    border: "1px solid #024628",
                     borderRadius: 8,
                     overflow: "hidden",
                   }}
@@ -454,9 +457,10 @@ export default function ProductDetailClient({
                 style={{
                   flex: "1 1 220px",
                   padding: "16px 26px",
-                  background: added ? "rgba(201,169,110,0.25)" : "transparent",
-                  border: `1px solid ${outOfStock ? "rgba(201,169,110,0.3)" : "#024628"}`,
-                  color: outOfStock ? "rgba(2,70,40,0.6)" : "#024628",
+                  background: added ? "#024628" : "transparent",
+                  border: "1px solid #024628",
+                  color: added ? "#FBF3D4" : "#024628",
+                  opacity: outOfStock ? 0.5 : 1,
                   fontFamily: "var(--font-body)",
                   fontSize: 11,
                   fontWeight: 500,
@@ -490,7 +494,7 @@ export default function ProductDetailClient({
                     fontSize: 13,
                     lineHeight: 1.75,
                     fontWeight: 300,
-                    color: "rgba(251, 243, 212, 0.7)",
+                    color: "#024628",
                   }}
                 >
                   {para}
@@ -521,8 +525,8 @@ export default function ProductDetailClient({
                       alignItems: "center",
                       gap: 14,
                       padding: "18px 18px",
-                      background: "rgba(29,29,31,0.35)",
-                      border: "0.5px solid rgba(201,169,110,0.15)",
+                      background: "transparent",
+                      border: "1px solid rgba(2,70,40,0.25)",
                       borderRadius: 8,
                     }}
                   >
@@ -561,14 +565,14 @@ export default function ProductDetailClient({
                 style={{
                   marginBottom: 24,
                   padding: "12px 16px",
-                  border: "0.5px solid rgba(201,169,110,0.3)",
+                  border: "1px solid rgba(2,70,40,0.25)",
                   borderRadius: 4,
                   fontFamily: "var(--font-body)",
                   fontSize: 13,
-                  fontWeight: 300,
+                  fontWeight: 400,
                   letterSpacing: "0.04em",
-                  color: "#024628",
-                  background: "rgba(201,169,110,0.06)",
+                  color: "#1D1D1F",
+                  background: "transparent",
                 }}
               >
                 {dispTrialsBanner}
@@ -648,7 +652,7 @@ function Gallery({
           background: "#1a1510",
           borderRadius: 14,
           overflow: "hidden",
-          border: "0.5px solid rgba(201,169,110,0.18)",
+          border: "1px solid rgba(2,70,40,0.25)",
         }}
       >
         <div
@@ -716,7 +720,7 @@ function Gallery({
           ))}
         </div>
 
-        {/* Swipe hint — only on first item */}
+        {/* Swipe hint — only on first item. FIX 4: solid cream pill + FG label + FG border (readable on any photo). */}
         {media.length > 1 && active === 0 && (
           <div
             style={{
@@ -728,15 +732,14 @@ function Gallery({
               fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "rgba(2,70,40,0.85)",
+              color: "#024628",
               padding: "6px 12px",
-              background: "rgba(29,29,31,0.6)",
-              border: "0.5px solid rgba(2,70,40,0.3)",
+              background: "#FBF3D4",
+              border: "1px solid #024628",
               borderRadius: 4,
               display: "inline-flex",
               alignItems: "center",
               gap: 8,
-              backdropFilter: "blur(4px)",
               pointerEvents: "none",
             }}
           >
@@ -792,7 +795,7 @@ function Gallery({
               width: 74,
               height: 92,
               padding: 0,
-              border: `1.5px solid ${i === active ? "#024628" : "rgba(201,169,110,0.2)"}`,
+              border: `1.5px solid ${i === active ? "#024628" : "rgba(2,70,40,0.25)"}`,
               borderRadius: 8,
               overflow: "hidden",
               cursor: "pointer",
@@ -912,8 +915,8 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                   style={{
                     display: "block",
                     padding: "14px 16px",
-                    border: "1px solid rgba(201, 169, 110, 0.35)",
-                    background: "rgba(201,169,110,0.05)",
+                    border: "1px solid rgba(2,70,40,0.25)",
+                    background: "transparent",
                     textDecoration: "none",
                     color: "#024628",
                   }}
@@ -924,7 +927,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                         fontFamily: "var(--font-body)",
                         fontSize: 10,
                         letterSpacing: "0.12em",
-                        color: "rgba(2,70,40,0.75)",
+                        color: "#024628",
                         marginBottom: 4,
                       }}
                     >
@@ -948,7 +951,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                         fontFamily: "var(--font-body)",
                         fontSize: 12,
                         lineHeight: 1.5,
-                        color: "rgba(2,70,40,0.85)",
+                        color: "#024628",
                         marginBottom: 8,
                       }}
                     >

@@ -95,7 +95,7 @@ export default function PastPage() {
           <div
             style={{
               padding: "40px 24px",
-              background: "rgba(255,255,255,0.03)",
+              background: "rgba(2,70,40,0.03)",
               border: `1px solid ${FAINT}`,
               borderRadius: 14,
               textAlign: "center",
@@ -152,7 +152,7 @@ export default function PastPage() {
             );
 
             const cardStyle: React.CSSProperties = {
-              background: "rgba(255,255,255,0.03)",
+              background: "rgba(2,70,40,0.03)",
               border: `1px solid ${FAINT}`,
               borderRadius: 14,
               padding: 20,

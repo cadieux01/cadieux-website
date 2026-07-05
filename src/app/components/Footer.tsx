@@ -44,7 +44,7 @@ export default function Footer() {
           href="/find-us"
           className="label-text"
           style={{
-            color: "rgba(201,169,110,0.85)",
+            color: "#FBF3D4",
             textDecoration: "none",
             opacity: 0.85,
           }}

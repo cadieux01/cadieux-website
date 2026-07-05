@@ -194,7 +194,7 @@ export default function LocationPickerModal(props: {
                 autoComplete="off"
                 style={{
                   width: "100%", height: 42,
-                  background: "rgba(255,255,255,0.04)",
+                  background: "rgba(251,243,212,0.04)",
                   border: "1px solid rgba(200,144,58,0.3)",
                   outline: "none",
                   padding: "0 14px",
@@ -208,7 +208,7 @@ export default function LocationPickerModal(props: {
             <div
               style={{
                 width: "100%", height: 42,
-                background: "rgba(255,255,255,0.04)",
+                background: "rgba(251,243,212,0.04)",
                 border: "1px solid rgba(200,144,58,0.18)",
                 display: "flex", alignItems: "center",
                 padding: "0 14px",

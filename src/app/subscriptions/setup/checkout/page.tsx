@@ -197,7 +197,7 @@ function cardStyle(active: boolean): React.CSSProperties {
   return {
     padding: 20,
     borderRadius: 14,
-    background: active ? "rgba(201,169,110,0.08)" : "rgba(255,255,255,0.03)",
+    background: active ? "rgba(2,70,40,0.08)" : "rgba(2,70,40,0.03)",
     border: `1px solid ${active ? GOLD : FAINT}`,
   };
 }

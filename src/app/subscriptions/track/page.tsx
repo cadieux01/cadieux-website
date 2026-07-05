@@ -180,7 +180,7 @@ export default function TrackPage() {
               <section
                 key={s.id}
                 style={{
-                  background: "rgba(255,255,255,0.03)",
+                  background: "rgba(251,243,212,0.03)",
                   border: "1px solid rgba(240,223,200,0.12)",
                   borderRadius: 14,
                   padding: 20,
@@ -277,7 +277,7 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
         alignItems: "center",
         gap: 14,
         padding: "14px 16px",
-        background: "rgba(255,255,255,0.025)",
+        background: "rgba(251,243,212,0.025)",
         border: "1px solid rgba(240,223,200,0.1)",
         borderRadius: 10,
         textDecoration: "none",
@@ -301,7 +301,7 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
             lineHeight: 1,
             color:
               mode === "direct"
-                ? "rgba(201,169,110,0.85)"
+                ? "rgba(2,70,40,0.85)"
                 : "rgba(227,179,65,0.85)",
             letterSpacing: 0,
           }}
@@ -380,7 +380,7 @@ function Empty({
     <div
       style={{
         padding: "40px 24px",
-        background: "rgba(255,255,255,0.03)",
+        background: "rgba(251,243,212,0.03)",
         border: "1px solid rgba(240,223,200,0.1)",
         borderRadius: 14,
         textAlign: "center",
@@ -463,7 +463,7 @@ function PlacedToast() {
         maxWidth: "calc(100vw - 32px)",
         padding: "12px 20px",
         borderRadius: 999,
-        background: "rgba(201,169,110,0.12)",
+        background: "rgba(2,70,40,0.12)",
         border: `1px solid ${GOLD}`,
         color: "#FBF3D4",
         fontSize: 13,

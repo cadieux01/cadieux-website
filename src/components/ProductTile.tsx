@@ -6,13 +6,16 @@ import { useRef, useState } from "react";
 import type { ProductMedia, ProductStat } from "@/lib/data";
 import { useCart } from "@/context/CartContext";
 
+// Task F v2 cleanup: card is a FG-brand surface (#024628). All text must be
+// Cream or Ash (matrix rule). Interactive controls follow FIX 4 pattern:
+// solid FG/cream — no rgba() alpha bgs on the stepper.
 const qtyBtnStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: 18,
   lineHeight: 1,
   fontWeight: 400,
   color: "#FBF3D4",
-  background: "rgba(251,243,212,0.06)",
+  background: "transparent",
   border: "none",
   padding: "8px 12px",
   cursor: "pointer",
@@ -109,13 +112,18 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
       href={`/shop/${slug}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      // FIX 2: equal-height cards — flex column + h:100% lets siblings match
+      // the tallest card in the row (parent grid must supply align-items:stretch,
+      // which CSS Grid does by default).
       style={{
-        display: "block",
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
         textDecoration: "none",
         color: "inherit",
         background: "#024628",
         borderRadius: 14,
-        border: `1px solid rgba(201, 169, 110, ${hover ? 0.45 : 0.18})`,
+        border: `1px solid rgba(251, 243, 212, ${hover ? 0.45 : 0.2})`,
         overflow: "hidden",
         transform: hover ? "translateY(-4px)" : "translateY(0)",
         transition: "transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease",
@@ -129,7 +137,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
         onPointerDown={onMediaPointerDown}
         onPointerMove={onMediaPointerMove}
         onClickCapture={onMediaClickCapture}
-        style={{ position: "relative", width: "100%", background: "#1a1510" }}
+        style={{ position: "relative", width: "100%", background: "#024628" }}
       >
         <div
           ref={scrollerRef}
@@ -155,7 +163,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                 height: "100%",
                 scrollSnapAlign: "center",
                 position: "relative",
-                background: "#1a1510",
+                background: "#024628",
               }}
             >
               {m.type === "video" ? (
@@ -169,7 +177,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
-                    backgroundColor: "#1a1510",
+                    backgroundColor: "#024628",
                     display: "block",
                     pointerEvents: "none",
                   }}
@@ -196,17 +204,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           ))}
         </div>
 
-        {/* gradient overlay */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "linear-gradient(180deg, rgba(29,29,31,0) 55%, rgba(29,29,31,0.65) 100%)",
-            pointerEvents: "none",
-          }}
-        />
-
-        {/* Test Reports badge */}
+        {/* Test Reports badge — cream pill + FG label so it reads on any photo. */}
         <div
           style={{
             position: "absolute",
@@ -219,13 +217,12 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             textTransform: "uppercase",
             color: "#024628",
             padding: "5px 10px",
-            background: "rgba(29,29,31,0.7)",
-            border: "0.5px solid rgba(201,169,110,0.4)",
+            background: "#FBF3D4",
+            border: "1px solid #024628",
             borderRadius: 4,
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
-            backdropFilter: "blur(4px)",
             pointerEvents: "none",
           }}
         >
@@ -233,9 +230,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           <span aria-hidden="true" style={{ fontSize: 10, lineHeight: 1 }}>✓</span>
         </div>
 
-        {/* Out-of-stock pill — only when the live products row has
-            in_stock=false. The tile stays clickable so customers can
-            still read the PDP. */}
+        {/* Out-of-stock pill — warning-on-brand red-300 for AAA on FG. */}
         {outOfStock && (
           <div
             style={{
@@ -247,12 +242,11 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               fontWeight: 500,
               letterSpacing: "0.25em",
               textTransform: "uppercase",
-              color: "#fecaca",
+              color: "var(--warning-on-brand)",
               padding: "5px 10px",
-              background: "rgba(29,29,31,0.75)",
-              border: "0.5px solid rgba(239,68,68,0.55)",
+              background: "transparent",
+              border: "1px solid var(--warning-on-brand)",
               borderRadius: 4,
-              backdropFilter: "blur(4px)",
               pointerEvents: "none",
             }}
           >
@@ -260,7 +254,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           </div>
         )}
 
-        {/* "Swipe" hint — only when more than one media */}
+        {/* "Swipe" hint — cream pill + FG label + FG border (readable on photo). */}
         {media.length > 1 && activeIdx === 0 && (
           <div
             style={{
@@ -272,15 +266,14 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "rgba(245,240,232,0.7)",
+              color: "#024628",
               padding: "5px 10px",
-              background: "rgba(29,29,31,0.55)",
-              border: "0.5px solid rgba(245,240,232,0.2)",
+              background: "#FBF3D4",
+              border: "1px solid #024628",
               borderRadius: 4,
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
-              backdropFilter: "blur(4px)",
               pointerEvents: "none",
             }}
           >
@@ -288,7 +281,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           </div>
         )}
 
-        {/* Dot indicators */}
+        {/* Dot indicators — cream on FG for AAA contrast. */}
         {media.length > 1 && (
           <div
             style={{
@@ -309,7 +302,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   width: i === activeIdx ? 18 : 6,
                   height: 6,
                   borderRadius: 999,
-                  background: i === activeIdx ? "#024628" : "rgba(245,240,232,0.45)",
+                  background: i === activeIdx ? "#FBF3D4" : "rgba(251,243,212,0.45)",
                   transition: "all 0.25s ease",
                 }}
               />
@@ -327,7 +320,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "#024628",
+            color: "#FBF3D4",
             marginBottom: 8,
           }}
         >
@@ -339,7 +332,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             margin: 0,
             fontFamily: "var(--font-heading)",
             fontWeight: 400,
-            color: "#f5f0e8",
+            color: "#FBF3D4",
             letterSpacing: "0.01em",
             lineHeight: 1.05,
           }}
@@ -353,7 +346,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             fontSize: 12,
             lineHeight: 1.5,
             fontWeight: 300,
-            color: "rgba(245,240,232,0.55)",
+            color: "#C0C8CE",
           }}
         >
           {subtitle}
@@ -364,7 +357,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             display: "flex",
             gap: 14,
             paddingTop: 12,
-            borderTop: "0.5px solid rgba(201,169,110,0.18)",
+            borderTop: "1px solid rgba(251,243,212,0.25)",
             marginBottom: 16,
           }}
         >
@@ -375,7 +368,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   fontFamily: "var(--font-heading)",
                   fontSize: 20,
                   fontWeight: 500,
-                  color: "#024628",
+                  color: "#FBF3D4",
                   lineHeight: 1,
                 }}
               >
@@ -386,10 +379,10 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   marginTop: 4,
                   fontFamily: "var(--font-body)",
                   fontSize: 8,
-                  fontWeight: 300,
+                  fontWeight: 400,
                   letterSpacing: "0.2em",
                   textTransform: "uppercase",
-                  color: "rgba(245,240,232,0.45)",
+                  color: "#C0C8CE",
                 }}
               >
                 {s.label}
@@ -398,6 +391,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           ))}
         </div>
 
+        {/* Price + ADD pinned to card bottom (FIX 2 equal-height alignment). */}
         <div
           style={{
             display: "flex",
@@ -405,6 +399,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             justifyContent: "space-between",
             gap: 12,
             flexWrap: "wrap",
+            marginTop: "auto",
           }}
         >
           <div
@@ -412,7 +407,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               fontFamily: "var(--font-heading)",
               fontSize: 28,
               fontWeight: 500,
-              color: "#f5f0e8",
+              color: "#FBF3D4",
               lineHeight: 1,
             }}
           >
@@ -427,7 +422,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                 fontWeight: 500,
                 letterSpacing: "0.2em",
                 textTransform: "uppercase",
-                color: "rgba(245,240,232,0.45)",
+                color: "#C0C8CE",
               }}
             >
               Unavailable
@@ -444,9 +439,9 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   fontWeight: 600,
                   letterSpacing: "0.2em",
                   textTransform: "uppercase",
-                  color: "#FBF3D4",
-                  background: "#024628",
-                  border: "1px solid #024628",
+                  color: "#024628",
+                  background: "#FBF3D4",
+                  border: "1px solid #FBF3D4",
                   borderRadius: 8,
                   padding: "10px 16px",
                   cursor: "pointer",
@@ -462,7 +457,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  border: "1px solid rgba(251,243,212,0.25)",
+                  border: "1px solid #FBF3D4",
                   borderRadius: 8,
                   overflow: "hidden",
                 }}
@@ -508,6 +503,9 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
         }
         .tile-body {
           padding: 16px 16px 18px;
+          display: flex;
+          flex-direction: column;
+          flex: 1;
         }
         .tile-title {
           font-size: 22px;

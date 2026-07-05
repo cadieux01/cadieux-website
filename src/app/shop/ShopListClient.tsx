@@ -89,9 +89,9 @@ export default function ShopListClient({
             margin: "0 0 20px",
             fontFamily: "var(--font-body)",
             fontSize: 12,
-            fontWeight: 300,
+            fontWeight: 400,
             lineHeight: 1.55,
-            color: "rgba(2, 70, 40, 0.75)",
+            color: "#024628",
             maxWidth: 520,
           }}>
             Two clean, high-protein loaves. Slow-fermented, lab-tested, and baked with nothing hidden. Pick a variant to see photos, ingredients, and reports.
@@ -120,7 +120,7 @@ export default function ShopListClient({
               {visibleProducts.map((p) => {
                 const c = contentBySlug?.[p.slug];
                 return (
-                  <div data-stagger key={p.slug}>
+                  <div data-stagger key={p.slug} style={{ height: "100%" }}>
                     <ProductTile
                       slug={p.slug}
                       productIndex={PRODUCTS.findIndex((x) => x.slug === p.slug)}
@@ -210,8 +210,8 @@ function SubscribePanel() {
                 style={{
                   padding: 18,
                   borderRadius: 14,
-                  border: "1px solid rgba(2,70,40,0.2)",
-                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid #024628",
+                  background: "transparent",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
@@ -220,16 +220,16 @@ function SubscribePanel() {
                   </div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                     {showStrike && (
-                      <span style={{ fontSize: 13, color: "rgba(2,70,40,0.55)", textDecoration: "line-through" }}>
+                      <span style={{ fontSize: 13, color: "#024628", opacity: 0.55, textDecoration: "line-through" }}>
                         ₹{money(mrp!)}
                       </span>
                     )}
-                    <span style={{ fontSize: 15, color: GOLD }}>₹{money(p.price)}</span>
+                    <span style={{ fontSize: 15, fontWeight: 500, color: "#024628" }}>₹{money(p.price)}</span>
                   </div>
                 </div>
-                <div style={{ marginTop: 4, fontSize: 13, color: "rgba(2,70,40,0.75)" }}>{p.blurb}</div>
+                <div style={{ marginTop: 4, fontSize: 13, color: "#024628" }}>{p.blurb}</div>
                 {savings > 0 && (
-                  <div style={{ marginTop: 6, fontSize: 12, color: "#8fce9b" }}>
+                  <div style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#1D1D1F" }}>
                     You save ₹{money(savings)}{pct > 0 ? ` (${pct}%)` : ""} per loaf
                   </div>
                 )}
@@ -238,7 +238,7 @@ function SubscribePanel() {
           })}
         </div>
 
-        <p style={{ fontSize: 12, color: "rgba(2,70,40,0.75)", lineHeight: 1.55, marginBottom: 18, maxWidth: 460 }}>
+        <p style={{ fontSize: 12, color: "#024628", lineHeight: 1.55, marginBottom: 18, maxWidth: 460 }}>
           Mix any combination of loaves — a subscription needs at least 2 loaves
           per delivery in total. Pick your dates and delivery windows in the next step.
         </p>

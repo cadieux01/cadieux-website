@@ -198,7 +198,7 @@ export default function PaymentPage() {
             padding: 16,
             borderRadius: 12,
             border: `1px solid ${FAINT}`,
-            background: "rgba(255,255,255,0.025)",
+            background: "rgba(2,70,40,0.025)",
             marginBottom: 22,
           }}
         >
@@ -311,7 +311,7 @@ function PaymentCard({
         padding: 18,
         borderRadius: 14,
         border: `1px solid ${selected ? GOLD : FAINT}`,
-        background: selected ? "rgba(201,169,110,0.1)" : "rgba(255,255,255,0.03)",
+        background: selected ? "rgba(2,70,40,0.1)" : "rgba(2,70,40,0.03)",
         color: TEXT,
         cursor: "pointer",
         display: "flex",
@@ -345,7 +345,7 @@ function DisabledCard({ title, sub }: { title: string; sub: string }) {
         padding: 18,
         borderRadius: 14,
         border: `1px dashed ${FAINT}`,
-        background: "rgba(255,255,255,0.015)",
+        background: "rgba(2,70,40,0.015)",
         opacity: 0.5,
         cursor: "not-allowed",
         display: "flex",
