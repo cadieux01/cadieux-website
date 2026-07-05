@@ -11,8 +11,8 @@
   --color-charcoal: #1d1d1f;
   --color-silver: #c0c8ce;
   --color-blue: #436cb4;
-  --glass-bg: rgba(192, 200, 206, 0.06);
-  --glass-border: rgba(192, 200, 206, 0.3);
+  --glass-bg: rgba(2, 70, 40, 0.06);
+  --glass-border: rgba(2, 70, 40, 0.20);
 
   /* Safe-area insets exposed as CSS variables. With
      viewportFit:"cover" in layout.tsx, the browser fills the entire
@@ -65,23 +65,24 @@ body {
   /* clip does NOT create a scroll container, so position:sticky still works */
   overflow-x: clip;
   cursor: none;
-  /* Rebrand pass: Foundation Green canvas + Clean Ash on-surface text.
-     Ambient radial gradients tuned to sit on green (cream warm-glow at 20% 50%
-     and blue cool-glow at 80% 20% for depth without lifting off brand). */
-  background: radial-gradient(ellipse at 20% 50%, rgba(251,243,212,0.06) 0%, transparent 60%),
+  /* Inverse rebrand pass: Clean Ash canvas + Foundation Green on-surface text.
+     Ambient radial gradients recast in FG tints so the ash surface has depth
+     without going washed-out. */
+  background: radial-gradient(ellipse at 20% 50%, rgba(2,70,40,0.08) 0%, transparent 60%),
               radial-gradient(ellipse at 80% 20%, rgba(67,108,180,0.08) 0%, transparent 55%),
-              #024628;
-  color: var(--color-silver);
+              #C0C8CE;
+  color: var(--color-green);
 }
 
-/* Text inputs: Clean Ash surface + Core Black text per rebrand spec.
-   Scoped away from buttons/checkboxes so those keep their component styles.
-   Placeholder is Core Black at 55% for AA-compliant secondary contrast. */
+/* Text inputs: Clean Ash surface + Core Black text + Foundation Green border
+   so the field reads against the ash canvas (border is the boundary, not the
+   fill). Placeholder is Core Black at 55% for AA-compliant secondary contrast. */
 input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="image"]),
 textarea {
   background-color: #c0c8ce;
   color: #1D1D1F;
   caret-color: #1D1D1F;
+  border: 1px solid #024628;
 }
 input::placeholder,
 textarea::placeholder {
@@ -104,7 +105,9 @@ html.admin-page body {
   font-size: clamp(3rem, 8vw, 7rem);
   line-height: 1.05;
   letter-spacing: 0.08em;
-  color: var(--color-cream);
+  /* Inverse rebrand: Foundation Green display on the ash canvas.
+     Grain Cream on ash is 1.52:1 (fails ALL contrast). */
+  color: var(--color-green);
   text-transform: uppercase;
 }
 
@@ -114,7 +117,9 @@ html.admin-page body {
   font-size: 0.65rem;
   letter-spacing: 0.35em;
   text-transform: uppercase;
-  color: rgba(192, 200, 206, 0.6);
+  /* Foundation Green at 0.75 alpha on ash canvas — reads as muted-but-legible
+     secondary text (~4.7:1) instead of the prior ash-on-ash wash. */
+  color: rgba(2, 70, 40, 0.75);
 }
 
 .body-text {
@@ -123,7 +128,7 @@ html.admin-page body {
   font-size: 1rem;
   line-height: 1.75;
   letter-spacing: 0.02em;
-  color: rgba(192, 200, 206, 0.7);
+  color: rgba(2, 70, 40, 0.8);
 }
 
 /* Mobile */
@@ -153,10 +158,10 @@ select {
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
   appearance: none !important;
-  border: 1px solid rgba(192, 200, 206, 0.4) !important; /* Clean Ash */
+  border: 1px solid #024628 !important; /* Foundation Green — boundary on ash canvas */
   border-radius: 8px !important;
   padding-right: 2.25rem !important; /* room for the chevron */
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%23c0c8ce' stroke-width='1.5' fill='none'/></svg>") !important;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%23024628' stroke-width='1.5' fill='none'/></svg>") !important;
   background-repeat: no-repeat !important;
   background-position: right 0.8rem center !important;
   background-size: 12px 8px !important;
@@ -171,8 +176,8 @@ select:not([style*="background"]) {
 }
 select:focus-visible {
   outline: none !important;
-  border-color: #c0c8ce !important;
-  box-shadow: 0 0 0 2px rgba(192, 200, 206, 0.35) !important;
+  border-color: #024628 !important;
+  box-shadow: 0 0 0 2px rgba(2, 70, 40, 0.35) !important;
 }
 /* The native option popup — Ash-on-Core-Black list to match the surface. */
 select option {
@@ -326,9 +331,9 @@ select option:disabled {
   border-radius: 2px;
   background: linear-gradient(
     90deg,
-    rgba(245,240,232,0.06) 0%,
-    rgba(245,240,232,0.18) 50%,
-    rgba(245,240,232,0.06) 100%
+    rgba(2,70,40,0.06) 0%,
+    rgba(2,70,40,0.18) 50%,
+    rgba(2,70,40,0.06) 100%
   );
   background-size: 400px 100%;
   animation: cdxHubShimmer 1.2s linear infinite;

@@ -21,11 +21,11 @@ import {
   type WizardProduct,
 } from "@/lib/subscription-setup";
 
-const BG = "#024628";
+const BG = "#C0C8CE";
 const GOLD = "#024628";
-const TEXT = "#FBF3D4";
-const FADED = "rgba(240,223,200,0.6)";
-const FAINT = "rgba(240,223,200,0.12)";
+const TEXT = "#024628";
+const FADED = "rgba(2,70,40,0.6)";
+const FAINT = "rgba(2,70,40,0.2)";
 const RED = "#ff8181";
 
 type Method = "cod" | null;

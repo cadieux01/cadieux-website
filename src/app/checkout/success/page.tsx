@@ -119,7 +119,7 @@ function SuccessInner() {
       : 0;
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#024628", position: "relative", overflowX: "clip" }}>
+    <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.05, pointerEvents: "none", zIndex: 0 }} />
 
       <main
@@ -142,7 +142,7 @@ function SuccessInner() {
           />
           <polyline
             points="22,37 32,47 52,26"
-            fill="none" stroke="#FBF3D4" strokeWidth="2.5"
+            fill="none" stroke="#024628" strokeWidth="2.5"
             strokeLinecap="round" strokeLinejoin="round"
             strokeDasharray="80"
             strokeDashoffset={animated ? 0 : 80}
@@ -154,7 +154,7 @@ function SuccessInner() {
           style={{
             margin: "0 0 12px",
             fontFamily: "var(--font-heading)", fontSize: "clamp(34px,8vw,52px)",
-            fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.06em", lineHeight: 1.05,
+            fontWeight: 300, color: "#024628", letterSpacing: "0.06em", lineHeight: 1.05,
           }}
         >
           Order Confirmed
@@ -165,7 +165,7 @@ function SuccessInner() {
               margin: "0 0 10px",
               fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200,
               letterSpacing: "0.35em", textTransform: "uppercase",
-              color: "rgba(200,144,58,0.8)",
+              color: "rgba(2,70,40,0.7)",
             }}
           >
             Order #{orderShort}
@@ -175,7 +175,7 @@ function SuccessInner() {
           style={{
             margin: "0 0 28px", maxWidth: 380,
             fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
-            letterSpacing: "0.05em", color: "rgba(240,223,200,0.5)", lineHeight: 1.7,
+            letterSpacing: "0.05em", color: "rgba(2,70,40,0.7)", lineHeight: 1.7,
           }}
         >
           Thank you. We&apos;ve sent a confirmation to your phone and will reach out to finalise delivery.
@@ -186,7 +186,7 @@ function SuccessInner() {
           <div
             style={{
               width: "100%", maxWidth: 460,
-              border: "1px solid rgba(240,223,200,0.12)",
+              border: "1px solid rgba(2,70,40,0.2)",
               padding: "20px 22px",
               marginBottom: 28,
               textAlign: "left",
@@ -212,13 +212,13 @@ function SuccessInner() {
                     style={{
                       display: "flex", justifyContent: "space-between",
                       gap: 12, padding: "6px 0",
-                      borderBottom: idx === order.items!.length - 1 ? "none" : "1px solid rgba(240,223,200,0.06)",
+                      borderBottom: idx === order.items!.length - 1 ? "none" : "1px solid rgba(2,70,40,0.12)",
                     }}
                   >
-                    <span style={{ ...summaryValue, color: "rgba(240,223,200,0.7)" }}>
+                    <span style={{ ...summaryValue, color: "rgba(2,70,40,0.75)" }}>
                       {it.name} × {it.qty}
                     </span>
-                    <span style={{ ...summaryValue, color: "rgba(240,223,200,0.7)" }}>
+                    <span style={{ ...summaryValue, color: "rgba(2,70,40,0.75)" }}>
                       ₹{(it.line_total ?? (it.price_inr ?? 0) * (it.qty ?? 0)).toLocaleString("en-IN")}
                     </span>
                   </div>
@@ -226,7 +226,7 @@ function SuccessInner() {
               </div>
             )}
 
-            <div style={{ borderTop: "1px solid rgba(240,223,200,0.12)", paddingTop: 12 }}>
+            <div style={{ borderTop: "1px solid rgba(2,70,40,0.2)", paddingTop: 12 }}>
               <SummaryRow label="Subtotal" value={`₹${subtotal.toLocaleString("en-IN")}`} />
               {typeof order.delivery_fee === "number" && order.delivery_fee > 0 && (
                 <SummaryRow
@@ -265,11 +265,11 @@ function SuccessInner() {
             display: "flex", alignItems: "center", justifyContent: "center",
             width: "100%", maxWidth: 360, height: 48,
             background: "transparent",
-            border: "1px solid rgba(240,223,200,0.18)",
+            border: "1px solid rgba(2,70,40,0.25)",
             textDecoration: "none",
             fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
             letterSpacing: "0.4em", textTransform: "uppercase",
-            color: "rgba(240,223,200,0.6)",
+            color: "rgba(2,70,40,0.7)",
             WebkitTapHighlightColor: "transparent",
           }}
         >
@@ -287,7 +287,7 @@ const summaryHeading: React.CSSProperties = {
   fontWeight: 500,
   letterSpacing: "0.35em",
   textTransform: "uppercase",
-  color: "rgba(200,144,58,0.7)",
+  color: "rgba(2,70,40,0.7)",
 };
 
 const summaryValue: React.CSSProperties = {
@@ -295,7 +295,7 @@ const summaryValue: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: 13,
   fontWeight: 300,
-  color: "rgba(240,223,200,0.85)",
+  color: "rgba(2,70,40,0.85)",
   letterSpacing: "0.03em",
   lineHeight: 1.5,
 };
@@ -310,7 +310,7 @@ function SummaryRow(props: { label: string; value: string; strong?: boolean }) {
           fontWeight: props.strong ? 400 : 300,
           letterSpacing: props.strong ? "0.3em" : "0.05em",
           textTransform: props.strong ? "uppercase" : "none",
-          color: props.strong ? "#FBF3D4" : "rgba(240,223,200,0.6)",
+          color: props.strong ? "#024628" : "rgba(2,70,40,0.7)",
         }}
       >
         {props.label}
@@ -320,7 +320,7 @@ function SummaryRow(props: { label: string; value: string; strong?: boolean }) {
           fontFamily: "var(--font-body)",
           fontSize: props.strong ? 13 : 12,
           fontWeight: props.strong ? 400 : 300,
-          color: props.strong ? "#FBF3D4" : "rgba(240,223,200,0.7)",
+          color: props.strong ? "#024628" : "rgba(2,70,40,0.75)",
           letterSpacing: "0.03em",
         }}
       >

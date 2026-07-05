@@ -66,7 +66,7 @@ export default function ShopListClient({
   }
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#024628", position: "relative", overflowX: "clip" }}>
+    <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
 
       {/* Back link */}
@@ -82,7 +82,7 @@ export default function ShopListClient({
 
       <div style={{ position: "relative", zIndex: 1, padding: "72px clamp(18px,5vw,80px) 80px", maxWidth: 1200, margin: "0 auto" }}>
         <ScrollReveal>
-          <h1 data-stagger style={{ margin: "0 0 12px", fontFamily: "var(--font-heading)", fontSize: "clamp(34px,8vw,80px)", fontWeight: 300, color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1 }}>
+          <h1 data-stagger style={{ margin: "0 0 12px", fontFamily: "var(--font-heading)", fontSize: "clamp(34px,8vw,80px)", fontWeight: 300, color: "#024628", letterSpacing: "0.02em", lineHeight: 1 }}>
             Our Breads
           </h1>
           <p data-stagger style={{
@@ -91,7 +91,7 @@ export default function ShopListClient({
             fontSize: 12,
             fontWeight: 300,
             lineHeight: 1.55,
-            color: "rgba(251, 243, 212, 0.55)",
+            color: "rgba(2, 70, 40, 0.75)",
             maxWidth: 520,
           }}>
             Two clean, high-protein loaves. Slow-fermented, lab-tested, and baked with nothing hidden. Pick a variant to see photos, ingredients, and reports.
@@ -161,9 +161,9 @@ function TabButton({
       style={{
         padding: "9px 18px",
         borderRadius: 999,
-        border: `1px solid ${active ? GOLD : "rgba(251,243,212,0.18)"}`,
+        border: `1px solid ${active ? GOLD : "rgba(2,70,40,0.25)"}`,
         background: active ? "rgba(201,169,110,0.12)" : "transparent",
-        color: active ? GOLD : "rgba(251,243,212,0.6)",
+        color: active ? GOLD : "rgba(2,70,40,0.7)",
         fontFamily: "var(--font-body)",
         fontSize: 11,
         fontWeight: 400,
@@ -217,24 +217,24 @@ function SubscribePanel() {
                 style={{
                   padding: 18,
                   borderRadius: 14,
-                  border: "1px solid rgba(251,243,212,0.12)",
+                  border: "1px solid rgba(2,70,40,0.2)",
                   background: "rgba(255,255,255,0.03)",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-                  <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 22, color: "#FBF3D4" }}>
+                  <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 22, color: "#024628" }}>
                     {p.title}
                   </div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                     {showStrike && (
-                      <span style={{ fontSize: 13, color: "rgba(251,243,212,0.5)", textDecoration: "line-through" }}>
+                      <span style={{ fontSize: 13, color: "rgba(2,70,40,0.55)", textDecoration: "line-through" }}>
                         ₹{money(mrp!)}
                       </span>
                     )}
                     <span style={{ fontSize: 15, color: GOLD }}>₹{money(p.price)}</span>
                   </div>
                 </div>
-                <div style={{ marginTop: 4, fontSize: 13, color: "rgba(251,243,212,0.55)" }}>{p.blurb}</div>
+                <div style={{ marginTop: 4, fontSize: 13, color: "rgba(2,70,40,0.75)" }}>{p.blurb}</div>
                 {savings > 0 && (
                   <div style={{ marginTop: 6, fontSize: 12, color: "#8fce9b" }}>
                     You save ₹{money(savings)}{pct > 0 ? ` (${pct}%)` : ""} per loaf
@@ -245,7 +245,7 @@ function SubscribePanel() {
           })}
         </div>
 
-        <p style={{ fontSize: 12, color: "rgba(251,243,212,0.55)", lineHeight: 1.55, marginBottom: 18, maxWidth: 460 }}>
+        <p style={{ fontSize: 12, color: "rgba(2,70,40,0.75)", lineHeight: 1.55, marginBottom: 18, maxWidth: 460 }}>
           Mix any combination of loaves — a subscription needs at least 2 loaves
           per delivery in total. Pick your dates and delivery windows in the next step.
         </p>
@@ -257,7 +257,7 @@ function SubscribePanel() {
             padding: "13px 26px",
             borderRadius: 999,
             background: GOLD,
-            color: "#0a0a0a",
+            color: "#FBF3D4",
             fontFamily: "var(--font-body)",
             fontSize: 12,
             fontWeight: 600,

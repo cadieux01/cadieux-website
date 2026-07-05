@@ -34,7 +34,7 @@ const pdpQtyBtnStyle: React.CSSProperties = {
   fontSize: 22,
   lineHeight: 1,
   fontWeight: 400,
-  color: "#FBF3D4",
+  color: "#024628",
   background: "rgba(201,169,110,0.12)",
   border: "none",
   padding: "10px 16px",
@@ -148,7 +148,7 @@ export default function ProductDetailClient({
   };
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#024628", position: "relative", overflowX: "clip" }}>
+    <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
 
       <Link
@@ -221,7 +221,7 @@ export default function ProductDetailClient({
                 fontFamily: "var(--font-heading)",
                 fontSize: "clamp(40px, 7vw, 64px)",
                 fontWeight: 300,
-                color: "#FBF3D4",
+                color: "#024628",
                 lineHeight: 1.05,
                 letterSpacing: "0.01em",
               }}
@@ -285,7 +285,7 @@ export default function ProductDetailClient({
                       fontWeight: 300,
                       letterSpacing: "0.22em",
                       textTransform: "uppercase",
-                      color: "rgba(245,240,232,0.55)",
+                      color: "rgba(2,70,40,0.75)",
                     }}
                   >
                     {tile.label}
@@ -314,7 +314,7 @@ export default function ProductDetailClient({
                   fontFamily: "var(--font-heading)",
                   fontSize: 42,
                   fontWeight: 500,
-                  color: "#FBF3D4",
+                  color: "#024628",
                   lineHeight: 1,
                 }}
               >
@@ -325,7 +325,7 @@ export default function ProductDetailClient({
                   fontFamily: "var(--font-body)",
                   fontSize: 11,
                   fontWeight: 300,
-                  color: "rgba(245,240,232,0.5)",
+                  color: "rgba(2,70,40,0.7)",
                 }}
               >
                 {orderType === "sub" ? "per delivery" : "one-time"}
@@ -352,7 +352,7 @@ export default function ProductDetailClient({
                     borderRadius: 999,
                     border: "none",
                     background: orderType === type ? "rgba(201,169,110,0.2)" : "transparent",
-                    color: orderType === type ? "#FBF3D4" : "rgba(245,240,232,0.55)",
+                    color: orderType === type ? "#024628" : "rgba(2,70,40,0.75)",
                     fontFamily: "var(--font-body)",
                     fontSize: 10,
                     fontWeight: 500,
@@ -398,7 +398,7 @@ export default function ProductDetailClient({
                     fontWeight: 500,
                     letterSpacing: "0.3em",
                     textTransform: "uppercase",
-                    color: "rgba(245,240,232,0.55)",
+                    color: "rgba(2,70,40,0.75)",
                   }}
                 >
                   Quantity
@@ -428,7 +428,7 @@ export default function ProductDetailClient({
                       fontFamily: "var(--font-body)",
                       fontSize: 16,
                       fontWeight: 600,
-                      color: "#FBF3D4",
+                      color: "#024628",
                     }}
                   >
                     {qty}
@@ -456,7 +456,7 @@ export default function ProductDetailClient({
                   padding: "16px 26px",
                   background: added ? "rgba(201,169,110,0.25)" : "transparent",
                   border: `1px solid ${outOfStock ? "rgba(201,169,110,0.3)" : "#024628"}`,
-                  color: outOfStock ? "rgba(245,240,232,0.45)" : "#FBF3D4",
+                  color: outOfStock ? "rgba(2,70,40,0.6)" : "#024628",
                   fontFamily: "var(--font-body)",
                   fontSize: 11,
                   fontWeight: 500,
@@ -540,7 +540,7 @@ export default function ProductDetailClient({
                         minWidth: 0,
                         fontFamily: "var(--font-heading)",
                         fontSize: 18,
-                        color: "#FBF3D4",
+                        color: "#024628",
                         lineHeight: 1.2,
                       }}
                     >
@@ -728,10 +728,10 @@ function Gallery({
               fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "rgba(245,240,232,0.75)",
+              color: "rgba(2,70,40,0.85)",
               padding: "6px 12px",
               background: "rgba(29,29,31,0.6)",
-              border: "0.5px solid rgba(245,240,232,0.22)",
+              border: "0.5px solid rgba(2,70,40,0.3)",
               borderRadius: 4,
               display: "inline-flex",
               alignItems: "center",
@@ -765,7 +765,7 @@ function Gallery({
                   width: i === active ? 20 : 6,
                   height: 6,
                   borderRadius: 999,
-                  background: i === active ? "#024628" : "rgba(245,240,232,0.45)",
+                  background: i === active ? "#024628" : "rgba(2,70,40,0.6)",
                   transition: "all 0.25s ease",
                 }}
               />
@@ -857,7 +857,7 @@ function Section({ label, title, children }: { label: string; title: string; chi
           fontFamily: "var(--font-heading)",
           fontSize: "clamp(32px, 5vw, 48px)",
           fontWeight: 300,
-          color: "#FBF3D4",
+          color: "#024628",
           letterSpacing: "0.01em",
           lineHeight: 1.1,
         }}
@@ -915,7 +915,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                     border: "1px solid rgba(201, 169, 110, 0.35)",
                     background: "rgba(201,169,110,0.05)",
                     textDecoration: "none",
-                    color: "#FBF3D4",
+                    color: "#024628",
                   }}
                 >
                   {r.report_number ? (
@@ -924,7 +924,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                         fontFamily: "var(--font-body)",
                         fontSize: 10,
                         letterSpacing: "0.12em",
-                        color: "rgba(251,243,212,0.55)",
+                        color: "rgba(2,70,40,0.75)",
                         marginBottom: 4,
                       }}
                     >
@@ -948,7 +948,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                         fontFamily: "var(--font-body)",
                         fontSize: 12,
                         lineHeight: 1.5,
-                        color: "rgba(251,243,212,0.75)",
+                        color: "rgba(2,70,40,0.85)",
                         marginBottom: 8,
                       }}
                     >

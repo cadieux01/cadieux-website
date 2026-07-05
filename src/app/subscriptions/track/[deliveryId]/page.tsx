@@ -41,7 +41,7 @@ type ChangeRequest = {
   created_at: string;
 };
 
-const BG = "#024628";
+const BG = "#C0C8CE";
 const FADED = "#f5f0e8";
 const REASON_MAX = 200;
 

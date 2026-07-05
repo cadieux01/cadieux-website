@@ -18,12 +18,12 @@ type Sub = {
   deliveries_count: number;
 };
 
-const BG = "#024628";
+const BG = "#C0C8CE";
 const GREEN = "#7dd3a0";
 const RED = "#ff8181";
-const TEXT = "#FBF3D4";
-const FADED = "rgba(240,223,200,0.6)";
-const FAINT = "rgba(240,223,200,0.1)";
+const TEXT = "#024628";
+const FADED = "rgba(2,70,40,0.6)";
+const FAINT = "rgba(2,70,40,0.2)";
 
 type Tone = { label: string; color: string };
 

@@ -33,7 +33,7 @@ type Delivery = {
   status: string;
 };
 
-const BG = "#024628";
+const BG = "#C0C8CE";
 
 function readPhone(): string {
   if (typeof window === "undefined") return "";

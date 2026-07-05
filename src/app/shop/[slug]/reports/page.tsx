@@ -17,7 +17,7 @@ export default function ProductReportsPage() {
   }
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#024628", position: "relative", overflowX: "clip" }}>
+    <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
 
       <Link

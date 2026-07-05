@@ -25,11 +25,11 @@ import { bookableSlots } from "@/lib/delivery-slots";
 import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 import Select from "@/components/ui/Select";
 
-const BG = "#024628";
+const BG = "#C0C8CE";
 const GOLD = "#024628";
-const TEXT = "#FBF3D4";
-const FADED = "rgba(240,223,200,0.6)";
-const FAINT = "rgba(240,223,200,0.12)";
+const TEXT = "#024628";
+const FADED = "rgba(2,70,40,0.6)";
+const FAINT = "rgba(2,70,40,0.2)";
 
 const TOTAL_STEPS = 4;
 
