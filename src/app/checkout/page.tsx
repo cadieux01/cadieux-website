@@ -67,31 +67,31 @@ function extractCityPincode(full: string): { city: string; pincode: string } {
   return { city, pincode };
 }
 
-/* ── Shared styles (Task G — matrix-legal on ash canvas) ────────────────── */
-// inputSt: transparent bg over ash, FG border (matches --surface-border 3:1),
-// FG body text (6.49:1 AA on ash).
+/* ── Shared styles (Task G Phase 2 — matrix-legal on ash canvas) ──────── */
+// Phase 2 rule: on ash + paper, text is SOLID #024628 (6.49:1 AA);
+// hierarchy comes from type-scale + weight + tracking, NOT opacity.
+// Borders that form a visible boundary between surfaces are solid #024628,
+// not the FG@25% --surface-border token (invisible at 1.4:1 on ash).
 const inputSt: React.CSSProperties = {
   display: "block", width: "100%", boxSizing: "border-box",
   background: "transparent",
-  border: "1px solid var(--surface-border)",
+  border: "1px solid #024628",
   padding: "14px 14px", outline: "none",
   fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200,
   color: "#024628", letterSpacing: "0.04em",
   minHeight: 48,
 };
-// labelSt: FG@75% on ash (4.87:1 AA). Retires walnut-gold entirely.
 const labelSt: React.CSSProperties = {
   display: "block", marginBottom: 8,
   fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
   letterSpacing: "0.4em", textTransform: "uppercase",
-  color: "rgba(2,70,40,0.75)",
+  color: "#024628",
 };
-// sectionHead: FG@75% on ash (4.87:1 AA). Cream@32% on FG bg → replaced.
 const sectionHead: React.CSSProperties = {
   margin: "0 0 18px",
   fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
   letterSpacing: "0.5em", textTransform: "uppercase",
-  color: "rgba(2,70,40,0.75)",
+  color: "#024628",
 };
 
 /* ── Main page ─────────────────────────────────────────────────────────── */
@@ -1018,7 +1018,7 @@ export default function CheckoutPage() {
   return (
     <div style={{ minHeight: "100dvh", background: "var(--surface-canvas)", position: "relative", overflowX: "clip" }}>
       <style>{`
-        input::placeholder { color: rgba(2,70,40,0.4); }
+        input::placeholder { color: rgba(2,70,40,0.6); }
         select::-ms-expand { display: none; }
       `}</style>
 
@@ -1098,7 +1098,7 @@ export default function CheckoutPage() {
             margin: "0 0 6px",
             fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
             letterSpacing: "0.5em", textTransform: "uppercase",
-            color: "rgba(2,70,40,0.75)",
+            color: "#024628",
           }}
         >
           {stepLabel}
@@ -1142,11 +1142,11 @@ export default function CheckoutPage() {
                 key={i}
                 style={{
                   display: "flex", justifyContent: "space-between",
-                  borderTop: "1px solid var(--surface-border)",
+                  borderTop: "1px solid #024628",
                   padding: "12px 0",
                 }}
               >
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(2,70,40,0.75)", letterSpacing: "0.03em" }}>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
                   {item.name} × {item.qty}
                 </span>
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628" }}>
@@ -1157,30 +1157,30 @@ export default function CheckoutPage() {
             <div
               style={{
                 display: "flex", justifyContent: "space-between", alignItems: "baseline",
-                borderTop: "1px solid var(--surface-border)",
+                borderTop: "1px solid #024628",
                 padding: "12px 0",
               }}
             >
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(2,70,40,0.75)" }}>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628" }}>
                 Delivery fee
                 {deliveryQuote?.distanceKm !== null && deliveryQuote?.distanceKm !== undefined && (
-                  <span style={{ fontSize: 11, color: "rgba(2,70,40,0.55)", marginLeft: 6 }}>
+                  <span style={{ fontSize: 11, color: "#024628", marginLeft: 6 }}>
                     ({deliveryQuote.distanceKm} km)
                   </span>
                 )}
               </span>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: quoteLoading ? "rgba(2,70,40,0.5)" : "#024628" }}>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628", opacity: quoteLoading ? 0.5 : 1 }}>
                 {quoteLoading ? "…" : `₹${deliveryFee}`}
               </span>
             </div>
             <div
               style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
-                borderTop: "1px solid rgba(2,70,40,0.4)",
+                borderTop: "1px solid #024628",
                 paddingTop: 14, marginTop: 4,
               }}
             >
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>Total (incl. GST)</span>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>Total (incl. GST)</span>
               <span style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 300, color: "#024628" }}>₹{grandTotal}</span>
             </div>
           </section>
@@ -1199,7 +1199,7 @@ export default function CheckoutPage() {
                 <div
                   style={{
                     background: "var(--surface-paper)",
-                    border: "1px solid var(--surface-border)",
+                    border: "1px solid #024628",
                     borderRadius: "var(--card-radius)",
                     padding: "18px 20px",
                     marginBottom: 16,
@@ -1214,7 +1214,7 @@ export default function CheckoutPage() {
                       type="button"
                       onClick={() => { setFormMode("edit"); setError(""); setAddressConfirmed(false); }}
                       style={{
-                        background: "none", border: "1px solid rgba(2,70,40,0.35)",
+                        background: "none", border: "1px solid #024628",
                         padding: "4px 10px", cursor: "pointer",
                         fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
                         letterSpacing: "0.3em", textTransform: "uppercase",
@@ -1255,11 +1255,11 @@ export default function CheckoutPage() {
                   <p style={{ margin: "0 0 6px", paddingRight: 120, fontFamily: "var(--font-body)", fontSize: 17, fontWeight: 300, color: "#024628", letterSpacing: "0.04em" }}>
                     {savedCustomer.full_name}
                   </p>
-                  <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(2,70,40,0.75)", letterSpacing: "0.04em" }}>
+                  <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "#024628", letterSpacing: "0.04em" }}>
                     +91 {savedCustomer.phone}
                   </p>
                   {savedCustomer.delivery_address && (
-                    <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "rgba(2,70,40,0.65)", letterSpacing: "0.03em", lineHeight: 1.7 }}>
+                    <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.7 }}>
                       {savedCustomer.delivery_address}
                     </p>
                   )}
@@ -1301,7 +1301,7 @@ export default function CheckoutPage() {
                   style={{
                     display: "block", width: "100%",
                     background: "transparent",
-                    border: "1px solid var(--surface-border)",
+                    border: "1px solid #024628",
                     minHeight: 48, padding: "14px 0",
                     cursor: "pointer",
                     fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
@@ -1315,9 +1315,9 @@ export default function CheckoutPage() {
                 </button>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                  <div style={{ flex: 1, height: 1, background: "var(--surface-border)" }} />
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(2,70,40,0.55)" }}>or</span>
-                  <div style={{ flex: 1, height: 1, background: "var(--surface-border)" }} />
+                  <div style={{ flex: 1, height: 1, background: "#024628" }} />
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>or</span>
+                  <div style={{ flex: 1, height: 1, background: "#024628" }} />
                 </div>
 
                 <button
@@ -1333,7 +1333,7 @@ export default function CheckoutPage() {
                     cursor: "pointer", padding: "12px 0",
                     fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
                     letterSpacing: "0.35em", textTransform: "uppercase",
-                    color: "rgba(2,70,40,0.75)",
+                    color: "#024628",
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
@@ -1437,7 +1437,7 @@ export default function CheckoutPage() {
             style={{
               marginTop: 28,
               padding: "18px 18px 16px",
-              border: "1px solid var(--surface-border)",
+              border: "1px solid #024628",
               background: "var(--surface-paper)",
               borderRadius: "var(--card-radius)",
             }}
@@ -1450,7 +1450,7 @@ export default function CheckoutPage() {
                 fontWeight: 300,
                 letterSpacing: "0.35em",
                 textTransform: "uppercase",
-                color: "rgba(2,70,40,0.75)",
+                color: "#024628",
               }}
             >
               Human Check
@@ -1463,7 +1463,7 @@ export default function CheckoutPage() {
                 fontWeight: 200,
                 lineHeight: 1.5,
                 letterSpacing: "0.02em",
-                color: "rgba(2,70,40,0.75)",
+                color: "#024628",
               }}
             >
               {TURNSTILE_BYPASS
@@ -1488,7 +1488,7 @@ export default function CheckoutPage() {
         style={{
           position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 10,
           background: "var(--surface-canvas)",
-          borderTop: "1px solid var(--surface-border)",
+          borderTop: "1px solid #024628",
           paddingBottom: "env(safe-area-inset-bottom)",
           boxShadow: "0 -8px 24px rgba(2,70,40,0.08)",
         }}
@@ -1504,20 +1504,20 @@ export default function CheckoutPage() {
                 display: "flex", alignItems: "baseline", justifyContent: "space-between",
                 gap: 12, marginBottom: 10,
                 paddingBottom: 10,
-                borderBottom: "1px solid var(--surface-border)",
+                borderBottom: "1px solid #024628",
                 fontFamily: "var(--font-body)",
               }}
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                <span style={{ fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.65)" }}>
+                <span style={{ fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#024628" }}>
                   Subtotal ₹{total} · Delivery {quoteLoading ? "…" : `₹${deliveryFee}`}
                   {deliveryQuote?.distanceKm !== null && deliveryQuote?.distanceKm !== undefined && (
-                    <span style={{ color: "rgba(2,70,40,0.5)" }}>
+                    <span style={{ color: "#024628" }}>
                       {" "}({deliveryQuote.distanceKm} km)
                     </span>
                   )}
                 </span>
-                <span style={{ fontSize: 11, fontWeight: 200, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(2,70,40,0.8)" }}>
+                <span style={{ fontSize: 11, fontWeight: 200, letterSpacing: "0.18em", textTransform: "uppercase", color: "#024628" }}>
                   Total (incl. GST)
                 </span>
               </div>
@@ -1576,18 +1576,20 @@ export default function CheckoutPage() {
 }
 
 /* ── Primary CTA style helper ────────────────────────────────────────── */
-// Task G: amber #f59e0b invisible on ash (1.06:1) → matrix-legal FG bg +
-// Cream label (9.88:1 AAA). Mirrors .cdx-cta-primary token semantics.
+// Task G Phase 2: bg stays solid --surface-brand always; disabled state uses
+// element-level opacity 0.5 so the FG-bg+cream-label composite (9.88:1 AAA)
+// never gets muddied by a semi-transparent FG over ash canvas.
 function primaryBtn(disabled: boolean): React.CSSProperties {
   return {
     display: "block", width: "100%",
     height: 56,
-    background: disabled ? "rgba(2,70,40,0.5)" : "var(--surface-brand)",
+    background: "var(--surface-brand)",
     border: "none",
     cursor: disabled ? "default" : "pointer",
     fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400,
     letterSpacing: "0.4em", textTransform: "uppercase",
     color: "#FBF3D4",
+    opacity: disabled ? 0.5 : 1,
     WebkitTapHighlightColor: "transparent",
   };
 }
@@ -1762,7 +1764,7 @@ function AddressForm(props: {
         <span style={labelSt}>Mobile Number *</span>
         <div style={{ display: "flex", alignItems: "stretch", gap: 10 }}>
           <div style={{ flex: 1, display: "flex", alignItems: "center", ...inputSt, padding: 0 }}>
-            <span style={{ padding: "0 6px 0 14px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(2,70,40,0.6)", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
+            <span style={{ padding: "0 6px 0 14px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "#024628", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
             <input
               type="tel" inputMode="numeric" autoComplete="tel-national"
               value={phone}
@@ -1785,7 +1787,7 @@ function AddressForm(props: {
               <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", color: "#024628" }}>✓ Verified</span>
               <button
                 onClick={() => { setOtpVerified(false); setOtpSent(false); setOtpCode(""); setOtpError(""); }}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.75)", WebkitTapHighlightColor: "transparent" }}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#024628", WebkitTapHighlightColor: "transparent" }}
               >
                 Edit
               </button>
@@ -1797,12 +1799,13 @@ function AddressForm(props: {
               style={{
                 flexShrink: 0, minHeight: 48,
                 background: "none",
-                border: "1px solid rgba(2,70,40,0.6)",
+                border: "1px solid #024628",
                 padding: "0 16px",
                 cursor: (sendingOtp || phone.replace(/\D/g, "").length < 10) ? "default" : "pointer",
                 fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
                 letterSpacing: "0.3em", textTransform: "uppercase",
-                color: (sendingOtp || phone.replace(/\D/g, "").length < 10) ? "rgba(2,70,40,0.4)" : "#024628",
+                color: "#024628",
+                opacity: (sendingOtp || phone.replace(/\D/g, "").length < 10) ? 0.5 : 1,
                 WebkitTapHighlightColor: "transparent",
               }}
             >
@@ -1820,7 +1823,7 @@ function AddressForm(props: {
               value={otpCode}
               onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(""); }}
               placeholder="6-digit code"
-              style={{ ...inputSt, letterSpacing: "0.4em", fontSize: 19, borderColor: "rgba(2,70,40,0.5)" }}
+              style={{ ...inputSt, letterSpacing: "0.4em", fontSize: 19, borderColor: "#024628" }}
               autoFocus
             />
             <button
@@ -1829,12 +1832,13 @@ function AddressForm(props: {
               style={{
                 marginTop: 12, display: "block", width: "100%",
                 height: 48,
-                background: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(2,70,40,0.35)" : "var(--surface-brand)",
+                background: "var(--surface-brand)",
                 border: "none",
                 cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                 letterSpacing: "0.4em", textTransform: "uppercase",
-                color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(251,243,212,0.6)" : "#FBF3D4",
+                color: "#FBF3D4",
+                opacity: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? 0.5 : 1,
                 WebkitTapHighlightColor: "transparent",
               }}
             >
@@ -1864,11 +1868,11 @@ function AddressForm(props: {
               style={{
                 flex: 1, minHeight: 40,
                 background: locQuestion === choice ? "var(--surface-brand)" : "transparent",
-                border: `1px solid ${locQuestion === choice ? "var(--surface-brand)" : "var(--surface-border)"}`,
+                border: "1px solid #024628",
                 cursor: "pointer",
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                 letterSpacing: "0.3em", textTransform: "uppercase",
-                color: locQuestion === choice ? "#FBF3D4" : "rgba(2,70,40,0.75)",
+                color: locQuestion === choice ? "#FBF3D4" : "#024628",
                 WebkitTapHighlightColor: "transparent",
               }}
             >
@@ -1886,11 +1890,12 @@ function AddressForm(props: {
               style={{
                 flex: 1, minHeight: 44,
                 background: "transparent",
-                border: "1px solid rgba(2,70,40,0.6)",
+                border: "1px solid #024628",
                 cursor: locating ? "default" : "pointer",
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                 letterSpacing: "0.3em", textTransform: "uppercase",
-                color: locating ? "rgba(2,70,40,0.4)" : "#024628",
+                color: "#024628",
+                opacity: locating ? 0.5 : 1,
                 WebkitTapHighlightColor: "transparent",
               }}
             >
@@ -1902,7 +1907,7 @@ function AddressForm(props: {
               style={{
                 flex: 1, minHeight: 44,
                 background: "transparent",
-                border: "1px solid rgba(2,70,40,0.6)",
+                border: "1px solid #024628",
                 cursor: "pointer",
                 fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                 letterSpacing: "0.3em", textTransform: "uppercase",
@@ -1916,7 +1921,7 @@ function AddressForm(props: {
         )}
 
         {locQuestion === "no" && (
-          <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(2,70,40,0.75)", letterSpacing: "0.03em", lineHeight: 1.5 }}>
+          <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.5 }}>
             No problem — please enter the delivery address below.
           </p>
         )}
@@ -2017,11 +2022,11 @@ function AddressForm(props: {
                 style={{
                   flex: 1, minHeight: 40,
                   background: selected ? "var(--surface-brand)" : "transparent",
-                  border: `1px solid ${selected ? "var(--surface-brand)" : "var(--surface-border)"}`,
+                  border: "1px solid #024628",
                   cursor: "pointer",
                   fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
                   letterSpacing: "0.3em", textTransform: "uppercase",
-                  color: selected ? "#FBF3D4" : "rgba(2,70,40,0.75)",
+                  color: selected ? "#FBF3D4" : "#024628",
                   WebkitTapHighlightColor: "transparent",
                 }}
               >
@@ -2052,7 +2057,7 @@ function AddressForm(props: {
             cursor: "pointer", marginTop: 6,
             fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
             letterSpacing: "0.3em", textTransform: "uppercase",
-            color: "rgba(2,70,40,0.65)",
+            color: "#024628",
             WebkitTapHighlightColor: "transparent",
           }}
         >
@@ -2089,16 +2094,16 @@ function SavedCustomerOtpBlock(props: {
     <div
       style={{
         background: "var(--surface-paper)",
-        border: "1px solid var(--surface-border)",
+        border: "1px solid #024628",
         borderRadius: "var(--card-radius)",
         padding: "16px 18px",
         marginBottom: 16,
       }}
     >
-      <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(2,70,40,0.75)" }}>
+      <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
         Verify Phone
       </p>
-      <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(2,70,40,0.75)", letterSpacing: "0.03em", lineHeight: 1.5 }}>
+      <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.5 }}>
         We&rsquo;ll send a 6-digit code to your saved number ending in {tail}. Verify once per session to continue.
       </p>
 
@@ -2112,12 +2117,13 @@ function SavedCustomerOtpBlock(props: {
           display: "block", width: "100%", marginTop: 14,
           minHeight: 46,
           background: "none",
-          border: "1px solid rgba(2,70,40,0.6)",
+          border: "1px solid #024628",
           padding: "0 16px",
           cursor: sendingOtp ? "default" : "pointer",
           fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
           letterSpacing: "0.35em", textTransform: "uppercase",
-          color: sendingOtp ? "rgba(2,70,40,0.4)" : "#024628",
+          color: "#024628",
+          opacity: sendingOtp ? 0.5 : 1,
           WebkitTapHighlightColor: "transparent",
         }}
       >
@@ -2133,7 +2139,7 @@ function SavedCustomerOtpBlock(props: {
             value={otpCode}
             onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(""); }}
             placeholder="6-digit code"
-            style={{ ...inputSt, letterSpacing: "0.4em", fontSize: 19, borderColor: "rgba(2,70,40,0.5)" }}
+            style={{ ...inputSt, letterSpacing: "0.4em", fontSize: 19, borderColor: "#024628" }}
             autoFocus
           />
           <button
@@ -2142,12 +2148,13 @@ function SavedCustomerOtpBlock(props: {
             style={{
               marginTop: 12, display: "block", width: "100%",
               height: 48,
-              background: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(2,70,40,0.35)" : "var(--surface-brand)",
+              background: "var(--surface-brand)",
               border: "none",
               cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
               letterSpacing: "0.4em", textTransform: "uppercase",
-              color: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "rgba(251,243,212,0.6)" : "#FBF3D4",
+              color: "#FBF3D4",
+              opacity: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? 0.5 : 1,
               WebkitTapHighlightColor: "transparent",
             }}
           >
@@ -2186,24 +2193,24 @@ function PaymentReview(props: {
       {/* Task G: cream-tinted card → paper card, FG text. Delivery slot line
           retires walnut-gold → FG@85% (still hierarchically stronger than
           address body text at 65%). */}
-      <div style={{ background: "var(--surface-paper)", border: "1px solid var(--surface-border)", borderRadius: "var(--card-radius)", padding: "18px 20px", marginBottom: 22 }}>
-        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>
+      <div style={{ background: "var(--surface-paper)", border: "1px solid #024628", borderRadius: "var(--card-radius)", padding: "18px 20px", marginBottom: 22 }}>
+        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>
           Order Total
         </p>
         <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#024628" }}>
           ₹{grandTotal}
         </p>
-        <p style={{ margin: "4px 0 12px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(2,70,40,0.6)", letterSpacing: "0.04em" }}>
+        <p style={{ margin: "4px 0 12px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "#024628", letterSpacing: "0.04em" }}>
           Includes ₹{deliveryFee} delivery
         </p>
-        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(2,70,40,0.8)", letterSpacing: "0.03em" }}>
+        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
           {customerName} · +91 {customerPhone.replace(/\D/g, "")}
         </p>
-        <p style={{ margin: "4px 0 0", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "rgba(2,70,40,0.65)", letterSpacing: "0.03em", lineHeight: 1.6 }}>
+        <p style={{ margin: "4px 0 0", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.6 }}>
           {fullAddress}
         </p>
         {deliveryDate && deliverySlot && (
-          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(2,70,40,0.85)" }}>
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "#024628" }}>
             {formatDeliveryDate(deliveryDate)} · {formatSlot12(deliverySlot)}
           </p>
         )}
@@ -2235,12 +2242,13 @@ function PaymentButtons({
         disabled={loading}
         style={{
           display: "block", width: "100%", height: 56,
-          background: loading ? "rgba(2,70,40,0.5)" : "#024628",
+          background: "#024628",
           border: "none",
           cursor: loading ? "default" : "pointer",
           fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400,
           letterSpacing: "0.4em", textTransform: "uppercase",
           color: "#FBF3D4",
+          opacity: loading ? 0.6 : 1,
           WebkitTapHighlightColor: "transparent",
         }}
       >
@@ -2252,11 +2260,12 @@ function PaymentButtons({
         style={{
           display: "block", width: "100%", height: 48,
           background: "transparent",
-          border: "1px solid rgba(2,70,40,0.6)",
+          border: "1px solid #024628",
           cursor: loading ? "default" : "pointer",
           fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
           letterSpacing: "0.4em", textTransform: "uppercase",
-          color: loading ? "rgba(2,70,40,0.35)" : "#024628",
+          color: "#024628",
+          opacity: loading ? 0.5 : 1,
           WebkitTapHighlightColor: "transparent",
         }}
       >
@@ -2277,10 +2286,10 @@ function PincodeStatusStrip({ pinStatus }: { pinStatus: PinState }) {
   const isChecking = pinStatus.state === "checking";
   const isErr = pinStatus.state === "error";
   const border = isOk
-    ? "1px solid rgba(2,70,40,0.5)"
+    ? "1px solid #024628"
     : (isBad || isErr)
       ? "1px solid rgba(153,27,27,0.4)"
-      : "1px solid var(--surface-border)";
+      : "1px solid #024628";
   const bg = isOk
     ? "rgba(2,70,40,0.06)"
     : (isBad || isErr)
@@ -2290,7 +2299,7 @@ function PincodeStatusStrip({ pinStatus }: { pinStatus: PinState }) {
     ? "#024628"
     : (isBad || isErr)
       ? "var(--warning-on-light)"
-      : "rgba(2,70,40,0.75)";
+      : "#024628";
   return (
     <div
       style={{
@@ -2355,9 +2364,7 @@ function DeliveryScheduleSection({
                 minHeight: 72,
                 padding: "14px 12px",
                 background: active ? "var(--surface-brand)" : "transparent",
-                border: active
-                  ? "1px solid var(--surface-brand)"
-                  : "1px solid var(--surface-border)",
+                border: "1px solid #024628",
                 cursor: "pointer",
                 fontFamily: "var(--font-body)",
                 color: active ? "#FBF3D4" : "#024628",
@@ -2369,7 +2376,7 @@ function DeliveryScheduleSection({
                 style={{
                   fontSize: 9, fontWeight: 200,
                   letterSpacing: "0.35em", textTransform: "uppercase",
-                  color: active ? "rgba(251,243,212,0.75)" : "rgba(2,70,40,0.65)",
+                  color: active ? "rgba(251,243,212,0.75)" : "#024628",
                   marginBottom: 6,
                 }}
               >
@@ -2417,7 +2424,7 @@ function SlotPicker({
         style={{
           padding: "14px 16px",
           borderRadius: "var(--card-radius)",
-          border: "1px solid var(--surface-border)",
+          border: "1px solid #024628",
           background: "var(--surface-paper)",
           color: "#024628",
           fontSize: 13,
