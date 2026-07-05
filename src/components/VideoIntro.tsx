@@ -14,6 +14,12 @@ export default function VideoIntro({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
+    // Re-assert muted imperatively — React sometimes doesn't apply the
+    // muted attribute reliably before autoplay is attempted, and iOS
+    // Safari can flip it during hydration races. Without this, play()
+    // may require a user gesture and browsers render a native play-icon
+    // overlay on the poster.
+    v.muted = true;
     v.play().catch(() => {});
     v.addEventListener("ended", dismiss);
     return () => v.removeEventListener("ended", dismiss);
@@ -66,7 +72,7 @@ export default function VideoIntro({ onDone }: { onDone: () => void }) {
           fontWeight: 200,
           letterSpacing: "0.45em",
           textTransform: "uppercase",
-          color: "rgb(200,144,58)",
+          color: "rgba(251,243,212,0.7)",
           padding: "8px 0 8px 8px",
           WebkitTapHighlightColor: "transparent",
         }}
