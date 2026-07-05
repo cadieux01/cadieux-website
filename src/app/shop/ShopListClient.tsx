@@ -97,7 +97,7 @@ export default function ShopListClient({
             Two clean, high-protein loaves. Slow-fermented, lab-tested, and baked with nothing hidden. Pick a variant to see photos, ingredients, and reports.
           </p>
 
-          <div data-stagger style={{ display: "flex", gap: 8, marginBottom: 28 }}>
+          <div data-stagger className="cdx-tab-group" style={{ marginBottom: 28 }} role="tablist">
             <TabButton active={mode === "onetime"} onClick={() => switchMode("onetime")}>
               One-time
             </TabButton>
@@ -155,22 +155,15 @@ function TabButton({
   onClick: () => void;
   children: React.ReactNode;
 }) {
+  // Geometry, type, and colour pairing are locked in `.cdx-tab` (globals.css).
+  // Active state = FG bg + Cream label (9.88:1 AAA). Inactive = transparent + FG.
   return (
     <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={`cdx-tab${active ? " is-active" : ""}`}
       onClick={onClick}
-      style={{
-        padding: "9px 18px",
-        borderRadius: 999,
-        border: `1px solid ${active ? GOLD : "rgba(2,70,40,0.25)"}`,
-        background: active ? "rgba(201,169,110,0.12)" : "transparent",
-        color: active ? GOLD : "rgba(2,70,40,0.7)",
-        fontFamily: "var(--font-body)",
-        fontSize: 11,
-        fontWeight: 400,
-        letterSpacing: "0.14em",
-        textTransform: "uppercase",
-        cursor: "pointer",
-      }}
     >
       {children}
     </button>

@@ -80,7 +80,8 @@ export default function FloatingCartButton() {
           justifyContent: "center",
           boxShadow: "0 12px 28px rgba(0,0,0,0.4)",
           textDecoration: "none",
-          zIndex: 80,
+          // FAB layer on the Task F v2 z-scale (content 0 / sticky 10 / dropdown 20 / fab 30 / modal 40 / toast 50)
+          zIndex: 30,
           // Pulse fires on cart-bounce; the lighter `cdx-fcb-in` only on
           // mount keeps the button from popping in abruptly when the cart
           // first becomes non-empty.

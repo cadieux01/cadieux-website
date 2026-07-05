@@ -24,7 +24,40 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left:   env(safe-area-inset-left, 0px);
   --safe-right:  env(safe-area-inset-right, 0px);
+
+  /* ── Semantic surface tokens (Task F v2) ──────────────────────────
+     Four surfaces total. Choose by ROLE, not by aesthetic. Max 2 non-
+     canvas surfaces per viewport. Any adjacent surface pair with <3:1
+     luminance boundary must be separated by a 1px --surface-border line. */
+  --surface-canvas:  #C0C8CE;                    /* page + chrome */
+  --surface-brand:   #024628;                    /* product cards, hero, CTA blocks */
+  --surface-paper:   #FBF3D4;                    /* editorial / info / nutrition / FAQ */
+  --surface-utility: #C0C8CE;                    /* forms, tables, order summary */
+  --surface-border:  rgba(2, 70, 40, 0.25);      /* boundary line on ash-adjacent surfaces */
+
+  /* Card tokens — one radius, one padding scale, one shadow. Kill per-card one-offs. */
+  --card-radius: 16px;
+  --card-padding-mobile: 24px;
+  --card-padding-desktop: 32px;
+  --card-shadow: 0 8px 24px rgba(2, 70, 40, 0.10);
+
+  /* Z-index scale — the ONLY allowed layers. Kill 60/70/80/100/999 one-offs. */
+  --z-content:   0;
+  --z-sticky:   10;
+  --z-dropdown: 20;
+  --z-fab:      30;
+  --z-modal:    40;
+  --z-toast:    50;
+
+  /* Sticky-header offset. Any in-page anchor jump lands below the nav. */
+  --sticky-header-offset: 80px;
+
+  /* Motion tokens */
+  --lift-y: -2px;
+  --lift-duration: 200ms;
 }
+
+html { scroll-padding-top: var(--sticky-header-offset); }
 
 /* Horizontal insets applied at body level so landscape orientation
    on notched phones (camera bezel on the side) never clips content.
@@ -400,4 +433,148 @@ select option:disabled {
   html.anim-cursor [contenteditable=""] {
     cursor: text !important;
   }
+}
+
+/* ── Task F v2 design-system utilities ───────────────────────────────
+   Semantic surface classes + one card token + one CTA pair + one tab
+   geometry. Use these instead of hand-rolling backgrounds/borders on
+   each new card so the pairing matrix (never Cream on ash, never Blue
+   as body copy on brand, never Ash on paper) is enforced by the class,
+   not by memory.
+
+   Pairing matrix (WCAG-verified against palette):
+     canvas  ash    → FG or Core Black  (Cream 1.52:1 = FAIL, banned)
+     brand   green  → Cream headline, Ash body  (Blue 3.55:1 large-only)
+     paper   cream  → FG/Black text, Blue accent  (Ash 1.52:1 = FAIL, banned)
+     utility ash    → Core Black text, FG border (form-only)
+*/
+
+/* Canvas is the default body; no class needed. */
+
+.cdx-card {
+  border-radius: var(--card-radius);
+  padding: var(--card-padding-mobile);
+  box-shadow: var(--card-shadow);
+}
+@media (min-width: 768px) {
+  .cdx-card { padding: var(--card-padding-desktop); }
+}
+
+.cdx-card-brand {
+  background: var(--surface-brand);
+  color: #FBF3D4;
+  border: 0.5px solid rgba(201, 169, 110, 0.25);
+}
+.cdx-card-paper {
+  background: var(--surface-paper);
+  color: var(--surface-brand);
+  border: 1px solid var(--surface-border);
+}
+.cdx-card-utility {
+  background: var(--surface-utility);
+  color: #1D1D1F;
+  border: 1px solid var(--surface-border);
+}
+
+/* Primary CTA — Foundation Green surface + Grain Cream label (9.88:1 AAA).
+   Only place a cream-bg CTA on a brand surface. Never on ash canvas. */
+.cdx-cta-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--surface-brand);
+  color: #FBF3D4;
+  border: 1px solid var(--surface-brand);
+  padding: 13px 26px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform var(--lift-duration) ease, box-shadow var(--lift-duration) ease;
+}
+.cdx-cta-primary:hover { transform: translateY(var(--lift-y)); box-shadow: var(--card-shadow); }
+
+/* Secondary CTA — transparent + 1px FG border + FG label. Works on ash and
+   on paper (both have a >3:1 boundary against the FG line). Do NOT use on
+   brand — invisible border. */
+.cdx-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--surface-brand);
+  border: 1px solid var(--surface-brand);
+  padding: 12px 25px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform var(--lift-duration) ease, background var(--lift-duration) ease;
+}
+.cdx-cta-secondary:hover { transform: translateY(var(--lift-y)); background: rgba(2, 70, 40, 0.06); }
+
+/* Tab group + tab — identical geometry. Group is a pill-bordered container;
+   each tab is same height/padding/radius/type. Active = FG bg + Cream label;
+   inactive = transparent + FG label. overflow-x auto so mobile row scrolls
+   instead of wrapping. */
+.cdx-tab-group {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+.cdx-tab-group::-webkit-scrollbar { display: none; }
+.cdx-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--surface-brand);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--lift-duration) ease, color var(--lift-duration) ease;
+  white-space: nowrap;
+}
+.cdx-tab:hover { background: rgba(2, 70, 40, 0.06); }
+.cdx-tab[aria-selected="true"],
+.cdx-tab.is-active {
+  background: var(--surface-brand);
+  color: #FBF3D4;
+}
+
+/* Hover-lift primitive for any tile/card that should nudge on hover. */
+.cdx-hover-lift {
+  transition: transform var(--lift-duration) ease, box-shadow var(--lift-duration) ease;
+}
+.cdx-hover-lift:hover { transform: translateY(var(--lift-y)); box-shadow: var(--card-shadow); }
+
+/* Global focus-visible ring — FG at 35% alpha, matches the input focus
+   already declared for <select>. Any focusable element gets it unless a
+   component opts out. Keyboard users see a consistent boundary. */
+:where(a, button, [role="button"], input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(2, 70, 40, 0.35);
+  border-radius: 4px;
 }

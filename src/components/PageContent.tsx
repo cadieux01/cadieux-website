@@ -94,8 +94,6 @@ const INGREDIENTS = [
   { name: "Barley Malt",           desc: "Natural sweetness with a low glycemic touch" },
 ];
 
-const CARD_BG = ["#024628", "#024628", "#024628", "#024628"];
-
 const PROTEIN_BENEFITS = [
   { n: "01", title: "Everyday Strength",  desc: "Holds your muscles together as you age." },
   { n: "02", title: "Keeps You Full",     desc: "Steadies hunger for hours, no cravings." },
