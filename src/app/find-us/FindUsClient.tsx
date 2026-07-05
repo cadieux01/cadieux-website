@@ -20,7 +20,7 @@ import type {
   PickupLocationType,
 } from "@/lib/pickup-locations";
 
-const GOLD_RGB = "201,169,110";
+const GOLD_RGB = "2,70,40";
 const GREEN_HEX = "#16a34a"; // kitchen
 const GOLD_HEX = "#024628"; // stall
 const BLUE_HEX = "#3b82f6"; // partner pickup
@@ -196,7 +196,7 @@ export default function FindUsClient({
     <div
       style={{
         minHeight: "100dvh",
-        background: "rgb(6,4,2)",
+        background: "#C0C8CE",
         position: "relative",
         overflowX: "clip",
       }}
@@ -206,7 +206,8 @@ export default function FindUsClient({
           position: "fixed",
           inset: 0,
           backgroundImage: "url(/grain.svg)",
-          opacity: 0.055,
+          opacity: 0.04,
+          mixBlendMode: "multiply",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -224,7 +225,7 @@ export default function FindUsClient({
           fontWeight: 200,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
-          color: "#4369B2",
+          color: "#024628",
           textDecoration: "none",
           display: "flex",
           alignItems: "center",
@@ -249,7 +250,7 @@ export default function FindUsClient({
             fontFamily: "var(--font-heading)",
             fontSize: "clamp(40px,9vw,76px)",
             fontWeight: 300,
-            color: "#FBF3D4",
+            color: "#024628",
             letterSpacing: "0.02em",
             lineHeight: 1,
           }}
@@ -262,7 +263,7 @@ export default function FindUsClient({
             fontFamily: "var(--font-body)",
             fontSize: 14,
             fontWeight: 300,
-            color: "rgba(251,243,212,0.6)",
+            color: "rgba(2,70,40,0.8)",
             letterSpacing: "0.02em",
             lineHeight: 1.6,
             maxWidth: 640,
@@ -369,7 +370,7 @@ export default function FindUsClient({
             marginBottom: 32,
             fontFamily: "var(--font-body)",
             fontSize: 11,
-            color: "rgba(251,243,212,0.6)",
+            color: "rgba(2,70,40,0.8)",
             letterSpacing: "0.15em",
             textTransform: "uppercase",
           }}
@@ -426,11 +427,12 @@ export default function FindUsClient({
               }}
               style={{
                 width: "100%",
-                background: "#024628",
-                border: `0.5px solid rgba(${GOLD_RGB},0.45)`,
+                background: "rgba(251,243,212,0.08)",
+                border: "1px solid #FBF3D4",
                 borderRadius: 8,
                 padding: "12px 14px",
-                color: "#f5f0e8",
+                color: "#FBF3D4",
+                caretColor: "#FBF3D4",
                 fontFamily: "var(--font-body)",
                 fontSize: 14,
                 outline: "none",
@@ -443,7 +445,7 @@ export default function FindUsClient({
             className="cdx-locator-btn"
             style={{
               background: "transparent",
-              border: `1px solid rgba(${GOLD_RGB},0.6)`,
+              border: "1px solid #FBF3D4",
               borderRadius: 8,
               padding: "12px 22px",
               fontFamily: "var(--font-body)",
@@ -451,7 +453,7 @@ export default function FindUsClient({
               fontWeight: 400,
               letterSpacing: "0.25em",
               textTransform: "uppercase",
-              color: `rgba(${GOLD_RGB},0.95)`,
+              color: "#FBF3D4",
               cursor: checking ? "wait" : "pointer",
               opacity: checking ? 0.6 : 1,
             }}
@@ -529,12 +531,8 @@ export default function FindUsClient({
                   aria-selected={isActive}
                   onClick={() => setActiveTab(key)}
                   style={{
-                    background: isActive
-                      ? `rgba(${GOLD_RGB},0.18)`
-                      : "transparent",
-                    border: `1px solid rgba(${GOLD_RGB},${
-                      isActive ? 0.85 : 0.4
-                    })`,
+                    background: isActive ? "#024628" : "transparent",
+                    border: "1px solid #024628",
                     borderRadius: 999,
                     padding: "8px 16px",
                     fontFamily: "var(--font-body)",
@@ -542,7 +540,7 @@ export default function FindUsClient({
                     fontWeight: 400,
                     letterSpacing: "0.2em",
                     textTransform: "uppercase",
-                    color: isActive ? "#FBF3D4" : `rgba(${GOLD_RGB},0.85)`,
+                    color: isActive ? "#FBF3D4" : "#024628",
                     cursor: "pointer",
                   }}
                 >
@@ -563,11 +561,12 @@ export default function FindUsClient({
           aria-label="Search locations"
           style={{
             width: "100%",
-            background: "#024628",
-            border: `0.5px solid rgba(${GOLD_RGB},0.45)`,
+            background: "#FBF3D4",
+            border: "1px solid #024628",
             borderRadius: 12,
             padding: "14px 18px",
-            color: "#f5f0e8",
+            color: "#024628",
+            caretColor: "#024628",
             fontFamily: "var(--font-body)",
             fontSize: 14,
             fontWeight: 300,
@@ -583,7 +582,7 @@ export default function FindUsClient({
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 13,
-              color: "rgba(251,243,212,0.5)",
+              color: "rgba(2,70,40,0.7)",
               textAlign: "center",
               padding: "40px 0",
             }}
@@ -629,7 +628,7 @@ export default function FindUsClient({
                         fontFamily: "var(--font-body)",
                         fontSize: 15,
                         fontWeight: 500,
-                        color: "#f5f0e8",
+                        color: "#FBF3D4",
                         letterSpacing: "0.01em",
                       }}
                     >
@@ -658,7 +657,7 @@ export default function FindUsClient({
                       fontFamily: "var(--font-body)",
                       fontSize: 11,
                       fontWeight: 300,
-                      color: "#8a7a5a",
+                      color: "rgba(251,243,212,0.75)",
                       letterSpacing: "0.03em",
                       lineHeight: 1.5,
                     }}
@@ -672,7 +671,7 @@ export default function FindUsClient({
                         fontFamily: "var(--font-body)",
                         fontSize: 10,
                         fontWeight: 300,
-                        color: "#6a5a40",
+                        color: "rgba(251,243,212,0.6)",
                         letterSpacing: "0.18em",
                         textTransform: "uppercase",
                       }}
@@ -696,7 +695,7 @@ export default function FindUsClient({
                       className="cdx-locator-btn"
                       style={{
                         background: "transparent",
-                        border: `1px solid rgba(${GOLD_RGB},0.5)`,
+                        border: "1px solid #FBF3D4",
                         borderRadius: 6,
                         padding: "7px 14px",
                         fontFamily: "var(--font-body)",
@@ -704,7 +703,7 @@ export default function FindUsClient({
                         fontWeight: 400,
                         letterSpacing: "0.25em",
                         textTransform: "uppercase",
-                        color: `rgba(${GOLD_RGB},0.95)`,
+                        color: "#FBF3D4",
                         cursor: "pointer",
                       }}
                     >
@@ -722,7 +721,8 @@ export default function FindUsClient({
           style={{
             marginTop: 48,
             padding: "28px 24px",
-            border: `0.5px solid rgba(${GOLD_RGB},0.35)`,
+            background: "#FBF3D4",
+            border: "1px solid #024628",
             borderRadius: 12,
             textAlign: "center",
           }}
@@ -732,7 +732,7 @@ export default function FindUsClient({
               fontFamily: "var(--font-heading)",
               fontSize: 22,
               fontWeight: 400,
-              color: "#FBF3D4",
+              color: "#024628",
               margin: "0 0 10px",
             }}
           >
@@ -743,7 +743,7 @@ export default function FindUsClient({
               fontFamily: "var(--font-body)",
               fontSize: 13,
               fontWeight: 300,
-              color: "rgba(251,243,212,0.6)",
+              color: "rgba(2,70,40,0.8)",
               margin: "0 0 16px",
               lineHeight: 1.6,
             }}
@@ -753,11 +753,10 @@ export default function FindUsClient({
           </p>
           <a
             href="mailto:hello@cadieux.in?subject=Suggest%20a%20location"
-            className="cdx-locator-btn"
             style={{
               display: "inline-block",
-              background: "transparent",
-              border: `1px solid rgba(${GOLD_RGB},0.6)`,
+              background: "#024628",
+              border: "1px solid #024628",
               borderRadius: 8,
               padding: "12px 22px",
               fontFamily: "var(--font-body)",
@@ -765,7 +764,7 @@ export default function FindUsClient({
               fontWeight: 400,
               letterSpacing: "0.25em",
               textTransform: "uppercase",
-              color: `rgba(${GOLD_RGB},0.95)`,
+              color: "#FBF3D4",
               textDecoration: "none",
             }}
           >
@@ -776,16 +775,14 @@ export default function FindUsClient({
 
       <style>{`
         .cdx-locator-btn:hover {
-          background: rgba(${GOLD_RGB},0.1) !important;
-          border-color: rgba(${GOLD_RGB},0.85) !important;
-          color: #FBF3D4 !important;
+          background: rgba(251,243,212,0.12) !important;
         }
         .cdx-locator-btn:focus-visible {
-          outline: 2px solid rgba(${GOLD_RGB},0.9);
+          outline: 2px solid #FBF3D4;
           outline-offset: 2px;
         }
-        input::placeholder { color: rgba(240,223,200,0.3); }
-        input:focus { border-color: rgba(${GOLD_RGB},0.85) !important; }
+        input::placeholder { color: rgba(2,70,40,0.4); }
+        #cdx-pincode::placeholder { color: rgba(251,243,212,0.4); }
       `}</style>
     </div>
   );

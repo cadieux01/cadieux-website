@@ -18,7 +18,7 @@ export default function ProductReportsPage() {
 
   return (
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
-      <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
+      <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.04, mixBlendMode: "multiply", pointerEvents: "none", zIndex: 0 }} />
 
       <Link
         href={`/shop/${slug}`}
@@ -32,7 +32,7 @@ export default function ProductReportsPage() {
           fontWeight: 200,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
-          color: "#4369B2",
+          color: "#024628",
           textDecoration: "none",
           display: "flex",
           alignItems: "center",
@@ -59,10 +59,9 @@ export default function ProductReportsPage() {
             maxWidth: 620,
             textAlign: "center",
             padding: "clamp(32px,6vw,56px) clamp(24px,5vw,48px)",
-            background: "rgba(29,29,31,0.55)",
-            border: "0.5px solid rgba(251,243,212,0.25)",
+            background: "#024628",
+            border: "1px solid #024628",
             borderRadius: 16,
-            backdropFilter: "blur(6px)",
           }}
         >
           <div
@@ -72,7 +71,7 @@ export default function ProductReportsPage() {
               fontWeight: 500,
               letterSpacing: "0.4em",
               textTransform: "uppercase",
-              color: "#024628",
+              color: "rgba(251,243,212,0.75)",
               marginBottom: 18,
             }}
           >
@@ -100,7 +99,7 @@ export default function ProductReportsPage() {
               fontSize: 13,
               fontWeight: 300,
               letterSpacing: "0.04em",
-              color: "#024628",
+              color: "rgba(251,243,212,0.85)",
             }}
           >
             Final trials are under process.
@@ -114,7 +113,7 @@ export default function ProductReportsPage() {
               margin: "8px auto 24px",
               borderRadius: "50%",
               border: "1.5px solid rgba(251,243,212,0.35)",
-              borderTopColor: "#024628",
+              borderTopColor: "#FBF3D4",
               animation: "reports-spin 1.4s linear infinite",
             }}
           />
@@ -153,7 +152,7 @@ export default function ProductReportsPage() {
               fontWeight: 400,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "#024628",
+              color: "rgba(251,243,212,0.75)",
             }}
           >
             Thank you for trusting Cadieux.
@@ -179,7 +178,7 @@ export default function ProductReportsPage() {
               href={`/shop/${slug}`}
               style={{
                 padding: "14px 26px",
-                border: "1px solid #024628",
+                border: "1px solid #FBF3D4",
                 color: "#FBF3D4",
                 fontFamily: "var(--font-body)",
                 fontSize: 10,
@@ -198,7 +197,7 @@ export default function ProductReportsPage() {
                 padding: "14px 26px",
                 background: "rgba(251,243,212,0.08)",
                 border: "1px solid rgba(251,243,212,0.3)",
-                color: "rgba(245,240,232,0.7)",
+                color: "rgba(251,243,212,0.75)",
                 fontFamily: "var(--font-body)",
                 fontSize: 10,
                 fontWeight: 500,

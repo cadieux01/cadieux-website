@@ -221,7 +221,7 @@ export default async function BehindCadieuxPage() {
                 borderRadius: 8,
                 overflow: "hidden",
                 position: "relative",
-                background: "rgba(0,0,0,0.2)",
+                background: "rgba(251,243,212,0.06)",
               }}
             >
               <Image
@@ -346,7 +346,7 @@ export default async function BehindCadieuxPage() {
                       top: 8,
                       bottom: 8,
                       width: 1,
-                      background: "rgba(201,169,110,0.35)",
+                      background: "rgba(251,243,212,0.35)",
                     }}
                   />
                   {milestones.map((m) => (
@@ -441,14 +441,14 @@ export default async function BehindCadieuxPage() {
               style={{
                 marginBottom: 24,
                 padding: "12px 16px",
-                border: "0.5px solid rgba(201,169,110,0.3)",
+                border: "0.5px solid rgba(251,243,212,0.3)",
                 borderRadius: 4,
                 fontFamily: "var(--font-body)",
                 fontSize: 13,
                 fontWeight: 300,
                 letterSpacing: "0.04em",
-                color: GOLD,
-                background: "rgba(201,169,110,0.06)",
+                color: "rgba(251,243,212,0.9)",
+                background: "rgba(251,243,212,0.06)",
               }}
             >
               {STATS_TRIALS_NOTE}
@@ -458,7 +458,7 @@ export default async function BehindCadieuxPage() {
               data-stagger
               style={{
                 marginTop: 16,
-                borderTop: "1px solid rgba(201,169,110,0.25)",
+                borderTop: "1px solid rgba(251,243,212,0.25)",
               }}
             >
               {stats.map((s) => (
@@ -466,7 +466,7 @@ export default async function BehindCadieuxPage() {
                   key={s.label}
                   style={{
                     padding: "20px 0",
-                    borderBottom: "1px solid rgba(201,169,110,0.25)",
+                    borderBottom: "1px solid rgba(251,243,212,0.25)",
                     display: "flex",
                     alignItems: "baseline",
                     justifyContent: "space-between",

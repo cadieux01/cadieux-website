@@ -8,7 +8,7 @@ export default function ShopCTA() {
       style={{
         marginTop: "64px",
         paddingTop: "48px",
-        borderTop: "1px solid rgba(240,223,200,0.1)",
+        borderTop: "1px solid rgba(2,70,40,0.2)",
       }}
     >
       <p
@@ -16,8 +16,8 @@ export default function ShopCTA() {
           margin: "0 0 16px",
           fontFamily: "var(--font-body)",
           fontSize: 12,
-          fontWeight: 200,
-          color: "rgba(251,243,212,0.6)",
+          fontWeight: 300,
+          color: "rgba(2,70,40,0.75)",
           letterSpacing: "0.05em",
           textTransform: "uppercase",
         }}
@@ -31,21 +31,20 @@ export default function ShopCTA() {
           padding: "12px 24px",
           fontFamily: "var(--font-body)",
           fontSize: 13,
-          fontWeight: 300,
+          fontWeight: 400,
           color: "#FBF3D4",
-          border: "1px solid rgba(251,243,212,0.4)",
+          background: "#024628",
+          border: "1px solid #024628",
           textDecoration: "none",
           transition: "all 200ms ease",
         }}
         onMouseEnter={(e) => {
           const el = e.currentTarget as HTMLAnchorElement;
-          el.style.background = "rgba(251,243,212,0.1)";
-          el.style.borderColor = "rgba(251,243,212,0.8)";
+          el.style.background = "#013620";
         }}
         onMouseLeave={(e) => {
           const el = e.currentTarget as HTMLAnchorElement;
-          el.style.background = "transparent";
-          el.style.borderColor = "rgba(251,243,212,0.4)";
+          el.style.background = "#024628";
         }}
       >
         Explore our bread →

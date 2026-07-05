@@ -70,7 +70,7 @@ function Stars({ rating, size = 14, onChange }: { rating: number; size?: number;
           key={i}
           onClick={interactive ? () => onChange!(i + 1) : undefined}
           style={{
-            opacity: rating >= i + 1 ? 1 : rating >= i + 0.5 ? 0.7 : 0.25,
+            opacity: rating >= i + 1 ? 1 : 0.3,
             cursor: interactive ? "pointer" : "default",
           }}
         >
@@ -356,10 +356,10 @@ export default function ReviewSection({ productSlug, scope }: Props) {
       {scope === "product" && ratedCount > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
           <Stars rating={avgRating} size={18} />
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, color: "#FBF3D4", fontWeight: 500 }}>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, color: "#024628", fontWeight: 500 }}>
             {avgRating.toFixed(1)}
           </div>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(245,240,232,0.5)" }}>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(2,70,40,0.65)" }}>
             {reviews.length} review{reviews.length === 1 ? "" : "s"}
           </div>
         </div>
@@ -389,7 +389,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
           )}
           {(scope === "product" || slugChoice) && (
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(245,240,232,0.55)" }}>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>
                 Rating
               </span>
               <Stars rating={rating} size={20} onChange={setRating} />
@@ -405,7 +405,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
             style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }}
           />
           {error && (
-            <div style={{ color: "#e88a7a", fontSize: 12, fontFamily: "var(--font-body)" }}>{error}</div>
+            <div style={{ color: "#991B1B", fontSize: 12, fontFamily: "var(--font-body)" }}>{error}</div>
           )}
           <TurnstileWidget
             ref={turnstileRef}
@@ -438,7 +438,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
             <div key={rev.id} style={cardStyle}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 500, color: "#FBF3D4" }}>{rev.author_name}</div>
+                  <div style={{ fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 500, color: "#024628" }}>{rev.author_name}</div>
                   {rev.rating != null && <Stars rating={rev.rating} />}
                   {scope === "all" && rev.product_slug && (
                     <span style={pillStyle}>{rev.product_slug}</span>
@@ -513,11 +513,11 @@ export default function ReviewSection({ productSlug, scope }: Props) {
               )}
 
               {rev.replies.length > 0 && (
-                <div style={{ marginTop: 14, paddingLeft: 16, borderLeft: "1px solid rgba(201,169,110,0.18)", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ marginTop: 14, paddingLeft: 16, borderLeft: "1px solid rgba(2,70,40,0.25)", display: "flex", flexDirection: "column", gap: 12 }}>
                   {rev.replies.map((rp) => (
                     <div key={rp.id}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-                        <span style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 500, color: "#FBF3D4" }}>{rp.author_name}</span>
+                        <span style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 500, color: "#024628" }}>{rp.author_name}</span>
                         {rp.is_admin && <span style={adminPill}>Cadieux Team</span>}
                         <span style={{ ...dateStyle, fontSize: 9 }}>
                           {formatDate(rp.created_at)}
@@ -566,8 +566,8 @@ export default function ReviewSection({ productSlug, scope }: Props) {
 
 const formStyle: React.CSSProperties = {
   padding: "20px 22px",
-  background: "rgba(29,29,31,0.4)",
-  border: "0.5px solid rgba(201,169,110,0.14)",
+  background: "#FBF3D4",
+  border: "1px solid #024628",
   borderRadius: 10,
   marginBottom: 24,
 };
@@ -575,10 +575,11 @@ const formStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
-  background: "rgba(29,29,31,0.6)",
-  border: "1px solid rgba(201,169,110,0.2)",
+  background: "#FBF3D4",
+  border: "1px solid #024628",
   borderRadius: 6,
-  color: "#FBF3D4",
+  color: "#024628",
+  caretColor: "#024628",
   fontFamily: "var(--font-body)",
   fontSize: 13,
   fontWeight: 300,
@@ -588,8 +589,8 @@ const inputStyle: React.CSSProperties = {
 const btnPrimary: React.CSSProperties = {
   alignSelf: "start",
   padding: "10px 22px",
-  background: "rgba(201,169,110,0.18)",
-  border: "1px solid rgba(201,169,110,0.5)",
+  background: "#024628",
+  border: "none",
   borderRadius: 6,
   color: "#FBF3D4",
   fontFamily: "var(--font-body)",
@@ -602,8 +603,8 @@ const btnPrimary: React.CSSProperties = {
 
 const cardStyle: React.CSSProperties = {
   padding: "22px 22px",
-  background: "rgba(29,29,31,0.4)",
-  border: "0.5px solid rgba(201,169,110,0.14)",
+  background: "#FBF3D4",
+  border: "1px solid #024628",
   borderRadius: 10,
 };
 
@@ -611,7 +612,7 @@ const editedTagStyle: React.CSSProperties = {
   marginLeft: 4,
   textTransform: "none",
   letterSpacing: "0.05em",
-  color: "rgba(245,240,232,0.4)",
+  color: "rgba(2,70,40,0.6)",
   fontStyle: "italic",
 };
 
@@ -621,7 +622,7 @@ const dateStyle: React.CSSProperties = {
   fontWeight: 300,
   letterSpacing: "0.2em",
   textTransform: "uppercase",
-  color: "rgba(245,240,232,0.4)",
+  color: "rgba(2,70,40,0.6)",
 };
 
 const bodyStyle: React.CSSProperties = {
@@ -630,7 +631,7 @@ const bodyStyle: React.CSSProperties = {
   fontSize: 13,
   lineHeight: 1.7,
   fontWeight: 300,
-  color: "rgba(251, 243, 212, 0.72)",
+  color: "#024628",
 };
 
 const pillStyle: React.CSSProperties = {
@@ -640,7 +641,7 @@ const pillStyle: React.CSSProperties = {
   letterSpacing: "0.25em",
   textTransform: "uppercase",
   color: "#024628",
-  border: "1px solid rgba(201,169,110,0.4)",
+  border: "1px solid #024628",
   borderRadius: 99,
   padding: "2px 8px",
 };
@@ -648,8 +649,8 @@ const pillStyle: React.CSSProperties = {
 const adminPill: React.CSSProperties = {
   ...pillStyle,
   color: "#FBF3D4",
-  background: "rgba(201,169,110,0.22)",
-  border: "1px solid rgba(201,169,110,0.5)",
+  background: "#024628",
+  border: "none",
 };
 
 const iconBtn: React.CSSProperties = {
@@ -659,7 +660,7 @@ const iconBtn: React.CSSProperties = {
   background: "transparent",
   border: "none",
   padding: 0,
-  color: "rgba(251,243,212,0.7)",
+  color: "rgba(2,70,40,0.75)",
   fontFamily: "var(--font-body)",
   fontSize: 12,
   fontWeight: 300,
@@ -670,7 +671,7 @@ const textBtn: React.CSSProperties = {
   background: "transparent",
   border: "none",
   padding: 0,
-  color: "rgba(251,243,212,0.7)",
+  color: "rgba(2,70,40,0.75)",
   fontFamily: "var(--font-body)",
   fontSize: 12,
   fontWeight: 300,
@@ -684,7 +685,7 @@ const disclosureStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 300,
   lineHeight: 1.55,
-  color: "rgba(251,243,212,0.55)",
+  color: "rgba(2,70,40,0.7)",
   padding: "8px 0 2px",
 };
 
@@ -696,5 +697,5 @@ const emptyStyle: React.CSSProperties = {
   fontWeight: 300,
   letterSpacing: "0.15em",
   textTransform: "uppercase",
-  color: "rgba(245,240,232,0.4)",
+  color: "rgba(2,70,40,0.6)",
 };

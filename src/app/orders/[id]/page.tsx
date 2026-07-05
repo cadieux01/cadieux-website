@@ -84,10 +84,10 @@ function paymentLabel(method: string | null, status: string | null): string {
 function paymentColor(method: string | null, status: string | null): string {
   const m = (method ?? "").toLowerCase();
   const s = (status ?? "").toLowerCase();
-  if (s === "paid") return "rgba(74,222,128,0.85)";
-  if (s === "failed") return "#ff8181";
-  if (m === "cod") return "rgba(240,223,200,0.85)";
-  return "rgba(200,144,58,0.85)";
+  if (s === "paid") return "#024628";
+  if (s === "failed") return "#991B1B";
+  if (m === "cod") return "#024628";
+  return "#024628";
 }
 
 function formatDeliveryDate(iso: string | null): string {
@@ -121,10 +121,10 @@ function formatSlot(slot: string | null): string {
 
 function statusColor(status: string): string {
   const s = status.toLowerCase();
-  if (s === "delivered" || s === "completed") return "rgba(74,222,128,0.85)";
-  if (s === "cancelled") return "#ff8181";
-  if (s === "confirmed" || s === "out_for_delivery") return "rgba(200,144,58,0.95)";
-  return "rgba(200,144,58,0.7)";
+  if (s === "delivered" || s === "completed") return "#024628";
+  if (s === "cancelled") return "#991B1B";
+  if (s === "confirmed" || s === "out_for_delivery") return "#024628";
+  return "#024628";
 }
 
 export default function OrderDetailPage() {
@@ -321,7 +321,7 @@ export default function OrderDetailPage() {
     <div
       style={{
         minHeight: "100dvh",
-        background: "rgb(6,4,2)",
+        background: "#C0C8CE",
         position: "relative",
         overflowX: "clip",
       }}
@@ -331,7 +331,7 @@ export default function OrderDetailPage() {
           position: "fixed",
           inset: 0,
           backgroundImage: GRAIN,
-          opacity: 0.055,
+          opacity: 0.04, mixBlendMode: "multiply",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -349,7 +349,7 @@ export default function OrderDetailPage() {
           fontWeight: 200,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
-          color: "#4369B2",
+          color: "#024628",
           textDecoration: "none",
           display: "flex",
           alignItems: "center",
@@ -373,7 +373,7 @@ export default function OrderDetailPage() {
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 15,
-              color: "rgba(240,223,200,0.3)",
+              color: "rgba(2,70,40,0.55)",
               letterSpacing: "0.1em",
             }}
           >
@@ -389,7 +389,7 @@ export default function OrderDetailPage() {
                 fontFamily: "var(--font-heading)",
                 fontSize: "clamp(36px,8vw,64px)",
                 fontWeight: 300,
-                color: "#FBF3D4",
+                color: "#024628",
                 letterSpacing: "0.02em",
                 lineHeight: 1.05,
               }}
@@ -402,7 +402,7 @@ export default function OrderDetailPage() {
                 fontFamily: "var(--font-body)",
                 fontSize: 15,
                 fontWeight: 200,
-                color: "rgba(240,223,200,0.55)",
+                color: "rgba(2,70,40,0.7)",
                 lineHeight: 1.7,
               }}
             >
@@ -441,7 +441,7 @@ export default function OrderDetailPage() {
                 fontFamily: "var(--font-heading)",
                 fontSize: "clamp(36px,8vw,64px)",
                 fontWeight: 300,
-                color: "#FBF3D4",
+                color: "#024628",
                 letterSpacing: "0.02em",
                 lineHeight: 1.05,
               }}
@@ -454,7 +454,7 @@ export default function OrderDetailPage() {
                 fontFamily: "var(--font-body)",
                 fontSize: 15,
                 fontWeight: 200,
-                color: "rgba(240,223,200,0.55)",
+                color: "rgba(2,70,40,0.7)",
                 lineHeight: 1.7,
               }}
             >
@@ -470,14 +470,14 @@ export default function OrderDetailPage() {
                 height: 48,
                 padding: "0 28px",
                 background: "transparent",
-                border: "1px solid rgba(240,223,200,0.18)",
+                border: "1px solid rgba(2,70,40,0.25)",
                 textDecoration: "none",
                 fontFamily: "var(--font-body)",
                 fontSize: 11,
                 fontWeight: 300,
                 letterSpacing: "0.4em",
                 textTransform: "uppercase",
-                color: "rgba(240,223,200,0.6)",
+                color: "rgba(2,70,40,0.75)",
               }}
             >
               All Orders
@@ -503,7 +503,7 @@ export default function OrderDetailPage() {
                   fontWeight: 200,
                   letterSpacing: "0.35em",
                   textTransform: "uppercase",
-                  color: "rgba(200,144,58,0.7)",
+                  color: "#024628",
                 }}
               >
                 Order #{shortId}
@@ -537,7 +537,7 @@ export default function OrderDetailPage() {
                   fontFamily: "var(--font-heading)",
                   fontSize: "clamp(40px,9vw,72px)",
                   fontWeight: 300,
-                  color: "#FBF3D4",
+                  color: "#024628",
                   letterSpacing: "0.02em",
                   lineHeight: 1.05,
                 }}
@@ -598,7 +598,7 @@ export default function OrderDetailPage() {
                     fontFamily: "var(--font-body)",
                     fontSize: 14,
                     fontWeight: 200,
-                    color: "rgba(240,223,200,0.4)",
+                    color: "rgba(2,70,40,0.6)",
                   }}
                 >
                   No items recorded.
@@ -618,7 +618,7 @@ export default function OrderDetailPage() {
                       alignItems: "baseline",
                       gap: 16,
                       padding: "12px 0",
-                      borderBottom: "1px solid rgba(240,223,200,0.06)",
+                      borderBottom: "1px solid rgba(2,70,40,0.15)",
                     }}
                   >
                     <div style={{ minWidth: 0, flex: 1 }}>
@@ -628,7 +628,7 @@ export default function OrderDetailPage() {
                           fontFamily: "var(--font-body)",
                           fontSize: 15,
                           fontWeight: 300,
-                          color: "#FBF3D4",
+                          color: "#024628",
                           letterSpacing: "0.02em",
                         }}
                       >
@@ -642,7 +642,7 @@ export default function OrderDetailPage() {
                           fontWeight: 200,
                           letterSpacing: "0.25em",
                           textTransform: "uppercase",
-                          color: "rgba(240,223,200,0.4)",
+                          color: "rgba(2,70,40,0.6)",
                         }}
                       >
                         Qty {it.qty}
@@ -654,7 +654,7 @@ export default function OrderDetailPage() {
                         fontFamily: "var(--font-body)",
                         fontSize: 14,
                         fontWeight: 200,
-                        color: "rgba(240,223,200,0.85)",
+                        color: "#024628",
                         whiteSpace: "nowrap",
                       }}
                     >
@@ -696,7 +696,7 @@ export default function OrderDetailPage() {
                   gap: 16,
                   paddingTop: 14,
                   marginTop: 8,
-                  borderTop: "1px solid rgba(240,223,200,0.12)",
+                  borderTop: "1px solid rgba(2,70,40,0.2)",
                 }}
               >
                 <span
@@ -706,7 +706,7 @@ export default function OrderDetailPage() {
                     fontWeight: 300,
                     letterSpacing: "0.35em",
                     textTransform: "uppercase",
-                    color: "rgba(240,223,200,0.55)",
+                    color: "rgba(2,70,40,0.7)",
                   }}
                 >
                   Grand Total
@@ -716,7 +716,7 @@ export default function OrderDetailPage() {
                     fontFamily: "var(--font-heading)",
                     fontSize: 22,
                     fontWeight: 300,
-                    color: "#FBF3D4",
+                    color: "#024628",
                   }}
                 >
                   ₹{Number(order.total_amount).toLocaleString("en-IN")}
@@ -742,7 +742,7 @@ export default function OrderDetailPage() {
                     fontWeight: 200,
                     letterSpacing: "0.3em",
                     textTransform: "uppercase",
-                    color: "rgba(240,223,200,0.4)",
+                    color: "rgba(2,70,40,0.6)",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -807,7 +807,7 @@ export default function OrderDetailPage() {
                           fontSize: 12,
                           fontWeight: 200,
                           lineHeight: 1.6,
-                          color: "#ff8181",
+                          color: "#991B1B",
                         }}
                       >
                         {payError}
@@ -840,7 +840,7 @@ export default function OrderDetailPage() {
                 fontWeight: 200,
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
-                color: "rgba(240,223,200,0.3)",
+                color: "rgba(2,70,40,0.55)",
               }}
             >
               Placed{" "}
@@ -876,7 +876,7 @@ function Section({
           fontWeight: 300,
           letterSpacing: "0.4em",
           textTransform: "uppercase",
-          color: "rgba(200,144,58,0.7)",
+          color: "#024628",
         }}
       >
         {title}
@@ -907,7 +907,7 @@ function StatusTracker({
             fontWeight: 300,
             letterSpacing: "0.4em",
             textTransform: "uppercase",
-            color: "rgba(200,144,58,0.7)",
+            color: "#024628",
           }}
         >
           Status
@@ -919,7 +919,7 @@ function StatusTracker({
             fontSize: 14,
             fontWeight: 300,
             letterSpacing: "0.05em",
-            color: "rgba(240,223,200,0.85)",
+            color: "#024628",
             textTransform: "uppercase",
           }}
         >
@@ -941,7 +941,7 @@ function StatusTracker({
           fontWeight: 300,
           letterSpacing: "0.4em",
           textTransform: "uppercase",
-          color: "rgba(200,144,58,0.7)",
+          color: "#024628",
         }}
       >
         Status
@@ -959,15 +959,15 @@ function StatusTracker({
         {ORDER_STAGES.map((s, i) => {
           const done = i < currentIdx;
           const active = i === currentIdx;
-          const dotBg = done || active ? "rgba(74,222,128,0.85)" : "transparent";
+          const dotBg = done || active ? "#024628" : "transparent";
           const dotBorder = done || active
-            ? "rgba(74,222,128,0.85)"
-            : "rgba(240,223,200,0.25)";
+            ? "#024628"
+            : "rgba(2,70,40,0.25)";
           const labelColor = active
-            ? "#FBF3D4"
+            ? "#024628"
             : done
-            ? "rgba(240,223,200,0.7)"
-            : "rgba(240,223,200,0.35)";
+            ? "rgba(2,70,40,0.8)"
+            : "rgba(2,70,40,0.6)";
           return (
             <div
               key={s}
@@ -993,8 +993,8 @@ function StatusTracker({
                     height: 2,
                     background:
                       i <= currentIdx
-                        ? "rgba(74,222,128,0.6)"
-                        : "rgba(240,223,200,0.12)",
+                        ? "#024628"
+                        : "rgba(2,70,40,0.2)",
                   }}
                 />
               )}
@@ -1016,7 +1016,7 @@ function StatusTracker({
                   fontWeight: 500,
                   lineHeight: 1,
                   boxShadow: active
-                    ? "0 0 0 4px rgba(74,222,128,0.15)"
+                    ? "0 0 0 4px rgba(2,70,40,0.15)"
                     : undefined,
                 }}
               >
@@ -1050,7 +1050,7 @@ function StatusTracker({
             fontWeight: 200,
             letterSpacing: "0.25em",
             textTransform: "uppercase",
-            color: "rgba(240,223,200,0.4)",
+            color: "rgba(2,70,40,0.6)",
           }}
         >
           Updated{" "}
@@ -1204,7 +1204,7 @@ function DeliveryEditor({
           fontSize: 12,
           fontWeight: 200,
           lineHeight: 1.6,
-          color: "rgba(240,223,200,0.45)",
+          color: "rgba(2,70,40,0.65)",
         }}
       >
         You have a pending {otherLabel} change awaiting approval — cancel it to
@@ -1242,8 +1242,8 @@ function DeliveryEditor({
         style={{
           marginTop: 16,
           padding: "16px 18px",
-          border: "1px solid rgba(200,144,58,0.3)",
-          background: "rgba(200,144,58,0.06)",
+          border: "1px solid #024628",
+          background: "#FBF3D4",
           borderRadius: 4,
         }}
       >
@@ -1255,7 +1255,7 @@ function DeliveryEditor({
             fontWeight: 400,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(200,144,58,0.95)",
+            color: "#024628",
           }}
         >
           Change requested · awaiting approval
@@ -1270,7 +1270,7 @@ function DeliveryEditor({
                 fontWeight: 200,
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
-                color: "rgba(240,223,200,0.4)",
+                color: "rgba(2,70,40,0.6)",
               }}
             >
               {d.label}
@@ -1281,15 +1281,15 @@ function DeliveryEditor({
                 fontFamily: "var(--font-body)",
                 fontSize: 14,
                 fontWeight: 200,
-                color: "rgba(240,223,200,0.85)",
+                color: "#024628",
                 lineHeight: 1.5,
               }}
             >
-              <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+              <span style={{ color: "rgba(2,70,40,0.6)", textDecoration: "line-through" }}>
                 {d.from}
               </span>
               {"  →  "}
-              <span style={{ color: "#FBF3D4" }}>{d.to}</span>
+              <span style={{ color: "#024628" }}>{d.to}</span>
             </p>
           </div>
         ))}
@@ -1301,7 +1301,7 @@ function DeliveryEditor({
               fontSize: 12,
               fontWeight: 200,
               fontStyle: "italic",
-              color: "rgba(240,223,200,0.5)",
+              color: "rgba(2,70,40,0.7)",
               lineHeight: 1.6,
             }}
           >
@@ -1309,7 +1309,7 @@ function DeliveryEditor({
           </p>
         )}
         {err && (
-          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181" }}>
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B" }}>
             {err}
           </p>
         )}
@@ -1329,7 +1329,7 @@ function DeliveryEditor({
               fontWeight: 300,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "#ff8181",
+              color: "#991B1B",
             }}
           >
             {busy ? "Cancelling…" : "Cancel request"}
@@ -1342,14 +1342,14 @@ function DeliveryEditor({
               height: 40,
               padding: "0 18px",
               background: "transparent",
-              border: "1px solid rgba(240,223,200,0.2)",
+              border: "1px solid rgba(2,70,40,0.25)",
               cursor: busy ? "default" : "pointer",
               fontFamily: "var(--font-body)",
               fontSize: 10,
               fontWeight: 300,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "rgba(240,223,200,0.6)",
+              color: "rgba(2,70,40,0.75)",
             }}
           >
             Edit again
@@ -1370,14 +1370,14 @@ function DeliveryEditor({
             height: 40,
             padding: "0 18px",
             background: "transparent",
-            border: "1px solid rgba(240,223,200,0.2)",
+            border: "1px solid rgba(2,70,40,0.25)",
             cursor: "pointer",
             fontFamily: "var(--font-body)",
             fontSize: 10,
             fontWeight: 300,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(240,223,200,0.7)",
+            color: "rgba(2,70,40,0.8)",
           }}
         >
           Edit delivery
@@ -1392,7 +1392,7 @@ function DeliveryEditor({
       style={{
         marginTop: 16,
         padding: "18px",
-        border: "1px solid rgba(240,223,200,0.12)",
+        border: "1px solid rgba(2,70,40,0.2)",
         borderRadius: 4,
       }}
     >
@@ -1403,7 +1403,7 @@ function DeliveryEditor({
           fontSize: 12,
           fontWeight: 200,
           lineHeight: 1.6,
-          color: "rgba(240,223,200,0.5)",
+          color: "rgba(2,70,40,0.7)",
         }}
       >
         Request a change to your delivery. Your order stays as-is until we
@@ -1428,14 +1428,14 @@ function DeliveryEditor({
               style={{
                 height: 36,
                 padding: "0 14px",
-                background: sel ? "rgba(74,222,128,0.18)" : "transparent",
-                border: `1px solid ${sel ? "rgba(74,222,128,0.6)" : "rgba(240,223,200,0.18)"}`,
+                background: sel ? "#024628" : "transparent",
+                border: "1px solid #024628",
                 cursor: "pointer",
                 fontFamily: "var(--font-body)",
                 fontSize: 11,
                 fontWeight: 300,
                 letterSpacing: "0.1em",
-                color: sel ? "#FBF3D4" : "rgba(240,223,200,0.6)",
+                color: sel ? "#FBF3D4" : "#024628",
               }}
             >
               {dateLabel(d)}
@@ -1458,15 +1458,15 @@ function DeliveryEditor({
               style={{
                 height: 36,
                 padding: "0 12px",
-                background: sel ? "rgba(74,222,128,0.18)" : "transparent",
-                border: `1px solid ${sel ? "rgba(74,222,128,0.6)" : "rgba(240,223,200,0.18)"}`,
+                background: sel ? "#024628" : "transparent",
+                border: "1px solid #024628",
                 cursor: s.disabled ? "not-allowed" : "pointer",
                 opacity: s.disabled ? 0.3 : 1,
                 fontFamily: "var(--font-body)",
                 fontSize: 11,
                 fontWeight: 300,
                 letterSpacing: "0.05em",
-                color: sel ? "#FBF3D4" : "rgba(240,223,200,0.6)",
+                color: sel ? "#FBF3D4" : "#024628",
                 whiteSpace: "nowrap",
               }}
             >
@@ -1475,7 +1475,7 @@ function DeliveryEditor({
           );
         })}
         {date && slots.length === 0 && (
-          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(240,223,200,0.4)" }}>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(2,70,40,0.6)" }}>
             No slots available for this date.
           </span>
         )}
@@ -1494,9 +1494,10 @@ function DeliveryEditor({
               boxSizing: "border-box",
               padding: "10px 12px",
               marginBottom: 16,
-              background: "rgba(0,0,0,0.25)",
-              border: "1px solid rgba(240,223,200,0.18)",
-              color: "#FBF3D4",
+              background: "#FBF3D4",
+              border: "1px solid #024628",
+              color: "#024628",
+              caretColor: "#024628",
               fontFamily: "var(--font-body)",
               fontSize: 14,
               fontWeight: 200,
@@ -1518,9 +1519,10 @@ function DeliveryEditor({
           boxSizing: "border-box",
           padding: "10px 12px",
           marginBottom: 16,
-          background: "rgba(0,0,0,0.25)",
-          border: "1px solid rgba(240,223,200,0.18)",
-          color: "#FBF3D4",
+          background: "#FBF3D4",
+          border: "1px solid #024628",
+          color: "#024628",
+          caretColor: "#024628",
           fontFamily: "var(--font-body)",
           fontSize: 14,
           fontWeight: 200,
@@ -1528,7 +1530,7 @@ function DeliveryEditor({
       />
 
       {err && (
-        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181", lineHeight: 1.6 }}>
+        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B", lineHeight: 1.6 }}>
           {err}
         </p>
       )}
@@ -1565,14 +1567,14 @@ function DeliveryEditor({
             height: 44,
             padding: "0 20px",
             background: "transparent",
-            border: "1px solid rgba(240,223,200,0.18)",
+            border: "1px solid rgba(2,70,40,0.25)",
             cursor: busy ? "default" : "pointer",
             fontFamily: "var(--font-body)",
             fontSize: 11,
             fontWeight: 300,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(240,223,200,0.6)",
+            color: "rgba(2,70,40,0.75)",
           }}
         >
           Cancel
@@ -1589,7 +1591,7 @@ const editorLabel: React.CSSProperties = {
   fontWeight: 300,
   letterSpacing: "0.3em",
   textTransform: "uppercase",
-  color: "rgba(200,144,58,0.7)",
+  color: "#024628",
 };
 
 // ItemEditor — customer-facing "change item quantities" control. Mirrors
@@ -1742,7 +1744,7 @@ function ItemEditor({
           fontSize: 12,
           fontWeight: 200,
           lineHeight: 1.6,
-          color: "rgba(240,223,200,0.45)",
+          color: "rgba(2,70,40,0.65)",
         }}
       >
         You have a pending {otherLabel} change awaiting approval — cancel it to
@@ -1772,8 +1774,8 @@ function ItemEditor({
         style={{
           marginTop: 16,
           padding: "16px 18px",
-          border: "1px solid rgba(200,144,58,0.3)",
-          background: "rgba(200,144,58,0.06)",
+          border: "1px solid #024628",
+          background: "#FBF3D4",
           borderRadius: 4,
         }}
       >
@@ -1785,7 +1787,7 @@ function ItemEditor({
             fontWeight: 400,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(200,144,58,0.95)",
+            color: "#024628",
           }}
         >
           Item change requested · awaiting approval
@@ -1806,7 +1808,7 @@ function ItemEditor({
                 fontFamily: "var(--font-body)",
                 fontSize: 14,
                 fontWeight: 300,
-                color: "#FBF3D4",
+                color: "#024628",
               }}
             >
               {l.name}
@@ -1816,15 +1818,15 @@ function ItemEditor({
                 fontFamily: "var(--font-body)",
                 fontSize: 13,
                 fontWeight: 200,
-                color: "rgba(240,223,200,0.85)",
+                color: "#024628",
                 whiteSpace: "nowrap",
               }}
             >
-              <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+              <span style={{ color: "rgba(2,70,40,0.6)", textDecoration: "line-through" }}>
                 Qty {l.from}
               </span>
               {"  →  "}
-              <span style={{ color: "#FBF3D4" }}>Qty {l.to}</span>
+              <span style={{ color: "#024628" }}>Qty {l.to}</span>
             </span>
           </div>
         ))}
@@ -1836,7 +1838,7 @@ function ItemEditor({
             gap: 16,
             marginTop: 10,
             paddingTop: 10,
-            borderTop: "1px solid rgba(240,223,200,0.12)",
+            borderTop: "1px solid rgba(2,70,40,0.2)",
           }}
         >
           <span
@@ -1846,7 +1848,7 @@ function ItemEditor({
               fontWeight: 300,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "rgba(240,223,200,0.5)",
+              color: "rgba(2,70,40,0.7)",
             }}
           >
             New total
@@ -1856,15 +1858,15 @@ function ItemEditor({
               fontFamily: "var(--font-body)",
               fontSize: 14,
               fontWeight: 200,
-              color: "rgba(240,223,200,0.85)",
+              color: "#024628",
               whiteSpace: "nowrap",
             }}
           >
-            <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+            <span style={{ color: "rgba(2,70,40,0.6)", textDecoration: "line-through" }}>
               ₹{Number(order.total_amount).toLocaleString("en-IN")}
             </span>
             {"  →  "}
-            <span style={{ color: "#FBF3D4" }}>
+            <span style={{ color: "#024628" }}>
               ₹{newTotal.toLocaleString("en-IN")}
             </span>
           </span>
@@ -1877,7 +1879,7 @@ function ItemEditor({
               fontSize: 12,
               fontWeight: 200,
               fontStyle: "italic",
-              color: "rgba(240,223,200,0.5)",
+              color: "rgba(2,70,40,0.7)",
               lineHeight: 1.6,
             }}
           >
@@ -1885,7 +1887,7 @@ function ItemEditor({
           </p>
         )}
         {err && (
-          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181" }}>
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B" }}>
             {err}
           </p>
         )}
@@ -1905,7 +1907,7 @@ function ItemEditor({
               fontWeight: 300,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "#ff8181",
+              color: "#991B1B",
             }}
           >
             {busy ? "Cancelling…" : "Cancel request"}
@@ -1918,14 +1920,14 @@ function ItemEditor({
               height: 40,
               padding: "0 18px",
               background: "transparent",
-              border: "1px solid rgba(240,223,200,0.2)",
+              border: "1px solid rgba(2,70,40,0.25)",
               cursor: busy ? "default" : "pointer",
               fontFamily: "var(--font-body)",
               fontSize: 10,
               fontWeight: 300,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "rgba(240,223,200,0.6)",
+              color: "rgba(2,70,40,0.75)",
             }}
           >
             Edit again
@@ -1946,14 +1948,14 @@ function ItemEditor({
             height: 40,
             padding: "0 18px",
             background: "transparent",
-            border: "1px solid rgba(240,223,200,0.2)",
+            border: "1px solid rgba(2,70,40,0.25)",
             cursor: "pointer",
             fontFamily: "var(--font-body)",
             fontSize: 10,
             fontWeight: 300,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(240,223,200,0.7)",
+            color: "rgba(2,70,40,0.8)",
           }}
         >
           Edit items
@@ -1968,7 +1970,7 @@ function ItemEditor({
       style={{
         marginTop: 16,
         padding: "18px",
-        border: "1px solid rgba(240,223,200,0.12)",
+        border: "1px solid rgba(2,70,40,0.2)",
         borderRadius: 4,
       }}
     >
@@ -1979,7 +1981,7 @@ function ItemEditor({
           fontSize: 12,
           fontWeight: 200,
           lineHeight: 1.6,
-          color: "rgba(240,223,200,0.5)",
+          color: "rgba(2,70,40,0.7)",
         }}
       >
         Adjust the quantities of items in your order. Your order stays as-is
@@ -1998,7 +2000,7 @@ function ItemEditor({
               alignItems: "center",
               gap: 12,
               padding: "10px 0",
-              borderBottom: "1px solid rgba(240,223,200,0.06)",
+              borderBottom: "1px solid rgba(2,70,40,0.15)",
             }}
           >
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -2008,7 +2010,7 @@ function ItemEditor({
                   fontFamily: "var(--font-body)",
                   fontSize: 14,
                   fontWeight: 300,
-                  color: "#FBF3D4",
+                  color: "#024628",
                 }}
               >
                 {it.name}
@@ -2019,7 +2021,7 @@ function ItemEditor({
                   fontFamily: "var(--font-body)",
                   fontSize: 12,
                   fontWeight: 200,
-                  color: "rgba(240,223,200,0.45)",
+                  color: "rgba(2,70,40,0.65)",
                 }}
               >
                 ₹{Number(it.price_inr ?? 0).toLocaleString("en-IN")} · ₹
@@ -2043,7 +2045,7 @@ function ItemEditor({
                   fontFamily: "var(--font-body)",
                   fontSize: 15,
                   fontWeight: 300,
-                  color: "#FBF3D4",
+                  color: "#024628",
                 }}
               >
                 {q}
@@ -2071,7 +2073,7 @@ function ItemEditor({
           gap: 16,
           marginTop: 12,
           paddingTop: 12,
-          borderTop: "1px solid rgba(240,223,200,0.12)",
+          borderTop: "1px solid rgba(2,70,40,0.2)",
         }}
       >
         <span
@@ -2081,7 +2083,7 @@ function ItemEditor({
             fontWeight: 300,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(240,223,200,0.5)",
+            color: "rgba(2,70,40,0.7)",
           }}
         >
           New total{fee > 0 ? " · incl delivery" : ""}
@@ -2091,7 +2093,7 @@ function ItemEditor({
             fontFamily: "var(--font-heading)",
             fontSize: 18,
             fontWeight: 300,
-            color: "#FBF3D4",
+            color: "#024628",
           }}
         >
           ₹{liveTotal.toLocaleString("en-IN")}
@@ -2099,7 +2101,7 @@ function ItemEditor({
       </div>
 
       {err && (
-        <p style={{ margin: "12px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181", lineHeight: 1.6 }}>
+        <p style={{ margin: "12px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B", lineHeight: 1.6 }}>
           {err}
         </p>
       )}
@@ -2136,14 +2138,14 @@ function ItemEditor({
             height: 44,
             padding: "0 20px",
             background: "transparent",
-            border: "1px solid rgba(240,223,200,0.18)",
+            border: "1px solid rgba(2,70,40,0.25)",
             cursor: busy ? "default" : "pointer",
             fontFamily: "var(--font-body)",
             fontSize: 11,
             fontWeight: 300,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(240,223,200,0.6)",
+            color: "rgba(2,70,40,0.75)",
           }}
         >
           Cancel
@@ -2270,8 +2272,8 @@ function AddressEditor({
         style={{
           marginTop: 16,
           padding: "16px 18px",
-          border: "1px solid rgba(200,144,58,0.3)",
-          background: "rgba(200,144,58,0.06)",
+          border: "1px solid #024628",
+          background: "#FBF3D4",
           borderRadius: 4,
         }}
       >
@@ -2283,7 +2285,7 @@ function AddressEditor({
             fontWeight: 400,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(200,144,58,0.95)",
+            color: "#024628",
           }}
         >
           Address change requested · awaiting approval
@@ -2296,7 +2298,7 @@ function AddressEditor({
             fontWeight: 200,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(240,223,200,0.4)",
+            color: "rgba(2,70,40,0.6)",
           }}
         >
           Address
@@ -2307,15 +2309,15 @@ function AddressEditor({
             fontFamily: "var(--font-body)",
             fontSize: 14,
             fontWeight: 200,
-            color: "rgba(240,223,200,0.85)",
+            color: "#024628",
             lineHeight: 1.6,
           }}
         >
-          <span style={{ color: "rgba(240,223,200,0.4)", textDecoration: "line-through" }}>
+          <span style={{ color: "rgba(2,70,40,0.6)", textDecoration: "line-through" }}>
             {from}
           </span>
           <br />
-          <span style={{ color: "#FBF3D4" }}>{to}</span>
+          <span style={{ color: "#024628" }}>{to}</span>
         </p>
         {changeRequest.reason && (
           <p
@@ -2325,7 +2327,7 @@ function AddressEditor({
               fontSize: 12,
               fontWeight: 200,
               fontStyle: "italic",
-              color: "rgba(240,223,200,0.5)",
+              color: "rgba(2,70,40,0.7)",
               lineHeight: 1.6,
             }}
           >
@@ -2333,7 +2335,7 @@ function AddressEditor({
           </p>
         )}
         {err && (
-          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181" }}>
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B" }}>
             {err}
           </p>
         )}
@@ -2353,7 +2355,7 @@ function AddressEditor({
               fontWeight: 300,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "#ff8181",
+              color: "#991B1B",
             }}
           >
             {busy ? "Cancelling…" : "Cancel request"}
@@ -2366,14 +2368,14 @@ function AddressEditor({
               height: 40,
               padding: "0 18px",
               background: "transparent",
-              border: "1px solid rgba(240,223,200,0.2)",
+              border: "1px solid rgba(2,70,40,0.25)",
               cursor: busy ? "default" : "pointer",
               fontFamily: "var(--font-body)",
               fontSize: 10,
               fontWeight: 300,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
-              color: "rgba(240,223,200,0.6)",
+              color: "rgba(2,70,40,0.75)",
             }}
           >
             Edit again
@@ -2394,14 +2396,14 @@ function AddressEditor({
             height: 40,
             padding: "0 18px",
             background: "transparent",
-            border: "1px solid rgba(240,223,200,0.2)",
+            border: "1px solid rgba(2,70,40,0.25)",
             cursor: "pointer",
             fontFamily: "var(--font-body)",
             fontSize: 10,
             fontWeight: 300,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(240,223,200,0.7)",
+            color: "rgba(2,70,40,0.8)",
           }}
         >
           Edit address
@@ -2416,7 +2418,7 @@ function AddressEditor({
       style={{
         marginTop: 16,
         padding: "18px",
-        border: "1px solid rgba(240,223,200,0.12)",
+        border: "1px solid rgba(2,70,40,0.2)",
         borderRadius: 4,
       }}
     >
@@ -2427,7 +2429,7 @@ function AddressEditor({
           fontSize: 12,
           fontWeight: 200,
           lineHeight: 1.6,
-          color: "rgba(240,223,200,0.5)",
+          color: "rgba(2,70,40,0.7)",
         }}
       >
         Request a change to your delivery address. Your order stays as-is
@@ -2445,9 +2447,10 @@ function AddressEditor({
           boxSizing: "border-box",
           padding: "10px 12px",
           marginBottom: 16,
-          background: "rgba(0,0,0,0.25)",
-          border: "1px solid rgba(240,223,200,0.18)",
-          color: "#FBF3D4",
+          background: "#FBF3D4",
+          border: "1px solid #024628",
+          color: "#024628",
+          caretColor: "#024628",
           fontFamily: "var(--font-body)",
           fontSize: 14,
           fontWeight: 200,
@@ -2466,9 +2469,10 @@ function AddressEditor({
           boxSizing: "border-box",
           padding: "10px 12px",
           marginBottom: 16,
-          background: "rgba(0,0,0,0.25)",
-          border: "1px solid rgba(240,223,200,0.18)",
-          color: "#FBF3D4",
+          background: "#FBF3D4",
+          border: "1px solid #024628",
+          color: "#024628",
+          caretColor: "#024628",
           fontFamily: "var(--font-body)",
           fontSize: 14,
           fontWeight: 200,
@@ -2476,7 +2480,7 @@ function AddressEditor({
       />
 
       {err && (
-        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#ff8181", lineHeight: 1.6 }}>
+        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B", lineHeight: 1.6 }}>
           {err}
         </p>
       )}
@@ -2513,14 +2517,14 @@ function AddressEditor({
             height: 44,
             padding: "0 20px",
             background: "transparent",
-            border: "1px solid rgba(240,223,200,0.18)",
+            border: "1px solid rgba(2,70,40,0.25)",
             cursor: busy ? "default" : "pointer",
             fontFamily: "var(--font-body)",
             fontSize: 11,
             fontWeight: 300,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(240,223,200,0.6)",
+            color: "rgba(2,70,40,0.75)",
           }}
         >
           Cancel
@@ -2538,13 +2542,13 @@ function qtyButton(disabled: boolean): React.CSSProperties {
     alignItems: "center",
     justifyContent: "center",
     background: "transparent",
-    border: "1px solid rgba(240,223,200,0.25)",
+    border: "1px solid rgba(2,70,40,0.25)",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.3 : 1,
     fontFamily: "var(--font-body)",
     fontSize: 18,
     fontWeight: 300,
-    color: "#FBF3D4",
+    color: "#024628",
     lineHeight: 1,
   };
 }
@@ -2567,7 +2571,7 @@ function Row({ label, value }: { label: string; value: string }) {
           fontWeight: 200,
           letterSpacing: "0.3em",
           textTransform: "uppercase",
-          color: "rgba(240,223,200,0.4)",
+          color: "rgba(2,70,40,0.6)",
           whiteSpace: "nowrap",
         }}
       >
@@ -2578,7 +2582,7 @@ function Row({ label, value }: { label: string; value: string }) {
           fontFamily: "var(--font-body)",
           fontSize: 14,
           fontWeight: 200,
-          color: "rgba(240,223,200,0.85)",
+          color: "#024628",
           textAlign: "right",
         }}
       >

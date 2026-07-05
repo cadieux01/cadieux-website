@@ -9,7 +9,7 @@ const GRAIN = "url(/grain.svg)";
 
 const AREA_NAMES = Object.keys(RETAILERS);
 
-const GOLD = "201,169,110";
+const GOLD = "251,243,212";
 
 // Universal Google Maps directions URL — opens the Maps app on iOS/Android
 // when installed, otherwise google.com/maps in the browser. Uses a name +
@@ -101,15 +101,15 @@ export default function StoreLocatorPage() {
   }
 
   return (
-    <div style={{ minHeight: "100dvh", background: "rgb(6,4,2)", position: "relative", overflowX: "clip" }}>
-      <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
+    <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
+      <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.04, mixBlendMode: "multiply", pointerEvents: "none", zIndex: 0 }} />
 
       {/* Back link */}
       <Link href="/" style={{
         position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
         fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
         letterSpacing: "0.35em", textTransform: "uppercase",
-        color: "#4369B2", textDecoration: "none",
+        color: "#024628", textDecoration: "none",
         display: "flex", alignItems: "center", gap: 8,
       }}>
         <span style={{ fontSize: 14 }}>←</span> Cadieux
@@ -121,7 +121,7 @@ export default function StoreLocatorPage() {
             margin: "0 0 12px",
             fontFamily: "var(--font-heading)",
             fontSize: "clamp(48px,11vw,88px)", fontWeight: 300,
-            color: "#FBF3D4", letterSpacing: "0.02em", lineHeight: 1,
+            color: "#024628", letterSpacing: "0.02em", lineHeight: 1,
           }}>
             Find Cadieux
           </h1>
@@ -131,7 +131,7 @@ export default function StoreLocatorPage() {
           margin: "0 0 28px",
           fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
           letterSpacing: "0.3em", textTransform: "uppercase",
-          color: "rgba(251,243,212,0.5)",
+          color: "rgba(2,70,40,0.75)",
         }}>
           Stores we supply across Vizag
         </p>
@@ -152,7 +152,7 @@ export default function StoreLocatorPage() {
               border: `0.5px solid rgba(${GOLD},0.45)`,
               borderRadius: 12,
               padding: "14px 44px 14px 18px",
-              color: "#f5f0e8",
+              color: "#FBF3D4",
               fontFamily: "var(--font-body)",
               fontSize: 14, fontWeight: 300,
               letterSpacing: "0.04em",
@@ -201,7 +201,7 @@ export default function StoreLocatorPage() {
                 <p style={{
                   margin: 0, padding: "14px 18px",
                   fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300,
-                  color: "rgba(240,223,200,0.4)", letterSpacing: "0.04em",
+                  color: "rgba(251,243,212,0.55)", letterSpacing: "0.04em",
                 }}>No matches for &ldquo;{query}&rdquo;.</p>
               )}
               {predictions.map((p, i) => (
@@ -219,7 +219,7 @@ export default function StoreLocatorPage() {
                     background: "transparent", border: "none", cursor: "pointer",
                     padding: "12px 18px",
                     textAlign: "left",
-                    color: "#f5f0e8",
+                    color: "#FBF3D4",
                     fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 300,
                     letterSpacing: "0.02em",
                     WebkitTapHighlightColor: "transparent",
@@ -241,7 +241,7 @@ export default function StoreLocatorPage() {
                   </span>
                   <span style={{
                     fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
-                    color: "#8a7a5a",
+                    color: "rgba(251,243,212,0.6)",
                     letterSpacing: "0.18em", textTransform: "uppercase",
                     flexShrink: 0,
                   }}>{p.sub}</span>
@@ -273,24 +273,24 @@ export default function StoreLocatorPage() {
                     borderRadius: 12,
                     padding: "16px 20px",
                     cursor: "pointer",
-                    color: "#f5f0e8",
+                    color: "#FBF3D4",
                     textAlign: "left",
                     transition: "background 200ms ease, border-color 200ms ease",
                     WebkitTapHighlightColor: "transparent",
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(201,169,110,0.06)"; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(251,243,212,0.08)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "#024628"; }}
                 >
                   <span style={{
                     flex: 1,
                     fontFamily: "var(--font-heading)",
                     fontSize: 20, fontWeight: 400,
-                    color: "#f5f0e8",
+                    color: "#FBF3D4",
                     letterSpacing: "0.01em",
                   }}>{area}</span>
                   <span style={{
                     fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
-                    color: "#8a7a5a",
+                    color: "rgba(251,243,212,0.6)",
                     letterSpacing: "0.15em", textTransform: "uppercase",
                   }}>{retailers.length} stores</span>
                   <span aria-hidden="true" style={{
@@ -336,14 +336,14 @@ export default function StoreLocatorPage() {
                               margin: 0,
                               fontFamily: "var(--font-body)",
                               fontSize: 14, fontWeight: 400,
-                              color: "#f5f0e8",
+                              color: "#FBF3D4",
                               letterSpacing: "0.02em",
                             }}>{r.name}</p>
                             <p style={{
                               margin: 0,
                               fontFamily: "var(--font-body)",
                               fontSize: 11, fontWeight: 300,
-                              color: "#6a5a40",
+                              color: "rgba(251,243,212,0.7)",
                               letterSpacing: "0.04em",
                               lineHeight: 1.5,
                             }}>{r.address}</p>
@@ -351,7 +351,7 @@ export default function StoreLocatorPage() {
                               margin: 0,
                               fontFamily: "var(--font-body)",
                               fontSize: 10, fontWeight: 300,
-                              color: "#8a7a5a",
+                              color: "rgba(251,243,212,0.6)",
                               letterSpacing: "0.18em", textTransform: "uppercase",
                             }}>{r.hours}</p>
 
@@ -426,7 +426,7 @@ export default function StoreLocatorPage() {
           outline: 2px solid rgba(${GOLD},0.9);
           outline-offset: 2px;
         }
-        input::placeholder { color: rgba(240,223,200,0.3); }
+        input::placeholder { color: rgba(251,243,212,0.4); }
         input:focus { border-color: rgba(${GOLD},0.85) !important; }
         .cdx-area-option:hover { background: rgba(${GOLD},0.08) !important; }
         .cdx-area-option:focus-visible { outline: 2px solid rgba(${GOLD},0.7); outline-offset: -2px; }

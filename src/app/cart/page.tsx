@@ -25,14 +25,14 @@ export default function CartPage() {
 
   return (
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
-      <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
+      <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.04, mixBlendMode: "multiply", pointerEvents: "none", zIndex: 0 }} />
 
       {/* Back link */}
       <Link href="/shop" style={{
         position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
         fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
         letterSpacing: "0.35em", textTransform: "uppercase",
-        color: "#4369B2", textDecoration: "none",
+        color: "#024628", textDecoration: "none",
         display: "flex", alignItems: "center", gap: 8,
       }}>
         <span style={{ fontSize: 14 }}>←</span> Shop
@@ -71,7 +71,7 @@ export default function CartPage() {
                   {item.orderType === "sub" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                        <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#4369B2", border: "1px solid rgba(67,105,178,0.3)", padding: "4px 12px" }}>Subscription</span>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#024628", border: "1px solid rgba(2,70,40,0.3)", padding: "4px 12px" }}>Subscription</span>
                         <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(2,70,40,0.6)", padding: "4px 0" }}>
                           {item.weeks} {item.weeks === 1 ? "week" : "weeks"}
                           {item.days && item.days.length > 0 ? ` · ${item.days.length} ${item.days.length === 1 ? "day" : "days"}/wk` : ""}
@@ -115,7 +115,7 @@ export default function CartPage() {
                     <button
                       onClick={() => removeFromCart(i)}
                       style={{ background: "none", border: "1px solid rgba(2,70,40,0.2)", cursor: "pointer", padding: "7px 14px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.6)", WebkitTapHighlightColor: "transparent", transition: "color 0.2s, border-color 0.2s" }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#e05a5a"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(224,90,90,0.4)"; }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#991B1B"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(153,27,27,0.4)"; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(2,70,40,0.6)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(2,70,40,0.2)"; }}
                     >Remove</button>
                   </div>

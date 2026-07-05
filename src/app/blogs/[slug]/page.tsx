@@ -95,7 +95,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
     <div
       style={{
         minHeight: "100dvh",
-        background: "rgb(6,4,2)",
+        background: "#C0C8CE",
         position: "relative",
         overflowX: "clip",
       }}
@@ -109,7 +109,8 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
           position: "fixed",
           inset: 0,
           backgroundImage: GRAIN,
-          opacity: 0.055,
+          opacity: 0.04,
+          mixBlendMode: "multiply",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -128,7 +129,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
           fontWeight: 200,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
-          color: "#4369B2",
+          color: "#024628",
           textDecoration: "none",
           display: "flex",
           alignItems: "center",
@@ -155,7 +156,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
               fontFamily: "var(--font-heading)",
               fontSize: "clamp(28px,7vw,56px)",
               fontWeight: 300,
-              color: "#FBF3D4",
+              color: "#024628",
               letterSpacing: "0.02em",
               lineHeight: 1.15,
             }}
@@ -170,9 +171,9 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
               gap: "24px",
               marginBottom: "48px",
               paddingBottom: "24px",
-              borderBottom: "1px solid rgba(240,223,200,0.1)",
+              borderBottom: "1px solid rgba(2,70,40,0.2)",
               fontSize: 12,
-              color: "rgba(251,243,212,0.6)",
+              color: "rgba(2,70,40,0.75)",
               fontFamily: "var(--font-body)",
               fontWeight: 200,
               letterSpacing: "0.05em",
@@ -190,7 +191,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
               fontSize: 13,
               fontWeight: 200,
               lineHeight: 1.9,
-              color: "rgba(251,243,212,0.7)",
+              color: "#024628",
             }}
           >
             {post.body.split("\n\n").map((paragraph, idx) => {
@@ -208,7 +209,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
                       fontFamily: "var(--font-heading)",
                       fontSize: sizes[level - 1] || "14px",
                       fontWeight: 300,
-                      color: "#FBF3D4",
+                      color: "#024628",
                       letterSpacing: "0.01em",
                     }}
                   >

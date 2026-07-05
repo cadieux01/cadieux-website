@@ -92,15 +92,15 @@ function formatDateOnly(iso: string | null): string {
   }
 }
 
-function statusColor(status: string): { bg: string; fg: string } {
+function statusColor(status: string): { bg: string; fg: string; border: string } {
   const s = (status || "").toLowerCase();
   if (s === "pending")
-    return { bg: "rgba(200,144,58,0.12)", fg: "rgba(220,170,90,0.95)" };
+    return { bg: "transparent", fg: "#024628", border: "#024628" };
   if (s === "approved" || s === "paid" || s === "applied")
-    return { bg: "rgba(80,150,90,0.14)", fg: "rgba(160,210,170,0.95)" };
+    return { bg: "#024628", fg: "#FBF3D4", border: "#024628" };
   if (s === "rejected" || s === "cancelled" || s === "failed")
-    return { bg: "rgba(200,80,80,0.12)", fg: "rgba(230,150,150,0.95)" };
-  return { bg: "rgba(67,105,178,0.12)", fg: "rgba(150,180,230,0.95)" };
+    return { bg: "transparent", fg: "#991B1B", border: "#991B1B" };
+  return { bg: "transparent", fg: "#024628", border: "#024628" };
 }
 
 function paymentLabel(p: PaymentRow): string {
@@ -158,7 +158,7 @@ export default function YourRequestsPage() {
     <div
       style={{
         minHeight: "100dvh",
-        background: "rgb(6,4,2)",
+        background: "#C0C8CE",
         position: "relative",
         overflowX: "clip",
       }}
@@ -168,7 +168,8 @@ export default function YourRequestsPage() {
           position: "fixed",
           inset: 0,
           backgroundImage: GRAIN,
-          opacity: 0.055,
+          opacity: 0.04,
+          mixBlendMode: "multiply",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -186,7 +187,7 @@ export default function YourRequestsPage() {
           fontWeight: 200,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
-          color: "#4369B2",
+          color: "#024628",
           textDecoration: "none",
           display: "flex",
           alignItems: "center",
@@ -211,7 +212,7 @@ export default function YourRequestsPage() {
             fontFamily: "var(--font-heading)",
             fontSize: "clamp(48px,11vw,88px)",
             fontWeight: 300,
-            color: "#FBF3D4",
+            color: "#024628",
             letterSpacing: "0.02em",
             lineHeight: 1,
           }}
@@ -226,7 +227,7 @@ export default function YourRequestsPage() {
             fontWeight: 200,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(251,243,212,0.5)",
+            color: "rgba(2,70,40,0.7)",
           }}
         >
           Status of your order changes, subscription edits & payments
@@ -237,7 +238,7 @@ export default function YourRequestsPage() {
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 15,
-              color: "rgba(240,223,200,0.3)",
+              color: "rgba(2,70,40,0.6)",
               letterSpacing: "0.1em",
             }}
           >
@@ -252,7 +253,7 @@ export default function YourRequestsPage() {
                 fontFamily: "var(--font-body)",
                 fontSize: 15,
                 fontWeight: 200,
-                color: "rgba(240,223,200,0.55)",
+                color: "rgba(2,70,40,0.8)",
                 lineHeight: 1.7,
                 marginBottom: 24,
               }}
@@ -265,14 +266,14 @@ export default function YourRequestsPage() {
               style={{
                 display: "inline-block",
                 padding: "14px 28px",
-                border: "1px solid rgba(200,144,58,0.45)",
-                background: "rgba(200,144,58,0.06)",
+                border: "1px solid #024628",
+                background: "#024628",
                 fontFamily: "var(--font-body)",
                 fontSize: 11,
-                fontWeight: 300,
+                fontWeight: 400,
                 letterSpacing: "0.4em",
                 textTransform: "uppercase",
-                color: "rgba(240,223,200,0.85)",
+                color: "#FBF3D4",
                 textDecoration: "none",
                 WebkitTapHighlightColor: "transparent",
               }}
@@ -287,7 +288,7 @@ export default function YourRequestsPage() {
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 14,
-              color: "rgba(230,150,150,0.9)",
+              color: "#991B1B",
             }}
           >
             {error}
@@ -302,7 +303,7 @@ export default function YourRequestsPage() {
                 display: "flex",
                 gap: 4,
                 marginBottom: 28,
-                borderBottom: "1px solid rgba(240,223,200,0.12)",
+                borderBottom: "1px solid rgba(2,70,40,0.2)",
               }}
             >
               {(
@@ -321,16 +322,16 @@ export default function YourRequestsPage() {
                     padding: "12px 14px",
                     fontFamily: "var(--font-body)",
                     fontSize: 10,
-                    fontWeight: 300,
+                    fontWeight: 400,
                     letterSpacing: "0.3em",
                     textTransform: "uppercase",
                     color:
                       tab === key
-                        ? "#FBF3D4"
-                        : "rgba(240,223,200,0.4)",
+                        ? "#024628"
+                        : "rgba(2,70,40,0.55)",
                     borderBottom:
                       tab === key
-                        ? "1px solid #c8903a"
+                        ? "1px solid #024628"
                         : "1px solid transparent",
                     cursor: "pointer",
                     WebkitTapHighlightColor: "transparent",
@@ -387,7 +388,7 @@ function EmptyState({ text }: { text: string }) {
         fontFamily: "var(--font-body)",
         fontSize: 15,
         fontWeight: 200,
-        color: "rgba(240,223,200,0.4)",
+        color: "rgba(2,70,40,0.7)",
         lineHeight: 1.7,
       }}
     >
@@ -397,7 +398,7 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const { bg, fg } = statusColor(status);
+  const { bg, fg, border } = statusColor(status);
   return (
     <span
       style={{
@@ -405,6 +406,7 @@ function StatusBadge({ status }: { status: string }) {
         padding: "4px 10px",
         background: bg,
         color: fg,
+        border: `1px solid ${border}`,
         fontFamily: "var(--font-body)",
         fontSize: 9,
         fontWeight: 400,
@@ -423,8 +425,8 @@ function CardShell({ children }: { children: React.ReactNode }) {
       style={{
         position: "relative",
         padding: "20px 20px 18px",
-        border: "1px solid rgba(240,223,200,0.12)",
-        background: "rgba(240,223,200,0.02)",
+        border: "1px solid #024628",
+        background: "#FBF3D4",
         marginBottom: 16,
       }}
     >
@@ -456,7 +458,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
               fontWeight: 400,
               letterSpacing: "0.4em",
               textTransform: "uppercase",
-              color: "rgba(240,223,200,0.45)",
+              color: "rgba(2,70,40,0.65)",
               marginBottom: 4,
             }}
           >
@@ -471,7 +473,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 14,
-              color: "#FBF3D4",
+              color: "#024628",
               textDecoration: "none",
             }}
           >
@@ -508,7 +510,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
           style={{
             fontFamily: "var(--font-body)",
             fontSize: 13,
-            color: "rgba(240,223,200,0.7)",
+            color: "rgba(2,70,40,0.8)",
             margin: "8px 0 0",
           }}
         >
@@ -524,7 +526,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
           style={{
             fontFamily: "var(--font-body)",
             fontSize: 12,
-            color: "rgba(240,223,200,0.55)",
+            color: "rgba(2,70,40,0.7)",
             margin: "10px 0 0",
             fontStyle: "italic",
           }}
@@ -538,7 +540,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
           style={{
             fontFamily: "var(--font-body)",
             fontSize: 12,
-            color: "rgba(240,223,200,0.5)",
+            color: "rgba(2,70,40,0.7)",
             margin: "10px 0 0",
           }}
         >
@@ -552,7 +554,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
           fontFamily: "var(--font-body)",
           fontSize: 10,
           letterSpacing: "0.2em",
-          color: "rgba(240,223,200,0.35)",
+          color: "rgba(2,70,40,0.55)",
         }}
       >
         Filed {formatDate(cr.created_at)}
@@ -583,7 +585,7 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
               fontWeight: 400,
               letterSpacing: "0.4em",
               textTransform: "uppercase",
-              color: "rgba(240,223,200,0.45)",
+              color: "rgba(2,70,40,0.65)",
               marginBottom: 4,
             }}
           >
@@ -594,7 +596,7 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 14,
-              color: "#FBF3D4",
+              color: "#024628",
               textDecoration: "none",
             }}
           >
@@ -624,7 +626,7 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
           style={{
             fontFamily: "var(--font-body)",
             fontSize: 12,
-            color: "rgba(240,223,200,0.55)",
+            color: "rgba(2,70,40,0.7)",
             margin: "10px 0 0",
             fontStyle: "italic",
           }}
@@ -638,7 +640,7 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
           style={{
             fontFamily: "var(--font-body)",
             fontSize: 12,
-            color: "rgba(240,223,200,0.5)",
+            color: "rgba(2,70,40,0.7)",
             margin: "10px 0 0",
           }}
         >
@@ -652,7 +654,7 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
           fontFamily: "var(--font-body)",
           fontSize: 10,
           letterSpacing: "0.2em",
-          color: "rgba(240,223,200,0.35)",
+          color: "rgba(2,70,40,0.55)",
         }}
       >
         Filed {formatDate(cr.created_at)}
@@ -680,7 +682,7 @@ function PaymentCard({ p }: { p: PaymentRow }) {
           style={{
             fontFamily: "var(--font-body)",
             fontSize: 14,
-            color: "#FBF3D4",
+            color: "#024628",
             textDecoration: "none",
           }}
         >
@@ -692,7 +694,7 @@ function PaymentCard({ p }: { p: PaymentRow }) {
         style={{
           fontFamily: "var(--font-body)",
           fontSize: 13,
-          color: "rgba(240,223,200,0.7)",
+          color: "rgba(2,70,40,0.8)",
         }}
       >
         ₹{Number(p.total_amount ?? 0).toFixed(0)}
@@ -704,7 +706,7 @@ function PaymentCard({ p }: { p: PaymentRow }) {
           fontFamily: "var(--font-body)",
           fontSize: 10,
           letterSpacing: "0.2em",
-          color: "rgba(240,223,200,0.35)",
+          color: "rgba(2,70,40,0.55)",
         }}
       >
         Placed {formatDate(p.created_at)}
@@ -724,17 +726,17 @@ function DiffGrid({ rows }: { rows: Array<[string, string, string]> }) {
         columnGap: 12,
         fontFamily: "var(--font-body)",
         fontSize: 13,
-        color: "rgba(240,223,200,0.7)",
+        color: "rgba(2,70,40,0.8)",
       }}
     >
       {rows.map(([label, oldVal, newVal]) => (
         <div key={label} style={{ display: "contents" }}>
-          <div style={{ color: "rgba(240,223,200,0.4)" }}>{label}</div>
+          <div style={{ color: "rgba(2,70,40,0.6)" }}>{label}</div>
           <div style={{ textDecoration: "line-through", opacity: 0.55 }}>
             {oldVal}
           </div>
-          <div style={{ color: "rgba(240,223,200,0.4)" }}>→</div>
-          <div style={{ color: "#FBF3D4" }}>{newVal}</div>
+          <div style={{ color: "rgba(2,70,40,0.6)" }}>→</div>
+          <div style={{ color: "#024628", fontWeight: 400 }}>{newVal}</div>
         </div>
       ))}
     </div>

@@ -128,11 +128,34 @@ export default function AddressesPage() {
     }
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "10px 12px",
+    border: "1px solid #024628",
+    background: "#FBF3D4",
+    fontFamily: "var(--font-body)",
+    fontSize: 13,
+    color: "#024628",
+    caretColor: "#024628",
+    boxSizing: "border-box",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    marginBottom: 8,
+    fontFamily: "var(--font-body)",
+    fontSize: 11,
+    fontWeight: 300,
+    letterSpacing: "0.2em",
+    textTransform: "uppercase",
+    color: "rgba(2,70,40,0.7)",
+  };
+
   return (
     <div
       style={{
         minHeight: "100dvh",
-        background: "rgb(6,4,2)",
+        background: "#C0C8CE",
         position: "relative",
         overflowX: "clip",
       }}
@@ -142,7 +165,8 @@ export default function AddressesPage() {
           position: "fixed",
           inset: 0,
           backgroundImage: GRAIN,
-          opacity: 0.055,
+          opacity: 0.04,
+          mixBlendMode: "multiply",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -160,7 +184,7 @@ export default function AddressesPage() {
           fontWeight: 200,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
-          color: "#4369B2",
+          color: "#024628",
           textDecoration: "none",
           display: "flex",
           alignItems: "center",
@@ -185,7 +209,7 @@ export default function AddressesPage() {
             fontFamily: "var(--font-heading)",
             fontSize: "clamp(48px,11vw,88px)",
             fontWeight: 300,
-            color: "#FBF3D4",
+            color: "#024628",
             letterSpacing: "0.02em",
             lineHeight: 1,
           }}
@@ -200,7 +224,7 @@ export default function AddressesPage() {
             fontWeight: 200,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(251,243,212,0.5)",
+            color: "rgba(2,70,40,0.7)",
           }}
         >
           Saved delivery locations
@@ -211,7 +235,7 @@ export default function AddressesPage() {
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 15,
-              color: "rgba(240,223,200,0.3)",
+              color: "rgba(2,70,40,0.6)",
               letterSpacing: "0.1em",
             }}
           >
@@ -226,7 +250,7 @@ export default function AddressesPage() {
                 fontFamily: "var(--font-body)",
                 fontSize: 15,
                 fontWeight: 200,
-                color: "rgba(240,223,200,0.55)",
+                color: "rgba(2,70,40,0.8)",
                 lineHeight: 1.7,
                 marginBottom: 24,
               }}
@@ -239,14 +263,14 @@ export default function AddressesPage() {
               style={{
                 display: "inline-block",
                 padding: "14px 28px",
-                border: "1px solid rgba(200,144,58,0.45)",
-                background: "rgba(200,144,58,0.06)",
+                border: "1px solid #024628",
+                background: "#024628",
                 fontFamily: "var(--font-body)",
                 fontSize: 11,
                 fontWeight: 300,
                 letterSpacing: "0.4em",
                 textTransform: "uppercase",
-                color: "rgba(240,223,200,0.85)",
+                color: "#FBF3D4",
                 textDecoration: "none",
                 WebkitTapHighlightColor: "transparent",
               }}
@@ -267,7 +291,7 @@ export default function AddressesPage() {
                       fontFamily: "var(--font-body)",
                       fontSize: 15,
                       fontWeight: 200,
-                      color: "rgba(240,223,200,0.4)",
+                      color: "rgba(2,70,40,0.7)",
                       lineHeight: 1.7,
                       marginBottom: 24,
                     }}
@@ -283,10 +307,8 @@ export default function AddressesPage() {
                         style={{
                           position: "relative",
                           padding: "20px 20px 18px",
-                          border: "1px solid rgba(240,223,200,0.12)",
-                          background: addr.is_default
-                            ? "rgba(67,105,178,0.06)"
-                            : "rgba(240,223,200,0.02)",
+                          border: "1px solid #024628",
+                          background: "#FBF3D4",
                           marginBottom: 16,
                         }}
                       >
@@ -298,24 +320,14 @@ export default function AddressesPage() {
                             left: 20,
                             display: "inline-block",
                             padding: "4px 10px",
-                            background:
-                              addr.label === "home"
-                                ? "rgba(2,70,40,0.3)"
-                                : addr.label === "work"
-                                  ? "rgba(67,105,178,0.2)"
-                                  : "rgba(100,100,100,0.2)",
+                            background: "#024628",
                             borderRadius: 3,
                             fontFamily: "var(--font-body)",
                             fontSize: 10,
                             fontWeight: 300,
                             letterSpacing: "0.2em",
                             textTransform: "uppercase",
-                            color:
-                              addr.label === "home"
-                                ? "#7ee8c1"
-                                : addr.label === "work"
-                                  ? "#93c5fd"
-                                  : "rgba(200,200,200,0.7)",
+                            color: "#FBF3D4",
                           }}
                         >
                           {LABEL_NAMES[addr.label]}
@@ -329,8 +341,8 @@ export default function AddressesPage() {
                               margin: "0 0 8px",
                               fontFamily: "var(--font-body)",
                               fontSize: 15,
-                              fontWeight: 200,
-                              color: "#FBF3D4",
+                              fontWeight: 300,
+                              color: "#024628",
                               letterSpacing: "0.04em",
                             }}
                           >
@@ -341,8 +353,8 @@ export default function AddressesPage() {
                               margin: "0 0 4px",
                               fontFamily: "var(--font-body)",
                               fontSize: 13,
-                              fontWeight: 200,
-                              color: "rgba(240,223,200,0.65)",
+                              fontWeight: 300,
+                              color: "rgba(2,70,40,0.75)",
                               letterSpacing: "0.03em",
                             }}
                           >
@@ -365,16 +377,16 @@ export default function AddressesPage() {
                             type="button"
                             onClick={() => startEdit(addr)}
                             style={{
-                              background: "none",
-                              border: "1px solid rgba(240,223,200,0.18)",
+                              background: "transparent",
+                              border: "1px solid #024628",
                               padding: "4px 10px",
                               cursor: "pointer",
                               fontFamily: "var(--font-body)",
                               fontSize: 9,
-                              fontWeight: 300,
+                              fontWeight: 400,
                               letterSpacing: "0.3em",
                               textTransform: "uppercase",
-                              color: "rgba(240,223,200,0.7)",
+                              color: "#024628",
                               WebkitTapHighlightColor: "transparent",
                             }}
                           >
@@ -384,16 +396,16 @@ export default function AddressesPage() {
                             type="button"
                             onClick={() => handleDelete(addr.id)}
                             style={{
-                              background: "none",
-                              border: "1px solid rgba(245,75,75,0.35)",
+                              background: "transparent",
+                              border: "1px solid #991B1B",
                               padding: "4px 10px",
                               cursor: "pointer",
                               fontFamily: "var(--font-body)",
                               fontSize: 9,
-                              fontWeight: 300,
+                              fontWeight: 400,
                               letterSpacing: "0.3em",
                               textTransform: "uppercase",
-                              color: "#f87171",
+                              color: "#991B1B",
                               WebkitTapHighlightColor: "transparent",
                             }}
                           >
@@ -412,14 +424,14 @@ export default function AddressesPage() {
                   style={{
                     display: "inline-block",
                     padding: "14px 28px",
-                    border: "1px solid rgba(200,144,58,0.45)",
-                    background: "rgba(200,144,58,0.06)",
+                    border: "1px solid #024628",
+                    background: "#024628",
                     fontFamily: "var(--font-body)",
                     fontSize: 11,
-                    fontWeight: 300,
+                    fontWeight: 400,
                     letterSpacing: "0.4em",
                     textTransform: "uppercase",
-                    color: "rgba(240,223,200,0.85)",
+                    color: "#FBF3D4",
                     cursor: "pointer",
                     WebkitTapHighlightColor: "transparent",
                   }}
@@ -434,8 +446,8 @@ export default function AddressesPage() {
               <section
                 style={{
                   padding: "24px 22px",
-                  border: "1px solid rgba(240,223,200,0.12)",
-                  background: "rgba(240,223,200,0.02)",
+                  border: "1px solid #024628",
+                  background: "#FBF3D4",
                   marginBottom: 24,
                 }}
               >
@@ -444,29 +456,16 @@ export default function AddressesPage() {
                     margin: "0 0 20px",
                     fontFamily: "var(--font-body)",
                     fontSize: 14,
-                    fontWeight: 300,
+                    fontWeight: 400,
                     letterSpacing: "0.1em",
-                    color: "rgba(240,223,200,0.8)",
+                    color: "#024628",
                   }}
                 >
                   {formMode === "add" ? "Add New Address" : "Edit Address"}
                 </h2>
 
                 <div style={{ marginBottom: 16 }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: 8,
-                      fontFamily: "var(--font-body)",
-                      fontSize: 11,
-                      fontWeight: 300,
-                      letterSpacing: "0.2em",
-                      textTransform: "uppercase",
-                      color: "rgba(240,223,200,0.6)",
-                    }}
-                  >
-                    Label
-                  </label>
+                  <label style={labelStyle}>Label</label>
                   <div style={{ display: "flex", gap: 8 }}>
                     {(["home", "work", "other"] as const).map((l) => (
                       <button
@@ -476,23 +475,14 @@ export default function AddressesPage() {
                         style={{
                           flex: 1,
                           padding: "8px 12px",
-                          border:
-                            label === l
-                              ? "1px solid #93c5fd"
-                              : "1px solid rgba(240,223,200,0.15)",
-                          background:
-                            label === l
-                              ? "rgba(67,105,178,0.2)"
-                              : "transparent",
+                          border: "1px solid #024628",
+                          background: label === l ? "#024628" : "transparent",
                           fontFamily: "var(--font-body)",
                           fontSize: 11,
-                          fontWeight: 300,
+                          fontWeight: 400,
                           letterSpacing: "0.1em",
                           textTransform: "uppercase",
-                          color:
-                            label === l
-                              ? "#93c5fd"
-                              : "rgba(240,223,200,0.5)",
+                          color: label === l ? "#FBF3D4" : "#024628",
                           cursor: "pointer",
                           WebkitTapHighlightColor: "transparent",
                         }}
@@ -504,101 +494,35 @@ export default function AddressesPage() {
                 </div>
 
                 <div style={{ marginBottom: 16 }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: 8,
-                      fontFamily: "var(--font-body)",
-                      fontSize: 11,
-                      fontWeight: 300,
-                      letterSpacing: "0.2em",
-                      textTransform: "uppercase",
-                      color: "rgba(240,223,200,0.6)",
-                    }}
-                  >
-                    Address
-                  </label>
+                  <label style={labelStyle}>Address</label>
                   <input
                     type="text"
                     value={addressLine}
                     onChange={(e) => setAddressLine(e.target.value)}
                     placeholder="Enter street address"
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      border: "1px solid rgba(240,223,200,0.15)",
-                      background: "rgba(0,0,0,0.3)",
-                      fontFamily: "var(--font-body)",
-                      fontSize: 13,
-                      color: "#FBF3D4",
-                      boxSizing: "border-box",
-                    }}
+                    style={inputStyle}
                   />
                 </div>
 
                 <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
                   <div style={{ flex: 1 }}>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: 8,
-                        fontFamily: "var(--font-body)",
-                        fontSize: 11,
-                        fontWeight: 300,
-                        letterSpacing: "0.2em",
-                        textTransform: "uppercase",
-                        color: "rgba(240,223,200,0.6)",
-                      }}
-                    >
-                      City
-                    </label>
+                    <label style={labelStyle}>City</label>
                     <input
                       type="text"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                       placeholder="City"
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid rgba(240,223,200,0.15)",
-                        background: "rgba(0,0,0,0.3)",
-                        fontFamily: "var(--font-body)",
-                        fontSize: 13,
-                        color: "#FBF3D4",
-                        boxSizing: "border-box",
-                      }}
+                      style={inputStyle}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: 8,
-                        fontFamily: "var(--font-body)",
-                        fontSize: 11,
-                        fontWeight: 300,
-                        letterSpacing: "0.2em",
-                        textTransform: "uppercase",
-                        color: "rgba(240,223,200,0.6)",
-                      }}
-                    >
-                      Pincode
-                    </label>
+                    <label style={labelStyle}>Pincode</label>
                     <input
                       type="text"
                       value={pincode}
                       onChange={(e) => setPincode(e.target.value)}
                       placeholder="Pincode"
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid rgba(240,223,200,0.15)",
-                        background: "rgba(0,0,0,0.3)",
-                        fontFamily: "var(--font-body)",
-                        fontSize: 13,
-                        color: "#FBF3D4",
-                        boxSizing: "border-box",
-                      }}
+                      style={inputStyle}
                     />
                   </div>
                 </div>
@@ -612,8 +536,8 @@ export default function AddressesPage() {
                       cursor: "pointer",
                       fontFamily: "var(--font-body)",
                       fontSize: 12,
-                      fontWeight: 200,
-                      color: "rgba(240,223,200,0.7)",
+                      fontWeight: 300,
+                      color: "#024628",
                     }}
                   >
                     <input
@@ -633,14 +557,14 @@ export default function AddressesPage() {
                     style={{
                       flex: 1,
                       padding: "12px 20px",
-                      border: "1px solid rgba(200,144,58,0.45)",
-                      background: "rgba(200,144,58,0.15)",
+                      border: "1px solid #024628",
+                      background: "#024628",
                       fontFamily: "var(--font-body)",
                       fontSize: 11,
-                      fontWeight: 300,
+                      fontWeight: 400,
                       letterSpacing: "0.3em",
                       textTransform: "uppercase",
-                      color: "rgba(240,223,200,0.9)",
+                      color: "#FBF3D4",
                       cursor: formLoading ? "not-allowed" : "pointer",
                       opacity: formLoading ? 0.5 : 1,
                       WebkitTapHighlightColor: "transparent",
@@ -657,14 +581,14 @@ export default function AddressesPage() {
                     onClick={cancelForm}
                     style={{
                       padding: "12px 20px",
-                      border: "1px solid rgba(240,223,200,0.15)",
+                      border: "1px solid #024628",
                       background: "transparent",
                       fontFamily: "var(--font-body)",
                       fontSize: 11,
-                      fontWeight: 300,
+                      fontWeight: 400,
                       letterSpacing: "0.3em",
                       textTransform: "uppercase",
-                      color: "rgba(240,223,200,0.5)",
+                      color: "#024628",
                       cursor: "pointer",
                       WebkitTapHighlightColor: "transparent",
                     }}
