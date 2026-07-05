@@ -35,6 +35,13 @@
   --surface-utility: #C0C8CE;                    /* forms, tables, order summary */
   --surface-border:  rgba(2, 70, 40, 0.25);      /* boundary line on ash-adjacent surfaces */
 
+  /* Semantic warning ink — two surface-scoped tokens (Task G).
+     A single hue cannot clear 4.5:1 on both #C0C8CE (L≈0.567) and
+     #024628 (L≈0.047) — the luminance gap is 12×. Standing rule:
+     pick by the surface you're painting on, not by shade preference. */
+  --warning-on-light: #991B1B;                   /* ≥4.5:1 on #C0C8CE ash + #FBF3D4 paper */
+  --warning-on-brand: #FCA5A5;                   /* ≥4.5:1 on #024628 FG brand */
+
   /* Card tokens — one radius, one padding scale, one shadow. Kill per-card one-offs. */
   --card-radius: 16px;
   --card-padding-mobile: 24px;
