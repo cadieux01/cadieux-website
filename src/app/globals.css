@@ -11,8 +11,8 @@
   --color-charcoal: #1d1d1f;
   --color-silver: #c0c8ce;
   --color-blue: #436cb4;
-  --glass-bg: rgba(251, 243, 212, 0.05);
-  --glass-border: rgba(192, 200, 206, 0.12);
+  --glass-bg: rgba(192, 200, 206, 0.06);
+  --glass-border: rgba(192, 200, 206, 0.3);
 
   /* Safe-area insets exposed as CSS variables. With
      viewportFit:"cover" in layout.tsx, the browser fills the entire
@@ -65,10 +65,27 @@ body {
   /* clip does NOT create a scroll container, so position:sticky still works */
   overflow-x: clip;
   cursor: none;
-  background: radial-gradient(ellipse at 20% 50%, rgba(2,70,40,0.15) 0%, transparent 60%),
+  /* Rebrand pass: Foundation Green canvas + Clean Ash on-surface text.
+     Ambient radial gradients tuned to sit on green (cream warm-glow at 20% 50%
+     and blue cool-glow at 80% 20% for depth without lifting off brand). */
+  background: radial-gradient(ellipse at 20% 50%, rgba(251,243,212,0.06) 0%, transparent 60%),
               radial-gradient(ellipse at 80% 20%, rgba(67,108,180,0.08) 0%, transparent 55%),
-              #1d1d1f;
-  color: var(--color-cream);
+              #024628;
+  color: var(--color-silver);
+}
+
+/* Text inputs: Clean Ash surface + Core Black text per rebrand spec.
+   Scoped away from buttons/checkboxes so those keep their component styles.
+   Placeholder is Core Black at 55% for AA-compliant secondary contrast. */
+input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="image"]),
+textarea {
+  background-color: #c0c8ce;
+  color: #1D1D1F;
+  caret-color: #1D1D1F;
+}
+input::placeholder,
+textarea::placeholder {
+  color: rgba(29, 29, 31, 0.55);
 }
 
 /* Admin pages: restore native cursor. ClientLayoutChrome returns null on
@@ -136,34 +153,34 @@ select {
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
   appearance: none !important;
-  border: 1px solid rgba(201, 169, 110, 0.4) !important; /* gold */
+  border: 1px solid rgba(192, 200, 206, 0.4) !important; /* Clean Ash */
   border-radius: 8px !important;
   padding-right: 2.25rem !important; /* room for the chevron */
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%23c9a96e' stroke-width='1.5' fill='none'/></svg>") !important;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%23c0c8ce' stroke-width='1.5' fill='none'/></svg>") !important;
   background-repeat: no-repeat !important;
   background-position: right 0.8rem center !important;
   background-size: 12px 8px !important;
   font-family: var(--font-body);
   cursor: pointer;
 }
-/* Dark fallback background only when a select doesn't set one inline. */
+/* Clean Ash surface + Core Black text when a select doesn't set one inline
+   (rebrand: matches text-input styling above). */
 select:not([style*="background"]) {
-  background-color: #1D1D1F;
-  color: var(--color-cream);
+  background-color: #c0c8ce;
+  color: #1D1D1F;
 }
 select:focus-visible {
   outline: none !important;
-  border-color: #024628 !important;
-  box-shadow: 0 0 0 2px rgba(201, 169, 110, 0.25) !important;
+  border-color: #c0c8ce !important;
+  box-shadow: 0 0 0 2px rgba(192, 200, 206, 0.35) !important;
 }
-/* The native option popup — force a dark, cream-on-dark list everywhere
-   instead of the OS default white menu. */
+/* The native option popup — Ash-on-Core-Black list to match the surface. */
 select option {
-  background-color: #1D1D1F !important;
-  color: var(--color-cream) !important;
+  background-color: #c0c8ce !important;
+  color: #1D1D1F !important;
 }
 select option:disabled {
-  color: rgba(251, 243, 212, 0.35) !important;
+  color: rgba(29, 29, 31, 0.35) !important;
 }
 
 /* Glass panel */

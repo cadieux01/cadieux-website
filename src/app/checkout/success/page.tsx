@@ -119,7 +119,7 @@ function SuccessInner() {
       : 0;
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#1D1D1F", position: "relative", overflowX: "clip" }}>
+    <div style={{ minHeight: "100dvh", background: "#024628", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.05, pointerEvents: "none", zIndex: 0 }} />
 
       <main
@@ -252,7 +252,7 @@ function SuccessInner() {
             textDecoration: "none",
             fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400,
             letterSpacing: "0.4em", textTransform: "uppercase",
-            color: "#1D1D1F",
+            color: "#024628",
             marginBottom: 14,
             WebkitTapHighlightColor: "transparent",
           }}

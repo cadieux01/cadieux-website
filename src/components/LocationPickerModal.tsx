@@ -273,7 +273,7 @@ export default function LocationPickerModal(props: {
               cursor: (confirming || !isLoaded) ? "default" : "pointer",
               fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
               letterSpacing: "0.4em", textTransform: "uppercase",
-              color: (confirming || !isLoaded) ? "rgba(29,29,31,0.35)" : "#1D1D1F",
+              color: (confirming || !isLoaded) ? "rgba(29,29,31,0.35)" : "#024628",
               WebkitTapHighlightColor: "transparent",
             }}
           >

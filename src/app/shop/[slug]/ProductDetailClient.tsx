@@ -148,7 +148,7 @@ export default function ProductDetailClient({
   };
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#1D1D1F", position: "relative", overflowX: "clip" }}>
+    <div style={{ minHeight: "100dvh", background: "#024628", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
 
       <Link

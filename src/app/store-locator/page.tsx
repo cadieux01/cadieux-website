@@ -148,7 +148,7 @@ export default function StoreLocatorPage() {
             aria-controls="area-dropdown"
             style={{
               width: "100%",
-              background: "#1D1D1F",
+              background: "#024628",
               border: `0.5px solid rgba(${GOLD},0.45)`,
               borderRadius: 12,
               padding: "14px 44px 14px 18px",
@@ -185,7 +185,7 @@ export default function StoreLocatorPage() {
               data-lenis-prevent
               style={{
                 position: "absolute", left: 0, right: 0, top: "calc(100% + 6px)",
-                background: "#1D1D1F",
+                background: "#024628",
                 border: `0.5px solid rgba(${GOLD},0.45)`,
                 borderRadius: 12,
                 maxHeight: 240,
@@ -268,7 +268,7 @@ export default function StoreLocatorPage() {
                   style={{
                     width: "100%",
                     display: "flex", alignItems: "center", gap: 12,
-                    background: "#1D1D1F",
+                    background: "#024628",
                     border: `0.5px solid rgba(${GOLD},0.45)`,
                     borderRadius: 12,
                     padding: "16px 20px",
@@ -279,7 +279,7 @@ export default function StoreLocatorPage() {
                     WebkitTapHighlightColor: "transparent",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(201,169,110,0.06)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "#1D1D1F"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "#024628"; }}
                 >
                   <span style={{
                     flex: 1,
@@ -322,7 +322,7 @@ export default function StoreLocatorPage() {
                           <div
                             key={`${area}-${i}`}
                             style={{
-                              background: "#1D1D1F",
+                              background: "#024628",
                               border: `0.25px solid rgba(${GOLD},0.35)`,
                               borderRadius: 10,
                               padding: "14px 18px",

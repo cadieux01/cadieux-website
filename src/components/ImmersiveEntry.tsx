@@ -58,7 +58,7 @@ export default function ImmersiveEntry() {
 
   return (
     <div ref={containerRef} style={{ position: "relative", height: isMobile ? "280vh" : "500vh" }}>
-      <div style={{ position: "sticky", top: 0, height: "100dvh", overflow: "hidden", background: "#1D1D1F" }}>
+      <div style={{ position: "sticky", top: 0, height: "100dvh", overflow: "hidden", background: "#024628" }}>
 
         {/* Vignette — tighter on mobile for drama */}
         <div style={{ position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none",
@@ -184,7 +184,7 @@ export default function ImmersiveEntry() {
             fontWeight: 300,
             letterSpacing: "0.4em",
             textTransform: "uppercase" as const,
-            color: "#1D1D1F",
+            color: "#024628",
             background: "#f0dfc8",
             padding: isMobile ? "18px 40px" : "17px 54px",
             border: "none",

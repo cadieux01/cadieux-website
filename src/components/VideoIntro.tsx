@@ -44,7 +44,7 @@ export default function VideoIntro({ onDone }: { onDone: () => void }) {
           width: "100%",
           height: "100%",
           objectFit: "cover",
-          backgroundColor: "#1D1D1F",
+          backgroundColor: "#024628",
         }}
       >
         <source src="/bread-intro.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />

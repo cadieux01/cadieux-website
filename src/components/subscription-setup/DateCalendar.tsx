@@ -13,7 +13,7 @@ const GOLD = "#024628";
 const TEXT = "#FBF3D4";
 const FADED = "rgba(240,223,200,0.6)";
 const FAINT = "rgba(240,223,200,0.12)";
-const CHARCOAL = "#1D1D1F";
+const CHARCOAL = "#024628";
 const WALNUT = "#024628";
 
 type Cell = {

@@ -21,7 +21,7 @@ import {
   type WizardProduct,
 } from "@/lib/subscription-setup";
 
-const BG = "#1D1D1F";
+const BG = "#024628";
 const GOLD = "#024628";
 const TEXT = "#FBF3D4";
 const FADED = "rgba(240,223,200,0.6)";

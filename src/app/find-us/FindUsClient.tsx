@@ -279,7 +279,7 @@ export default function FindUsClient({
             borderRadius: 12,
             overflow: "hidden",
             border: `0.5px solid rgba(${GOLD_RGB},0.35)`,
-            background: "#1D1D1F",
+            background: "#024628",
             marginBottom: 24,
           }}
         >
@@ -386,7 +386,7 @@ export default function FindUsClient({
         <form
           onSubmit={checkPincode}
           style={{
-            background: "#1D1D1F",
+            background: "#024628",
             border: `0.5px solid rgba(${GOLD_RGB},0.35)`,
             borderRadius: 12,
             padding: "20px 24px",
@@ -426,7 +426,7 @@ export default function FindUsClient({
               }}
               style={{
                 width: "100%",
-                background: "#1D1D1F",
+                background: "#024628",
                 border: `0.5px solid rgba(${GOLD_RGB},0.45)`,
                 borderRadius: 8,
                 padding: "12px 14px",
@@ -563,7 +563,7 @@ export default function FindUsClient({
           aria-label="Search locations"
           style={{
             width: "100%",
-            background: "#1D1D1F",
+            background: "#024628",
             border: `0.5px solid rgba(${GOLD_RGB},0.45)`,
             borderRadius: 12,
             padding: "14px 18px",
@@ -606,7 +606,7 @@ export default function FindUsClient({
                 <article
                   key={loc.id}
                   style={{
-                    background: "#1D1D1F",
+                    background: "#024628",
                     border: `0.25px solid rgba(${GOLD_RGB},0.3)`,
                     borderRadius: 10,
                     padding: "16px 18px",

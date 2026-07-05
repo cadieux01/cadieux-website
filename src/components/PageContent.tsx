@@ -94,7 +94,7 @@ const INGREDIENTS = [
   { name: "Barley Malt",           desc: "Natural sweetness with a low glycemic touch" },
 ];
 
-const CARD_BG = ["#1D1D1F", "#1F1F21", "#1B1B1D", "#212123"];
+const CARD_BG = ["#024628", "#024628", "#024628", "#024628"];
 
 const PROTEIN_BENEFITS = [
   { n: "01", title: "Everyday Strength",  desc: "Holds your muscles together as you age." },
@@ -262,7 +262,7 @@ export default function PageContent() {
 
       `}</style>
 
-      <div style={{ position: "relative", background: "#1D1D1F", overflowX: "clip" }}>
+      <div style={{ position: "relative", background: "#024628", overflowX: "clip" }}>
 
         {/* ── Floating grain layer ── */}
         <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
@@ -315,7 +315,7 @@ export default function PageContent() {
                   width: "100%", height: "100%",
                   objectFit: "cover",
                   zIndex: 1,
-                  backgroundColor: "#1D1D1F",
+                  backgroundColor: "#024628",
                 }}
               >
                 <source src="/bread-intro.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
@@ -396,7 +396,7 @@ export default function PageContent() {
           <div style={{
             position: "relative", marginTop: "-35vh", height: "35vh",
             zIndex: 2, pointerEvents: "none",
-            background: "linear-gradient(to bottom, transparent, #1D1D1F)",
+            background: "linear-gradient(to bottom, transparent, #024628)",
           }} />
 
           {/* ══ Q&A SECTION ══ */}
@@ -407,7 +407,7 @@ export default function PageContent() {
           <div ref={cardsOuterRef} style={{ position: "relative", height: `${N_C * 100}vh`, marginTop: "-100vh", zIndex: 3 }}>
             <div style={{
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
-              background: "#1D1D1F",
+              background: "#024628",
             }}>
               {/* Background video — lazy play on enter (preload="none" so it
                   doesn't compete with the hero video for bandwidth/decode on
@@ -419,7 +419,7 @@ export default function PageContent() {
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
                   objectFit: "cover", zIndex: 0,
-                  backgroundColor: "#1D1D1F",
+                  backgroundColor: "#024628",
                 }}
               >
                 <source src="/product-video-05.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
@@ -555,7 +555,7 @@ export default function PageContent() {
           <div ref={proteinOuterRef} style={{ position: "relative", height: `${N_P * 100}vh`, marginTop: "-100vh", zIndex: 3 }}>
             <div style={{
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
-              background: "#1D1D1F",
+              background: "#024628",
             }}>
               {/* Background video — lazy play on enter (preload="none" so it
                   doesn't compete with the hero video for bandwidth/decode on
@@ -567,7 +567,7 @@ export default function PageContent() {
                   position: "absolute", inset: 0,
                   width: "100%", height: "100%",
                   objectFit: "cover", zIndex: 0,
-                  backgroundColor: "#1D1D1F",
+                  backgroundColor: "#024628",
                 }}
               >
                 <source src="/bread-eating-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
@@ -579,7 +579,7 @@ export default function PageContent() {
               <div style={{
                 position: "absolute", bottom: 0, left: 0, right: 0,
                 height: "25vh", zIndex: 12, pointerEvents: "none",
-                background: "linear-gradient(to bottom, transparent, #1D1D1F)",
+                background: "linear-gradient(to bottom, transparent, #024628)",
               }} />
               {/* Shared grain overlay */}
               <div style={{ position: "absolute", inset: 0, zIndex: 10, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none" }} />
@@ -707,7 +707,7 @@ export default function PageContent() {
             padding: "80px 28px", textAlign: "center", position: "relative",
             overflow: "hidden",
             zIndex: 3,
-            backgroundColor: "#1D1D1F",
+            backgroundColor: "#024628",
           }}>
             {/* Background video — preload="none" because this is the deepest
                 section with the largest video (15.6 MB); we don't want it
@@ -716,7 +716,7 @@ export default function PageContent() {
               poster="/bread-making-01.poster.jpg"
               style={{
                 position: "absolute", inset: 0, width: "100%", height: "100%",
-                objectFit: "cover", zIndex: 0, backgroundColor: "#1D1D1F",
+                objectFit: "cover", zIndex: 0, backgroundColor: "#024628",
               }}>
               <source src="/bread-making-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
               <source src="/bread-making-01.mp4" type="video/mp4" />
@@ -868,7 +868,7 @@ export default function PageContent() {
               band can sit between the CTA and the footer. Walnut bg
               matches the closing CTA so the seam is invisible. */}
           <footer style={{
-            background: "#1D1D1F",
+            background: "#024628",
             padding: "56px 28px 80px",
             display: "flex", justifyContent: "center",
             position: "relative",

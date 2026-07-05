@@ -113,7 +113,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
         display: "block",
         textDecoration: "none",
         color: "inherit",
-        background: "#1D1D1F",
+        background: "#024628",
         borderRadius: 14,
         border: `1px solid rgba(201, 169, 110, ${hover ? 0.45 : 0.18})`,
         overflow: "hidden",

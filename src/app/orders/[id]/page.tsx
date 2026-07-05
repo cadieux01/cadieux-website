@@ -425,7 +425,7 @@ export default function OrderDetailPage() {
                 fontWeight: 400,
                 letterSpacing: "0.4em",
                 textTransform: "uppercase",
-                color: "#1D1D1F",
+                color: "#024628",
               }}
             >
               Go to Orders
@@ -792,7 +792,7 @@ export default function OrderDetailPage() {
                         fontWeight: 400,
                         letterSpacing: "0.4em",
                         textTransform: "uppercase",
-                        color: "#1D1D1F",
+                        color: "#024628",
                       }}
                     >
                       {paying
@@ -1010,7 +1010,7 @@ function StatusTracker({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#1D1D1F",
+                  color: "#024628",
                   fontFamily: "var(--font-body)",
                   fontSize: 11,
                   fontWeight: 500,
@@ -1549,7 +1549,7 @@ function DeliveryEditor({
             fontWeight: 400,
             letterSpacing: "0.35em",
             textTransform: "uppercase",
-            color: "#1D1D1F",
+            color: "#024628",
           }}
         >
           {busy ? "Sending…" : "Send request"}
@@ -2120,7 +2120,7 @@ function ItemEditor({
             fontWeight: 400,
             letterSpacing: "0.35em",
             textTransform: "uppercase",
-            color: "#1D1D1F",
+            color: "#024628",
           }}
         >
           {busy ? "Sending…" : "Send request"}
@@ -2497,7 +2497,7 @@ function AddressEditor({
             fontWeight: 400,
             letterSpacing: "0.35em",
             textTransform: "uppercase",
-            color: "#1D1D1F",
+            color: "#024628",
           }}
         >
           {busy ? "Sending…" : "Send request"}
