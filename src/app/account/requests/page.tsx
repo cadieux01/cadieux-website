@@ -217,7 +217,7 @@ export default function YourRequestsPage() {
             lineHeight: 1,
           }}
         >
-          Your Requests
+          Requests
         </h1>
         <p
           style={{

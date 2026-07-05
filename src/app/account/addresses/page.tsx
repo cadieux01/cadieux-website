@@ -214,7 +214,7 @@ export default function AddressesPage() {
             lineHeight: 1,
           }}
         >
-          Your Addresses
+          Addresses
         </h1>
         <p
           style={{

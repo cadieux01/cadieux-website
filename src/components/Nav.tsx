@@ -144,31 +144,46 @@ export default function Nav() {
           padding: "0 calc(28px + env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) calc(28px + env(safe-area-inset-left))",
           display: "flex", flexDirection: "column",
         }}>
-          {[
-            { label: "Products of Cadieux", action: () => nav("/shop") },
-            { label: "Orders",              action: () => nav("/orders") },
-            { label: "Cart",                action: () => nav("/cart") },
-            // "Your Address" sits next to the other account-only links
-            // (Orders) and only appears once the device has placed an
-            // order (cadieux_phone in localStorage). Hidden for first-
-            // time visitors so we don't dangle a link that just bounces
-            // them to the cart.
-            ...(hasSavedPhone
-              ? [
-                  { label: "Your Address", action: () => nav("/account/addresses") },
-                  { label: "Your Requests", action: () => nav("/account/requests") },
-                ]
-              : []),
-            { label: "Subscription",        action: () => nav("/subscription") },
-            { label: "Precision Baking",    action: () => nav("/making") },
-            { label: "Behind Cadieux",      action: () => nav("/behind-cadieux") },
-            { label: "Blogs",               action: () => nav("/blogs") },
-            { label: "Feedback & Reviews",  action: () => nav("/feedback") },
-            { label: "Reports",             action: () => nav("/reports") },
-            { label: "Store Locator",       action: () => nav("/find-us") },
-            { label: "Connect with Cadieux", action: () => nav("/connect") },
-          ].map(({ label, action }) => (
-            <button key={label} onClick={action} style={{
+          {(() => {
+            // Two-group menu: MAIN = transactional / account, EXPLORE = editorial.
+            // Account-only entries ("Addresses" / "Requests") sit inside MAIN
+            // next to Orders and only appear once the device has placed an
+            // order (cadieux_phone in localStorage). Hidden for first-time
+            // visitors so we don't dangle a link that just bounces them to
+            // the cart.
+            const mainItems: { label: string; action: () => void }[] = [
+              { label: "Products",       action: () => nav("/shop") },
+              { label: "Orders",         action: () => nav("/orders") },
+              ...(hasSavedPhone
+                ? [
+                    { label: "Addresses", action: () => nav("/account/addresses") },
+                    { label: "Requests",  action: () => nav("/account/requests") },
+                  ]
+                : []),
+              { label: "Cart",           action: () => nav("/cart") },
+              { label: "Subscription",   action: () => nav("/subscription") },
+              { label: "Store Locator",  action: () => nav("/find-us") },
+            ];
+            const exploreItems: { label: string; action: () => void }[] = [
+              { label: "Precision Baking", action: () => nav("/making") },
+              { label: "Behind Cadieux",   action: () => nav("/behind-cadieux") },
+              { label: "Blogs",            action: () => nav("/blogs") },
+              { label: "Reviews",          action: () => nav("/feedback") },
+              { label: "Reports",          action: () => nav("/reports") },
+              { label: "Connect",          action: () => nav("/connect") },
+            ];
+
+            const sectionLabelStyle: React.CSSProperties = {
+              margin: "0 0 6px",
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 200,
+              letterSpacing: "0.4em",
+              textTransform: "uppercase",
+              color: "rgba(2,70,40,0.6)",
+              flexShrink: 0,
+            };
+            const itemStyle: React.CSSProperties = {
               background: "none", border: "none", cursor: "pointer", padding: "12px 0",
               textAlign: "left", borderBottom: "1px solid rgba(2,70,40,0.15)",
               fontFamily: "var(--font-heading)", fontSize: "clamp(16px,2.6vw,20px)", fontWeight: 300,
@@ -176,10 +191,28 @@ export default function Nav() {
               display: "block", width: "100%",
               flexShrink: 0,
               WebkitTapHighlightColor: "transparent",
-            }}>
-              {label}
-            </button>
-          ))}
+            };
+
+            return (
+              <>
+                <p style={sectionLabelStyle}>Main</p>
+                {mainItems.map(({ label, action }) => (
+                  <button key={label} onClick={action} style={itemStyle}>
+                    {label}
+                  </button>
+                ))}
+
+                <div style={{ height: 1, background: "rgba(2,70,40,0.15)", margin: "24px 0", flexShrink: 0 }} />
+
+                <p style={sectionLabelStyle}>Explore</p>
+                {exploreItems.map(({ label, action }) => (
+                  <button key={label} onClick={action} style={itemStyle}>
+                    {label}
+                  </button>
+                ))}
+              </>
+            );
+          })()}
         </div>
       </div>
 
