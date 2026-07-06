@@ -70,6 +70,16 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
       } catch {
         /* Safari private mode etc. — non-fatal */
       }
+      // Signal to SiteMusic (and any other listener) that the intro has
+      // ended so it can safely attach its gesture-unlock listeners. The
+      // sessionStorage flag above is the source of truth on subsequent
+      // mounts / navigations; this event covers the SAME-mount case
+      // where SiteMusic mounted before LoadingScreen finished.
+      try {
+        window.dispatchEvent(new Event("cadieux:intro-done"));
+      } catch {
+        /* dispatchEvent virtually never throws — ignore just in case */
+      }
       setFading(true);
       // Match the 0.5s opacity transition below.
       window.setTimeout(onComplete, 500);

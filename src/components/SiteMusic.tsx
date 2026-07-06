@@ -1,18 +1,62 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+
+// Session-storage key used by both LoadingScreen (writes it on intro
+// dismiss) and here (reads it to decide when to unlock). Sharing the
+// key means no matter which mounts first, the intro→music handoff
+// works: same-mount races are covered by the "cadieux:intro-done"
+// event; already-played sessions and non-homepage routes are covered
+// by the flag / pathname check.
+const INTRO_DONE_KEY = "cadieux_intro_played";
+const MUTE_KEY = "cadieux_music_muted";
 
 export default function SiteMusic() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [muted, setMuted] = useState(true);
   const [ready, setReady] = useState(false);
+  // Gate the gesture-unlock listeners on the intro video finishing.
+  // Rule: on the homepage the LoadingScreen intro plays once per
+  // session with its own (muted) audio track; music unlock defers
+  // until that intro is out of the way so the two never overlap
+  // (also gives the intro dramatic silence). On any non-homepage
+  // route the intro doesn't render, so we unlock immediately.
+  const [introDone, setIntroDone] = useState(false);
+  const pathname = usePathname();
 
   // Restore mute state
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? sessionStorage.getItem("cadieux_music_muted") : null;
+    const saved = typeof window !== "undefined" ? sessionStorage.getItem(MUTE_KEY) : null;
     if (saved === "false") setMuted(false);
     setReady(true);
   }, []);
+
+  // Watch for the intro finishing. Three signals cover every path:
+  //   1. sessionStorage flag already set  → prior play OR "already
+  //      played this session" branch inside LoadingScreen.
+  //   2. pathname is NOT "/"              → intro never mounts on
+  //      this route; safe to unlock now.
+  //   3. "cadieux:intro-done" event fires → intro just finished on
+  //      the current mount; unlock in response.
+  useEffect(() => {
+    if (introDone) return;
+    if (typeof window === "undefined") return;
+
+    const flagged = (() => {
+      try { return sessionStorage.getItem(INTRO_DONE_KEY) === "1"; }
+      catch { return false; }
+    })();
+
+    if (flagged || pathname !== "/") {
+      setIntroDone(true);
+      return;
+    }
+
+    const onIntroDone = () => setIntroDone(true);
+    window.addEventListener("cadieux:intro-done", onIntroDone, { once: true });
+    return () => window.removeEventListener("cadieux:intro-done", onIntroDone);
+  }, [pathname, introDone]);
 
   // Sync mute state to audio + storage
   useEffect(() => {
@@ -21,31 +65,35 @@ export default function SiteMusic() {
     if (!el) return;
     el.muted = muted;
     el.volume = 0.35;
-    sessionStorage.setItem("cadieux_music_muted", String(muted));
+    sessionStorage.setItem(MUTE_KEY, String(muted));
     if (!muted) el.play().catch(() => {});
   }, [muted, ready]);
 
-  // Start on first user interaction (autoplay-policy safe)
+  // Start on first user interaction (autoplay-policy safe). Held
+  // back until the intro is out of the way — see introDone above.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !introDone) return;
     const el = audioRef.current;
     if (!el) return;
     const start = () => {
       el.play().catch(() => {});
       window.removeEventListener("pointerdown", start);
       window.removeEventListener("keydown", start);
+      window.removeEventListener("touchstart", start);
     };
     window.addEventListener("pointerdown", start, { once: true });
     window.addEventListener("keydown", start, { once: true });
+    window.addEventListener("touchstart", start, { once: true });
     return () => {
       window.removeEventListener("pointerdown", start);
       window.removeEventListener("keydown", start);
+      window.removeEventListener("touchstart", start);
     };
-  }, [ready]);
+  }, [ready, introDone]);
 
   return (
     <>
-      <audio ref={audioRef} src="/background-music.mp3" loop preload="none" />
+      <audio ref={audioRef} src="/music/ivory-atelier.mp3" loop preload="none" />
       <button
         onClick={() => setMuted(m => !m)}
         aria-label={muted ? "Unmute music" : "Mute music"}
