@@ -342,10 +342,10 @@ That's the whole model. Bake close. Deliver fast. Skip the middle.
     tier: 1,
   },
   {
-    title: "The 18-Month Build: How One Loaf Took Years to Get Right",
+    title: "The Two-Year Build: How One Loaf Took Years to Get Right",
     slug: "the-18-month-build",
-    brief: "Eighteen months. That's how long it took to get one loaf of bread right.",
-    body: `Eighteen months. That's how long it took to get one loaf of bread right.
+    brief: "Two years. That's how long it took to get one loaf of bread right.",
+    body: `Two years. That's how long it took to get one loaf of bread right.
 
 I didn't start as a baker, and I'm still not one today. What I am is someone who got tired of choosing between taste and protein, and decided that was a problem worth solving myself.
 
@@ -365,13 +365,13 @@ So I decided to build it.
 
 I come from business, not food science. BBA, years of sales experience, pitching products across every format — online meetings, offline meets, cold pitches. I know how to convince someone a product is good. I had no idea how to actually make one.
 
-So I found a consultant who did. We researched across India together, testing formulations, sending samples to labs, adjusting, testing again. Eighteen to twenty months of getting it wrong before getting it right. Not eighteen months of certainty — eighteen months of actually doing the work, including the parts that didn't work the first time.
+So I found a consultant who did. We researched across India together, testing formulations, sending samples to labs, adjusting, testing again. Two years of getting it wrong before getting it right. Not two years of certainty — two years of actually doing the work, including the parts that didn't work the first time.
 
 **What it taught me**
 
-The recipe wasn't the hard part, looking back. The hard part was sticking with something for almost two years before it was ready to put my name on.
+The recipe wasn't the hard part, looking back. The hard part was sticking with something for two years before it was ready to put my name on.
 
-That's the same idea Cadieux is built around now. Strength isn't one big moment. It's eighteen months of small, unglamorous steps that nobody sees until the loaf is finally on the shelf.
+That's the same idea Cadieux is built around now. Strength isn't one big moment. It's two years of small, unglamorous steps that nobody sees until the loaf is finally on the shelf.
 
 **Where it's going**
 
@@ -384,7 +384,7 @@ Every product we build from here follows the same rule: taste and strength, toge
 ---
 
 *Follow the journey: [@dsunny_raja](https://instagram.com/dsunny_raja) · [@CadieuxIndia](https://instagram.com/cadieuxindia)*`,
-    meta_description: "The real story behind Cadieux's recipe — eighteen months, a consultant, and dozens of lab tests, told by founder Sunny Raja.",
+    meta_description: "The real story behind Cadieux's recipe — 24 months, a consultant, and dozens of lab tests, told by founder Sunny Raja.",
     primary_keyword: "how cadieux is made",
     secondary_keywords: ["story of cadieux bread", "founder story protein bread"],
     date: "2026-06-22",
@@ -404,7 +404,7 @@ I looked everywhere — Instagram, the web, every health store I could find. Not
 
 So I built it.
 
-I'm not a baker. I'm a business guy — BBA, years in sales, pitching products in every format you can imagine, online and offline. I know how to sell something. What I didn't know was how to make something worth selling. So I found a consultant, researched across India, and spent eighteen to twenty months getting the recipe right. Lab tests. Iterations. More iterations.
+I'm not a baker. I'm a business guy — BBA, years in sales, pitching products in every format you can imagine, online and offline. I know how to sell something. What I didn't know was how to make something worth selling. So I found a consultant, researched across India, and spent two years getting the recipe right. Lab tests. Iterations. More iterations.
 
 That process taught me something I didn't expect: this was never about beating another brand. It was about building something that didn't need to.
 
@@ -861,7 +861,7 @@ Most "healthy food" options reaching Tier 2 cities like Vizag are afterthoughts 
 
 **Where Cadieux fits into that list**
 
-High-protein bread, built from scratch over eighteen months, lab-tested, baked fresh in the city it's named for. We didn't start here because it was easy. We started here because nobody else was doing it properly, and I live here.
+High-protein bread, built from scratch over two years, lab-tested, baked fresh in the city it's named for. We didn't start here because it was easy. We started here because nobody else was doing it properly, and I live here.
 
 **The bigger point**
 

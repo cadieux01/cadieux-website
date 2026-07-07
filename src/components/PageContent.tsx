@@ -126,7 +126,7 @@ const FOUNDER_HEADING = "Why I built Cadieux";
 const FOUNDER_PARAGRAPHS = [
   "For a long time, eating well felt like a chore I had to survive. Same shake. Same eggs. Same bar. The discipline was working, but I\u2019d stopped enjoying any of it.",
   "All I wanted was good protein bread. I searched everywhere \u2014 found it online, but never here in Vizag. Not in a single store. Not even to my door.",
-  "So I spent eighteen months making the bread I wished existed. This is it. I hope it makes your everyday a little better, the way it did mine.",
+  "So I spent two years making the bread I wished existed. This is it. I hope it makes your everyday a little better, the way it did mine.",
 ];
 const FOUNDER_SIGNATURE = "\u2014 Sunny Raja, Founder";
 const FOUNDER_LINK_LABEL = "Read the full story \u2192 Behind Cadieux";
