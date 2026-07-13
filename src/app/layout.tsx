@@ -10,6 +10,7 @@ import PWAServiceWorker from "@/components/PWAServiceWorker";
 import AndroidInstallPrompt from "@/components/AndroidInstallPrompt";
 import IOSInstallHint from "@/components/IOSInstallHint";
 import FloatingCartButton from "@/components/FloatingCartButton";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 import { CartProvider } from "@/context/CartContext";
 
 // Unified on DM Sans for both headings and body (serif dropped). One family,
@@ -171,6 +172,9 @@ export default function RootLayout({
         <Script id="local-business-schema" type="application/ld+json">
           {JSON.stringify(localBusinessSchema)}
         </Script>
+        {/* GA4 (gtag.js). No-op in dev + when NEXT_PUBLIC_GA_MEASUREMENT_ID
+            is unset. Fires manual pageviews on SPA route changes. */}
+        <GoogleAnalytics />
       </head>
       <body className="font-body" suppressHydrationWarning>
         <CartProvider>
