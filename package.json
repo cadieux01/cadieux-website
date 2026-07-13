@@ -33,5 +33,13 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
-  }
+  },
+  "//browserslist": "Modern baseline so Next/SWC stops emitting legacy ES5 helpers + polyfills (PageSpeed 'Legacy JavaScript', ~12 KiB). Chrome 87 / Safari 14 / Firefox 78 / Edge 88 (all late-2020) cover essentially every auto-updating Android Chrome + iOS 14+ device in India; 'not dead' drops abandoned engines. Not aggressive enough to break mainstream Indian mobile.",
+  "browserslist": [
+    "chrome >= 87",
+    "safari >= 14",
+    "firefox >= 78",
+    "edge >= 88",
+    "not dead"
+  ]
 }

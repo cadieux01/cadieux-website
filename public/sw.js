@@ -15,7 +15,7 @@
 // the new SW take over immediately. The page-side registration listens
 // for `controllerchange` and prompts the user to reload.
 
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const STATIC_CACHE  = `cadieux-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `cadieux-runtime-${CACHE_VERSION}`;
 
@@ -104,13 +104,23 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(networkFirst(req, RUNTIME_CACHE));
 });
 
+// Only full, same-origin 200 responses may be written to the Cache API.
+// The Cache API REJECTS partial (206) responses — e.g. the range requests a
+// <video> issues to stream the intro — and put() throws "Partial response
+// (status code 206) is unsupported". It also can't store opaque cross-origin
+// responses. Guarding here keeps normal asset/HTML caching intact while
+// silently skipping anything cache.put() can't accept.
+function isCacheable(res) {
+  return !!res && res.status === 200 && res.type !== "opaque" && res.type !== "opaqueredirect";
+}
+
 async function cacheFirst(req) {
   const cache = await caches.open(STATIC_CACHE);
   const cached = await cache.match(req);
   if (cached) return cached;
   try {
     const res = await fetch(req);
-    if (res && res.ok) cache.put(req, res.clone());
+    if (isCacheable(res)) cache.put(req, res.clone());
     return res;
   } catch (err) {
     // If we have ANY cached version (different query string, etc.) return it.
@@ -124,7 +134,7 @@ async function networkFirst(req, cacheName) {
   const cache = await caches.open(cacheName);
   try {
     const res = await fetch(req);
-    if (res && res.ok) cache.put(req, res.clone());
+    if (isCacheable(res)) cache.put(req, res.clone());
     return res;
   } catch (err) {
     const cached = await cache.match(req);
@@ -136,9 +146,10 @@ async function networkFirst(req, cacheName) {
 async function navigationHandler(req) {
   try {
     const res = await fetch(req);
-    // Only cache successful HTML responses. Don't cache redirects (they
-    // confuse navigation state) or error pages.
-    if (res && res.ok && res.type !== "opaqueredirect") {
+    // Only cache full 200 HTML responses. isCacheable() also rejects
+    // redirects (opaqueredirect confuses navigation state), partial 206s
+    // and opaque responses.
+    if (isCacheable(res)) {
       const cache = await caches.open(RUNTIME_CACHE);
       cache.put(req, res.clone());
     }

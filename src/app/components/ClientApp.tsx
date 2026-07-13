@@ -18,12 +18,23 @@ export default function ClientApp() {
     window.scrollTo(0, 0);
   }, []);
 
-  // Mount PageContent only after the intro finishes so Phase 1's video
-  // doesn't decode + play invisibly under the LoadingScreen for 4s.
+  // PageContent renders from the very first (server) paint so its hero
+  // heading is in the initial HTML and becomes a stable, text-based LCP
+  // element. Previously it was gated behind `introDone`, so during the 4-6s
+  // intro the only painted thing was the intro <video> (not a reliable LCP
+  // candidate), and the real hero mounted — then the intro overlay was
+  // removed — after Lighthouse's measurement window: PageSpeed reported
+  // NO_LCP and couldn't measure LCP/TBT.
+  //
+  // The intro <video> overlay (LoadingScreen, position:fixed z-1000) still
+  // sits on top and plays exactly as before. We pass `introActive` so
+  // PageContent holds its hero video's playback until the intro finishes —
+  // preserving the original optimization of not decoding Phase 1's video
+  // invisibly under the LoadingScreen.
   return (
     <div id="main-page">
+      <PageContent introActive={!introDone} />
       {!introDone && <LoadingScreen onComplete={() => setIntroDone(true)} />}
-      {introDone && <PageContent />}
     </div>
   );
 }

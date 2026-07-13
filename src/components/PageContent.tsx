@@ -131,7 +131,7 @@ const FOUNDER_PARAGRAPHS = [
 const FOUNDER_SIGNATURE = "\u2014 Sunny Raja, Founder";
 const FOUNDER_LINK_LABEL = "Read the full story \u2192 Behind Cadieux";
 
-export default function PageContent() {
+export default function PageContent({ introActive = false }: { introActive?: boolean }) {
   const router = useRouter();
   const grainRefs     = useRef<(HTMLImageElement | null)[]>([]);
   const cardsOuterRef = useRef<HTMLDivElement>(null);
@@ -143,6 +143,11 @@ export default function PageContent() {
     const v = videoRef.current;
     if (!v) return;
     v.muted = true;
+    // Hold hero playback while the intro overlay is still up: PageContent now
+    // renders from first paint (behind the intro), and we don't want the hero
+    // video decoding invisibly under the LoadingScreen. Once the intro
+    // finishes (introActive → false) this effect re-runs and starts playback.
+    if (introActive) return;
     // Hero video is in viewport on first paint — play immediately.
     // IO below pauses it when scrolled past so it stops decoding offscreen.
     let inView = true;
@@ -167,7 +172,7 @@ export default function PageContent() {
       v.removeEventListener("loadeddata", tryPlay);
       if (io) io.disconnect();
     };
-  }, []);
+  }, [introActive]);
 
   /* ── Scroll-driven card progress ── */
   const [cardsP, setCardsP] = useState(0);
@@ -365,7 +370,10 @@ export default function PageContent() {
                   fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
                   color: "#FBF3D4", pointerEvents: "none",
                 }}>Cadieux</p>
-                <p style={{
+                {/* Primary hero heading. Rendered as an <h1> (the page's only
+                    one) so it's both the SEO title and a text-based LCP
+                    candidate present in the first server paint. */}
+                <h1 style={{
                   margin: 0,
                   fontFamily: "var(--font-heading)",
                   fontSize: "clamp(40px, 10vw, 88px)",
@@ -377,7 +385,7 @@ export default function PageContent() {
                   pointerEvents: "none",
                 }}>
                   Same Routine.<br />Better Protein.
-                </p>
+                </h1>
               </div>
             </section>
             {/* Shop Now — bottom right, outside masked section so it stays visible */}
