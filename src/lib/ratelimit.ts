@@ -93,6 +93,32 @@ export const smsIpRateLimit = new Ratelimit({
   prefix: "ratelimit:sms:ip",
 });
 
+// Super-admin password reset (Forgot password → SMS OTP). Hard-limited
+// from BOTH vectors so neither a single-target phone flood nor a single-IP
+// bot can abuse the recovery path:
+//   Phone bucket: 3 reset-OTP requests per phone per hour.
+//   IP bucket:    3 reset-OTP requests per source IP per hour.
+export const adminResetPhoneRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(3, "1 h"),
+  analytics: true,
+  prefix: "ratelimit:admin-reset:phone",
+});
+export const adminResetIpRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(3, "1 h"),
+  analytics: true,
+  prefix: "ratelimit:admin-reset:ip",
+});
+// Reset verify attempts — a coarse second gate on top of the OTP store's
+// own 5-wrong-guess burn. 10 verify calls per phone per hour.
+export const adminResetVerifyRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, "1 h"),
+  analytics: true,
+  prefix: "ratelimit:admin-reset:verify",
+});
+
 // Admin review replies — bounded so a compromised admin session can't
 // spam reply rows across the catalogue. Keyed by the admin session
 // signature (falls back to IP).
