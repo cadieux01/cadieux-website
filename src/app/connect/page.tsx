@@ -11,9 +11,9 @@ const GRAIN = "url(/grain.svg)";
 
 const CONTACTS = [
   { label: "Instagram", value: "@cadieuxindia",    href: "https://instagram.com/cadieuxindia" },
-  { label: "WhatsApp",  value: "+91 70934 03747",  href: "https://wa.me/917093403747" },
+  { label: "WhatsApp",  value: "+91 99891 53747",  href: "https://wa.me/919989153747" },
   { label: "Email",     value: "admin@cadieux.in", href: "mailto:admin@cadieux.in" },
-  { label: "Phone",     value: "+91 70934 03747",  href: "tel:+917093403747" },
+  { label: "Phone",     value: "+91 99891 53747",  href: "tel:+919989153747" },
 ];
 
 export default function ConnectPage() {
