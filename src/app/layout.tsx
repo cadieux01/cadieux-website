@@ -10,7 +10,7 @@ import PWAServiceWorker from "@/components/PWAServiceWorker";
 import AndroidInstallPrompt from "@/components/AndroidInstallPrompt";
 import IOSInstallHint from "@/components/IOSInstallHint";
 import FloatingCartButton from "@/components/FloatingCartButton";
-import GoogleAnalytics from "@/components/GoogleAnalytics";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { CartProvider } from "@/context/CartContext";
 
 // Unified on DM Sans for both headings and body (serif dropped). One family,
@@ -172,9 +172,6 @@ export default function RootLayout({
         <Script id="local-business-schema" type="application/ld+json">
           {JSON.stringify(localBusinessSchema)}
         </Script>
-        {/* GA4 (gtag.js). No-op in dev + when NEXT_PUBLIC_GA_MEASUREMENT_ID
-            is unset. Fires manual pageviews on SPA route changes. */}
-        <GoogleAnalytics />
       </head>
       <body className="font-body" suppressHydrationWarning>
         <CartProvider>
@@ -190,6 +187,9 @@ export default function RootLayout({
           {children}
           <FloatingCartButton />
         </CartProvider>
+        {/* GA4 via @next/third-parties — loads gtag.js on every page. This is
+            the single source of the Measurement ID; do not add it elsewhere. */}
+        <GoogleAnalytics gaId="G-HVBGHYD7M7" />
       </body>
     </html>
   );
