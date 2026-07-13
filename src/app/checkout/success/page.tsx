@@ -7,9 +7,10 @@
 // delivery slot + fee + total (fetched from /api/orders/<id>), and a
 // "Track order" button into /orders/<id>.
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { trackPurchase } from "@/lib/analytics";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -71,6 +72,7 @@ function SuccessInner() {
   const orderId = params.get("id") || "";
   const [animated, setAnimated] = useState(false);
   const [order, setOrder] = useState<Order | null>(null);
+  const purchaseTrackedRef = useRef(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => setAnimated(true), 50);
@@ -109,6 +111,41 @@ function SuccessInner() {
     })();
     return () => { cancelled = true; };
   }, [orderId]);
+
+  // GA4 purchase — fire exactly once per order. The ref guards re-renders
+  // within this mount; the sessionStorage key guards a page refresh so a
+  // reload of the confirmation URL doesn't double-count the transaction.
+  useEffect(() => {
+    if (purchaseTrackedRef.current || !order) return;
+    const transactionId = orderShort || orderId;
+    if (!transactionId) return;
+    const storageKey = `cdx_ga_purchase_${transactionId}`;
+    try {
+      if (sessionStorage.getItem(storageKey)) {
+        purchaseTrackedRef.current = true;
+        return;
+      }
+    } catch {
+      /* private mode / storage disabled — fall through and still fire once */
+    }
+    purchaseTrackedRef.current = true;
+    trackPurchase({
+      transactionId,
+      value: order.total_amount,
+      items: Array.isArray(order.items)
+        ? order.items.map((it) => ({
+            item_name: it.name,
+            quantity: it.qty,
+            price: it.price_inr ?? (it.qty ? (it.line_total ?? 0) / it.qty : undefined),
+          }))
+        : [],
+    });
+    try {
+      sessionStorage.setItem(storageKey, "1");
+    } catch {
+      /* ignore */
+    }
+  }, [order, orderShort, orderId]);
 
   const subtotal =
     order && Array.isArray(order.items)

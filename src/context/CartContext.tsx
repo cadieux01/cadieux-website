@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import type { CartItem } from "@/lib/data";
+import { trackAddToCart } from "@/lib/analytics";
 
 type CartContextType = {
   cart: CartItem[];
@@ -34,6 +35,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cart, hydrated]);
 
   function addToCart(item: CartItem) {
+    trackAddToCart(item);
     setCart(prev => {
       // Subscriptions are unique per schedule — always append a new line
       // so two different subscription configs aren't merged together.

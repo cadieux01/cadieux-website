@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
 import { useCart } from "@/context/CartContext";
+import { trackBeginCheckout } from "@/lib/analytics";
 import { PRODUCTS } from "@/lib/data";
 import { DELIVERY_FEE_INR } from "@/lib/order-validation";
 import {
@@ -100,6 +101,15 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { cart, cartTotal, clearCart } = useCart();
   const total = cartTotal;
+
+  // GA4 begin_checkout — fire once when the checkout page first has a
+  // hydrated, non-empty cart (cart loads async from localStorage).
+  const beganCheckoutRef = useRef(false);
+  useEffect(() => {
+    if (beganCheckoutRef.current || cart.length === 0) return;
+    beganCheckoutRef.current = true;
+    trackBeginCheckout(cart, cartTotal);
+  }, [cart, cartTotal]);
 
   // Cart snapshot for place_order body.
   const orderItems = cart.map((c) => ({
