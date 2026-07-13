@@ -126,12 +126,29 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
         pointerEvents: fading ? "none" : "auto",
       }}
     >
+      {/*
+        preload="metadata" (was "auto"): browsers with autoPlay still fetch
+        enough bytes to start playback fast, but they don't greedily suck
+        down the ENTIRE video before first paint — which on mid-range Android
+        + Indian 4G was starving the poster JPEG + hero fonts + JS chunks of
+        bandwidth for the first 1-2 seconds. The poster covers any tiny
+        playback-start delay.
+
+        Mobile-first source order: phones ≤720px CSS pixels get the 480x854
+        variants (~170-270 KB) instead of the 720p desktop ones (~310-460 KB).
+        AV1-first inside each viewport bucket keeps the existing ordering
+        convention (H.264 fallback for Safari/older Chromium). The `media`
+        attribute on <source> inside <video> is honored by every current
+        Chromium/Firefox/Safari; browsers that ignore it fall through to the
+        first source without a media query (desktop 720p) — a slower but
+        still-working fallback.
+      */}
       <video
         ref={videoRef}
         autoPlay
         muted
         playsInline
-        preload="auto"
+        preload="metadata"
         poster="/logo-intro.poster.jpg"
         style={{
           position: "absolute",
@@ -143,6 +160,8 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
           display: "block",
         }}
       >
+        <source src="/logo-intro.mobile.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' media="(max-width: 720px)" />
+        <source src="/logo-intro.mobile.mp4" type="video/mp4" media="(max-width: 720px)" />
         <source src="/logo-intro.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
         <source src="/logo-intro.mp4" type="video/mp4" />
       </video>
