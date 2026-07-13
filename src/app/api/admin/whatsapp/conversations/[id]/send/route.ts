@@ -98,17 +98,26 @@ export async function POST(
   }
 
   // Relay to the existing edge function. Same MSG91 path the bot uses.
+  // NAME every missing env var in the error so it's obvious what to set
+  // (and WHERE — Vercel vs Supabase have separate secret stores). The
+  // earlier generic "Server mis-configured" gave zero signal.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
   const internalSecret = process.env.INTERNAL_API_SECRET ?? "";
-  if (!supabaseUrl || !anon || !internalSecret) {
-    console.error("[admin/whatsapp/send] server mis-configured", {
-      hasUrl: Boolean(supabaseUrl),
-      hasAnon: Boolean(anon),
-      hasSecret: Boolean(internalSecret),
-    });
+  const missing: string[] = [];
+  if (!supabaseUrl) missing.push("NEXT_PUBLIC_SUPABASE_URL");
+  if (!anon) missing.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  if (!internalSecret) missing.push("INTERNAL_API_SECRET");
+  if (missing.length > 0) {
+    console.error(
+      "[admin/whatsapp/send] missing env var(s) on Vercel:",
+      missing.join(", "),
+    );
     return NextResponse.json(
-      { error: "Server mis-configured — WhatsApp send unavailable." },
+      {
+        error: `WhatsApp send is disabled — set ${missing.join(", ")} in Vercel (Cadieux-Website project) and redeploy.`,
+        missing,
+      },
       { status: 500 },
     );
   }
