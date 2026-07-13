@@ -478,7 +478,7 @@ export default function AdminProfilePage() {
         >
           This admin area uses a{" "}
           <strong style={{ color: CREAM }}>single shared password</strong> for access, set via
-          the <code style={{ color: GOLD, fontSize: "0.78rem" }}>ADMIN_TOKEN</code> environment
+          the <code style={{ color: GOLD, fontSize: "0.78rem" }}>ADMIN_PASSWORD</code> environment
           variable — contact whoever manages the server to rotate it. There is no per-operator
           login ID. The security PIN below is a{" "}
           <strong style={{ color: CREAM }}>separate, additional layer</strong> you can use to

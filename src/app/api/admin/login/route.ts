@@ -1,9 +1,25 @@
 // POST /api/admin/login
 //
-// Accepts { password } and, on a constant-time match with ADMIN_TOKEN,
+// Accepts { password } and, on a constant-time match with ADMIN_PASSWORD,
 // sets an HttpOnly + Secure + SameSite=Strict `admin_session` cookie
-// signed by HMAC-SHA256(ADMIN_TOKEN, payload). The browser never sees
-// ADMIN_TOKEN itself. Rate-limited to 5 attempts/minute per IP.
+// signed by HMAC-SHA256(ADMIN_TOKEN, payload).
+//
+// TWO ENV VARS, TWO ROLES — do not confuse them:
+//   • ADMIN_PASSWORD → the human-typed password on the /admin gate.
+//     Only this route reads it, and only for the compare below.
+//   • ADMIN_TOKEN    → the HMAC signing key for admin_session tokens
+//     (see src/lib/admin-session.ts) and PIN grants (src/lib/pin-grant.ts).
+//     Same key is held by the Supabase dashboard-admin-bridge Edge function
+//     — rotating it there without matching here (and vice-versa) breaks the
+//     dashboard bridge. It is NEVER used as a password.
+//
+// Backwards-compat: if ADMIN_PASSWORD is unset we fall back to ADMIN_TOKEN
+// with a warning so a deploy that ships before the new env var is
+// configured does not lock the operator out. Once ADMIN_PASSWORD is set in
+// Vercel the fallback is inert, and rotating ADMIN_TOKEN will never change
+// the /admin password again.
+//
+// Rate-limited to 5 attempts/minute per IP.
 
 import { NextRequest, NextResponse } from "next/server";
 
@@ -38,7 +54,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const expected = process.env.ADMIN_TOKEN;
+  // ADMIN_PASSWORD is the human-typed gate password. Fall back to
+  // ADMIN_TOKEN (the legacy conflated value) if the new var is unset so
+  // an operator is not locked out during the env-var rollout. Once
+  // ADMIN_PASSWORD is set in Vercel this fallback is inert.
+  let expected = process.env.ADMIN_PASSWORD;
+  if (!expected) {
+    expected = process.env.ADMIN_TOKEN;
+    if (expected) {
+      console.warn(
+        "[admin/login] ADMIN_PASSWORD not set — falling back to ADMIN_TOKEN. " +
+          "Set ADMIN_PASSWORD in Vercel and redeploy so the /admin password " +
+          "is decoupled from the HMAC signing key.",
+      );
+    }
+  }
   if (!expected) {
     return NextResponse.json(
       { error: "Admin login is not configured." },

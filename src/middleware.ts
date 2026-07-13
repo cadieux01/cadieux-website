@@ -8,7 +8,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Admin endpoints are gated by ADMIN_TOKEN inside each route. The
+  // Admin endpoints are gated by verifyAdminSession() inside each route
+  // (HMAC-signed session cookie / Bearer, keyed on ADMIN_TOKEN). The
   // dashboard polls /api/admin/* every 10s across multiple endpoints
   // and a single click can fan out further requests; the public 30/min
   // cap would starve admin work. Skip the IP limiter on this prefix

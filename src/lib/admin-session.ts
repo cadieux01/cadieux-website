@@ -1,11 +1,18 @@
 // Server-side admin session — HTTP-only signed cookie.
 //
-// Replaces the legacy x-admin-token header (which required shipping
-// ADMIN_TOKEN to the browser bundle). The operator POSTs the password
+// Replaces the legacy x-admin-token header (which required shipping the
+// signing secret to the browser bundle). The operator POSTs the password
 // to /api/admin/login; on success we set `admin_session` — an
 // HttpOnly, Secure, SameSite=Strict cookie carrying an HMAC-signed
 // payload `{p:"admin", exp:<epoch-ms>}`. The HMAC is keyed on
 // ADMIN_TOKEN (server-only).
+//
+// ADMIN_TOKEN here is the HMAC SIGNING KEY — it is NOT the /admin login
+// password. The login password lives in ADMIN_PASSWORD and is read only
+// by src/app/api/admin/login/route.ts. The same signing key is held by
+// the Supabase dashboard-admin-bridge Edge function so bridge-minted
+// Bearer tokens verify against the same hmac() below — do not change
+// ADMIN_TOKEN without matching Supabase.
 //
 // All admin API routes call verifyAdminSession(req); the helper reads
 // the cookie, re-derives the HMAC, and rejects expired or tampered
