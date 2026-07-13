@@ -129,6 +129,18 @@ export const adminReplyRateLimit = new Ratelimit({
   prefix: "ratelimit:admin:reply",
 });
 
+// Admin WhatsApp sends — a compromised admin session should not be
+// able to blast messages to customers via our Business API number.
+// 30 sends per admin per minute is comfortably above the pace a human
+// support agent replies at (roughly 1 msg every 2s) and well below
+// what a script would attempt. Keyed by IP.
+export const adminWhatsappSendRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(30, "1 m"),
+  analytics: true,
+  prefix: "ratelimit:admin:wa-send",
+});
+
 // Helper to get IP from request
 export function getClientIP(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
