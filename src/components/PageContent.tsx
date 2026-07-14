@@ -714,78 +714,13 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             </div>
           </div>
 
-          {/* ══ SECTION 5 — CLOSING CTA ══ */}
-          {/* No overlap on this boundary — Phase 4's bottom benefits (Sharper
-              Mind) need full dwell time before the CTA scrolls in. */}
-          <section style={{
-            minHeight: "100dvh", display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center",
-            padding: "80px 28px", textAlign: "center", position: "relative",
-            overflow: "hidden",
-            zIndex: 3,
-            backgroundColor: "#024628",
-          }}>
-            {/* Background video — preload="none" because this is the deepest
-                section with the largest video (15.6 MB); we don't want it
-                fetching metadata on first paint. */}
-            <video ref={playOnEnter} muted playsInline loop preload="none"
-              poster="/bread-making-01.poster.jpg"
-              style={{
-                position: "absolute", inset: 0, width: "100%", height: "100%",
-                objectFit: "cover", zIndex: 0, backgroundColor: "#024628",
-              }}>
-              <source src="/bread-making-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
-              <source src="/bread-making-01.mp4" type="video/mp4" />
-            </video>
-            {/* Dark overlay */}
-            <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.70)", zIndex: 1, pointerEvents: "none" }} />
-            <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 2 }} />
-
-            <img
-              src="/logo-icon.png"
-              alt="Cadieux"
-              style={{
-                position: "relative", zIndex: 3,
-                display: "block",
-                width: "clamp(72px, 18vw, 120px)",
-                height: "auto",
-                marginBottom: 20,
-                pointerEvents: "none",
-                filter: "invert(1) sepia(0.4) saturate(0.8) brightness(0.95)",
-              }}
-            />
-            <p style={{
-              position: "relative", zIndex: 3,
-              margin: 0, fontFamily: "var(--font-heading)",
-              fontSize: "clamp(40px, 13vw, 84px)", fontWeight: 300,
-              color: "#FBF3D4", letterSpacing: "0.05em", lineHeight: 1.05,
-            }}>Core Element</p>
-
-            <p style={{
-              position: "relative", zIndex: 3,
-              margin: "20px 0 0", fontFamily: "var(--font-body)", fontSize: 9,
-              fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
-              color: "#4369B2",
-            }}>Same Bread. Better Built.</p>
-
-            <button style={{
-              position: "relative", zIndex: 3,
-              display: "block", width: "100%", maxWidth: 320, marginTop: 28,
-              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
-              letterSpacing: "0.4em", textTransform: "uppercase",
-              color: "#FBF3D4", background: "#024628",
-              border: "none", padding: 18, cursor: "pointer",
-              WebkitTapHighlightColor: "transparent",
-            }}
-            onClick={() => router.push("/shop")}
-            >Shop Now</button>
-          </section>
-
-          {/* ══ SECTION 6 — FOUNDER (homepage only, just above the footer) ══
+          {/* ══ SECTION 5 — FOUNDER (homepage only, between Phase 4 and the CTA) ══
               Foundation Green band per brand bible. Portrait + short
               personal note + gold signature + soft link to the full
               /behind-cadieux page. Confidentiality: no premix/supplier
-              references — the recipe is framed as developed in-house. */}
+              references — the recipe is framed as developed in-house.
+              No overlap on this boundary — Phase 4's bottom benefits (Sharper
+              Mind) need full dwell time before the Founder band scrolls in. */}
           <section style={{
             background: "#024628",
             padding: "96px clamp(24px,6vw,80px)",
@@ -879,10 +814,74 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             </div>
           </section>
 
+          {/* ══ SECTION 6 — CLOSING CTA ══ */}
+          <section style={{
+            minHeight: "100dvh", display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            padding: "80px 28px", textAlign: "center", position: "relative",
+            overflow: "hidden",
+            zIndex: 3,
+            backgroundColor: "#024628",
+          }}>
+            {/* Background video — preload="none" because this is the deepest
+                section with the largest video (15.6 MB); we don't want it
+                fetching metadata on first paint. */}
+            <video ref={playOnEnter} muted playsInline loop preload="none"
+              poster="/bread-making-01.poster.jpg"
+              style={{
+                position: "absolute", inset: 0, width: "100%", height: "100%",
+                objectFit: "cover", zIndex: 0, backgroundColor: "#024628",
+              }}>
+              <source src="/bread-making-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
+              <source src="/bread-making-01.mp4" type="video/mp4" />
+            </video>
+            {/* Dark overlay */}
+            <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.70)", zIndex: 1, pointerEvents: "none" }} />
+            <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 2 }} />
+
+            <img
+              src="/logo-icon.png"
+              alt="Cadieux"
+              style={{
+                position: "relative", zIndex: 3,
+                display: "block",
+                width: "clamp(72px, 18vw, 120px)",
+                height: "auto",
+                marginBottom: 20,
+                pointerEvents: "none",
+                filter: "invert(1) sepia(0.4) saturate(0.8) brightness(0.95)",
+              }}
+            />
+            <p style={{
+              position: "relative", zIndex: 3,
+              margin: 0, fontFamily: "var(--font-heading)",
+              fontSize: "clamp(40px, 13vw, 84px)", fontWeight: 300,
+              color: "#FBF3D4", letterSpacing: "0.05em", lineHeight: 1.05,
+            }}>Core Element</p>
+
+            <p style={{
+              position: "relative", zIndex: 3,
+              margin: "20px 0 0", fontFamily: "var(--font-body)", fontSize: 9,
+              fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
+              color: "#4369B2",
+            }}>Same Bread. Better Built.</p>
+
+            <button style={{
+              position: "relative", zIndex: 3,
+              display: "block", width: "100%", maxWidth: 320, marginTop: 28,
+              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+              letterSpacing: "0.4em", textTransform: "uppercase",
+              color: "#FBF3D4", background: "#024628",
+              border: "none", padding: 18, cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
+            }}
+            onClick={() => router.push("/shop")}
+            >Shop Now</button>
+          </section>
+
           {/* ══ Brand / Company / Manufacturing footer ══
-              Extracted out of the closing CTA section so the Founder
-              band can sit between the CTA and the footer. Walnut bg
-              matches the closing CTA so the seam is invisible. */}
+              Sits directly under the closing CTA. Walnut bg matches
+              the closing CTA so the seam is invisible. */}
           <footer style={{
             background: "#024628",
             padding: "56px 28px 80px",
