@@ -142,7 +142,7 @@ export default function ImmersiveEntry() {
           pointerEvents: pkOp > 0.5 ? "auto" : "none",
         }}>
           <img
-            src="/logo-icon.png"
+            src="/logo-icon.webp"
             alt="Cadieux"
             style={{
               display: "block",

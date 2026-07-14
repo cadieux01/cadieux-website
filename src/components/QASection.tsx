@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { playExclusive, releaseVideo } from "@/lib/videoCoordinator";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -77,24 +78,35 @@ export default function QASection() {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0);   }
         }
-        @keyframes qa-glow {
-          0%   { background-position: 0% 50%; }
-          100% { background-position: 100% 50%; }
-        }
       `;
       document.head.appendChild(s);
     }
 
+    /* Geometry is cached and only re-measured on resize/load. Reading
+       getBoundingClientRect / scrollHeight / innerHeight *inside* the rAF
+       tick forced a layout reflow every frame (flagged by the audit); the
+       element's absolute top and scroll range don't change while scrolling,
+       so measure once and reuse. */
     let raf = 0;
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
+    let lastSy = -1;
+    let cachedTop = 0;
+    let cachedRange = 1;
+    const measure = () => {
       const outer = outerRef.current;
       if (!outer) return;
+      cachedTop = window.scrollY + outer.getBoundingClientRect().top;
+      cachedRange = Math.max(outer.scrollHeight - window.innerHeight, 1);
+    };
+    measure();
+    window.addEventListener("resize", measure, { passive: true });
+    window.addEventListener("load", measure);
 
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
       const sy = window.scrollY;
-      const top = sy + outer.getBoundingClientRect().top;
-      const range = outer.scrollHeight - window.innerHeight;
-      const p = Math.min(Math.max((sy - top) / range, 0), 1);
+      if (sy === lastSy) return; // idle frame — no work, no reflow
+      lastSy = sy;
+      const p = Math.min(Math.max((sy - cachedTop) / cachedRange, 0), 1);
 
       /* Active slice index. */
       let idx = 0;
@@ -119,7 +131,11 @@ export default function QASection() {
     };
 
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("load", measure);
+    };
   }, []);
 
   const current = QAS[active];
@@ -154,9 +170,9 @@ export default function QASection() {
           height: "100dvh",
           overflow: "hidden",
           background: "linear-gradient(135deg,#024628 0%,#024628 40%,#035c35 70%,#024628 100%)",
-          backgroundSize: "300% 300%",
-          animation: "qa-glow 8s ease-in-out infinite alternate",
-          willChange: "transform",
+          /* Static gradient. The former `qa-glow` animation shifted
+             background-position every frame — a full-surface repaint behind
+             the sticky Q&A that never composited on the GPU. Dropped. */
           transform: "translateZ(0)",
         }}
       >
@@ -168,7 +184,9 @@ export default function QASection() {
             let shouldPlay = false;
             const tryPlay = () => {
               if (!shouldPlay) return;
-              void el.play().catch(() => {});
+              // Exclusive play so this bg video never decodes alongside the
+              // hero/section videos during a sticky-section overlap.
+              playExclusive(el);
             };
             el.addEventListener("canplay", tryPlay);
             el.addEventListener("loadeddata", tryPlay);
@@ -184,7 +202,7 @@ export default function QASection() {
                   tryPlay();
                 } else {
                   shouldPlay = false;
-                  if (!el.paused) el.pause();
+                  releaseVideo(el);
                 }
               }),
               { threshold: 0 }
@@ -242,8 +260,27 @@ export default function QASection() {
           </p>
 
           {/* Answer — word by word. Each word is its own span with a
-              staggered delay so the sentence types out left → right.  */}
-          <p style={aStyle} aria-label={current.a.replace(/\*\*/g, "")}>
+              staggered delay so the sentence types out left → right.
+              `aria-label` on a generic <p> is a prohibited ARIA attribute
+              (flagged by the audit); instead a visually-hidden span carries
+              the full answer for screen readers while the animated per-word
+              spans stay aria-hidden. */}
+          <p style={aStyle}>
+            <span
+              style={{
+                position: "absolute",
+                width: 1,
+                height: 1,
+                padding: 0,
+                margin: -1,
+                overflow: "hidden",
+                clip: "rect(0 0 0 0)",
+                whiteSpace: "nowrap",
+                border: 0,
+              }}
+            >
+              {current.a.replace(/\*\*/g, "")}
+            </span>
             {words.map((w, i) => (
               <span
                 key={i}

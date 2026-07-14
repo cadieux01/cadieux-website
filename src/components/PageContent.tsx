@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import QASection from "./QASection";
+import { playExclusive, releaseVideo } from "@/lib/videoCoordinator";
 
 /* ── Helpers ── */
 const sr    = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
@@ -36,7 +37,9 @@ const playOnEnter = (el: HTMLVideoElement | null) => {
   let shouldPlay = false;
   const tryPlay = () => {
     if (!shouldPlay) return;
-    void el.play().catch(() => {});
+    // Exclusive: starting this video pauses any other that's playing, so
+    // overlapping sticky sections never decode two videos at once.
+    playExclusive(el);
   };
 
   // Retry whenever the browser signals it has enough buffer.
@@ -72,7 +75,7 @@ const playOnEnter = (el: HTMLVideoElement | null) => {
         tryPlay();
       } else {
         shouldPlay = false;
-        if (!el.paused) el.pause();
+        releaseVideo(el);
       }
     }),
     { threshold: 0 }
@@ -151,7 +154,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
     // Hero video is in viewport on first paint — play immediately.
     // IO below pauses it when scrolled past so it stops decoding offscreen.
     let inView = true;
-    const tryPlay = () => { if (inView) v.play().catch(() => {}); };
+    const tryPlay = () => { if (inView) playExclusive(v); };
     tryPlay();
     v.addEventListener("canplay", tryPlay, { once: true });
     v.addEventListener("loadeddata", tryPlay, { once: true });
@@ -161,7 +164,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
         (entries) => entries.forEach((e) => {
           inView = e.isIntersecting;
           if (inView) tryPlay();
-          else if (!v.paused) v.pause();
+          else releaseVideo(v);
         }),
         { threshold: 0 }
       );
@@ -361,7 +364,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 paddingTop: "clamp(80px, 18vh, 160px)",
               }}>
                 <img
-                  src="/logo-icon.png"
+                  src="/logo-icon.webp"
                   alt="Cadieux"
                   style={{
                     display: "block",
@@ -840,7 +843,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             <div style={{ position: "absolute", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 2 }} />
 
             <img
-              src="/logo-icon.png"
+              src="/logo-icon.webp"
               alt="Cadieux"
               style={{
                 position: "relative", zIndex: 3,

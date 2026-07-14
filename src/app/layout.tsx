@@ -10,8 +10,10 @@ import PWAServiceWorker from "@/components/PWAServiceWorker";
 import AndroidInstallPrompt from "@/components/AndroidInstallPrompt";
 import IOSInstallHint from "@/components/IOSInstallHint";
 import FloatingCartButton from "@/components/FloatingCartButton";
-import { GoogleAnalytics } from "@next/third-parties/google";
 import { CartProvider } from "@/context/CartContext";
+
+// Single source of the GA4 Measurement ID. Referenced only here.
+const GA_ID = "G-HVBGHYD7M7";
 
 // Unified on DM Sans for both headings and body (serif dropped). One family,
 // multiple weights covers every call site — --font-heading and --font-body
@@ -114,8 +116,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // maximumScale / userScalable intentionally left at their defaults so
+  // users can pinch-zoom (WCAG 1.4.4). Locking zoom fails accessibility.
   viewportFit: "cover",
   themeColor: "#C0C8CE",
 };
@@ -187,9 +189,24 @@ export default function RootLayout({
           {children}
           <FloatingCartButton />
         </CartProvider>
-        {/* GA4 via @next/third-parties — loads gtag.js on every page. This is
-            the single source of the Measurement ID; do not add it elsewhere. */}
-        <GoogleAnalytics gaId="G-HVBGHYD7M7" />
+        {/* GA4 loaded exactly once via next/script `lazyOnload`. Unlike
+            @next/third-parties' <GoogleAnalytics> (which forces
+            `afterInteractive` and emits a <link rel=preload> that the
+            runtime-injected script never consumes → gtag.js downloaded
+            TWICE), lazyOnload emits no preload and injects a single
+            script during idle. Analytics is non-critical, so deferring it
+            also frees the main thread during load. */}
+        <Script
+          id="ga-src"
+          strategy="lazyOnload"
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+        />
+        <Script id="ga-init" strategy="lazyOnload">
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GA_ID}');`}
+        </Script>
       </body>
     </html>
   );
