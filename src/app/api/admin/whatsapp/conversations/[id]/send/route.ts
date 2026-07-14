@@ -157,13 +157,32 @@ export async function POST(
 
   if (!sendRes.ok) {
     const windowClosed = (payload as { window_closed?: boolean }).window_closed === true;
-    const errMsg =
-      (payload as { error?: string }).error ??
-      `Send failed (HTTP ${sendRes.status})`;
+    const p = payload as {
+      error?: string;
+      msg91_status?: number | null;
+      msg91_raw?: unknown;
+    };
+    // If the edge function forwarded MSG91's raw body, INLINE its text
+    // into the user-visible error. Otherwise the dashboard would only
+    // see the fallback "MSG91 HTTP 400" — which tells us nothing about
+    // WHY MSG91 rejected the payload (shape? auth? template required?).
+    let errMsg = p.error ?? `Send failed (HTTP ${sendRes.status})`;
+    if (p.msg91_raw && !windowClosed) {
+      const raw = p.msg91_raw as Record<string, unknown>;
+      const detail =
+        (typeof raw.message === "string" && raw.message) ||
+        (typeof raw.errors === "string" && raw.errors) ||
+        (typeof (raw as { _nonJsonBody?: string })._nonJsonBody === "string" &&
+          (raw as { _nonJsonBody: string })._nonJsonBody) ||
+        JSON.stringify(raw);
+      if (detail && detail !== errMsg) {
+        errMsg = `${errMsg} — ${detail}`;
+      }
+    }
     return NextResponse.json(
       windowClosed
         ? { error: errMsg, window_closed: true }
-        : { error: errMsg },
+        : { error: errMsg, msg91_status: p.msg91_status ?? null, msg91_raw: p.msg91_raw ?? null },
       { status: windowClosed ? 409 : 502 },
     );
   }
