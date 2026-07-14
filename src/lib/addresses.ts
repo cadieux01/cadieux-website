@@ -1,19 +1,37 @@
+// Client-side helpers for the shared customer address book.
+//
+// After the address-unification migration these helpers hit
+// /api/customer-addresses which reads/writes the SAME `public.addresses`
+// rows as the mobile app's /api/mobile/addresses. Website + app now
+// share one book per phone.
+
 export type CustomerAddress = {
   id: string;
   customer_id: string;
-  label: "home" | "work" | "other";
-  address_line: string;
+  label: string;          // free text, 1-40 chars (was a 3-value enum)
+  full_name: string;
+  phone: string | null;
+  line1: string;
+  area: string;
   city: string;
-  state: string | null;
-  pincode: string | null;
+  pincode: string;
   is_default: boolean;
   created_at: string;
+  latitude: number | null;
+  longitude: number | null;
 };
 
-export const LABEL_NAMES: Record<"home" | "work" | "other", string> = {
-  home: "Home",
-  work: "Work",
-  other: "Other",
+export type CustomerAddressInput = {
+  label: string;
+  full_name: string;
+  phone?: string;
+  line1: string;
+  area: string;
+  city: string;
+  pincode: string;
+  is_default?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export async function fetchAddresses(phone: string): Promise<CustomerAddress[]> {
@@ -27,7 +45,7 @@ export async function fetchAddresses(phone: string): Promise<CustomerAddress[]> 
 
 export async function createAddress(
   phone: string,
-  address: Omit<CustomerAddress, "id" | "customer_id" | "created_at">,
+  address: CustomerAddressInput,
 ): Promise<CustomerAddress | null> {
   const response = await fetch(
     `/api/customer-addresses?phone=${encodeURIComponent(phone)}`,
@@ -45,7 +63,7 @@ export async function createAddress(
 export async function updateAddress(
   phone: string,
   id: string,
-  updates: Partial<Omit<CustomerAddress, "id" | "customer_id" | "created_at">>,
+  updates: Partial<CustomerAddressInput>,
 ): Promise<CustomerAddress | null> {
   const response = await fetch(
     `/api/customer-addresses/${id}?phone=${encodeURIComponent(phone)}`,
@@ -73,8 +91,6 @@ export async function deleteAddress(
     { method: "DELETE" },
   );
   if (response.ok) return { ok: true };
-  // Try to surface the server's reason (e.g. "address_in_use"). Fall back
-  // to a generic message when the body isn't JSON.
   let error = "Could not delete address.";
   let code: string | undefined;
   try {
@@ -85,10 +101,9 @@ export async function deleteAddress(
   return { ok: false, error, code };
 }
 
-export function formatAddressPreview(
-  address: CustomerAddress,
-): string {
-  const parts = [address.address_line];
+export function formatAddressPreview(address: CustomerAddress): string {
+  const parts = [address.line1];
+  if (address.area) parts.push(address.area);
   if (address.city) parts.push(address.city);
   if (address.pincode) parts.push(address.pincode);
   return parts.join(", ");
@@ -96,56 +111,55 @@ export function formatAddressPreview(
 
 /**
  * Best-effort mirror of a checkout-entered address into the customer's
- * address book (`customer_addresses`). Called from the checkout address
- * step so an address typed there also appears at /account/addresses and
- * prefills future checkouts — closing the round-trip.
+ * shared address book (`public.addresses`). Called from the checkout
+ * address step so an address typed there also appears at
+ * /account/addresses AND the mobile app — closing the round-trip.
  *
- * Contract: NEVER throws, NEVER rethrows. All failures — bad phone,
- * network error, 4xx/5xx from the API, JSON parse — are swallowed. This
- * function must not block or break the checkout submit / payment flow;
- * the order + Razorpay path is the priority, address-book mirroring is
- * secondary.
+ * Contract: NEVER throws. All failures are swallowed. Must not block
+ * or break checkout submit / payment; order + Razorpay path is priority.
  *
  * Dedup: fetches existing addresses first and skips the insert when a
- * whitespace-normalized case-insensitive match on (label, address_line,
+ * whitespace-normalized case-insensitive match on (label, line1, area,
  * city, pincode) already exists.
  */
 export async function upsertAddressToBookBestEffort(
   phone: string,
   input: {
-    label: string;           // "Home" | "Work" | "Other" | custom text
-    addressLine: string;     // may be free-form (checkout's addressLine)
-    area?: string;           // checkout has a separate area/locality — folded in
+    label: string;
+    fullName: string;
+    line1: string;
+    area: string;
     city: string;
     pincode: string;
   },
 ): Promise<void> {
   try {
-    const phoneDigits = (phone || "").replace(/\D/g, "");
+    const phoneDigits = (phone || "").replace(/\D/g, "").slice(-10);
     if (phoneDigits.length !== 10) return;
 
-    // The customer_addresses.label column is a tri-value enum
-    // ('home' | 'work' | 'other'). Custom labels from checkout ("Mom's
-    // place") map to 'other' — the string itself isn't persisted here,
-    // but the order still carries the label prefix in delivery_address.
-    const raw = (input.label || "").trim().toLowerCase();
-    const label: "home" | "work" | "other" =
-      raw === "home" ? "home" : raw === "work" ? "work" : "other";
+    const label = (input.label || "").trim().slice(0, 40);
+    const fullName = (input.fullName || "").trim();
+    const line1 = (input.line1 || "").trim();
+    const area = (input.area || "").trim();
+    const city = (input.city || "").trim();
+    const pincode = (input.pincode || "").trim();
 
-    // Combine addressLine + area into one line — customer_addresses has
-    // no separate area column and the standalone page treats
-    // address_line as the full free-form line.
-    const line = input.addressLine.trim();
-    const area = (input.area ?? "").trim();
-    const address_line = area ? `${line}, ${area}` : line;
-    const city = input.city.trim();
-    const pincode = input.pincode.trim();
+    // Skip if any required field is missing / violates mobile-parity
+    // length bounds — the POST would 400 anyway.
+    if (
+      !label ||
+      fullName.length < 2 ||
+      line1.length < 3 ||
+      area.length < 2 ||
+      city.length < 2 ||
+      !/^\d{6}$/.test(pincode)
+    ) {
+      return;
+    }
 
-    if (!address_line || !city) return;
-
-    // Dedup — fetch existing rows and short-circuit on a match. If the
-    // GET fails we still attempt the POST; worst case is a duplicate row
-    // (rare and non-destructive).
+    // Dedup — best-effort GET. On any failure we still POST; the API
+    // enforces a unique-label guard so a true duplicate label just 400s
+    // (which we swallow).
     let existing: CustomerAddress[] = [];
     try {
       const r = await fetch(
@@ -155,14 +169,15 @@ export async function upsertAddressToBookBestEffort(
         const data = await r.json();
         existing = data.addresses || [];
       }
-    } catch { /* ignore, proceed to POST */ }
+    } catch { /* ignore */ }
 
     const norm = (s: string | null | undefined) =>
       (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
     const dup = existing.some(
       (a) =>
-        a.label === label &&
-        norm(a.address_line) === norm(address_line) &&
+        norm(a.label) === norm(label) &&
+        norm(a.line1) === norm(line1) &&
+        norm(a.area) === norm(area) &&
         norm(a.city) === norm(city) &&
         (a.pincode ?? "") === pincode,
     );
@@ -175,13 +190,16 @@ export async function upsertAddressToBookBestEffort(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           label,
-          address_line,
+          full_name: fullName,
+          phone: phoneDigits,
+          line1,
+          area,
           city,
-          state: null,
-          pincode: pincode || null,
-          // Never overwrite a user's chosen default — an address entered
-          // at checkout enters the book as non-default so their existing
-          // default (if any) stays authoritative.
+          pincode,
+          // Never overwrite user's chosen default — checkout entries
+          // arrive as non-default so their existing default (if any)
+          // stays authoritative. First-ever address will auto-default
+          // server-side.
           is_default: false,
         }),
       },

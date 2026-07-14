@@ -20,39 +20,47 @@ CREATE TABLE customers (
 -- Migration for existing deployments (run once):
 -- ALTER TABLE customers ADD COLUMN IF NOT EXISTS push_token TEXT;
 
--- Customer Addresses (multi-address per customer)
--- Replaces the single address model where delivery_address was stored in orders.
--- Each customer can have multiple labeled addresses (Home/Work/Other) with one marked default.
-CREATE TABLE customer_addresses (
+-- Addresses (multi-address per customer — SHARED between website + mobile app)
+-- The mobile app (/api/mobile/addresses) and the website
+-- (/api/customer-addresses) both read/write these same rows keyed on
+-- customer_id. Label is free text (1-40 chars), unique per customer.
+-- First insert for a customer auto-defaults; MAX 20 rows/customer.
+CREATE TABLE addresses (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id       UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-  label             TEXT NOT NULL CHECK (label IN ('home', 'work', 'other')),
-  address_line      TEXT NOT NULL,
+  label             TEXT NOT NULL,          -- free text, e.g. "Home", "Work", "Mom's place"
+  full_name         TEXT NOT NULL,
+  phone             TEXT,                   -- 10-digit local; nullable
+  line1             TEXT NOT NULL,          -- flat / house no, street
+  area              TEXT NOT NULL,          -- neighbourhood / locality
   city              TEXT NOT NULL,
-  state             TEXT,
-  pincode           TEXT,
-  is_default        BOOLEAN DEFAULT false NOT NULL,
-  created_at        TIMESTAMPTZ DEFAULT now(),
-
-  -- Ensure only one default per customer
-  CONSTRAINT one_default_per_customer UNIQUE (customer_id, is_default) WHERE is_default = true
+  pincode           TEXT NOT NULL,          -- 6 digits
+  is_default        BOOLEAN NOT NULL DEFAULT false,
+  latitude          DOUBLE PRECISION,
+  longitude         DOUBLE PRECISION,
+  created_at        TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX customer_addresses_customer_id_idx
-  ON customer_addresses(customer_id);
-CREATE INDEX customer_addresses_default_idx
-  ON customer_addresses(customer_id, is_default);
+-- One default per customer.
+CREATE UNIQUE INDEX addresses_one_default_per_customer_idx
+  ON addresses(customer_id) WHERE is_default = true;
+-- Case-insensitive unique label per customer (duplicate-label guard).
+CREATE UNIQUE INDEX addresses_unique_label_per_customer_idx
+  ON addresses(customer_id, lower(label));
+CREATE INDEX addresses_customer_id_idx
+  ON addresses(customer_id);
 
 -- Orders
 -- Cancellation columns (cancelled_at, cancellation_reason, refund_status)
 -- support the 1-hour customer-cancel window. See
 -- src/lib/order-cancellation.ts and /api/mobile/orders/[id]/cancel.
--- delivery_address is kept for backwards-compatibility (stores full address string).
--- customer_address_id references customer_addresses for multi-address model (nullable during transition).
+-- delivery_address stores the full "[Label] line1, area, city - pincode"
+-- string as a point-in-time snapshot — orders never dereference the
+-- shared address book, so editing/deleting an address after an order
+-- ships is safe.
 CREATE TABLE orders (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id           UUID REFERENCES customers(id),
-  customer_address_id   UUID REFERENCES customer_addresses(id) ON DELETE SET NULL,
   total_amount          DECIMAL(10, 2),   -- inclusive of delivery_fee
   delivery_fee          DECIMAL(10, 2) NOT NULL DEFAULT 50,
   status                TEXT DEFAULT 'pending',
@@ -62,9 +70,6 @@ CREATE TABLE orders (
   cancellation_reason   TEXT,
   refund_status         TEXT CHECK (refund_status IN ('pending', 'processed', 'failed'))
 );
-
-CREATE INDEX orders_customer_address_id_idx
-  ON orders(customer_address_id);
 
 -- Blog Posts
 CREATE TABLE blog_posts (

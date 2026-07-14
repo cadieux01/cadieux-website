@@ -26,7 +26,11 @@ import { GOOGLE_MAPS_LOADER_ID, GOOGLE_MAPS_LIBRARIES } from "@/lib/google-maps-
 import { geocodePincodeClient, reverseGeocodeClient } from "@/lib/clientGeocode";
 import LocationPickerModal from "@/components/LocationPickerModal";
 import Select from "@/components/ui/Select";
-import { upsertAddressToBookBestEffort } from "@/lib/addresses";
+import {
+  CustomerAddress,
+  fetchAddresses,
+  upsertAddressToBookBestEffort,
+} from "@/lib/addresses";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -160,6 +164,14 @@ export default function CheckoutPage() {
   const [pincode, setPincode] = useState("");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [savedCustomer, setSavedCustomer] = useState<Customer | null>(null);
+
+  // Shared address book (public.addresses) — the same rows the mobile
+  // app + /account/addresses read. Fetched on mount once we have a
+  // saved phone. When length > 1 we render a picker in the returning
+  // section so a customer with multiple addresses (added via the app or
+  // /account/addresses) can pick which one this order ships to.
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
 
   // Loading states
   const [sendingOtp, setSendingOtp] = useState(false);
@@ -328,6 +340,75 @@ export default function CheckoutPage() {
     // prefill if it changed mid-session, which we don't want.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load the shared address book once the phone is known. Best-effort;
+  // failures are silent (the returning-customer card still works off
+  // customer.delivery_address alone).
+  useEffect(() => {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length !== 10) {
+      setSavedAddresses([]);
+      setSelectedAddressId(null);
+      return;
+    }
+    let cancelled = false;
+    fetchAddresses(digits)
+      .then((rows) => {
+        if (cancelled) return;
+        setSavedAddresses(rows);
+        // Seed the selection with the default row (or the row whose
+        // formatted string matches the saved delivery_address) so the
+        // picker highlights the row currently in play.
+        const def = rows.find((r) => r.is_default) ?? rows[0] ?? null;
+        setSelectedAddressId(def?.id ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setSavedAddresses([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [phone]);
+
+  /** Build the `[Label] line1, area, city - pincode` string the order
+   *  API expects from a shared-book row. */
+  function formatBookAddress(a: CustomerAddress): string {
+    return `[${a.label}] ${a.line1}, ${a.area}, ${a.city} - ${a.pincode}`;
+  }
+
+  /** Pick a shared-book address on the returning-customer step. Swaps
+   *  the customer's delivery_address for this row + syncs the field
+   *  state so an "Edit Details" flip lands in the right values. */
+  function pickSavedAddress(a: CustomerAddress) {
+    setSelectedAddressId(a.id);
+    const built = formatBookAddress(a);
+    setSavedCustomer((prev) =>
+      prev ? { ...prev, delivery_address: built, city: a.city } : prev,
+    );
+    setCustomer((prev) =>
+      prev ? { ...prev, delivery_address: built, city: a.city } : prev,
+    );
+    // Sync editable fields — Edit Details flip picks these up.
+    setName(a.full_name);
+    setAddressLine(a.line1);
+    setArea(a.area);
+    setCity(a.city);
+    setPincode(a.pincode);
+    const preset = ["Home", "Work", "Other"].find(
+      (p) => p.toLowerCase() === a.label.toLowerCase(),
+    );
+    if (preset === "Home" || preset === "Work" || preset === "Other") {
+      setAddressLabel(preset);
+      setCustomLabel("");
+    } else {
+      setAddressLabel("Other");
+      setCustomLabel(a.label);
+    }
+    if (a.latitude != null && a.longitude != null) {
+      setOrderLat(a.latitude);
+      setOrderLng(a.longitude);
+    }
+  }
 
   // Effective pincode for serviceability check.
   const effectivePincode = (() => {
@@ -626,19 +707,21 @@ export default function CheckoutPage() {
       setCustomer(data.customer);
 
       // ── Address-book round-trip (best-effort, fire-and-forget) ─────
-      // Mirror the entered address into customer_addresses so it shows
-      // up at /account/addresses and prefills the next checkout. This
-      // is intentionally NOT awaited: the helper is contractually silent
-      // on all failures (network, 4xx/5xx, bad phone, JSON parse) and
-      // must never block or delay advancing to the delivery step or the
-      // downstream Razorpay / COD path. Order creation + payment are
-      // the priority; address-book mirroring is secondary.
+      // Mirror the entered address into the shared `public.addresses`
+      // book so it shows up at /account/addresses AND the mobile app,
+      // and prefills the next checkout. This is intentionally NOT
+      // awaited: the helper is contractually silent on all failures
+      // (network, 4xx/5xx, bad phone, JSON parse) and must never block
+      // or delay advancing to the delivery step or the downstream
+      // Razorpay / COD path. Order creation + payment are the priority;
+      // address-book mirroring is secondary.
       // Runs only on fresh/edit form paths — returning customers with
       // saved details short-circuit above at line ~573 and never reach
       // here, so we don't duplicate their existing book entries.
       void upsertAddressToBookBestEffort(phone.replace(/\D/g, ""), {
         label: effectiveLabel,
-        addressLine,
+        fullName: name.trim(),
+        line1: addressLine,
         area,
         city,
         pincode,
@@ -1295,6 +1378,77 @@ export default function CheckoutPage() {
                     </p>
                   )}
                 </div>
+
+                {/* Saved-book picker — appears only when the customer
+                    has more than one address saved (via /account/addresses
+                    or the mobile app). Clicking a row swaps the shipping
+                    address in-place; the top card above reflects the pick.
+                    A single-row book is redundant with the card above so
+                    we suppress the picker in that case. */}
+                {savedAddresses.length > 1 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{
+                      margin: "0 0 10px",
+                      fontFamily: "var(--font-body)",
+                      fontSize: 10,
+                      fontWeight: 300,
+                      letterSpacing: "0.35em",
+                      textTransform: "uppercase",
+                      color: "rgba(2,70,40,0.7)",
+                    }}>
+                      Ship to a different saved address
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {savedAddresses.map((a) => {
+                        const active = a.id === selectedAddressId;
+                        return (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => pickSavedAddress(a)}
+                            style={{
+                              display: "block",
+                              textAlign: "left",
+                              width: "100%",
+                              padding: "12px 14px",
+                              border: `1px solid ${active ? "#024628" : "rgba(2,70,40,0.35)"}`,
+                              background: active ? "rgba(2,70,40,0.06)" : "transparent",
+                              cursor: "pointer",
+                              fontFamily: "var(--font-body)",
+                              color: "#024628",
+                              WebkitTapHighlightColor: "transparent",
+                            }}
+                            aria-pressed={active}
+                          >
+                            <div style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              marginBottom: 4,
+                              fontSize: 10,
+                              fontWeight: 400,
+                              letterSpacing: "0.25em",
+                              textTransform: "uppercase",
+                            }}>
+                              <span>{a.label}</span>
+                              {a.is_default && <span style={{ opacity: 0.7 }}>• Default</span>}
+                              {active && <span style={{ marginLeft: "auto", opacity: 0.8 }}>Selected</span>}
+                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 300, lineHeight: 1.5 }}>
+                              {a.full_name}
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 200, lineHeight: 1.5, opacity: 0.85 }}>
+                              {a.line1}{a.area ? `, ${a.area}` : ""}
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 200, lineHeight: 1.5, opacity: 0.75 }}>
+                              {a.city}{a.pincode ? `, ${a.pincode}` : ""}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <PincodeStatusStrip pinStatus={pinStatus} />
 

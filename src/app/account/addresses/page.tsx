@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   CustomerAddress,
-  LABEL_NAMES,
   fetchAddresses,
   createAddress,
   updateAddress,
@@ -16,28 +14,28 @@ const GRAIN = "url(/grain.svg)";
 
 type FormMode = "view" | "add" | "edit";
 
+const LABEL_PRESETS = ["Home", "Work", "Other"] as const;
+
 export default function AddressesPage() {
-  const router = useRouter();
   const [phone, setPhone] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [formMode, setFormMode] = useState<FormMode>("view");
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Form state
-  const [label, setLabel] = useState<"home" | "work" | "other">("home");
-  const [addressLine, setAddressLine] = useState("");
+  // Form state — mirrors the mobile app's fields on `public.addresses`.
+  const [label, setLabel] = useState("Home");
+  const [fullName, setFullName] = useState("");
+  const [rowPhone, setRowPhone] = useState("");
+  const [line1, setLine1] = useState("");
+  const [area, setArea] = useState("");
   const [city, setCity] = useState("");
-  const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  // Page-level notice used by delete guard — surfaces messages like
-  // "address is tied to an active order" instead of a silent no-op.
   const [pageNotice, setPageNotice] = useState<string | null>(null);
 
-  // Initialize phone and fetch addresses
   useEffect(() => {
     const savedPhone =
       typeof window !== "undefined"
@@ -58,25 +56,33 @@ export default function AddressesPage() {
     setLoading(false);
   }
 
-  function startAdd() {
-    setLabel("home");
-    setAddressLine("");
+  function resetForm() {
+    setLabel("Home");
+    setFullName("");
+    setRowPhone(phone ?? "");
+    setLine1("");
+    setArea("");
     setCity("");
-    setState("");
     setPincode("");
-    setIsDefault(addresses.length === 0); // Default if first address
-    setEditingId(null);
     setFormError(null);
     setPageNotice(null);
+  }
+
+  function startAdd() {
+    resetForm();
+    setIsDefault(addresses.length === 0);
+    setEditingId(null);
     setFormMode("add");
   }
 
   function startEdit(addr: CustomerAddress) {
     setLabel(addr.label);
-    setAddressLine(addr.address_line);
+    setFullName(addr.full_name);
+    setRowPhone(addr.phone ?? phone ?? "");
+    setLine1(addr.line1);
+    setArea(addr.area);
     setCity(addr.city);
-    setState(addr.state || "");
-    setPincode(addr.pincode || "");
+    setPincode(addr.pincode);
     setIsDefault(addr.is_default);
     setEditingId(addr.id);
     setFormError(null);
@@ -92,14 +98,29 @@ export default function AddressesPage() {
 
   async function saveAddress() {
     if (!phone) return;
-    // Validation mirrors checkout: address line + city required, pincode
-    // must be 6 numeric digits (matches Indian postal format enforced on
-    // the checkout add-address form).
-    if (!addressLine.trim()) {
+    const labelTrim = label.trim();
+    const fullNameTrim = fullName.trim();
+    const line1Trim = line1.trim();
+    const areaTrim = area.trim();
+    const cityTrim = city.trim();
+
+    if (!labelTrim || labelTrim.length > 40) {
+      setFormError("Label must be 1-40 characters.");
+      return;
+    }
+    if (fullNameTrim.length < 2) {
+      setFormError("Please enter the recipient's full name.");
+      return;
+    }
+    if (line1Trim.length < 3) {
       setFormError("Please enter a street address.");
       return;
     }
-    if (!city.trim()) {
+    if (areaTrim.length < 2) {
+      setFormError("Please enter an area / locality.");
+      return;
+    }
+    if (cityTrim.length < 2) {
       setFormError("Please enter a city.");
       return;
     }
@@ -107,36 +128,41 @@ export default function AddressesPage() {
       setFormError("Pincode must be 6 digits.");
       return;
     }
+    const phoneDigits = rowPhone.replace(/\D/g, "").slice(-10);
+    if (phoneDigits && phoneDigits.length !== 10) {
+      setFormError("Contact phone must be a 10-digit number.");
+      return;
+    }
     setFormError(null);
+
+    const payload = {
+      label: labelTrim,
+      full_name: fullNameTrim,
+      phone: phoneDigits || undefined,
+      line1: line1Trim,
+      area: areaTrim,
+      city: cityTrim,
+      pincode,
+      is_default: isDefault,
+    };
 
     setFormLoading(true);
     try {
+      let result: CustomerAddress | null;
       if (formMode === "add") {
-        const newAddr = await createAddress(phone, {
-          label,
-          address_line: addressLine,
-          city,
-          state: state || null,
-          pincode: pincode || null,
-          is_default: isDefault,
-        });
-        if (newAddr) {
-          await loadAddresses(phone);
-          setFormMode("view");
-        }
+        result = await createAddress(phone, payload);
       } else if (formMode === "edit" && editingId) {
-        const updated = await updateAddress(phone, editingId, {
-          label,
-          address_line: addressLine,
-          city,
-          state: state || null,
-          pincode: pincode || null,
-          is_default: isDefault,
-        });
-        if (updated) {
-          await loadAddresses(phone);
-          setFormMode("view");
-        }
+        result = await updateAddress(phone, editingId, payload);
+      } else {
+        result = null;
+      }
+      if (result) {
+        await loadAddresses(phone);
+        setFormMode("view");
+      } else {
+        setFormError(
+          "Could not save this address. Check the fields and try again.",
+        );
       }
     } finally {
       setFormLoading(false);
@@ -152,8 +178,6 @@ export default function AddressesPage() {
     if (result.ok) {
       await loadAddresses(phone);
     } else {
-      // Server refused (e.g. address_in_use). Show the reason inline so
-      // the customer knows why the delete didn't take.
       setPageNotice(result.error);
     }
   }
@@ -170,7 +194,7 @@ export default function AddressesPage() {
     boxSizing: "border-box",
   };
 
-  const labelStyle: React.CSSProperties = {
+  const fieldLabelStyle: React.CSSProperties = {
     display: "block",
     marginBottom: 8,
     fontFamily: "var(--font-body)",
@@ -228,7 +252,8 @@ export default function AddressesPage() {
         style={{
           position: "relative",
           zIndex: 1,
-          padding: "100px clamp(24px,6vw,80px) 120px",
+          padding:
+            "calc(64px + env(safe-area-inset-top)) clamp(24px,6vw,80px) 120px",
           maxWidth: 720,
           margin: "0 auto",
         }}
@@ -379,7 +404,7 @@ export default function AddressesPage() {
                             color: "#FBF3D4",
                           }}
                         >
-                          {LABEL_NAMES[addr.label]}
+                          {addr.label}
                           {addr.is_default && " • Default"}
                         </div>
 
@@ -387,15 +412,29 @@ export default function AddressesPage() {
                         <div style={{ paddingTop: 24, paddingRight: 120 }}>
                           <p
                             style={{
-                              margin: "0 0 8px",
+                              margin: "0 0 6px",
                               fontFamily: "var(--font-body)",
                               fontSize: 15,
+                              fontWeight: 400,
+                              color: "#024628",
+                              letterSpacing: "0.03em",
+                            }}
+                          >
+                            {addr.full_name}
+                          </p>
+                          <p
+                            style={{
+                              margin: "0 0 4px",
+                              fontFamily: "var(--font-body)",
+                              fontSize: 14,
                               fontWeight: 300,
                               color: "#024628",
                               letterSpacing: "0.04em",
+                              lineHeight: 1.5,
                             }}
                           >
-                            {addr.address_line}
+                            {addr.line1}
+                            {addr.area ? `, ${addr.area}` : ""}
                           </p>
                           <p
                             style={{
@@ -410,6 +449,20 @@ export default function AddressesPage() {
                             {addr.city}
                             {addr.pincode && `, ${addr.pincode}`}
                           </p>
+                          {addr.phone && (
+                            <p
+                              style={{
+                                margin: "6px 0 0",
+                                fontFamily: "var(--font-body)",
+                                fontSize: 12,
+                                fontWeight: 300,
+                                color: "rgba(2,70,40,0.6)",
+                                letterSpacing: "0.05em",
+                              }}
+                            >
+                              {addr.phone}
+                            </p>
+                          )}
                         </div>
 
                         {/* Action Buttons */}
@@ -514,9 +567,9 @@ export default function AddressesPage() {
                 </h2>
 
                 <div style={{ marginBottom: 16 }}>
-                  <label style={labelStyle}>Label</label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {(["home", "work", "other"] as const).map((l) => (
+                  <label style={fieldLabelStyle}>Label</label>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    {LABEL_PRESETS.map((l) => (
                       <button
                         key={l}
                         type="button"
@@ -525,47 +578,89 @@ export default function AddressesPage() {
                           flex: 1,
                           padding: "8px 12px",
                           border: "1px solid #024628",
-                          background: label === l ? "#024628" : "transparent",
+                          background:
+                            label.toLowerCase() === l.toLowerCase()
+                              ? "#024628"
+                              : "transparent",
                           fontFamily: "var(--font-body)",
                           fontSize: 11,
                           fontWeight: 400,
                           letterSpacing: "0.1em",
                           textTransform: "uppercase",
-                          color: label === l ? "#FBF3D4" : "#024628",
+                          color:
+                            label.toLowerCase() === l.toLowerCase()
+                              ? "#FBF3D4"
+                              : "#024628",
                           cursor: "pointer",
                           WebkitTapHighlightColor: "transparent",
                         }}
                       >
-                        {LABEL_NAMES[l]}
+                        {l}
                       </button>
                     ))}
                   </div>
+                  <input
+                    type="text"
+                    value={label}
+                    onChange={(e) => setLabel(e.target.value.slice(0, 40))}
+                    placeholder="Or type a custom label"
+                    maxLength={40}
+                    style={inputStyle}
+                  />
                 </div>
 
                 <div style={{ marginBottom: 16 }}>
-                  <label style={labelStyle}>Address</label>
+                  <label style={fieldLabelStyle}>Recipient full name</label>
                   <input
                     type="text"
-                    value={addressLine}
-                    onChange={(e) => setAddressLine(e.target.value)}
-                    placeholder="Enter street address"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Who's receiving this?"
+                    autoComplete="name"
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={fieldLabelStyle}>
+                    Street address (house / building)
+                  </label>
+                  <input
+                    type="text"
+                    value={line1}
+                    onChange={(e) => setLine1(e.target.value)}
+                    placeholder="Flat / house no, street"
+                    autoComplete="address-line1"
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={fieldLabelStyle}>Area / locality</label>
+                  <input
+                    type="text"
+                    value={area}
+                    onChange={(e) => setArea(e.target.value)}
+                    placeholder="Neighbourhood, landmark"
+                    autoComplete="address-line2"
                     style={inputStyle}
                   />
                 </div>
 
                 <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
                   <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>City</label>
+                    <label style={fieldLabelStyle}>City</label>
                     <input
                       type="text"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                       placeholder="City"
+                      autoComplete="address-level2"
                       style={inputStyle}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>Pincode</label>
+                    <label style={fieldLabelStyle}>Pincode</label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -579,6 +674,22 @@ export default function AddressesPage() {
                       style={inputStyle}
                     />
                   </div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={fieldLabelStyle}>Contact phone (optional)</label>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={rowPhone}
+                    onChange={(e) =>
+                      setRowPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                    }
+                    placeholder="10-digit mobile"
+                    autoComplete="tel-national"
+                    maxLength={10}
+                    style={inputStyle}
+                  />
                 </div>
 
                 <div style={{ marginBottom: 20 }}>
