@@ -5,8 +5,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        heading: ['"Cormorant Garamond"', "serif"],
-        body: ['"Jost"', "sans-serif"],
+        heading: ["var(--font-heading)", '"DM Sans"', "sans-serif"],
+        body: ["var(--font-body)", '"DM Sans"', "sans-serif"],
       },
     },
   },

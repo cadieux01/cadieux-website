@@ -7,6 +7,14 @@
       "runtimeArgs": ["next", "dev"],
       "autoPort": true,
       "port": 3000
+    },
+    {
+      "name": "your-requests worktree",
+      "runtimeExecutable": "/opt/homebrew/Cellar/node/25.8.2/bin/npx",
+      "runtimeArgs": ["next", "dev"],
+      "cwd": "/Users/sunnyraj/cadieux-your-requests",
+      "autoPort": true,
+      "port": 3010
     }
   ]
 }

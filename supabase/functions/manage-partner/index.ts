@@ -469,8 +469,8 @@ Deno.serve(async (req: Request) => {
     if (!isNonEmptyString(userId)) {
       return json(400, { error: "user_id is required" });
     }
-    if (!isNonEmptyString(newPassword) || newPassword.length < 6) {
-      return json(400, { error: "new_password must be at least 6 characters" });
+    if (!isNonEmptyString(newPassword) || newPassword.length < 8) {
+      return json(400, { error: "new_password must be at least 8 characters" });
     }
 
     const { data: target, error: lookupErr } = await admin

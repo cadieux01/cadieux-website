@@ -124,8 +124,16 @@ Deno.serve(async (req: Request) => {
 
   const send = await sendWhatsAppText(to, text);
   if (!send.ok) {
-    console.error("[whatsapp-send] text send failed:", send.error);
-    return json(502, { error: send.error });
+    console.error("[whatsapp-send] text send failed:", send.error, send.raw);
+    // Include MSG91's raw body + status so the dashboard surfaces the
+    // ACTUAL provider error (not the generic "MSG91 HTTP 400" fallback).
+    // Callers should NOT depend on the shape of `msg91_raw` — it's a
+    // debug passthrough of whatever MSG91 returned.
+    return json(502, {
+      error: send.error,
+      msg91_status: send.status ?? null,
+      msg91_raw: send.raw ?? null,
+    });
   }
   try {
     const convId = await getOrCreateConversation(admin, mobile);
