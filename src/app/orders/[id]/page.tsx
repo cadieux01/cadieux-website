@@ -24,6 +24,7 @@ import {
   formatSlotForDisplay,
   nextDeliveryDates,
 } from "@/lib/delivery-slots";
+import { trackPurchase } from "@/lib/analytics";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -194,6 +195,45 @@ export default function OrderDetailPage() {
       window.removeEventListener("focus", onVisible);
     };
   }, [fetchOrder]);
+
+  // GA4 purchase — this page is where finishOrder() lands the customer
+  // after place_order (the /checkout/success interstitial is orphaned),
+  // so it's the canonical spot to fire the ecommerce purchase event.
+  //
+  // Fires exactly ONCE per order.id, ever. Guarded by localStorage
+  // (not sessionStorage) because /orders/[id] is bookmarkable — a
+  // customer may revisit later to check delivery status, and we must
+  // not re-fire the purchase on those return visits and double-count
+  // revenue. Cancelled / failed orders are excluded so we don't count
+  // them as revenue either.
+  useEffect(() => {
+    if (!order) return;
+    if (isCancelled(order.status)) return;
+    if (order.cancelled_at) return;
+    if ((order.payment_status ?? "").toLowerCase() === "failed") return;
+    const storageKey = `cdx_ga_purchase_${order.id}`;
+    try {
+      if (localStorage.getItem(storageKey)) return;
+    } catch {
+      /* private mode / storage disabled — fall through and still fire */
+    }
+    trackPurchase({
+      transactionId: order.id,
+      value: Number(order.total_amount) || 0,
+      items: (order.items ?? []).map((it) => ({
+        item_name: it.name,
+        quantity: it.qty,
+        price:
+          it.price_inr ??
+          (it.qty ? (it.line_total ?? 0) / it.qty : undefined),
+      })),
+    });
+    try {
+      localStorage.setItem(storageKey, "1");
+    } catch {
+      /* ignore */
+    }
+  }, [order]);
 
   // "Pay Now" — convert a COD order to a paid Razorpay order without
   // creating a new order. Mirrors the checkout page's payOnline() flow:
