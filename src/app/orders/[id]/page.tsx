@@ -221,6 +221,7 @@ export default function OrderDetailPage() {
       transactionId: order.id,
       value: Number(order.total_amount) || 0,
       items: (order.items ?? []).map((it) => ({
+        item_id: it.slug ?? it.name,
         item_name: it.name,
         quantity: it.qty,
         price:
