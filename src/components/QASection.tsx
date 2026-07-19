@@ -13,15 +13,15 @@ const ss = (e0: number, e1: number, x: number) => {
 const QAS = [
   {
     q: "Why do you need protein?",
-    a: "Protein holds your body together — muscles that move you, hormones that steady you, immunity that guards you, and **blood sugar it keeps in check**. Run short, and the body breaks itself down to keep going. Eat enough — every part stays intact.",
+    a: "Protein is what holds you together. Muscle that moves you. Focus that sharpens you. Steadiness that carries you through the day. Fall short, and the body borrows from itself. Meet it, and every part stays strong.",
   },
   {
     q: "Why we exist?",
-    a: "We exist to make strength simple. Same bread, better built — real grains, honest protein, no shortcuts. A quiet daily ritual for anyone choosing to grow stronger, sharper, steadier — without giving up the food they hold dear.",
+    a: "We exist to make strength simple. The same bread you love, built better — real grains, honest protein, no shortcuts. A quiet daily ritual for anyone growing stronger, sharper, steadier, without giving up the food they hold close.",
   },
   {
     q: "Why protein bread?",
-    a: "Most bread takes from your body. Cadieux gives back — high protein and rich fibre from real seeds and ancient grains. Same morning. Better fuel.",
+    a: "Bread is already part of your morning. We made it work harder. Real seeds, ancient grains, honest protein baked into every slice. Same routine. More strength.",
   },
 ];
 
@@ -139,10 +139,10 @@ export default function QASection() {
   }, []);
 
   const current = QAS[active];
-  // Words wrapped in **double asterisks** render bold (used to emphasise key
-  // promises like "blood sugar it keeps in check"). Closing markers may
-  // appear before trailing punctuation — e.g. "check**." — so we strip
-  // every "**" anywhere in the word and toggle a running bold flag.
+  // Words wrapped in **double asterisks** render bold (used to emphasise
+  // key phrases inside an answer). Closing markers may appear before
+  // trailing punctuation — e.g. "word**." — so we strip every "**"
+  // anywhere in the word and toggle a running bold flag.
   let boldOpen = false;
   const words = current.a.split(/\s+/).map(w => {
     let text = w;
