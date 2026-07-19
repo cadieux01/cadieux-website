@@ -10,6 +10,12 @@ import {
   type ProductSlug,
   type ProductMedia,
 } from "@/lib/data";
+
+// PRODUCT_DETAILS remains imported so its `description` narrative can
+// still fall back when the content-string description is empty (bundled
+// editorial voice). The media gallery no longer reads from it — that
+// arrives as a server-computed `media` prop that already blends admin
+// (products.image_url) + bundled sources.
 import { useCart } from "@/context/CartContext";
 import { flyToCart } from "@/lib/fly-to-cart";
 import ReviewSection from "@/components/ReviewSection";
@@ -75,6 +81,8 @@ export default function ProductDetailClient({
   price = null,
   pdpStrings,
   statTiles = [],
+  media = [],
+  heroImage,
 }: {
   slug: string;
   outOfStock?: boolean;
@@ -92,10 +100,33 @@ export default function ProductDetailClient({
   // Stat tiles (content-driven). When empty, fall back to the bundled
   // PRODUCTS[].stats array so the page still renders sensible numbers.
   statTiles?: PdpStatTile[];
+  // Server-resolved gallery media. Blends admin (products.image_url) +
+  // bundled PRODUCT_DETAILS. Guaranteed non-empty — always at least one
+  // hero tile so an empty admin field never renders a broken image.
+  media?: ProductMedia[];
+  // Server-resolved primary image URL (admin image_url → bundled → /hero.jpg).
+  // Used for meta share button + any single-image lookup on the client.
+  heroImage?: string;
 }) {
   const typedSlug = slug as ProductSlug;
   const product = PRODUCTS.find((p) => p.slug === typedSlug);
   const detail = product ? PRODUCT_DETAILS[typedSlug] : undefined;
+  // Final client-side gallery fallback: if the server somehow shipped an
+  // empty media list (shouldn't happen — resolveGalleryMedia always
+  // returns ≥1 tile), synthesize one from heroImage / bundled / brand
+  // default so <Gallery/> never receives an empty array.
+  const galleryMedia: ProductMedia[] =
+    media.length > 0
+      ? media
+      : detail?.media && detail.media.length > 0
+        ? detail.media
+        : [
+            {
+              type: "image",
+              src: heroImage || product?.image || "/hero.jpg",
+              alt: product?.name || "Product image",
+            },
+          ];
 
   // Resolve display strings with PRODUCTS-bundled fallbacks (in case the
   // server didn't pass pdpStrings — e.g. a stale call site).
@@ -187,7 +218,7 @@ export default function ProductDetailClient({
       >
         {/* Top fold: gallery + info */}
         <div className="pdp-top">
-          <Gallery media={detail.media} active={activeMedia} onSelect={setActiveMedia} />
+          <Gallery media={galleryMedia} active={activeMedia} onSelect={setActiveMedia} />
 
           <div style={{ minWidth: 0 }}>
             <div

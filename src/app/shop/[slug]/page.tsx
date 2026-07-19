@@ -8,7 +8,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
-import { PRODUCTS } from "@/lib/data";
+import { PRODUCTS, PRODUCT_DETAILS, type ProductMedia, type ProductSlug } from "@/lib/data";
 import { getProductAvailability, getProductBySlug } from "@/lib/products";
 import { getProductReports } from "@/lib/product-reports";
 import { getProductIngredients } from "@/lib/ingredients";
@@ -16,16 +16,58 @@ import { getPageContent, pickString } from "@/lib/content";
 
 import ProductDetailClient from "./ProductDetailClient";
 
-// Dynamic metadata for product pages
+const OG_FALLBACK_IMAGE = "/hero.jpg";
+
+// Resolve the OG / social share image with an admin-first fallback chain:
+//   products.image_url (admin editor) → bundled PRODUCTS[].image (legacy
+//   default for shipped slugs) → /hero.jpg (brand default; never empty).
+function resolveHeroImage(
+  dbImageUrl: string | null | undefined,
+  bundledImage: string | undefined,
+): string {
+  const trimmed = (dbImageUrl ?? "").trim();
+  if (trimmed) return trimmed;
+  if (bundledImage) return bundledImage;
+  return OG_FALLBACK_IMAGE;
+}
+
+// Build the PDP media gallery from admin + bundled sources. Preference:
+//   1. Bundled PRODUCT_DETAILS[slug].media — rich, editorial (videos + images)
+//      for shipped products. Deploy-owned but hand-curated.
+//   2. A single tile derived from the admin-editable products.image_url.
+//   3. Legacy bundled PRODUCTS[].image.
+//   4. /hero.jpg brand default.
+// The important guarantee: an empty admin field never yields an empty
+// gallery — a heroImage tile is always produced.
+function resolveGalleryMedia(
+  slug: string,
+  heroImage: string,
+  bundledName: string | undefined,
+): ProductMedia[] {
+  const bundled = PRODUCT_DETAILS[slug as ProductSlug]?.media;
+  if (bundled && bundled.length > 0) return bundled;
+  return [
+    {
+      type: "image",
+      src: heroImage,
+      alt: bundledName ? `${bundledName} — hero` : "Product image",
+    },
+  ];
+}
+
+// Dynamic metadata for product pages. Slug resolution is DB-first
+// (products table) so admin-created products get their OG payload;
+// bundled PRODUCTS[] is only consulted for legacy display fallbacks.
 export async function generateMetadata({
   params,
 }: {
   params: { slug: string };
 }): Promise<Metadata> {
   const { slug } = params;
-  const product = PRODUCTS.find((p) => p.slug === slug);
+  const productRow = await getProductBySlug(slug);
+  const bundled = PRODUCTS.find((p) => p.slug === slug);
 
-  if (!product) {
+  if (!productRow && !bundled) {
     return {
       title: "Product Not Found",
       description: "The product you're looking for is not available.",
@@ -37,7 +79,9 @@ export async function generateMetadata({
   const content = await getPageContent({ page: "pdp", productId: slug });
   const title = pickString(content, "pdp.seo.title", slug);
   const description = pickString(content, "pdp.seo.description", slug);
-  const ogName = pickString(content, "pdp.name", slug) || product.name;
+  const ogName =
+    pickString(content, "pdp.name", slug) || productRow?.name || bundled?.name || slug;
+  const ogImage = resolveHeroImage(productRow?.image_url, bundled?.image);
 
   return {
     title,
@@ -50,7 +94,7 @@ export async function generateMetadata({
       description,
       images: [
         {
-          url: product.image || "/hero.jpg",
+          url: ogImage,
           width: 1200,
           height: 630,
           alt: ogName,
@@ -61,7 +105,7 @@ export async function generateMetadata({
       card: "summary_large_image",
       title,
       description,
-      images: [product.image || "/hero.jpg"],
+      images: [ogImage],
     },
   };
 }
@@ -72,10 +116,12 @@ export default async function ProductDetailPage({
   params: { slug: string };
 }) {
   const { slug } = params;
-  if (!PRODUCTS.some((p) => p.slug === slug)) {
-    notFound();
-  }
 
+  // Slug resolution is admin-driven: an active, non-archived row in
+  // public.products IS the allowlist. Deleted from bundled PRODUCTS or
+  // never listed there — doesn't matter. If the DB says the slug is
+  // live, we render. If not, 404. This is what lets a newly-created
+  // admin product resolve without a deploy.
   const availability = await getProductAvailability();
   if (availability && !availability.listed.has(slug)) {
     notFound();
@@ -89,6 +135,15 @@ export default async function ProductDetailPage({
     getProductIngredients(slug),
     getPageContent({ page: "pdp", productId: slug }),
   ]);
+
+  // Second gate: availability is best-effort (returns null on Supabase
+  // outage → we degrade to "show everything"). If BOTH the DB row and
+  // any bundled fallback are missing, this really is a bad URL — 404.
+  const bundled = PRODUCTS.find((p) => p.slug === slug);
+  if (!productRow && !bundled) {
+    notFound();
+  }
+
   const reports = productRow ? await getProductReports(productRow.id) : [];
 
   // Resolve PDP strings (with critical fallbacks per slug) here so the
@@ -107,6 +162,9 @@ export default async function ProductDetailPage({
     outOfStockBanner: pickString(content, "pdp.out_of_stock_banner"),
   };
 
+  const heroImage = resolveHeroImage(productRow?.image_url, bundled?.image);
+  const media = resolveGalleryMedia(slug, heroImage, bundled?.name);
+
   return (
     <ProductDetailClient
       slug={slug}
@@ -116,6 +174,8 @@ export default async function ProductDetailPage({
       price={productRow?.price_inr ?? null}
       pdpStrings={pdpStrings}
       statTiles={content.stat_tiles}
+      media={media}
+      heroImage={heroImage}
     />
   );
 }

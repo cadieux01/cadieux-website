@@ -1,7 +1,8 @@
 import { MetadataRoute } from "next";
-import { BLOG_POSTS } from "@/lib/data";
+import { BLOG_POSTS, PRODUCTS } from "@/lib/data";
+import { getActiveProducts } from "@/lib/products";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://www.cadieux.in";
   const today = new Date().toISOString().split("T")[0];
 
@@ -17,18 +18,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${baseUrl}/shop`,
       lastModified: "2026-06-22",
       changeFrequency: "weekly",
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/shop/multigrain`,
-      lastModified: "2026-06-22",
-      changeFrequency: "monthly",
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/shop/high-protein`,
-      lastModified: "2026-06-22",
-      changeFrequency: "monthly",
       priority: 0.9,
     },
     {
@@ -113,5 +102,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: post.tier === 4 ? 0.7 : 0.6,
   }));
 
-  return [...staticPages, ...blogPages];
+  // Dynamic product PDPs — pulled from the live `products` table so any
+  // admin-created slug (is_active=true, is_archived=false) appears here
+  // without a deploy. Falls back to the bundled PRODUCTS[] slugs when
+  // Supabase is unreachable so the sitemap never loses its two shipped
+  // product URLs (multigrain, high-protein).
+  const activeProducts = await getActiveProducts();
+  const productSlugs =
+    activeProducts.length > 0
+      ? activeProducts.map((p) => p.slug)
+      : PRODUCTS.map((p) => p.slug);
+  const productPages: MetadataRoute.Sitemap = productSlugs.map((slug) => ({
+    url: `${baseUrl}/shop/${slug}`,
+    lastModified: today,
+    changeFrequency: "monthly" as const,
+    priority: 0.9,
+  }));
+
+  return [...staticPages, ...productPages, ...blogPages];
 }
