@@ -1,15 +1,18 @@
 "use client";
 
-import { useLayoutEffect, useState } from "react";
-import LoadingScreen from "./LoadingScreen";
+import { useEffect, useLayoutEffect } from "react";
 import PageContent from "@/components/PageContent";
 
 export default function ClientApp() {
-  const [introDone, setIntroDone] = useState(false);
+  // Intro splash removed. Homepage renders content immediately with no
+  // overlay and no perceived wait. The `introActive` prop below is
+  // permanently false so PageContent's hero video plays on first paint.
+  // LoadingScreen.tsx and /logo-intro.* assets remain on disk so this
+  // change is trivially revertible.
 
   // Disable browser scroll restoration and pin to top on every mount so a
-  // mobile refresh always starts at the loading intro / Phase 1, not at
-  // wherever the user last scrolled to.
+  // mobile refresh always starts at Phase 1, not at wherever the user
+  // last scrolled to.
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     if ("scrollRestoration" in window.history) {
@@ -18,23 +21,23 @@ export default function ClientApp() {
     window.scrollTo(0, 0);
   }, []);
 
-  // PageContent renders from the very first (server) paint so its hero
-  // heading is in the initial HTML and becomes a stable, text-based LCP
-  // element. Previously it was gated behind `introDone`, so during the 4-6s
-  // intro the only painted thing was the intro <video> (not a reliable LCP
-  // candidate), and the real hero mounted — then the intro overlay was
-  // removed — after Lighthouse's measurement window: PageSpeed reported
-  // NO_LCP and couldn't measure LCP/TBT.
-  //
-  // The intro <video> overlay (LoadingScreen, position:fixed z-1000) still
-  // sits on top and plays exactly as before. We pass `introActive` so
-  // PageContent holds its hero video's playback until the intro finishes —
-  // preserving the original optimization of not decoding Phase 1's video
-  // invisibly under the LoadingScreen.
+  // Signal to SiteMusic (and any other listener) that the "intro" is
+  // done, since it never mounts anymore. SiteMusic on / relies on this
+  // event to arm its gesture-unlock listeners. On non-/ routes it
+  // unlocks via the pathname check and doesn't need the event; on /
+  // its useEffect runs during layout render, so its listener is
+  // attached before this dispatch fires from the page component.
+  useEffect(() => {
+    try {
+      window.dispatchEvent(new Event("cadieux:intro-done"));
+    } catch {
+      /* dispatchEvent virtually never throws — ignore just in case */
+    }
+  }, []);
+
   return (
     <div id="main-page">
-      <PageContent introActive={!introDone} />
-      {!introDone && <LoadingScreen onComplete={() => setIntroDone(true)} />}
+      <PageContent introActive={false} />
     </div>
   );
 }
