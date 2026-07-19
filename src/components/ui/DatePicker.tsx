@@ -115,6 +115,9 @@ export default function DatePicker({
     !minDate ||
     monthStart > new Date(minDate.getFullYear(), minDate.getMonth(), 1);
 
+  // Matches Select.tsx trigger: paint the trigger Foundation Green
+  // explicitly so cream text renders at 9.88:1 (AAA) regardless of the
+  // parent bg (Clean Ash inheritance made cream 1.52:1 FAIL previously).
   const triggerStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -122,8 +125,8 @@ export default function DatePicker({
     gap: 10,
     width: "100%",
     boxSizing: "border-box",
-    background: "transparent",
-    border: `1px solid ${open ? GOLD : "rgba(240,223,200,0.16)"}`,
+    background: "#024628",
+    border: `1px solid ${open ? "#FBF3D4" : "rgba(251,243,212,0.35)"}`,
     borderRadius: 8,
     padding: "12px 14px",
     minHeight: 46,
@@ -132,8 +135,8 @@ export default function DatePicker({
     fontSize: 15,
     fontWeight: 200,
     letterSpacing: "0.04em",
-    color: selected ? CREAM : "rgba(240,223,200,0.4)",
-    boxShadow: open ? `0 0 0 2px rgba(201,169,110,0.25)` : "none",
+    color: selected ? CREAM : "rgba(251,243,212,0.7)",
+    boxShadow: open ? `0 0 0 2px rgba(251,243,212,0.35)` : "none",
     transition: "border-color 0.15s ease, box-shadow 0.15s ease",
     ...style,
   };
@@ -141,7 +144,9 @@ export default function DatePicker({
   const navBtn: React.CSSProperties = {
     background: "transparent",
     border: "none",
-    color: GOLD,
+    // Cream on FG-green menu = 9.88:1. Was GOLD (= #024628, same as menu
+    // bg) → invisible chevron arrows.
+    color: "#FBF3D4",
     fontSize: 18,
     lineHeight: 1,
     padding: "4px 8px",
@@ -201,7 +206,9 @@ export default function DatePicker({
             maxWidth: "calc(100vw - 32px)",
             padding: 14,
             background: MENU_BG,
-            border: `1px solid ${GOLD}`,
+            // Cream border on FG-green menu — GOLD (#024628) was equal to
+            // MENU_BG so the panel had no visible boundary.
+            border: `1px solid rgba(251,243,212,0.35)`,
             borderRadius: 10,
             boxShadow: "0 14px 40px rgba(0,0,0,0.55)",
             ...(flipUp
@@ -268,7 +275,7 @@ export default function DatePicker({
                   fontWeight: 400,
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
-                  color: "rgba(240,223,200,0.4)",
+                  color: "rgba(251,243,212,0.7)",
                   padding: "4px 0",
                 }}
               >
@@ -307,15 +314,21 @@ export default function DatePicker({
                   }}
                   style={{
                     aspectRatio: "1 / 1",
+                    // Today ring in cream so it's visible on the FG-green
+                    // menu (was a gold-brown that isn't in the brand
+                    // palette).
                     border: isToday && !isSelected
-                      ? `1px solid rgba(201,169,110,0.4)`
+                      ? `1px solid rgba(251,243,212,0.45)`
                       : "1px solid transparent",
                     borderRadius: 7,
-                    background: isSelected ? GOLD : "transparent",
+                    // Selected day paints CREAM bg + FG-green text so the
+                    // pick reads as a strong inverse chip (9.88:1 AAA).
+                    // Was GOLD (= FG-green, same as menu) → invisible.
+                    background: isSelected ? "#FBF3D4" : "transparent",
                     color: isDisabled
-                      ? "rgba(251,243,212,0.22)"
+                      ? "rgba(251,243,212,0.5)"
                       : isSelected
-                        ? "#0a0a0a"
+                        ? "#024628"
                         : CREAM,
                     fontFamily: "var(--font-body)",
                     fontSize: 13,

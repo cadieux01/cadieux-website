@@ -1103,7 +1103,10 @@ export default function CheckoutPage() {
   const firstName =
     (formMode === "returning" && savedCustomer?.full_name?.split(" ")[0]) ||
     (name.trim() ? name.trim().split(" ")[0] : "");
-  const greeting = firstName ? `Welcome back, ${firstName}` : "";
+  // Short greeting: the header's right cell has a tight width budget on
+  // mobile (grid 1fr auto 1fr; the wordmark takes the middle). "Welcome
+  // back, X" overflowed and visually collided with CADIEUX.
+  const greeting = firstName ? `Hi, ${firstName}` : "";
 
   const stepLabel =
     step === "address"
@@ -1178,8 +1181,13 @@ export default function CheckoutPage() {
           <div
             style={{
               justifySelf: "center",
+              // Slightly tighter tracking (0.35em vs 0.45em) so the middle
+              // grid cell doesn't consume the width the right greeting
+              // needs on 375px viewports — was overlapping "Welcome back,
+              // X" into the wordmark on mobile.
               fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 300,
-              letterSpacing: "0.45em", color: "#FBF3D4",
+              letterSpacing: "0.35em", color: "#FBF3D4",
+              whiteSpace: "nowrap",
             }}
           >
             CADIEUX
@@ -1190,7 +1198,10 @@ export default function CheckoutPage() {
               fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
               letterSpacing: "0.25em", textTransform: "uppercase",
               color: "rgba(251,243,212,0.7)",
-              maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              // Right cell capped tighter + minWidth 0 so it can shrink
+              // inside the 1fr grid track rather than push into CADIEUX.
+              minWidth: 0,
+              maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}
           >
             {greeting}

@@ -230,6 +230,9 @@ export default function Select({
     }
   };
 
+  // Trigger sits on any parent bg (Clean Ash #C0C8CE on checkout + subscription
+  // setup). We explicitly paint it Foundation Green so cream text always
+  // renders at 9.88:1 (AAA) — never inherits an unknown parent bg.
   const triggerStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -237,8 +240,8 @@ export default function Select({
     gap: 10,
     width: fullWidth ? "100%" : undefined,
     boxSizing: "border-box",
-    background: "transparent",
-    border: `1px solid ${open ? GOLD : "rgba(240,223,200,0.16)"}`,
+    background: "#024628",
+    border: `1px solid ${open ? "#FBF3D4" : "rgba(251,243,212,0.35)"}`,
     borderRadius: 8,
     padding: "12px 14px",
     minHeight: 46,
@@ -247,8 +250,8 @@ export default function Select({
     fontSize: 15,
     fontWeight: 200,
     letterSpacing: "0.04em",
-    color: selectedLabel ? CREAM : "rgba(240,223,200,0.4)",
-    boxShadow: open ? `0 0 0 2px rgba(201,169,110,0.25)` : "none",
+    color: selectedLabel ? "#FBF3D4" : "rgba(251,243,212,0.7)",
+    boxShadow: open ? `0 0 0 2px rgba(251,243,212,0.35)` : "none",
     opacity: disabled ? 0.5 : 1,
     transition: "border-color 0.15s ease, box-shadow 0.15s ease",
     ...style,
@@ -297,7 +300,7 @@ export default function Select({
         >
           <path
             d="M1 1l5 5 5-5"
-            stroke={GOLD}
+            stroke="#FBF3D4"
             strokeWidth="1.5"
             fill="none"
           />
@@ -361,17 +364,20 @@ export default function Select({
                   fontWeight: 300,
                   letterSpacing: "0.03em",
                   lineHeight: 1.3,
+                  // Cream on Foundation-Green menu = 9.88:1 AAA. Previously
+                  // the selected option flipped to Foundation-Green text on
+                  // the same green menu bg (~1:1, invisible). Keep the label
+                  // cream and signal selection via a stronger cream tint bg
+                  // + a bright checkmark instead.
                   color: opt.disabled
-                    ? "rgba(251,243,212,0.32)"
-                    : isSelected
-                      ? GOLD
-                      : CREAM,
+                    ? "rgba(251,243,212,0.5)"
+                    : "#FBF3D4",
                   background: opt.disabled
                     ? "transparent"
                     : isActive
-                      ? "rgba(201,169,110,0.16)"
+                      ? "rgba(251,243,212,0.14)"
                       : isSelected
-                        ? "rgba(201,169,110,0.08)"
+                        ? "rgba(251,243,212,0.10)"
                         : "transparent",
                   transition: "background 0.1s ease",
                 }}
@@ -389,7 +395,7 @@ export default function Select({
                   <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true" style={{ flex: "0 0 auto" }}>
                     <path
                       d="M2 7l3 3 6-7"
-                      stroke={GOLD}
+                      stroke="#FBF3D4"
                       strokeWidth="1.6"
                       fill="none"
                       strokeLinecap="round"
