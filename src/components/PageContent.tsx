@@ -390,6 +390,10 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   style={{
                     display: "block",
                     width: "clamp(42px, 6vw, 62px)",
+                    // Square logo — reserve the box via aspect-ratio so the
+                    // heading below doesn't shift down when the image loads
+                    // (this shift was previously hidden by the intro splash).
+                    aspectRatio: "1",
                     height: "auto",
                     marginBottom: 10,
                     pointerEvents: "none",
