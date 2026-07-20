@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Subscription Checkout | Cadieux",
   description: "Confirm details for your new Cadieux subscription.",
+  robots: { index: false, follow: true },
 };
 
 export default function SubscriptionCheckoutLayout({

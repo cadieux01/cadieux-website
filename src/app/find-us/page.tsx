@@ -9,9 +9,9 @@ import FindUsClient from "./FindUsClient";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Store Locator | Cadieux",
+  title: "Check Bread Delivery to Your Pincode | Cadieux",
   description:
-    "Find your nearest Cadieux kitchen, stall or partner pickup point in Visakhapatnam. Check whether we deliver to your pincode in one tap.",
+    "See if Cadieux delivers fresh protein bread to your Visakhapatnam pincode. Same-day delivery across Vizag — enter your PIN to check in one tap.",
 };
 
 export default async function FindUsPage() {

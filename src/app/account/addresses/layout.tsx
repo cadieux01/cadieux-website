@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Saved Addresses | Cadieux",
   description:
     "Manage the delivery addresses saved to your Cadieux account.",
+  robots: { index: false, follow: true },
 };
 
 export default function AddressesLayout({

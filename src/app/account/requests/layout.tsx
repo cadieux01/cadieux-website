@@ -4,6 +4,7 @@ export const metadata: Metadata = {
   title: "Your Requests | Cadieux",
   description:
     "Track and manage the change requests you've submitted for your Cadieux orders and subscriptions.",
+  robots: { index: false, follow: true },
 };
 
 export default function RequestsLayout({
