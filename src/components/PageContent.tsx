@@ -151,19 +151,38 @@ export default function PageContent({ introActive = false }: { introActive?: boo
     // video decoding invisibly under the LoadingScreen. Once the intro
     // finishes (introActive → false) this effect re-runs and starts playback.
     if (introActive) return;
-    // Hero video is in viewport on first paint — play immediately.
-    // IO below pauses it when scrolled past so it stops decoding offscreen.
+
+    // Hero video is in viewport on first paint. With the intro splash removed
+    // (commit b2c94d0) this effect now runs on mount BEFORE the video has
+    // buffered — the splash used to give it a few seconds. Calling play() with
+    // readyState < 2 makes mobile Safari/Chrome reject the promise;
+    // playExclusive swallows that rejection, so without a readiness gate the
+    // hero silently froze on its poster. Fix: only play() once the element has
+    // decodable frames (readyState >= 2), and retry on every readiness signal
+    // plus a short delayed backstop so a swallowed early rejection can recover.
     let inView = true;
-    const tryPlay = () => { if (inView) playExclusive(v); };
-    tryPlay();
-    v.addEventListener("canplay", tryPlay, { once: true });
-    v.addEventListener("loadeddata", tryPlay, { once: true });
+    let delayedRetry: ReturnType<typeof setTimeout> | null = null;
+    const attempt = () => {
+      if (inView && v.readyState >= 2) playExclusive(v);
+    };
+
+    // NOT { once: true }: a first canplay can arrive before the decoder is
+    // truly ready on mobile; a later loadeddata/canplaythrough then succeeds.
+    v.addEventListener("canplay", attempt);
+    v.addEventListener("loadeddata", attempt);
+    v.addEventListener("canplaythrough", attempt);
+
+    attempt();
+    // Backstop retry for a swallowed early rejection when no further readiness
+    // event fires (e.g. the video was already buffered but play() lost a race).
+    delayedRetry = setTimeout(attempt, 300);
+
     let io: IntersectionObserver | null = null;
     if (typeof IntersectionObserver !== "undefined") {
       io = new IntersectionObserver(
         (entries) => entries.forEach((e) => {
           inView = e.isIntersecting;
-          if (inView) tryPlay();
+          if (inView) attempt();
           else releaseVideo(v);
         }),
         { threshold: 0 }
@@ -171,8 +190,10 @@ export default function PageContent({ introActive = false }: { introActive?: boo
       io.observe(v);
     }
     return () => {
-      v.removeEventListener("canplay", tryPlay);
-      v.removeEventListener("loadeddata", tryPlay);
+      if (delayedRetry) clearTimeout(delayedRetry);
+      v.removeEventListener("canplay", attempt);
+      v.removeEventListener("loadeddata", attempt);
+      v.removeEventListener("canplaythrough", attempt);
       if (io) io.disconnect();
     };
   }, [introActive]);
@@ -323,7 +344,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 autoPlay
                 muted
                 playsInline
-                preload="metadata"
+                preload="auto"
                 loop
                 poster="/bread-intro.poster.jpg"
                 style={{

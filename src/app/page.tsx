@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import ReactDOM from "react-dom";
 import ClientApp from "./components/ClientApp";
 
 // Only canonical is set here — title/description are inherited from the
@@ -24,5 +25,13 @@ export const metadata: Metadata = {
 // FCP/LCP on the homepage where the previous ClientOnly wrapper returned
 // null on the server and forced everything to render after hydration.
 export default function Home() {
+  // The hero bread-intro video's poster is now the true first paint (the
+  // intro splash was removed in b2c94d0). Preload it so it renders without a
+  // blank green frame — this replaces the logo-intro poster preload we
+  // dropped with the one that's actually on screen.
+  ReactDOM.preload("/bread-intro.poster.jpg", {
+    as: "image",
+    fetchPriority: "high",
+  });
   return <ClientApp />;
 }
