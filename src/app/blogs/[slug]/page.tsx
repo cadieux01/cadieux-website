@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BLOG_POSTS } from "@/lib/data";
 import ShopCTA from "@/components/ShopCTA";
+
+const SITE_URL = "https://www.cadieux.in";
 
 interface BlogPostPageProps {
   params: { slug: string };
@@ -91,6 +92,21 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
     ),
   };
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+      { "@type": "ListItem", position: 2, name: "Journal", item: `${SITE_URL}/blogs` },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: post.title,
+        item: `${SITE_URL}/blogs/${post.slug}`,
+      },
+    ],
+  };
+
   return (
     <div
       style={{
@@ -100,9 +116,14 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         overflowX: "clip",
       }}
     >
-      <Script id="blog-post-schema" type="application/ld+json">
-        {JSON.stringify(blogPostSchema)}
-      </Script>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(blogPostSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
 
       <div
         style={{

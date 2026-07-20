@@ -9,6 +9,8 @@ import { getPageContent, pickString } from "@/lib/content";
 
 import ShopListClient, { type ShopContentBySlug } from "./ShopListClient";
 
+const SITE_URL = "https://www.cadieux.in";
+
 const SLUGS = ["multigrain", "high-protein"] as const;
 
 export const metadata: Metadata = {
@@ -41,11 +43,26 @@ export default async function ShopPage() {
     };
   });
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+      { "@type": "ListItem", position: 2, name: "Shop", item: `${SITE_URL}/shop` },
+    ],
+  };
+
   return (
-    <ShopListClient
-      availability={availability}
-      priceBySlug={priceBySlug}
-      contentBySlug={contentBySlug}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <ShopListClient
+        availability={availability}
+        priceBySlug={priceBySlug}
+        contentBySlug={contentBySlug}
+      />
+    </>
   );
 }

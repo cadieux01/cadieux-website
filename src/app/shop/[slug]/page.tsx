@@ -16,7 +16,32 @@ import { getPageContent, pickString } from "@/lib/content";
 
 import ProductDetailClient from "./ProductDetailClient";
 
+const SITE_URL = "https://www.cadieux.in";
 const OG_FALLBACK_IMAGE = "/hero.jpg";
+
+// JSON-LD requires absolute URLs. Product image_url may be a Supabase
+// storage URL (already absolute) or a repo-relative path like "/hero.jpg";
+// this normalises either form.
+function toAbsoluteUrl(src: string): string {
+  if (/^https?:\/\//i.test(src)) return src;
+  if (src.startsWith("/")) return `${SITE_URL}${src}`;
+  return `${SITE_URL}/${src}`;
+}
+
+// Extract a positive number of grams from a product_stat_tiles row like
+// "7g", "7 g", "7.5g", "12". Returns null for placeholders ("—", "", "TBD")
+// so callers fall through to generic titles. Values are admin-editable, so
+// we cannot assume any specific format — regex is intentionally lenient.
+function parseProteinGrams(
+  tiles: ReadonlyArray<{ tile_key: string; value: string }>,
+): number | null {
+  const tile = tiles.find((t) => t.tile_key === "protein_per_slice");
+  if (!tile || !tile.value) return null;
+  const m = tile.value.match(/(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 // Resolve the OG / social share image with an admin-first fallback chain:
 //   products.image_url (admin editor) → bundled PRODUCTS[].image (legacy
@@ -77,11 +102,22 @@ export async function generateMetadata({
   // Content-backed SEO with critical fallbacks (CRITICAL_FALLBACKS map
   // in lib/content.ts guarantees a non-empty title/description per slug).
   const content = await getPageContent({ page: "pdp", productId: slug });
-  const title = pickString(content, "pdp.seo.title", slug);
-  const description = pickString(content, "pdp.seo.description", slug);
+  const baseTitle = pickString(content, "pdp.seo.title", slug);
+  const baseDescription = pickString(content, "pdp.seo.description", slug);
   const ogName =
     pickString(content, "pdp.name", slug) || productRow?.name || bundled?.name || slug;
   const ogImage = resolveHeroImage(productRow?.image_url, bundled?.image);
+
+  // Prefer a protein-forward SEO title when the stat tile is a real number.
+  // Placeholder "—" or empty admin values → fall back to the content-string
+  // title (already backed by CRITICAL_FALLBACKS per slug).
+  const proteinG = parseProteinGrams(content.stat_tiles);
+  const title = proteinG !== null
+    ? `${ogName} — ${proteinG}g Protein per Slice | Cadieux`
+    : baseTitle;
+  const description = proteinG !== null
+    ? `${ogName} — ${proteinG}g protein per slice, lab-tested and baked fresh in Visakhapatnam. Same-day delivery across Vizag.`
+    : baseDescription;
 
   return {
     title,
@@ -165,17 +201,69 @@ export default async function ProductDetailPage({
   const heroImage = resolveHeroImage(productRow?.image_url, bundled?.image);
   const media = resolveGalleryMedia(slug, heroImage, bundled?.name);
 
+  // Product JSON-LD — price + availability are live from public.products
+  // (price_inr int NOT NULL, in_stock bool via getProductAvailability).
+  // Skip the offers block entirely when no DB row is available (bundled-only
+  // legacy fallback) or price is missing — better no schema than a null price.
+  const productSchema: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: pdpStrings.name,
+    image: [toAbsoluteUrl(heroImage)],
+    description:
+      pickString(content, "pdp.seo.description", slug) ||
+      pdpStrings.description,
+    brand: { "@type": "Brand", name: "Cadieux" },
+    sku: slug,
+  };
+  if (productRow?.price_inr) {
+    productSchema.offers = {
+      "@type": "Offer",
+      url: `${SITE_URL}/shop/${slug}`,
+      priceCurrency: "INR",
+      price: productRow.price_inr,
+      availability: outOfStock
+        ? "https://schema.org/OutOfStock"
+        : "https://schema.org/InStock",
+    };
+  }
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+      { "@type": "ListItem", position: 2, name: "Shop", item: `${SITE_URL}/shop` },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: pdpStrings.name,
+        item: `${SITE_URL}/shop/${slug}`,
+      },
+    ],
+  };
+
   return (
-    <ProductDetailClient
-      slug={slug}
-      outOfStock={outOfStock}
-      reports={reports}
-      ingredients={ingredients}
-      price={productRow?.price_inr ?? null}
-      pdpStrings={pdpStrings}
-      statTiles={content.stat_tiles}
-      media={media}
-      heroImage={heroImage}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <ProductDetailClient
+        slug={slug}
+        outOfStock={outOfStock}
+        reports={reports}
+        ingredients={ingredients}
+        price={productRow?.price_inr ?? null}
+        pdpStrings={pdpStrings}
+        statTiles={content.stat_tiles}
+        media={media}
+        heroImage={heroImage}
+      />
+    </>
   );
 }
