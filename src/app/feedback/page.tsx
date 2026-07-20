@@ -3,9 +3,9 @@ import Link from "next/link";
 import ReviewSection from "@/components/ReviewSection";
 
 export const metadata: Metadata = {
-  title: "Reviews & Feedback | Cadieux",
+  title: "Cadieux Reviews — Customers on Protein Bread | Cadieux",
   description:
-    "Read customer reviews and share your feedback on Cadieux protein bread.",
+    "Read real reviews from Cadieux customers eating high protein bread in Visakhapatnam. Share your feedback and help shape the next loaf.",
 };
 
 const GRAIN = "url(/grain.svg)";

@@ -31,9 +31,10 @@ const GRAIN = "url(/grain.svg)";
 // non-engineers can edit meta copy in the admin CMS. Inline fallbacks keep
 // tags meaningful even if the DB row is empty (pickString returns "" when
 // no CRITICAL_FALLBACKS entry exists).
-const BEHIND_TITLE_FALLBACK = "Behind Cadieux | Cadieux";
+const BEHIND_TITLE_FALLBACK =
+  "The Story Behind Cadieux Protein Bread | Cadieux";
 const BEHIND_DESCRIPTION_FALLBACK =
-  "Behind Cadieux — the two-year story of building India's high-protein bread. From a chore-like routine to a recipe engineered for absorption, refined in-house and verified by NABL-accredited laboratories.";
+  "Why we built Cadieux — a protein bread brand from Visakhapatnam. Founder story, lab-tested loaves, and the mission to make everyday bread better.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const content = await getPageContent({ page: "behind" });

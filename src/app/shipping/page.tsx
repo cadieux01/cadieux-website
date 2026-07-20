@@ -6,7 +6,7 @@ import LegalPage from "@/app/components/LegalPage";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Shipping & Delivery Policy | Cadieux",
+  title: "Shipping & Delivery — Vizag | Cadieux",
   description:
     "Cadieux's delivery options, timing, fees, and policies for Visakhapatnam.",
   alternates: { canonical: "/shipping" },

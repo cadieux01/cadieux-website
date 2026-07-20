@@ -12,9 +12,9 @@ import ShopListClient, { type ShopContentBySlug } from "./ShopListClient";
 const SLUGS = ["multigrain", "high-protein"] as const;
 
 export const metadata: Metadata = {
-  title: "Shop | Cadieux",
+  title: "Shop Protein Bread — Multigrain & High Protein | Cadieux",
   description:
-    "Shop Cadieux protein bread — Multigrain and High Protein loaves baked fresh in Visakhapatnam. Same-day delivery in Vizag.",
+    "Shop Cadieux protein bread online — high protein and multigrain loaves, baked fresh in Visakhapatnam with same-day delivery across Vizag.",
   alternates: { canonical: "/shop" },
 };
 

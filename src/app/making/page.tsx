@@ -11,9 +11,9 @@ import { getPageContent } from "@/lib/content";
 const GRAIN = "url(/grain.svg)";
 
 export const metadata: Metadata = {
-  title: "How It's Made | Cadieux",
+  title: "How Cadieux Protein Bread Is Made | Cadieux",
   description:
-    "How Cadieux protein bread is made — the five-step process from grain and dough to lab-verified loaves baked fresh in Visakhapatnam.",
+    "Behind Cadieux protein bread — grain, dough, bake, and lab verification. A five-step process for high protein bread made fresh in Visakhapatnam.",
   alternates: { canonical: "/making" },
 };
 

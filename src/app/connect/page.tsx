@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Connect | Cadieux",
+  title: "Contact Cadieux — Protein Bread from Visakhapatnam",
   description:
-    "Get in touch with Cadieux — Instagram, WhatsApp, email, and phone. We reply personally.",
+    "Reach the Cadieux team on WhatsApp, Instagram, email, or phone. We reply personally to every message from our Visakhapatnam kitchen.",
 };
 
 const GRAIN = "url(/grain.svg)";

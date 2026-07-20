@@ -5,7 +5,17 @@ import ClientApp from "./components/ClientApp";
 // root layout so the homepage keeps the brand-line title
 // "Cadieux | Premium Protein Bread, Visakhapatnam".
 export const metadata: Metadata = {
+  title: "Cadieux — High Protein Bread, Baked Fresh in Visakhapatnam",
+  description:
+    "Premium high protein bread from Cadieux — lab-tested, low-carb, and delivered fresh across Visakhapatnam. More protein. Same routine.",
   alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "https://www.cadieux.in/",
+    title: "Cadieux — High Protein Bread, Baked Fresh in Visakhapatnam",
+    description:
+      "Premium high protein bread from Cadieux — lab-tested, low-carb, and delivered fresh across Visakhapatnam.",
+  },
 };
 
 // Server Component. ClientApp is a "use client" component but Next.js still

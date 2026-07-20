@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Lab Reports | Cadieux",
+  title: "NABL Lab Reports for Cadieux Protein Bread | Cadieux",
   description:
-    "NABL-accredited laboratory reports and nutrition verification for Cadieux protein bread.",
+    "Every Cadieux protein bread batch is lab-tested. Read NABL-accredited nutrition reports covering protein, carbs, and macronutrient breakdown.",
 };
 
 export default function ReportsLayout({

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Your Subscription | Cadieux",
+  title: "Manage Your Cadieux Protein Bread Subscription",
   description:
-    "Manage your Cadieux bread subscription — deliveries, schedule, and preferences.",
+    "Pause, skip, or update your Cadieux high protein bread subscription — deliveries, schedule, and preferences, all in one place.",
 };
 
 export default function SubscriptionLayout({
