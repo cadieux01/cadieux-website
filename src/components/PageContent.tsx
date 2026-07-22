@@ -491,6 +491,22 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   letterSpacing: "0.04em", color: "#FBF3D4", lineHeight: 1.1,
                 }}>Ingredients That Matter</h2>
 
+                {/* Section subhead — reuses QASection's answer paragraph
+                    style so it sits natively on this Foundation Green
+                    background beneath the H2. */}
+                <p style={{
+                  margin: "18px auto 0",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 14,
+                  lineHeight: 1.95,
+                  color: "rgba(251,243,212,0.85)",
+                  maxWidth: 540,
+                  textAlign: "center",
+                  padding: "0 24px",
+                }}>
+                  22.94g protein per 100g, lab-verified. A protein-rich bread with no artificial preservatives. Nothing hidden.
+                </p>
+
                 {/* Timeline rail — line + ingredients column, fills remaining height */}
                 <div style={{
                   position: "relative", flex: 1, width: "100%",
