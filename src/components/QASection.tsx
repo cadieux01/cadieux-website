@@ -163,17 +163,13 @@ export default function QASection() {
        plus ~100vh tail on the final answer — enough for typing to land
        and a single more swipe to bring in Phase 3, no dead scroll.
 
-       Perf: `content-visibility: auto` skips paint/composite for the
-       Q&A + its background video whenever this whole 470vh region is
-       off-screen. The `auto 470vh` intrinsic size matches the explicit
-       `height: 470vh`, so the browser reserves the correct placeholder
-       before first paint and remembers the real size afterwards — no
-       scroll-length jumps as we enter/leave the section. */
+       NOTE: do NOT put `content-visibility: auto` on this wrapper. It
+       contains the section's background <video>; skipping its rendering
+       off-screen leaves the video frozen on its first frame and it never
+       resumes on re-entry. */
     <div ref={outerRef} style={{
       position: "relative", height: "470vh", overflowX: "clip",
-      contentVisibility: "auto",
-      containIntrinsicSize: "auto 470vh",
-    } as React.CSSProperties}>
+    }}>
       <div
         style={{
           position: "sticky",

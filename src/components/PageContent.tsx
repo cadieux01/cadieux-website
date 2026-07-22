@@ -344,21 +344,19 @@ export default function PageContent({ introActive = false }: { introActive?: boo
         <div style={{ position: "relative", zIndex: 1 }}>
 
           {/* ══ SECTION 1 — VIDEO ══
-              Perf: `content-visibility: auto` lets the browser skip layout
-              and paint for this 100dvh section once scrolled fully past.
-              `contain-intrinsic-size: auto 100dvh` reserves the same box
-              size for the placeholder — the `auto` keyword tells the
-              browser to remember the real rendered size after first
-              paint, so scroll length stays stable.
-
               `heroRef` is observed by the grain-layer effect above so
-              all 22 mix-blend-mode grains are paused + hidden the
-              moment the hero leaves the viewport. */}
+              all 22 mix-blend-mode grains are paused + hidden the moment
+              the hero leaves the viewport.
+
+              NOTE: do NOT put `content-visibility: auto` on this wrapper.
+              It contains the hero <video>; skipping its rendering
+              off-screen leaves the video frozen on its first frame and it
+              never resumes on re-entry. The grain layer is gated via the
+              per-node content-visibility toggle in the effect above, which
+              is safe because those nodes are <img>, not <video>. */}
           <div ref={heroRef} style={{
             position: "relative", height: "100dvh",
-            contentVisibility: "auto",
-            containIntrinsicSize: "auto 100dvh",
-          } as React.CSSProperties}>
+          }}>
             <section style={{
               position: "absolute", inset: 0, overflow: "hidden",
               display: "flex", flexDirection: "column", justifyContent: "flex-start",
@@ -879,10 +877,11 @@ export default function PageContent({ introActive = false }: { introActive?: boo
           </section>
 
           {/* ══ SECTION 6 — CLOSING CTA ══
-              Perf: skip paint/decoded-video work while this deep section
-              is still off-screen (its background video is the largest on
-              the page). `contain-intrinsic-size: auto 100dvh` matches the
-              real `minHeight` so scroll length doesn't shift on entry. */}
+              NOTE: no `content-visibility: auto` here — this section holds
+              the largest background <video>, and skipping its rendering
+              off-screen froze it on its first frame. Off-screen decode is
+              already avoided by the video's own preload="none" + the
+              play-on-enter IntersectionObserver. */}
           <section style={{
             minHeight: "100dvh", display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
@@ -890,9 +889,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             overflow: "hidden",
             zIndex: 3,
             backgroundColor: "#024628",
-            contentVisibility: "auto",
-            containIntrinsicSize: "auto 100dvh",
-          } as React.CSSProperties}>
+          }}>
             {/* Background video — preload="none" because this is the deepest
                 section with the largest video (15.6 MB); we don't want it
                 fetching metadata on first paint. */}
