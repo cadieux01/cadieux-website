@@ -389,10 +389,10 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   backgroundColor: "#024628",
                 }}
               >
-                <source src="/bread-intro.mobile.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' media="(max-width: 720px)" />
                 <source src="/bread-intro.mobile.mp4" type="video/mp4" media="(max-width: 720px)" />
-                <source src="/bread-intro.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
+                <source src="/bread-intro.mobile.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' media="(max-width: 720px)" />
                 <source src="/bread-intro.mp4" type="video/mp4" />
+                <source src="/bread-intro.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
               </video>
               <div style={{
                 position: "absolute", inset: 0, zIndex: 2,
@@ -500,8 +500,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   backgroundColor: "#024628",
                 }}
               >
-                <source src="/product-video-05.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
                 <source src="/product-video-05.mp4" type="video/mp4" />
+                <source src="/product-video-05.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
               </video>
               {/* Dark overlay */}
               <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.62)", zIndex: 0, pointerEvents: "none" }} />
@@ -648,8 +648,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   backgroundColor: "#024628",
                 }}
               >
-                <source src="/bread-eating-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
                 <source src="/bread-eating-01.mp4" type="video/mp4" />
+                <source src="/bread-eating-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
               </video>
               {/* Dark overlay — matched to Phase 3 */}
               <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.62)", zIndex: 0, pointerEvents: "none" }} />
@@ -899,8 +899,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 position: "absolute", inset: 0, width: "100%", height: "100%",
                 objectFit: "cover", zIndex: 0, backgroundColor: "#024628",
               }}>
-              <source src="/bread-making-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
               <source src="/bread-making-01.mp4" type="video/mp4" />
+              <source src="/bread-making-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
             </video>
             {/* Dark overlay */}
             <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.70)", zIndex: 1, pointerEvents: "none" }} />

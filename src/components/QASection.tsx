@@ -226,8 +226,8 @@ export default function QASection() {
             objectFit: "cover", zIndex: 0, backgroundColor: "#024628",
           }}
         >
-          <source src="/product-video-06.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
           <source src="/product-video-06.mp4" type="video/mp4" />
+          <source src="/product-video-06.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
         </video>
 
         {/* Dark video overlay */}
