@@ -139,6 +139,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
   const grainRefs     = useRef<(HTMLImageElement | null)[]>([]);
   const cardsOuterRef = useRef<HTMLDivElement>(null);
   const videoRef      = useRef<HTMLVideoElement>(null);
+  const heroRef       = useRef<HTMLDivElement>(null);
   const proteinOuterRef = useRef<HTMLDivElement>(null);
   const [proteinP, setProteinP] = useState(0);
 
@@ -259,32 +260,38 @@ export default function PageContent({ introActive = false }: { introActive?: boo
     };
   }, []);
 
-  /* ── Grains — opacity boost on viewport entry ──
-     Perf: off-screen grains are set to `content-visibility: hidden` and
-     their keyframe animation is paused. Off-screen grains contribute
-     nothing visually (they're outside the viewport by definition), but
-     with `mix-blend-mode: screen` set on the inline style they otherwise
-     force a compositor pass every frame across the entire page height,
-     which surfaced as jank on the sticky video sections. On-screen
-     grains are untouched so the look is preserved exactly. */
+  /* ── Grains — gated on hero visibility ──
+     Perf: the grain layer sits at zIndex:0 inside the outer wrapper;
+     every section past the hero (QASection sticky, §4/§4.5 stickies,
+     §5 founder, §6 CTA, footer) fully covers the viewport with an
+     opaque #024628 background. Verified by code trace: grains cannot
+     visibly show past the hero. So instead of a per-grain observer
+     (which reports occluded-but-in-viewport grains as visible and
+     keeps them compositing), a single observer on the hero element
+     hides ALL 22 grains + pauses their animation the moment the hero
+     leaves the viewport. `mix-blend-mode: screen` composite cost
+     across the entire page height drops to zero past the hero, with
+     zero visual change.
+
+     Grains inherit their base opacity from the inline style at the
+     JSX site (no per-grain opacity manipulation from JS). */
   useEffect(() => {
+    const hero = heroRef.current;
+    if (!hero) return;
+    const applyHeroVisibility = (visible: boolean) => {
+      const cv = visible ? "visible" : "hidden";
+      const ps = visible ? "running" : "paused";
+      grainRefs.current.forEach(el => {
+        if (!el) return;
+        el.style.contentVisibility = cv;
+        el.style.animationPlayState = ps;
+      });
+    };
     const io = new IntersectionObserver(
-      entries => entries.forEach(e => {
-        const el = e.target as HTMLImageElement;
-        const base = parseFloat(el.dataset.op ?? "0.08");
-        if (e.isIntersecting) {
-          el.style.opacity = String(Math.min(0.18, base + 0.06));
-          el.style.contentVisibility = "visible";
-          el.style.animationPlayState = "running";
-        } else {
-          el.style.opacity = String(base);
-          el.style.contentVisibility = "hidden";
-          el.style.animationPlayState = "paused";
-        }
-      }),
-      { threshold: 0.1 }
+      entries => entries.forEach(e => applyHeroVisibility(e.isIntersecting)),
+      { threshold: 0 }
     );
-    grainRefs.current.forEach(el => el && io.observe(el));
+    io.observe(hero);
     return () => io.disconnect();
   }, []);
 
@@ -342,8 +349,12 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               `contain-intrinsic-size: auto 100dvh` reserves the same box
               size for the placeholder — the `auto` keyword tells the
               browser to remember the real rendered size after first
-              paint, so scroll length stays stable. */}
-          <div style={{
+              paint, so scroll length stays stable.
+
+              `heroRef` is observed by the grain-layer effect above so
+              all 22 mix-blend-mode grains are paused + hidden the
+              moment the hero leaves the viewport. */}
+          <div ref={heroRef} style={{
             position: "relative", height: "100dvh",
             contentVisibility: "auto",
             containIntrinsicSize: "auto 100dvh",
