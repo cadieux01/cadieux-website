@@ -94,7 +94,7 @@ export default function ShopListClient({
             color: "#024628",
             maxWidth: 520,
           }}>
-            Two clean, high-protein loaves. Slow-fermented, lab-tested, and baked with nothing hidden. Pick a variant to see photos, ingredients, and reports.
+            Two clean, high-protein loaves. 7.32g protein per slice, slow-fermented and lab-tested. A protein bread with no artificial preservatives, baked fresh in Vizag and delivered across Andhra Pradesh. Pick a variant to see photos, ingredients, and reports.
           </p>
 
           <div data-stagger className="cdx-tab-group" style={{ marginBottom: 28 }} role="tablist">
