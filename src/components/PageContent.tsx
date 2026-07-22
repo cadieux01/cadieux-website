@@ -22,14 +22,42 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
      responsiveness for the first 1-2s. The IntersectionObserver fires its
      initial callback right away, so the in-view video gets its play() with
      no perceptible delay; the others stay paused until scrolled to.
-   • A second IO with a 600px rootMargin warms up `preload="none"` videos
-     just before they enter view — so the user still sees a frame as they
-     scroll past, without paying for metadata fetches on initial paint. */
+   • A second IO with a 600px rootMargin warms up section videos just before
+     they enter view, so the first frame is ready as the user scrolls to it.
+     Section videos use preload="metadata" so their buffer survives a
+     scroll-out and resumes instantly on re-entry instead of flashing a
+     frozen frame; a poster overlay masks the gap if the buffer was evicted. */
 const playOnEnter = (el: HTMLVideoElement | null) => {
   if (!el) return;
   // Defensive — React sets these from attributes, but re-asserting avoids
   // hydration races on iOS where muted reverts and play() then needs a gesture.
   el.muted = true;
+
+  // Poster cover — after a video has played once, a *paused* <video> paints
+  // its last decoded frame, not its poster. With preload="metadata" the buffer
+  // usually survives a scroll-out, but if the browser evicts it the element
+  // would flash that stale frame as a frozen still on re-entry. So whenever the
+  // video re-enters view without a ready frame (readyState < HAVE_CURRENT_DATA)
+  // we overlay its own poster and reveal the live video the instant it can play
+  // again. The cover sits directly on top of the video but below the dark tint.
+  const posterSrc = el.getAttribute("poster");
+  let cover: HTMLImageElement | null = null;
+  const showCover = () => {
+    if (el.readyState >= 2 || !posterSrc || !el.parentElement) return;
+    if (!cover) {
+      cover = document.createElement("img");
+      cover.src = posterSrc;
+      cover.setAttribute("aria-hidden", "true");
+      cover.style.cssText =
+        "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" +
+        "z-index:0;pointer-events:none;transition:opacity 150ms linear;";
+      el.parentElement.insertBefore(cover, el.nextSibling);
+    }
+    cover.style.opacity = "1";
+  };
+  const hideCover = () => {
+    if (cover) cover.style.opacity = "0";
+  };
 
   // shouldPlay is the source of truth for whether this video is currently
   // in the viewport. canplay/loadeddata fire after warm-up loads complete,
@@ -42,9 +70,13 @@ const playOnEnter = (el: HTMLVideoElement | null) => {
     playExclusive(el);
   };
 
-  // Retry whenever the browser signals it has enough buffer.
-  el.addEventListener("canplay", tryPlay);
-  el.addEventListener("loadeddata", tryPlay);
+  // A ready frame is available — drop the poster cover and (re)start playback.
+  const onReady = () => {
+    hideCover();
+    tryPlay();
+  };
+  el.addEventListener("canplay", onReady);
+  el.addEventListener("loadeddata", onReady);
 
   if (typeof IntersectionObserver === "undefined") {
     // Server-rendered or ancient browser — fall back to immediate play.
@@ -72,6 +104,7 @@ const playOnEnter = (el: HTMLVideoElement | null) => {
     (entries) => entries.forEach((e) => {
       if (e.isIntersecting) {
         shouldPlay = true;
+        showCover(); // mask any evicted/frozen frame until canplay fires
         tryPlay();
       } else {
         shouldPlay = false;
@@ -487,11 +520,12 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
               background: "#024628",
             }}>
-              {/* Background video — lazy play on enter (preload="none" so it
-                  doesn't compete with the hero video for bandwidth/decode on
-                  first paint; playOnEnter warms it 600px before viewport) */}
+              {/* Background video — lazy play on enter (preload="metadata" so
+                  the buffer survives a scroll-out and resumes instantly on
+                  re-entry; playOnEnter still defers decode until 600px before
+                  the viewport) */}
               <video
-                ref={playOnEnter} muted playsInline loop preload="none"
+                ref={playOnEnter} muted playsInline loop preload="metadata"
                 poster="/product-video-05.poster.jpg"
                 style={{
                   position: "absolute", inset: 0,
@@ -651,11 +685,12 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
               background: "#024628",
             }}>
-              {/* Background video — lazy play on enter (preload="none" so it
-                  doesn't compete with the hero video for bandwidth/decode on
-                  first paint; playOnEnter warms it 600px before viewport) */}
+              {/* Background video — lazy play on enter (preload="metadata" so
+                  the buffer survives a scroll-out and resumes instantly on
+                  re-entry; playOnEnter still defers decode until 600px before
+                  the viewport) */}
               <video
-                ref={playOnEnter} muted playsInline loop preload="none"
+                ref={playOnEnter} muted playsInline loop preload="metadata"
                 poster="/bread-eating-01.poster.jpg"
                 style={{
                   position: "absolute", inset: 0,
@@ -896,7 +931,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               NOTE: no `content-visibility: auto` here — this section holds
               the largest background <video>, and skipping its rendering
               off-screen froze it on its first frame. Off-screen decode is
-              already avoided by the video's own preload="none" + the
+              already avoided by the video's own preload="metadata" + the
               play-on-enter IntersectionObserver. */}
           <section style={{
             minHeight: "100dvh", display: "flex", flexDirection: "column",
@@ -906,10 +941,11 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             zIndex: 3,
             backgroundColor: "#024628",
           }}>
-            {/* Background video — preload="none" because this is the deepest
-                section with the largest video (15.6 MB); we don't want it
-                fetching metadata on first paint. */}
-            <video ref={playOnEnter} muted playsInline loop preload="none"
+            {/* Background video — preload="metadata" so the buffer survives a
+                scroll-out and resumes instantly on re-entry (this is the deepest
+                section with the largest video, 15.6 MB); the play-on-enter IO
+                still defers the actual decode until it approaches the viewport. */}
+            <video ref={playOnEnter} muted playsInline loop preload="metadata"
               poster="/bread-making-01.poster.jpg"
               style={{
                 position: "absolute", inset: 0, width: "100%", height: "100%",
