@@ -259,13 +259,28 @@ export default function PageContent({ introActive = false }: { introActive?: boo
     };
   }, []);
 
-  /* ── Grains — opacity boost on viewport entry ── */
+  /* ── Grains — opacity boost on viewport entry ──
+     Perf: off-screen grains are set to `content-visibility: hidden` and
+     their keyframe animation is paused. Off-screen grains contribute
+     nothing visually (they're outside the viewport by definition), but
+     with `mix-blend-mode: screen` set on the inline style they otherwise
+     force a compositor pass every frame across the entire page height,
+     which surfaced as jank on the sticky video sections. On-screen
+     grains are untouched so the look is preserved exactly. */
   useEffect(() => {
     const io = new IntersectionObserver(
       entries => entries.forEach(e => {
         const el = e.target as HTMLImageElement;
         const base = parseFloat(el.dataset.op ?? "0.08");
-        el.style.opacity = e.isIntersecting ? String(Math.min(0.18, base + 0.06)) : String(base);
+        if (e.isIntersecting) {
+          el.style.opacity = String(Math.min(0.18, base + 0.06));
+          el.style.contentVisibility = "visible";
+          el.style.animationPlayState = "running";
+        } else {
+          el.style.opacity = String(base);
+          el.style.contentVisibility = "hidden";
+          el.style.animationPlayState = "paused";
+        }
       }),
       { threshold: 0.1 }
     );
@@ -321,8 +336,18 @@ export default function PageContent({ introActive = false }: { introActive?: boo
 
         <div style={{ position: "relative", zIndex: 1 }}>
 
-          {/* ══ SECTION 1 — VIDEO ══ */}
-          <div style={{ position: "relative", height: "100dvh" }}>
+          {/* ══ SECTION 1 — VIDEO ══
+              Perf: `content-visibility: auto` lets the browser skip layout
+              and paint for this 100dvh section once scrolled fully past.
+              `contain-intrinsic-size: auto 100dvh` reserves the same box
+              size for the placeholder — the `auto` keyword tells the
+              browser to remember the real rendered size after first
+              paint, so scroll length stays stable. */}
+          <div style={{
+            position: "relative", height: "100dvh",
+            contentVisibility: "auto",
+            containIntrinsicSize: "auto 100dvh",
+          } as React.CSSProperties}>
             <section style={{
               position: "absolute", inset: 0, overflow: "hidden",
               display: "flex", flexDirection: "column", justifyContent: "flex-start",
@@ -842,7 +867,11 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             </div>
           </section>
 
-          {/* ══ SECTION 6 — CLOSING CTA ══ */}
+          {/* ══ SECTION 6 — CLOSING CTA ══
+              Perf: skip paint/decoded-video work while this deep section
+              is still off-screen (its background video is the largest on
+              the page). `contain-intrinsic-size: auto 100dvh` matches the
+              real `minHeight` so scroll length doesn't shift on entry. */}
           <section style={{
             minHeight: "100dvh", display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
@@ -850,7 +879,9 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             overflow: "hidden",
             zIndex: 3,
             backgroundColor: "#024628",
-          }}>
+            contentVisibility: "auto",
+            containIntrinsicSize: "auto 100dvh",
+          } as React.CSSProperties}>
             {/* Background video — preload="none" because this is the deepest
                 section with the largest video (15.6 MB); we don't want it
                 fetching metadata on first paint. */}
