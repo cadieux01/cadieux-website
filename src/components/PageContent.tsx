@@ -34,12 +34,12 @@ const GRAIN =
 
 /* ── Content ── */
 const INGREDIENTS = [
-  { name: "Whey Protein",          desc: "Builds lean muscle and speeds up recovery" },
-  { name: "Rye Sourdough Ferment", desc: "Ancient fermentation for better digestion" },
-  { name: "Linseeds",              desc: "Omega-3 powerhouse for heart and brain" },
-  { name: "Sunflower Seeds",       desc: "Rich in vitamin E and healthy fats" },
-  { name: "Sesame Seeds",          desc: "Tiny seeds, massive mineral content" },
-  { name: "Barley Malt",           desc: "Natural sweetness with a low glycemic touch" },
+  { name: "Whey Protein",          desc: "A complete protein source" },
+  { name: "Rye Sourdough Ferment", desc: "Slow-fermented, traditional method" },
+  { name: "Linseeds",              desc: "A source of omega-3 and fibre" },
+  { name: "Sunflower Seeds",       desc: "A source of vitamin E" },
+  { name: "Sesame Seeds",          desc: "A source of minerals" },
+  { name: "Barley Malt",           desc: "Naturally malted for subtle sweetness" },
 ];
 
 const PROTEIN_BENEFITS = [
@@ -462,7 +462,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   textAlign: "center",
                   padding: "0 24px",
                 }}>
-                  22.94g protein per 100g, lab-verified. A protein-rich bread with no artificial preservatives. Nothing hidden.
+                  A protein-rich bread with no artificial preservatives. Nothing hidden.
                 </p>
 
                 {/* Timeline rail — line + ingredients column, fills remaining height */}
