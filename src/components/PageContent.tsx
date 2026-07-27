@@ -5,52 +5,27 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import QASection from "./QASection";
-import { playExclusive, releaseVideo } from "@/lib/videoCoordinator";
 
 /* ── Helpers ── */
 const sr    = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
 
-/* Autoplay a background video and keep it playing the whole time it's on
-   screen; pause it ONLY once it's fully off-screen. This is a pure per-video
-   decode guard — each video is governed solely by its own visibility, so an
-   on-screen video is ALWAYS playing and a video NEVER pauses because a
-   different one started. Bounding decode to the on-screen videos keeps the
-   mobile HW decoder pool from being exhausted without the old "one at a time"
-   coordinator (which caused the "video paused when I land on it" bug).
-
-   Mobile Safari/Chrome can silently reject a too-early play(); we retry on
-   canplay/loadeddata to recover from that ("blank background" bug). We never
-   reset currentTime and never call load() on re-entry — the buffer resumes in
-   place. */
+/* Autoplay a background video and keep it playing for the entire life of the
+   page — it NEVER pauses: not off-screen, not because another video plays,
+   never. play() on mount and retry on canplay/loadeddata in case a too-early
+   play() was rejected. muted is re-asserted immediately before every play()
+   because a muted video is always allowed to autoplay (an unmuted one is
+   blocked and the browser then shows controls). */
 const playOnEnter = (el: HTMLVideoElement | null) => {
   if (!el) return;
-  // Defensive — React sets muted from the attribute, but re-asserting avoids
-  // hydration races on iOS where muted reverts and play() then needs a gesture.
-  el.muted = true;
-
-  const play = () => { void el.play().catch(() => {}); };
-
-  // Retry play() once the decoder has frames, in case autoplay was blocked or
-  // the element wasn't ready on the first attempt.
+  const play = () => {
+    // muted right before play() — belt-and-suspenders against a hydration race
+    // that leaves it unmuted, which would block autoplay.
+    el.muted = true;
+    void el.play().catch(() => {});
+  };
   el.addEventListener("canplay", play);
   el.addEventListener("loadeddata", play);
-
-  if (typeof IntersectionObserver === "undefined") {
-    // Server-rendered or ancient browser — fall back to immediate play.
-    play();
-    return;
-  }
-
-  // Decode guard: play while on-screen (or within ~200px of entering), pause
-  // only when fully off-screen. No cross-video pausing.
-  const io = new IntersectionObserver(
-    (entries) => entries.forEach((e) => {
-      if (e.isIntersecting) play();
-      else el.pause();
-    }),
-    { rootMargin: "200px 0px" }
-  );
-  io.observe(el);
+  play();
 };
 
 /* ── SVG grain texture ── */
@@ -123,18 +98,15 @@ export default function PageContent({ introActive = false }: { introActive?: boo
     // finishes (introActive → false) this effect re-runs and starts playback.
     if (introActive) return;
 
-    // Hero video is in viewport on first paint. With the intro splash removed
-    // (commit b2c94d0) this effect now runs on mount BEFORE the video has
-    // buffered — the splash used to give it a few seconds. Calling play() with
-    // readyState < 2 makes mobile Safari/Chrome reject the promise;
-    // playExclusive swallows that rejection, so without a readiness gate the
-    // hero silently froze on its poster. Fix: only play() once the element has
-    // decodable frames (readyState >= 2), and retry on every readiness signal
-    // plus a short delayed backstop so a swallowed early rejection can recover.
-    let inView = true;
+    // Hero plays on load and NEVER pauses — not off-screen, never. A too-early
+    // play() (readyState < 2 before buffering) can be rejected on mobile, so we
+    // retry on every readiness signal plus a short delayed backstop. muted is
+    // re-asserted right before each play() because a muted video is always
+    // allowed to autoplay (unmuted → blocked → browser shows controls).
     let delayedRetry: ReturnType<typeof setTimeout> | null = null;
     const attempt = () => {
-      if (inView && v.readyState >= 2) playExclusive(v);
+      v.muted = true;
+      void v.play().catch(() => {});
     };
 
     // NOT { once: true }: a first canplay can arrive before the decoder is
@@ -148,24 +120,11 @@ export default function PageContent({ introActive = false }: { introActive?: boo
     // event fires (e.g. the video was already buffered but play() lost a race).
     delayedRetry = setTimeout(attempt, 300);
 
-    let io: IntersectionObserver | null = null;
-    if (typeof IntersectionObserver !== "undefined") {
-      io = new IntersectionObserver(
-        (entries) => entries.forEach((e) => {
-          inView = e.isIntersecting;
-          if (inView) attempt();
-          else releaseVideo(v);
-        }),
-        { threshold: 0 }
-      );
-      io.observe(v);
-    }
     return () => {
       if (delayedRetry) clearTimeout(delayedRetry);
       v.removeEventListener("canplay", attempt);
       v.removeEventListener("loadeddata", attempt);
       v.removeEventListener("canplaythrough", attempt);
-      if (io) io.disconnect();
     };
   }, [introActive]);
 
@@ -325,6 +284,9 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 playsInline
                 preload="auto"
                 loop
+                disablePictureInPicture
+                disableRemotePlayback
+                controlsList="nodownload nofullscreen noremoteplayback"
                 poster="/bread-intro.poster.jpg"
                 style={{
                   position: "absolute", inset: 0,
@@ -438,6 +400,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   playOnEnter pauses it only when fully off-screen (decode guard). */}
               <video
                 ref={playOnEnter} autoPlay muted playsInline loop preload="auto"
+                disablePictureInPicture disableRemotePlayback
+                controlsList="nodownload nofullscreen noremoteplayback"
                 poster="/product-video-05.poster.jpg"
                 style={{
                   position: "absolute", inset: 0,
@@ -601,6 +565,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   playOnEnter pauses it only when fully off-screen (decode guard). */}
               <video
                 ref={playOnEnter} autoPlay muted playsInline loop preload="auto"
+                disablePictureInPicture disableRemotePlayback
+                controlsList="nodownload nofullscreen noremoteplayback"
                 poster="/bread-eating-01.poster.jpg"
                 style={{
                   position: "absolute", inset: 0,
@@ -857,6 +823,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 playOnEnter pauses it only when fully off-screen so this deepest
                 section's large video (15.6 MB) doesn't decode out of view. */}
             <video ref={playOnEnter} autoPlay muted playsInline loop preload="auto"
+              disablePictureInPicture disableRemotePlayback
+              controlsList="nodownload nofullscreen noremoteplayback"
               poster="/bread-making-01.poster.jpg"
               style={{
                 position: "absolute", inset: 0, width: "100%", height: "100%",

@@ -186,33 +186,26 @@ export default function QASection() {
         <video
           ref={(el) => {
             if (!el) return;
-            el.muted = true;
-            const play = () => { void el.play().catch(() => {}); };
-            // Retry play() once the decoder has frames, in case autoplay was
-            // blocked or the element wasn't ready on the first attempt.
+            // Plays on load and NEVER pauses. Retry on canplay/loadeddata in
+            // case a too-early play() was rejected; muted is re-asserted right
+            // before every play() since a muted video is always allowed to
+            // autoplay (unmuted → blocked → browser shows controls).
+            const play = () => {
+              el.muted = true;
+              void el.play().catch(() => {});
+            };
             el.addEventListener("canplay", play);
             el.addEventListener("loadeddata", play);
-            if (typeof IntersectionObserver === "undefined") {
-              play();
-              return;
-            }
-            // Decode guard: play while on-screen (or within ~200px), pause only
-            // when fully off-screen. This video is never paused because another
-            // one started — it's governed solely by its own visibility.
-            const io = new IntersectionObserver(
-              (entries) => entries.forEach((e) => {
-                if (e.isIntersecting) play();
-                else el.pause();
-              }),
-              { rootMargin: "200px 0px" }
-            );
-            io.observe(el);
+            play();
           }}
           autoPlay
           muted
           playsInline
           loop
           preload="auto"
+          disablePictureInPicture
+          disableRemotePlayback
+          controlsList="nodownload nofullscreen noremoteplayback"
           poster="/product-video-06.poster.jpg"
           style={{
             position: "absolute", inset: 0, width: "100%", height: "100%",
