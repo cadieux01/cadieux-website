@@ -43,11 +43,11 @@ const INGREDIENTS = [
 ];
 
 const PROTEIN_BENEFITS = [
-  { n: "01", title: "Everyday Strength",  desc: "Holds your muscles together as you age." },
-  { n: "02", title: "Keeps You Full",     desc: "Steadies hunger for hours, no cravings." },
-  { n: "03", title: "Lasting Energy",     desc: "Keeps blood sugar steady, no crashes." },
-  { n: "04", title: "Stronger Immunity",  desc: "Builds antibodies, enzymes, hormones." },
-  { n: "05", title: "Sharper Mind",       desc: "Powers focus, mood and memory daily." },
+  { n: "01", title: "Everyday Strength",  desc: "Protein for everyday movement." },
+  { n: "02", title: "Keeps You Full",     desc: "Satisfying and substantial." },
+  { n: "03", title: "Lasting Energy",     desc: "Steady fuel for your day." },
+  { n: "04", title: "Stronger Immunity",  desc: "Everyday nourishment." },
+  { n: "05", title: "Sharper Mind",       desc: "Made to keep up with your day." },
 ];
 
 /* ── Deterministic floating grain data ── */
