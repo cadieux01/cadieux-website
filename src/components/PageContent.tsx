@@ -91,42 +91,56 @@ export default function PageContent({ introActive = false }: { introActive?: boo
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    v.muted = true;
-    // Hold hero playback while the intro overlay is still up: PageContent now
-    // renders from first paint (behind the intro), and we don't want the hero
-    // video decoding invisibly under the LoadingScreen. Once the intro
-    // finishes (introActive → false) this effect re-runs and starts playback.
-    if (introActive) return;
 
-    // Hero plays on load and NEVER pauses — not off-screen, never. A too-early
-    // play() (readyState < 2 before buffering) can be rejected on mobile, so we
-    // retry on every readiness signal plus a short delayed backstop. muted is
-    // re-asserted right before each play() because a muted video is always
-    // allowed to autoplay (unmuted → blocked → browser shows controls).
-    let delayedRetry: ReturnType<typeof setTimeout> | null = null;
-    const attempt = () => {
+    // Bulletproof muted autoplay for the hero. It attempts play immediately on
+    // mount regardless of any intro state, and never pauses. Safari only permits
+    // autoplay when the element is reliably muted at the moment it evaluates it,
+    // so we set BOTH muted and defaultMuted before every play() — the attribute
+    // alone isn't always enough. A too-early play() (readyState still low before
+    // the larger re-encoded file has buffered) is what Safari rejects and
+    // surfaces as its native play button, so we only play once there's data
+    // (canplay/loadeddata) and, on any rejection, re-assert muted and retry once.
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retried = false;
+
+    const play = () => {
       v.muted = true;
-      void v.play().catch(() => {});
+      v.defaultMuted = true;
+      const p = v.play();
+      if (p && typeof p.catch === "function") {
+        p.catch(() => {
+          if (retried) return;
+          retried = true;
+          retryTimer = setTimeout(() => {
+            v.muted = true;
+            v.defaultMuted = true;
+            void v.play().catch(() => {});
+          }, 200);
+        });
+      }
     };
 
-    // NOT { once: true }: a first canplay can arrive before the decoder is
-    // truly ready on mobile; a later loadeddata/canplaythrough then succeeds.
-    v.addEventListener("canplay", attempt);
-    v.addEventListener("loadeddata", attempt);
-    v.addEventListener("canplaythrough", attempt);
+    // Ensure muted is asserted up-front too, before the browser evaluates
+    // the autoPlay attribute on first paint.
+    v.muted = true;
+    v.defaultMuted = true;
 
-    attempt();
-    // Backstop retry for a swallowed early rejection when no further readiness
-    // event fires (e.g. the video was already buffered but play() lost a race).
-    delayedRetry = setTimeout(attempt, 300);
+    // Gate on readiness: play now if the element already has enough buffered
+    // (readyState >= HAVE_FUTURE_DATA); otherwise these events fire play() the
+    // instant it does. NOT { once: true } — an early canplay can precede a
+    // truly-ready decoder on mobile, and a later signal then succeeds.
+    v.addEventListener("canplay", play);
+    v.addEventListener("loadeddata", play);
+    v.addEventListener("canplaythrough", play);
+    if (v.readyState >= 3) play();
 
     return () => {
-      if (delayedRetry) clearTimeout(delayedRetry);
-      v.removeEventListener("canplay", attempt);
-      v.removeEventListener("loadeddata", attempt);
-      v.removeEventListener("canplaythrough", attempt);
+      if (retryTimer) clearTimeout(retryTimer);
+      v.removeEventListener("canplay", play);
+      v.removeEventListener("loadeddata", play);
+      v.removeEventListener("canplaythrough", play);
     };
-  }, [introActive]);
+  }, []);
 
   /* ── Ingredient cards — reveal on entry (no scroll-pin) ──
      The section is a single 100dvh panel. An IntersectionObserver flips
