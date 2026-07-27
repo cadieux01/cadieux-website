@@ -9,7 +9,6 @@ import { playExclusive, releaseVideo } from "@/lib/videoCoordinator";
 
 /* ── Helpers ── */
 const sr    = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /* Lazy-play a video when any pixel enters the viewport, and pause it the
    moment it's fully off-screen so a 5-video page doesn't decode all of them
@@ -174,7 +173,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
   const videoRef      = useRef<HTMLVideoElement>(null);
   const heroRef       = useRef<HTMLDivElement>(null);
   const proteinOuterRef = useRef<HTMLDivElement>(null);
-  const [proteinP, setProteinP] = useState(0);
+  const [proteinRevealed, setProteinRevealed] = useState(false);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -232,65 +231,40 @@ export default function PageContent({ introActive = false }: { introActive?: boo
     };
   }, [introActive]);
 
-  /* ── Scroll-driven card progress ── */
-  const [cardsP, setCardsP] = useState(0);
+  /* ── Ingredient cards — reveal on entry (no scroll-pin) ──
+     The section is a single 100dvh panel. An IntersectionObserver flips
+     `cardsRevealed` when the panel enters/leaves the viewport; the cards
+     then fade/slide in on a per-item transition-delay stagger (see JSX).
+     Toggling on exit re-arms a clean replay on re-entry — it never loops. */
+  const [cardsRevealed, setCardsRevealed] = useState(false);
 
   useEffect(() => {
-    let rafId: number;
-    let last = -1;
-    // Cache layout values — only recalculate on resize, not every frame
-    let cachedTop = 0, cachedH = 0, cachedWh = 0;
-    const measure = () => {
-      const el = cardsOuterRef.current;
-      if (!el) return;
-      cachedTop = window.scrollY + el.getBoundingClientRect().top;
-      cachedH   = el.scrollHeight;
-      cachedWh  = window.innerHeight;
-    };
-    measure();
-    window.addEventListener("resize", measure, { passive: true });
-
-    const tick = () => {
-      rafId = requestAnimationFrame(tick);
-      const sy = window.scrollY;
-      if (sy === last) return;
-      last = sy;
-      setCardsP(clamp((sy - cachedTop) / (cachedH - cachedWh), 0, 1));
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener("resize", measure);
-    };
+    const el = cardsOuterRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setCardsRevealed(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => entries.forEach((e) => setCardsRevealed(e.isIntersecting)),
+      { threshold: 0.35 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
 
-  /* ── Protein benefits — scroll-driven sticky progress (same pattern as ingredients) ── */
+  /* ── Protein benefits — reveal on entry (same pattern as ingredients) ── */
   useEffect(() => {
-    let rafId: number;
-    let last = -1;
-    let cachedTop = 0, cachedH = 0, cachedWh = 0;
-    const measure = () => {
-      const el = proteinOuterRef.current;
-      if (!el) return;
-      cachedTop = window.scrollY + el.getBoundingClientRect().top;
-      cachedH   = el.scrollHeight;
-      cachedWh  = window.innerHeight;
-    };
-    measure();
-    window.addEventListener("resize", measure, { passive: true });
-
-    const tick = () => {
-      rafId = requestAnimationFrame(tick);
-      const sy = window.scrollY;
-      if (sy === last) return;
-      last = sy;
-      setProteinP(clamp((sy - cachedTop) / (cachedH - cachedWh), 0, 1));
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener("resize", measure);
-    };
+    const el = proteinOuterRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setProteinRevealed(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => entries.forEach((e) => setProteinRevealed(e.isIntersecting)),
+      { threshold: 0.35 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
 
   /* ── Grains — gated on hero visibility ──
@@ -513,11 +487,13 @@ export default function PageContent({ introActive = false }: { introActive?: boo
           {/* ══ Q&A SECTION ══ */}
           <QASection />
 
-          {/* ══ SECTION 4 — INGREDIENT CARDS (scroll-driven sticky) ══ */}
-          {/* Slow overlap with Phase 2 — same pattern as Phase 3→4 (pull up 100vh, no coating) */}
-          <div ref={cardsOuterRef} style={{ position: "relative", height: `${N_C * 100}vh`, marginTop: "-100vh", zIndex: 3 }}>
+          {/* ══ SECTION 4 — INGREDIENT CARDS (single-viewport, auto-reveal on entry) ══ */}
+          {/* Normal flow directly after the QA pin — no marginTop overlap, no
+              scroll-pin. The panel fills one viewport and reveals its cards on
+              entry via an IntersectionObserver (see cardsRevealed effect). */}
+          <div ref={cardsOuterRef} style={{ position: "relative", height: "100dvh", zIndex: 3 }}>
             <div style={{
-              position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
+              position: "relative", height: "100%", overflow: "hidden",
               background: "#024628",
             }}>
               {/* Background video — lazy play on enter (preload="metadata" so
@@ -583,20 +559,16 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   {/*
                     Connector line — split into N_C-1 segments, each living in
                     the gap *between* two consecutive ingredient rows. The line
-                    never passes through any text. Reveals are scoped to the
-                    first 82% of cardsP so the last ingredient is fully active
-                    before Phase 4 takes over.
+                    never passes through any text. Each segment draws (scaleY
+                    0→1) on entry, shortly after the row above it appears.
                   */}
                   {Array.from({ length: N_C - 1 }, (_, i) => {
-                    const stepP = clamp(cardsP / 0.82, 0, 1);
                     // Segments span between consecutive row CENTERS, which sit
                     // at (i + 0.5)/N — same coordinates the rows themselves
                     // are absolutely positioned at below.
                     const startPct = ((i + 0.5) / N_C) * 100;
                     const endPct = ((i + 1.5) / N_C) * 100;
-                    const reachStart = (i + 0.5) / N_C;
-                    const reachEnd = (i + 1.5) / N_C;
-                    const segP = clamp((stepP - reachStart) / (reachEnd - reachStart), 0, 1);
+                    const segDelay = i * 170 + 120;
                     return (
                       <div key={`seg-${i}`} style={{
                         position: "absolute", left: "50%", marginLeft: -0.5,
@@ -609,13 +581,14 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                           position: "absolute", inset: 0,
                           background: "rgba(251,243,212,0.12)",
                         }} />
-                        {/* Gold fill — scales within this segment */}
+                        {/* Gold fill — draws in on entry */}
                         <div style={{
                           position: "absolute", inset: 0,
                           background: "#024628",
                           boxShadow: "0 0 8px rgba(201,169,110,0.45)",
                           transformOrigin: "top",
-                          transform: `scaleY(${segP})`,
+                          transform: cardsRevealed ? "scaleY(1)" : "scaleY(0)",
+                          transition: `transform 0.42s ease ${segDelay}ms`,
                           willChange: "transform",
                         }} />
                       </div>
@@ -624,26 +597,26 @@ export default function PageContent({ introActive = false }: { introActive?: boo
 
                   {/* 6 ingredient rows — absolutely positioned with their
                       CENTERS at (i + 0.5)/N_C so they line up exactly with the
-                      gaps between line segments. */}
+                      gaps between line segments. Each fades/slides in on entry
+                      on a staggered transition-delay. */}
                   <div style={{
                     position: "relative", height: "100%",
                   }}>
                     {INGREDIENTS.map((ing, i) => {
-                      // Reveals are scoped to the first 82% of cardsP so
-                      // Barley Malt is fully active before Phase 4 takes over.
-                      const stepP = clamp(cardsP / 0.82, 0, 1);
                       const reachAt = (i + 0.5) / N_C;
-                      const reached = stepP >= reachAt;
-                      const reveal = clamp((stepP - (i / N_C)) * N_C * 1.2, 0, 1);
+                      const reached = cardsRevealed;
+                      const delay = i * 170;
                       return (
                         <div key={i} style={{
                           position: "absolute",
                           top: `${reachAt * 100}%`,
                           left: 0, right: 0,
                           textAlign: "center",
-                          opacity: 0.22 + reveal * 0.78,
-                          transform: `translate(0, calc(-50% + ${(1 - reveal) * 6}px))`,
-                          transition: "opacity 0.25s ease, transform 0.25s ease",
+                          opacity: cardsRevealed ? 1 : 0,
+                          transform: cardsRevealed
+                            ? "translate(0, -50%)"
+                            : "translate(0, calc(-50% + 8px))",
+                          transition: `opacity 0.52s ease ${delay}ms, transform 0.52s ease ${delay}ms`,
                         }}>
                           <p style={{
                             margin: 0,
@@ -654,7 +627,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                             textShadow: reached
                               ? "0 0 8px rgba(255,222,160,0.95), 0 0 22px rgba(201,169,110,0.9), 0 0 48px rgba(201,169,110,0.55), 0 0 90px rgba(201,169,110,0.3)"
                               : "none",
-                            transition: "color 0.5s ease, text-shadow 0.5s ease",
+                            transition: `color 0.5s ease ${delay}ms, text-shadow 0.5s ease ${delay}ms`,
                           }}>{ing.name}</p>
                           <p style={{
                             margin: "10px 0 0",
@@ -666,7 +639,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                             textShadow: reached
                               ? "0 0 8px rgba(255,222,160,0.85), 0 0 18px rgba(201,169,110,0.7), 0 0 36px rgba(201,169,110,0.4)"
                               : "none",
-                            transition: "color 0.5s ease, text-shadow 0.5s ease",
+                            transition: `color 0.5s ease ${delay}ms, text-shadow 0.5s ease ${delay}ms`,
                           }}>{ing.desc}</p>
                         </div>
                       );
@@ -678,11 +651,14 @@ export default function PageContent({ introActive = false }: { introActive?: boo
           </div>
 
 
-          {/* ══ SECTION 4.5 — PHASE 3.5: WHY PROTEIN (sticky scroll-driven) ══ */}
-          {/* Pull up 100vh so Phase 4's sticky begins exactly as Phase 3's cards finish fading — no dead zone */}
-          <div ref={proteinOuterRef} style={{ position: "relative", height: `${N_P * 100}vh`, marginTop: "-100vh", zIndex: 3 }}>
+          {/* ══ SECTION 4.5 — WHY PROTEIN (single-viewport, auto-reveal on entry) ══ */}
+          {/* Normal flow directly after the Ingredients panel — no marginTop
+              overlap, no scroll-pin. Fills one viewport and reveals its 5
+              benefits on entry via an IntersectionObserver (see proteinRevealed
+              effect). */}
+          <div ref={proteinOuterRef} style={{ position: "relative", height: "100dvh", zIndex: 3 }}>
             <div style={{
-              position: "sticky", top: 0, height: "100dvh", overflow: "hidden",
+              position: "relative", height: "100%", overflow: "hidden",
               background: "#024628",
             }}>
               {/* Background video — lazy play on enter (preload="metadata" so
@@ -742,15 +718,15 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                       athletes" stands as Phase 4's intro and must not be
                       crossed by any line. */}
                   {Array.from({ length: N_P - 1 }, (_, i) => {
-                    const stepP = clamp(proteinP / 0.82, 0, 1);
                     // Segments span between consecutive row CENTERS, which
                     // sit at (i + 0.5)/N_P — same coordinates the rows
-                    // themselves are absolutely positioned at below.
+                    // themselves are absolutely positioned at below. Each
+                    // segment draws (scaleY 0→1) on entry, shortly after the
+                    // row above it appears (same triggered timeline as the
+                    // ingredients section).
                     const startPct = ((i + 0.5) / N_P) * 100;
                     const endPct = ((i + 1.5) / N_P) * 100;
-                    const reachStart = (i + 0.5) / N_P;
-                    const reachEnd = (i + 1.5) / N_P;
-                    const segP = clamp((stepP - reachStart) / (reachEnd - reachStart), 0, 1);
+                    const segDelay = i * 170 + 120;
                     return (
                       <div key={`pseg-${i}`} style={{
                         position: "absolute", left: "50%", marginLeft: -0.5,
@@ -767,7 +743,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                           background: "#024628",
                           boxShadow: "0 0 8px rgba(201,169,110,0.45)",
                           transformOrigin: "top",
-                          transform: `scaleY(${segP})`,
+                          transform: proteinRevealed ? "scaleY(1)" : "scaleY(0)",
+                          transition: `transform 0.42s ease ${segDelay}ms`,
                           willChange: "transform",
                         }} />
                       </div>
@@ -781,19 +758,20 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                     position: "relative", height: "100%",
                   }}>
                     {PROTEIN_BENEFITS.map((b, i) => {
-                      const stepP = clamp(proteinP / 0.82, 0, 1);
                       const reachAt = (i + 0.5) / N_P;
-                      const reached = stepP >= reachAt;
-                      const reveal = clamp((stepP - (i / N_P)) * N_P * 1.2, 0, 1);
+                      const reached = proteinRevealed;
+                      const delay = i * 170;
                       return (
                         <div key={b.n} style={{
                           position: "absolute",
                           top: `${reachAt * 100}%`,
                           left: 0, right: 0,
                           textAlign: "center",
-                          opacity: 0.22 + reveal * 0.78,
-                          transform: `translate(0, calc(-50% + ${(1 - reveal) * 6}px))`,
-                          transition: "opacity 0.25s ease, transform 0.25s ease",
+                          opacity: proteinRevealed ? 1 : 0,
+                          transform: proteinRevealed
+                            ? "translate(0, -50%)"
+                            : "translate(0, calc(-50% + 8px))",
+                          transition: `opacity 0.52s ease ${delay}ms, transform 0.52s ease ${delay}ms`,
                         }}>
                           <p style={{
                             margin: 0,
@@ -804,7 +782,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                             textShadow: reached
                               ? "0 0 8px rgba(255,222,160,0.95), 0 0 22px rgba(201,169,110,0.9), 0 0 48px rgba(201,169,110,0.55), 0 0 90px rgba(201,169,110,0.3)"
                               : "none",
-                            transition: "color 0.5s ease, text-shadow 0.5s ease",
+                            transition: `color 0.5s ease ${delay}ms, text-shadow 0.5s ease ${delay}ms`,
                           }}>{b.title}</p>
                           <p style={{
                             margin: "10px 0 0",
@@ -816,7 +794,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                             textShadow: reached
                               ? "0 0 8px rgba(255,222,160,0.85), 0 0 18px rgba(201,169,110,0.7), 0 0 36px rgba(201,169,110,0.4)"
                               : "none",
-                            transition: "color 0.5s ease, text-shadow 0.5s ease",
+                            transition: `color 0.5s ease ${delay}ms, text-shadow 0.5s ease ${delay}ms`,
                           }}>{b.desc}</p>
                         </div>
                       );
