@@ -13,20 +13,23 @@ export default function SmoothScroll() {
 
     lenis.on('scroll', ScrollTrigger.update)
 
-    gsap.ticker.add((time) => {
+    // Keep the exact callback reference so cleanup removes THIS function.
+    // Previously cleanup passed a fresh anonymous fn to gsap.ticker.remove(),
+    // which never matched the added one — so the ticker callback leaked and
+    // accumulated on every remount/navigation.
+    const tickerCallback = (time: number) => {
       lenis.raf(time * 1000)
-    })
+    }
+    gsap.ticker.add(tickerCallback)
 
     gsap.ticker.lagSmoothing(0)
 
     return () => {
+      gsap.ticker.remove(tickerCallback)
       const currentLenis = getLenis()
       if (currentLenis) {
         currentLenis.destroy()
       }
-      gsap.ticker.remove((time) => {
-        currentLenis?.raf(time * 1000)
-      })
     }
   }, [])
 

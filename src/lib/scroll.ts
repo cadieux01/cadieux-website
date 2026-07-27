@@ -4,10 +4,10 @@ let lenis: Lenis | null = null
 
 export function initLenis() {
   lenis = new Lenis({
-    // 1.0 (was 1.4) — the long 1.4s tail made wheel scrolling feel floaty
-    // and laggy. A shorter duration tracks the wheel more tightly while
-    // staying smooth.
-    duration: 1.0,
+    // 0.6 (was 1.0, was 1.4) — the 1.0s tail still read as laggy on the
+    // wheel. 0.6 responds to the wheel almost immediately while keeping a
+    // light smoothing so it isn't jumpy.
+    duration: 0.6,
     easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
     orientation: 'vertical',
     smoothWheel: true,
