@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { playExclusive, releaseVideo } from "@/lib/videoCoordinator";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -188,38 +187,32 @@ export default function QASection() {
           ref={(el) => {
             if (!el) return;
             el.muted = true;
-            let shouldPlay = false;
-            const tryPlay = () => {
-              if (!shouldPlay) return;
-              // Exclusive play so this bg video never decodes alongside the
-              // hero/section videos during a sticky-section overlap.
-              playExclusive(el);
-            };
-            el.addEventListener("canplay", tryPlay);
-            el.addEventListener("loadeddata", tryPlay);
+            const play = () => { void el.play().catch(() => {}); };
+            // Retry play() once the decoder has frames, in case autoplay was
+            // blocked or the element wasn't ready on the first attempt.
+            el.addEventListener("canplay", play);
+            el.addEventListener("loadeddata", play);
             if (typeof IntersectionObserver === "undefined") {
-              shouldPlay = true;
-              tryPlay();
+              play();
               return;
             }
+            // Decode guard: play while on-screen (or within ~200px), pause only
+            // when fully off-screen. This video is never paused because another
+            // one started — it's governed solely by its own visibility.
             const io = new IntersectionObserver(
               (entries) => entries.forEach((e) => {
-                if (e.isIntersecting) {
-                  shouldPlay = true;
-                  tryPlay();
-                } else {
-                  shouldPlay = false;
-                  releaseVideo(el);
-                }
+                if (e.isIntersecting) play();
+                else el.pause();
               }),
-              { threshold: 0 }
+              { rootMargin: "200px 0px" }
             );
             io.observe(el);
           }}
+          autoPlay
           muted
           playsInline
           loop
-          preload="metadata"
+          preload="auto"
           poster="/product-video-06.poster.jpg"
           style={{
             position: "absolute", inset: 0, width: "100%", height: "100%",
