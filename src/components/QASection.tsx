@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { playExclusive, releaseVideo } from "@/lib/videoCoordinator";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -182,26 +183,43 @@ export default function QASection() {
           transform: "translateZ(0)",
         }}
       >
-        {/* Background video — autoplays unconditionally and never pauses. The
-            autoPlay attribute starts it; the ref callback is a fallback that
-            re-asserts muted (iOS hydration race) and re-issues plain play() on
-            canplay/loadeddata if autoplay was blocked. It does NOT route
-            through the exclusive coordinator, so it never pauses (or is paused
-            by) the hero/section videos. */}
+        {/* Background video */}
         <video
           ref={(el) => {
             if (!el) return;
             el.muted = true;
-            const kick = () => { void el.play().catch(() => {}); };
-            el.addEventListener("canplay", kick);
-            el.addEventListener("loadeddata", kick);
-            kick();
+            let shouldPlay = false;
+            const tryPlay = () => {
+              if (!shouldPlay) return;
+              // Exclusive play so this bg video never decodes alongside the
+              // hero/section videos during a sticky-section overlap.
+              playExclusive(el);
+            };
+            el.addEventListener("canplay", tryPlay);
+            el.addEventListener("loadeddata", tryPlay);
+            if (typeof IntersectionObserver === "undefined") {
+              shouldPlay = true;
+              tryPlay();
+              return;
+            }
+            const io = new IntersectionObserver(
+              (entries) => entries.forEach((e) => {
+                if (e.isIntersecting) {
+                  shouldPlay = true;
+                  tryPlay();
+                } else {
+                  shouldPlay = false;
+                  releaseVideo(el);
+                }
+              }),
+              { threshold: 0 }
+            );
+            io.observe(el);
           }}
-          autoPlay
           muted
           playsInline
           loop
-          preload="auto"
+          preload="metadata"
           poster="/product-video-06.poster.jpg"
           style={{
             position: "absolute", inset: 0, width: "100%", height: "100%",
