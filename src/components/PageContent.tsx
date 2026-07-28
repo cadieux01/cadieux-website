@@ -51,7 +51,7 @@ const PROTEIN_BENEFITS = [
 ];
 
 /* ── Deterministic floating grain data ── */
-const GRAINS = Array.from({ length: 10 }, (_, i) => ({
+const GRAINS = Array.from({ length: 6 }, (_, i) => ({
   id:    i,
   x:     sr(i * 13 + 1) * 88,
   y:     sr(i * 13 + 2) * 95,

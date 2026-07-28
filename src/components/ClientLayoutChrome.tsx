@@ -10,13 +10,10 @@ import {
   resolveCursorVariant,
 } from "@/lib/cursor-config";
 
-// Lazy-load both — they ship sizable JS (Lenis ~25KB, custom cursor a few KB
-// of GSAP-driven animation). Only fetch on devices that can actually use
-// them, i.e. fine pointers (mouse/trackpad). On phones the cursor never
-// shows and Lenis just adds jank to native momentum scroll.
-const SmoothScroll = dynamic(() => import("@/components/SmoothScroll"), {
-  ssr: false,
-});
+// Lazy-load the cursor variants — they ship a few KB of GSAP-driven
+// animation. Only fetch on devices that can actually use them, i.e. fine
+// pointers (mouse/trackpad). On phones the cursor never shows. Scrolling is
+// native on every device (no smooth-scroll library).
 const CustomCursor = dynamic(() => import("@/components/CustomCursor"), {
   ssr: false,
 });
@@ -48,16 +45,14 @@ export default function ClientLayoutChrome() {
     setVariant(resolveCursorVariant());
   }, []);
 
-  // Skip SmoothScroll (Lenis) and all cursor variants on admin pages —
-  // both add continuous GSAP 60fps tickers that make admin data tables
-  // sluggish. The native cursor is restored via the `admin-page` class
-  // set by AdminShell.
+  // Skip all cursor variants on admin pages — they add a continuous GSAP
+  // 60fps ticker that makes admin data tables sluggish. The native cursor
+  // is restored via the `admin-page` class set by AdminShell.
   if (isAdmin) return null;
 
   if (!finePointer || variant === null) return null;
   return (
     <>
-      <SmoothScroll />
       {variant === "classic" ? (
         <CustomCursor />
       ) : isBakeryVariant(variant) ? (
