@@ -1,7 +1,14 @@
 import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
 import { RETAILERS } from "@/lib/data";
+import { ADMIN_PHONE } from "@/lib/delivery-slots";
 import StoreLocatorSearch from "./StoreLocatorSearch";
+
+// Dial form of the standardised NAP phone — no spaces, for tel: hrefs.
+// Derived from ADMIN_PHONE so a single-source update propagates. Do NOT
+// hardcode the number here; the whole point of NAP consistency is one
+// source of truth for the business phone (see Prompt 6 work).
+const CADIEUX_PHONE_DIAL = ADMIN_PHONE.replace(/\s/g, "");
 
 const GRAIN = "url(/grain.svg)";
 const GOLD = "251,243,212";
@@ -56,12 +63,39 @@ export default function StoreLocatorPage() {
         </ScrollReveal>
 
         <p style={{
-          margin: "0 0 28px",
+          margin: "0 0 20px",
           fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
           letterSpacing: "0.3em", textTransform: "uppercase",
           color: "rgba(2,70,40,0.75)",
         }}>
           Stores we supply across Vizag
+        </p>
+
+        {/* Cadieux contact block — one real, callable number that matches
+            our LocalBusiness schema + Google Business Profile. Deliberately
+            NOT per-retailer: chain-store switchboards can't answer stock
+            questions about our bread. Number is imported from the NAP
+            constant so it stays in sync with the standardised business
+            phone. */}
+        <p style={{
+          margin: "0 0 24px",
+          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 400,
+          color: "#024628", lineHeight: 1.5,
+          letterSpacing: "0.01em",
+        }}>
+          Not sure if your store has stock today? Call us on{" "}
+          <a
+            href={`tel:${CADIEUX_PHONE_DIAL}`}
+            aria-label={`Call Cadieux at ${ADMIN_PHONE}`}
+            style={{
+              color: "#024628",
+              textDecoration: "underline",
+              textUnderlineOffset: 3,
+              fontWeight: 500,
+              whiteSpace: "nowrap",
+            }}
+          >{ADMIN_PHONE}</a>{" "}
+          and we will tell you.
         </p>
 
         <StoreLocatorSearch
