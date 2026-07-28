@@ -2,18 +2,18 @@
 // because Next.js only allows a specific set of named exports from page
 // files (`default`, `generateMetadata`, `generateStaticParams`, etc).
 //
-// This list is the SINGLE source of truth for two consumers on the PDP:
-//   1. The FAQPage JSON-LD schema emitted by shop/[slug]/page.tsx.
-//   2. The visible <details>/<summary> FAQ section rendered by
-//      ProductDetailClient.tsx.
-// Google requires the visible answer text to match the schema answer
-// exactly (they crawl the DOM to verify), so a single source of truth
-// avoids drift.
+// Consumer: the visible <details>/<summary> FAQ section rendered by
+// ProductDetailClient.tsx. FAQPage JSON-LD was removed after Google
+// deprecated FAQ rich results (May 2026); this list is the visible-copy
+// source of truth only.
 //
 // Copy adheres to the brand-voice rules: no comparison with regular
 // bread, no exclamation marks, no reader-instruction ("you should"),
 // short sentences, no nutrition figures until the FSSAI label is on
-// the physical loaf.
+// the physical loaf. The nutrition-per-slice Q was intentionally
+// dropped — raising it on the PDP without an on-page answer is a
+// conversion negative; the FSSAI label at point-of-consumption is
+// where that question belongs.
 
 export type PdpFaq = { q: string; a: string };
 
@@ -32,11 +32,7 @@ export const PDP_FAQS: PdpFaq[] = [
   },
   {
     q: "Is it lab-tested?",
-    a: "Every recipe is baked to a formula that is periodically tested by NABL-accredited labs. Full lab reports for each variant are on the Reports link on this page.",
-  },
-  {
-    q: "What is the nutrition information per slice?",
-    a: "Publishing with our FSSAI label.",
+    a: "The recipe was developed over 18 months across 60 to 70 parameters and verified at three independent NABL-accredited laboratories. Reports for each variant are linked on this page.",
   },
   {
     q: "Where can I find Cadieux in a store?",

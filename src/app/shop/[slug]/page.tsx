@@ -212,11 +212,22 @@ export default async function ProductDetailPage({
       url: canonicalUrl,
       priceCurrency: "INR",
       price: productRow.price_inr,
+      // Search Console flags Offers without priceValidUntil. Rolling
+      // annual expiry — bump when repricing or on next SEO sweep.
+      priceValidUntil: "2027-03-31",
       availability: outOfStock
         ? "https://schema.org/OutOfStock"
         : "https://schema.org/InStock",
     };
   }
+  // Physical loaf weight — same 240g across both variants. Static in
+  // the Product schema (not Offer) since it's an intrinsic product
+  // property, not a purchase-option variable.
+  productSchema.weight = {
+    "@type": "QuantitativeValue",
+    value: 240,
+    unitCode: "GRM",
+  };
 
   const breadcrumbSchema = {
     "@context": "https://schema.org",
@@ -233,22 +244,11 @@ export default async function ProductDetailPage({
     ],
   };
 
-  // FAQPage JSON-LD — one entry per PDP_FAQS row. The visible FAQ
-  // section rendered by ProductDetailClient uses the SAME PDP_FAQS
-  // constant, so the answer strings match schema exactly (Google's
-  // hard requirement for FAQ rich results).
-  const faqSchema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: PDP_FAQS.map((f) => ({
-      "@type": "Question",
-      name: f.q,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: f.a,
-      },
-    })),
-  };
+  // No FAQPage JSON-LD: Google deprecated FAQ rich results in May 2026
+  // (feature switched off for ecommerce since Aug 2023), so the schema
+  // renders nothing while forcing byte-identical drift maintenance
+  // between schema.text and visible answers. The visible FAQ section
+  // below is kept — it still has UX + on-page-content value.
 
   return (
     <>
@@ -259,10 +259,6 @@ export default async function ProductDetailPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
       <ProductDetailClient
         slug={internalSlug}
