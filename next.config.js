@@ -119,6 +119,11 @@ const nextConfig = {
   },
   async redirects() {
     return [
+      // Legacy /products path (never existed as a route; the nav is labelled
+      // "Products" but has always linked to /shop). External backlinks and
+      // bookmarks that guessed /products were hitting a 404 — send them home.
+      { source: "/products", destination: "/shop", permanent: true },
+      { source: "/products/:path*", destination: "/shop/:path*", permanent: true },
       // Phase 1A: plain product slug renamed to high-protein to match DB.
       { source: "/shop/plain", destination: "/shop/high-protein", permanent: true },
       // Force the admin onto www. localStorage is per-origin, so a bearer
