@@ -113,10 +113,10 @@ export async function generateMetadata({
   // title (already backed by CRITICAL_FALLBACKS per slug).
   const proteinG = parseProteinGrams(content.stat_tiles);
   const title = proteinG !== null
-    ? `${ogName} — ${proteinG}g Protein per Slice | Cadieux`
+    ? `${ogName} — High Protein Bread | Cadieux`
     : baseTitle;
   const description = proteinG !== null
-    ? `${ogName} — ${proteinG}g protein per slice, lab-tested and baked fresh in Visakhapatnam. Same-day delivery across Vizag.`
+    ? `${ogName} — high-protein bread, slow-fermented and lab-tested. Order fresh delivery in Vizag.`
     : baseDescription;
 
   return {
