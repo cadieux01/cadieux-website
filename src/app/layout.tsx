@@ -134,7 +134,7 @@ export default function RootLayout({
     name: "Cadieux",
     url: "https://www.cadieux.in",
     logo: "https://www.cadieux.in/icons/icon-512.png",
-    telephone: "+91 9989153747",
+    telephone: "+91 99891 53747",
     sameAs: ["https://www.instagram.com/CadieuxIndia"],
     foundingLocation: {
       "@type": "City",
@@ -150,10 +150,10 @@ export default function RootLayout({
     "@type": "LocalBusiness",
     name: "Cadieux",
     url: "https://www.cadieux.in",
-    telephone: "+91 9989153747",
+    telephone: "+91 99891 53747",
     address: {
       "@type": "PostalAddress",
-      streetAddress: "Ward 4, Revenue, D.no.13/18, PLOT 78, PM Palem Main Rd",
+      streetAddress: "D.No. 13/18, Plot 78, PM Palem Main Road, Revenue Ward 4, PM Palem",
       addressLocality: "Visakhapatnam",
       addressRegion: "Andhra Pradesh",
       postalCode: "530041",

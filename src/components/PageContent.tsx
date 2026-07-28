@@ -914,8 +914,9 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 maxWidth: 380,
               }}>
                 <span style={{ display: "block", fontSize: 9, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)", marginBottom: 6 }}>Manufactured at</span>
-                D.no. 13/18, Plot 78, P.M Palem,<br />
-                Revenue Ward 4, Visakhapatnam — 530041
+                D.No. 13/18, Plot 78, PM Palem Main Road,<br />
+                Revenue Ward 4, PM Palem,<br />
+                Visakhapatnam, Andhra Pradesh 530041
               </p>
 
               <a

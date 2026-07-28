@@ -89,7 +89,7 @@ const HANDOFF_TOKEN = "[[HANDOFF]]";
 const SUPPORT_EMAIL = "support@cadieux.in";
 const SUPPORT_PHONE_HUMAN = "+91 99891 53747";
 const SUPPORT_PHONE_DIAL = "+919989153747";
-const REGISTERED_ADDRESS = "D.no. 13/18, Plot 78, Visakhapatnam, Andhra Pradesh 530041, India";
+const REGISTERED_ADDRESS = "D.No. 13/18, Plot 78, PM Palem Main Road, Revenue Ward 4, PM Palem, Visakhapatnam, Andhra Pradesh 530041, India";
 
 // ── system prompt ───────────────────────────────────────────────────────────
 
