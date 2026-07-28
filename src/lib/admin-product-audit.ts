@@ -30,6 +30,7 @@ export const AUDITED_FIELDS = [
   "tagline",
   "highlights",
   "image_url",
+  "gallery_urls",
   "is_active",
   "in_stock",
   "is_archived",

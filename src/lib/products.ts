@@ -18,6 +18,10 @@ export type ProductRow = {
   tagline: string | null;
   highlights: string[];
   image_url: string | null;
+  // Admin-curated PDP gallery (ordered). Empty array = no gallery set, in
+  // which case the PDP falls back to bundled editorial media. Non-empty =
+  // these images become the PDP gallery (admin owns product photos).
+  gallery_urls: string[];
   is_active: boolean;
   in_stock: boolean;
   sort_order: number;
@@ -37,7 +41,7 @@ export const getActiveProducts = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, is_active, in_stock, sort_order",
+        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, sort_order",
       )
       .eq("is_active", true)
       .eq("is_archived", false)

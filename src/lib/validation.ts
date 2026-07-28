@@ -82,6 +82,8 @@ export const ProductUpdateSchema = z
     tagline: boundedText(200).nullable().optional(),
     highlights: z.array(boundedText(200)).max(20).optional(),
     image_url: z.string().url().max(2048).nullable().optional(),
+    // Admin-curated PDP gallery — ordered list of public image URLs.
+    gallery_urls: z.array(z.string().url().max(2048)).max(20).optional(),
     in_stock: z.boolean().optional(),
     is_active: z.boolean().optional(),
     sort_order: z.number().int().min(0).max(100000).optional(),

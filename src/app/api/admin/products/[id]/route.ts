@@ -24,7 +24,7 @@ function bustProductCaches(): void {
 }
 
 const PRODUCT_SELECT =
-  "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
+  "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
 
 // GET /api/admin/products/[id]
 //   Returns { product, history } where history is the last 50 audit
@@ -185,6 +185,15 @@ export async function PATCH(
   }
   if ("highlights" in update && !Array.isArray(update.highlights)) {
     return NextResponse.json({ error: "highlights must be an array" }, { status: 400 });
+  }
+  if ("gallery_urls" in update) {
+    if (!Array.isArray(update.gallery_urls)) {
+      return NextResponse.json({ error: "gallery_urls must be an array" }, { status: 400 });
+    }
+    // Keep only non-empty string URLs, preserving order.
+    update.gallery_urls = (update.gallery_urls as unknown[])
+      .filter((u): u is string => typeof u === "string" && u.trim().length > 0)
+      .map((u) => u.trim());
   }
 
   if (Object.keys(update).length === 0) {

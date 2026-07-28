@@ -27,6 +27,7 @@ export type ProductFormValues = {
   tagline: string;
   highlights: string; // textarea, one per line
   image_url: string;
+  gallery_urls: string; // textarea, one image URL per line (PDP gallery)
   in_stock: boolean;
   is_active: boolean;
   sort_order: string;
@@ -47,6 +48,7 @@ export function emptyFormValues(): ProductFormValues {
     tagline: "",
     highlights: "",
     image_url: "",
+    gallery_urls: "",
     in_stock: true,
     is_active: true,
     sort_order: "",
@@ -71,6 +73,7 @@ export function formValuesFromRow(row: AdminProductRow): ProductFormValues {
     tagline: row.tagline ?? "",
     highlights: (row.highlights ?? []).join("\n"),
     image_url: row.image_url ?? "",
+    gallery_urls: (row.gallery_urls ?? []).join("\n"),
     in_stock: row.in_stock,
     is_active: row.is_active,
     sort_order: String(row.sort_order ?? ""),
@@ -88,6 +91,10 @@ export function valuesToPayload(v: ProductFormValues): Record<string, unknown> {
     .split("\n")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+  const gallery_urls = v.gallery_urls
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
   const payload: Record<string, unknown> = {
     slug: v.slug.trim(),
     name: v.name.trim(),
@@ -97,6 +104,7 @@ export function valuesToPayload(v: ProductFormValues): Record<string, unknown> {
     tagline: v.tagline.trim() || null,
     highlights,
     image_url: v.image_url.trim() || null,
+    gallery_urls,
     in_stock: v.in_stock,
     is_active: v.is_active,
   };
@@ -377,6 +385,21 @@ export function ProductForm({
         </div>
       </Field>
 
+      <Field
+        label="Gallery images"
+        hint="One image URL per line. These become the product page gallery (in order). Leave blank to keep the current gallery. Upload buttons come next."
+      >
+        <div className="flex flex-col gap-3">
+          <GalleryPreview raw={values.gallery_urls} />
+          <Textarea
+            value={values.gallery_urls}
+            onChange={(v) => patch({ gallery_urls: v })}
+            rows={4}
+            placeholder={"https://…/photo-1.jpg\nhttps://…/photo-2.jpg"}
+          />
+        </div>
+      </Field>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Checkbox
           label="In stock"
@@ -462,6 +485,35 @@ export function ProductForm({
         </button>
       </div>
     </form>
+  );
+}
+
+// Live thumbnail strip for the gallery textarea. Renders each non-empty
+// line as a small preview so the operator sees exactly what the PDP will
+// show, in order. Broken URLs simply fail to load (browser default).
+function GalleryPreview({ raw }: { raw: string }) {
+  const urls = raw
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (urls.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {urls.map((src, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={`${i}-${src}`}
+          src={src}
+          alt=""
+          style={{
+            width: 88,
+            height: 88,
+            objectFit: "cover",
+            border: `1px solid ${BORDER}`,
+          }}
+        />
+      ))}
+    </div>
   );
 }
 

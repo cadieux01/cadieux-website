@@ -57,18 +57,32 @@ function resolveHeroImage(
 }
 
 // Build the PDP media gallery from admin + bundled sources. Preference:
-//   1. Bundled PRODUCT_DETAILS[slug].media — rich, editorial (videos + images)
+//   1. Admin-curated products.gallery_urls — when non-empty, these image
+//      tiles ARE the gallery (Sunny owns product photos from /admin).
+//   2. Bundled PRODUCT_DETAILS[slug].media — rich, editorial (videos + images)
 //      for shipped products. Deploy-owned but hand-curated.
-//   2. A single tile derived from the admin-editable products.image_url.
-//   3. Legacy bundled PRODUCTS[].image.
-//   4. /hero.jpg brand default.
-// The important guarantee: an empty admin field never yields an empty
-// gallery — a heroImage tile is always produced.
+//   3. A single tile derived from the admin-editable products.image_url.
+//   4. Legacy bundled PRODUCTS[].image.
+//   5. /hero.jpg brand default.
+// The important guarantee: an empty admin gallery never yields an empty
+// gallery — it falls through to today's exact behaviour (no live
+// regression; shipped editorial videos stay until a gallery is uploaded).
 function resolveGalleryMedia(
   slug: string,
   heroImage: string,
   bundledName: string | undefined,
+  galleryUrls: string[] | undefined,
 ): ProductMedia[] {
+  const gallery = (galleryUrls ?? []).filter(
+    (u) => typeof u === "string" && u.trim().length > 0,
+  );
+  if (gallery.length > 0) {
+    return gallery.map((src, i) => ({
+      type: "image",
+      src,
+      alt: bundledName ? `${bundledName} — ${i + 1}` : "Product image",
+    }));
+  }
   const bundled = PRODUCT_DETAILS[slug as ProductSlug]?.media;
   if (bundled && bundled.length > 0) return bundled;
   return [
@@ -199,7 +213,12 @@ export default async function ProductDetailPage({
   };
 
   const heroImage = resolveHeroImage(productRow?.image_url, bundled?.image);
-  const media = resolveGalleryMedia(slug, heroImage, bundled?.name);
+  const media = resolveGalleryMedia(
+    slug,
+    heroImage,
+    bundled?.name,
+    productRow?.gallery_urls,
+  );
 
   // Product JSON-LD — price + availability are live from public.products
   // (price_inr int NOT NULL, in_stock bool via getProductAvailability).

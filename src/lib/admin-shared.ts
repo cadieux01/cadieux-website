@@ -100,6 +100,7 @@ export type AdminProductRow = {
   tagline: string | null;
   highlights: string[];
   image_url: string | null;
+  gallery_urls: string[];
   is_active: boolean;
   in_stock: boolean;
   is_archived: boolean;

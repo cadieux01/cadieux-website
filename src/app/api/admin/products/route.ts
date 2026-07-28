@@ -27,7 +27,7 @@ function bustProductCaches(): void {
 }
 
 const PRODUCT_SELECT =
-  "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, weight, description, tagline, highlights, image_url, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
+  "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
 
 // GET /api/admin/products?include_archived=1
 //   Returns every product (newest first) so the admin can scroll the
@@ -200,6 +200,11 @@ export async function POST(req: NextRequest) {
       typeof body.image_url === "string" && body.image_url.length > 0
         ? body.image_url
         : null,
+    gallery_urls: Array.isArray(body.gallery_urls)
+      ? body.gallery_urls
+          .filter((u: unknown) => typeof u === "string" && u.trim().length > 0)
+          .map((u: string) => u.trim())
+      : [],
     in_stock: typeof body.in_stock === "boolean" ? body.in_stock : true,
     is_active: typeof body.is_active === "boolean" ? body.is_active : true,
     is_archived: false,
