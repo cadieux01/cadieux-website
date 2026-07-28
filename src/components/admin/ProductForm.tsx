@@ -139,6 +139,8 @@ export function ProductForm({
   const [values, setValues] = useState<ProductFormValues>(initial);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [galleryBusy, setGalleryBusy] = useState(false);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
 
   useEffect(() => {
     setValues(initial);
@@ -179,6 +181,54 @@ export function ProductForm({
     } finally {
       setUploadBusy(false);
       // Reset the input so the same file can be re-selected after an error.
+      e.target.value = "";
+    }
+  }
+
+  // Gallery upload: accepts multiple files, uploads each through the same
+  // admin-gated /upload-image route (service-role write server-side — the
+  // browser never sees the service key), and appends each returned public
+  // URL as a new line to the gallery textarea. Partial success is kept:
+  // any files that uploaded before an error are still appended.
+  async function handleGalleryUpload(e: ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setGalleryBusy(true);
+    setGalleryError(null);
+    const added: string[] = [];
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/admin/products/upload-image", {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          credentials: "include",
+          body: fd,
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          url?: string;
+          error?: string;
+        };
+        if (!res.ok || !json.url) {
+          throw new Error(json.error ?? `Upload failed (${res.status})`);
+        }
+        added.push(json.url);
+      }
+    } catch (err) {
+      setGalleryError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      if (added.length > 0) {
+        setValues((v) => {
+          const existing = v.gallery_urls.trim();
+          const appended = added.join("\n");
+          return {
+            ...v,
+            gallery_urls: existing ? `${existing}\n${appended}` : appended,
+          };
+        });
+      }
+      setGalleryBusy(false);
       e.target.value = "";
     }
   }
@@ -397,6 +447,35 @@ export function ProductForm({
             rows={4}
             placeholder={"https://…/photo-1.jpg\nhttps://…/photo-2.jpg"}
           />
+          <div className="flex items-center gap-3">
+            <label
+              className="uppercase cursor-pointer"
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "0.7rem",
+                letterSpacing: "0.25em",
+                color: GOLD,
+                border: `1px solid ${GOLD}`,
+                padding: "0.45rem 0.9rem",
+                opacity: galleryBusy ? 0.5 : 1,
+              }}
+            >
+              {galleryBusy ? "Uploading…" : "Upload gallery images"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                onChange={handleGalleryUpload}
+                disabled={galleryBusy}
+                style={{ display: "none" }}
+              />
+            </label>
+          </div>
+          {galleryError ? (
+            <p style={{ color: "#fecaca", fontSize: "0.8rem" }}>
+              {galleryError}
+            </p>
+          ) : null}
         </div>
       </Field>
 
