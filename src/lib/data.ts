@@ -1233,35 +1233,40 @@ export const STORES: Record<string, { name: string; address: string }[]> = {
 export type Retailer = {
   name: string;
   address: string;
-  phone: string;
-  hours: string;
+  // phone + hours intentionally NOT part of this type. Public rendering
+  // of unverified retailer contact info is a local-trust + local-SEO risk
+  // (fake-number pages get flagged, uniform "9 AM – 10 PM" hours across
+  // every outlet reads as guessed). Add these fields back per-retailer
+  // ONLY when a verified outlet phone + posted opening hours are in hand
+  // for that specific storefront.
 };
 
 // Areas + the supermarkets / retailers under each. Used by /store-locator.
-// Real high-rated supermarkets per area (Google ratings); phone numbers are
-// placeholders — replace with real outlet numbers when known.
+// Real high-rated supermarkets per area (Google ratings). Storefront phone
+// numbers and per-outlet hours are omitted until verified — see the type
+// comment above. Do not reintroduce placeholder values.
 export const RETAILERS: Record<string, Retailer[]> = {
   "Madhurawada / P.M. Palem": [
-    { name: "DMart Madhurawada",        address: "NH16, Madhurawada, Visakhapatnam", phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM" },
-    { name: "Vijetha Supermarket",      address: "Madhurawada, Visakhapatnam",       phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+    { name: "DMart Madhurawada",        address: "NH16, Madhurawada, Visakhapatnam" },
+    { name: "Vijetha Supermarket",      address: "Madhurawada, Visakhapatnam" },
   ],
   "MVP Colony": [
-    { name: "Vijetha Supermarket", address: "Ushodaya Junction, MVP Colony, Visakhapatnam", phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM" },
-    { name: "More Super Market",   address: "MVP Colony, Visakhapatnam",                    phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+    { name: "Vijetha Supermarket", address: "Ushodaya Junction, MVP Colony, Visakhapatnam" },
+    { name: "More Super Market",   address: "MVP Colony, Visakhapatnam" },
   ],
   "Dwaraka Nagar": [
-    { name: "Spencer's Hyper Market", address: "Rama Talkies Road, Resapuvani Palem, Dwaraka Nagar, Visakhapatnam", phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM" },
-    { name: "Vardhan Super Market",   address: "48-10-32, Sri Nagar, Dwaraka Nagar, Visakhapatnam",                  phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+    { name: "Spencer's Hyper Market", address: "Rama Talkies Road, Resapuvani Palem, Dwaraka Nagar, Visakhapatnam" },
+    { name: "Vardhan Super Market",   address: "48-10-32, Sri Nagar, Dwaraka Nagar, Visakhapatnam" },
   ],
   "Gajuwaka": [
-    { name: "G Mart Super Market", address: "KL Rao Nagar, BC Road, Gajuwaka, Visakhapatnam",        phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM" },
-    { name: "More Supermarket",    address: "DVSN Plaza, beside Mohini Cinemas, Gajuwaka, Visakhapatnam", phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+    { name: "G Mart Super Market", address: "KL Rao Nagar, BC Road, Gajuwaka, Visakhapatnam" },
+    { name: "More Supermarket",    address: "DVSN Plaza, beside Mohini Cinemas, Gajuwaka, Visakhapatnam" },
   ],
   "Siripuram": [
-    { name: "More For You", address: "10-1-47, Waltair Main Road, Siripuram Junction, Dutt Island, Visakhapatnam", phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+    { name: "More For You", address: "10-1-47, Waltair Main Road, Siripuram Junction, Dutt Island, Visakhapatnam" },
   ],
   "Seethammadhara": [
-    { name: "More Supermarket",          address: "HB Colony Road, Seethammadhara, Visakhapatnam",  phone: "+91 891 XXXXXXX", hours: "9 AM – 10 PM" },
-    { name: "Heritage Fresh Supermarket", address: "P&T Colony, Seethammadhara, Visakhapatnam",      phone: "+91 891 XXXXXXX", hours: "8 AM – 10 PM" },
+    { name: "More Supermarket",          address: "HB Colony Road, Seethammadhara, Visakhapatnam" },
+    { name: "Heritage Fresh Supermarket", address: "P&T Colony, Seethammadhara, Visakhapatnam" },
   ],
 };

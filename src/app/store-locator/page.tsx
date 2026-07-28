@@ -107,96 +107,72 @@ export default function StoreLocatorPage() {
                 </div>
 
                 <div style={{ paddingLeft: 20, paddingTop: 8 }}>
-                  {retailers.map((r, i) => {
-                    const telHref = `tel:${r.phone.replace(/\s/g, "")}`;
-                    return (
-                      <article
-                        key={`${area}-${i}`}
-                        style={{
-                          background: "#024628",
-                          border: `0.25px solid rgba(${GOLD},0.35)`,
-                          borderRadius: 10,
-                          padding: "14px 18px",
-                          margin: "8px 0",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 6,
-                        }}
-                      >
-                        <p style={{
-                          margin: 0,
-                          fontFamily: "var(--font-body)",
-                          fontSize: 14, fontWeight: 400,
-                          color: "#FBF3D4",
-                          letterSpacing: "0.02em",
-                        }}>{r.name}</p>
-                        <p style={{
-                          margin: 0,
-                          fontFamily: "var(--font-body)",
-                          fontSize: 11, fontWeight: 300,
-                          color: "rgba(251,243,212,0.7)",
-                          letterSpacing: "0.04em",
-                          lineHeight: 1.5,
-                        }}>{r.address}</p>
-                        <p style={{
-                          margin: 0,
-                          fontFamily: "var(--font-body)",
-                          fontSize: 10, fontWeight: 300,
-                          color: "rgba(251,243,212,0.6)",
-                          letterSpacing: "0.18em", textTransform: "uppercase",
-                        }}>{r.hours}</p>
+                  {retailers.map((r, i) => (
+                    <article
+                      key={`${area}-${i}`}
+                      style={{
+                        background: "#024628",
+                        border: `0.25px solid rgba(${GOLD},0.35)`,
+                        borderRadius: 10,
+                        padding: "14px 18px",
+                        margin: "8px 0",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      <p style={{
+                        margin: 0,
+                        fontFamily: "var(--font-body)",
+                        fontSize: 14, fontWeight: 400,
+                        color: "#FBF3D4",
+                        letterSpacing: "0.02em",
+                      }}>{r.name}</p>
+                      <p style={{
+                        margin: 0,
+                        fontFamily: "var(--font-body)",
+                        fontSize: 11, fontWeight: 300,
+                        color: "rgba(251,243,212,0.7)",
+                        letterSpacing: "0.04em",
+                        lineHeight: 1.5,
+                      }}>{r.address}</p>
 
-                        <div style={{
-                          display: "flex", justifyContent: "flex-end",
-                          gap: 8, marginTop: 8,
-                        }}>
-                          <a
-                            href={directionsUrl(r.name, r.address)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={`Get directions to ${r.name}`}
-                            className="cdx-locator-btn"
-                            style={{
-                              display: "inline-flex", alignItems: "center", gap: 6,
-                              background: "transparent",
-                              border: `1px solid rgba(${GOLD},0.5)`,
-                              borderRadius: 6,
-                              padding: "8px 14px",
-                              fontFamily: "var(--font-body)",
-                              fontSize: 10, fontWeight: 400,
-                              letterSpacing: "0.25em", textTransform: "uppercase",
-                              color: `rgba(${GOLD},0.95)`,
-                              textDecoration: "none",
-                              transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
-                              WebkitTapHighlightColor: "transparent",
-                            }}
-                          >
-                            <span aria-hidden="true" style={{ fontSize: 12, lineHeight: 1 }}>↗</span>
-                            Directions
-                          </a>
-                          <a
-                            href={telHref}
-                            aria-label={`Call ${r.name} at ${r.phone}`}
-                            className="cdx-locator-btn"
-                            style={{
-                              display: "inline-flex", alignItems: "center", gap: 6,
-                              background: "transparent",
-                              border: `1px solid rgba(${GOLD},0.5)`,
-                              borderRadius: 6,
-                              padding: "8px 14px",
-                              fontFamily: "var(--font-body)",
-                              fontSize: 10, fontWeight: 400,
-                              letterSpacing: "0.25em", textTransform: "uppercase",
-                              color: `rgba(${GOLD},0.95)`,
-                              textDecoration: "none",
-                              transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
-                              WebkitTapHighlightColor: "transparent",
-                            }}
-                          >Call</a>
-                        </div>
-                      </article>
-                    );
-                  })}
+                      {/* No hours line and no CALL button until verified
+                          per-outlet phone + posted opening hours are in
+                          hand. Placeholder contact info on a public local
+                          page hurts trust and local SEO — see the note on
+                          the Retailer type. */}
+                      <div style={{
+                        display: "flex", justifyContent: "flex-end",
+                        gap: 8, marginTop: 8,
+                      }}>
+                        <a
+                          href={directionsUrl(r.name, r.address)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Get directions to ${r.name}`}
+                          className="cdx-locator-btn"
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 6,
+                            background: "transparent",
+                            border: `1px solid rgba(${GOLD},0.5)`,
+                            borderRadius: 6,
+                            padding: "8px 14px",
+                            fontFamily: "var(--font-body)",
+                            fontSize: 10, fontWeight: 400,
+                            letterSpacing: "0.25em", textTransform: "uppercase",
+                            color: `rgba(${GOLD},0.95)`,
+                            textDecoration: "none",
+                            transition: "background 200ms ease, border-color 200ms ease, color 200ms ease",
+                            WebkitTapHighlightColor: "transparent",
+                          }}
+                        >
+                          <span aria-hidden="true" style={{ fontSize: 12, lineHeight: 1 }}>↗</span>
+                          Directions
+                        </a>
+                      </div>
+                    </article>
+                  ))}
                 </div>
               </section>
             );
