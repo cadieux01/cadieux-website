@@ -84,12 +84,16 @@ const HANDOFF_TOKEN = "[[HANDOFF]]";
 // Canonical customer-facing contact details.
 // Support email: canonical across policies, subscription emails, delete-account.
 // Support phone: WhatsApp business number Raja gave for the bot.
-// Registered address (Terms of Service): treated as our public contact address.
-// The exact bakehouse address is NOT confirmed — if pressed for it, hand off.
+// Registered address (Terms of Service): kept in the same wording as the
+// legal recital in policies-raw/terms.html. DO NOT standardise this to the
+// PM Palem operational/kitchen address — the registered firm's principal
+// place of business (Registrar of Firms record) is a separate location that
+// is pending legal review. If the bot is pressed for the exact bakehouse or
+// registered address, hand off rather than answer.
 const SUPPORT_EMAIL = "support@cadieux.in";
 const SUPPORT_PHONE_HUMAN = "+91 99891 53747";
 const SUPPORT_PHONE_DIAL = "+919989153747";
-const REGISTERED_ADDRESS = "D.No. 13/18, Plot 78, PM Palem Main Road, Revenue Ward 4, PM Palem, Visakhapatnam, Andhra Pradesh 530041, India";
+const REGISTERED_ADDRESS = "D.no. 13/18, Plot 78, Visakhapatnam, Andhra Pradesh 530041, India";
 
 // ── system prompt ───────────────────────────────────────────────────────────
 
