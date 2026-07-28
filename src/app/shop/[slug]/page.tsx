@@ -8,8 +8,13 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
-import { PRODUCTS, PRODUCT_DETAILS, type ProductMedia, type ProductSlug } from "@/lib/data";
-import { getProductAvailability, getProductBySlug } from "@/lib/products";
+import { PRODUCTS } from "@/lib/data";
+import {
+  getProductAvailability,
+  getProductBySlug,
+  resolveHeroImage,
+  resolveProductMedia,
+} from "@/lib/products";
 import { getProductReports } from "@/lib/product-reports";
 import { getProductIngredients } from "@/lib/ingredients";
 import { getPageContent, pickString } from "@/lib/content";
@@ -17,7 +22,6 @@ import { getPageContent, pickString } from "@/lib/content";
 import ProductDetailClient from "./ProductDetailClient";
 
 const SITE_URL = "https://www.cadieux.in";
-const OG_FALLBACK_IMAGE = "/hero.jpg";
 
 // JSON-LD requires absolute URLs. Product image_url may be a Supabase
 // storage URL (already absolute) or a repo-relative path like "/hero.jpg";
@@ -41,57 +45,6 @@ function parseProteinGrams(
   if (!m) return null;
   const n = Number(m[1]);
   return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-// Resolve the OG / social share image with an admin-first fallback chain:
-//   products.image_url (admin editor) → bundled PRODUCTS[].image (legacy
-//   default for shipped slugs) → /hero.jpg (brand default; never empty).
-function resolveHeroImage(
-  dbImageUrl: string | null | undefined,
-  bundledImage: string | undefined,
-): string {
-  const trimmed = (dbImageUrl ?? "").trim();
-  if (trimmed) return trimmed;
-  if (bundledImage) return bundledImage;
-  return OG_FALLBACK_IMAGE;
-}
-
-// Build the PDP media gallery from admin + bundled sources. Preference:
-//   1. Admin-curated products.gallery_urls — when non-empty, these image
-//      tiles ARE the gallery (Sunny owns product photos from /admin).
-//   2. Bundled PRODUCT_DETAILS[slug].media — rich, editorial (videos + images)
-//      for shipped products. Deploy-owned but hand-curated.
-//   3. A single tile derived from the admin-editable products.image_url.
-//   4. Legacy bundled PRODUCTS[].image.
-//   5. /hero.jpg brand default.
-// The important guarantee: an empty admin gallery never yields an empty
-// gallery — it falls through to today's exact behaviour (no live
-// regression; shipped editorial videos stay until a gallery is uploaded).
-function resolveGalleryMedia(
-  slug: string,
-  heroImage: string,
-  bundledName: string | undefined,
-  galleryUrls: string[] | undefined,
-): ProductMedia[] {
-  const gallery = (galleryUrls ?? []).filter(
-    (u) => typeof u === "string" && u.trim().length > 0,
-  );
-  if (gallery.length > 0) {
-    return gallery.map((src, i) => ({
-      type: "image",
-      src,
-      alt: bundledName ? `${bundledName} — ${i + 1}` : "Product image",
-    }));
-  }
-  const bundled = PRODUCT_DETAILS[slug as ProductSlug]?.media;
-  if (bundled && bundled.length > 0) return bundled;
-  return [
-    {
-      type: "image",
-      src: heroImage,
-      alt: bundledName ? `${bundledName} — hero` : "Product image",
-    },
-  ];
 }
 
 // Dynamic metadata for product pages. Slug resolution is DB-first
@@ -120,7 +73,7 @@ export async function generateMetadata({
   const baseDescription = pickString(content, "pdp.seo.description", slug);
   const ogName =
     pickString(content, "pdp.name", slug) || productRow?.name || bundled?.name || slug;
-  const ogImage = resolveHeroImage(productRow?.image_url, bundled?.image);
+  const ogImage = resolveHeroImage(productRow?.image_url, slug);
 
   // Prefer a protein-forward SEO title when the stat tile is a real number.
   // Placeholder "—" or empty admin values → fall back to the content-string
@@ -212,11 +165,10 @@ export default async function ProductDetailPage({
     outOfStockBanner: pickString(content, "pdp.out_of_stock_banner"),
   };
 
-  const heroImage = resolveHeroImage(productRow?.image_url, bundled?.image);
-  const media = resolveGalleryMedia(
+  const heroImage = resolveHeroImage(productRow?.image_url, slug);
+  const media = resolveProductMedia(
     slug,
-    heroImage,
-    bundled?.name,
+    productRow?.image_url,
     productRow?.gallery_urls,
   );
 

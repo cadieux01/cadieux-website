@@ -8,6 +8,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 
+import {
+  PRODUCTS,
+  PRODUCT_DETAILS,
+  type ProductMedia,
+  type ProductSlug,
+} from "@/lib/data";
+
 export type ProductRow = {
   id: string;
   slug: string;
@@ -60,6 +67,79 @@ export const getActiveProducts = unstable_cache(
 export async function getProductBySlug(slug: string): Promise<ProductRow | null> {
   const products = await getActiveProducts();
   return products.find((p) => p.slug === slug) ?? null;
+}
+
+// ── image / media resolution (DB-first, hardcoded fallback) ──────────────────
+// Single source of truth for turning a product row's admin-owned image
+// fields into what the storefront renders. The admin writes products.image_url
+// (main) + products.gallery_urls (gallery) from /admin; these resolvers prefer
+// those and fall back to the bundled lib/data.ts assets so an image NEVER goes
+// blank. Fallbacks are logged server-side so a missing admin image is visible
+// in the logs. Video has no DB column, so it only ever comes from the bundled
+// PRODUCT_DETAILS media (below) — never from the DB.
+
+const OG_FALLBACK_IMAGE = "/hero.jpg";
+
+// Resolve the main / hero / OG image with a DB-first fallback chain:
+//   products.image_url (admin) → bundled PRODUCTS[].image → /hero.jpg.
+export function resolveHeroImage(
+  imageUrl: string | null | undefined,
+  slug: string,
+): string {
+  const trimmed = (imageUrl ?? "").trim();
+  if (trimmed) return trimmed;
+  const bundled = PRODUCTS.find((p) => p.slug === slug)?.image;
+  if (bundled) {
+    console.info(
+      `[lib/products] hero image fallback → bundled asset for "${slug}" (products.image_url empty)`,
+    );
+    return bundled;
+  }
+  console.info(
+    `[lib/products] hero image fallback → brand default for "${slug}" (no bundled image)`,
+  );
+  return OG_FALLBACK_IMAGE;
+}
+
+// Build the PDP / shop-tile media gallery, DB-first:
+//   1. products.gallery_urls (admin) non-empty → these image tiles ARE the
+//      gallery (Sunny owns product photos from /admin).
+//   2. bundled PRODUCT_DETAILS[slug].media — editorial videos + images.
+//   3. a single tile derived from the resolved hero image.
+// An empty admin gallery never yields an empty gallery — it falls through to
+// the bundled media (today's exact behaviour), so shipped editorial videos
+// stay until a gallery is uploaded. No live regression.
+export function resolveProductMedia(
+  slug: string,
+  imageUrl: string | null | undefined,
+  galleryUrls: string[] | null | undefined,
+): ProductMedia[] {
+  const bundledName = PRODUCTS.find((p) => p.slug === slug)?.name;
+  const gallery = (galleryUrls ?? []).filter(
+    (u) => typeof u === "string" && u.trim().length > 0,
+  );
+  if (gallery.length > 0) {
+    return gallery.map((src, i) => ({
+      type: "image",
+      src,
+      alt: bundledName ? `${bundledName} — ${i + 1}` : "Product image",
+    }));
+  }
+  const bundled = PRODUCT_DETAILS[slug as ProductSlug]?.media;
+  if (bundled && bundled.length > 0) {
+    console.info(
+      `[lib/products] gallery fallback → bundled media for "${slug}" (products.gallery_urls empty)`,
+    );
+    return bundled;
+  }
+  const heroImage = resolveHeroImage(imageUrl, slug);
+  return [
+    {
+      type: "image",
+      src: heroImage,
+      alt: bundledName ? `${bundledName} — hero` : "Product image",
+    },
+  ];
 }
 
 // Lightweight availability map for the public shop. Returns null when

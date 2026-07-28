@@ -4,8 +4,13 @@
 // to bundled PRODUCTS values + critical fallbacks if Supabase is dark.
 
 import type { Metadata } from "next";
-import { getActiveProducts, getProductAvailability } from "@/lib/products";
+import {
+  getActiveProducts,
+  getProductAvailability,
+  resolveProductMedia,
+} from "@/lib/products";
 import { getPageContent, pickString } from "@/lib/content";
+import type { ProductMedia } from "@/lib/data";
 
 import ShopListClient, { type ShopContentBySlug } from "./ShopListClient";
 
@@ -25,7 +30,15 @@ export default async function ShopPage() {
   // Live DB price per slug — single source of truth for the catalogue.
   const products = await getActiveProducts();
   const priceBySlug: Record<string, number> = {};
-  for (const p of products) priceBySlug[p.slug] = p.price_inr;
+  // Live DB image/gallery per slug — admin owns product photos from /admin
+  // (products.image_url + products.gallery_urls). resolveProductMedia falls
+  // back to the bundled editorial media (videos + images) when the admin
+  // gallery is empty, so tiles never go blank and today's behaviour is kept.
+  const mediaBySlug: Record<string, ProductMedia[]> = {};
+  for (const p of products) {
+    priceBySlug[p.slug] = p.price_inr;
+    mediaBySlug[p.slug] = resolveProductMedia(p.slug, p.image_url, p.gallery_urls);
+  }
 
   // Content per slug (parallel). pickString applies critical fallbacks
   // so name/tag/subtitle are never empty.
@@ -61,6 +74,7 @@ export default async function ShopPage() {
       <ShopListClient
         availability={availability}
         priceBySlug={priceBySlug}
+        mediaBySlug={mediaBySlug}
         contentBySlug={contentBySlug}
       />
     </>
