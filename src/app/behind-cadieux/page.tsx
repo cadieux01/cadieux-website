@@ -115,7 +115,7 @@ const STATS_FALLBACK: Stat[] = [
   { value: "\u2014", label: "Protein" },
   { value: "\u2014", label: "Fibre" },
   { value: "Dense & nourishing", label: "Every loaf" },
-  { value: "Lab-verified", label: "Quality standard" },
+  { value: "In-house", label: "Recipe development" },
   { value: "\u2014", label: "Trans fat \u00b7 No animal fat \u00b7 Multigrain" },
 ];
 

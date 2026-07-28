@@ -111,7 +111,7 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   "pdp.seo.title::multigrain": "Cadieux Multigrain Protein Bread | Lab-Tested",
   "pdp.seo.title::high-protein": "Cadieux Plain Protein Bread | Fresh Delivery",
   "pdp.seo.description::multigrain":
-    "Cadieux Multigrain Protein Bread. Lab-verified ingredients. Order fresh delivery in Vizag.",
+    "Cadieux Multigrain Protein Bread. Made with quality ingredients. Order fresh delivery in Vizag.",
   "pdp.seo.description::high-protein":
     "Cadieux Plain Protein Bread. Clean sandwich bread, fresh-baked daily in Visakhapatnam.",
 };

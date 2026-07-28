@@ -1054,7 +1054,7 @@ That's the whole philosophy, really. Build a plate that earns its calories, one 
     brief: "The full numbers on Cadieux protein bread — protein, fibre, and what each figure was measured against.",
     body: `Most bread asks you to trust the front of the pack. This one puts the numbers on the table.
 
-# 22.94g of protein per 100g
+# Protein that actually counts
 
 That is the figure our loaf carries, verified in the lab. It is the number the rest of this page is built on, and the one worth remembering when you compare any two breads.
 
@@ -1077,7 +1077,7 @@ The nutrition panel is clean in the parts that do not show up as grams. No artif
 # Reading it for yourself
 
 Turn any protein bread over and read the protein per 100g, the fibre, and the preservative line. Those three tell you most of what you need. Ours are printed because they hold up.`,
-    meta_description: "The full nutrition breakdown of Cadieux protein bread — 22.94g protein per 100g, lab-verified, with 6.46g fibre and no artificial preservatives.",
+    meta_description: "A closer look at what goes into Cadieux protein bread — a protein-rich recipe with no artificial preservatives.",
     primary_keyword: "protein bread nutrition facts",
     secondary_keywords: ["protein bread nutrition", "protein per slice", "high protein bread nutrition facts", "protein bread india"],
     date: "2026-07-23",
@@ -1138,7 +1138,7 @@ A shake delivers a large dose fast. It is also a separate step, a separate purch
 
 # Other breads
 
-Most bread is chosen for texture, not protein. A loaf built to carry 22.94g of protein per 100g, verified across three NABL-accredited labs, keeps the format you know and moves the number that matters.
+Most bread is chosen for texture, not protein. A loaf built to carry real protein keeps the format you know and moves the number that matters.
 
 # Where the loaf fits
 
@@ -1167,7 +1167,7 @@ Bread works at the other end of the day. It carries 7.32g of protein per slice i
 
 # Concentrated dose vs everyday base
 
-Whey is concentrated and occasional. Protein bread is steady and everyday. One tops up a specific moment; the other lifts the baseline of what your normal meals already provide, at 22.94g per 100g, verified across three NABL-accredited labs.
+Whey is concentrated and occasional. Protein bread is steady and everyday. One tops up a specific moment; the other lifts the baseline of what your normal meals already provide.
 
 # Most people want both
 
