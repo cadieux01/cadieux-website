@@ -143,6 +143,17 @@ const nextConfig = {
         destination: "https://www.cadieux.in/admin/:path*",
         permanent: false,
       },
+      // Canonical host is www.cadieux.in. Vercel's platform-level apex→www
+      // 307 already exists, but 308 is a stronger canonical signal (Google
+      // treats it as authoritative and browsers cache it) and putting it in
+      // the config documents the intent. The /admin rules above match first
+      // and stay 307 by design (see the comment on the /admin redirect).
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "cadieux.in" }],
+        destination: "https://www.cadieux.in/:path*",
+        permanent: true,
+      },
     ];
   },
   async rewrites() {
