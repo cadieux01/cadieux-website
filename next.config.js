@@ -124,8 +124,23 @@ const nextConfig = {
       // bookmarks that guessed /products were hitting a 404 — send them home.
       { source: "/products", destination: "/shop", permanent: true },
       { source: "/products/:path*", destination: "/shop/:path*", permanent: true },
-      // Phase 1A: plain product slug renamed to high-protein to match DB.
-      { source: "/shop/plain", destination: "/shop/high-protein", permanent: true },
+      // Prompts 4+5 (SEO): both product URLs renamed to keyword-rich
+      // slugs. The OLD URLs `/shop/high-protein` and `/shop/multigrain`
+      // are the currently-indexed, shipped paths (verified against the
+      // live sitemap.xml before this diff was cut). 301 permanent so
+      // link equity, ranking signals, and any Search Console history
+      // follow to the new URL. Internal slugs (products.slug, PRODUCTS[]
+      // bundled fallback, content_strings keys, product_stat_tiles seeds)
+      // are UNCHANGED — the [slug] route resolves the URL slug to the
+      // internal slug via `resolveInternalSlug` in @/lib/product-slugs.
+      // These entries must sit ABOVE the apex→www catch-all below so the
+      // 301 fires before host rewriting.
+      { source: "/shop/high-protein", destination: "/shop/plain-protein-bread", permanent: true },
+      { source: "/shop/multigrain", destination: "/shop/multigrain-protein-bread", permanent: true },
+      // Phase 1A: legacy `/shop/plain` (from before the DB slug rename)
+      // now jumps directly to the new URL, avoiding a 301 chain through
+      // `/shop/high-protein` (which is itself 301'd above).
+      { source: "/shop/plain", destination: "/shop/plain-protein-bread", permanent: true },
       // Force the admin onto www. localStorage is per-origin, so a bearer
       // token saved on www.cadieux.in is invisible on the apex cadieux.in
       // (and vice-versa) — landing on the apex looked "logged out". Sending

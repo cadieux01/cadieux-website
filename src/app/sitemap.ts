@@ -1,6 +1,7 @@
 import { MetadataRoute } from "next";
 import { BLOG_POSTS, PRODUCTS } from "@/lib/data";
 import { getActiveProducts } from "@/lib/products";
+import { toUrlSlug } from "@/lib/product-slugs";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://www.cadieux.in";
@@ -106,14 +107,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // admin-created slug (is_active=true, is_archived=false) appears here
   // without a deploy. Falls back to the bundled PRODUCTS[] slugs when
   // Supabase is unreachable so the sitemap never loses its two shipped
-  // product URLs (multigrain, high-protein).
+  // product URLs.
+  //
+  // The DB stores the INTERNAL slug (`high-protein`, `multigrain`); we
+  // map each one through toUrlSlug() so the sitemap emits the canonical
+  // URL slug (`plain-protein-bread`, `multigrain-protein-bread`) —
+  // matching what canonical + Google-indexed URLs return post-Prompt-5.
+  // Unaliased DB slugs (future admin-created products) pass through
+  // unchanged so their `/shop/<db-slug>` URL keeps working.
   const activeProducts = await getActiveProducts();
   const productSlugs =
     activeProducts.length > 0
       ? activeProducts.map((p) => p.slug)
       : PRODUCTS.map((p) => p.slug);
   const productPages: MetadataRoute.Sitemap = productSlugs.map((slug) => ({
-    url: `${baseUrl}/shop/${slug}`,
+    url: `${baseUrl}/shop/${toUrlSlug(slug)}`,
     lastModified: today,
     changeFrequency: "monthly" as const,
     priority: 0.9,

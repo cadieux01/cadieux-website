@@ -1,9 +1,20 @@
-// Server entry for the product detail page. Looks up the slug in the
-// live products table (is_active=true, is_archived=false) and surfaces
-// an `outOfStock` flag. Now also reads PageContent (content_strings +
-// stat_tiles + ingredients + app_reports) via getPageContent and hands
-// it to the client. pickString applies critical-string fallbacks so
-// the heading / SEO / section titles never go blank.
+// Server entry for the product detail page.
+//
+// Two slugs travel through this file:
+//   • `urlSlug`      — the [slug] route param, i.e. what appears in the
+//     browser bar (`plain-protein-bread`, `multigrain-protein-bread`).
+//     Used for canonical, OG url, breadcrumb item, and the JSON-LD
+//     Offer.url. This is the SEO-visible form and the only slug the
+//     external world ever sees post-Prompt-5.
+//   • `internalSlug` — the DB / content key (`high-protein`, `multigrain`).
+//     Used for every products-table lookup, PRODUCTS/PRODUCT_DETAILS
+//     bundled fallback, content_strings key, product_stat_tiles fetch,
+//     product_ingredients fetch, and review-scope key. Never changes
+//     across the URL rename.
+//
+// If the URL slug does not resolve to an internal slug, we 404 — the
+// old `/shop/high-protein` and `/shop/multigrain` paths never reach
+// this route because next.config.js 301s them at the edge.
 
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -18,8 +29,10 @@ import {
 import { getProductReports } from "@/lib/product-reports";
 import { getProductIngredients } from "@/lib/ingredients";
 import { getPageContent, pickString } from "@/lib/content";
+import { resolveInternalSlug } from "@/lib/product-slugs";
 
 import ProductDetailClient from "./ProductDetailClient";
+import { PDP_FAQS } from "./faqs";
 
 const SITE_URL = "https://www.cadieux.in";
 
@@ -32,32 +45,28 @@ function toAbsoluteUrl(src: string): string {
   return `${SITE_URL}/${src}`;
 }
 
-// Extract a positive number of grams from a product_stat_tiles row like
-// "7g", "7 g", "7.5g", "12". Returns null for placeholders ("—", "", "TBD")
-// so callers fall through to generic titles. Values are admin-editable, so
-// we cannot assume any specific format — regex is intentionally lenient.
-function parseProteinGrams(
-  tiles: ReadonlyArray<{ tile_key: string; value: string }>,
-): number | null {
-  const tile = tiles.find((t) => t.tile_key === "protein_per_slice");
-  if (!tile || !tile.value) return null;
-  const m = tile.value.match(/(\d+(?:\.\d+)?)/);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-// Dynamic metadata for product pages. Slug resolution is DB-first
-// (products table) so admin-created products get their OG payload;
-// bundled PRODUCTS[] is only consulted for legacy display fallbacks.
+// Dynamic metadata for product pages. Resolves the URL slug → internal
+// slug for every DB / content lookup; keeps the URL slug for canonical
+// + OG.url so social crawlers see the SEO-visible form only. Hero /
+// gallery resolution now lives in @/lib/products (phase-2 DB image
+// support) — this file only wires internalSlug into those helpers.
 export async function generateMetadata({
   params,
 }: {
   params: { slug: string };
 }): Promise<Metadata> {
-  const { slug } = params;
-  const productRow = await getProductBySlug(slug);
-  const bundled = PRODUCTS.find((p) => p.slug === slug);
+  const urlSlug = params.slug;
+  const internalSlug = resolveInternalSlug(urlSlug);
+
+  if (!internalSlug) {
+    return {
+      title: "Product Not Found",
+      description: "The product you're looking for is not available.",
+    };
+  }
+
+  const productRow = await getProductBySlug(internalSlug);
+  const bundled = PRODUCTS.find((p) => p.slug === internalSlug);
 
   if (!productRow && !bundled) {
     return {
@@ -67,32 +76,24 @@ export async function generateMetadata({
   }
 
   // Content-backed SEO with critical fallbacks (CRITICAL_FALLBACKS map
-  // in lib/content.ts guarantees a non-empty title/description per slug).
-  const content = await getPageContent({ page: "pdp", productId: slug });
-  const baseTitle = pickString(content, "pdp.seo.title", slug);
-  const baseDescription = pickString(content, "pdp.seo.description", slug);
+  // in lib/content.ts guarantees a non-empty title/description per
+  // internal slug). No conditional protein-title branching — the
+  // FSSAI-labelled figures aren't public yet, so a single stable
+  // title per slug avoids leaking placeholder values into <title>.
+  const content = await getPageContent({ page: "pdp", productId: internalSlug });
+  const title = pickString(content, "pdp.seo.title", internalSlug);
+  const description = pickString(content, "pdp.seo.description", internalSlug);
   const ogName =
-    pickString(content, "pdp.name", slug) || productRow?.name || bundled?.name || slug;
-  const ogImage = resolveHeroImage(productRow?.image_url, slug);
-
-  // Prefer a protein-forward SEO title when the stat tile is a real number.
-  // Placeholder "—" or empty admin values → fall back to the content-string
-  // title (already backed by CRITICAL_FALLBACKS per slug).
-  const proteinG = parseProteinGrams(content.stat_tiles);
-  const title = proteinG !== null
-    ? `${ogName} — High Protein Bread | Cadieux`
-    : baseTitle;
-  const description = proteinG !== null
-    ? `${ogName} — high-protein bread, slow-fermented and lab-tested. Order fresh delivery in Vizag.`
-    : baseDescription;
+    pickString(content, "pdp.name", internalSlug) || productRow?.name || bundled?.name || internalSlug;
+  const ogImage = resolveHeroImage(productRow?.image_url, internalSlug);
 
   return {
     title,
     description,
-    alternates: { canonical: `/shop/${slug}` },
+    alternates: { canonical: `/shop/${urlSlug}` },
     openGraph: {
       type: "website",
-      url: `https://www.cadieux.in/shop/${slug}`,
+      url: `${SITE_URL}/shop/${urlSlug}`,
       title,
       description,
       images: [
@@ -118,45 +119,54 @@ export default async function ProductDetailPage({
 }: {
   params: { slug: string };
 }) {
-  const { slug } = params;
+  const urlSlug = params.slug;
+  const internalSlug = resolveInternalSlug(urlSlug);
 
-  // Slug resolution is admin-driven: an active, non-archived row in
-  // public.products IS the allowlist. Deleted from bundled PRODUCTS or
-  // never listed there — doesn't matter. If the DB says the slug is
-  // live, we render. If not, 404. This is what lets a newly-created
-  // admin product resolve without a deploy.
-  const availability = await getProductAvailability();
-  if (availability && !availability.listed.has(slug)) {
+  // Unknown URL slug → immediate 404. The old `/shop/high-protein` and
+  // `/shop/multigrain` paths are 301'd in next.config.js and never
+  // reach this route; anything else typed by hand is a genuine miss.
+  if (!internalSlug) {
     notFound();
   }
 
-  const outOfStock = availability?.outOfStock.has(slug) ?? false;
+  // Slug resolution is admin-driven: an active, non-archived row in
+  // public.products IS the allowlist. If the DB says the internal slug
+  // is live, we render. If not, 404. This is what lets a newly-created
+  // admin product resolve without a deploy (once its URL slug is aliased
+  // in @/lib/product-slugs).
+  const availability = await getProductAvailability();
+  if (availability && !availability.listed.has(internalSlug)) {
+    notFound();
+  }
 
-  // Live product row + lab reports + ingredients (DB) + content.
+  const outOfStock = availability?.outOfStock.has(internalSlug) ?? false;
+
+  // Live product row + lab reports + ingredients (DB) + content — all
+  // keyed on the INTERNAL slug (public.products.slug + content_strings).
   const [productRow, ingredients, content] = await Promise.all([
-    getProductBySlug(slug),
-    getProductIngredients(slug),
-    getPageContent({ page: "pdp", productId: slug }),
+    getProductBySlug(internalSlug),
+    getProductIngredients(internalSlug),
+    getPageContent({ page: "pdp", productId: internalSlug }),
   ]);
 
   // Second gate: availability is best-effort (returns null on Supabase
   // outage → we degrade to "show everything"). If BOTH the DB row and
   // any bundled fallback are missing, this really is a bad URL — 404.
-  const bundled = PRODUCTS.find((p) => p.slug === slug);
+  const bundled = PRODUCTS.find((p) => p.slug === internalSlug);
   if (!productRow && !bundled) {
     notFound();
   }
 
   const reports = productRow ? await getProductReports(productRow.id) : [];
 
-  // Resolve PDP strings (with critical fallbacks per slug) here so the
-  // client doesn't have to import lib/content (server-only Supabase).
+  // Resolve PDP strings (with critical fallbacks per internal slug) here
+  // so the client doesn't have to import lib/content (server-only Supabase).
   const pdpStrings = {
-    name: pickString(content, "pdp.name", slug),
-    tag: pickString(content, "pdp.tag", slug),
-    title: pickString(content, "pdp.title", slug),
-    subtitle: pickString(content, "pdp.subtitle", slug),
-    description: pickString(content, "pdp.description", slug),
+    name: pickString(content, "pdp.name", internalSlug),
+    tag: pickString(content, "pdp.tag", internalSlug),
+    title: pickString(content, "pdp.title", internalSlug),
+    subtitle: pickString(content, "pdp.subtitle", internalSlug),
+    description: pickString(content, "pdp.description", internalSlug),
     aboutEyebrow: pickString(content, "pdp.section.about.eyebrow"),
     aboutTitle: pickString(content, "pdp.section.about.title"),
     reportsEyebrow: pickString(content, "pdp.section.reports.eyebrow"),
@@ -165,32 +175,41 @@ export default async function ProductDetailPage({
     outOfStockBanner: pickString(content, "pdp.out_of_stock_banner"),
   };
 
-  const heroImage = resolveHeroImage(productRow?.image_url, slug);
+  const heroImage = resolveHeroImage(productRow?.image_url, internalSlug);
   const media = resolveProductMedia(
-    slug,
+    internalSlug,
     productRow?.image_url,
     productRow?.gallery_urls,
   );
 
   // Product JSON-LD — price + availability are live from public.products
   // (price_inr int NOT NULL, in_stock bool via getProductAvailability).
-  // Skip the offers block entirely when no DB row is available (bundled-only
-  // legacy fallback) or price is missing — better no schema than a null price.
+  // `url` + Offer.url are the CANONICAL, URL-slug form so Google links
+  // the schema to the SEO-visible URL. Skip the offers block when no DB
+  // row is available (bundled-only legacy fallback) or price is missing
+  // — better no schema than a null price.
+  //
+  // NO aggregateRating field: we do not yet render individual reviews
+  // in the initial HTML, and Google penalises rating markup that isn't
+  // backed by visible reviews on the same page (Search Console flags
+  // it as a manual action risk).
+  const canonicalUrl = `${SITE_URL}/shop/${urlSlug}`;
   const productSchema: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: pdpStrings.name,
     image: [toAbsoluteUrl(heroImage)],
     description:
-      pickString(content, "pdp.seo.description", slug) ||
+      pickString(content, "pdp.seo.description", internalSlug) ||
       pdpStrings.description,
     brand: { "@type": "Brand", name: "Cadieux" },
-    sku: slug,
+    sku: internalSlug,
+    url: canonicalUrl,
   };
   if (productRow?.price_inr) {
     productSchema.offers = {
       "@type": "Offer",
-      url: `${SITE_URL}/shop/${slug}`,
+      url: canonicalUrl,
       priceCurrency: "INR",
       price: productRow.price_inr,
       availability: outOfStock
@@ -209,9 +228,26 @@ export default async function ProductDetailPage({
         "@type": "ListItem",
         position: 3,
         name: pdpStrings.name,
-        item: `${SITE_URL}/shop/${slug}`,
+        item: canonicalUrl,
       },
     ],
+  };
+
+  // FAQPage JSON-LD — one entry per PDP_FAQS row. The visible FAQ
+  // section rendered by ProductDetailClient uses the SAME PDP_FAQS
+  // constant, so the answer strings match schema exactly (Google's
+  // hard requirement for FAQ rich results).
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: PDP_FAQS.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: f.a,
+      },
+    })),
   };
 
   return (
@@ -224,8 +260,13 @@ export default async function ProductDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
       <ProductDetailClient
-        slug={slug}
+        slug={internalSlug}
+        urlSlug={urlSlug}
         outOfStock={outOfStock}
         reports={reports}
         ingredients={ingredients}
@@ -234,6 +275,7 @@ export default async function ProductDetailPage({
         statTiles={content.stat_tiles}
         media={media}
         heroImage={heroImage}
+        faqs={PDP_FAQS}
       />
     </>
   );

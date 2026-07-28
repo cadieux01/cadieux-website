@@ -103,17 +103,30 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   "pdp.name::high-protein": "Protein Bread",
   "pdp.tag::multigrain": "Multigrain Edition",
   "pdp.tag::high-protein": "Plain Edition",
+  // H1 fallback per product. The client reads pickString("pdp.title", slug)
+  // for the on-page <h1>. Prompt 4 promoted these to keyword-rich phrases
+  // that match the new URL slugs (`plain-protein-bread`,
+  // `multigrain-protein-bread`) so the H1, canonical URL, breadcrumb
+  // trail, and title tag all reinforce the same primary keyword. Admin
+  // edits in content_strings still take precedence.
+  "pdp.title::multigrain": "Cadieux Multigrain Protein Bread",
+  "pdp.title::high-protein": "Cadieux Plain Protein Bread",
   "pdp.description::multigrain":
     "Our multigrain loaf is the full expression of Cadieux: ancient grains, seeds, and protein, slow-fermented and baked to hold structure.",
   "pdp.description::high-protein":
     "Clean sandwich bread built for protein without the fuss. Soft slices, no compromise.",
-  // SEO fallbacks per product
-  "pdp.seo.title::multigrain": "Cadieux Multigrain Protein Bread | Lab-Tested",
-  "pdp.seo.title::high-protein": "Cadieux Plain Protein Bread | Fresh Delivery",
+  // SEO fallbacks per product — under Google's 60-char title / 155-char
+  // description windows, city-anchored (Visakhapatnam is the primary
+  // delivery market), keyword-forward. No nutrition figures until the
+  // FSSAI label is on the physical loaf (per compliance sweep).
+  "pdp.seo.title::multigrain":
+    "Cadieux Multigrain Protein Bread — Baked in Visakhapatnam",
+  "pdp.seo.title::high-protein":
+    "Cadieux Plain Protein Bread — Baked in Visakhapatnam",
   "pdp.seo.description::multigrain":
-    "Cadieux Multigrain Protein Bread. Made with quality ingredients. Order fresh delivery in Vizag.",
+    "Cadieux Multigrain Protein Bread. Slow-fermented, lab-tested, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
   "pdp.seo.description::high-protein":
-    "Cadieux Plain Protein Bread. Clean sandwich bread, fresh-baked daily in Visakhapatnam.",
+    "Cadieux Plain Protein Bread. Clean sandwich slices, slow-fermented and lab-tested, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
 };
 
 function fallbackFor(key: string, productId: string | null | undefined): string | undefined {

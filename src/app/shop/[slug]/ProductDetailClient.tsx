@@ -73,8 +73,13 @@ export type PdpStatTile = {
   sort_order: number;
 };
 
+// Shape of a single FAQ row — kept in sync with PdpFaq in the server page
+// (imported as `faqs` via props so the client stays server-safe).
+export type PdpFaqRow = { q: string; a: string };
+
 export default function ProductDetailClient({
   slug,
+  urlSlug,
   outOfStock = false,
   reports = [],
   ingredients = [],
@@ -83,8 +88,17 @@ export default function ProductDetailClient({
   statTiles = [],
   media = [],
   heroImage,
+  faqs = [],
 }: {
+  // Internal slug (`high-protein` | `multigrain`) — the key for PRODUCTS,
+  // PRODUCT_DETAILS, and the review scope. Never changes across a URL
+  // rename, so historical review data stays attached to the same product.
   slug: string;
+  // URL slug (`plain-protein-bread` | `multigrain-protein-bread`) — used
+  // only for outbound public links (share button, any deep link back to
+  // this page). Kept separate so we can rename URLs again without touching
+  // the DB / review scope.
+  urlSlug: string;
   outOfStock?: boolean;
   reports?: ProductReport[];
   // DB-driven ingredient names (product_ingredients), ordered. The bundled
@@ -107,6 +121,10 @@ export default function ProductDetailClient({
   // Server-resolved primary image URL (admin image_url → bundled → /hero.jpg).
   // Used for meta share button + any single-image lookup on the client.
   heroImage?: string;
+  // FAQ rows resolved on the server (PDP_FAQS in page.tsx). Rendered as a
+  // visible <section> so the DOM matches the FAQPage JSON-LD schema
+  // Google requires for FAQ rich results.
+  faqs?: PdpFaqRow[];
 }) {
   const typedSlug = slug as ProductSlug;
   const product = PRODUCTS.find((p) => p.slug === typedSlug);
@@ -245,7 +263,7 @@ export default function ProductDetailClient({
               <ShareButton
                 title={`${dispTitle} — Cadieux`}
                 text={`${dispTitle}. ${dispSubtitle}`}
-                url={`https://www.cadieux.in/shop/${product.slug}`}
+                url={`https://www.cadieux.in/shop/${urlSlug}`}
                 size={36}
               />
             </div>
@@ -615,6 +633,75 @@ export default function ProductDetailClient({
         ) : (
           <hr style={DIVIDER_STYLE} />
         )}
+
+        {/* FAQ — visible HTML that mirrors the FAQPage JSON-LD schema
+            emitted by the server page. Google's rich-result guidelines
+            require the visible answer text to match the schema answer
+            exactly (they crawl the DOM to verify), so both the schema
+            and this section render from the same PDP_FAQS list.
+            Rendered as an accessible <details>/<summary> so the answer
+            text is in the initial HTML (indexable) but collapsed by
+            default for a clean visual layout. */}
+        {faqs.length > 0 ? (
+          <>
+            <Section label="Frequently asked" title="Common questions">
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {faqs.map((f, i) => (
+                  <details
+                    key={i}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(2,70,40,0.2)",
+                      borderRadius: 8,
+                      padding: "14px 18px",
+                    }}
+                  >
+                    <summary
+                      style={{
+                        fontFamily: "var(--font-body)",
+                        fontSize: 15,
+                        fontWeight: 500,
+                        color: "#024628",
+                        letterSpacing: "0.01em",
+                        cursor: "pointer",
+                        listStyle: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                      }}
+                    >
+                      <span>{f.q}</span>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          fontSize: 18,
+                          lineHeight: 1,
+                          color: "rgba(2,70,40,0.55)",
+                        }}
+                      >
+                        +
+                      </span>
+                    </summary>
+                    <p
+                      style={{
+                        margin: "12px 0 0",
+                        fontFamily: "var(--font-body)",
+                        fontSize: 14,
+                        lineHeight: 1.6,
+                        fontWeight: 300,
+                        color: "#024628",
+                      }}
+                    >
+                      {f.a}
+                    </p>
+                  </details>
+                ))}
+              </div>
+            </Section>
+            <hr style={DIVIDER_STYLE} />
+          </>
+        ) : null}
 
         {/* Reviews */}
         <Section label="What customers say" title="Customer Reviews">

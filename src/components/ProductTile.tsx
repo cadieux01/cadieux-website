@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRef, useState } from "react";
 import type { ProductMedia, ProductStat } from "@/lib/data";
+import { toUrlSlug } from "@/lib/product-slugs";
 import { useCart } from "@/context/CartContext";
 
 // Task F v2 cleanup: card is a FG-brand surface (#024628). All text must be
@@ -107,9 +108,13 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
     }
   };
 
+  // The `slug` prop is the INTERNAL slug (products.slug from Supabase or
+  // the bundled PRODUCTS[]). Map it to the URL slug so the tile links to
+  // the canonical, SEO-visible URL (`/shop/plain-protein-bread`) rather
+  // than the internal-only form. Unaliased slugs pass through unchanged.
   return (
     <Link
-      href={`/shop/${slug}`}
+      href={`/shop/${toUrlSlug(slug)}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       // FIX 2: equal-height cards — flex column + h:100% lets siblings match

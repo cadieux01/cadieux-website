@@ -2,17 +2,23 @@
 
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { PRODUCTS, type ProductSlug } from "@/lib/data";
+import { PRODUCTS } from "@/lib/data";
+import { resolveInternalSlug } from "@/lib/product-slugs";
 import { ShareButton } from "@/components/ShareButton";
 
 const GRAIN = "url(/grain.svg)";
 
 export default function ProductReportsPage() {
   const params = useParams<{ slug: string }>();
-  const slug = params?.slug as ProductSlug | undefined;
-  const product = slug ? PRODUCTS.find((p) => p.slug === slug) : undefined;
+  // `urlSlug` = whatever's in the URL bar (`plain-protein-bread`,
+  // `multigrain-protein-bread`). We resolve it to the internal slug
+  // for the PRODUCTS lookup, but the "back" link stays on the URL
+  // slug so the user round-trips through the same SEO-visible URL.
+  const urlSlug = params?.slug;
+  const internalSlug = urlSlug ? resolveInternalSlug(urlSlug) : null;
+  const product = internalSlug ? PRODUCTS.find((p) => p.slug === internalSlug) : undefined;
 
-  if (!slug || !product) {
+  if (!urlSlug || !internalSlug || !product) {
     notFound();
   }
 
@@ -21,7 +27,7 @@ export default function ProductReportsPage() {
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.04, mixBlendMode: "multiply", pointerEvents: "none", zIndex: 0 }} />
 
       <Link
-        href={`/shop/${slug}`}
+        href={`/shop/${urlSlug}`}
         style={{
           position: "fixed",
           top: "calc(24px + env(safe-area-inset-top))",
@@ -170,12 +176,12 @@ export default function ProductReportsPage() {
             <ShareButton
               title={`${product.title} — Test Reports`}
               text={`${product.title}: independent lab reports from Cadieux.`}
-              url={`https://www.cadieux.in/shop/${slug}/reports`}
+              url={`https://www.cadieux.in/shop/${urlSlug}/reports`}
               label="Share"
               size={42}
             />
             <Link
-              href={`/shop/${slug}`}
+              href={`/shop/${urlSlug}`}
               style={{
                 padding: "14px 26px",
                 border: "1px solid #FBF3D4",
