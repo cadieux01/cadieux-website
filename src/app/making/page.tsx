@@ -25,8 +25,15 @@ export default async function MakingPage() {
           num: s.step_num,
           title: s.title,
           desc: s.body,
+          image: s.image_url,
         }))
-      : PROCESS_STEPS.map((s) => ({ num: s.num, title: s.title, desc: s.desc }));
+      : PROCESS_STEPS.map((s) => ({
+          num: s.num,
+          title: s.title,
+          desc: s.desc,
+          // Bundled fallback steps are text-only (no photo field).
+          image: null as string | null,
+        }));
 
   return (
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
@@ -54,15 +61,32 @@ export default async function MakingPage() {
         </ScrollReveal>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-          {steps.map((step, i) => (
-            <ScrollReveal key={i}>
-              <div style={{ borderTop: "1px solid rgba(2,70,40,0.2)", paddingTop: 32, paddingBottom: 40 }}>
+          {steps.map((step, i) => {
+            const text = (
+              <>
                 <span data-stagger style={{ display: "block", marginBottom: 16, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", color: "rgba(2,70,40,0.55)" }}>{step.num}</span>
                 <p data-stagger style={{ margin: "0 0 12px", fontFamily: "var(--font-heading)", fontSize: "clamp(22px,5vw,38px)", fontWeight: 300, color: "#024628", letterSpacing: "0.01em", lineHeight: 1.1 }}>{step.title}</p>
                 <p data-stagger style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, lineHeight: 1.85, color: "rgba(2,70,40,0.8)", maxWidth: 520 }}>{step.desc}</p>
-              </div>
-            </ScrollReveal>
-          ))}
+              </>
+            );
+            return (
+              <ScrollReveal key={i}>
+                <div style={{ borderTop: "1px solid rgba(2,70,40,0.2)", paddingTop: 32, paddingBottom: 40 }}>
+                  {step.image ? (
+                    <div style={{ display: "flex", gap: "clamp(20px,4vw,48px)", alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div style={{ flex: "1 1 300px", minWidth: 0 }}>{text}</div>
+                      <div style={{ flex: "0 1 340px" }} data-stagger>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={step.image} alt={step.title} loading="lazy" style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: 8, border: "1px solid rgba(2,70,40,0.15)", display: "block" }} />
+                      </div>
+                    </div>
+                  ) : (
+                    text
+                  )}
+                </div>
+              </ScrollReveal>
+            );
+          })}
         </div>
       </div>
     </div>

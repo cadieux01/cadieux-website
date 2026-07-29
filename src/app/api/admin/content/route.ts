@@ -297,6 +297,13 @@ function shapeRow(
         if (title !== undefined) row.title = title;
         if (bodyTxt !== undefined) row.body = bodyTxt;
       }
+      // Optional per-step photo (nullable). Present-and-empty clears it
+      // back to NULL (text-only step). Sent by the admin editor as a URL
+      // string from the shared /upload-image route (process-steps/ prefix).
+      if (patch.image_url !== undefined) {
+        const img = trimStr(patch.image_url);
+        row.image_url = img && img.length > 0 ? img : null;
+      }
       return { row };
     }
   }

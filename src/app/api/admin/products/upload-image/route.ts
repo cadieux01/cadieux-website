@@ -50,10 +50,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Optional `prefix` folder within the same bucket so different callers
+  // can keep their uploads organised (e.g. process-steps/). Sanitised to a
+  // safe slug-ish path segment; empty/absent = bucket root (product images,
+  // unchanged). Never trust the raw value — strip anything but [a-z0-9/_-].
+  const prefixRaw = form.get("prefix");
+  const prefix =
+    typeof prefixRaw === "string"
+      ? prefixRaw
+          .replace(/[^a-zA-Z0-9/_-]/g, "")
+          .replace(/^\/+|\/+$/g, "")
+          .slice(0, 64)
+      : "";
+
   const ext = EXT_BY_MIME[file.type] ?? "bin";
   const stamp = Date.now();
   const rand = Math.random().toString(36).slice(2, 10);
-  const path = `${stamp}-${rand}.${ext}`;
+  const filename = `${stamp}-${rand}.${ext}`;
+  const path = prefix ? `${prefix}/${filename}` : filename;
 
   const buffer = Buffer.from(await file.arrayBuffer());
 

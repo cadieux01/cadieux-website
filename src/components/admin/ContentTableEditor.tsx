@@ -14,9 +14,9 @@
 // Generic catch: keep the JSX flat (no fancy table) so the existing
 // admin "code-y" aesthetic carries through.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 
-import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import { adminFetch, AdminFetchError, adminAuthHeaders } from "@/lib/admin-client";
 
 const GOLD = "#f59e0b";
 const CREAM = "#fbf3d4";
@@ -34,9 +34,10 @@ export type ContentTable =
 export type FieldSpec = {
   key: string;
   label: string;
-  // 'short' is a small input, 'long' is a textarea, 'hidden' is set on
-  // create only (e.g. natural keys auto-derived).
-  kind: "short" | "long";
+  // 'short' is a small input, 'long' is a textarea, 'image' is an optional
+  // photo upload (reuses the product /upload-image route) that stores a
+  // public URL string in the field.
+  kind: "short" | "long" | "image";
   // Optional hint shown under the field on the create row.
   hint?: string;
   // If true, surface a soft warning when the value looks like a macro
@@ -361,7 +362,15 @@ export function ContentTableEditor({
                             f.warnMacros && looksLikeMacro(String(current));
                           return (
                             <LabelCell key={f.key} label={f.label}>
-                              {f.kind === "long" ? (
+                              {f.kind === "image" ? (
+                                <ImageUpload
+                                  value={String(current)}
+                                  onChange={(url) =>
+                                    setDraftField(r.id, f.key, url)
+                                  }
+                                  disabled={busy}
+                                />
+                              ) : f.kind === "long" ? (
                                 <textarea
                                   value={current as string}
                                   onChange={(e) =>
@@ -483,7 +492,15 @@ export function ContentTableEditor({
                     key={f.key}
                     label={`${f.label}${f.required ? " *" : ""}`}
                   >
-                    {f.kind === "long" ? (
+                    {f.kind === "image" ? (
+                      <ImageUpload
+                        value={v}
+                        onChange={(url) =>
+                          setNewRow((s) => ({ ...s, [f.key]: url }))
+                        }
+                        disabled={busy}
+                      />
+                    ) : f.kind === "long" ? (
                       <textarea
                         value={v}
                         onChange={(e) =>
@@ -547,6 +564,110 @@ export function ContentTableEditor({
         </p>
       ) : null}
     </section>
+  );
+}
+
+// Optional photo upload for an 'image' field. Reuses the admin-gated
+// product /upload-image route with a `process-steps/` prefix (same bucket,
+// organised folder). Stores the returned public URL in the field; "Clear"
+// resets it to "" which the API persists as NULL (text-only step).
+function ImageUpload({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (url: string) => void;
+  disabled?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [uErr, setUErr] = useState<string | null>(null);
+
+  async function pick(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    setUErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("prefix", "process-steps");
+      // Raw fetch (not adminFetch) so the browser sets the multipart
+      // boundary; still attach the admin bearer via adminAuthHeaders.
+      const res = await fetch("/api/admin/products/upload-image", {
+        method: "POST",
+        headers: adminAuthHeaders(),
+        credentials: "include",
+        body: fd,
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
+      if (!res.ok || !json.url) {
+        throw new Error(json.error || "Upload failed");
+      }
+      onChange(json.url);
+    } catch (err) {
+      setUErr(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  const controlDisabled = disabled || busy;
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {value ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={value}
+          alt=""
+          style={{
+            width: 46,
+            height: 46,
+            objectFit: "cover",
+            border: `1px solid ${BORDER}`,
+            flexShrink: 0,
+          }}
+        />
+      ) : (
+        <span style={{ ...hintStyle, marginTop: 0 }}>No photo</span>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={pick}
+        disabled={controlDisabled}
+        style={{ display: "none" }}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={controlDisabled}
+        className="uppercase"
+        style={pillStyle(GOLD, controlDisabled)}
+      >
+        {busy ? "Uploading…" : value ? "Replace" : "Upload"}
+      </button>
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          disabled={controlDisabled}
+          className="uppercase"
+          style={pillStyle("#9ca3af", controlDisabled)}
+        >
+          Clear
+        </button>
+      ) : null}
+      {uErr ? (
+        <p style={{ ...warnStyle, color: "#fecaca", width: "100%" }}>{uErr}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -680,5 +801,6 @@ export const PROCESS_STEPS_SPEC: TableSpec = {
     { key: "step_num", label: "Step number/marker", kind: "short", required: true },
     { key: "title", label: "Title", kind: "short", required: true },
     { key: "body", label: "Body", kind: "long", required: true },
+    { key: "image_url", label: "Photo (optional)", kind: "image" },
   ],
 };

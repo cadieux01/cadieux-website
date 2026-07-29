@@ -70,6 +70,8 @@ export type ProcessStep = {
   step_num: string;
   title: string;
   body: string;
+  // Optional admin-uploaded photo for the step. null = text-only step.
+  image_url: string | null;
   sort_order: number;
 };
 
@@ -343,7 +345,7 @@ async function fetchProcessSteps(locale: ContentLocale): Promise<ProcessStep[]> 
   const sb = anon();
   const { data, error } = await sb
     .from("process_steps")
-    .select("id, step_key, step_num, title, body, sort_order")
+    .select("id, step_key, step_num, title, body, image_url, sort_order")
     .eq("locale", locale)
     .eq("is_visible", true)
     .order("sort_order", { ascending: true });
