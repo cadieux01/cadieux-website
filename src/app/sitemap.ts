@@ -2,6 +2,7 @@ import { MetadataRoute } from "next";
 import { BLOG_POSTS, PRODUCTS } from "@/lib/data";
 import { getActiveProducts } from "@/lib/products";
 import { toUrlSlug } from "@/lib/product-slugs";
+import { getServiceAreaGroups } from "@/lib/service-areas";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://www.cadieux.in";
@@ -127,5 +128,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.9,
   }));
 
-  return [...staticPages, ...productPages, ...blogPages];
+  // Dynamic /delivery/[area] pages — one entry per row in
+  // public.service_areas with a populated slug (Prompt 8). Empty when
+  // Supabase is unreachable so the sitemap degrades cleanly rather
+  // than emitting broken URLs.
+  const areaGroups = await getServiceAreaGroups();
+  const deliveryPages: MetadataRoute.Sitemap = areaGroups.map((g) => ({
+    url: `${baseUrl}/delivery/${g.slug}`,
+    lastModified: today,
+    changeFrequency: "monthly" as const,
+    priority: 0.7,
+  }));
+
+  return [...staticPages, ...productPages, ...deliveryPages, ...blogPages];
 }

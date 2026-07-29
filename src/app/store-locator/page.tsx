@@ -19,6 +19,16 @@ function areaSlug(area: string) {
   return `area-${area.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
 }
 
+// RETAILERS-key → /delivery/[area] slug (Prompt 8). Only areas that have
+// BOTH a stockist row AND a service_areas row with a populated slug get
+// a link. Deliberately explicit rather than fuzzy-matched — the two sets
+// have no shared join key. Missing entries render without a link (the
+// area section is still visible, just without an "In-area delivery" CTA).
+const DELIVERY_PAGE_BY_RETAILER_AREA: Record<string, string> = {
+  "MVP Colony": "mvp-colony",
+  "Madhurawada / P.M. Palem": "madhurawada",
+};
+
 // Universal Google Maps directions URL — opens the Maps app on iOS/Android
 // when installed, otherwise google.com/maps in the browser. Uses a name +
 // address query so Google geocodes the actual storefront (no guessed coords).
@@ -110,6 +120,7 @@ export default function StoreLocatorPage() {
           {areas.map((area) => {
             const retailers = RETAILERS[area];
             const slug = areaSlug(area);
+            const deliverySlug = DELIVERY_PAGE_BY_RETAILER_AREA[area];
             return (
               <section
                 key={area}
@@ -139,6 +150,37 @@ export default function StoreLocatorPage() {
                     letterSpacing: "0.15em", textTransform: "uppercase",
                   }}>{retailers.length} stores</span>
                 </div>
+
+                {/* Prompt 8 — cross-link to the /delivery/[area] page when
+                    a mapping exists. Rendered right below the area header so
+                    a visitor scrolled to this anchor sees the delivery CTA
+                    before scanning the stockist list. Rows without a mapping
+                    render nothing here (no placeholder). */}
+                {deliverySlug ? (
+                  <p style={{
+                    margin: "8px 0 0",
+                    paddingLeft: 20,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 12,
+                    fontWeight: 400,
+                    color: "rgba(2,70,40,0.85)",
+                    letterSpacing: "0.02em",
+                    lineHeight: 1.5,
+                  }}>
+                    <Link
+                      href={`/delivery/${deliverySlug}`}
+                      style={{
+                        color: "#024628",
+                        textDecoration: "underline",
+                        textUnderlineOffset: 3,
+                        fontWeight: 500,
+                      }}
+                    >
+                      Fresh delivery in {area}
+                    </Link>
+                    {" "}— pincodes and details.
+                  </p>
+                ) : null}
 
                 <div style={{ paddingLeft: 20, paddingTop: 8 }}>
                   {retailers.map((r, i) => (

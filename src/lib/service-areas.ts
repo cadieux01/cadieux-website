@@ -23,6 +23,11 @@ export type ServiceAreaRow = {
   latitude: number | null;
   longitude: number | null;
   geocoded_at: string | null;
+  // Prompt 8: `slug` drives /delivery/[area] URLs. Nullable — rows
+  // added for checkout serviceability only don't need a public page.
+  // `local_note` is human-written area copy, one short paragraph.
+  slug: string | null;
+  local_note: string | null;
 };
 
 /** Normalises whatever the caller passed to a 6-digit pincode, or null. */
@@ -168,4 +173,80 @@ export async function resolveServiceability(
     };
   }
   return { serviceable: false, reason: "no_match" };
+}
+
+// ── Prompt 8 (SEO /delivery/[area]) ─────────────────────────────────────
+//
+// Public page reads for /delivery/[area]. Only rows with a populated
+// slug render a page — rows added for checkout serviceability without
+// an admin-assigned slug are excluded. Aggregation groups multiple
+// pincodes under a single slug (today every slug maps to one row, but
+// the schema and page render support N pincodes per area).
+
+export type ServiceAreaGroup = {
+  slug: string;
+  area_name: string;
+  pincodes: string[];
+  local_note: string | null;
+};
+
+const getSluggedGroups = unstable_cache(
+  async (): Promise<ServiceAreaGroup[]> => {
+    const { data, error } = await supabaseAdmin
+      .from("service_areas")
+      .select("slug, area_name, pincode, local_note")
+      .eq("is_active", true)
+      .not("slug", "is", null)
+      .order("slug", { ascending: true });
+    if (error) {
+      console.warn("[service-areas] slugged lookup failed:", error.message);
+      return [];
+    }
+    const bySlug = new Map<string, ServiceAreaGroup>();
+    for (const r of data ?? []) {
+      if (!r.slug) continue;
+      const existing = bySlug.get(r.slug);
+      if (existing) {
+        existing.pincodes.push(r.pincode);
+      } else {
+        bySlug.set(r.slug, {
+          slug: r.slug,
+          area_name: r.area_name,
+          pincodes: [r.pincode],
+          local_note: r.local_note,
+        });
+      }
+    }
+    const groups = Array.from(bySlug.values());
+    for (const g of groups) g.pincodes.sort();
+    return groups.sort((a, b) => a.slug.localeCompare(b.slug));
+  },
+  ["service-areas:slugged-groups"],
+  { tags: [SERVICE_AREAS_TAG], revalidate: 3600 },
+);
+
+/** All slugged/active area groups — one entry per /delivery/[area] page. */
+export async function getServiceAreaGroups(): Promise<ServiceAreaGroup[]> {
+  return getSluggedGroups();
+}
+
+/** Single group lookup by URL slug — returns null when the slug is not
+ *  a known service area (page will `notFound()`). */
+export async function getServiceAreaBySlug(
+  slug: string,
+): Promise<ServiceAreaGroup | null> {
+  const groups = await getSluggedGroups();
+  return groups.find((g) => g.slug === slug) ?? null;
+}
+
+/** Display-time title-case for `area_name`. DB stores what admin typed
+ *  (e.g. "KURMANA PALEM"); this returns a render form without touching
+ *  the DB. Used for H1, OG title, and inline copy only — the slug is
+ *  independent and stable. */
+export function displayAreaName(raw: string): string {
+  return raw
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => (w.length ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
 }
