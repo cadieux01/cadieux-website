@@ -91,7 +91,10 @@ export async function generateMetadata({
   }
   const name = displayAreaName(group.area_name);
   const title = `Cadieux Protein Bread Delivery in ${name}, Visakhapatnam`;
-  const description = `Fresh, slow-fermented protein bread delivered in ${name}. ${DELIVERY_WINDOW_TEXT} Serving pincode ${group.pincodes.join(", ")}.`;
+  // Meta description kept under 160 chars. Avoid duplicating "Fresh" —
+  // the loaf is described as slow-fermented; delivery is described as
+  // daily with the citywide window.
+  const description = `Slow-fermented protein bread delivered in ${name}. Delivered daily, 7:30 AM to 9:00 PM IST, except 1–2 PM. Serving pincode ${group.pincodes.join(", ")}.`;
   return {
     title,
     description,

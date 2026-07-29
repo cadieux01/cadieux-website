@@ -239,11 +239,14 @@ export async function getServiceAreaBySlug(
   return groups.find((g) => g.slug === slug) ?? null;
 }
 
-/** Display-time title-case for `area_name`. DB stores what admin typed
- *  (e.g. "KURMANA PALEM"); this returns a render form without touching
- *  the DB. Used for H1, OG title, and inline copy only — the slug is
- *  independent and stable. */
+/** Display-time normalisation for `area_name`. DB stores what admin
+ *  typed. Only fully-uppercase strings ("KURMANA PALEM") are folded
+ *  to title-case ("Kurmana Palem"). Mixed-case inputs like "MVP Colony"
+ *  are already deliberate and pass through unchanged — folding them
+ *  would produce "Mvp Colony" and lose the acronym.
+ *  Used for H1, OG title, and inline copy — the slug is independent. */
 export function displayAreaName(raw: string): string {
+  if (raw !== raw.toUpperCase()) return raw;
   return raw
     .toLowerCase()
     .split(/\s+/)
