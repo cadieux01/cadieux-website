@@ -416,6 +416,46 @@ function summariseItems(items: unknown): string {
     .join(", ");
 }
 
+// ── order classification (computed, no DB writes) ───────────────────────────
+// PHASE 1: derive a live/stale class for each order on the fly so the bot never
+// presents a stale, never-confirmed order as if it were being delivered. NOTHING
+// is written back — this is read-side logic only.
+type OrderClass = "delivered" | "cancelled" | "active" | "pending" | "expired";
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+// Statuses that mean the team has already picked the order up / moved it along.
+const ADVANCED_STATUSES = new Set(["confirmed", "preparing", "out_for_delivery", "dispatched"]);
+// Statuses that mean "placed but not yet acted on by the team".
+const PENDINGISH_STATUSES = new Set(["pending", "placed"]);
+
+// Precedence (highest first):
+//   1. delivered / cancelled  → terminal, always answerable, never hidden.
+//   2. paid OR advanced status → ACTIVE (the team is working it / money is in).
+//   3. pending|placed & unpaid → split on the 7-day line from created_at:
+//        • within last 7 days  → PENDING  (genuine, awaiting confirmation)
+//        • older than 7 days   → EXPIRED  (stale, never confirmed → NOT active)
+//   4. anything else (unknown status) → ACTIVE (never hide what we don't model).
+// Age uses created_at; 7 days = 7×24h from now (UTC). Boundary (exactly 7d old)
+// counts as still within → PENDING.
+function classifyOrder(o: OrderRow, nowMs: number): OrderClass {
+  const status = (o.status ?? "").toLowerCase();
+  if (status === "delivered") return "delivered";
+  if (status === "cancelled") return "cancelled";
+
+  const paid = (o.payment_status ?? "").toLowerCase() === "paid";
+  if (paid || ADVANCED_STATUSES.has(status)) return "active";
+
+  if (PENDINGISH_STATUSES.has(status)) {
+    const createdMs = Date.parse(o.created_at);
+    // Unparseable date → be conservative and treat as EXPIRED (don't promise delivery).
+    if (!Number.isFinite(createdMs)) return "expired";
+    const ageMs = nowMs - createdMs;
+    return ageMs > SEVEN_DAYS_MS ? "expired" : "pending";
+  }
+
+  return "active";
+}
+
 // ── caches ──────────────────────────────────────────────────────────────────
 
 let productCache: { at: number; rows: ProductForPrompt[] } | null = null;
@@ -557,7 +597,9 @@ async function fetchCustomerContext(
         )
         .in("customer_id", customerIds)
         .order("created_at", { ascending: false })
-        .limit(3);
+        // PHASE 1: fetch up to 5 (was 3) so that after we hide stale/expired
+        // unconfirmed orders the customer still sees any genuine active order.
+        .limit(5);
       if (oErr) console.error("[ai-reply] orders fetch failed:", oErr.message);
       orders = (ords ?? []) as OrderRow[];
     }
@@ -738,13 +780,31 @@ function renderCustomerBlock(ctx: CustomerContext | null, verifiedPhone: string)
   if (ctx.customer?.full_name) lines.push(`Name on record: ${ctx.customer.full_name}`);
   if (ctx.customer?.city) lines.push(`City on record: ${ctx.customer.city}`);
   lines.push("");
-  lines.push(`RECENT ORDERS (up to 3, newest first — total loaded: ${ctx.orders.length})`);
-  if (ctx.orders.length === 0) {
-    lines.push("- (none)");
+  // PHASE 1: classify each fetched order so the model never treats a stale,
+  // never-confirmed order as live. Expired orders are lifted out of the active
+  // list and only summarised as "on file, not active".
+  const nowMs = Date.now();
+  const classified = ctx.orders.map((o) => ({ o, klass: classifyOrder(o, nowMs) }));
+  const visible = classified.filter((c) => c.klass !== "expired");
+  const expired = classified.filter((c) => c.klass === "expired");
+
+  lines.push(
+    `RECENT ORDERS (newest first — ${visible.length} active/pending/completed shown)`,
+  );
+  if (visible.length === 0) {
+    lines.push("- (no active or recent orders on this number)");
   } else {
-    for (const o of ctx.orders) {
+    for (const { o, klass } of visible) {
+      const tag =
+        klass === "pending"
+          ? " [PENDING CONFIRMATION — awaiting the team, NOT yet confirmed]"
+          : klass === "delivered"
+          ? " [DELIVERED]"
+          : klass === "cancelled"
+          ? " [CANCELLED]"
+          : " [ACTIVE]";
       const bits: string[] = [];
-      bits.push(`- Order ${shortOrderId(o)} — placed ${isoDate(o.created_at)}`);
+      bits.push(`- Order ${shortOrderId(o)} — placed ${isoDate(o.created_at)}${tag}`);
       bits.push(
         `  status: ${o.status ?? "unknown"}${
           o.status_updated_at ? ` (updated ${isoDate(o.status_updated_at)})` : ""
@@ -762,8 +822,21 @@ function renderCustomerBlock(ctx: CustomerContext | null, verifiedPhone: string)
       );
       bits.push(`  address: ${o.delivery_address ?? "(none on file)"}`);
       if (o.cancelled_at) bits.push(`  cancelled at: ${isoDate(o.cancelled_at)}`);
+      if (klass === "pending") {
+        bits.push(
+          `  → PENDING CONFIRMATION by the team. Do NOT promise a delivery date/time. If the customer asks about it, tell them it's pending confirmation and OFFER: "Would you like me to connect you with the team to confirm it?" If they agree, write one warm sentence naming this order number and hand off with ${HANDOFF_TOKEN}.`,
+        );
+      }
       lines.push(bits.join("\n"));
     }
+  }
+  if (expired.length > 0) {
+    lines.push("");
+    lines.push(
+      `STALE / EXPIRED (${expired.length}): ${expired
+        .map((c) => shortOrderId(c.o))
+        .join(", ")} — placed more than 7 days ago and NEVER confirmed or paid. These are NOT active orders. Never present them as live: do NOT say "scheduled", "delivering", or give a delivery date. If the customer asks about one, say it's an older unconfirmed request that isn't active, and offer to connect them to the team.`,
+    );
   }
   lines.push("");
   lines.push(
@@ -811,6 +884,12 @@ function renderCustomerBlock(ctx: CustomerContext | null, verifiedPhone: string)
   );
   lines.push(
     "- Refunds, replacements, cancellations, address changes → say the team will help and hand off. Never promise an outcome.",
+  );
+  lines.push(
+    "- Orders tagged [PENDING CONFIRMATION] are NOT confirmed yet — never state a delivery date/time as promised. Offer to connect the customer to the team to confirm; on agreement, hand off naming the order number.",
+  );
+  lines.push(
+    "- Any order listed under STALE / EXPIRED is NOT active — it was never confirmed. Never say it is being delivered, scheduled, or arriving. If the customer's only orders are expired (nothing shown under RECENT ORDERS), tell them there are no active orders on this WhatsApp number; you may add that an older unconfirmed request is on file but not active, and offer to connect them to the team.",
   );
   return lines.join("\n");
 }
