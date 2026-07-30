@@ -1019,24 +1019,30 @@ Deno.serve(async (req: Request) => {
     topics.size > 0 &&
     Array.from(topics).every((t) => t === "greeting" || t === "smalltalk");
 
-  // Option B: a PURELY transactional turn (order/subscription, optionally with
-  // greeting/smalltalk/ack) is self-contained — its answer comes entirely from
-  // the freshly-fetched CUSTOMER DATA block, never from chat history. Drop
-  // history so stale topics (e.g. an old "I don't have the founding history"
-  // line) can't bleed into an order/subscription reply. Mixed turns (order +
-  // pricing, order + brand_story, etc.) KEEP history and rely on the prompt rule.
-  const TRANSACTIONAL_RESET_ALLOWED = new Set<Topic>([
-    "order",
-    "subscription",
-    "greeting",
-    "smalltalk",
-    "ack",
+  const ANCILLARY = new Set<Topic>(["greeting", "smalltalk", "ack"]);
+  // Every topic here is answered entirely from a freshly-injected block
+  // (fetched/fixed on THIS turn) or a fixed HARD RULE — never from chat
+  // history. So dropping history on these turns removes nothing the answer
+  // needs, while preventing stale topics from bleeding in.
+  // brand_story is DELIBERATELY EXCLUDED: it is the one narrative topic whose
+  // "tell me more" follow-ups genuinely rely on conversation history.
+  const SELF_CONTAINED_RESET = new Set<Topic>([
+    "order", "subscription",             // → CUSTOMER DATA (fresh DB)
+    "pricing", "product", "ingredients", // → LIVE PRODUCT DATA (fresh DB)
+    "stores",                            // → STORE LOCATIONS (fresh DB)
+    "contact", "factory", "launch",      // → fixed CONTACT / FACTORY / LAUNCH blocks
+    "nutrition", "recipe", "delivery_area", // → fixed HARD RULES 4 / 7 / 3
+    "greeting", "smalltalk", "ack",      // ancillary
   ]);
-  const isTransactionalReset =
-    (topics.has("order") || topics.has("subscription")) &&
-    Array.from(topics).every((t) => TRANSACTIONAL_RESET_ALLOWED.has(t));
+  // Require at least one NON-ancillary topic, so an ack-only "ok" (answering
+  // the bot's "connect you to a human?") does NOT drop history — it must
+  // remember what's being confirmed.
+  const isSelfContainedReset =
+    topics.size > 0 &&
+    Array.from(topics).some((t) => !ANCILLARY.has(t)) &&
+    Array.from(topics).every((t) => SELF_CONTAINED_RESET.has(t));
 
-  const isConversationalReset = isGreetingReset || isTransactionalReset;
+  const isConversationalReset = isGreetingReset || isSelfContainedReset;
   const effectiveHistory: Turn[] = isConversationalReset ? [] : history;
   const messages: Turn[] = [...effectiveHistory, { role: "user", content: message }];
 
