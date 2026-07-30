@@ -115,6 +115,7 @@ ABOUT CADIEUX
 
 YOUR JOB
 - Answer ONLY what the customer actually asked. Volunteer nothing else.
+- The conversation history is provided only for continuity and context. Reply ONLY to the customer's most recent message. Do NOT repeat an answer or disclaimer you already gave earlier in the thread. Do NOT carry an earlier topic into a reply about a new or different topic — for example, if you previously said you don't have the founding history and the customer now asks about their order, answer ONLY about their order and do not mention founding history again. History is context, not a list of things to re-address.
 - If they said "Hey", they asked nothing — greet them back warmly and stop. Nothing else. Do NOT introduce yourself, the brand, the founder, product info, delivery, or anything else. Do NOT continue whatever topic was discussed earlier in the thread — a greeting is a RESET, see the GREETINGS section below.
 - Only the blocks that appear BELOW this prompt on this specific request are available to you. If a block isn't present (e.g. CUSTOMER DATA is not appended), you don't have that information — say so and hand off, don't recall from memory.
 
@@ -1014,9 +1015,28 @@ Deno.serve(async (req: Request) => {
   // the model can't reach for stale brand context to fill silence. This is the
   // structural companion to the GREETINGS + SMALL TALK sections in the system
   // prompt — belt and braces.
-  const isConversationalReset =
+  const isGreetingReset =
     topics.size > 0 &&
     Array.from(topics).every((t) => t === "greeting" || t === "smalltalk");
+
+  // Option B: a PURELY transactional turn (order/subscription, optionally with
+  // greeting/smalltalk/ack) is self-contained — its answer comes entirely from
+  // the freshly-fetched CUSTOMER DATA block, never from chat history. Drop
+  // history so stale topics (e.g. an old "I don't have the founding history"
+  // line) can't bleed into an order/subscription reply. Mixed turns (order +
+  // pricing, order + brand_story, etc.) KEEP history and rely on the prompt rule.
+  const TRANSACTIONAL_RESET_ALLOWED = new Set<Topic>([
+    "order",
+    "subscription",
+    "greeting",
+    "smalltalk",
+    "ack",
+  ]);
+  const isTransactionalReset =
+    (topics.has("order") || topics.has("subscription")) &&
+    Array.from(topics).every((t) => TRANSACTIONAL_RESET_ALLOWED.has(t));
+
+  const isConversationalReset = isGreetingReset || isTransactionalReset;
   const effectiveHistory: Turn[] = isConversationalReset ? [] : history;
   const messages: Turn[] = [...effectiveHistory, { role: "user", content: message }];
 
