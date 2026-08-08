@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Cadieux Reviews — Customers on Protein Bread | Cadieux",
   description:
     "Read real reviews from Cadieux customers eating high protein bread in Visakhapatnam. Share your feedback and help shape the next loaf.",
+  alternates: { canonical: "/feedback" },
 };
 
 const GRAIN = "url(/grain.svg)";

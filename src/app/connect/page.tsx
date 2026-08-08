@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Contact Cadieux — Protein Bread from Visakhapatnam",
   description:
     "Reach the Cadieux team on WhatsApp, Instagram, email, or phone. We reply personally to every message from our Visakhapatnam kitchen.",
+  alternates: { canonical: "/connect" },
 };
 
 const GRAIN = "url(/grain.svg)";
