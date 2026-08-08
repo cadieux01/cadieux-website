@@ -197,7 +197,10 @@ export default async function ProductDetailPage({
   const productSchema: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": "Product",
-    name: pdpStrings.name,
+    // Use pdp.title (keyword-rich, e.g. "Cadieux Multigrain Protein Bread")
+    // rather than pdp.name (generic "Protein Bread" fallback) so Google's
+    // product rich result reflects the on-page H1 and canonical URL slug.
+    name: pdpStrings.title,
     image: [toAbsoluteUrl(heroImage)],
     description:
       pickString(content, "pdp.seo.description", internalSlug) ||
@@ -238,7 +241,8 @@ export default async function ProductDetailPage({
       {
         "@type": "ListItem",
         position: 3,
-        name: pdpStrings.name,
+        // Keyword-rich H1-matching label for the breadcrumb rich result.
+        name: pdpStrings.title,
         item: canonicalUrl,
       },
     ],
