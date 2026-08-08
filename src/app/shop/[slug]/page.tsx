@@ -23,6 +23,7 @@ import { PRODUCTS } from "@/lib/data";
 import {
   getProductAvailability,
   getProductBySlug,
+  hasRealProductImage,
   resolveHeroImage,
   resolveProductMedia,
 } from "@/lib/products";
@@ -201,7 +202,6 @@ export default async function ProductDetailPage({
     // rather than pdp.name (generic "Protein Bread" fallback) so Google's
     // product rich result reflects the on-page H1 and canonical URL slug.
     name: pdpStrings.title,
-    image: [toAbsoluteUrl(heroImage)],
     description:
       pickString(content, "pdp.seo.description", internalSlug) ||
       pdpStrings.description,
@@ -209,6 +209,14 @@ export default async function ProductDetailPage({
     sku: internalSlug,
     url: canonicalUrl,
   };
+  // Only claim a product image in JSON-LD when an admin-uploaded photo
+  // exists. resolveHeroImage's decorative fallbacks (/hero.jpg,
+  // /grains.jpg) are safe for on-page rendering + OG scrapers but must
+  // NOT be presented to Google as the canonical product photo — the
+  // Plain PDP historically emitted /grains.jpg here.
+  if (hasRealProductImage(productRow?.image_url)) {
+    productSchema.image = [toAbsoluteUrl(heroImage)];
+  }
   if (productRow?.price_inr) {
     productSchema.offers = {
       "@type": "Offer",

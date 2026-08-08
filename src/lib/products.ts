@@ -101,6 +101,19 @@ export function resolveHeroImage(
   return OG_FALLBACK_IMAGE;
 }
 
+// Companion to resolveHeroImage: true iff the DB row has a real admin-uploaded
+// product photo. When false, resolveHeroImage falls through to a decorative
+// bundled asset (e.g. /grains.jpg, /hero.jpg) that is NOT a photo of the
+// actual product — safe to render on the page and pass to OG scrapers, but
+// NOT safe to claim as `image` in the Product JSON-LD (Google will treat a
+// mismatched decorative image as the canonical product photo). Callers that
+// emit schema.image should gate on this and OMIT the field when false.
+export function hasRealProductImage(
+  imageUrl: string | null | undefined,
+): boolean {
+  return typeof imageUrl === "string" && imageUrl.trim().length > 0;
+}
+
 // Build the PDP / shop-tile media gallery, DB-first:
 //   1. products.gallery_urls (admin) non-empty → these image tiles ARE the
 //      gallery (Sunny owns product photos from /admin).
