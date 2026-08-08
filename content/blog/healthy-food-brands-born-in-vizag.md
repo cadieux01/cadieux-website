@@ -19,7 +19,7 @@ Most "healthy food" options reaching Tier 2 cities like Vizag are afterthoughts 
 
 **Where Cadieux fits into that list**
 
-High-protein bread, built from scratch over eighteen months, lab-tested, baked fresh in the city it's named for. We didn't start here because it was easy. We started here because nobody else was doing it properly, and I live here.
+High-protein bread, built from scratch over nearly two years, lab-tested, baked fresh in the city it's named for. We didn't start here because it was easy. We started here because nobody else was doing it properly, and I live here.
 
 **The bigger point**
 

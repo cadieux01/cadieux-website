@@ -1,7 +1,7 @@
 ---
-title: "The 18-Month Build: How One Loaf Took Years to Get Right"
+title: "The Two-Year Build: How One Loaf Took Years to Get Right"
 slug: "the-18-month-build"
-meta_description: "The real story behind Cadieux's recipe — eighteen months, a consultant, and dozens of lab tests, told by founder Sunny Raja."
+meta_description: "The real story behind Cadieux's recipe — 24 months, a consultant, and dozens of lab tests, told by founder Sunny Raja."
 primary_keyword: "how cadieux is made"
 secondary_keywords: ["story of cadieux bread", "founder story protein bread"]
 date: "2026-06-22"
@@ -9,7 +9,7 @@ author: "Sunny Raja, Founder"
 pillar: "Founder Story"
 ---
 
-Eighteen months. That's how long it took to get one loaf of bread right.
+Two years. That's how long it took to get one loaf of bread right.
 
 I didn't start as a baker, and I'm still not one today. What I am is someone who got tired of choosing between taste and protein, and decided that was a problem worth solving myself.
 
@@ -29,13 +29,13 @@ So I decided to build it.
 
 I come from business, not food science. BBA, years of sales experience, pitching products across every format — online meetings, offline meets, cold pitches. I know how to convince someone a product is good. I had no idea how to actually make one.
 
-So I found a consultant who did. We researched across India together, testing formulations, sending samples to labs, adjusting, testing again. Eighteen to twenty months of getting it wrong before getting it right. Not eighteen months of certainty — eighteen months of actually doing the work, including the parts that didn't work the first time.
+So I found a consultant who did. We researched across India together, testing formulations, sending samples to labs, adjusting, testing again. Two years of getting it wrong before getting it right. Not two years of certainty — two years of actually doing the work, including the parts that didn't work the first time.
 
 **What it taught me**
 
-The recipe wasn't the hard part, looking back. The hard part was sticking with something for almost two years before it was ready to put my name on.
+The recipe wasn't the hard part, looking back. The hard part was sticking with something for two years before it was ready to put my name on.
 
-That's the same idea Cadieux is built around now. Strength isn't one big moment. It's eighteen months of small, unglamorous steps that nobody sees until the loaf is finally on the shelf.
+That's the same idea Cadieux is built around now. Strength isn't one big moment. It's two years of small, unglamorous steps that nobody sees until the loaf is finally on the shelf.
 
 **Where it's going**
 

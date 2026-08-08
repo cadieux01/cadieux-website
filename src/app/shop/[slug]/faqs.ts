@@ -32,7 +32,7 @@ export const PDP_FAQS: PdpFaq[] = [
   },
   {
     q: "Is it lab-tested?",
-    a: "The recipe was developed over 18 months across 60 to 70 parameters and verified at three independent NABL-accredited laboratories. Reports for each variant are linked on this page.",
+    a: "The recipe was developed over nearly two years across 60 to 70 parameters and verified at three independent NABL-accredited laboratories.",
   },
   {
     q: "Where can I find Cadieux in a store?",
