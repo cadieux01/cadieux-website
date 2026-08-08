@@ -3,6 +3,22 @@
 import Link from "next/link";
 import SplitText from "@/components/SplitTextLazy";
 
+const PRIMARY_LINKS = [
+  { href: "/shop", label: "Shop" },
+  { href: "/subscribe", label: "Subscribe" },
+  { href: "/store-locator", label: "Store Locator" },
+  { href: "/find-us", label: "Check Delivery" },
+];
+
+const LEGAL_LINKS = [
+  { href: "/shipping", label: "Shipping" },
+  { href: "/refunds", label: "Refunds" },
+  { href: "/terms", label: "Terms" },
+  { href: "/privacy-policy", label: "Privacy" },
+  { href: "/cookies", label: "Cookies" },
+  { href: "/delete-account", label: "Delete Account" },
+];
+
 export default function Footer() {
   return (
     <footer
@@ -40,20 +56,48 @@ export default function Footer() {
           marginTop: "0.5rem",
         }}
       >
-        <Link
-          href="/find-us"
-          className="label-text"
-          style={{
-            color: "#FBF3D4",
-            textDecoration: "none",
-            opacity: 0.85,
-          }}
-        >
-          Store Locator
-        </Link>
+        {PRIMARY_LINKS.map(({ href, label }) => (
+          <Link
+            key={href}
+            href={href}
+            className="label-text"
+            style={{
+              color: "#FBF3D4",
+              textDecoration: "none",
+              opacity: 0.85,
+            }}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+      <nav
+        aria-label="Footer legal"
+        style={{
+          display: "flex",
+          gap: "1.25rem",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          marginTop: "0.25rem",
+        }}
+      >
+        {LEGAL_LINKS.map(({ href, label }) => (
+          <Link
+            key={href}
+            href={href}
+            className="label-text"
+            style={{
+              color: "#FBF3D4",
+              textDecoration: "none",
+              opacity: 0.5,
+            }}
+          >
+            {label}
+          </Link>
+        ))}
       </nav>
       <p className="label-text" style={{ opacity: 0.4, marginTop: "1rem" }}>
-        <SplitText text="© 2024 CADIEUX · VISAKHAPATNAM" repelStrength={20} repelRadius={70} staggerDelay={0.02} animateEntrance={false} />
+        <SplitText text={`© ${new Date().getFullYear()} CADIEUX · VISAKHAPATNAM`} repelStrength={20} repelRadius={70} staggerDelay={0.02} animateEntrance={false} />
       </p>
     </footer>
   );
