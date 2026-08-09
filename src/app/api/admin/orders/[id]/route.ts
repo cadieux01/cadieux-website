@@ -138,7 +138,7 @@ export async function PATCH(
   // COD/unpaid orders are NEVER refunded.
   let refundOutcome: "none" | "processing" | "failed" = "none";
   if (update.status === "cancelled" && updated && canAutoRefund(updated)) {
-    const { data: reserved } = await supabaseAdmin
+    const { data: reserved, error: reserveErr } = await supabaseAdmin
       .from("orders")
       .update({ refund_status: "processing" })
       .eq("id", params.id)
@@ -146,7 +146,15 @@ export async function PATCH(
       .is("refund_id", null)
       .select("id")
       .maybeSingle();
-    if (reserved) {
+    if (reserveErr) {
+      // The reserve write itself failed (e.g. a DB constraint rejected it). This
+      // must NEVER masquerade as "no refund needed" — surface it as a failure so
+      // it can be processed manually. The order still stays cancelled.
+      refundOutcome = "failed";
+      console.error(
+        `[admin/orders cancel] REFUND RESERVE FAILED for order ${params.id}: ${reserveErr.message} — manual refund may be needed`,
+      );
+    } else if (reserved) {
       const amountPaise = Math.round(Number(updated.total_amount) * 100);
       const result = await issueRazorpayRefund(
         updated.razorpay_payment_id as string,

@@ -184,7 +184,7 @@ export async function POST(
     // 'processing'. This is the authoritative double-refund guard, independent
     // of any Razorpay-side idempotency. If we don't win it, someone already
     // reserved the refund — do nothing.
-    const { data: reserved } = await supabaseAdmin
+    const { data: reserved, error: reserveErr } = await supabaseAdmin
       .from("orders")
       .update({ refund_status: "processing" })
       .eq("id", orderId)
@@ -192,7 +192,16 @@ export async function POST(
       .is("refund_id", null)
       .select("id")
       .maybeSingle();
-    if (reserved) {
+    if (reserveErr) {
+      // The reserve write itself failed (e.g. a DB constraint rejected it). This
+      // must NEVER masquerade as "no refund needed" — surface it as a failure so
+      // it can be processed manually. The order still stays cancelled.
+      refundOutcome = "failed";
+      console.error(
+        `[mobile/order cancel] REFUND RESERVE FAILED for order ${orderId}: ${reserveErr.message} — manual refund may be needed`,
+        { phone: maskPhone(phoneLocal) },
+      );
+    } else if (reserved) {
       const amountPaise = Math.round(Number(order.total_amount) * 100);
       const result = await issueRazorpayRefund(
         order.razorpay_payment_id as string,
