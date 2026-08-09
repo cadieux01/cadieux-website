@@ -83,8 +83,8 @@ type MetricKey =
   | "new_stores";
 
 const METRICS: { key: MetricKey; label: string }[] = [
-  { key: "daily_orders", label: "Daily Orders" },
-  { key: "daily_revenue", label: "Daily Revenue" },
+  { key: "daily_orders", label: "Orders" },
+  { key: "daily_revenue", label: "Revenue" },
   { key: "retention", label: "Customer Retention Rate" },
   { key: "new_customers", label: "New Customers" },
   { key: "monthly_sales", label: "Monthly Sales & Turnover" },
@@ -167,12 +167,12 @@ function OverviewPageInner() {
 
   const activeLabel =
     selected != null
-      ? METRICS.find((m) => m.key === selected)?.label ?? "Overview"
+      ? METRICS.find((m) => m.key === selected)?.label ?? "Segments"
       : null;
 
   return (
     <AdminShell
-      title="Overview"
+      title="Segments"
       subtitle={activeLabel ? activeLabel : "What do you want to see?"}
     >
       <TopSelector selected={selected} onSelect={setSelected} />
@@ -249,7 +249,7 @@ function TopSelector({
           onChange={(v) => onSelect(v ? (v as MetricKey) : null)}
           style={{ background: GREEN, borderColor: GREEN }}
           options={[
-            { value: "", label: "Overview — all tiles" },
+            { value: "", label: "Segments — all tiles" },
             ...METRICS.map((m) => ({ value: m.key, label: m.label })),
           ]}
         />
@@ -271,13 +271,13 @@ function KpiStrip({
     [
       {
         key: "daily_orders",
-        label: "Daily Orders",
+        label: "Orders",
         value: String(todayPoint?.orders ?? 0),
         sub: "today",
       },
       {
         key: "daily_revenue",
-        label: "Daily Revenue",
+        label: "Revenue",
         value: formatINR(data.kpis.revenue_today),
         sub: "today",
       },
