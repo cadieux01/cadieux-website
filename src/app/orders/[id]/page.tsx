@@ -12,10 +12,10 @@ import { useParams } from "next/navigation";
 
 import { ShareButton } from "@/components/ShareButton";
 import {
-  ORDER_STAGES,
   STAGE_LABEL,
   isCancelled,
   stageIndex,
+  stagesFor,
   toStage,
 } from "@/lib/order-stages";
 import {
@@ -53,6 +53,11 @@ type Order = {
   refund_status: string | null;
   payment_method: string | null;
   payment_status: string | null;
+  // Phase 1 pickup-from-stall. 'delivery' (default) or 'pickup'.
+  fulfillment_type?: string | null;
+  pickup_location_id?: string | null;
+  pickup_ready_at?: string | null;
+  picked_up_at?: string | null;
 };
 
 type ChangeRequest = {
@@ -599,11 +604,20 @@ export default function OrderDetailPage() {
               <StatusTracker
                 status={order.status}
                 statusUpdatedAt={order.status_updated_at ?? null}
+                fulfillmentType={order.fulfillment_type ?? null}
               />
             )}
 
-            {/* Delivery details */}
-            <Section title="Delivery">
+            {/* Delivery / Pickup details. Header + row labels flip based on
+                fulfillment_type. Pickup has no date/slot — the baker marks
+                the order ready_for_pickup when ready. */}
+            <Section
+              title={
+                (order.fulfillment_type ?? "").toLowerCase() === "pickup"
+                  ? "Pickup"
+                  : "Delivery"
+              }
+            >
               {order.delivery_date && (
                 <Row
                   label="Date"
@@ -614,7 +628,14 @@ export default function OrderDetailPage() {
                 <Row label="Slot" value={formatSlot(order.delivery_slot)} />
               )}
               {order.delivery_address && (
-                <Row label="Address" value={String(order.delivery_address)} />
+                <Row
+                  label={
+                    (order.fulfillment_type ?? "").toLowerCase() === "pickup"
+                      ? "Pickup point"
+                      : "Address"
+                  }
+                  value={String(order.delivery_address)}
+                />
               )}
               <DeliveryEditor
                 orderId={id}
@@ -930,11 +951,16 @@ function Section({
 function StatusTracker({
   status,
   statusUpdatedAt,
+  fulfillmentType,
 }: {
   status: string;
   statusUpdatedAt: string | null;
+  fulfillmentType: string | null;
 }) {
   const stage = toStage(status);
+  // Pickup orders progress through PICKUP_STAGES (placed → confirmed →
+  // ready_for_pickup → picked_up); delivery orders through ORDER_STAGES.
+  const stages = stagesFor(fulfillmentType);
   // Unknown / non-tracker state (e.g. pending_payment): fall back to
   // a single status pill so we never render an empty progress bar.
   if (!stage) {
@@ -970,7 +996,7 @@ function StatusTracker({
     );
   }
 
-  const currentIdx = stageIndex(stage);
+  const currentIdx = stageIndex(stage, stages);
 
   return (
     <section style={{ marginBottom: 40 }}>
@@ -991,13 +1017,13 @@ function StatusTracker({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `repeat(${ORDER_STAGES.length}, 1fr)`,
+          gridTemplateColumns: `repeat(${stages.length}, 1fr)`,
           alignItems: "start",
           gap: 0,
           position: "relative",
         }}
       >
-        {ORDER_STAGES.map((s, i) => {
+        {stages.map((s, i) => {
           const done = i < currentIdx;
           const active = i === currentIdx;
           const dotBg = done || active ? "#024628" : "transparent";
@@ -1129,9 +1155,12 @@ function DeliveryEditor({
 }) {
   const paid = (order.payment_status ?? "").toLowerCase() === "paid";
   const cod = (order.payment_method ?? "").toLowerCase() === "cod";
+  const isPickup = (order.fulfillment_type ?? "").toLowerCase() === "pickup";
   // Date/time can be changed on a paid order (any method) OR a COD-unpaid
-  // order; never on a cancelled one.
-  const editable = !isCancelled(order.status) && (paid || cod);
+  // order; never on a cancelled one. Pickup orders have NO scheduled window
+  // (no date/slot) and their "address" is the fixed pickup point — the
+  // whole change-request UI is hidden for them.
+  const editable = !isCancelled(order.status) && (paid || cod) && !isPickup;
   // The address can change the delivery fee, so it's only editable while the
   // order is unpaid.
   const canEditAddress = editable && !paid;
@@ -2214,7 +2243,10 @@ function AddressEditor({
   onChanged: () => void;
 }) {
   const paid = (order.payment_status ?? "").toLowerCase() === "paid";
-  const editable = !isCancelled(order.status) && !paid;
+  const isPickup = (order.fulfillment_type ?? "").toLowerCase() === "pickup";
+  // Pickup orders lock the "address" (it's the pickup point selected at
+  // checkout — customer must place a new order to change stall).
+  const editable = !isCancelled(order.status) && !paid && !isPickup;
   const reqType = (changeRequest?.type ?? "delivery").toLowerCase();
 
   const [editing, setEditing] = useState(false);

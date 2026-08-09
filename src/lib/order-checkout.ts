@@ -26,6 +26,7 @@ import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import { computeDeliveryFee } from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
+import { getActiveLocations } from "@/lib/pickup-locations";
 
 /** Parses a value as a finite number, returning null for absent/invalid. */
 function parseCoord(v: unknown): number | null {
@@ -44,8 +45,9 @@ export type PreparedOrder = {
   custPhone: string | null;
   deliveryAddress: string;
   pincode: string;
-  deliveryDate: string;
-  deliverySlot: string;
+  // Nullable for pickup orders (no scheduled window).
+  deliveryDate: string | null;
+  deliverySlot: string | null;
   items: unknown;
   subtotal: number;
   deliveryFee: number;
@@ -54,6 +56,11 @@ export type PreparedOrder = {
   orderLng: number | null;
   distanceKm: number | null;
   proximityHint: ProximityHint;
+  // Phase 1 pickup-from-stall. 'delivery' (default) or 'pickup'. For
+  // pickup orders deliveryFee is forced to 0, pincode/serviceability/
+  // distance gates are SKIPPED, and pickupLocationId is required.
+  fulfillmentType: "delivery" | "pickup";
+  pickupLocationId: string | null;
 };
 
 export type PrepareResult =
@@ -74,59 +81,120 @@ export async function prepareOneTimeOrder(
   supabaseAdmin: SupabaseClient,
 ): Promise<PrepareResult> {
   const customer_id = body.customer_id as string | undefined;
-  const delivery_address = body.delivery_address as string | undefined;
   const total_amount = body.total_amount;
 
-  if (!delivery_address || total_amount === undefined || total_amount === null) {
-    return { ok: false, status: 400, body: { error: "Missing fields" } };
+  // Phase 1 pickup-from-stall. Accept only the two-value enum; anything
+  // else (including undefined) falls through to the legacy delivery path.
+  const fulfillmentType: "delivery" | "pickup" =
+    body.fulfillment_type === "pickup" ? "pickup" : "delivery";
+  const rawPickupLocationId =
+    typeof body.pickup_location_id === "string"
+      ? body.pickup_location_id.trim()
+      : "";
+
+  // For pickup orders, delivery_address is a human-readable pickup label
+  // we synthesise server-side from the chosen location — do NOT trust the
+  // client's copy of it. For delivery it's required.
+  let deliveryAddress: string;
+  if (fulfillmentType === "delivery") {
+    const delivery_address = body.delivery_address as string | undefined;
+    if (!delivery_address || total_amount === undefined || total_amount === null) {
+      return { ok: false, status: 400, body: { error: "Missing fields" } };
+    }
+    deliveryAddress = delivery_address;
+  } else {
+    if (total_amount === undefined || total_amount === null) {
+      return { ok: false, status: 400, body: { error: "Missing fields" } };
+    }
+    deliveryAddress = ""; // filled after we validate the pickup location
   }
 
+  // Delivery date/slot ONLY apply to delivery orders. Pickup has no
+  // scheduled window — the baker marks ready_for_pickup when the loaves
+  // are ready and the customer collects.
   const deliveryDate =
     typeof body.delivery_date === "string" ? body.delivery_date : "";
   const deliverySlot =
     typeof body.delivery_slot === "string" ? body.delivery_slot : "";
-  if (!isAcceptableDeliveryDate(deliveryDate)) {
-    return {
-      ok: false,
-      status: 400,
-      body: { error: "Please pick a delivery date with at least one bookable slot." },
-    };
-  }
-  if (!isAcceptableDeliverySlot(deliverySlot)) {
-    return {
-      ok: false,
-      status: 400,
-      body: { error: "Please pick a delivery time slot." },
-    };
-  }
-  const slotGate = validateBookingSlot(deliveryDate, deliverySlot);
-  if (slotGate) {
-    return { ok: false, status: slotGate.status, body: { error: slotGate.error, code: slotGate.code } };
+  if (fulfillmentType === "delivery") {
+    if (!isAcceptableDeliveryDate(deliveryDate)) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: "Please pick a delivery date with at least one bookable slot." },
+      };
+    }
+    if (!isAcceptableDeliverySlot(deliverySlot)) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: "Please pick a delivery time slot." },
+      };
+    }
+    const slotGate = validateBookingSlot(deliveryDate, deliverySlot);
+    if (slotGate) {
+      return { ok: false, status: slotGate.status, body: { error: slotGate.error, code: slotGate.code } };
+    }
   }
 
-  // Re-check serviceability server-side. The client gates the CTA but a
-  // determined attacker could submit anyway.
-  const pinFromAddress =
-    typeof body.pincode === "string"
-      ? normalizePincode(body.pincode)
-      : (delivery_address.match(/(\d{6})\s*$/)?.[1] ?? null);
-  if (!pinFromAddress) {
-    return { ok: false, status: 400, body: { error: "Invalid pincode." } };
+  // ── Serviceability + pincode gate ONLY applies to delivery orders.
+  //    Pickup skips this entirely (money-correctness: no delivery fee,
+  //    no distance zone check — the customer is coming to us).
+  let pinFromAddress: string | null = null;
+  let proximityHint: ProximityHint = null;
+  let pickupLocationId: string | null = null;
+
+  if (fulfillmentType === "delivery") {
+    pinFromAddress =
+      typeof body.pincode === "string"
+        ? normalizePincode(body.pincode)
+        : (deliveryAddress.match(/(\d{6})\s*$/)?.[1] ?? null);
+    if (!pinFromAddress) {
+      return { ok: false, status: 400, body: { error: "Invalid pincode." } };
+    }
+    const serviceability = await resolveServiceability(pinFromAddress);
+    if (!serviceability.serviceable) {
+      return {
+        ok: false,
+        status: 400,
+        body: {
+          error:
+            "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
+          code: "pincode_unserviceable",
+        },
+      };
+    }
+    proximityHint =
+      serviceability.via === "proximity" ? (serviceability as ProximityHint) : null;
+  } else {
+    // Pickup: require + validate an active pickup_locations row.
+    if (!rawPickupLocationId) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: "Please choose a pickup point.", code: "pickup_location_required" },
+      };
+    }
+    const locations = await getActiveLocations();
+    const chosen = locations.find((l) => l.id === rawPickupLocationId);
+    if (!chosen) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: "That pickup point is no longer available.", code: "pickup_location_invalid" },
+      };
+    }
+    pickupLocationId = chosen.id;
+    // Synthesise a human-readable delivery_address so legacy admin
+    // surfaces (order lists, receipts, notifications) still render
+    // sensible text without needing to join pickup_locations everywhere.
+    // The semantic source of truth is orders.pickup_location_id.
+    deliveryAddress = `Pick up at ${chosen.name}, ${chosen.area}`;
+    // Pincode column is NOT NULL-friendly for pickup; use the stall's if
+    // present, else leave the field empty. Downstream code paths that
+    // consume orders.pincode are all delivery-scoped.
+    pinFromAddress = chosen.pincode ?? "";
   }
-  const serviceability = await resolveServiceability(pinFromAddress);
-  if (!serviceability.serviceable) {
-    return {
-      ok: false,
-      status: 400,
-      body: {
-        error:
-          "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
-        code: "pincode_unserviceable",
-      },
-    };
-  }
-  const proximityHint: ProximityHint =
-    serviceability.via === "proximity" ? (serviceability as ProximityHint) : null;
 
   const verified = getVerifiedPhone(req);
 
@@ -168,13 +236,16 @@ export async function prepareOneTimeOrder(
     };
   }
 
-  // Server-authoritative distance-based delivery fee.
+  // Server-authoritative distance-based delivery fee — SKIPPED for pickup
+  // orders, which never incur a delivery fee. This is the money-critical
+  // branch: PreparedOrder.deliveryFee=0 → grandTotal=subtotal → the exact
+  // amount Razorpay is asked to capture at /api/create-order.
   const orderLat = parseCoord(body.latitude);
   const orderLng = parseCoord(body.longitude);
-  let deliveryFee = DELIVERY_FEE_INR;
+  let deliveryFee = fulfillmentType === "pickup" ? 0 : DELIVERY_FEE_INR;
   let distanceKm: number | null = null;
 
-  if (await hasActivePickups()) {
+  if (fulfillmentType === "delivery" && (await hasActivePickups())) {
     if (orderLat !== null && orderLng !== null) {
       distanceKm = await getDrivingDistanceKm(orderLat, orderLng);
     } else if (pinFromAddress) {
@@ -226,10 +297,10 @@ export async function prepareOneTimeOrder(
     data: {
       customerId: customer_id,
       custPhone: cust.phone ?? null,
-      deliveryAddress: delivery_address,
-      pincode: pinFromAddress,
-      deliveryDate,
-      deliverySlot,
+      deliveryAddress,
+      pincode: pinFromAddress ?? "",
+      deliveryDate: fulfillmentType === "pickup" ? null : deliveryDate,
+      deliverySlot: fulfillmentType === "pickup" ? null : deliverySlot,
       items: reconciled.items,
       subtotal: reconciled.subtotal,
       deliveryFee,
@@ -238,6 +309,8 @@ export async function prepareOneTimeOrder(
       orderLng,
       distanceKm,
       proximityHint,
+      fulfillmentType,
+      pickupLocationId,
     },
   };
 }
@@ -285,5 +358,12 @@ export function orderInsertColumns(prepared: PreparedOrder) {
       ? { latitude: prepared.orderLat, longitude: prepared.orderLng }
       : {}),
     ...(prepared.distanceKm !== null ? { distance_km: prepared.distanceKm } : {}),
+    // Phase 1 pickup-from-stall. fulfillment_type is NOT NULL DEFAULT
+    // 'delivery' at the DB level, so we could omit it — but writing it
+    // explicitly here makes the code trace obvious.
+    fulfillment_type: prepared.fulfillmentType,
+    ...(prepared.pickupLocationId
+      ? { pickup_location_id: prepared.pickupLocationId }
+      : {}),
   };
 }

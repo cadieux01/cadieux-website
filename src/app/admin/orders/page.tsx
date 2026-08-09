@@ -49,7 +49,12 @@ import Select from "@/components/ui/Select";
 
 type SortKey = "created_desc" | "delivery_asc";
 
-const NEXT_STATUS_FOR: Record<string, OrderStatus | null> = {
+// Delivery lifecycle: placed → confirmed → preparing → out_for_delivery →
+// delivered. Pickup lifecycle diverges after confirmed: no preparing/
+// out_for_delivery — the baker marks ready_for_pickup and the customer
+// collects. nextStatusFor() branches on order.fulfillment_type so the
+// admin "Advance" action always presents the correct next stage.
+const NEXT_STATUS_DELIVERY: Record<string, OrderStatus | null> = {
   pending_payment: "confirmed",
   placed: "confirmed",
   confirmed: "preparing",
@@ -61,6 +66,25 @@ const NEXT_STATUS_FOR: Record<string, OrderStatus | null> = {
   pending: "confirmed",
   dispatched: "delivered",
 };
+
+const NEXT_STATUS_PICKUP: Record<string, OrderStatus | null> = {
+  pending_payment: "confirmed",
+  placed: "confirmed",
+  confirmed: "ready_for_pickup",
+  ready_for_pickup: "picked_up",
+  picked_up: null,
+  cancelled: null,
+  // legacy aliases
+  pending: "confirmed",
+};
+
+function nextStatusFor(order: AdminOrderRow): OrderStatus | null {
+  const table =
+    (order.fulfillment_type ?? "").toLowerCase() === "pickup"
+      ? NEXT_STATUS_PICKUP
+      : NEXT_STATUS_DELIVERY;
+  return table[(order.status ?? "").toLowerCase()] ?? null;
+}
 
 type BulkAction = "confirm" | "prepare" | "dispatch" | "deliver" | "cancel";
 
@@ -206,7 +230,7 @@ function OrdersPageInner() {
   }, [orders, range]);
 
   const advance = async (order: AdminOrderRow) => {
-    const next = NEXT_STATUS_FOR[(order.status ?? "").toLowerCase()];
+    const next = nextStatusFor(order);
     if (!next) return;
     await patchStatus(order, next);
   };
@@ -536,7 +560,9 @@ function OrdersPageInner() {
             </thead>
             <tbody>
               {filtered.map((o, i) => {
-                const next = NEXT_STATUS_FOR[(o.status ?? "").toLowerCase()];
+                const next = nextStatusFor(o);
+                const isPickup =
+                  (o.fulfillment_type ?? "").toLowerCase() === "pickup";
                 const busy = busyId === o.id;
                 return (
                   <tr
@@ -593,6 +619,26 @@ function OrdersPageInner() {
                       ) : null}
                     </td>
                     <td style={{ ...td, maxWidth: 240 }}>
+                      {isPickup && (
+                        <div
+                          style={{
+                            display: "inline-block",
+                            marginBottom: 6,
+                            padding: "2px 8px",
+                            borderRadius: 999,
+                            border: "1px solid rgba(134,239,172,0.5)",
+                            color: "#86efac",
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.6rem",
+                            letterSpacing: "0.18em",
+                            textTransform: "uppercase",
+                            whiteSpace: "nowrap",
+                          }}
+                          title="Pickup from stall"
+                        >
+                          Pickup
+                        </div>
+                      )}
                       <div
                         style={{
                           color: "#fbf3d4",

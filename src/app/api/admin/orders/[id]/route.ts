@@ -17,6 +17,13 @@ const ALLOWED_STATUSES = new Set([
   "out_for_delivery",
   "delivered",
   "cancelled",
+  // Pickup-only stages (Phase 1 pickup-from-stall). Delivery orders keep
+  // preparing → out_for_delivery → delivered; pickup orders use
+  // confirmed → ready_for_pickup → picked_up instead. Admin PATCH accepts
+  // both vocabularies — enforcement of the correct one per order lives in
+  // the admin UI (nextStatusFor() branches on fulfillment_type).
+  "ready_for_pickup",
+  "picked_up",
   // legacy aliases — accepted on input, normalised on write below
   "pending",
   "dispatched",
@@ -50,6 +57,15 @@ const STATUS_PUSH_COPY: Record<string, { title: string; body: string }> = {
     title: "Order cancelled",
     body: "Your order has been cancelled.",
   },
+  // Pickup-only copy — do NOT reuse delivery-worded strings above.
+  ready_for_pickup: {
+    title: "Ready to pick up",
+    body: "Your order is ready to pick up!",
+  },
+  picked_up: {
+    title: "Picked up",
+    body: "Order picked up — enjoy!",
+  },
 };
 
 export async function PATCH(
@@ -72,7 +88,13 @@ export async function PATCH(
     update.status = s;
     // Stamp the moment the status changed so the customer Track Order
     // page can show "Updated <relative>" beneath the stage tracker.
-    update.status_updated_at = new Date().toISOString();
+    const nowIso = new Date().toISOString();
+    update.status_updated_at = nowIso;
+    // Pickup-only lifecycle timestamps. Additive columns from the
+    // add_pickup_fulfillment_to_orders migration — safe to write on any
+    // order (delivery rows just never hit these transitions).
+    if (s === "ready_for_pickup") update.pickup_ready_at = nowIso;
+    if (s === "picked_up") update.picked_up_at = nowIso;
   }
 
   if (typeof body.delivery_address === "string") {
