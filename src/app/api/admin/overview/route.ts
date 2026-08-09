@@ -43,6 +43,13 @@ export type OverviewResponse = {
     mrr: number;
     // Annual Recurring Revenue = MRR × 12.
     arr: number;
+    // "Stores" tile = combined footprint = active pickup_locations (retail
+    // stockists in Vizag) + active service_areas (delivery-coverage rows).
+    // The two component counts are exposed so the detail panel can break
+    // the combined figure back down.
+    stores_total: number;
+    retail_stores: number;
+    serviceable_areas: number;
   };
   daily_revenue: RevenuePoint[];
   orders_by_status: CountByKey;
@@ -152,12 +159,28 @@ export async function GET(req: NextRequest) {
     .gte("created_at", `${sixMonthStart}T00:00:00Z`)
     .limit(20000);
 
-  const [oRes, sRes, cRes, cohRes, moRes] = await Promise.all([
+  // "Stores" tile — retail stockists in Vizag (pickup_locations, excludes
+  // soft-archived rows via is_archived). Small table (<50 rows expected).
+  const storesP = supabaseAdmin
+    .from("pickup_locations")
+    .select("id", { count: "exact", head: true })
+    .not("is_archived", "is", true);
+
+  // "Stores" tile — serviceable delivery areas (service_areas, only rows
+  // flagged active in the admin dashboard).
+  const areasP = supabaseAdmin
+    .from("service_areas")
+    .select("id", { count: "exact", head: true })
+    .eq("is_active", true);
+
+  const [oRes, sRes, cRes, cohRes, moRes, stRes, arRes] = await Promise.all([
     ordersP,
     subsP,
     customersP,
     cohortsP,
     monthlyOrdersP,
+    storesP,
+    areasP,
   ]);
 
   if (oRes.error) {
@@ -411,6 +434,14 @@ export async function GET(req: NextRequest) {
   const monthly_sales: MonthlySalesPoint[] = Array.from(monthlyMap.values())
     .sort((a, b) => a.month.localeCompare(b.month));
 
+  // ---------- Stores footprint ----------
+  // Failures here should not blow up the whole overview — fall back to 0
+  // so the tile shows a real (if under-reported) number rather than an
+  // error banner. Both queries are HEAD count-only (no row payload).
+  const retail_stores = stRes.error ? 0 : stRes.count ?? 0;
+  const serviceable_areas = arRes.error ? 0 : arRes.count ?? 0;
+  const stores_total = retail_stores + serviceable_areas;
+
   const response: OverviewResponse = {
     range: { from, to },
     kpis: {
@@ -428,6 +459,9 @@ export async function GET(req: NextRequest) {
       retention_rate,
       mrr,
       arr,
+      stores_total,
+      retail_stores,
+      serviceable_areas,
     },
     daily_revenue,
     orders_by_status,
