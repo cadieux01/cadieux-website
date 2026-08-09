@@ -160,7 +160,7 @@ export default function RootLayout({
       addressCountry: "IN",
     },
     image: "https://www.cadieux.in/icons/icon-512.png",
-    priceRange: "₹119-₹150",
+    priceRange: "₹120-₹159",
     areaServed: "IN",
   };
 
