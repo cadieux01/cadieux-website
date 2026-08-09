@@ -29,7 +29,20 @@ export type OverviewResponse = {
     paused_subs: number;
     cancelled_subs: number;
     aov_range: number;
-    churn_rate: number;
+    // Period-scoped churn: cancellations in the selected {from,to} ÷ subs
+    // active at the start of the period. `null` when the denominator is 0
+    // (no active base to churn from) so the UI can render "—" instead of
+    // "0%"/"NaN".
+    churn_rate: number | null;
+    // Retention = 1 − churn_rate. Same null semantics as churn_rate.
+    retention_rate: number | null;
+    // Monthly Recurring Revenue: sum, over currently-`active` subs, of
+    // (bread_price × quantity_per_delivery × days_per_week × 4.33). Days
+    // per week comes from `subscriptions.days[]`; empty array with
+    // frequency='weekly' falls back to 1/week.
+    mrr: number;
+    // Annual Recurring Revenue = MRR × 12.
+    arr: number;
   };
   daily_revenue: RevenuePoint[];
   orders_by_status: CountByKey;
@@ -38,6 +51,10 @@ export type OverviewResponse = {
   customer_cohorts: CohortPoint[];
   monthly_sales: MonthlySalesPoint[];
 };
+
+// Weeks per average calendar month — used to project weekly subscription
+// revenue up to a monthly figure for MRR. 52 weeks / 12 months = 4.333…
+const WEEKS_PER_MONTH = 4.33;
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
@@ -87,10 +104,14 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(5000);
 
+  // Subs pull adds bread_price/quantity/days/frequency (for MRR) plus
+  // updated_at (proxy for cancellation date — there is no dedicated
+  // `cancelled_at` column, so we treat updated_at on a `cancelled` row as
+  // the moment it was cancelled).
   const subsP = supabaseAdmin
     .from("subscriptions")
     .select(
-      "id, product_name, product_slug, total_amount, status, created_at",
+      "id, product_name, product_slug, total_amount, status, created_at, updated_at, bread_price, quantity_per_delivery, days, frequency",
     )
     .order("created_at", { ascending: false })
     .limit(5000);
@@ -163,6 +184,11 @@ export async function GET(req: NextRequest) {
     total_amount: number | null;
     status: string | null;
     created_at: string;
+    updated_at: string | null;
+    bread_price: number | null;
+    quantity_per_delivery: number | null;
+    days: string[] | null;
+    frequency: string | null;
   };
   type CustomerRow = { id: string; created_at: string };
 
@@ -215,10 +241,78 @@ export async function GET(req: NextRequest) {
   const active_subs = subStatusCounts["active"] ?? 0;
   const paused_subs = subStatusCounts["paused"] ?? 0;
   const cancelled_subs = subStatusCounts["cancelled"] ?? 0;
-  // Simple churn rate: cancelled / (active + paused + cancelled + completed).
-  // Anything with no subs returns 0 (rather than NaN).
-  const totalSubs = allSubs.length;
-  const churn_rate = totalSubs > 0 ? cancelled_subs / totalSubs : 0;
+
+  // ---------- MRR / ARR ----------
+  // Textbook MRR: sum of monthly recurring revenue from currently active
+  // subscriptions. For each active sub we compute the weekly delivery
+  // revenue (bread_price × quantity_per_delivery × days_per_week) and
+  // scale to a month via WEEKS_PER_MONTH.
+  //
+  // `subscriptions.days[]` holds the delivery days-of-week for the plan.
+  // Some legacy weekly rows have an empty `days` array — we fall back to
+  // 1 delivery/week when frequency='weekly' so they still contribute a
+  // sensible number rather than 0.
+  //
+  // ARR is just MRR × 12 (annualised) — the standard SaaS convention.
+  const daysPerWeek = (s: SubRow): number => {
+    const n = Array.isArray(s.days) ? s.days.length : 0;
+    if (n > 0) return n;
+    if ((s.frequency ?? "").toLowerCase() === "weekly") return 1;
+    return 0;
+  };
+  const mrr = allSubs
+    .filter((s) => (s.status ?? "").toLowerCase() === "active")
+    .reduce((acc, s) => {
+      const price = Number(s.bread_price) || 0;
+      const qty = Number(s.quantity_per_delivery) || 0;
+      const dpw = daysPerWeek(s);
+      return acc + price * qty * dpw * WEEKS_PER_MONTH;
+    }, 0);
+  const arr = mrr * 12;
+
+  // ---------- period-scoped churn + retention ----------
+  // Classic customer-churn formula, applied here to subscriptions:
+  //   churn = cancellations_in_period ÷ subs_active_at_start_of_period
+  //   retention = 1 − churn
+  //
+  // "Cancellations in period" = subs whose status is now `cancelled` AND
+  // whose `updated_at` falls in [from, to]. (No dedicated `cancelled_at`
+  // column exists; `updated_at` is the closest proxy — the cancel path is
+  // the last write on a cancelled row.)
+  //
+  // "Active at start of period" = subs that existed before `from` and
+  // were not already cancelled before `from`. A row is considered
+  // still-active-at-start iff either its status is not `cancelled`, or
+  // its status is `cancelled` but the cancellation write happened on or
+  // after `from`.
+  //
+  // Divide-by-zero guard: when the denominator is 0 (no active base at
+  // period start — common in a pre-launch dataset) both metrics return
+  // `null` so the UI renders "—" instead of "0%" or NaN.
+  const startOfPeriodIso = `${from}T00:00:00Z`;
+  const endOfPeriodIso = `${to}T23:59:59Z`;
+  const isCancelled = (s: SubRow) =>
+    (s.status ?? "").toLowerCase() === "cancelled";
+
+  const activeAtStart = allSubs.filter((s) => {
+    if (s.created_at >= startOfPeriodIso) return false;
+    if (!isCancelled(s)) return true;
+    // Cancelled row: only counts as active-at-start if the cancellation
+    // hadn't been written yet at that moment.
+    const cancelAt = s.updated_at ?? s.created_at;
+    return cancelAt >= startOfPeriodIso;
+  }).length;
+
+  const cancellationsInPeriod = allSubs.filter((s) => {
+    if (!isCancelled(s)) return false;
+    const cancelAt = s.updated_at ?? s.created_at;
+    return cancelAt >= startOfPeriodIso && cancelAt <= endOfPeriodIso;
+  }).length;
+
+  const churn_rate: number | null =
+    activeAtStart > 0 ? cancellationsInPeriod / activeAtStart : null;
+  const retention_rate: number | null =
+    churn_rate == null ? null : 1 - churn_rate;
 
   // ---------- daily revenue ----------
   const dayBuckets = new Map<string, RevenuePoint>();
@@ -331,6 +425,9 @@ export async function GET(req: NextRequest) {
       cancelled_subs,
       aov_range,
       churn_rate,
+      retention_rate,
+      mrr,
+      arr,
     },
     daily_revenue,
     orders_by_status,

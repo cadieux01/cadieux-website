@@ -55,7 +55,13 @@ type OverviewResponse = {
     paused_subs: number;
     cancelled_subs: number;
     aov_range: number;
-    churn_rate: number;
+    // churn_rate / retention_rate are null when there was no active
+    // subscription base at the start of the period (divide-by-zero
+    // guard) — the UI renders "—" in that case.
+    churn_rate: number | null;
+    retention_rate: number | null;
+    mrr: number;
+    arr: number;
   };
   daily_revenue: { date: string; revenue: number; orders: number }[];
   orders_by_status: { key: string; count: number }[];
@@ -64,6 +70,13 @@ type OverviewResponse = {
   customer_cohorts: { month: string; new_customers: number }[];
   monthly_sales: { month: string; revenue: number; orders: number }[];
 };
+
+// Format a 0..1 ratio as a "42.3%" string, or "—" when null (denominator
+// was 0). Kept module-scoped so both KPI tiles and headlines share it.
+function formatPercent(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `${(v * 100).toFixed(1)}%`;
+}
 
 // ---- palette ------------------------------------------------------------
 const GREEN = "#024628";
@@ -76,8 +89,12 @@ const BORDER = "rgba(251,243,212,0.16)";
 type MetricKey =
   | "daily_orders"
   | "daily_revenue"
-  | "retention"
   | "new_customers"
+  | "customer_retention"
+  | "retention"
+  | "churn"
+  | "arr"
+  | "mrr"
   | "monthly_sales"
   | "new_locations"
   | "new_stores";
@@ -85,8 +102,12 @@ type MetricKey =
 const METRICS: { key: MetricKey; label: string }[] = [
   { key: "daily_orders", label: "Orders" },
   { key: "daily_revenue", label: "Revenue" },
-  { key: "retention", label: "Customer Retention Rate" },
-  { key: "new_customers", label: "New Customers" },
+  { key: "new_customers", label: "Customers" },
+  { key: "customer_retention", label: "Customer Retention Rate" },
+  { key: "retention", label: "Retention Rate" },
+  { key: "churn", label: "Churn Rate" },
+  { key: "arr", label: "ARR" },
+  { key: "mrr", label: "MRR" },
   { key: "monthly_sales", label: "Monthly Sales & Turnover" },
   { key: "new_locations", label: "New Serviceable Locations" },
   { key: "new_stores", label: "New Stores in Vizag" },
@@ -282,16 +303,40 @@ function KpiStrip({
         sub: "today",
       },
       {
-        key: "retention",
-        label: "Customer Retention",
-        value: "—",
-        sub: "coming soon",
+        key: "new_customers",
+        label: "Customers",
+        value: String(data.kpis.new_customers_range),
+        sub: "new in range",
       },
       {
-        key: "new_customers",
-        label: "New Customers",
-        value: String(data.kpis.new_customers_range),
+        key: "customer_retention",
+        label: "Customer Retention Rate",
+        value: formatPercent(data.kpis.retention_rate),
         sub: "in range",
+      },
+      {
+        key: "retention",
+        label: "Retention Rate",
+        value: formatPercent(data.kpis.retention_rate),
+        sub: "in range",
+      },
+      {
+        key: "churn",
+        label: "Churn Rate",
+        value: formatPercent(data.kpis.churn_rate),
+        sub: "in range",
+      },
+      {
+        key: "arr",
+        label: "ARR",
+        value: formatINR(data.kpis.arr),
+        sub: "active subs · MRR × 12",
+      },
+      {
+        key: "mrr",
+        label: "MRR",
+        value: formatINR(data.kpis.mrr),
+        sub: "active subs",
       },
       {
         key: "monthly_sales",
@@ -509,13 +554,36 @@ function headlineFor(
         value: String(data.kpis.new_customers_range),
         caption: `new customers · ${data.range.from} → ${data.range.to}`,
       };
+    case "customer_retention":
+      return {
+        value: formatPercent(data.kpis.retention_rate),
+        caption: `customer retention · ${data.range.from} → ${data.range.to}`,
+      };
+    case "retention":
+      return {
+        value: formatPercent(data.kpis.retention_rate),
+        caption: `retention · ${data.range.from} → ${data.range.to}`,
+      };
+    case "churn":
+      return {
+        value: formatPercent(data.kpis.churn_rate),
+        caption: `churn · ${data.range.from} → ${data.range.to}`,
+      };
+    case "arr":
+      return {
+        value: formatINR(data.kpis.arr),
+        caption: "annual recurring revenue · MRR × 12",
+      };
+    case "mrr":
+      return {
+        value: formatINR(data.kpis.mrr),
+        caption: "monthly recurring revenue · active subs",
+      };
     case "monthly_sales":
       return {
         value: formatINR(data.kpis.revenue_month),
         caption: "turnover this month · last 6 months below",
       };
-    case "retention":
-      return { value: "—", caption: "no data yet" };
     case "new_locations":
       return { value: "—", caption: "no data yet" };
     case "new_stores":
@@ -677,11 +745,49 @@ function MetricChart({
       );
     }
 
-    case "retention":
+    case "customer_retention":
+    case "retention": {
+      const active = data.kpis.active_subs;
+      const cancelled = data.kpis.cancelled_subs;
       return (
-        <ComingSoonTable
-          headers={["Period", "Retained", "Churned", "Retention %"]}
-          note="Retention tracking isn't wired up yet."
+        <FormulaPanel
+          rows={[
+            ["Active subscriptions (now)", String(active)],
+            ["Cancelled subscriptions (all-time)", String(cancelled)],
+            ["Retention rate (in range)", formatPercent(data.kpis.retention_rate)],
+            ["Churn rate (in range)", formatPercent(data.kpis.churn_rate)],
+          ]}
+          note="Retention = 1 − churn. Churn = cancellations in the selected period ÷ subscriptions active at the start of the period. Renders “—” when there was no active base at period start (divide-by-zero guard)."
+        />
+      );
+    }
+
+    case "churn": {
+      const active = data.kpis.active_subs;
+      const cancelled = data.kpis.cancelled_subs;
+      return (
+        <FormulaPanel
+          rows={[
+            ["Active subscriptions (now)", String(active)],
+            ["Cancelled subscriptions (all-time)", String(cancelled)],
+            ["Churn rate (in range)", formatPercent(data.kpis.churn_rate)],
+            ["Retention rate (in range)", formatPercent(data.kpis.retention_rate)],
+          ]}
+          note="Churn = cancellations in the selected period ÷ subscriptions active at the start of the period. Renders “—” when the denominator is 0."
+        />
+      );
+    }
+
+    case "mrr":
+    case "arr":
+      return (
+        <FormulaPanel
+          rows={[
+            ["Active subscriptions", String(data.kpis.active_subs)],
+            ["MRR", formatINR(data.kpis.mrr)],
+            ["ARR", formatINR(data.kpis.arr)],
+          ]}
+          note="MRR sums (bread_price × quantity_per_delivery × days_per_week × 4.33) across every active subscription. ARR = MRR × 12."
         />
       );
 
@@ -763,6 +869,82 @@ function DataTable({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Compact key/value panel used to break down the formula-derived metrics
+// (MRR, ARR, retention, churn) into their inputs and result. Kept simple
+// on purpose — the headline number above is the answer; this just shows
+// how it was computed and cites the divide-by-zero guard in the note.
+function FormulaPanel({
+  rows,
+  note,
+}: {
+  rows: [string, string][];
+  note: string;
+}) {
+  return (
+    <div>
+      <div style={{ overflowX: "auto" }}>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontFamily: "var(--font-body)",
+            fontSize: "0.85rem",
+            color: CREAM,
+          }}
+        >
+          <tbody>
+            {rows.map(([k, v], i) => (
+              <tr key={i}>
+                <th
+                  scope="row"
+                  style={{
+                    textAlign: "left",
+                    padding: "0.6rem 0.75rem",
+                    borderBottom: `1px solid ${BORDER}`,
+                    color: FADED,
+                    fontSize: "0.62rem",
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    fontWeight: 400,
+                    whiteSpace: "nowrap",
+                    width: "60%",
+                  }}
+                >
+                  {k}
+                </th>
+                <td
+                  style={{
+                    padding: "0.6rem 0.75rem",
+                    borderBottom: `1px solid ${BORDER}`,
+                    textAlign: "right",
+                    fontFamily: "var(--font-heading)",
+                    fontSize: "1rem",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {v}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p
+        style={{
+          marginTop: "0.85rem",
+          color: "rgba(251,243,212,0.5)",
+          fontFamily: "var(--font-body)",
+          fontSize: "0.72rem",
+          letterSpacing: "0.04em",
+          lineHeight: 1.5,
+        }}
+      >
+        {note}
+      </p>
     </div>
   );
 }
@@ -877,7 +1059,7 @@ function Skeletons({ selected }: { selected: MetricKey | null }) {
         gap: "0.75rem",
       }}
     >
-      {Array.from({ length: 7 }).map((_, i) => (
+      {Array.from({ length: 11 }).map((_, i) => (
         <div key={i} style={skel(110)} />
       ))}
     </div>
