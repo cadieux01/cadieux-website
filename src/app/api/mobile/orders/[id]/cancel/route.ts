@@ -26,7 +26,9 @@ import { toLocal10 } from "@/lib/order-validation";
 import {
   CANCELLABLE_STATUSES,
   isWithinCancellationWindow,
+  canAutoRefund,
 } from "@/lib/order-cancellation";
+import { issueRazorpayRefund } from "@/lib/razorpay-refund";
 import { notifyCustomer } from "@/lib/push";
 
 const supabaseAdmin = createClient(
@@ -95,7 +97,9 @@ export async function POST(
   // ----- 3. Order (scoped to this customer) -----
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
-    .select("id, status, created_at")
+    .select(
+      "id, status, created_at, payment_status, payment_method, razorpay_payment_id, refund_status, refund_id, total_amount",
+    )
     .eq("id", orderId)
     .eq("customer_id", customer.id)
     .maybeSingle();
@@ -136,19 +140,18 @@ export async function POST(
     );
   }
 
-  // ----- 6. Update -----
-  // pending_payment orders never received a payment, so there is nothing to
-  // refund — leave refund_status null. paid/confirmed orders captured money
-  // (Razorpay or COD authorisation) and therefore enter the refund queue.
+  // ----- 6. Cancel (money-neutral) -----
+  // Mark the order cancelled first. refund_status is deliberately NOT set here.
+  // The auto-refund step below reserves it via a compare-and-swap, so a
+  // double-cancel can never trigger a double-refund. COD/unpaid orders never
+  // reach the refund step at all (see canAutoRefund).
   const nowIso = new Date().toISOString();
-  const requiresRefund = order.status !== "pending_payment";
   const { data: updated, error: updateErr } = await supabaseAdmin
     .from("orders")
     .update({
       status: "cancelled",
       cancelled_at: nowIso,
       cancellation_reason: reason,
-      refund_status: requiresRefund ? "pending" : null,
     })
     .eq("id", orderId)
     .eq("customer_id", customer.id)
@@ -171,9 +174,61 @@ export async function POST(
     );
   }
 
+  // ----- 7. Auto-refund (PAID orders only) -----
+  // canAutoRefund is the single gate: payment_status==='paid' AND a real
+  // 'pay_' payment id AND no refund already in flight. COD/unpaid orders can
+  // NEVER pass it, so no money is ever sent for them.
+  let refundOutcome: "none" | "processing" | "failed" = "none";
+  if (canAutoRefund(order)) {
+    // Compare-and-swap: exactly one caller can flip refund_status null→
+    // 'processing'. This is the authoritative double-refund guard, independent
+    // of any Razorpay-side idempotency. If we don't win it, someone already
+    // reserved the refund — do nothing.
+    const { data: reserved } = await supabaseAdmin
+      .from("orders")
+      .update({ refund_status: "processing" })
+      .eq("id", orderId)
+      .is("refund_status", null)
+      .is("refund_id", null)
+      .select("id")
+      .maybeSingle();
+    if (reserved) {
+      const amountPaise = Math.round(Number(order.total_amount) * 100);
+      const result = await issueRazorpayRefund(
+        order.razorpay_payment_id as string,
+        amountPaise,
+        orderId,
+      );
+      if (result.ok) {
+        refundOutcome = "processing";
+        // refunded_at stays null until the refund webhook confirms settlement.
+        await supabaseAdmin
+          .from("orders")
+          .update({ refund_id: result.refundId })
+          .eq("id", orderId);
+      } else {
+        // Refund could not be initiated. Keep the order cancelled, flag the
+        // failure for manual processing. NEVER silently swallow.
+        refundOutcome = "failed";
+        await supabaseAdmin
+          .from("orders")
+          .update({ refund_status: "failed" })
+          .eq("id", orderId);
+        console.error("[mobile/order cancel] REFUND FAILED — manual action needed", {
+          orderId,
+          phone: maskPhone(phoneLocal),
+          error: result.error,
+          code: result.code,
+          httpStatus: result.httpStatus,
+        });
+      }
+    }
+  }
+
   console.info("[mobile/order cancel] success", {
     orderId,
     phone: maskPhone(phoneLocal),
+    refundOutcome,
   });
 
   // Confirmation push to the same device that initiated the cancel. Some
@@ -189,8 +244,12 @@ export async function POST(
   return NextResponse.json({
     ok: true,
     order: updated,
-    message: requiresRefund
-      ? "Order cancelled. Refund will be processed within 5-7 business days."
-      : "Order cancelled. No payment was captured, so no refund is needed.",
+    refund_status: refundOutcome,
+    message:
+      refundOutcome === "processing"
+        ? "Order cancelled. Your refund has been initiated and will reflect in 5-7 business days."
+        : refundOutcome === "failed"
+        ? "Order cancelled. We hit a snag starting your refund automatically — our team will process it manually."
+        : "Order cancelled.",
   });
 }

@@ -3,6 +3,8 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { notifyCustomer } from "@/lib/push";
 import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/delivery-slots";
+import { canAutoRefund } from "@/lib/order-cancellation";
+import { issueRazorpayRefund } from "@/lib/razorpay-refund";
 
 // New canonical stages + legacy values that pre-date the
 // order-status-stages migration. The migration normalises existing
@@ -120,12 +122,58 @@ export async function PATCH(
     .from("orders")
     .update(update)
     .eq("id", params.id)
-    .select("id, customer_id, status")
+    .select(
+      "id, customer_id, status, payment_status, razorpay_payment_id, refund_status, refund_id, total_amount",
+    )
     .maybeSingle();
 
   if (error) {
     console.error("[admin/orders update]", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Auto-refund on admin cancel — PAID orders only. Same paid-only gate + DB
+  // compare-and-swap as the customer cancel path. Admin may cancel outside the
+  // 1-hour window (the full-refund promise still applies), but the gate ensures
+  // COD/unpaid orders are NEVER refunded.
+  let refundOutcome: "none" | "processing" | "failed" = "none";
+  if (update.status === "cancelled" && updated && canAutoRefund(updated)) {
+    const { data: reserved } = await supabaseAdmin
+      .from("orders")
+      .update({ refund_status: "processing" })
+      .eq("id", params.id)
+      .is("refund_status", null)
+      .is("refund_id", null)
+      .select("id")
+      .maybeSingle();
+    if (reserved) {
+      const amountPaise = Math.round(Number(updated.total_amount) * 100);
+      const result = await issueRazorpayRefund(
+        updated.razorpay_payment_id as string,
+        amountPaise,
+        params.id,
+      );
+      if (result.ok) {
+        refundOutcome = "processing";
+        // refunded_at set later by the refund webhook (Phase C).
+        await supabaseAdmin
+          .from("orders")
+          .update({ refund_id: result.refundId })
+          .eq("id", params.id);
+      } else {
+        refundOutcome = "failed";
+        await supabaseAdmin
+          .from("orders")
+          .update({ refund_status: "failed" })
+          .eq("id", params.id);
+        console.error("[admin/orders cancel] REFUND FAILED — manual action needed", {
+          orderId: params.id,
+          error: result.error,
+          code: result.code,
+          httpStatus: result.httpStatus,
+        });
+      }
+    }
   }
 
   // Fire-and-forget push on a status transition we have copy for.
@@ -194,5 +242,5 @@ export async function PATCH(
     },
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, refund_status: refundOutcome });
 }
