@@ -20,6 +20,7 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ADMIN_SESSION_KEY } from "@/lib/admin-shared";
 import {
+  ADMIN_AUTH_LOGOUT_EVENT,
   adminTokenValid,
   clearAdminToken,
   notifyAdminAuthChange,
@@ -34,13 +35,17 @@ import { IDLE, useIdleLogout } from "@/lib/session-timeout";
 // load.
 const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Simple client-side "I already logged in" flag. The REAL credential is the
-// bearer token / cookie the server verifies on every /api/admin request;
-// this flag only decides whether to show the password screen, so it being
-// forgeable in localStorage is harmless (a forged flag still gets 401s from
-// the API). Kept separate from the token so the gate also opens for sessions
-// where the token round-trip is flaky.
-const ADMIN_AUTHED_FLAG = "admin_authenticated";
+// Legacy: an "admin_authenticated=true" localStorage flag with no expiry
+// used to keep the gate open. It outlived the real 30-day credentials
+// (admin_session cookie + bearer token), so after cookie expiry the shell
+// would open on the flag and every /api/admin/* call would 401. It has
+// been REMOVED as a gate input: the only client-side gate hints are now
+// (a) the bearer token's readable exp claim and (b) the localStorage
+// remembered-auth record whose expiresAt tracks the cookie TTL. Any
+// stale "admin_authenticated" value already sitting in an operator's
+// browser is inert because nothing reads it any more; it is also purged
+// during sign-out and on any 401 via ADMIN_AUTH_LOGOUT_EVENT below.
+const LEGACY_ADMIN_AUTHED_FLAG = "admin_authenticated";
 
 function readRememberedAuth(): boolean {
   if (typeof window === "undefined") return false;
@@ -81,7 +86,7 @@ function clearRememberedAuth(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(ADMIN_SESSION_KEY);
   sessionStorage.removeItem(ADMIN_SESSION_KEY);
-  localStorage.removeItem(ADMIN_AUTHED_FLAG);
+  localStorage.removeItem(LEGACY_ADMIN_AUTHED_FLAG);
   clearAdminToken();
 }
 
@@ -154,14 +159,25 @@ export function AdminShell({
   const pathname = usePathname();
 
   useEffect(() => {
-    // Open the gate if any of: a valid bearer token, the simple
-    // logged-in flag, or the legacy remembered-auth record. The server
-    // still enforces real auth on every API call regardless.
-    const flagged =
-      typeof window !== "undefined" &&
-      localStorage.getItem(ADMIN_AUTHED_FLAG) === "true";
-    if (adminTokenValid() || flagged || readRememberedAuth()) setAuthed(true);
+    // Open the gate only if a client-side hint says the real credentials
+    // (admin_session cookie + bearer token) are still within their 30-day
+    // TTL. The server enforces real auth on every /api/admin request; if
+    // this hint is wrong (token still parses as valid but the cookie was
+    // rotated), the first 401 from adminFetch fires ADMIN_AUTH_LOGOUT_EVENT
+    // and drops us back to the gate — see the listener below.
+    if (adminTokenValid() || readRememberedAuth()) setAuthed(true);
     setChecking(false);
+  }, []);
+
+  // Any /api/admin/* 401 (30-day expiry, ADMIN_TOKEN rotation, revoked
+  // cookie) → drop straight back to the PasswordGate instead of leaving
+  // the operator staring at blank tiles and silently-failing mutations.
+  // adminFetch has already cleared the client credentials by the time
+  // this event fires.
+  useEffect(() => {
+    const onLogout = () => setAuthed(false);
+    window.addEventListener(ADMIN_AUTH_LOGOUT_EVENT, onLogout);
+    return () => window.removeEventListener(ADMIN_AUTH_LOGOUT_EVENT, onLogout);
   }, []);
 
   // 30-minute idle auto-logout. Warning fires 5 min before, the timer
@@ -688,9 +704,6 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
         // that only set the cookie won't return a token — that's fine, the
         // cookie path still applies there.
         if (data.token) setAdminToken(data.token);
-        // Simple gate flag so the password screen is skipped on reload even
-        // if the token round-trip is flaky.
-        localStorage.setItem(ADMIN_AUTHED_FLAG, "true");
         // Release any admin requests that mounted (and paused) before login.
         notifyAdminAuthChange();
         onSuccess();
@@ -815,6 +828,22 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
             {error}
           </p>
         )}
+        {/* Discreet recovery hint for the owner. Deliberately vague —
+            this gate is publicly reachable, so it must NOT reference
+            the underlying credential store or hosting provider. */}
+        <p
+          className="text-center"
+          style={{
+            marginTop: "0.25rem",
+            color: "rgba(251, 243, 212, 0.35)",
+            fontFamily: "var(--font-body)",
+            fontSize: "0.65rem",
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+          }}
+        >
+          Locked out? Contact your administrator.
+        </p>
       </form>
     </div>
   );

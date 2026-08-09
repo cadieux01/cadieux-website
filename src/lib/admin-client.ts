@@ -8,7 +8,12 @@
 // server-side and `credentials: "include"` is kept as a fallback for
 // browsers that honour it.
 
+import { ADMIN_SESSION_KEY } from "@/lib/admin-shared";
+
 const ADMIN_TOKEN_KEY = "admin_token";
+// Legacy sticky-login flag — no longer read by AdminShell but still
+// cleared here so a stale value can't ever re-open the gate after a 401.
+const LEGACY_ADMIN_AUTHED_FLAG = "admin_authenticated";
 
 export function getAdminToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -61,9 +66,31 @@ export function adminAuthHeaders(base?: HeadersInit): Headers {
 // than waiting for the poll below to notice.
 export const ADMIN_AUTH_EVENT = "admin-auth-change";
 
+// Fired by adminFetch when a /api/admin/* call returns 401 so AdminShell
+// can drop back to the PasswordGate instead of leaving the operator on
+// a page full of blank tiles and silently-failing mutations. Also fired
+// when the admin_session cookie has been rotated server-side (same 401).
+export const ADMIN_AUTH_LOGOUT_EVENT = "admin-auth-logout";
+
 export function notifyAdminAuthChange(): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(ADMIN_AUTH_EVENT));
+}
+
+// Purge every scrap of client-side admin auth state and tell AdminShell
+// to re-mount the PasswordGate. Called by adminFetch on 401 and available
+// for direct callers (e.g. sign-out) that need the same clean slate.
+export function clearAdminAuthAndSignal(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    localStorage.removeItem(LEGACY_ADMIN_AUTHED_FLAG);
+  } catch {
+    /* storage unavailable — event still fires so the UI recovers */
+  }
+  window.dispatchEvent(new Event(ADMIN_AUTH_LOGOUT_EVENT));
 }
 
 // Every admin page fires its data `load()` on mount — which happens BEFORE
@@ -146,6 +173,17 @@ export async function adminFetch<T = unknown>(
       (json && typeof json === "object" && "error" in json
         ? String((json as { error: unknown }).error)
         : null) ?? `Request failed (${res.status})`;
+    // On 401 the server has rejected our credentials — the cookie has
+    // expired (30-day TTL), or ADMIN_TOKEN was rotated, or the session
+    // was invalidated. Wipe all client-side admin state and signal
+    // AdminShell to drop back to the PasswordGate. This is one-shot per
+    // request: we still throw AdminFetchError so callers behave normally
+    // (no infinite retry), we just guarantee the UI recovers instead of
+    // showing "Unauthorized" tiles until the operator manually signs out.
+    // Non-401 responses are unaffected.
+    if (res.status === 401) {
+      clearAdminAuthAndSignal();
+    }
     throw new AdminFetchError(res.status, message);
   }
   return (json as T) ?? (undefined as unknown as T);
