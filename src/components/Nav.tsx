@@ -162,7 +162,8 @@ export default function Nav() {
                 : []),
               { label: "Cart",           action: () => nav("/cart") },
               { label: "Subscription",   action: () => nav("/subscription") },
-              { label: "Store Locator",  action: () => nav("/find-us") },
+              { label: "Store Locator",  action: () => nav("/store-locator") },
+              { label: "Check Delivery", action: () => nav("/find-us") },
             ];
             const exploreItems: { label: string; action: () => void }[] = [
               { label: "Precision Baking", action: () => nav("/making") },

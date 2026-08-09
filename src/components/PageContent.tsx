@@ -932,9 +932,55 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 }}
               >@cadieuxindia</a>
 
+              {/* ── Site links ──
+                  Discoverability row for the SEO landing pages that are
+                  otherwise reachable only from the homepage hamburger
+                  (which doesn't render on subpages) or the sitemap.
+                  Matches the Legal row's styling exactly so the footer
+                  stays visually quiet — one extra row on mobile. */}
+              <div
+                style={{
+                  marginTop: 18,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  gap: "0.4rem 1.1rem",
+                }}
+              >
+                <span style={{
+                  width: "100%",
+                  fontSize: 9, letterSpacing: "0.35em", textTransform: "uppercase",
+                  color: "rgba(200,144,58,0.65)",
+                  marginBottom: 4,
+                }}>Site</span>
+                {[
+                  ["Shop", "/shop"],
+                  ["Subscribe", "/subscribe"],
+                  ["Store Locator", "/store-locator"],
+                  ["Check Delivery", "/find-us"],
+                ].map(([label, href]) => (
+                  <a
+                    key={href}
+                    href={href}
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: 10,
+                      fontWeight: 300,
+                      letterSpacing: "0.18em",
+                      textTransform: "uppercase",
+                      color: "rgba(251,243,212,0.55)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
+
               {/* ── Legal links ──
-                  Five required policy pages. Each routes to a server-rendered
-                  page that embeds the cleaned Termly HTML. Kept compact and
+                  Six required policy pages. Each routes to a server-rendered
+                  page that embeds the cleaned Termly HTML. /delete-account is
+                  required for Google Play policy compliance. Kept compact and
                   centred so the footer height grows by only one row on mobile. */}
               <div
                 style={{
@@ -955,8 +1001,9 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   ["Privacy Policy", "/privacy-policy"],
                   ["Cookie Policy", "/cookies"],
                   ["Terms", "/terms"],
-                  ["Returns", "/refunds"],
+                  ["Refunds", "/refunds"],
                   ["Shipping", "/shipping"],
+                  ["Delete Account", "/delete-account"],
                 ].map(([label, href]) => (
                   <a
                     key={href}
@@ -975,6 +1022,20 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   </a>
                 ))}
               </div>
+
+              {/* ── Copyright ──
+                  Dynamic year so it never goes stale. Client component,
+                  so SSR + hydration both render the same value on the
+                  same day. Kept muted to sit quietly below Legal. */}
+              <p style={{
+                margin: "10px 0 0",
+                fontFamily: "var(--font-body)",
+                fontSize: 9,
+                fontWeight: 300,
+                letterSpacing: "0.35em",
+                textTransform: "uppercase",
+                color: "rgba(251,243,212,0.4)",
+              }}>© {new Date().getFullYear()} Cadieux · Visakhapatnam</p>
             </div>
           </footer>
 
