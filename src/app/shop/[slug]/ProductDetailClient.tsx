@@ -222,7 +222,7 @@ export default function ProductDetailClient({
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 14 }}>←</span> Our Breads
+        <span style={{ fontSize: 14 }}>←</span> Shop
       </Link>
 
       <div

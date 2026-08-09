@@ -89,7 +89,7 @@ export default function ShopListClient({
       <div style={{ position: "relative", zIndex: 1, padding: "72px clamp(18px,5vw,80px) 80px", maxWidth: 1200, margin: "0 auto" }}>
         <ScrollReveal>
           <h1 data-stagger style={{ margin: "0 0 12px", fontFamily: "var(--font-heading)", fontSize: "clamp(34px,8vw,80px)", fontWeight: 300, color: "#024628", letterSpacing: "0.02em", lineHeight: 1 }}>
-            Our Breads
+            Cadieux Protein Bread
           </h1>
           <p data-stagger style={{
             margin: "0 0 20px",

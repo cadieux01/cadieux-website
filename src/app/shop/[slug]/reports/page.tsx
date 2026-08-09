@@ -213,7 +213,7 @@ export default function ProductReportsPage() {
                 textDecoration: "none",
               }}
             >
-              Our Breads
+              Shop
             </Link>
           </div>
         </div>
