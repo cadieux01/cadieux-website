@@ -32,6 +32,7 @@ export type ProductRow = {
   is_active: boolean;
   in_stock: boolean;
   sort_order: number;
+  updated_at: string;
 };
 
 const supabaseAnon = createClient(
@@ -48,7 +49,7 @@ export const getActiveProducts = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, sort_order",
+        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, sort_order, updated_at",
       )
       .eq("is_active", true)
       .eq("is_archived", false)
