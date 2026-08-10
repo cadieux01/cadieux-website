@@ -9,11 +9,6 @@ const COLOR_BY_STATUS: Record<string, { fg: string; border: string }> = {
   preparing: { fg: "#fcd34d", border: "rgba(252,211,77,0.5)" },
   out_for_delivery: { fg: "#86efac", border: "rgba(134,239,172,0.5)" },
   delivered: { fg: "#4ade80", border: "rgba(74,222,128,0.55)" },
-  // Pickup-only stages (Phase 1 pickup-from-stall). Deliberately in the
-  // same green-family as out_for_delivery/delivered so operators read
-  // "close-to-done" at a glance.
-  ready_for_pickup: { fg: "#86efac", border: "rgba(134,239,172,0.5)" },
-  picked_up: { fg: "#4ade80", border: "rgba(74,222,128,0.55)" },
   cancelled: { fg: "#ef4444", border: "rgba(239,68,68,0.5)" },
   // legacy aliases (rendered for any rows the migration hasn't touched yet)
   pending: { fg: "rgba(245,158,11,0.85)", border: "rgba(245,158,11,0.35)" },

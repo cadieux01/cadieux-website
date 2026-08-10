@@ -17,11 +17,6 @@ export const ORDER_STATUSES = [
   "preparing",
   "out_for_delivery",
   "delivered",
-  // Pickup-only stages (Phase 1 "pickup from stall"). Admin uses these
-  // for orders where fulfillment_type='pickup'. Delivery orders keep
-  // the preparing → out_for_delivery → delivered progression.
-  "ready_for_pickup",
-  "picked_up",
   "cancelled",
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
@@ -47,8 +42,6 @@ export const ORDER_FILTER_VALUES = [
   "preparing",
   "out_for_delivery",
   "delivered",
-  "ready_for_pickup",
-  "picked_up",
   "cancelled",
 ] as const;
 export type OrderFilterValue = (typeof ORDER_FILTER_VALUES)[number];
@@ -90,12 +83,6 @@ export type AdminOrderRow = {
    *  once the new build is live. Null for everything before. */
   latitude?: number | null;
   longitude?: number | null;
-  /** Phase 1 pickup-from-stall: 'delivery' (default) | 'pickup'. */
-  fulfillment_type?: string | null;
-  /** FK-like ref to public.pickup_locations.id when fulfillment_type='pickup'. */
-  pickup_location_id?: string | null;
-  pickup_ready_at?: string | null;
-  picked_up_at?: string | null;
   customers?: AdminCustomerSummary | null;
 };
 

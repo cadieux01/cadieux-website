@@ -24,7 +24,6 @@ import { bookableSlots } from "@/lib/delivery-slots";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import { GOOGLE_MAPS_LOADER_ID, GOOGLE_MAPS_LIBRARIES } from "@/lib/google-maps-loader";
 import { geocodePincodeClient, reverseGeocodeClient } from "@/lib/clientGeocode";
-import { haversineKm } from "@/lib/geocode";
 import LocationPickerModal from "@/components/LocationPickerModal";
 import Select from "@/components/ui/Select";
 import {
@@ -206,45 +205,6 @@ export default function CheckoutPage() {
   const [orderLat, setOrderLat] = useState<number | null>(null);
   const [orderLng, setOrderLng] = useState<number | null>(null);
 
-  // ── Phase 1 pickup-from-stall ─────────────────────────────────────────
-  // "delivery" (default) or "pickup". Toggled at the top of the address
-  // step. When "pickup" the address form + serviceability + delivery-fee
-  // quote are all skipped; the customer chooses a stall from the picker.
-  type FulfillmentType = "delivery" | "pickup";
-  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>("delivery");
-  type PickupLocation = {
-    id: string;
-    name: string;
-    type: "kitchen" | "stall" | "partner_pickup";
-    area: string;
-    address: string;
-    latitude: number;
-    longitude: number;
-    pincode?: string;
-    notes?: string;
-  };
-  const [pickupLocations, setPickupLocations] = useState<PickupLocation[]>([]);
-  const [pickupLocationId, setPickupLocationId] = useState<string | null>(null);
-
-  // Fetch the pickup-point directory once — same public endpoint the
-  // /find-us page uses. Silent on failure; the picker will just show
-  // "no pickup points available".
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/locations")
-      .then((r) => r.json())
-      .then((d: { locations?: PickupLocation[] }) => {
-        if (cancelled) return;
-        setPickupLocations(Array.isArray(d.locations) ? d.locations : []);
-      })
-      .catch(() => {
-        if (!cancelled) setPickupLocations([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // Distance-based delivery fee quote (fetched from /api/delivery-quote)
   type DeliveryQuote = {
     serviceable: boolean | null;
@@ -254,26 +214,17 @@ export default function CheckoutPage() {
   const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
-  // Reactive fee + total — update immediately when quote arrives.
-  // PICKUP: fee is always 0 (money-critical: server independently
-  // forces 0 for fulfillment_type='pickup' via prepareOneTimeOrder,
-  // this UI value is only for display).
-  const deliveryFee =
-    fulfillmentType === "pickup" ? 0 : (deliveryQuote?.feeInr ?? DELIVERY_FEE_INR);
-  const grandTotal = total + deliveryFee;
-  const distanceUnserviceable =
-    fulfillmentType === "delivery" && deliveryQuote?.serviceable === false;
+  // Reactive fee + total — update immediately when quote arrives
+  const deliveryFee  = deliveryQuote?.feeInr  ?? DELIVERY_FEE_INR;
+  const grandTotal   = total + deliveryFee;
+  const distanceUnserviceable = deliveryQuote?.serviceable === false;
 
   // Render the order summary only after the user has confirmed their
   // address (Continue pressed) AND a real distance-based quote is in
   // hand. `distanceUnserviceable` short-circuits the summary in favour
-  // of the standalone ">10 km" warning rendered above. For pickup the
-  // quote is skipped entirely — the summary shows as soon as a stall
-  // is chosen.
+  // of the standalone ">10 km" warning rendered above.
   const showSummary =
-    fulfillmentType === "pickup"
-      ? addressConfirmed && pickupLocationId !== null
-      : addressConfirmed && deliveryQuote !== null && !distanceUnserviceable;
+    addressConfirmed && deliveryQuote !== null && !distanceUnserviceable;
 
   // Pincode serviceability
   const [pinStatus, setPinStatus] = useState<PinState>({ state: "idle" });
@@ -508,12 +459,7 @@ export default function CheckoutPage() {
 
   // Delivery-fee quote: fetch whenever GPS coords or pincode changes.
   // Uses coords as primary; falls back to pincode centroid for returning customers.
-  // Skipped entirely for pickup orders (no distance / no fee).
   useEffect(() => {
-    if (fulfillmentType === "pickup") {
-      setDeliveryQuote(null);
-      return;
-    }
     const params = new URLSearchParams();
     if (orderLat !== null && orderLng !== null) {
       params.set("lat", String(orderLat));
@@ -541,7 +487,7 @@ export default function CheckoutPage() {
     }, 400);
     return () => { window.clearTimeout(timer); ctrl.abort(); setQuoteLoading(false); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderLat, orderLng, effectivePincode, fulfillmentType]);
+  }, [orderLat, orderLng, effectivePincode]);
 
   // Pincode → city autofill: when the user types a full pincode, fill city
   // if it's currently blank. Only fires in fresh/edit mode (not returning —
@@ -709,55 +655,6 @@ export default function CheckoutPage() {
       setError("Please complete the human-verification check below.");
       return;
     }
-
-    // ── PICKUP FAST-PATH ────────────────────────────────────────────
-    // No delivery address to save — the pickup point IS the destination
-    // and lives in the pickup_locations table. Only real gates: name,
-    // OTP-verified phone, and a chosen stall.
-    if (fulfillmentType === "pickup") {
-      if (formMode !== "returning") {
-        if (!name.trim()) { setError("Please enter your name."); return; }
-        if (phone.replace(/\D/g, "").length !== 10) { setError("Enter a valid 10-digit number."); return; }
-      }
-      if (!otpVerified) { setError("Please verify your phone number."); return; }
-      if (!pickupLocationId) { setError("Please choose a pickup point."); return; }
-      // Fresh/edit mode still needs a customer row so subsequent
-      // /api/checkout place_order can attribute the order. Reuse the
-      // save_customer flow but with a stub delivery_address (server
-      // validation of save_customer doesn't care about deliverability).
-      if (formMode !== "returning") {
-        setSubmitting(true);
-        try {
-          const res = await fetch("/api/checkout", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "save_customer",
-              full_name: name.trim(),
-              phone: phone.replace(/\D/g, ""),
-              delivery_address: "(pickup order)",
-              city: "Visakhapatnam",
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) { setError(data.error ?? "Failed to save details."); return; }
-          localStorage.setItem("cadieux_phone", phone.replace(/\D/g, ""));
-          setCustomer(data.customer);
-        } catch {
-          setError("Something went wrong. Try again.");
-          return;
-        } finally {
-          setSubmitting(false);
-        }
-      }
-      setAddressConfirmed(true);
-      // Pickup skips the delivery date/slot step entirely — no scheduled
-      // window, the baker marks the order ready_for_pickup and the
-      // customer collects. Straight to payment.
-      setStep("payment");
-      return;
-    }
-
     // Returning customer using saved details just advances — BUT we
     // still require an in-session OTP (cookie). Without it the server
     // will reject `place_order` with "Phone verification required"
@@ -955,21 +852,9 @@ export default function CheckoutPage() {
   /* ── Resolve address+phone+name for order placement ───────────────────── */
   function resolveOrderIdentity() {
     const isReturning = formMode === "returning" && savedCustomer;
-    // Pickup: synthesise a human-readable label from the chosen stall so
-    // the receipt / confirmation copy reads sensibly. The server IGNORES
-    // this and regenerates it authoritatively from pickup_locations (see
-    // prepareOneTimeOrder), but we still send it so the UI copy is
-    // consistent client-side.
-    const pickupLoc =
-      fulfillmentType === "pickup"
-        ? pickupLocations.find((l) => l.id === pickupLocationId) ?? null
-        : null;
-    const fullAddress =
-      pickupLoc
-        ? `Pick up at ${pickupLoc.name}, ${pickupLoc.area}`
-        : isReturning
-          ? (savedCustomer!.delivery_address ?? "")
-          : `[${effectiveLabel}] ${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+    const fullAddress = isReturning
+      ? (savedCustomer!.delivery_address ?? "")
+      : `[${effectiveLabel}] ${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
     const customerPhone = isReturning ? (savedCustomer!.phone ?? "") : phone;
     const customerName = isReturning ? (savedCustomer!.full_name ?? "") : name.trim();
     return { fullAddress, customerPhone, customerName };
@@ -992,11 +877,6 @@ export default function CheckoutPage() {
       setStep("address");
       return;
     }
-    if (fulfillmentType === "pickup" && !pickupLocationId) {
-      setError("Please choose a pickup point.");
-      setStep("address");
-      return;
-    }
     setOrderLoading(true); setError("");
     try {
       const res = await fetch("/api/checkout", {
@@ -1012,10 +892,6 @@ export default function CheckoutPage() {
           total_amount: total,
           items: orderItems,
           ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
-          fulfillment_type: fulfillmentType,
-          ...(fulfillmentType === "pickup" && pickupLocationId
-            ? { pickup_location_id: pickupLocationId }
-            : {}),
         }),
       });
       const data = await res.json();
@@ -1066,19 +942,12 @@ export default function CheckoutPage() {
       setStep("address");
       return;
     }
-    if (fulfillmentType === "pickup" && !pickupLocationId) {
-      setError("Please choose a pickup point.");
-      setStep("address");
-      return;
-    }
     setOrderLoading(true); setError("");
     const { fullAddress, customerPhone, customerName } = resolveOrderIdentity();
     try {
       // Create the Razorpay order AND the pending DB order row in one call.
       // The server re-derives the authoritative grand total from the cart;
-      // `total` here is only a hint it compares against. For pickup the
-      // server forces delivery_fee=0 so the Razorpay capture amount will
-      // be items-only regardless of what we send here.
+      // `total` here is only a hint it compares against.
       const res = await fetch("/api/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1091,10 +960,6 @@ export default function CheckoutPage() {
           total_amount: total,
           items: orderItems,
           ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
-          fulfillment_type: fulfillmentType,
-          ...(fulfillmentType === "pickup" && pickupLocationId
-            ? { pickup_location_id: pickupLocationId }
-            : {}),
         }),
       });
       if (!res.ok) {
@@ -1422,17 +1287,15 @@ export default function CheckoutPage() {
               }}
             >
               <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628" }}>
-                {fulfillmentType === "pickup" ? "Pickup" : "Delivery fee"}
-                {fulfillmentType === "delivery" && deliveryQuote?.distanceKm !== null && deliveryQuote?.distanceKm !== undefined && (
+                Delivery fee
+                {deliveryQuote?.distanceKm !== null && deliveryQuote?.distanceKm !== undefined && (
                   <span style={{ fontSize: 11, color: "#024628", marginLeft: 6 }}>
                     ({deliveryQuote.distanceKm} km)
                   </span>
                 )}
               </span>
               <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628", opacity: quoteLoading ? 0.5 : 1 }}>
-                {fulfillmentType === "pickup"
-                  ? "Free"
-                  : quoteLoading ? "…" : `₹${deliveryFee}`}
+                {quoteLoading ? "…" : `₹${deliveryFee}`}
               </span>
             </div>
             <div
@@ -1450,130 +1313,6 @@ export default function CheckoutPage() {
 
         {/* ── ADDRESS STEP ─────────────────────────────────────────────── */}
         {step === "address" && (
-          <>
-            {/* Phase 1 pickup-from-stall toggle. Always visible at the
-                top of the address step. Flipping to Pickup hides the
-                address form entirely and shows the stall picker below. */}
-            <section style={{ marginBottom: 24 }}>
-              <p style={sectionHead}>How would you like to get it?</p>
-              <div style={{ display: "flex", gap: 12 }}>
-                {(["delivery", "pickup"] as const).map((mode) => {
-                  const active = fulfillmentType === mode;
-                  return (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => {
-                        setFulfillmentType(mode);
-                        setError("");
-                        setAddressConfirmed(false);
-                        // When flipping into pickup, clear any residual
-                        // delivery-only state that would otherwise gate
-                        // the summary.
-                        if (mode === "pickup") setUnserviceableAtPayment(false);
-                      }}
-                      aria-pressed={active}
-                      style={{
-                        flex: 1,
-                        minHeight: 72,
-                        padding: "14px 12px",
-                        background: active ? "var(--surface-brand)" : "transparent",
-                        border: "1px solid #024628",
-                        cursor: "pointer",
-                        fontFamily: "var(--font-body)",
-                        color: active ? "#FBF3D4" : "#024628",
-                        textAlign: "left",
-                        WebkitTapHighlightColor: "transparent",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 9, fontWeight: 200,
-                          letterSpacing: "0.35em", textTransform: "uppercase",
-                          color: active ? "rgba(251,243,212,0.75)" : "#024628",
-                          marginBottom: 6,
-                        }}
-                      >
-                        {mode === "delivery" ? "Home Delivery" : "Pickup"}
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 300, letterSpacing: "0.04em" }}>
-                        {mode === "delivery" ? "We bring it to you" : "Collect from a stall"}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* PICKUP branch: stall picker in place of the address form.
-                Uses orderLat/orderLng (already captured by the delivery
-                address flow when available) to sort by nearest via a
-                pure haversine — falls back to sort_order (server) when
-                we have no coords. */}
-            {fulfillmentType === "pickup" && (
-              <PickupPointPicker
-                locations={pickupLocations}
-                selectedId={pickupLocationId}
-                onSelect={(id) => { setPickupLocationId(id); setError(""); }}
-                originLat={orderLat}
-                originLng={orderLng}
-              />
-            )}
-
-            {/* Returning customer + pickup: skip the address card entirely,
-                but still gate on an in-session OTP so payment doesn't 401
-                on "Phone verification required" later. Mirrors the OTP
-                block inside the returning-customer delivery card. */}
-            {fulfillmentType === "pickup" && formMode === "returning" && savedCustomer && !otpVerified && (
-              <div style={{ marginBottom: 20 }}>
-                <SavedCustomerOtpBlock
-                  phone={savedCustomer.phone}
-                  otpSent={otpSent}
-                  otpCode={otpCode}
-                  setOtpCode={setOtpCode}
-                  otpError={otpError}
-                  setOtpError={setOtpError}
-                  sendOtp={sendOtp}
-                  verifyOtp={verifyOtp}
-                  sendingOtp={sendingOtp}
-                  verifyingOtp={verifyingOtp}
-                />
-              </div>
-            )}
-            {fulfillmentType === "pickup" && formMode === "returning" && savedCustomer && otpVerified && (
-              <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.25em", textTransform: "uppercase", color: "#024628" }}>
-                ✓ Phone Verified — {savedCustomer.full_name}
-              </p>
-            )}
-
-            {/* Contact-only sub-form for fresh customers on pickup mode.
-                Name + phone + OTP are still required (we still create a
-                customer row + send order confirmations). Skipped on
-                returning customers whose saved row already covers this. */}
-            {fulfillmentType === "pickup" && formMode !== "returning" && (
-              <PickupContactForm
-                name={name}
-                setName={setName}
-                phone={phone}
-                setPhone={setPhone}
-                otpSent={otpSent}
-                otpCode={otpCode}
-                setOtpCode={setOtpCode}
-                otpVerified={otpVerified}
-                otpError={otpError}
-                setOtpError={setOtpError}
-                sendOtp={sendOtp}
-                verifyOtp={verifyOtp}
-                sendingOtp={sendingOtp}
-                verifyingOtp={verifyingOtp}
-              />
-            )}
-          </>
-        )}
-
-        {/* DELIVERY branch — the original address form. Only rendered
-            when fulfillmentType === 'delivery'. */}
-        {step === "address" && fulfillmentType === "delivery" && (
           <>
             {formMode === "returning" && savedCustomer ? (
               <section>
@@ -1997,25 +1736,15 @@ export default function CheckoutPage() {
               disabled={
                 submitting ||
                 !turnstileToken ||
-                (formMode !== "returning" &&
-                  fulfillmentType === "delivery" &&
-                  locQuestion === "unanswered") ||
-                (fulfillmentType === "pickup" && !pickupLocationId)
+                (formMode !== "returning" && locQuestion === "unanswered")
               }
               style={primaryBtn(
                 submitting ||
                   !turnstileToken ||
-                  (formMode !== "returning" &&
-                    fulfillmentType === "delivery" &&
-                    locQuestion === "unanswered") ||
-                  (fulfillmentType === "pickup" && !pickupLocationId),
+                  (formMode !== "returning" && locQuestion === "unanswered"),
               )}
             >
-              {submitting
-                ? "Saving…"
-                : fulfillmentType === "pickup"
-                  ? "Continue to Payment"
-                  : "Continue to Delivery"}
+              {submitting ? "Saving…" : "Continue to Delivery"}
             </button>
           ) : step === "delivery" ? (
             <button onClick={submitDeliveryStep} style={primaryBtn(false)}>
@@ -2668,7 +2397,7 @@ function PaymentReview(props: {
           ₹{grandTotal}
         </p>
         <p style={{ margin: "4px 0 12px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "#024628", letterSpacing: "0.04em" }}>
-          {deliveryFee > 0 ? `Includes ₹${deliveryFee} delivery` : "Pickup order — no delivery fee"}
+          Includes ₹{deliveryFee} delivery
         </p>
         <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
           {customerName} · +91 {customerPhone.replace(/\D/g, "")}
@@ -2920,284 +2649,5 @@ function SlotPicker({
         }))}
       />
     </label>
-  );
-}
-
-/* ── Phase 1 pickup-from-stall subcomponents ─────────────────────────── */
-
-type PickupLocationRow = {
-  id: string;
-  name: string;
-  type: "kitchen" | "stall" | "partner_pickup";
-  area: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  pincode?: string;
-  notes?: string;
-};
-
-/**
- * Nearest-first stall picker. Sorts by haversine distance from the
- * customer's captured GPS/pincode centroid when available; falls back
- * to the API's server-side sort_order (already applied) otherwise.
- * Kilometres are rounded to 1 dp — this is a UX hint, not the fee
- * (pickup has no fee), so precision doesn't matter.
- */
-function PickupPointPicker({
-  locations,
-  selectedId,
-  onSelect,
-  originLat,
-  originLng,
-}: {
-  locations: PickupLocationRow[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  originLat: number | null;
-  originLng: number | null;
-}) {
-  const hasOrigin = originLat !== null && originLng !== null;
-  const sorted = hasOrigin
-    ? [...locations]
-        .map((l) => ({
-          loc: l,
-          km: haversineKm(
-            { latitude: originLat as number, longitude: originLng as number },
-            { latitude: l.latitude, longitude: l.longitude },
-          ),
-        }))
-        .sort((a, b) => a.km - b.km)
-    : locations.map((l) => ({ loc: l, km: null as number | null }));
-
-  return (
-    <section style={{ marginBottom: 24 }}>
-      <p style={sectionHead}>Pickup Point</p>
-      {!hasOrigin && (
-        <p
-          style={{
-            margin: "0 0 12px",
-            fontFamily: "var(--font-body)",
-            fontSize: 12,
-            fontWeight: 200,
-            lineHeight: 1.5,
-            color: "#024628",
-            opacity: 0.75,
-          }}
-        >
-          Share your location to sort by nearest.
-        </p>
-      )}
-      {sorted.length === 0 && (
-        <div
-          style={{
-            padding: "14px 16px",
-            borderRadius: "var(--card-radius)",
-            border: "1px solid #024628",
-            background: "var(--surface-paper)",
-            color: "#024628",
-            fontSize: 13,
-            lineHeight: 1.5,
-            letterSpacing: "0.02em",
-          }}
-          role="status"
-        >
-          No pickup points available right now. Please switch to home delivery.
-        </div>
-      )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {sorted.map(({ loc, km }) => {
-          const active = loc.id === selectedId;
-          return (
-            <button
-              key={loc.id}
-              type="button"
-              onClick={() => onSelect(loc.id)}
-              aria-pressed={active}
-              style={{
-                display: "block",
-                textAlign: "left",
-                width: "100%",
-                padding: "14px 16px",
-                border: `1px solid ${active ? "#024628" : "rgba(2,70,40,0.35)"}`,
-                background: active ? "rgba(2,70,40,0.06)" : "transparent",
-                cursor: "pointer",
-                fontFamily: "var(--font-body)",
-                color: "#024628",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginBottom: 4,
-                  fontSize: 10,
-                  fontWeight: 400,
-                  letterSpacing: "0.25em",
-                  textTransform: "uppercase",
-                }}
-              >
-                <span>{loc.type === "stall" ? "Stall" : loc.type === "kitchen" ? "Kitchen" : "Partner"}</span>
-                {km !== null && (
-                  <span style={{ opacity: 0.75 }}>
-                    • {km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`}
-                  </span>
-                )}
-                {active && <span style={{ marginLeft: "auto", opacity: 0.85 }}>Selected</span>}
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 300, lineHeight: 1.4 }}>{loc.name}</div>
-              <div style={{ fontSize: 13, fontWeight: 200, lineHeight: 1.5, opacity: 0.85, marginTop: 2 }}>
-                {loc.area}
-              </div>
-              <div style={{ fontSize: 12, fontWeight: 200, lineHeight: 1.5, opacity: 0.7, marginTop: 2 }}>
-                {loc.address}
-              </div>
-              {loc.notes && (
-                <div style={{ fontSize: 12, fontWeight: 200, lineHeight: 1.5, opacity: 0.7, marginTop: 4 }}>
-                  {loc.notes}
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-/**
- * Minimal contact + OTP form for pickup orders on fresh/edit form modes.
- * Wraps the parent's sendOtp / verifyOtp closures — the parent already
- * owns the phone/name/otp state so this is purely a presentational split
- * from the full AddressForm (which is delivery-only).
- */
-function PickupContactForm({
-  name,
-  setName,
-  phone,
-  setPhone,
-  otpSent,
-  otpCode,
-  setOtpCode,
-  otpVerified,
-  otpError,
-  setOtpError,
-  sendOtp,
-  verifyOtp,
-  sendingOtp,
-  verifyingOtp,
-}: {
-  name: string;
-  setName: (v: string) => void;
-  phone: string;
-  setPhone: (v: string) => void;
-  otpSent: boolean;
-  otpCode: string;
-  setOtpCode: (v: string) => void;
-  otpVerified: boolean;
-  otpError: string;
-  setOtpError: (v: string) => void;
-  sendOtp: () => Promise<void>;
-  verifyOtp: () => Promise<void>;
-  sendingOtp: boolean;
-  verifyingOtp: boolean;
-}) {
-  return (
-    <section style={{ marginBottom: 24 }}>
-      <p style={sectionHead}>Your Contact</p>
-      <label style={{ display: "block", marginBottom: 16 }}>
-        <span style={labelSt}>Full Name *</span>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Jane Doe"
-          style={inputSt}
-        />
-      </label>
-      <label style={{ display: "block", marginBottom: 12 }}>
-        <span style={labelSt}>Phone *</span>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            type="tel"
-            inputMode="numeric"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-            placeholder="10-digit number"
-            style={{ ...inputSt, flex: 1 }}
-            disabled={otpVerified}
-          />
-          {!otpVerified && (
-            <button
-              type="button"
-              onClick={() => { setOtpError(""); void sendOtp(); }}
-              disabled={sendingOtp || phone.replace(/\D/g, "").length !== 10}
-              style={{
-                minWidth: 110,
-                minHeight: 48,
-                padding: "0 14px",
-                background: "var(--surface-brand)",
-                color: "#FBF3D4",
-                border: "1px solid #024628",
-                cursor: sendingOtp ? "wait" : "pointer",
-                fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
-                letterSpacing: "0.3em", textTransform: "uppercase",
-                opacity: sendingOtp || phone.replace(/\D/g, "").length !== 10 ? 0.6 : 1,
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              {sendingOtp ? "Sending…" : otpSent ? "Resend" : "Send OTP"}
-            </button>
-          )}
-        </div>
-      </label>
-      {otpSent && !otpVerified && (
-        <label style={{ display: "block", marginBottom: 8 }}>
-          <span style={labelSt}>Enter Code *</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              type="tel"
-              inputMode="numeric"
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="6-digit code"
-              style={{ ...inputSt, flex: 1 }}
-            />
-            <button
-              type="button"
-              onClick={() => { void verifyOtp(); }}
-              disabled={verifyingOtp || otpCode.replace(/\D/g, "").length !== 6}
-              style={{
-                minWidth: 110,
-                minHeight: 48,
-                padding: "0 14px",
-                background: "var(--surface-brand)",
-                color: "#FBF3D4",
-                border: "1px solid #024628",
-                cursor: verifyingOtp ? "wait" : "pointer",
-                fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
-                letterSpacing: "0.3em", textTransform: "uppercase",
-                opacity: verifyingOtp || otpCode.replace(/\D/g, "").length !== 6 ? 0.6 : 1,
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              {verifyingOtp ? "…" : "Verify"}
-            </button>
-          </div>
-        </label>
-      )}
-      {otpError && (
-        <p style={{ margin: "0 0 8px", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--warning-on-light)" }}>
-          {otpError}
-        </p>
-      )}
-      {otpVerified && (
-        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.25em", textTransform: "uppercase", color: "#024628" }}>
-          ✓ Phone Verified
-        </p>
-      )}
-    </section>
   );
 }
