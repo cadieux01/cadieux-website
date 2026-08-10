@@ -17,6 +17,11 @@ const ALLOWED_STATUSES = new Set([
   "out_for_delivery",
   "delivered",
   "cancelled",
+  // pickup-only stages (see PICKUP_STAGES in lib/order-stages) — admin
+  // clients only offer these on pickup orders, but we accept them here
+  // regardless so a mis-clicked transition returns 200 not 400.
+  "ready_for_pickup",
+  "picked_up",
   // legacy aliases — accepted on input, normalised on write below
   "pending",
   "dispatched",
@@ -50,6 +55,14 @@ const STATUS_PUSH_COPY: Record<string, { title: string; body: string }> = {
     title: "Order cancelled",
     body: "Your order has been cancelled.",
   },
+  ready_for_pickup: {
+    title: "Ready for pickup",
+    body: "Your loaf is staged at the stall — come pick it up.",
+  },
+  picked_up: {
+    title: "Picked up",
+    body: "Thanks for picking up your order. Enjoy!",
+  },
 };
 
 export async function PATCH(
@@ -73,6 +86,13 @@ export async function PATCH(
     // Stamp the moment the status changed so the customer Track Order
     // page can show "Updated <relative>" beneath the stage tracker.
     update.status_updated_at = new Date().toISOString();
+    // Pickup-specific milestone stamps. Columns are nullable + idempotent-
+    // safe (we only write on the forward transition).
+    if (s === "ready_for_pickup") {
+      update.pickup_ready_at = update.status_updated_at;
+    } else if (s === "picked_up") {
+      update.picked_up_at = update.status_updated_at;
+    }
   }
 
   if (typeof body.delivery_address === "string") {

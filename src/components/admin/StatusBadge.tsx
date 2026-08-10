@@ -10,6 +10,11 @@ const COLOR_BY_STATUS: Record<string, { fg: string; border: string }> = {
   out_for_delivery: { fg: "#86efac", border: "rgba(134,239,172,0.5)" },
   delivered: { fg: "#4ade80", border: "rgba(74,222,128,0.55)" },
   cancelled: { fg: "#ef4444", border: "rgba(239,68,68,0.5)" },
+  // pickup-only stages — reuse the "ready to hand over" green family so
+  // ready_for_pickup sits visually between confirmed (cream) and picked_up
+  // (delivered-green).
+  ready_for_pickup: { fg: "#86efac", border: "rgba(134,239,172,0.5)" },
+  picked_up: { fg: "#4ade80", border: "rgba(74,222,128,0.55)" },
   // legacy aliases (rendered for any rows the migration hasn't touched yet)
   pending: { fg: "rgba(245,158,11,0.85)", border: "rgba(245,158,11,0.35)" },
   pending_payment: { fg: "#f59e0b", border: "rgba(245,158,11,0.45)" },

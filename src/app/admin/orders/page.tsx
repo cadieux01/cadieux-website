@@ -49,7 +49,7 @@ import Select from "@/components/ui/Select";
 
 type SortKey = "created_desc" | "delivery_asc";
 
-const NEXT_STATUS_FOR: Record<string, OrderStatus | null> = {
+const NEXT_STATUS_DELIVERY: Record<string, OrderStatus | null> = {
   pending_payment: "confirmed",
   placed: "confirmed",
   confirmed: "preparing",
@@ -61,6 +61,30 @@ const NEXT_STATUS_FOR: Record<string, OrderStatus | null> = {
   pending: "confirmed",
   dispatched: "delivered",
 };
+
+// Pickup skips preparing + out_for_delivery. The stall side goes:
+// placed → confirmed → ready_for_pickup → picked_up.
+const NEXT_STATUS_PICKUP: Record<string, OrderStatus | null> = {
+  pending_payment: "confirmed",
+  placed: "confirmed",
+  confirmed: "ready_for_pickup",
+  ready_for_pickup: "picked_up",
+  picked_up: null,
+  cancelled: null,
+  pending: "confirmed",
+};
+
+/** Returns the next status this order should transition to, or null if it's
+ *  already at a terminal stage. Branches on fulfillment_type; legacy rows
+ *  with no value are treated as delivery. */
+function nextStatusFor(order: AdminOrderRow): OrderStatus | null {
+  const key = (order.status ?? "").toLowerCase();
+  const map =
+    order.fulfillment_type === "pickup"
+      ? NEXT_STATUS_PICKUP
+      : NEXT_STATUS_DELIVERY;
+  return map[key] ?? null;
+}
 
 type BulkAction = "confirm" | "prepare" | "dispatch" | "deliver" | "cancel";
 
@@ -206,7 +230,7 @@ function OrdersPageInner() {
   }, [orders, range]);
 
   const advance = async (order: AdminOrderRow) => {
-    const next = NEXT_STATUS_FOR[(order.status ?? "").toLowerCase()];
+    const next = nextStatusFor(order);
     if (!next) return;
     await patchStatus(order, next);
   };
@@ -536,7 +560,7 @@ function OrdersPageInner() {
             </thead>
             <tbody>
               {filtered.map((o, i) => {
-                const next = NEXT_STATUS_FOR[(o.status ?? "").toLowerCase()];
+                const next = nextStatusFor(o);
                 const busy = busyId === o.id;
                 return (
                   <tr
@@ -593,6 +617,23 @@ function OrdersPageInner() {
                       ) : null}
                     </td>
                     <td style={{ ...td, maxWidth: 240 }}>
+                      {o.fulfillment_type === "pickup" ? (
+                        <div
+                          className="inline-flex items-center uppercase"
+                          style={{
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.55rem",
+                            letterSpacing: "0.2em",
+                            color: "#fcd34d",
+                            border: "1px solid rgba(252,211,77,0.5)",
+                            padding: "0.15rem 0.5rem",
+                            borderRadius: "999px",
+                            marginBottom: 4,
+                          }}
+                        >
+                          Pickup
+                        </div>
+                      ) : null}
                       <div
                         style={{
                           color: "#fbf3d4",
@@ -604,7 +645,19 @@ function OrdersPageInner() {
                       >
                         {o.delivery_address ?? "—"}
                       </div>
-                      {o.customers?.city ? (
+                      {o.fulfillment_type === "pickup" && o.pickup_location ? (
+                        <div
+                          style={{
+                            color: "rgba(252,211,77,0.85)",
+                            fontSize: "0.7rem",
+                            letterSpacing: "0.03em",
+                            marginTop: 2,
+                          }}
+                        >
+                          {o.pickup_location.name}
+                          {o.pickup_location.area ? ` · ${o.pickup_location.area}` : ""}
+                        </div>
+                      ) : o.customers?.city ? (
                         <div
                           style={{
                             color: "rgba(192,200,206,0.65)",
@@ -616,11 +669,13 @@ function OrdersPageInner() {
                           {o.customers.city}
                         </div>
                       ) : null}
-                      <OrderLocationActions
-                        latitude={o.latitude}
-                        longitude={o.longitude}
-                        orderId={o.id}
-                      />
+                      {o.fulfillment_type === "pickup" ? null : (
+                        <OrderLocationActions
+                          latitude={o.latitude}
+                          longitude={o.longitude}
+                          orderId={o.id}
+                        />
+                      )}
                     </td>
                     <td style={td}>
                       <span style={{ color: "#fbf3d4", fontSize: "0.85rem" }}>

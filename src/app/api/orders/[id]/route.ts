@@ -51,7 +51,7 @@ export async function GET(
   const { data: order, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, total_amount, delivery_fee, status, status_updated_at, delivery_address, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status, payment_method, payment_status, customer_id",
+      "id, total_amount, delivery_fee, status, status_updated_at, delivery_address, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status, payment_method, payment_status, customer_id, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -78,8 +78,23 @@ export async function GET(
     .limit(1)
     .maybeSingle();
 
+  // Side-fetch the pickup_location (no FK to embed via PostgREST) if this
+  // order is a pickup. Cheap: at most one row.
+  let pickupLocation: { id: string; name: string; area: string; address: string } | null = null;
+  if (order.pickup_location_id) {
+    const { data: loc } = await supabaseAdmin
+      .from("pickup_locations")
+      .select("id, name, area, address")
+      .eq("id", order.pickup_location_id)
+      .maybeSingle();
+    if (loc) pickupLocation = loc;
+  }
+
   // Strip customer_id from the response — the client doesn't need it.
   const { customer_id: _omit, ...rest } = order;
   void _omit;
-  return NextResponse.json({ order: rest, change_request: pendingRequest ?? null });
+  return NextResponse.json({
+    order: { ...rest, pickup_location: pickupLocation },
+    change_request: pendingRequest ?? null,
+  });
 }

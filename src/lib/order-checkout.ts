@@ -54,6 +54,12 @@ export type PreparedOrder = {
   orderLng: number | null;
   distanceKm: number | null;
   proximityHint: ProximityHint;
+  /** 'delivery' (default) | 'pickup'. Pickup orders skip serviceability +
+   *  distance-fee + date/slot gates entirely; the delivery path is byte-for-
+   *  byte unchanged. Dormant until the Step 2 checkout UI starts sending
+   *  fulfillment_type='pickup'. */
+  fulfillmentType: "delivery" | "pickup";
+  pickupLocationId: string | null;
 };
 
 export type PrepareResult =
@@ -74,65 +80,135 @@ export async function prepareOneTimeOrder(
   supabaseAdmin: SupabaseClient,
 ): Promise<PrepareResult> {
   const customer_id = body.customer_id as string | undefined;
-  const delivery_address = body.delivery_address as string | undefined;
   const total_amount = body.total_amount;
 
-  if (!delivery_address || total_amount === undefined || total_amount === null) {
+  // Fulfillment routing. Default to 'delivery' so pre-Step-2 clients (which
+  // don't send this field yet) hit the exact same code path they always have.
+  const rawFulfillment =
+    typeof body.fulfillment_type === "string"
+      ? body.fulfillment_type.toLowerCase()
+      : "delivery";
+  const fulfillmentType: "delivery" | "pickup" =
+    rawFulfillment === "pickup" ? "pickup" : "delivery";
+  const isPickup = fulfillmentType === "pickup";
+
+  // Common preflight — required for both flows.
+  if (total_amount === undefined || total_amount === null) {
+    return { ok: false, status: 400, body: { error: "Missing fields" } };
+  }
+  if (!customer_id) {
+    return { ok: false, status: 400, body: { error: "Missing customer." } };
+  }
+
+  // Pickup-flow gates. Delivery-flow gates (address, date/slot, serviceability,
+  // distance fee) are the current code path — kept below untouched.
+  let pickupLocationId: string | null = null;
+  let pickupAddress = "";
+  let pickupPincode = "";
+
+  if (isPickup) {
+    const raw =
+      typeof body.pickup_location_id === "string"
+        ? body.pickup_location_id.trim()
+        : "";
+    if (!raw) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: "Please choose a pickup point.", code: "pickup_location_required" },
+      };
+    }
+    const { data: loc, error: locErr } = await supabaseAdmin
+      .from("pickup_locations")
+      .select("id, name, area, address, pincode, is_archived")
+      .eq("id", raw)
+      .maybeSingle();
+    if (locErr || !loc || loc.is_archived) {
+      return {
+        ok: false,
+        status: 400,
+        body: {
+          error: "That pickup point is no longer available. Please choose another.",
+          code: "pickup_location_invalid",
+        },
+      };
+    }
+    pickupLocationId = loc.id;
+    pickupAddress = `Pick up at ${loc.name}, ${loc.area}`;
+    pickupPincode =
+      typeof loc.pincode === "string" && /^\d{6}$/.test(loc.pincode)
+        ? loc.pincode
+        : (String(loc.address ?? "").match(/(\d{6})/)?.[1] ?? "");
+  }
+
+  const delivery_address = isPickup
+    ? pickupAddress
+    : (body.delivery_address as string | undefined);
+
+  if (!isPickup && !delivery_address) {
     return { ok: false, status: 400, body: { error: "Missing fields" } };
   }
 
+  // Delivery date/slot are optional on pickup (the stall hands over during
+  // its open hours). We still accept + persist them for pickup if the client
+  // sends them, but never gate on them.
   const deliveryDate =
     typeof body.delivery_date === "string" ? body.delivery_date : "";
   const deliverySlot =
     typeof body.delivery_slot === "string" ? body.delivery_slot : "";
-  if (!isAcceptableDeliveryDate(deliveryDate)) {
-    return {
-      ok: false,
-      status: 400,
-      body: { error: "Please pick a delivery date with at least one bookable slot." },
-    };
-  }
-  if (!isAcceptableDeliverySlot(deliverySlot)) {
-    return {
-      ok: false,
-      status: 400,
-      body: { error: "Please pick a delivery time slot." },
-    };
-  }
-  const slotGate = validateBookingSlot(deliveryDate, deliverySlot);
-  if (slotGate) {
-    return { ok: false, status: slotGate.status, body: { error: slotGate.error, code: slotGate.code } };
+
+  if (!isPickup) {
+    if (!isAcceptableDeliveryDate(deliveryDate)) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: "Please pick a delivery date with at least one bookable slot." },
+      };
+    }
+    if (!isAcceptableDeliverySlot(deliverySlot)) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: "Please pick a delivery time slot." },
+      };
+    }
+    const slotGate = validateBookingSlot(deliveryDate, deliverySlot);
+    if (slotGate) {
+      return { ok: false, status: slotGate.status, body: { error: slotGate.error, code: slotGate.code } };
+    }
   }
 
-  // Re-check serviceability server-side. The client gates the CTA but a
-  // determined attacker could submit anyway.
-  const pinFromAddress =
-    typeof body.pincode === "string"
-      ? normalizePincode(body.pincode)
-      : (delivery_address.match(/(\d{6})\s*$/)?.[1] ?? null);
-  if (!pinFromAddress) {
-    return { ok: false, status: 400, body: { error: "Invalid pincode." } };
+  // Serviceability — delivery only. Pickup uses the stall's location.
+  let pinFromAddress: string | null = null;
+  let proximityHint: ProximityHint = null;
+
+  if (isPickup) {
+    pinFromAddress = pickupPincode || "";
+  } else {
+    pinFromAddress =
+      typeof body.pincode === "string"
+        ? normalizePincode(body.pincode)
+        : (delivery_address!.match(/(\d{6})\s*$/)?.[1] ?? null);
+    if (!pinFromAddress) {
+      return { ok: false, status: 400, body: { error: "Invalid pincode." } };
+    }
+    const serviceability = await resolveServiceability(pinFromAddress);
+    if (!serviceability.serviceable) {
+      return {
+        ok: false,
+        status: 400,
+        body: {
+          error:
+            "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
+          code: "pincode_unserviceable",
+        },
+      };
+    }
+    proximityHint =
+      serviceability.via === "proximity" ? (serviceability as ProximityHint) : null;
   }
-  const serviceability = await resolveServiceability(pinFromAddress);
-  if (!serviceability.serviceable) {
-    return {
-      ok: false,
-      status: 400,
-      body: {
-        error:
-          "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
-        code: "pincode_unserviceable",
-      },
-    };
-  }
-  const proximityHint: ProximityHint =
-    serviceability.via === "proximity" ? (serviceability as ProximityHint) : null;
 
   const verified = getVerifiedPhone(req);
-
-  if (!customer_id) {
-    return { ok: false, status: 400, body: { error: "Missing customer." } };
-  }
 
   // Validate items shape, then re-derive prices from the products table.
   const itemsShape = validateWebOrderItemsShape(body.items);
@@ -168,13 +244,14 @@ export async function prepareOneTimeOrder(
     };
   }
 
-  // Server-authoritative distance-based delivery fee.
-  const orderLat = parseCoord(body.latitude);
-  const orderLng = parseCoord(body.longitude);
-  let deliveryFee = DELIVERY_FEE_INR;
+  // Server-authoritative distance-based delivery fee. Pickup orders never
+  // pay a delivery fee — the customer is coming to the stall.
+  const orderLat = isPickup ? null : parseCoord(body.latitude);
+  const orderLng = isPickup ? null : parseCoord(body.longitude);
+  let deliveryFee = isPickup ? 0 : DELIVERY_FEE_INR;
   let distanceKm: number | null = null;
 
-  if (await hasActivePickups()) {
+  if (!isPickup && (await hasActivePickups())) {
     if (orderLat !== null && orderLng !== null) {
       distanceKm = await getDrivingDistanceKm(orderLat, orderLng);
     } else if (pinFromAddress) {
@@ -226,8 +303,8 @@ export async function prepareOneTimeOrder(
     data: {
       customerId: customer_id,
       custPhone: cust.phone ?? null,
-      deliveryAddress: delivery_address,
-      pincode: pinFromAddress,
+      deliveryAddress: delivery_address!,
+      pincode: pinFromAddress ?? "",
       deliveryDate,
       deliverySlot,
       items: reconciled.items,
@@ -238,6 +315,8 @@ export async function prepareOneTimeOrder(
       orderLng,
       distanceKm,
       proximityHint,
+      fulfillmentType,
+      pickupLocationId,
     },
   };
 }
@@ -273,17 +352,27 @@ export function logProximitySuggestion(
 
 /** Common order-row columns for an insert, shared by COD + Razorpay paths. */
 export function orderInsertColumns(prepared: PreparedOrder) {
+  const isPickup = prepared.fulfillmentType === "pickup";
   return {
     customer_id: prepared.customerId,
     total_amount: prepared.grandTotal,
     delivery_fee: prepared.deliveryFee,
     delivery_address: prepared.deliveryAddress,
     items: prepared.items,
-    delivery_date: prepared.deliveryDate,
-    delivery_slot: prepared.deliverySlot,
+    // Pickup orders don't have a delivery-slot commitment yet — persist the
+    // fields only when the client actually chose them. Delivery orders are
+    // gated above so these are always present.
+    ...(prepared.deliveryDate ? { delivery_date: prepared.deliveryDate } : {}),
+    ...(prepared.deliverySlot ? { delivery_slot: prepared.deliverySlot } : {}),
     ...(prepared.orderLat !== null && prepared.orderLng !== null
       ? { latitude: prepared.orderLat, longitude: prepared.orderLng }
       : {}),
     ...(prepared.distanceKm !== null ? { distance_km: prepared.distanceKm } : {}),
+    // Fulfillment routing. Always write fulfillment_type; only include the
+    // pickup_location_id when the flow is actually pickup.
+    fulfillment_type: prepared.fulfillmentType,
+    ...(isPickup && prepared.pickupLocationId
+      ? { pickup_location_id: prepared.pickupLocationId }
+      : {}),
   };
 }

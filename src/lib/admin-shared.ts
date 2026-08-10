@@ -18,6 +18,9 @@ export const ORDER_STATUSES = [
   "out_for_delivery",
   "delivered",
   "cancelled",
+  // pickup-only stages (see PICKUP_STAGES in lib/order-stages)
+  "ready_for_pickup",
+  "picked_up",
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
@@ -43,6 +46,9 @@ export const ORDER_FILTER_VALUES = [
   "out_for_delivery",
   "delivered",
   "cancelled",
+  // pickup-only stages surfaced as filter chips
+  "ready_for_pickup",
+  "picked_up",
 ] as const;
 export type OrderFilterValue = (typeof ORDER_FILTER_VALUES)[number];
 
@@ -83,6 +89,17 @@ export type AdminOrderRow = {
    *  once the new build is live. Null for everything before. */
   latitude?: number | null;
   longitude?: number | null;
+  /** 'delivery' | 'pickup'. Legacy rows may be null → treat as delivery. */
+  fulfillment_type?: string | null;
+  pickup_location_id?: string | null;
+  pickup_ready_at?: string | null;
+  picked_up_at?: string | null;
+  pickup_location?: {
+    id: string;
+    name: string;
+    area?: string | null;
+    address?: string | null;
+  } | null;
   customers?: AdminCustomerSummary | null;
 };
 
