@@ -31,6 +31,12 @@ import {
   fetchAddresses,
   upsertAddressToBookBestEffort,
 } from "@/lib/addresses";
+// IMPORTANT: distance math is imported from "@/lib/haversine" (zero imports,
+// client-safe). Do NOT import from "@/lib/geocode" — that file imports the
+// Supabase admin client, which reads SUPABASE_SERVICE_ROLE_KEY at module
+// load. Dragging it into this client component crashes hydration with
+// "supabaseUrl is required" → blank page (the b012899 bug).
+import { haversineKm } from "@/lib/haversine";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -214,17 +220,41 @@ export default function CheckoutPage() {
   const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
-  // Reactive fee + total — update immediately when quote arrives
-  const deliveryFee  = deliveryQuote?.feeInr  ?? DELIVERY_FEE_INR;
+  // ── Fulfillment (delivery vs pickup) ───────────────────────────────────
+  // Pickup orders collect from a Cadieux stall — ₹0 fee, address is
+  // synthesized server-side from pickup_locations, and pincode / distance /
+  // date / slot gates all skip on the server. The delivery path below is
+  // preserved byte-for-byte; every pickup override is `isPickup ? … : …`.
+  type PickupLoc = {
+    id: string;
+    name: string;
+    area: string;
+    latitude: number;
+    longitude: number;
+    address?: string | null;
+    type?: string | null;
+  };
+  const [fulfillmentType, setFulfillmentType] =
+    useState<"delivery" | "pickup">("delivery");
+  const isPickup = fulfillmentType === "pickup";
+  const [pickupLocationId, setPickupLocationId] = useState<string | null>(null);
+  const [pickupLocations, setPickupLocations] = useState<PickupLoc[]>([]);
+  const [pickupLocationsLoading, setPickupLocationsLoading] = useState(false);
+
+  // Reactive fee + total — update immediately when quote arrives. Pickup
+  // forces ₹0 (server enforces the same in prepareOneTimeOrder).
+  const deliveryFee  = isPickup ? 0 : (deliveryQuote?.feeInr  ?? DELIVERY_FEE_INR);
   const grandTotal   = total + deliveryFee;
-  const distanceUnserviceable = deliveryQuote?.serviceable === false;
+  const distanceUnserviceable = !isPickup && deliveryQuote?.serviceable === false;
 
   // Render the order summary only after the user has confirmed their
   // address (Continue pressed) AND a real distance-based quote is in
   // hand. `distanceUnserviceable` short-circuits the summary in favour
-  // of the standalone ">10 km" warning rendered above.
-  const showSummary =
-    addressConfirmed && deliveryQuote !== null && !distanceUnserviceable;
+  // of the standalone ">10 km" warning rendered above. Pickup skips the
+  // quote gate entirely — subtotal is the total, no distance involved.
+  const showSummary = addressConfirmed && (
+    isPickup || (deliveryQuote !== null && !distanceUnserviceable)
+  );
 
   // Pincode serviceability
   const [pinStatus, setPinStatus] = useState<PinState>({ state: "idle" });
@@ -459,7 +489,10 @@ export default function CheckoutPage() {
 
   // Delivery-fee quote: fetch whenever GPS coords or pincode changes.
   // Uses coords as primary; falls back to pincode centroid for returning customers.
+  // Skipped on pickup — the stall's own coords are the fulfillment point,
+  // no distance-to-customer fee is applied.
   useEffect(() => {
+    if (isPickup) { setDeliveryQuote(null); return; }
     const params = new URLSearchParams();
     if (orderLat !== null && orderLng !== null) {
       params.set("lat", String(orderLat));
@@ -487,7 +520,44 @@ export default function CheckoutPage() {
     }, 400);
     return () => { window.clearTimeout(timer); ctrl.abort(); setQuoteLoading(false); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderLat, orderLng, effectivePincode]);
+  }, [orderLat, orderLng, effectivePincode, isPickup]);
+
+  // Pickup locations — fetched from the public GET /api/locations endpoint
+  // (edge-cached 3600s, no auth). Fires only the first time the user toggles
+  // Pickup on; subsequent toggles reuse the cached array. The endpoint
+  // returns { locations: [{ id, name, type, area, latitude, longitude, … }] }
+  // with only active + non-archived rows.
+  useEffect(() => {
+    if (!isPickup) return;
+    if (pickupLocations.length > 0) return;
+    if (pickupLocationsLoading) return;
+    let cancelled = false;
+    setPickupLocationsLoading(true);
+    fetch("/api/locations")
+      .then((r) => r.json())
+      .then((d: { locations?: PickupLoc[] }) => {
+        if (cancelled) return;
+        setPickupLocations(Array.isArray(d.locations) ? d.locations : []);
+      })
+      .catch(() => { /* silent — user sees empty picker with a retry hint */ })
+      .finally(() => { if (!cancelled) setPickupLocationsLoading(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPickup]);
+
+  // Sorted stall list: nearest-first when we have customer coords,
+  // otherwise the DB's sort_order (which /api/locations already respects).
+  // Distance comes from `@/lib/haversine.haversineKm` — a pure, zero-import
+  // client-safe helper (see import block above). Recomputed on every render;
+  // cheap for the ~6 active rows we have.
+  const sortedPickupLocations: PickupLoc[] = (() => {
+    if (pickupLocations.length === 0) return pickupLocations;
+    if (orderLat === null || orderLng === null) return pickupLocations;
+    const from = { latitude: orderLat, longitude: orderLng };
+    return [...pickupLocations].sort(
+      (a, b) => haversineKm(from, a) - haversineKm(from, b),
+    );
+  })();
 
   // Pincode → city autofill: when the user types a full pincode, fill city
   // if it's currently blank. Only fires in fresh/edit mode (not returning —
@@ -655,6 +725,61 @@ export default function CheckoutPage() {
       setError("Please complete the human-verification check below.");
       return;
     }
+
+    // ── Pickup branch ────────────────────────────────────────────────────
+    // Skips serviceability, pincode, distance, date, and slot gates entirely.
+    // Server does the same in prepareOneTimeOrder when fulfillment_type ===
+    // 'pickup'. Still requires name + phone + OTP + a chosen stall.
+    if (isPickup) {
+      if (!pickupLocationId) { setError("Please choose a pickup point."); return; }
+      const chosen = pickupLocations.find((p) => p.id === pickupLocationId);
+      const placeholderAddress = chosen
+        ? `Pick up at ${chosen.name}, ${chosen.area}`
+        : "Pick up at Cadieux";
+
+      // Returning customer — already has a customer id, skip save_customer.
+      if (formMode === "returning" && savedCustomer && customer?.id) {
+        if (!otpVerified) { setError("Please verify your phone number to continue."); return; }
+        setAddressConfirmed(true);
+        setStep("payment"); // pickup skips the delivery date/slot step
+        return;
+      }
+
+      // Fresh / edit — still need name + phone + verified OTP. No address
+      // fields required. `save_customer` writes the stall address string as
+      // the customer's placeholder delivery_address; any real delivery order
+      // later will overwrite it via the same endpoint.
+      if (!name.trim()) { setError("Please enter your name."); return; }
+      if (phone.replace(/\D/g, "").length !== 10) { setError("Enter a valid 10-digit number."); return; }
+      if (!otpVerified) { setError("Please verify your phone number."); return; }
+
+      setSubmitting(true);
+      try {
+        const res = await fetch("/api/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "save_customer",
+            full_name: name.trim(),
+            phone: phone.replace(/\D/g, ""),
+            delivery_address: placeholderAddress,
+            city: chosen?.area ?? "",
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setError(data.error ?? "Failed to save details."); return; }
+        localStorage.setItem("cadieux_phone", phone.replace(/\D/g, ""));
+        setCustomer(data.customer);
+        setAddressConfirmed(true);
+        setStep("payment"); // pickup skips the delivery date/slot step
+      } catch {
+        setError("Something went wrong. Try again.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     // Returning customer using saved details just advances — BUT we
     // still require an in-session OTP (cookie). Without it the server
     // will reject `place_order` with "Phone verification required"
@@ -852,9 +977,19 @@ export default function CheckoutPage() {
   /* ── Resolve address+phone+name for order placement ───────────────────── */
   function resolveOrderIdentity() {
     const isReturning = formMode === "returning" && savedCustomer;
-    const fullAddress = isReturning
-      ? (savedCustomer!.delivery_address ?? "")
-      : `[${effectiveLabel}] ${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
+    // On pickup, prefer the chosen stall's synthesized "Pick up at …" string
+    // over any saved / entered delivery address. The server also synthesizes
+    // this from pickup_locations, so both paths agree.
+    const chosenPickup = isPickup
+      ? pickupLocations.find((p) => p.id === pickupLocationId)
+      : null;
+    const fullAddress = isPickup
+      ? (chosenPickup
+          ? `Pick up at ${chosenPickup.name}, ${chosenPickup.area}`
+          : "Pick up at Cadieux")
+      : (isReturning
+          ? (savedCustomer!.delivery_address ?? "")
+          : `[${effectiveLabel}] ${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`);
     const customerPhone = isReturning ? (savedCustomer!.phone ?? "") : phone;
     const customerName = isReturning ? (savedCustomer!.full_name ?? "") : name.trim();
     return { fullAddress, customerPhone, customerName };
@@ -892,6 +1027,13 @@ export default function CheckoutPage() {
           total_amount: total,
           items: orderItems,
           ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
+          // Pickup fields — server branches on fulfillment_type and uses
+          // pickup_location_id to synthesize the authoritative address +
+          // zero out the delivery fee. Absent on delivery orders so the
+          // legacy code path is byte-for-byte unchanged.
+          ...(isPickup
+            ? { fulfillment_type: "pickup", pickup_location_id: pickupLocationId }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -960,6 +1102,14 @@ export default function CheckoutPage() {
           total_amount: total,
           items: orderItems,
           ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
+          // Pickup fields — server branches on fulfillment_type and uses
+          // pickup_location_id to synthesize the authoritative address +
+          // zero out the delivery fee. Razorpay amount is server-derived
+          // from the pickup subtotal (no delivery fee), so `serverAmount`
+          // returned below already reflects the ₹0 fee.
+          ...(isPickup
+            ? { fulfillment_type: "pickup", pickup_location_id: pickupLocationId }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -1108,8 +1258,11 @@ export default function CheckoutPage() {
   // back, X" overflowed and visually collided with CADIEUX.
   const greeting = firstName ? `Hi, ${firstName}` : "";
 
-  const stepLabel =
-    step === "address"
+  // Pickup skips the delivery date/slot step, so the step counter shows
+  // "1 of 2" / "2 of 2" instead of "1 of 3" / "3 of 3".
+  const stepLabel = isPickup
+    ? (step === "address" ? "Pickup Point (1 of 2)" : "Payment (2 of 2)")
+    : step === "address"
       ? "Address (1 of 3)"
       : step === "delivery"
         ? "Delivery (2 of 3)"
@@ -1122,7 +1275,9 @@ export default function CheckoutPage() {
     if (step === "payment") {
       setUnserviceableAtPayment(false);
       setError("");
-      setStep("delivery");
+      // Pickup skipped the delivery step on the way in, so unwind straight
+      // back to the address step to keep the flow symmetric.
+      setStep(isPickup ? "address" : "delivery");
     } else if (step === "delivery") setStep("address");
     else router.push("/cart");
   }
@@ -1235,7 +1390,11 @@ export default function CheckoutPage() {
             fontWeight: 300, color: "#024628", letterSpacing: "0.04em", lineHeight: 1.1,
           }}
         >
-          {step === "address" ? "Your Address" : step === "delivery" ? "Pick a Time" : "Payment"}
+          {step === "address"
+            ? (isPickup ? "Pickup Point" : "Your Address")
+            : step === "delivery"
+              ? "Pick a Time"
+              : "Payment"}
         </h1>
 
         {/* Standalone >10 km warning — surfaces independent of the
@@ -1314,7 +1473,53 @@ export default function CheckoutPage() {
         {/* ── ADDRESS STEP ─────────────────────────────────────────────── */}
         {step === "address" && (
           <>
-            {formMode === "returning" && savedCustomer ? (
+            {/* Delivery vs Pickup toggle — the entry point for the whole
+                pickup flow. Kept visually simple (two paper tabs); toggling
+                resets addressConfirmed so the summary re-arms cleanly. */}
+            <FulfillmentToggle
+              value={fulfillmentType}
+              onChange={(next) => {
+                if (next === fulfillmentType) return;
+                setFulfillmentType(next);
+                setError("");
+                setAddressConfirmed(false);
+              }}
+            />
+
+            {isPickup ? (
+              <PickupSection
+                formMode={formMode}
+                savedCustomer={savedCustomer}
+                name={name}
+                setName={setName}
+                phone={phone}
+                setPhone={setPhone}
+                otpSent={otpSent}
+                otpCode={otpCode}
+                setOtpCode={setOtpCode}
+                otpVerified={otpVerified}
+                setOtpVerified={setOtpVerified}
+                setOtpSent={setOtpSent}
+                otpError={otpError}
+                setOtpError={setOtpError}
+                sendOtp={sendOtp}
+                verifyOtp={verifyOtp}
+                sendingOtp={sendingOtp}
+                verifyingOtp={verifyingOtp}
+                onSwitchToFresh={() => {
+                  setFormMode("fresh");
+                  setName(""); setPhone("");
+                  setOtpVerified(false); setOtpSent(false);
+                  setOtpCode(""); setOtpError("");
+                  setCustomer(null); setError("");
+                }}
+                pickupLocations={sortedPickupLocations}
+                pickupLocationsLoading={pickupLocationsLoading}
+                pickupLocationId={pickupLocationId}
+                setPickupLocationId={(id) => { setPickupLocationId(id); setError(""); }}
+                customerHasCoords={orderLat !== null && orderLng !== null}
+              />
+            ) : formMode === "returning" && savedCustomer ? (
               <section>
                 <p style={sectionHead}>Saved Details</p>
                 {/* Task G: cream-on-ash (1.52:1 FAIL) → paper card semantics.
@@ -1736,15 +1941,17 @@ export default function CheckoutPage() {
               disabled={
                 submitting ||
                 !turnstileToken ||
-                (formMode !== "returning" && locQuestion === "unanswered")
+                // locQuestion only applies to the delivery form (fresh/edit).
+                // Pickup has no address to answer "are you there?" about.
+                (!isPickup && formMode !== "returning" && locQuestion === "unanswered")
               }
               style={primaryBtn(
                 submitting ||
                   !turnstileToken ||
-                  (formMode !== "returning" && locQuestion === "unanswered"),
+                  (!isPickup && formMode !== "returning" && locQuestion === "unanswered"),
               )}
             >
-              {submitting ? "Saving…" : "Continue to Delivery"}
+              {submitting ? "Saving…" : (isPickup ? "Continue to Payment" : "Continue to Delivery")}
             </button>
           ) : step === "delivery" ? (
             <button onClick={submitDeliveryStep} style={primaryBtn(false)}>
@@ -2420,6 +2627,344 @@ function PaymentReview(props: {
         session.
       */}
     </section>
+  );
+}
+
+/* ── Fulfillment toggle (Delivery / Pickup) ─────────────────────────── */
+// Compact two-tab picker rendered at the top of the address step. Toggling
+// resets addressConfirmed in the parent so the summary re-arms cleanly for
+// the new flow. Matrix-legal on ash: solid #024628 border, brand-fill for
+// the active tab, transparent for the inactive.
+function FulfillmentToggle({
+  value,
+  onChange,
+}: {
+  value: "delivery" | "pickup";
+  onChange: (next: "delivery" | "pickup") => void;
+}) {
+  const tab = (
+    key: "delivery" | "pickup",
+    label: string,
+    hint: string,
+  ) => {
+    const active = value === key;
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => onChange(key)}
+        aria-pressed={active}
+        style={{
+          flex: 1,
+          display: "flex", flexDirection: "column", alignItems: "flex-start",
+          gap: 4,
+          padding: "14px 16px",
+          minHeight: 62,
+          background: active ? "var(--surface-brand)" : "transparent",
+          border: "1px solid #024628",
+          cursor: "pointer",
+          fontFamily: "var(--font-body)",
+          color: active ? "#FBF3D4" : "#024628",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 400, letterSpacing: "0.35em", textTransform: "uppercase" }}>
+          {label}
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 200, letterSpacing: "0.02em", opacity: active ? 0.85 : 0.7 }}>
+          {hint}
+        </span>
+      </button>
+    );
+  };
+  return (
+    <section style={{ marginBottom: 22 }}>
+      <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>
+        How would you like your bread?
+      </p>
+      <div style={{ display: "flex", gap: 10 }}>
+        {tab("delivery", "Delivery", "We deliver to your door")}
+        {tab("pickup",   "Pickup",   "Free · collect from a stall")}
+      </div>
+    </section>
+  );
+}
+
+/* ── Pickup section (address-step body when isPickup) ────────────────── */
+// Replaces the returning/fresh AddressForm branch when Pickup is selected.
+// Shows (a) the customer identity block — saved details for returning, or a
+// compact name + phone + OTP form for fresh — and (b) the stall picker,
+// already sorted nearest-first by the parent via haversineKm.
+function PickupSection(props: {
+  formMode: FormMode;
+  savedCustomer: Customer | null;
+  name: string; setName: (s: string) => void;
+  phone: string; setPhone: (s: string) => void;
+  otpSent: boolean; setOtpSent: (b: boolean) => void;
+  otpCode: string; setOtpCode: (s: string) => void;
+  otpVerified: boolean; setOtpVerified: (b: boolean) => void;
+  otpError: string; setOtpError: (s: string) => void;
+  sendOtp: () => void;
+  verifyOtp: () => void;
+  sendingOtp: boolean;
+  verifyingOtp: boolean;
+  onSwitchToFresh: () => void;
+  pickupLocations: Array<{
+    id: string; name: string; area: string;
+    latitude: number; longitude: number;
+    address?: string | null;
+    type?: string | null;
+  }>;
+  pickupLocationsLoading: boolean;
+  pickupLocationId: string | null;
+  setPickupLocationId: (id: string) => void;
+  customerHasCoords: boolean;
+}) {
+  const {
+    formMode, savedCustomer,
+    name, setName, phone, setPhone,
+    otpSent, otpCode, setOtpCode,
+    otpVerified, setOtpVerified, setOtpSent,
+    otpError, setOtpError,
+    sendOtp, verifyOtp, sendingOtp, verifyingOtp,
+    onSwitchToFresh,
+    pickupLocations, pickupLocationsLoading,
+    pickupLocationId, setPickupLocationId,
+    customerHasCoords,
+  } = props;
+
+  const isReturning = formMode === "returning" && !!savedCustomer;
+
+  return (
+    <>
+      {/* ── Identity block ─────────────────────────────────────────── */}
+      {isReturning ? (
+        <section>
+          <p style={sectionHead}>Your Details</p>
+          <div
+            style={{
+              background: "var(--surface-paper)",
+              border: "1px solid #024628",
+              borderRadius: "var(--card-radius)",
+              padding: "16px 18px",
+              marginBottom: 16,
+            }}
+          >
+            <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, color: "#024628", letterSpacing: "0.04em" }}>
+              {savedCustomer!.full_name}
+            </p>
+            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
+              +91 {savedCustomer!.phone}
+            </p>
+          </div>
+
+          {!otpVerified ? (
+            <SavedCustomerOtpBlock
+              phone={savedCustomer!.phone}
+              otpSent={otpSent}
+              otpCode={otpCode}
+              setOtpCode={setOtpCode}
+              otpError={otpError}
+              setOtpError={setOtpError}
+              sendOtp={sendOtp}
+              verifyOtp={verifyOtp}
+              sendingOtp={sendingOtp}
+              verifyingOtp={verifyingOtp}
+            />
+          ) : (
+            <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.25em", textTransform: "uppercase", color: "#024628" }}>
+              ✓ Phone Verified
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={onSwitchToFresh}
+            style={{
+              display: "block", width: "100%",
+              background: "none", border: "none",
+              cursor: "pointer", padding: "12px 0",
+              fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+              letterSpacing: "0.35em", textTransform: "uppercase",
+              color: "#024628",
+              WebkitTapHighlightColor: "transparent",
+              marginBottom: 8,
+            }}
+          >
+            Order with a Different Number
+          </button>
+        </section>
+      ) : (
+        <section>
+          <p style={sectionHead}>Your Details</p>
+
+          <div style={{ marginBottom: 14 }}>
+            <span style={labelSt}>Full name *</span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Anisha Rao"
+              style={inputSt}
+              autoComplete="name"
+            />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <span style={labelSt}>Phone number *</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={phone}
+                onChange={(e) => {
+                  const next = e.target.value.replace(/\D/g, "").slice(0, 10);
+                  setPhone(next);
+                  if (otpVerified) {
+                    setOtpVerified(false); setOtpSent(false); setOtpCode(""); setOtpError("");
+                  }
+                }}
+                placeholder="10-digit mobile"
+                style={{ ...inputSt, flex: 1 }}
+                autoComplete="tel"
+                maxLength={10}
+              />
+              {otpVerified ? (
+                <div style={{ flexShrink: 0, display: "flex", alignItems: "center", padding: "0 12px" }}>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", color: "#024628" }}>
+                    ✓ Verified
+                  </span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={sendOtp}
+                  disabled={sendingOtp || phone.replace(/\D/g, "").length < 10}
+                  style={{
+                    flexShrink: 0, minHeight: 48,
+                    background: "none",
+                    border: "1px solid #024628",
+                    padding: "0 16px",
+                    cursor: (sendingOtp || phone.replace(/\D/g, "").length < 10) ? "default" : "pointer",
+                    fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                    letterSpacing: "0.35em", textTransform: "uppercase",
+                    color: "#024628",
+                    opacity: (sendingOtp || phone.replace(/\D/g, "").length < 10) ? 0.4 : 1,
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  {sendingOtp ? "Sending…" : otpSent ? "Resend" : "Send OTP"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {otpSent && !otpVerified && (
+            <div style={{ marginBottom: 14 }}>
+              <span style={labelSt}>Enter OTP *</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(""); }}
+                placeholder="6-digit code"
+                style={{ ...inputSt, letterSpacing: "0.4em", fontSize: 19 }}
+              />
+              <button
+                type="button"
+                onClick={verifyOtp}
+                disabled={verifyingOtp || otpCode.replace(/\D/g, "").length < 6}
+                style={{
+                  marginTop: 10, display: "block", width: "100%",
+                  height: 48,
+                  background: "var(--surface-brand)",
+                  border: "none",
+                  cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
+                  fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                  letterSpacing: "0.4em", textTransform: "uppercase",
+                  color: "#FBF3D4",
+                  opacity: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? 0.5 : 1,
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                {verifyingOtp ? "Verifying…" : "Verify"}
+              </button>
+              {otpError && (
+                <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--warning-on-light)", letterSpacing: "0.04em" }}>
+                  {otpError}
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Stall picker ───────────────────────────────────────────── */}
+      <section style={{ marginTop: 8, marginBottom: 8 }}>
+        <p style={sectionHead}>Choose a pickup point</p>
+        {pickupLocationsLoading && pickupLocations.length === 0 && (
+          <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
+            Loading nearby stalls…
+          </p>
+        )}
+        {!pickupLocationsLoading && pickupLocations.length === 0 && (
+          <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "var(--warning-on-light)", letterSpacing: "0.03em" }}>
+            No pickup points available right now. Please switch to Delivery, or try again in a moment.
+          </p>
+        )}
+        {pickupLocations.length > 0 && (
+          <>
+            {customerHasCoords && (
+              <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+                Sorted by nearest to you
+              </p>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {pickupLocations.map((loc) => {
+                const active = loc.id === pickupLocationId;
+                return (
+                  <button
+                    key={loc.id}
+                    type="button"
+                    onClick={() => setPickupLocationId(loc.id)}
+                    aria-pressed={active}
+                    style={{
+                      display: "block", textAlign: "left", width: "100%",
+                      padding: "12px 14px",
+                      border: `1px solid ${active ? "#024628" : "rgba(2,70,40,0.35)"}`,
+                      background: active ? "rgba(2,70,40,0.06)" : "transparent",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-body)",
+                      color: "#024628",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 8, marginBottom: 4,
+                      fontSize: 10, fontWeight: 400,
+                      letterSpacing: "0.25em", textTransform: "uppercase",
+                    }}>
+                      <span>{loc.area}</span>
+                      {active && <span style={{ marginLeft: "auto", opacity: 0.8 }}>Selected</span>}
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 300, lineHeight: 1.5 }}>
+                      {loc.name}
+                    </div>
+                    {loc.address && (
+                      <div style={{ marginTop: 2, fontSize: 12, fontWeight: 200, lineHeight: 1.5, opacity: 0.8 }}>
+                        {loc.address}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </section>
+    </>
   );
 }
 
