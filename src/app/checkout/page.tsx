@@ -1397,6 +1397,27 @@ export default function CheckoutPage() {
               : "Payment"}
         </h1>
 
+        {/* Delivery vs Pickup toggle — hoisted OUT of the address step so
+            it renders on ALL 3 steps. Returning customers with a saved
+            address auto-skip the address step (setStep("payment") at the
+            OTP-verified branch), so a toggle nested inside address never
+            rendered for them. Rendering here (below H1, above the >10 km
+            warning) means every customer — new or returning, on address /
+            delivery / payment — can switch Deliver ↔ Pickup. Any toggle
+            snaps setStep("address") so the customer lands at the entry
+            point of the chosen mode (pick a stall for pickup, confirm
+            address for delivery). */}
+        <FulfillmentToggle
+          value={fulfillmentType}
+          onChange={(next) => {
+            if (next === fulfillmentType) return;
+            setFulfillmentType(next);
+            setError("");
+            setAddressConfirmed(false);
+            setStep("address");
+          }}
+        />
+
         {/* Standalone >10 km warning — surfaces independent of the
             summary so the customer sees why we can't deliver even
             before they've pressed Continue. */}
@@ -1473,19 +1494,6 @@ export default function CheckoutPage() {
         {/* ── ADDRESS STEP ─────────────────────────────────────────────── */}
         {step === "address" && (
           <>
-            {/* Delivery vs Pickup toggle — the entry point for the whole
-                pickup flow. Kept visually simple (two paper tabs); toggling
-                resets addressConfirmed so the summary re-arms cleanly. */}
-            <FulfillmentToggle
-              value={fulfillmentType}
-              onChange={(next) => {
-                if (next === fulfillmentType) return;
-                setFulfillmentType(next);
-                setError("");
-                setAddressConfirmed(false);
-              }}
-            />
-
             {isPickup ? (
               <PickupSection
                 formMode={formMode}
