@@ -10,10 +10,23 @@
  *    8 km   → ₹72
  *    9 km   → ₹82
  *   10 km   → ₹92
- *  > 10 km  → unserviceable
+ *  11–20 km → ₹92 + (km − 10) × ₹12
+ *              → 11:₹104, 12:₹116, 13:₹128, 14:₹140, 15:₹152,
+ *                16:₹164, 17:₹176, 18:₹188, 19:₹200, 20:₹212
+ *  > 20 km  → unserviceable
  *
- * Pure function — no I/O, safe to import on client OR server.
+ * The ≤10 km tiers are frozen — existing customers pay exactly what
+ * they paid before this change. The 10→20 km extension charges the
+ * outer band at a flat ₹12/km on top of the ₹92 base at 10 km. Whole
+ * ₹1 arithmetic (12 × integer km) — no rounding style needed.
+ *
+ * Pure function — no I/O, safe to import on client OR server. Single
+ * source of truth: /api/delivery-quote (fee shown to customer) AND
+ * prepareOneTimeOrder + /api/mobile/checkout|create-order (fee actually
+ * charged) all call this — shown == charged by construction.
  */
+export const MAX_DELIVERY_KM = 20;
+
 export function computeDeliveryFee(distanceKm: number): {
   serviceable: boolean;
   feeInr: number;
@@ -27,5 +40,8 @@ export function computeDeliveryFee(distanceKm: number): {
   if (c === 8)  return { serviceable: true,  feeInr: 72 };
   if (c === 9)  return { serviceable: true,  feeInr: 82 };
   if (c === 10) return { serviceable: true,  feeInr: 92 };
+  if (c <= MAX_DELIVERY_KM) {
+    return { serviceable: true, feeInr: 92 + (c - 10) * 12 };
+  }
   return { serviceable: false, feeInr: 0 };
 }

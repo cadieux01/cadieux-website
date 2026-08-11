@@ -9,7 +9,7 @@
 //
 // Response shapes:
 //   200  { serviceable: true,  feeInr: number, distanceKm: number }
-//   200  { serviceable: false, feeInr: 0,      distanceKm: number }   > 10 km
+//   200  { serviceable: false, feeInr: 0,      distanceKm: number }   > 20 km
 //   200  { serviceable: null,  feeInr: null,   distanceKm: null,
 //          message: "..." }                                             no coords
 //   503  { error: "..." }                                               no active pickups

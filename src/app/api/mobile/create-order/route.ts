@@ -285,7 +285,7 @@ export async function POST(req: NextRequest) {
           {
             ok: false,
             error:
-              "We don't deliver beyond 10 km yet. Please check our service area.",
+              "We don't deliver beyond 20 km yet. Please check our service area.",
             code: "distance_unserviceable",
           },
           { status: 400 },

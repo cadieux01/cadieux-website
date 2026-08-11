@@ -267,7 +267,7 @@ export async function prepareOneTimeOrder(
           ok: false,
           status: 400,
           body: {
-            error: "We don't deliver beyond 10 km yet. Please check our service area.",
+            error: "We don't deliver beyond 20 km yet. Please check our service area.",
             code: "distance_unserviceable",
           },
         };
