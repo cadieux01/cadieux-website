@@ -66,8 +66,14 @@ function PrintPackingListPageInner() {
   const filtered = useMemo(() => {
     const search = q.trim().toLowerCase();
     return orders.filter((o) => {
-      if (status !== "all" && (o.status ?? "").toLowerCase() !== status) {
-        return false;
+      if (status !== "all") {
+        if (status === "expired") {
+          // Match the /admin/orders page filter — 'expired' is computed,
+          // not a stored status. See src/lib/order-state.ts.
+          if (o.computed_state !== "expired") return false;
+        } else if ((o.status ?? "").toLowerCase() !== status) {
+          return false;
+        }
       }
       if (!search) return true;
       const name = (o.customers?.full_name ?? "").toLowerCase();

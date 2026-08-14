@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { computeOrderState } from "@/lib/order-state";
 
 export async function GET(req: NextRequest) {
   if (!isAdmin(req)) {
@@ -39,9 +40,19 @@ export async function GET(req: NextRequest) {
       pickupById[l.id] = l;
     }
   }
-  const enriched = rows.map((r: { pickup_location_id?: string | null }) => ({
+  // Attach computed_state on every row so admin filters / badges never need
+  // to duplicate the classifier. See src/lib/order-state.ts (mirrors the
+  // WhatsApp bot's classifyOrder — the single source of truth for "expired").
+  const nowMs = Date.now();
+  const enriched = rows.map((r: {
+    pickup_location_id?: string | null;
+    status?: string | null;
+    payment_status?: string | null;
+    created_at?: string | null;
+  }) => ({
     ...r,
     pickup_location: r.pickup_location_id ? pickupById[r.pickup_location_id] ?? null : null,
+    computed_state: computeOrderState(r, nowMs),
   }));
 
   return NextResponse.json({ orders: enriched });

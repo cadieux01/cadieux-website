@@ -19,6 +19,10 @@ const COLOR_BY_STATUS: Record<string, { fg: string; border: string }> = {
   pending: { fg: "rgba(245,158,11,0.85)", border: "rgba(245,158,11,0.35)" },
   pending_payment: { fg: "#f59e0b", border: "rgba(245,158,11,0.45)" },
   dispatched: { fg: "#86efac", border: "rgba(134,239,172,0.5)" },
+  // computed lifecycle state — stale unpaid pending/placed >7d, per
+  // src/lib/order-state.ts. Muted grey so it reads as "inert" (not scary
+  // red, since it's just an abandoned COD, not something to act on).
+  expired: { fg: "rgba(192,200,206,0.75)", border: "rgba(192,200,206,0.4)" },
   // subscriptions
   active: { fg: "#4ade80", border: "rgba(74,222,128,0.5)" },
   paused: { fg: "#fbbf24", border: "rgba(251,191,36,0.5)" },

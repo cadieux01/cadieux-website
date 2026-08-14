@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
+import { computeOrderState } from "@/lib/order-state";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
   const { data: orders, error: ordersErr } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, total_amount, status, status_updated_at, delivery_address, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at",
+      "id, total_amount, status, status_updated_at, delivery_address, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status, payment_status, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at",
     )
     .eq("customer_id", customer.id)
     .order("created_at", { ascending: false })
@@ -77,5 +78,13 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true, orders: orders ?? [] });
+  // Attach computed_state so any mobile client (current or future) sees the
+  // same "expired" truth the website and bot use. Old clients ignore this
+  // new top-level field.
+  const nowMs = Date.now();
+  const enriched = (orders ?? []).map((o) => ({
+    ...o,
+    computed_state: computeOrderState(o, nowMs),
+  }));
+  return NextResponse.json({ ok: true, orders: enriched });
 }

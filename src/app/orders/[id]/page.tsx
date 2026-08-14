@@ -53,6 +53,11 @@ type Order = {
   refund_status: string | null;
   payment_method: string | null;
   payment_status: string | null;
+  // Server-computed lifecycle state (mirror of the WhatsApp bot's
+  // classifyOrder). See src/lib/order-state.ts. 'expired' means an unpaid
+  // pending/placed order that's been sitting > 7 days — the tracker treats
+  // it as a terminal state (like cancelled) and Pay Now is hidden.
+  computed_state?: "delivered" | "cancelled" | "active" | "pending" | "expired";
 };
 
 type ChangeRequest = {
@@ -592,10 +597,10 @@ export default function OrderDetailPage() {
               />
             </div>
 
-            {/* Status progress tracker. Hidden for cancelled orders —
-                the dedicated Cancellation section below already tells
-                the customer everything they need. */}
-            {!isCancelled(order.status) && (
+            {/* Status progress tracker. Hidden for cancelled OR expired
+                orders — the dedicated section below (Cancellation / Expired)
+                already tells the customer everything they need. */}
+            {!isCancelled(order.status) && order.computed_state !== "expired" && (
               <StatusTracker
                 status={order.status}
                 statusUpdatedAt={order.status_updated_at ?? null}
@@ -807,11 +812,14 @@ export default function OrderDetailPage() {
                 </span>
               </div>
 
-              {/* Pay Now — only for unpaid COD orders that aren't cancelled,
-                  and never while a delivery change-request is pending. */}
+              {/* Pay Now — only for unpaid COD orders that aren't cancelled
+                  or expired, and never while a delivery change-request is
+                  pending. Expired = server-computed (>7d unpaid pending);
+                  see src/lib/order-state.ts. */}
               {(order.payment_method ?? "").toLowerCase() === "cod" &&
                 (order.payment_status ?? "").toLowerCase() !== "paid" &&
                 !isCancelled(order.status) &&
+                order.computed_state !== "expired" &&
                 !changeRequest && (
                   <div style={{ marginTop: 16 }}>
                     <button
@@ -870,6 +878,29 @@ export default function OrderDetailPage() {
                 {order.refund_status && (
                   <Row label="Refund" value={order.refund_status} />
                 )}
+              </Section>
+            )}
+
+            {/* Expired: an unpaid pending/placed order older than 7 days.
+                Terminal for the customer — no tracker, no Pay Now. Kept as
+                a friendly explanation rather than a scary error. */}
+            {!order.cancelled_at && order.computed_state === "expired" && (
+              <Section title="Expired">
+                <p
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 14,
+                    fontWeight: 200,
+                    lineHeight: 1.65,
+                    color: "rgba(2,70,40,0.8)",
+                  }}
+                >
+                  This order expired because it wasn&apos;t completed within 7
+                  days of being placed. To reorder, please browse the shop and
+                  place a new order — or reach out on WhatsApp if you&apos;d
+                  like help.
+                </p>
               </Section>
             )}
 

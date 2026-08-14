@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
+import { computeOrderState } from "@/lib/order-state";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -90,9 +91,13 @@ export async function GET(
     .limit(1)
     .maybeSingle();
 
+  // Attach computed_state (mirror of the bot's classifyOrder). Old app
+  // installs will ignore this new field; a future app build (Phase 2) can
+  // read it to render the "expired" terminal state on the tracker.
+  const computed_state = computeOrderState(order);
   return NextResponse.json({
     ok: true,
-    order,
+    order: { ...order, computed_state },
     change_request: pendingRequest ?? null,
   });
 }

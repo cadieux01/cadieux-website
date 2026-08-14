@@ -189,7 +189,13 @@ function OrdersPageInner() {
       .filter((o) => {
         if (!withinDateRange(o.created_at, range)) return false;
         if (filter !== "all") {
-          if ((o.status ?? "").toLowerCase() !== filter) return false;
+          if (filter === "expired") {
+            // 'expired' is a computed lifecycle state (not a stored status).
+            // Match server-attached computed_state; see src/lib/order-state.ts.
+            if (o.computed_state !== "expired") return false;
+          } else if ((o.status ?? "").toLowerCase() !== filter) {
+            return false;
+          }
         }
         if (!q) return true;
         const name = (o.customers?.full_name ?? "").toLowerCase();
@@ -225,6 +231,12 @@ function OrdersPageInner() {
     for (const o of inRange) {
       const k = (o.status ?? "").toLowerCase();
       c[k] = (c[k] ?? 0) + 1;
+      // 'expired' is a computed lifecycle state (server-attached
+      // computed_state; see src/lib/order-state.ts). Bucket it as an
+      // extra chip count on top of its underlying status ('pending').
+      if (o.computed_state === "expired") {
+        c.expired = (c.expired ?? 0) + 1;
+      }
     }
     return c;
   }, [orders, range]);
@@ -710,7 +722,14 @@ function OrdersPageInner() {
                         ]}
                       />
                       <div style={{ marginTop: 4 }}>
-                        <StatusBadge status={o.status} />
+                        {/* Show 'expired' badge for stale unpaid pending orders
+                            (>7d, per src/lib/order-state.ts). Stored orders.status
+                            is still 'pending' — computed_state is derived on read. */}
+                        <StatusBadge
+                          status={
+                            o.computed_state === "expired" ? "expired" : o.status
+                          }
+                        />
                       </div>
                     </td>
                     <td style={td}>

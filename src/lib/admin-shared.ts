@@ -49,6 +49,11 @@ export const ORDER_FILTER_VALUES = [
   // pickup-only stages surfaced as filter chips
   "ready_for_pickup",
   "picked_up",
+  // Computed filter (NOT a stored orders.status value). Matches rows where
+  // computeOrderState(o) === 'expired'. See src/lib/order-state.ts and the
+  // client-side filter in src/app/admin/orders/page.tsx. Admin PATCH does
+  // NOT accept 'expired' — it's derived on read, never written.
+  "expired",
 ] as const;
 export type OrderFilterValue = (typeof ORDER_FILTER_VALUES)[number];
 
@@ -100,6 +105,10 @@ export type AdminOrderRow = {
     area?: string | null;
     address?: string | null;
   } | null;
+  /** Server-computed lifecycle state (mirror of the WhatsApp bot's
+   *  classifyOrder). See src/lib/order-state.ts. Attached by
+   *  /api/admin/orders. 'expired' = unpaid pending/placed > 7 days. */
+  computed_state?: "delivered" | "cancelled" | "active" | "pending" | "expired";
   customers?: AdminCustomerSummary | null;
 };
 

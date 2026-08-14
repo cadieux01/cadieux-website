@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
+import { computeOrderState } from "@/lib/order-state";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -93,8 +94,12 @@ export async function GET(
   // Strip customer_id from the response — the client doesn't need it.
   const { customer_id: _omit, ...rest } = order;
   void _omit;
+  // Attach computed_state (mirror of the bot's classifyOrder). The customer
+  // tracker uses this to render the "expired" terminal state + hide Pay Now
+  // on stale unpaid orders. See src/lib/order-state.ts.
+  const computed_state = computeOrderState(order);
   return NextResponse.json({
-    order: { ...rest, pickup_location: pickupLocation },
+    order: { ...rest, pickup_location: pickupLocation, computed_state },
     change_request: pendingRequest ?? null,
   });
 }
