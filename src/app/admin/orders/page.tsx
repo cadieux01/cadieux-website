@@ -385,6 +385,13 @@ function OrdersPageInner() {
       actions={
         <>
           <Link
+            href="/admin/orders/new"
+            className="uppercase"
+            style={chipPrimary}
+          >
+            Register new order
+          </Link>
+          <Link
             href={{
               pathname: "/admin/orders/print",
               query: {

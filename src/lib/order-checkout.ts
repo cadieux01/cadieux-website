@@ -66,6 +66,21 @@ export type PrepareResult =
   | { ok: true; data: PreparedOrder }
   | { ok: false; status: number; body: Record<string, unknown> };
 
+/** Options for admin-only overrides. Public callers pass nothing / undefined
+ *  and get the exact same behaviour they always had. Only the admin manual-
+ *  entry endpoint (POST /api/admin/orders) sets `skipServiceability`, and
+ *  it only bypasses the pincode + >20km gates — every other gate (price,
+ *  date, slot, item shape, phone-verification) is unchanged. */
+export type PrepareOptions = {
+  /** When true, skip BOTH the `pincode_unserviceable` and
+   *  `distance_unserviceable` rejections. The fee is still computed from
+   *  the real driving distance when it falls within the fee table; when
+   *  the address is beyond the 20 km table, the formula is linearly
+   *  extrapolated (₹92 + (km − 10) × ₹12) so the fee still scales with
+   *  distance. Admin-only. */
+  skipServiceability?: boolean;
+};
+
 /**
  * Runs every server-side gate a one-time order must pass and returns the
  * authoritative, reconciled order figures. Returns a structured error (to
@@ -78,6 +93,7 @@ export async function prepareOneTimeOrder(
   body: Record<string, unknown>,
   req: NextRequest,
   supabaseAdmin: SupabaseClient,
+  opts: PrepareOptions = {},
 ): Promise<PrepareResult> {
   const customer_id = body.customer_id as string | undefined;
   const total_amount = body.total_amount;
@@ -193,7 +209,7 @@ export async function prepareOneTimeOrder(
       return { ok: false, status: 400, body: { error: "Invalid pincode." } };
     }
     const serviceability = await resolveServiceability(pinFromAddress);
-    if (!serviceability.serviceable) {
+    if (!serviceability.serviceable && !opts.skipServiceability) {
       return {
         ok: false,
         status: 400,
@@ -205,7 +221,9 @@ export async function prepareOneTimeOrder(
       };
     }
     proximityHint =
-      serviceability.via === "proximity" ? (serviceability as ProximityHint) : null;
+      serviceability.serviceable && serviceability.via === "proximity"
+        ? (serviceability as ProximityHint)
+        : null;
   }
 
   const verified = getVerifiedPhone(req);
@@ -263,16 +281,23 @@ export async function prepareOneTimeOrder(
     if (distanceKm !== null) {
       const feeResult = computeDeliveryFee(distanceKm);
       if (!feeResult.serviceable) {
-        return {
-          ok: false,
-          status: 400,
-          body: {
-            error: "We don't deliver beyond 20 km yet. Please check our service area.",
-            code: "distance_unserviceable",
-          },
-        };
+        if (!opts.skipServiceability) {
+          return {
+            ok: false,
+            status: 400,
+            body: {
+              error: "We don't deliver beyond 20 km yet. Please check our service area.",
+              code: "distance_unserviceable",
+            },
+          };
+        }
+        // Admin override: extrapolate the same ₹12/km slope used inside
+        // the 10–20 km band so the fee still scales with distance.
+        const c = Math.ceil(distanceKm);
+        deliveryFee = 92 + (c - 10) * 12;
+      } else {
+        deliveryFee = feeResult.feeInr;
       }
-      deliveryFee = feeResult.feeInr;
     }
   }
 
