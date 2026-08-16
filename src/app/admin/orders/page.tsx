@@ -25,6 +25,10 @@ import {
 } from "@/components/admin/DateRangeDropdown";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { OrderLocationActions } from "@/components/admin/OrderLocationActions";
+import {
+  OrderShareButton,
+  type ShareablePartner,
+} from "@/components/admin/OrderShareButton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { adminAuthHeaders, adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
@@ -48,6 +52,7 @@ import {
 } from "@/lib/admin-notify";
 import Select from "@/components/ui/Select";
 import { formatOrderNumber } from "@/lib/order-number";
+import { isShareable } from "@/lib/order-share-message";
 
 type SortKey = "created_desc" | "delivery_asc";
 
@@ -139,6 +144,47 @@ function OrdersPageInner() {
   const [range, setRange] = useState<DateRangeValue | null>(() =>
     resolvePreset("this_month"),
   );
+
+  // Delivery partners power the per-row "Share" button. Fetched once on
+  // mount (never polled — the list changes only when the operator edits
+  // /admin/delivery-partners) and passed down to every OrderShareButton.
+  const [partners, setPartners] = useState<ShareablePartner[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(true);
+  const [partnersError, setPartnersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch<{
+          partners: { id: string; name: string; phone: string }[];
+        }>("/api/admin/delivery-partners");
+        if (cancelled) return;
+        setPartners(
+          (res.partners ?? []).map((p) => ({
+            id: p.id,
+            name: p.name,
+            phone: p.phone,
+          })),
+        );
+        setPartnersError(null);
+      } catch (e) {
+        if (cancelled) return;
+        setPartnersError(
+          e instanceof AdminFetchError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : "Could not load partners.",
+        );
+      } finally {
+        if (!cancelled) setPartnersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -804,6 +850,18 @@ function OrdersPageInner() {
                           >
                             Send WA
                           </button>
+                        ) : null}
+                        {isShareable(o) ? (
+                          <OrderShareButton
+                            order={o}
+                            partners={partners}
+                            partnersLoading={partnersLoading}
+                            partnersError={partnersError}
+                            buttonStyle={{
+                              ...buttonSm,
+                              opacity: busy ? 0.5 : 1,
+                            }}
+                          />
                         ) : null}
                         <button
                           type="button"
