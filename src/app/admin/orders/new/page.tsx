@@ -817,12 +817,20 @@ export default function RegisterNewOrderPage() {
               Each date gets its own time slot — days can vary week-to-week.
             </div>
 
-            <DateCalendar
-              selectedDates={selectedDates}
-              onToggleDate={onToggleDate}
-              deliveriesCount={deliveriesCount}
-              totalAmount={subtotal}
-            />
+            {/* Wrap the shared DateCalendar in a cream surface so its
+                built-in Foundation Green foreground + selected-pill
+                colours render on their intended light background. This
+                avoids modifying the shared component (still used by
+                CUSTOMERS on /subscriptions/setup, which already sits on
+                a light ash canvas). */}
+            <div style={calendarSurface}>
+              <DateCalendar
+                selectedDates={selectedDates}
+                onToggleDate={onToggleDate}
+                deliveriesCount={deliveriesCount}
+                totalAmount={subtotal}
+              />
+            </div>
 
             {selectedDates.length > 0 && (
               <>
@@ -876,7 +884,7 @@ export default function RegisterNewOrderPage() {
                         style={{
                           fontFamily: "var(--font-body)",
                           fontSize: "0.8rem",
-                          color: "rgba(245,158,11,0.85)",
+                          color: CREAM_STRONG,
                         }}
                       >
                         Wk {row.week_number} · {longDayLabel(row.date)}
@@ -994,7 +1002,19 @@ export default function RegisterNewOrderPage() {
   );
 }
 
-// ── Styles (match admin/orders/page.tsx palette) ─────────────────────
+// ── Styles — Cadieux brand palette ───────────────────────────────────
+// Foundation Green #024628, Grain Cream #FBF3D4, Core Black #1D1D1F.
+// Cream on Foundation Green = 9.88:1 (AAA). Muted cream tints stay
+// >=4.5:1 on Core Black. Selected chips flip to green-on-cream so the
+// active state is unmistakably distinct from unselected.
+
+const CREAM = "#FBF3D4";
+const CREAM_STRONG = "rgba(251,243,212,0.92)";
+const CREAM_MUTED = "rgba(251,243,212,0.72)";
+const CREAM_FAINT = "rgba(251,243,212,0.55)";
+const CREAM_BORDER = "rgba(251,243,212,0.35)";
+const GREEN = "#024628";
+const CORE_BLACK = "#1D1D1F";
 
 const pageWrap: React.CSSProperties = {
   maxWidth: 640,
@@ -1005,9 +1025,9 @@ const pageWrap: React.CSSProperties = {
 };
 
 const section: React.CSSProperties = {
-  border: "1px solid rgba(245,158,11,0.15)",
+  border: `1px solid ${CREAM_BORDER}`,
   padding: "1rem",
-  background: "rgba(245,158,11,0.03)",
+  background: "rgba(2,70,40,0.35)",
   borderRadius: 6,
 };
 
@@ -1016,7 +1036,7 @@ const sectionTitle: React.CSSProperties = {
   fontSize: "0.75rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
-  color: "rgba(245,158,11,0.9)",
+  color: CREAM,
   marginTop: 0,
   marginBottom: "0.75rem",
 };
@@ -1028,14 +1048,14 @@ const label: React.CSSProperties = {
   marginBottom: "0.75rem",
   fontFamily: "var(--font-body)",
   fontSize: "0.75rem",
-  color: "rgba(245,158,11,0.85)",
+  color: CREAM_STRONG,
 };
 
 const input: React.CSSProperties = {
   padding: "0.55rem 0.7rem",
-  background: "rgba(0,0,0,0.4)",
-  color: "#e8e8e8",
-  border: "1px solid rgba(245,158,11,0.25)",
+  background: CORE_BLACK,
+  color: CREAM,
+  border: `1px solid ${CREAM_BORDER}`,
   fontFamily: "var(--font-body)",
   fontSize: "0.85rem",
   borderRadius: 4,
@@ -1049,7 +1069,7 @@ const readOnlyStyle: React.CSSProperties = {
 
 const chipBase: React.CSSProperties = {
   padding: "0.4rem 0.9rem",
-  border: "1px solid rgba(245,158,11,0.4)",
+  border: `1px solid ${CREAM_BORDER}`,
   fontFamily: "var(--font-body)",
   fontSize: "0.65rem",
   letterSpacing: "0.22em",
@@ -1059,29 +1079,36 @@ const chipBase: React.CSSProperties = {
 
 const chipPrimary: React.CSSProperties = {
   ...chipBase,
-  color: "#f59e0b",
-  borderColor: "rgba(245,158,11,0.55)",
+  color: CREAM,
+  borderColor: CREAM,
   display: "inline-block",
   textDecoration: "none",
 };
 
 const chipNeutral: React.CSSProperties = {
   ...chipBase,
-  color: "rgba(245,158,11,0.85)",
+  color: CREAM_MUTED,
   display: "inline-block",
   textDecoration: "none",
 };
 
+// Selected state: cream fill + green ink — a clear inversion of the
+// unselected outline chip so the eye locks onto the active option.
 const chipActive: React.CSSProperties = {
-  ...chipPrimary,
-  background: "rgba(245,158,11,0.15)",
+  ...chipBase,
+  color: GREEN,
+  background: CREAM,
+  borderColor: CREAM,
+  display: "inline-block",
+  textDecoration: "none",
+  fontWeight: 600,
 };
 
 const hintBox: React.CSSProperties = {
   padding: "0.5rem 0.7rem",
-  border: "1px solid rgba(34,197,94,0.35)",
-  background: "rgba(34,197,94,0.08)",
-  color: "rgba(220,252,231,0.9)",
+  border: "1px solid rgba(34,197,94,0.45)",
+  background: "rgba(34,197,94,0.12)",
+  color: "rgba(220,252,231,0.95)",
   fontFamily: "var(--font-body)",
   fontSize: "0.75rem",
   borderRadius: 4,
@@ -1091,14 +1118,14 @@ const hintBox: React.CSSProperties = {
 const mutedNote: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: "0.7rem",
-  color: "rgba(245,158,11,0.6)",
+  color: CREAM_FAINT,
 };
 
 const errorBox: React.CSSProperties = {
   padding: "0.6rem 0.9rem",
-  border: "1px solid rgba(239,68,68,0.5)",
-  background: "rgba(239,68,68,0.1)",
-  color: "rgba(254,226,226,0.95)",
+  border: "1px solid rgba(239,68,68,0.55)",
+  background: "rgba(239,68,68,0.12)",
+  color: "rgba(254,226,226,0.98)",
   fontFamily: "var(--font-body)",
   fontSize: "0.8rem",
   borderRadius: 4,
@@ -1106,10 +1133,23 @@ const errorBox: React.CSSProperties = {
 
 const okBox: React.CSSProperties = {
   padding: "0.6rem 0.9rem",
-  border: "1px solid rgba(34,197,94,0.5)",
-  background: "rgba(34,197,94,0.1)",
-  color: "rgba(220,252,231,0.95)",
+  border: "1px solid rgba(34,197,94,0.55)",
+  background: "rgba(34,197,94,0.12)",
+  color: "rgba(220,252,231,0.98)",
   fontFamily: "var(--font-body)",
   fontSize: "0.8rem",
   borderRadius: 4,
+};
+
+// Cream surface wrapper for the shared DateCalendar. The calendar's
+// internal palette (Foundation Green foreground, cream on selected
+// pills) is designed for a light background — customers already view
+// it on the ash canvas at /subscriptions/setup. In admin (dark shell)
+// we drop a cream card behind it so the same component renders
+// legibly WITHOUT any modification to the shared file.
+const calendarSurface: React.CSSProperties = {
+  background: CREAM,
+  borderRadius: 12,
+  padding: "0.75rem",
+  border: `1px solid ${CREAM_BORDER}`,
 };
