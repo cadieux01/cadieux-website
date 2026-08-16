@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
-import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { isAdmin, supabaseAdmin, verifyAdminOrTeamOrder } from "@/lib/admin-auth";
 import {
   buildAuditEntries,
   slugify,
@@ -34,7 +34,10 @@ const PRODUCT_SELECT =
 //   full catalogue. Archived rows are filtered out by default; pass
 //   `?include_archived=1` to include them.
 export async function GET(req: NextRequest) {
-  if (!isAdmin(req)) {
+  // Dual-auth on GET only: the /register team-PIN link needs the
+  // product catalogue to build its item picker. POST/PATCH stay
+  // admin-only (they still use isAdmin/hasValidPinGrant below).
+  if (!verifyAdminOrTeamOrder(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const url = new URL(req.url);

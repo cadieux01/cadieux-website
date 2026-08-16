@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import {
+  isAdmin,
+  isTeamOrderToken,
+  supabaseAdmin,
+  verifyAdminOrTeamOrder,
+} from "@/lib/admin-auth";
 import { computeOrderState } from "@/lib/order-state";
 import {
   orderInsertColumns,
@@ -83,11 +88,27 @@ export async function GET(req: NextRequest) {
 // Nothing on the PUBLIC checkout path is touched; the override flag is
 // only ever set here, on an isAdmin()-gated endpoint.
 export async function POST(req: NextRequest) {
-  if (!isAdmin(req)) {
+  // Dual-auth: full admin OR the narrow team-order token. Team-order
+  // callers are subject to additional clamps below (payment forced to
+  // COD, status forced to pending, serviceability override discarded).
+  if (!verifyAdminOrTeamOrder(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const isTeam = !isAdmin(req) && isTeamOrderToken(req);
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+
+  // Team-PIN clamps — enforced BEFORE any DB work so a hand-crafted
+  // request cannot bypass the UI restrictions. A team member can only
+  // record a pending, unpaid COD order; they can never mark cash
+  // collected or bypass serviceability. Any incoming values are
+  // silently overridden (rather than rejected) so a stale form can
+  // still submit successfully.
+  if (isTeam) {
+    body.payment = "cod";
+    body.status = "pending";
+    body.serviceability_override = false;
+  }
 
   // 1. Phone normalisation — 10-digit local. Rejects garbage before we
   //    ever touch the DB. Matches the format customers.phone stores +
@@ -210,7 +231,7 @@ export async function POST(req: NextRequest) {
     action: "create",
     targetId: order.id,
     targetLabel: `#${order.id.slice(0, 8)}`,
-    context: `Admin manually registered order for ${phoneLocal}${serviceabilityOverride ? " (serviceability override)" : ""}`,
+    context: `${isTeam ? "[team-PIN] " : ""}Admin manually registered order for ${phoneLocal}${serviceabilityOverride ? " (serviceability override)" : ""}`,
     meta: {
       phone: phoneLocal,
       customer_id: customerId,
@@ -221,6 +242,7 @@ export async function POST(req: NextRequest) {
       serviceability_override: serviceabilityOverride,
       payment: isPaid ? "paid" : "cod",
       status,
+      via: isTeam ? "team_order" : "admin",
     },
   });
 

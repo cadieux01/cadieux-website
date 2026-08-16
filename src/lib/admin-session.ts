@@ -155,3 +155,70 @@ export function safeEqual(a: string, b: string): boolean {
   if (ba.length !== bb.length) return false;
   return crypto.timingSafeEqual(ba, bb);
 }
+
+// ── team-order session (ADDITIVE) ──────────────────────────────────────
+// Second, strictly-narrower session type used by the shareable
+// /register link. A team member unlocks it with TEAM_ORDER_PIN and
+// receives a signed token whose payload marker is `p:"team_order"`
+// (never `p:"admin"`). verifyAdminSessionToken above rejects this
+// marker — so a team-order token CANNOT reach any admin route that
+// only checks isAdmin(). Only the 4 opt-in endpoints that call the
+// new verifyAdminOrTeamOrder() helper honour it.
+//
+// Same HMAC key (ADMIN_TOKEN) so we don't need a second secret. Kept
+// separate from the admin token by the `p` field alone, which is
+// covered by the HMAC.
+
+export const TEAM_ORDER_SESSION_COOKIE = "team_order_session";
+
+// 7-day sliding window. Team members share PDA/laptop devices; short
+// enough that a lost device stops mattering within a week without
+// forcing daily re-entry of the PIN.
+const TEAM_ORDER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function signTeamOrderSession(now: number = Date.now()): string {
+  const payload = { p: "team_order", exp: now + TEAM_ORDER_TTL_MS };
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  return `${body}.${hmac(body)}`;
+}
+
+export function verifyTeamOrderSessionToken(
+  token: string | null | undefined,
+): boolean {
+  if (!token) return false;
+  const dot = token.indexOf(".");
+  if (dot <= 0) return false;
+  const body = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  const expected = hmac(body);
+  if (sig.length !== expected.length) return false;
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(body, "base64url").toString()) as {
+      p?: string;
+      exp?: number;
+    };
+    return (
+      parsed.p === "team_order" &&
+      typeof parsed.exp === "number" &&
+      parsed.exp > Date.now()
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function verifyTeamOrderSession(req: NextRequest): boolean {
+  const token = req.cookies.get(TEAM_ORDER_SESSION_COOKIE)?.value;
+  return verifyTeamOrderSessionToken(token);
+}
+
+export function teamOrderSessionCookieMaxAgeSeconds(): number {
+  return Math.floor(TEAM_ORDER_TTL_MS / 1000);
+}

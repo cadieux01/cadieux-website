@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import {
   verifyAdminSession,
   verifyAdminSessionToken,
+  verifyTeamOrderSession,
+  verifyTeamOrderSessionToken,
 } from "@/lib/admin-session";
 
 // Service-role Supabase client. RLS is bypassed entirely, so any admin
@@ -27,4 +29,29 @@ export function isAdmin(req: NextRequest): boolean {
     return verifyAdminSessionToken(auth.slice(7).trim());
   }
   return false;
+}
+
+// ── team-order dual-auth (ADDITIVE) ────────────────────────────────────
+// isTeamOrderToken(req): true if the request presents a valid
+// team-order session (cookie OR `Authorization: Bearer` header). This
+// is checked SEPARATELY from isAdmin — a team-order token can NEVER
+// satisfy isAdmin because verifyAdminSessionToken rejects any payload
+// whose `p` field isn't `"admin"`.
+//
+// verifyAdminOrTeamOrder(req): the OPT-IN gate. Used by the small set
+// of endpoints the /register form needs (POST /api/admin/orders, POST
+// /api/admin/subscriptions/create, GET /api/admin/customers, GET
+// /api/admin/products). Every other admin endpoint still calls
+// isAdmin() directly and is therefore closed to team-PIN tokens.
+export function isTeamOrderToken(req: NextRequest): boolean {
+  if (verifyTeamOrderSession(req)) return true;
+  const auth = req.headers.get("authorization");
+  if (auth && auth.startsWith("Bearer ")) {
+    return verifyTeamOrderSessionToken(auth.slice(7).trim());
+  }
+  return false;
+}
+
+export function verifyAdminOrTeamOrder(req: NextRequest): boolean {
+  return isAdmin(req) || isTeamOrderToken(req);
 }

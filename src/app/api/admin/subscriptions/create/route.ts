@@ -39,7 +39,12 @@
 // products row exclusively.
 
 import { NextRequest, NextResponse } from "next/server";
-import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import {
+  isAdmin,
+  isTeamOrderToken,
+  supabaseAdmin,
+  verifyAdminOrTeamOrder,
+} from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import {
   DAY_KEYS,
@@ -68,11 +73,22 @@ type ClientDelivery = {
 };
 
 export async function POST(req: NextRequest) {
-  if (!isAdmin(req)) {
+  // Dual-auth — see /api/admin/orders POST for the model. Team-order
+  // callers are clamped to pending_confirmation + COD below.
+  if (!verifyAdminOrTeamOrder(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const isTeam = !isAdmin(req) && isTeamOrderToken(req);
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+
+  // Team-PIN clamps — no team member can mark a subscription active
+  // (Sunny reviews first) or record cash as collected. Applied before
+  // any DB work so a hand-crafted request cannot bypass.
+  if (isTeam) {
+    body.status = "pending_confirmation";
+    body.payment = "cod";
+  }
 
   // 1. Phone + name. Same 10-digit normalization as the one-time path.
   const rawPhone = typeof body.phone === "string" ? body.phone : "";
@@ -483,7 +499,7 @@ export async function POST(req: NextRequest) {
     action: "create",
     targetId: write.subscription_id,
     targetLabel: `sub ${write.subscription_id.slice(0, 8)}`,
-    context: `Admin manually registered subscription for ${phoneLocal}`,
+    context: `${isTeam ? "[team-PIN] " : ""}Admin manually registered subscription for ${phoneLocal}`,
     meta: {
       phone: phoneLocal,
       customer_id: customerId,
@@ -501,6 +517,7 @@ export async function POST(req: NextRequest) {
       source: clientDeliveries && clientDeliveries.length > 0 ? "per_date" : "uniform",
       payment: isPaid ? "paid" : "cod",
       status: subStatus,
+      via: isTeam ? "team_order" : "admin",
     },
   });
 
