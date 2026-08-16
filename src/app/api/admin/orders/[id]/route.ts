@@ -5,6 +5,7 @@ import { notifyCustomer } from "@/lib/push";
 import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/delivery-slots";
 import { canAutoRefund } from "@/lib/order-cancellation";
 import { issueRazorpayRefund } from "@/lib/razorpay-refund";
+import { computeOrderState } from "@/lib/order-state";
 
 // New canonical stages + legacy values that pre-date the
 // order-status-stages migration. The migration normalises existing
@@ -64,6 +65,62 @@ const STATUS_PUSH_COPY: Record<string, { title: string; body: string }> = {
     body: "Thanks for picking up your order. Enjoy!",
   },
 };
+
+// Admin-gated single-order GET. Mirrors the SELECT + pickup side-fetch +
+// computed_state enrichment of /api/admin/orders (list) so consumers (the
+// per-order print page) get the exact same row shape as an entry in the
+// list response. Kept intentionally minimal — no writes, no side-effects.
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  if (!isAdmin(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = params;
+  if (!id || typeof id !== "string") {
+    return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select(
+      "id, customer_id, total_amount, delivery_fee, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, customers(id, full_name, phone, city)",
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[admin/orders GET]", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  // Manual join for pickup_locations — same reason as the list route:
+  // no FK exists between orders.pickup_location_id and pickup_locations.id.
+  let pickup_location = null as
+    | { id: string; name: string; area: string | null; address: string | null }
+    | null;
+  if (data.pickup_location_id) {
+    const { data: loc } = await supabaseAdmin
+      .from("pickup_locations")
+      .select("id, name, area, address")
+      .eq("id", data.pickup_location_id)
+      .maybeSingle();
+    pickup_location = loc ?? null;
+  }
+
+  const order = {
+    ...data,
+    pickup_location,
+    computed_state: computeOrderState(data, Date.now()),
+  };
+
+  return NextResponse.json({ order });
+}
 
 export async function PATCH(
   req: NextRequest,

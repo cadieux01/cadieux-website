@@ -804,6 +804,20 @@ function OrdersPageInner() {
                         >
                           Edit
                         </button>
+                        <Link
+                          href={`/admin/orders/${o.id}/print`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            ...buttonSm,
+                            textDecoration: "none",
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                          title="Print single-order receipt"
+                        >
+                          Print
+                        </Link>
                         {o.status !== "cancelled" && o.status !== "delivered" ? (
                           <button
                             type="button"
