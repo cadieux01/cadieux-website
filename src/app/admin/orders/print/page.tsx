@@ -1,8 +1,13 @@
 "use client";
 
-// Print-friendly packing list. Renders the same filter set as
-// /admin/orders (status, q, sort all carried in query params) and
-// triggers window.print() once loaded.
+// Print-friendly orders sheet. Renders the same filter set as
+// /admin/orders (status, q, sort, from, to — all carried in query
+// params) and triggers window.print() once loaded.
+//
+// The date range comes from the DateRangeDropdown on the orders page:
+// ?from=YYYY-MM-DD&to=YYYY-MM-DD (local dates). Filtered inclusively
+// on created_at so the printed sheet matches the on-screen table
+// exactly.
 //
 // Rows are grouped first by delivery_date then by delivery_slot so the
 // kitchen can pack each route slot in one pass. Orders missing either
@@ -12,6 +17,10 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import {
+  withinDateRange,
+  type DateRangeValue,
+} from "@/components/admin/DateRangeDropdown";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
 import {
@@ -20,26 +29,59 @@ import {
   OrderFilterValue,
 } from "@/lib/admin-shared";
 
+// Parse a YYYY-MM-DD string (from the orders page's toYMD) as a local
+// Date. Invalid / missing → null. Mirrors DateRangeDropdown's own
+// parser — kept private here to avoid enlarging its exported API.
+function parseYmdLocal(s: string | null): Date | null {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function buildRange(
+  fromParam: string | null,
+  toParam: string | null,
+): DateRangeValue | null {
+  const f = parseYmdLocal(fromParam);
+  const t = parseYmdLocal(toParam);
+  if (!f || !t) return null;
+  const from = new Date(f);
+  from.setHours(0, 0, 0, 0);
+  const to = new Date(t);
+  to.setHours(23, 59, 59, 999);
+  return { from, to };
+}
+
 // Suspense wrapper required by Next.js prerender for any client page
 // that reads useSearchParams() directly.
-export default function PrintPackingListPage() {
+export default function PrintOrdersPage() {
   return (
     <Suspense
       fallback={
         <main style={page}>
-          <p>Loading packing list…</p>
+          <p>Loading orders…</p>
         </main>
       }
     >
-      <PrintPackingListPageInner />
+      <PrintOrdersPageInner />
     </Suspense>
   );
 }
 
-function PrintPackingListPageInner() {
+function PrintOrdersPageInner() {
   const params = useSearchParams();
   const status = (params.get("status") ?? "all") as OrderFilterValue;
   const q = params.get("q") ?? "";
+  const fromParam = params.get("from");
+  const toParam = params.get("to");
+  const range = useMemo(
+    () => buildRange(fromParam, toParam),
+    [fromParam, toParam],
+  );
+  const rangeLabel = range
+    ? `Range: ${formatDate(fromParam)} → ${formatDate(toParam)}`
+    : "Range: all dates";
 
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +108,11 @@ function PrintPackingListPageInner() {
   const filtered = useMemo(() => {
     const search = q.trim().toLowerCase();
     return orders.filter((o) => {
+      // Date-range filter — matches the /admin/orders table which
+      // filters on created_at with withinDateRange. When from/to are
+      // missing, range is null and this passes everything (back-compat
+      // for older bookmarks / entry points).
+      if (!withinDateRange(o.created_at, range)) return false;
       if (status !== "all") {
         if (status === "expired") {
           // Match the /admin/orders page filter — 'expired' is computed,
@@ -80,7 +127,7 @@ function PrintPackingListPageInner() {
       const phone = (o.customers?.phone ?? "").toLowerCase();
       return name.includes(search) || phone.includes(search);
     });
-  }, [orders, status, q]);
+  }, [orders, status, q, range]);
 
   // Group: delivery_date → delivery_slot → orders[]. Null date/slot
   // bucket sorts last so the dated rows print first.
@@ -121,7 +168,7 @@ function PrintPackingListPageInner() {
   if (loading) {
     return (
       <main style={page}>
-        <p>Loading packing list…</p>
+        <p>Loading orders…</p>
       </main>
     );
   }
@@ -132,10 +179,23 @@ function PrintPackingListPageInner() {
       </main>
     );
   }
+  // Empty-range / no-match → render a valid, printable header + message
+  // instead of crashing. The auto-print effect above short-circuits on
+  // filtered.length === 0, so the admin can hit "Print again" manually
+  // if they still want a blank sheet.
   if (filtered.length === 0) {
     return (
       <main style={page}>
-        <p>No orders match the requested filters.</p>
+        <header style={{ marginBottom: "1.5rem" }}>
+          <h1 style={{ fontSize: "1.4rem", margin: 0, letterSpacing: "0.1em" }}>
+            Cadieux — Orders
+          </h1>
+          <p style={{ margin: "0.3rem 0 0", color: "#444", fontSize: "0.85rem" }}>
+            {rangeLabel} · Status: {status} · Search: {q || "—"} · Generated{" "}
+            {new Date().toLocaleString("en-IN")}
+          </p>
+        </header>
+        <p>No orders in the selected range.</p>
       </main>
     );
   }
@@ -144,10 +204,10 @@ function PrintPackingListPageInner() {
     <main style={page}>
       <header style={{ marginBottom: "1.5rem" }}>
         <h1 style={{ fontSize: "1.4rem", margin: 0, letterSpacing: "0.1em" }}>
-          Cadieux — Packing List
+          Cadieux — Orders
         </h1>
         <p style={{ margin: "0.3rem 0 0", color: "#444", fontSize: "0.85rem" }}>
-          Status: {status} · Search: {q || "—"} · Generated{" "}
+          {rangeLabel} · Status: {status} · Search: {q || "—"} · Generated{" "}
           {new Date().toLocaleString("en-IN")}
         </p>
         <p style={{ margin: "0.3rem 0 0", fontSize: "0.85rem" }}>

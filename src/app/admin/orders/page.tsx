@@ -19,6 +19,7 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import {
   DateRangeDropdown,
   resolvePreset,
+  toYMD,
   withinDateRange,
   type DateRangeValue,
 } from "@/components/admin/DateRangeDropdown";
@@ -386,12 +387,21 @@ function OrdersPageInner() {
           <Link
             href={{
               pathname: "/admin/orders/print",
-              query: { status: filter, q: query, sort },
+              query: {
+                status: filter,
+                q: query,
+                sort,
+                // Carry the currently-selected date range so the print
+                // view shows exactly the same slice as the on-screen table.
+                ...(range
+                  ? { from: toYMD(range.from), to: toYMD(range.to) }
+                  : {}),
+              },
             }}
             className="uppercase"
             style={chipPrimary}
           >
-            Print packing list
+            Print orders
           </Link>
           <button
             type="button"
