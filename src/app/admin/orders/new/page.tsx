@@ -24,6 +24,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatINR } from "@/lib/admin-formatting";
 import {
@@ -32,6 +33,14 @@ import {
   formatSlotForDisplay,
   nextDeliveryDates,
 } from "@/lib/delivery-slots";
+import {
+  buildDeliveries,
+  formatSlot,
+  listWeekDayRows,
+  longDayLabel,
+  TIME_SLOTS,
+  type SetupState,
+} from "@/lib/subscription-setup";
 
 type ProductRow = {
   id: string;
@@ -63,26 +72,6 @@ type CustomerHit = {
 type LineItem = { slug: string; qty: number };
 
 type OrderType = "one_time" | "subscription";
-
-const DAY_OPTIONS: { key: string; label: string }[] = [
-  { key: "mon", label: "Mon" },
-  { key: "tue", label: "Tue" },
-  { key: "wed", label: "Wed" },
-  { key: "thu", label: "Thu" },
-  { key: "fri", label: "Fri" },
-  { key: "sat", label: "Sat" },
-  { key: "sun", label: "Sun" },
-];
-
-// A stable set of common delivery windows for subscriptions. Same wording
-// the customer wizard uses. Sub deliveries don't run through the 12h10m
-// booking-lead gate here (admin bypass), so we don't need bookableSlots().
-const SUB_SLOT_OPTIONS = [
-  "06:30-08:30",
-  "08:30-10:30",
-  "16:00-18:00",
-  "18:00-20:00",
-];
 
 export default function RegisterNewOrderPage() {
   const router = useRouter();
@@ -169,10 +158,14 @@ export default function RegisterNewOrderPage() {
     setDeliverySlot(firstEnabledSlot);
   }, [firstEnabledSlot, deliveryDate]);
 
-  // ── SUBSCRIPTION: weeks, days, single slot ─────────────────────────
-  const [subWeeks, setSubWeeks] = useState<number>(4);
-  const [subDays, setSubDays] = useState<string[]>(["mon", "wed", "fri"]);
-  const [subSlot, setSubSlot] = useState<string>(SUB_SLOT_OPTIONS[0]);
+  // ── SUBSCRIPTION: per-date calendar + per-date slots ───────────────
+  // Mirrors the customer wizard shape (SetupState.selectedDates +
+  // slotByDate). Local state only — no sessionStorage (admin scratch
+  // entry). buildDeliveries() flattens these into the deliveries[]
+  // payload the endpoint expects.
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [slotByDate, setSlotByDate] = useState<Record<string, string>>({});
+  const [bulkSlot, setBulkSlot] = useState<string>(TIME_SLOTS[0] ?? "");
   const [subStatus, setSubStatus] = useState<
     "active" | "pending_confirmation"
   >("active");
@@ -204,9 +197,9 @@ export default function RegisterNewOrderPage() {
         setDeliverySlot(firstEnabledSlot);
       } else {
         // Clear subscription-only fields; keep defaults so re-entry is fast.
-        setSubWeeks(4);
-        setSubDays(["mon", "wed", "fri"]);
-        setSubSlot(SUB_SLOT_OPTIONS[0]);
+        setSelectedDates([]);
+        setSlotByDate({});
+        setBulkSlot(TIME_SLOTS[0] ?? "");
         setSubStatus("active");
       }
     },
@@ -255,7 +248,9 @@ export default function RegisterNewOrderPage() {
       }
       return sum;
     }
-    // Subscription hint: MRP × (1 − discount%) × qty × deliveries (weeks × days).
+    // Subscription hint: MRP × (1 − discount%) × qty × #selectedDates.
+    // One delivery per calendar date the admin picked (mirrors the
+    // customer wizard's buildDeliveries flatten).
     const perDelivery = items.reduce((s, it) => {
       const p = activeProducts.find((x) => x.slug === it.slug);
       if (!p) return s;
@@ -268,9 +263,8 @@ export default function RegisterNewOrderPage() {
         Math.round(mrp * (1 - disc / 100) * 100 + Number.EPSILON) / 100;
       return s + unit * Number(it.qty);
     }, 0);
-    const deliveries = subWeeks * subDays.length;
-    return perDelivery * deliveries;
-  }, [orderType, items, activeProducts, subWeeks, subDays]);
+    return perDelivery * selectedDates.length;
+  }, [orderType, items, activeProducts, selectedDates]);
 
   const totalUnitsPerDelivery = useMemo(
     () =>
@@ -299,9 +293,8 @@ export default function RegisterNewOrderPage() {
 
     // subscription
     if (deliveryAddress.trim().length === 0) return false;
-    if (!subSlot) return false;
-    if (subDays.length === 0) return false;
-    if (!(subWeeks >= 1 && subWeeks <= 26)) return false;
+    if (selectedDates.length === 0) return false;
+    if (selectedDates.some((iso) => !slotByDate[iso])) return false;
     if (totalUnitsPerDelivery < 2) return false;
     return true;
   }, [
@@ -315,9 +308,8 @@ export default function RegisterNewOrderPage() {
     deliveryAddress,
     deliveryDate,
     deliverySlot,
-    subSlot,
-    subDays,
-    subWeeks,
+    selectedDates,
+    slotByDate,
     totalUnitsPerDelivery,
   ]);
 
@@ -385,15 +377,38 @@ export default function RegisterNewOrderPage() {
           quantity_per_delivery: Number(it.qty),
         }));
 
+      // Flatten calendar+slots the SAME way the customer wizard does
+      // (buildDeliveries) and derive the summary bundle exactly like
+      // payment/page.tsx:86-94.
+      const state: SetupState = {
+        qtyBySlug: {},
+        selectedDates,
+        slotByDate,
+      };
+      const deliveries = buildDeliveries(state);
+      const dayKeysSet = new Set<string>();
+      deliveries.forEach((d) => dayKeysSet.add(d.day_key));
+      const daysUnion = Array.from(dayKeysSet);
+      const weekNumsSet = new Set<number>();
+      deliveries.forEach((d) => weekNumsSet.add(d.week_number));
+      const weeksDistinct = weekNumsSet.size;
+      const slotsByDay: Record<string, string> = {};
+      for (const d of deliveries) {
+        if (!slotsByDay[d.day_key]) slotsByDay[d.day_key] = d.slot;
+      }
+
       const payload: Record<string, unknown> = {
         phone: digits,
         full_name: fullName.trim(),
         city: city.trim(),
         delivery_address: deliveryAddress.trim(),
         pincode: pincode.trim(),
-        weeks: subWeeks,
-        days: subDays,
-        slot: subSlot,
+        deliveries,
+        slot_mode: "custom",
+        slots_by_day: slotsByDay,
+        slot: null,
+        days: daysUnion,
+        weeks: weeksDistinct,
         items: subItems,
         payment,
         status: subStatus,
@@ -437,19 +452,44 @@ export default function RegisterNewOrderPage() {
     pickupLocationId,
     pincode,
     router,
+    selectedDates,
+    slotByDate,
     serviceabilityOverride,
     status,
-    subDays,
-    subSlot,
     subStatus,
-    subWeeks,
   ]);
 
-  const toggleDay = (key: string) => {
-    setSubDays((prev) =>
-      prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key],
+  const onToggleDate = useCallback((iso: string) => {
+    setSelectedDates((prev) =>
+      prev.includes(iso) ? prev.filter((d) => d !== iso) : [...prev, iso].sort(),
     );
-  };
+    setSlotByDate((prev) => {
+      if (!(iso in prev)) return prev;
+      const next = { ...prev };
+      delete next[iso];
+      return next;
+    });
+  }, []);
+
+  const applyBulkSlot = useCallback(() => {
+    if (!bulkSlot) return;
+    setSlotByDate((prev) => {
+      const next: Record<string, string> = { ...prev };
+      for (const iso of selectedDates) next[iso] = bulkSlot;
+      return next;
+    });
+  }, [bulkSlot, selectedDates]);
+
+  const scheduleRows = useMemo(() => {
+    const state: SetupState = {
+      qtyBySlug: {},
+      selectedDates,
+      slotByDate,
+    };
+    return listWeekDayRows(state);
+  }, [selectedDates, slotByDate]);
+
+  const deliveriesCount = selectedDates.length;
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
@@ -724,8 +764,8 @@ export default function RegisterNewOrderPage() {
               <>
                 Per-delivery units: {totalUnitsPerDelivery} (minimum 2).
                 Estimated total (hint): {formatINR(subtotal)} over{" "}
-                {subWeeks * subDays.length} deliveries. Server prices from DB
-                (MRP × (1 − sub discount%)).
+                {deliveriesCount} deliveries. Server prices from DB (MRP ×
+                (1 − sub discount%)).
               </>
             )}
           </div>
@@ -772,62 +812,99 @@ export default function RegisterNewOrderPage() {
         ) : (
           <section style={section}>
             <h2 style={sectionTitle}>Subscription schedule</h2>
-            <label style={label}>
-              Duration (weeks)
-              <select
-                value={String(subWeeks)}
-                onChange={(e) => setSubWeeks(Number(e.target.value))}
-                style={input}
-              >
-                {Array.from({ length: 26 }, (_, i) => i + 1).map((w) => (
-                  <option key={w} value={w}>
-                    {w} {w === 1 ? "week" : "weeks"}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div style={{ ...mutedNote, marginBottom: "0.75rem" }}>
+              Pick individual delivery dates (same picker customers use).
+              Each date gets its own time slot — days can vary week-to-week.
+            </div>
 
-            <label style={label}>
-              Delivery days
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.4rem",
-                  flexWrap: "wrap",
-                  marginTop: "0.25rem",
-                }}
-              >
-                {DAY_OPTIONS.map((d) => (
-                  <button
-                    key={d.key}
-                    type="button"
-                    style={
-                      subDays.includes(d.key) ? chipActive : chipPrimary
-                    }
-                    onClick={() => toggleDay(d.key)}
+            <DateCalendar
+              selectedDates={selectedDates}
+              onToggleDate={onToggleDate}
+              deliveriesCount={deliveriesCount}
+              totalAmount={subtotal}
+            />
+
+            {selectedDates.length > 0 && (
+              <>
+                <div
+                  style={{
+                    marginTop: "1rem",
+                    display: "flex",
+                    gap: "0.5rem",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span style={label}>Set same time for all</span>
+                  <select
+                    value={bulkSlot}
+                    onChange={(e) => setBulkSlot(e.target.value)}
+                    style={{ ...input, maxWidth: 200 }}
                   >
-                    {d.label}
+                    {TIME_SLOTS.map((s) => (
+                      <option key={s} value={s}>
+                        {formatSlot(s)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    style={chipPrimary}
+                    onClick={applyBulkSlot}
+                    disabled={!bulkSlot}
+                  >
+                    Apply to all
                   </button>
-                ))}
-              </div>
-            </label>
+                </div>
 
-            <label style={label}>
-              Time slot (same for every delivery)
-              <select
-                value={subSlot}
-                onChange={(e) => setSubSlot(e.target.value)}
-                style={input}
-              >
-                {SUB_SLOT_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {formatSlotForDisplay(s)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <div style={{ marginTop: "1rem" }}>
+                  <div style={{ ...label, marginBottom: "0.5rem" }}>
+                    Per-date time slots
+                  </div>
+                  {scheduleRows.map((row) => (
+                    <div
+                      key={row.date_iso}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "0.5rem",
+                        alignItems: "center",
+                        marginBottom: "0.4rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.8rem",
+                          color: "rgba(245,158,11,0.85)",
+                        }}
+                      >
+                        Wk {row.week_number} · {longDayLabel(row.date)}
+                      </div>
+                      <select
+                        value={slotByDate[row.date_iso] ?? ""}
+                        onChange={(e) =>
+                          setSlotByDate((prev) => ({
+                            ...prev,
+                            [row.date_iso]: e.target.value,
+                          }))
+                        }
+                        style={input}
+                      >
+                        <option value="">— choose slot —</option>
+                        {TIME_SLOTS.map((s) => (
+                          <option key={s} value={s}>
+                            {formatSlot(s)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
 
-            <label style={label}>
+            <label style={{ ...label, marginTop: "1rem" }}>
               Initial subscription status
               <select
                 value={subStatus}
@@ -846,8 +923,8 @@ export default function RegisterNewOrderPage() {
             </label>
 
             <div style={mutedNote}>
-              First delivery uses the same generator the checkout uses.
-              Admin bypasses the 12h10m booking-lead gate.
+              Deliveries mirror the customer wizard exactly. Admin bypasses
+              the 12h10m booking-lead gate (calendar still hides past dates).
             </div>
           </section>
         )}
