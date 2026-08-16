@@ -307,7 +307,7 @@ export async function POST(req: NextRequest) {
       ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
       ...(distanceKm !== null ? { distance_km: distanceKm } : {}),
     })
-    .select("id")
+    .select("id, order_number")
     .single();
 
   if (orderErr || !order) {
@@ -348,6 +348,7 @@ export async function POST(req: NextRequest) {
         phone: phoneLocal,
         name: fullName,
         orderId: order.id,
+        orderNumber: order.order_number,
         total: grandTotal,
         address: addressString,
       }),
@@ -356,7 +357,12 @@ export async function POST(req: NextRequest) {
     { phone: phoneLocal },
   );
 
-  const shortId = String(order.id).slice(0, 8).toUpperCase();
+  // Prefer the human-facing OLF number when the trigger has assigned one
+  // (always, for new inserts); fall back to the UUID hex slice for
+  // parity with legacy behaviour if the column is somehow null.
+  const shortId =
+    (typeof order.order_number === "string" && order.order_number.trim()) ||
+    "#" + String(order.id).slice(0, 8).toUpperCase();
   const waMessage =
     `Hi ${fullName || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
     `Order ID: ${shortId}\n` +
@@ -376,6 +382,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     order_id: order.id,
+    order_number: order.order_number,
     subtotal_inr: subtotal,
     delivery_fee_inr: deliveryFee,
     total_amount_inr: grandTotal,

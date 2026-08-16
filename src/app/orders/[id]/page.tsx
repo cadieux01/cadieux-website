@@ -25,6 +25,7 @@ import {
   nextDeliveryDates,
 } from "@/lib/delivery-slots";
 import { trackPurchase } from "@/lib/analytics";
+import { formatOrderNumber } from "@/lib/order-number";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -39,6 +40,8 @@ type OrderItem = {
 
 type Order = {
   id: string;
+  /** DB-trigger-assigned OLF number. Null on legacy pre-trigger rows. */
+  order_number?: string | null;
   total_amount: number;
   delivery_fee: number | null;
   status: string;
@@ -361,7 +364,9 @@ export default function OrderDetailPage() {
     0,
   );
 
-  const shortId = id ? id.slice(0, 8).toUpperCase() : "";
+  // Human-facing order number: OLF{n} on new orders, CDX-##### on the
+  // 6 mid-2026 rows, and #<uuid-slice> on legacy pre-trigger rows.
+  const shortId = order?.id ? formatOrderNumber(order) : "";
 
   return (
     <div
@@ -552,7 +557,7 @@ export default function OrderDetailPage() {
                   color: "#024628",
                 }}
               >
-                Order #{shortId}
+                Order {shortId}
               </span>
               <span
                 style={{

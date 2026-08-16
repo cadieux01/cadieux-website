@@ -30,7 +30,7 @@ export async function GET(
 
   const ordersP = supabaseAdmin
     .from("orders")
-    .select("id, total_amount, status, delivery_address, created_at, latitude, longitude")
+    .select("id, order_number, total_amount, status, delivery_address, created_at, latitude, longitude")
     .eq("customer_id", id)
     .order("created_at", { ascending: false });
   const addressesP = supabaseAdmin

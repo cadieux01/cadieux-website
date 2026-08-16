@@ -870,7 +870,7 @@ export default function CheckoutPage() {
   }
 
   /* ── Order confirmations (fire-and-forget) ────────────────────────────── */
-  async function sendOrderSMS(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string) {
+  async function sendOrderSMS(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string, orderNumber?: string | null) {
     const resolvedPhone = customerPhone.replace(/\D/g, "");
     if (!resolvedPhone) return;
     try {
@@ -882,6 +882,7 @@ export default function CheckoutPage() {
           phone: resolvedPhone,
           name: customerName || "Customer",
           orderId,
+          orderNumber: orderNumber ?? undefined,
           total: grandTotal,
           address: deliveryAddress,
         }),
@@ -889,8 +890,10 @@ export default function CheckoutPage() {
     } catch { /* silent */ }
   }
 
-  async function sendOrderWhatsApp(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string) {
-    const shortId = orderId.slice(0, 8).toUpperCase();
+  async function sendOrderWhatsApp(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string, orderNumber?: string | null) {
+    const shortId =
+      (typeof orderNumber === "string" && orderNumber.trim()) ||
+      orderId.slice(0, 8).toUpperCase();
     const resolvedPhone = customerPhone.replace(/\D/g, "");
     if (!resolvedPhone) return;
     const message =
@@ -1050,9 +1053,10 @@ export default function CheckoutPage() {
         return;
       }
       const oid = data.order_id ?? "";
+      const onum = data.order_number ?? null;
       if (oid) {
-        sendOrderSMS(oid, fullAddress, customerPhone, customerName);
-        sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName);
+        sendOrderSMS(oid, fullAddress, customerPhone, customerName, onum);
+        sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName, onum);
       }
       const { city: subCity, pincode: subPincode } = extractCityPincode(fullAddress);
       const subFailed = await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);
@@ -1132,10 +1136,12 @@ export default function CheckoutPage() {
       }
       const {
         db_order_id,
+        db_order_number,
         razorpay_order_id,
         amount: serverAmount,
       } = await res.json() as {
         db_order_id: string;
+        db_order_number?: string | null;
         razorpay_order_id: string;
         amount: number;
       };
@@ -1188,8 +1194,8 @@ export default function CheckoutPage() {
             return;
           }
           if (db_order_id) {
-            sendOrderSMS(db_order_id, fullAddress, customerPhone, customerName);
-            sendOrderWhatsApp(db_order_id, fullAddress, customerPhone, customerName);
+            sendOrderSMS(db_order_id, fullAddress, customerPhone, customerName, db_order_number);
+            sendOrderWhatsApp(db_order_id, fullAddress, customerPhone, customerName, db_order_number);
           }
           const { city: subCity, pincode: subPincode } = extractCityPincode(fullAddress);
           const subFailed = await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);

@@ -78,6 +78,10 @@ export type AdminOrderItemSnapshot = {
 
 export type AdminOrderRow = {
   id: string;
+  /** Human-facing order number ('OLF7', 'CDX-00006', …) assigned by the
+   *  DB trigger public.tg_orders_assign_number. Nullable for legacy rows
+   *  created before the trigger existed. Render via formatOrderNumber(). */
+  order_number?: string | null;
   customer_id: string | null;
   total_amount: number | null;
   delivery_fee?: number | null;

@@ -28,6 +28,7 @@ export type OrderChangeRequestRow = {
   resolved_at: string | null;
   order: {
     id: string;
+    order_number: string | null;
     status: string;
     total_amount: number;
     delivery_date: string | null;
@@ -51,6 +52,7 @@ export type SubscriptionChangeRequestRow = {
 
 export type PaymentRow = {
   order_id: string;
+  order_number: string | null;
   status: string;
   total_amount: number;
   payment_status: string | null;
@@ -100,7 +102,7 @@ export async function loadMyRequests(
   const { data: orders, error: ordersErr } = await supabase
     .from("orders")
     .select(
-      "id, status, total_amount, delivery_date, delivery_slot, delivery_address, payment_status, payment_method, paid_at, razorpay_payment_id, created_at",
+      "id, order_number, status, total_amount, delivery_date, delivery_slot, delivery_address, payment_status, payment_method, paid_at, razorpay_payment_id, created_at",
     )
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
@@ -135,6 +137,7 @@ export async function loadMyRequests(
         order: o
           ? {
               id: o.id,
+              order_number: (o as { order_number?: string | null }).order_number ?? null,
               status: o.status,
               total_amount: Number(o.total_amount ?? 0),
               delivery_date: o.delivery_date ?? null,
@@ -165,6 +168,7 @@ export async function loadMyRequests(
   //    payment-relevant fields. No separate payments table exists.
   const payments: PaymentRow[] = orderRows.map((o) => ({
     order_id: o.id,
+    order_number: (o as { order_number?: string | null }).order_number ?? null,
     status: o.status,
     total_amount: Number(o.total_amount ?? 0),
     payment_status: o.payment_status ?? null,

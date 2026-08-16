@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       payment_status: "created",
       razorpay_order_id: rzp.id,
     })
-    .select("id")
+    .select("id, order_number")
     .single();
 
   if (error) {
@@ -119,6 +119,9 @@ export async function POST(req: NextRequest) {
 
   const res = NextResponse.json({
     db_order_id: order.id,
+    // Human-facing OLF number (assigned by DB trigger). Consumed by the
+    // client to route the correct label into SMS + WhatsApp.
+    db_order_number: order.order_number,
     razorpay_order_id: rzp.id,
     amount: rzp.amount, // paise (server-confirmed)
     currency: rzp.currency,

@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   const { data: orders } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, customer_id, status, payment_method, payment_status, delivery_date, delivery_slot, delivery_address, items, total_amount",
+      "id, order_number, customer_id, status, payment_method, payment_status, delivery_date, delivery_slot, delivery_address, items, total_amount",
     )
     .in("id", orderIds);
 

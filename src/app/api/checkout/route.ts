@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
         payment_method: "cod",
         payment_status: "pending",
       })
-      .select("id")
+      .select("id, order_number")
       .single();
 
     if (error) {
@@ -207,6 +207,10 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({
       order_id: order.id,
+      // Human-facing OLF-prefixed number assigned by the DB trigger. Used
+      // by the checkout success page + SMS/WA confirmations. Nullable for
+      // safety though the trigger always assigns.
+      order_number: order.order_number,
       total_amount: prepared.grandTotal,
     });
     // Re-issue the verified-phone cookie so the post-checkout redirect to

@@ -47,6 +47,7 @@ import {
   toNotifyStatus,
 } from "@/lib/admin-notify";
 import Select from "@/components/ui/Select";
+import { formatOrderNumber } from "@/lib/order-number";
 
 type SortKey = "created_desc" | "delivery_asc";
 
@@ -619,7 +620,7 @@ function OrdersPageInner() {
                         }}
                         title={o.id}
                       >
-                        #{o.id.slice(0, 8)}
+                        {formatOrderNumber(o)}
                       </span>
                     </td>
                     <td style={td}>
@@ -640,7 +641,7 @@ function OrdersPageInner() {
                           <ContactActions
                             phone={o.customers.phone}
                             customerName={o.customers.full_name}
-                            orderInfo={`order #${o.id.slice(0, 8)}`}
+                            orderInfo={`order ${formatOrderNumber(o)}`}
                           />
                         </div>
                       ) : null}
@@ -703,6 +704,7 @@ function OrdersPageInner() {
                           latitude={o.latitude}
                           longitude={o.longitude}
                           orderId={o.id}
+                          orderNumber={o.order_number}
                         />
                       )}
                     </td>
@@ -1040,7 +1042,7 @@ function ResultModal({
             >
               {result.failed.map((f) => (
                 <li key={f.id} style={{ padding: "0.2rem 0" }}>
-                  #{f.id.slice(0, 8)} — {f.error}
+                  {formatOrderNumber({ id: f.id })} — {f.error}
                 </li>
               ))}
             </ul>
@@ -1164,7 +1166,7 @@ function EditOrderModal({
     <div style={modalBackdrop} onClick={saving ? undefined : onCancel}>
       <div style={modalCard} onClick={(e) => e.stopPropagation()}>
         <div style={modalHeader}>
-          <h3 style={modalTitle}>Edit customer · order #{order.id.slice(0, 8)}</h3>
+          <h3 style={modalTitle}>Edit customer · order {formatOrderNumber(order)}</h3>
         </div>
         <div style={modalScrollBody}>
           <Field label="Full name">

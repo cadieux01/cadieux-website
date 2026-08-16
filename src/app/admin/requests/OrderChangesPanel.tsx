@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
+import { formatOrderNumber } from "@/lib/order-number";
 
 type OrderItem = {
   slug?: string;
@@ -33,6 +34,7 @@ type OrderItem = {
 
 type OrderInfo = {
   id: string;
+  order_number?: string | null;
   customer_id: string;
   status: string;
   payment_method: string | null;
@@ -244,7 +246,10 @@ export function OrderChangesPanel() {
                     ? "rgba(251,243,212,0.5)"
                     : "#e3b341";
             const order = r.order;
-            const shortId = r.order_id.slice(0, 8).toUpperCase();
+            const shortId = formatOrderNumber({
+              id: r.order_id,
+              order_number: order?.order_number,
+            });
             return (
               <div
                 key={r.id}
@@ -575,7 +580,11 @@ export function OrderChangesPanel() {
                     }}
                   >
                     <span style={{ color: "#fbf3d4" }}>
-                      Order #{r.order_id.slice(0, 8).toUpperCase()}
+                      Order{" "}
+                      {formatOrderNumber({
+                        id: r.order_id,
+                        order_number: r.order?.order_number,
+                      })}
                     </span>
                     <span
                       style={{

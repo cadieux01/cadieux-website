@@ -17,6 +17,7 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import { formatOrderNumber } from "@/lib/order-number";
 import {
   formatDate,
   formatDateTime,
@@ -35,6 +36,8 @@ type CustomerDetail = {
 
 type OrderRow = {
   id: string;
+  /** DB-trigger-assigned OLF number. Null on legacy pre-trigger rows. */
+  order_number?: string | null;
   total_amount: number | null;
   status: string | null;
   delivery_address: string | null;
@@ -353,7 +356,7 @@ export default function CustomerDetailPage() {
         <Table headers={["Order", "Total", "Status", "Address", "Location", "Created"]}>
           {data.orders.map((o) => (
             <tr key={o.id}>
-              <td style={td}>#{o.id.slice(0, 8)}</td>
+              <td style={td}>{formatOrderNumber(o)}</td>
               <td style={td}>{formatINR(o.total_amount)}</td>
               <td style={td}><StatusBadge status={o.status} /></td>
               <td style={{ ...td, maxWidth: 300 }}>{o.delivery_address ?? "—"}</td>

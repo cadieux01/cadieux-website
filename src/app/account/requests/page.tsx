@@ -12,6 +12,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+import { formatOrderNumber } from "@/lib/order-number";
+
 const GRAIN = "url(/grain.svg)";
 
 type OrderChangeRequest = {
@@ -30,6 +32,7 @@ type OrderChangeRequest = {
   resolved_at: string | null;
   order: {
     id: string;
+    order_number: string | null;
     status: string;
     total_amount: number;
     delivery_date: string | null;
@@ -53,6 +56,7 @@ type SubscriptionChangeRequest = {
 
 type PaymentRow = {
   order_id: string;
+  order_number: string | null;
   status: string;
   total_amount: number;
   payment_status: string | null;
@@ -477,7 +481,11 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
               textDecoration: "none",
             }}
           >
-            Order #{cr.order_id.slice(0, 8)}
+            Order{" "}
+            {formatOrderNumber({
+              id: cr.order_id,
+              order_number: cr.order?.order_number ?? null,
+            })}
           </Link>
         </div>
         <StatusBadge status={cr.status} />
@@ -686,7 +694,7 @@ function PaymentCard({ p }: { p: PaymentRow }) {
             textDecoration: "none",
           }}
         >
-          Order #{p.order_id.slice(0, 8)}
+          Order {formatOrderNumber({ id: p.order_id, order_number: p.order_number })}
         </Link>
         <StatusBadge status={label} />
       </div>

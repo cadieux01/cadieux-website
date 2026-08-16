@@ -35,20 +35,30 @@ type SmsPayload = {
   name?: string;
   type: "order_placed" | "status_change" | "customer_edit";
   orderId?: string;
+  /** Human-facing OLF number. When present, replaces the UUID slice. */
+  orderNumber?: string;
   total?: number;
   address?: string;
   status?: string;
 };
 
+/** OLF number (preferred) → falls back to a UUID hex slice so old callers
+ *  that only pass orderId still get a recognisable identifier. */
+function orderLabel(body: SmsPayload): string {
+  const n = body.orderNumber?.trim();
+  if (n) return n;
+  return "#" + String(body.orderId ?? "").slice(0, 8).toUpperCase();
+}
+
 function buildMessage(body: SmsPayload): string | null {
   const name = body.name ?? "Customer";
 
   if (body.type === "order_placed") {
-    const orderId = String(body.orderId ?? "").slice(0, 8).toUpperCase();
+    const label = orderLabel(body);
     const total = body.total ?? "";
     const address = body.address ?? "";
     return (
-      `Hi ${name}! Your Cadieux order #${orderId} has been placed.\n` +
+      `Hi ${name}! Your Cadieux order ${label} has been placed.\n` +
       `Total: Rs.${total}\n` +
       `Delivery to: ${address}\n` +
       `We will confirm shortly. Thank you!`
@@ -56,14 +66,14 @@ function buildMessage(body: SmsPayload): string | null {
   }
 
   if (body.type === "status_change") {
-    const orderId = String(body.orderId ?? "").slice(0, 8).toUpperCase();
+    const label = orderLabel(body);
     switch (body.status) {
       case "Confirmed":
-        return `Hi ${name}! Your Cadieux order #${orderId} is confirmed. We are preparing your fresh bread.`;
+        return `Hi ${name}! Your Cadieux order ${label} is confirmed. We are preparing your fresh bread.`;
       case "Dispatched":
-        return `Hi ${name}! Your Cadieux order #${orderId} is on the way! Our delivery partner will reach you soon.`;
+        return `Hi ${name}! Your Cadieux order ${label} is on the way! Our delivery partner will reach you soon.`;
       case "Delivered":
-        return `Hi ${name}! Your Cadieux order #${orderId} has been delivered! Enjoy your fresh bread. Thank you for choosing Cadieux.`;
+        return `Hi ${name}! Your Cadieux order ${label} has been delivered! Enjoy your fresh bread. Thank you for choosing Cadieux.`;
       default:
         return null;
     }

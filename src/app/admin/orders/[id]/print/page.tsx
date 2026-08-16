@@ -25,6 +25,7 @@ import type {
   AdminOrderItemSnapshot,
   AdminOrderRow,
 } from "@/lib/admin-shared";
+import { formatOrderNumber } from "@/lib/order-number";
 
 type OrderResponse = { order: AdminOrderRow };
 
@@ -46,9 +47,9 @@ function itemLineTotal(item: AdminOrderItemSnapshot): number | null {
 }
 
 function formatOrderId(order: AdminOrderRow): string {
-  // Use the customer-visible short id (first 8 hex chars, uppercase)
-  // when nothing better exists. Matches the OrderCard convention.
-  return `#${order.id.slice(0, 8).toUpperCase()}`;
+  // Prefers the DB-trigger-assigned OLF number; falls back to the
+  // UUID hex slice on legacy pre-trigger rows. See src/lib/order-number.ts.
+  return formatOrderNumber(order);
 }
 
 function formatPaymentLabel(order: AdminOrderRow): string {

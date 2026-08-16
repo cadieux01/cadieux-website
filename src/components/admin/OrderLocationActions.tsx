@@ -19,6 +19,8 @@
 
 import { useState } from "react";
 
+import { formatOrderNumber } from "@/lib/order-number";
+
 const GOLD = "#f59e0b";
 const CREAM = "#fbf3d4";
 const BORDER = "rgba(245,158,11,0.35)";
@@ -28,12 +30,15 @@ export function OrderLocationActions({
   latitude,
   longitude,
   orderId,
+  orderNumber,
   stopPropagation = true,
 }: {
   latitude: number | null | undefined;
   longitude: number | null | undefined;
   /** Short order id used in the WhatsApp prefill text. */
   orderId: string;
+  /** Human-facing order number (OLF…). Preferred over id-slice fallback. */
+  orderNumber?: string | null;
   /** When inside a clickable row, swallow the click. Matches ContactActions. */
   stopPropagation?: boolean;
 }) {
@@ -62,8 +67,8 @@ export function OrderLocationActions({
   }
 
   const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
-  const shortId = orderId.slice(0, 8);
-  const waText = `Cadieux delivery location for order #${shortId}: ${mapsUrl}`;
+  const shortId = formatOrderNumber({ id: orderId, order_number: orderNumber });
+  const waText = `Cadieux delivery location for order ${shortId}: ${mapsUrl}`;
   const waUrl = `https://wa.me/?text=${encodeURIComponent(waText)}`;
 
   const guard = (e: React.MouseEvent) => {
