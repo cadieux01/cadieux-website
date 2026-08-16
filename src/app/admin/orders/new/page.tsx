@@ -1,20 +1,23 @@
 "use client";
 
-// Manual admin order-entry ("Register New Order").
+// Manual admin order-entry ("Register New Order") — Phase 3b.
 //
-// This page is the admin-facing counterpart of the public /checkout flow.
-// It POSTs to /api/admin/orders (admin-gated) which reuses the SAME
-// prepareOneTimeOrder + orderInsertColumns as the customer path, so the
-// resulting row is byte-identical to a real customer-placed order — the
-// auto-refund gate, mobile /api/mobile/orders lookup, WhatsApp bot
-// classifier and admin list/print pages all keep working unchanged.
+// One page, TWO modes:
+//   • one_time    → POST /api/admin/orders                       (existing)
+//   • subscription → POST /api/admin/subscriptions/create        (new, 3b)
 //
-// Customer linking works the same way the mobile app does: the phone is
-// normalised to 10-digit local, we upsert public.customers by that value
-// (customers_phone_unique index), and orders.customer_id points at that
-// row. When the same phone signs in on the app, the /api/mobile/orders
-// endpoint follows phone → customer_id → orders and shows the manual
-// order in the customer's history.
+// The one-time path is byte-identical to a customer-placed order (shared
+// prepareOneTimeOrder + orderInsertColumns). The subscription path goes
+// through the same shared helpers as the public checkout multi-variant
+// branch (buildMultiVariantSubscriptionInsert + insertMultiVariantSubscription
+// in src/lib/subscription-checkout.ts), so an admin-registered subscription
+// writes byte-identical rows to a customer-created one.
+//
+// Customer linking is the same in both modes: phone → 10-digit local →
+// upsert public.customers by customers_phone_unique → never overwrite
+// existing name/city. Both endpoints populate BOTH customer_id AND
+// customer_phone so the tracking page / mobile app history match on the
+// phone LIKE fallback too.
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -38,6 +41,8 @@ type ProductRow = {
   is_active: boolean;
   in_stock: boolean;
   is_archived: boolean;
+  subscription_per_loaf_inr?: number | null;
+  subscription_discount_pct?: number | null;
 };
 
 type PickupLocation = {
@@ -56,6 +61,28 @@ type CustomerHit = {
 };
 
 type LineItem = { slug: string; qty: number };
+
+type OrderType = "one_time" | "subscription";
+
+const DAY_OPTIONS: { key: string; label: string }[] = [
+  { key: "mon", label: "Mon" },
+  { key: "tue", label: "Tue" },
+  { key: "wed", label: "Wed" },
+  { key: "thu", label: "Thu" },
+  { key: "fri", label: "Fri" },
+  { key: "sat", label: "Sat" },
+  { key: "sun", label: "Sun" },
+];
+
+// A stable set of common delivery windows for subscriptions. Same wording
+// the customer wizard uses. Sub deliveries don't run through the 12h10m
+// booking-lead gate here (admin bypass), so we don't need bookableSlots().
+const SUB_SLOT_OPTIONS = [
+  "06:30-08:30",
+  "08:30-10:30",
+  "16:00-18:00",
+  "18:00-20:00",
+];
 
 export default function RegisterNewOrderPage() {
   const router = useRouter();
@@ -101,7 +128,10 @@ export default function RegisterNewOrderPage() {
     [products],
   );
 
-  // ── Form state ──────────────────────────────────────────────────────
+  // ── Order type ──────────────────────────────────────────────────────
+  const [orderType, setOrderType] = useState<OrderType>("one_time");
+
+  // ── Customer (shared across modes) ─────────────────────────────────
   const [phone, setPhone] = useState("");
   const [fullName, setFullName] = useState("");
   const [city, setCity] = useState("");
@@ -110,6 +140,9 @@ export default function RegisterNewOrderPage() {
   );
   const [lookupBusy, setLookupBusy] = useState(false);
 
+  // ── Fulfillment ────────────────────────────────────────────────────
+  //   one_time: delivery OR pickup
+  //   subscription: delivery only (admin sub endpoint does not accept pickup)
   const [fulfillmentType, setFulfillmentType] = useState<
     "delivery" | "pickup"
   >("delivery");
@@ -117,10 +150,10 @@ export default function RegisterNewOrderPage() {
   const [pincode, setPincode] = useState("");
   const [pickupLocationId, setPickupLocationId] = useState("");
 
+  // ── Items (shared shape across modes) ──────────────────────────────
   const [items, setItems] = useState<LineItem[]>([{ slug: "", qty: 1 }]);
 
-  // Dates + slots — same helper the public checkout uses so admin gets
-  // the identical 7-day window (skipping dates with zero bookable slots).
+  // ── ONE-TIME: dates + slots (public helper) ────────────────────────
   const dates = useMemo(() => nextDeliveryDates(7), []);
   const [deliveryDate, setDeliveryDate] = useState<string>(dates[0] ?? "");
   const slots = useMemo(
@@ -133,11 +166,18 @@ export default function RegisterNewOrderPage() {
   );
   const [deliverySlot, setDeliverySlot] = useState<string>("");
   useEffect(() => {
-    // Reset the slot when the date changes; default to the first bookable
-    // slot on the new date so the operator can submit without an extra tap.
     setDeliverySlot(firstEnabledSlot);
   }, [firstEnabledSlot, deliveryDate]);
 
+  // ── SUBSCRIPTION: weeks, days, single slot ─────────────────────────
+  const [subWeeks, setSubWeeks] = useState<number>(4);
+  const [subDays, setSubDays] = useState<string[]>(["mon", "wed", "fri"]);
+  const [subSlot, setSubSlot] = useState<string>(SUB_SLOT_OPTIONS[0]);
+  const [subStatus, setSubStatus] = useState<
+    "active" | "pending_confirmation"
+  >("active");
+
+  // ── Payment/status/override (shared) ───────────────────────────────
   const [payment, setPayment] = useState<"cod" | "paid">("cod");
   const [status, setStatus] = useState<string>("pending");
   const [serviceabilityOverride, setServiceabilityOverride] = useState(false);
@@ -146,7 +186,34 @@ export default function RegisterNewOrderPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitOk, setSubmitOk] = useState<string | null>(null);
 
-  // ── Customer prefill on phone-blur ─────────────────────────────────
+  // ── Mode-switch cleanup ────────────────────────────────────────────
+  // When switching modes, wipe the other mode's inputs so nothing leaks
+  // into the payload. Shared fields (customer, items, fulfilment) stay.
+  const switchMode = useCallback(
+    (next: OrderType) => {
+      if (next === orderType) return;
+      setOrderType(next);
+      setSubmitError(null);
+      setSubmitOk(null);
+      if (next === "subscription") {
+        // Subscription endpoint is delivery-only.
+        setFulfillmentType("delivery");
+        setPickupLocationId("");
+        // Reset one-time date/slot to their defaults (harmless if unused).
+        setDeliveryDate(dates[0] ?? "");
+        setDeliverySlot(firstEnabledSlot);
+      } else {
+        // Clear subscription-only fields; keep defaults so re-entry is fast.
+        setSubWeeks(4);
+        setSubDays(["mon", "wed", "fri"]);
+        setSubSlot(SUB_SLOT_OPTIONS[0]);
+        setSubStatus("active");
+      }
+    },
+    [orderType, dates, firstEnabledSlot],
+  );
+
+  // ── Customer prefill on phone-blur (shared) ────────────────────────
   const lookupCustomer = useCallback(async () => {
     const digits = phone.replace(/\D/g, "").slice(-10);
     if (digits.length !== 10) {
@@ -158,16 +225,12 @@ export default function RegisterNewOrderPage() {
       const j = await adminFetch<{ customers: CustomerHit[] }>(
         `/api/admin/customers?q=${encodeURIComponent(digits)}`,
       );
-      // /api/admin/customers?q= does ILIKE on phone; find the exact match.
       const hit =
         (j.customers ?? []).find(
           (c) => (c.phone ?? "").replace(/\D/g, "").slice(-10) === digits,
         ) ?? null;
       if (hit) {
         setExistingCustomer(hit);
-        // Prefill name + city ONLY when the operator hasn't typed something
-        // else. We never lock the fields — the API will still refuse to
-        // overwrite the existing values regardless of what's on screen.
         if (hit.full_name && !fullName) setFullName(hit.full_name);
         if (hit.city && !city) setCity(hit.city);
       } else {
@@ -180,27 +243,83 @@ export default function RegisterNewOrderPage() {
     }
   }, [phone, fullName, city]);
 
-  // ── Derived: subtotal (client hint; server re-derives from DB) ────
+  // ── Derived: subtotal ──────────────────────────────────────────────
+  // Client-side hint only. Servers re-derive from DB in both modes.
   const subtotal = useMemo(() => {
-    let sum = 0;
-    for (const it of items) {
-      const p = activeProducts.find((x) => x.slug === it.slug);
-      if (!p) continue;
-      sum += Number(p.price_inr) * Number(it.qty);
+    if (orderType === "one_time") {
+      let sum = 0;
+      for (const it of items) {
+        const p = activeProducts.find((x) => x.slug === it.slug);
+        if (!p) continue;
+        sum += Number(p.price_inr) * Number(it.qty);
+      }
+      return sum;
     }
-    return sum;
-  }, [items, activeProducts]);
+    // Subscription hint: MRP × (1 − discount%) × qty × deliveries (weeks × days).
+    const perDelivery = items.reduce((s, it) => {
+      const p = activeProducts.find((x) => x.slug === it.slug);
+      if (!p) return s;
+      const mrp = Number(p.price_inr) || 0;
+      const disc = Math.min(
+        100,
+        Math.max(0, Number(p.subscription_discount_pct ?? 0)),
+      );
+      const unit =
+        Math.round(mrp * (1 - disc / 100) * 100 + Number.EPSILON) / 100;
+      return s + unit * Number(it.qty);
+    }, 0);
+    const deliveries = subWeeks * subDays.length;
+    return perDelivery * deliveries;
+  }, [orderType, items, activeProducts, subWeeks, subDays]);
 
-  const canSubmit =
-    !submitBusy &&
-    phone.replace(/\D/g, "").length >= 10 &&
-    fullName.trim().length > 0 &&
-    items.some((it) => it.slug && Number(it.qty) > 0) &&
-    (fulfillmentType === "pickup"
-      ? pickupLocationId.length > 0
-      : deliveryAddress.trim().length > 0 &&
+  const totalUnitsPerDelivery = useMemo(
+    () =>
+      items.reduce(
+        (s, it) => s + (it.slug ? Math.max(0, Number(it.qty) || 0) : 0),
+        0,
+      ),
+    [items],
+  );
+
+  // ── canSubmit gates per mode ───────────────────────────────────────
+  const canSubmit = useMemo(() => {
+    if (submitBusy) return false;
+    if (phone.replace(/\D/g, "").length < 10) return false;
+    if (!fullName.trim()) return false;
+    if (!items.some((it) => it.slug && Number(it.qty) > 0)) return false;
+
+    if (orderType === "one_time") {
+      if (fulfillmentType === "pickup") return pickupLocationId.length > 0;
+      return (
+        deliveryAddress.trim().length > 0 &&
         deliveryDate.length > 0 &&
-        deliverySlot.length > 0);
+        deliverySlot.length > 0
+      );
+    }
+
+    // subscription
+    if (deliveryAddress.trim().length === 0) return false;
+    if (!subSlot) return false;
+    if (subDays.length === 0) return false;
+    if (!(subWeeks >= 1 && subWeeks <= 26)) return false;
+    if (totalUnitsPerDelivery < 2) return false;
+    return true;
+  }, [
+    submitBusy,
+    phone,
+    fullName,
+    items,
+    orderType,
+    fulfillmentType,
+    pickupLocationId,
+    deliveryAddress,
+    deliveryDate,
+    deliverySlot,
+    subSlot,
+    subDays,
+    subWeeks,
+    totalUnitsPerDelivery,
+  ]);
 
   // ── Submit ──────────────────────────────────────────────────────────
   const submit = useCallback(async () => {
@@ -209,59 +328,96 @@ export default function RegisterNewOrderPage() {
     setSubmitBusy(true);
     try {
       const digits = phone.replace(/\D/g, "").slice(-10);
-      const cleanItems = items
+
+      if (orderType === "one_time") {
+        const cleanItems = items
+          .filter((it) => it.slug && Number(it.qty) > 0)
+          .map((it) => {
+            const p = activeProducts.find((x) => x.slug === it.slug);
+            const price = p ? Number(p.price_inr) : 0;
+            const qty = Number(it.qty);
+            return {
+              slug: it.slug,
+              name: p?.name ?? it.slug,
+              quantity: qty,
+              price_inr: price,
+              line_total_inr: price * qty,
+            };
+          });
+
+        const payload: Record<string, unknown> = {
+          phone: digits,
+          full_name: fullName.trim(),
+          city: city.trim(),
+          items: cleanItems,
+          total_amount: cleanItems.reduce(
+            (s, it) => s + Number(it.line_total_inr),
+            0,
+          ),
+          fulfillment_type: fulfillmentType,
+          payment,
+          status,
+          serviceability_override: serviceabilityOverride,
+        };
+        if (fulfillmentType === "pickup") {
+          payload.pickup_location_id = pickupLocationId;
+        } else {
+          payload.delivery_address = deliveryAddress.trim();
+          payload.pincode = pincode.trim();
+          payload.delivery_date = deliveryDate;
+          payload.delivery_slot = deliverySlot;
+        }
+
+        const res = await adminFetch<{ ok: boolean; order_id: string }>(
+          "/api/admin/orders",
+          { method: "POST", body: JSON.stringify(payload) },
+        );
+        setSubmitOk(`Order registered (${res.order_id.slice(0, 8)}).`);
+        setTimeout(() => router.push("/admin/orders"), 900);
+        return;
+      }
+
+      // ── subscription ────────────────────────────────────────────────
+      const subItems = items
         .filter((it) => it.slug && Number(it.qty) > 0)
-        .map((it) => {
-          const p = activeProducts.find((x) => x.slug === it.slug);
-          const price = p ? Number(p.price_inr) : 0;
-          const qty = Number(it.qty);
-          return {
-            slug: it.slug,
-            name: p?.name ?? it.slug,
-            quantity: qty,
-            price_inr: price,
-            line_total_inr: price * qty,
-          };
-        });
+        .map((it) => ({
+          product_slug: it.slug,
+          quantity_per_delivery: Number(it.qty),
+        }));
 
       const payload: Record<string, unknown> = {
         phone: digits,
         full_name: fullName.trim(),
         city: city.trim(),
-        items: cleanItems,
-        total_amount: cleanItems.reduce(
-          (s, it) => s + Number(it.line_total_inr),
-          0,
-        ),
-        fulfillment_type: fulfillmentType,
+        delivery_address: deliveryAddress.trim(),
+        pincode: pincode.trim(),
+        weeks: subWeeks,
+        days: subDays,
+        slot: subSlot,
+        items: subItems,
         payment,
-        status,
-        serviceability_override: serviceabilityOverride,
+        status: subStatus,
       };
-      if (fulfillmentType === "pickup") {
-        payload.pickup_location_id = pickupLocationId;
-      } else {
-        payload.delivery_address = deliveryAddress.trim();
-        payload.pincode = pincode.trim();
-        payload.delivery_date = deliveryDate;
-        payload.delivery_slot = deliverySlot;
-      }
 
-      const res = await adminFetch<{ ok: boolean; order_id: string }>(
-        "/api/admin/orders",
-        { method: "POST", body: JSON.stringify(payload) },
+      const res = await adminFetch<{
+        ok: boolean;
+        subscription_id: string;
+        deliveries: number;
+      }>("/api/admin/subscriptions/create", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setSubmitOk(
+        `Subscription registered (${res.subscription_id.slice(0, 8)}, ${res.deliveries} deliveries).`,
       );
-      setSubmitOk(`Order registered (${res.order_id.slice(0, 8)}).`);
-      // Small delay so the operator sees the toast, then bounce back to
-      // the orders list where the new row will appear at the top.
-      setTimeout(() => router.push("/admin/orders"), 900);
+      setTimeout(() => router.push("/admin/subscriptions"), 900);
     } catch (e) {
       const msg =
         e instanceof AdminFetchError
           ? e.message
           : e instanceof Error
             ? e.message
-            : "Failed to register order.";
+            : "Failed to register.";
       setSubmitError(msg);
     } finally {
       setSubmitBusy(false);
@@ -275,6 +431,7 @@ export default function RegisterNewOrderPage() {
     fullName,
     fulfillmentType,
     items,
+    orderType,
     payment,
     phone,
     pickupLocationId,
@@ -282,7 +439,17 @@ export default function RegisterNewOrderPage() {
     router,
     serviceabilityOverride,
     status,
+    subDays,
+    subSlot,
+    subStatus,
+    subWeeks,
   ]);
+
+  const toggleDay = (key: string) => {
+    setSubDays((prev) =>
+      prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key],
+    );
+  };
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
@@ -295,11 +462,37 @@ export default function RegisterNewOrderPage() {
         </Link>
       }
     >
-      {loadError && <div style={errorBox}>{loadError}</div>}
-      {submitOk && <div style={okBox}>{submitOk}</div>}
-      {submitError && <div style={errorBox}>{submitError}</div>}
+      <div style={pageWrap}>
+        {loadError && <div style={errorBox}>{loadError}</div>}
+        {submitOk && <div style={okBox}>{submitOk}</div>}
+        {submitError && <div style={errorBox}>{submitError}</div>}
 
-      <div style={grid}>
+        {/* ── ORDER TYPE toggle ── */}
+        <section style={section}>
+          <h2 style={sectionTitle}>Order type</h2>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              style={orderType === "one_time" ? chipActive : chipPrimary}
+              onClick={() => switchMode("one_time")}
+            >
+              One-time
+            </button>
+            <button
+              type="button"
+              style={orderType === "subscription" ? chipActive : chipPrimary}
+              onClick={() => switchMode("subscription")}
+            >
+              Subscription
+            </button>
+          </div>
+          <div style={{ marginTop: "0.6rem", ...mutedNote }}>
+            {orderType === "one_time"
+              ? "Single delivery or pickup. Byte-identical to a customer-placed order."
+              : "Recurring weekly delivery. Writes go through the same helpers as the public checkout wizard."}
+          </div>
+        </section>
+
         {/* ── Customer ── */}
         <section style={section}>
           <h2 style={sectionTitle}>Customer</h2>
@@ -358,24 +551,55 @@ export default function RegisterNewOrderPage() {
         {/* ── Fulfillment ── */}
         <section style={section}>
           <h2 style={sectionTitle}>Fulfillment</h2>
-          <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
-            <button
-              type="button"
-              style={fulfillmentType === "delivery" ? chipActive : chipPrimary}
-              onClick={() => setFulfillmentType("delivery")}
+          {orderType === "one_time" ? (
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                marginBottom: "0.75rem",
+                flexWrap: "wrap",
+              }}
             >
-              Delivery
-            </button>
-            <button
-              type="button"
-              style={fulfillmentType === "pickup" ? chipActive : chipPrimary}
-              onClick={() => setFulfillmentType("pickup")}
-            >
-              Pickup
-            </button>
-          </div>
+              <button
+                type="button"
+                style={
+                  fulfillmentType === "delivery" ? chipActive : chipPrimary
+                }
+                onClick={() => setFulfillmentType("delivery")}
+              >
+                Delivery
+              </button>
+              <button
+                type="button"
+                style={fulfillmentType === "pickup" ? chipActive : chipPrimary}
+                onClick={() => setFulfillmentType("pickup")}
+              >
+                Pickup
+              </button>
+            </div>
+          ) : (
+            <div style={{ ...mutedNote, marginBottom: "0.75rem" }}>
+              Subscriptions are delivery-only.
+            </div>
+          )}
 
-          {fulfillmentType === "delivery" ? (
+          {orderType === "one_time" && fulfillmentType === "pickup" ? (
+            <label style={label}>
+              Pickup point
+              <select
+                value={pickupLocationId}
+                onChange={(e) => setPickupLocationId(e.target.value)}
+                style={input}
+              >
+                <option value="">— choose a stall —</option>
+                {(locations ?? []).map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} — {l.area}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
             <>
               <label style={label}>
                 Delivery address
@@ -397,62 +621,27 @@ export default function RegisterNewOrderPage() {
                   maxLength={6}
                 />
               </label>
-              <label style={label}>
-                Delivery date
-                <select
-                  value={deliveryDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
-                  style={input}
-                >
-                  {dates.map((d) => (
-                    <option key={d} value={d}>
-                      {dateLabel(d)} ({d})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={label}>
-                Time slot
-                <select
-                  value={deliverySlot}
-                  onChange={(e) => setDeliverySlot(e.target.value)}
-                  style={input}
-                >
-                  {slots.map((s) => (
-                    <option key={s.value} value={s.value} disabled={s.disabled}>
-                      {formatSlotForDisplay(s.value)}
-                      {s.disabled ? " (too soon)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label
-                style={{ ...label, flexDirection: "row", alignItems: "center", gap: "0.5rem" }}
+                style={{
+                  ...label,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
               >
                 <input
                   type="checkbox"
                   checked={serviceabilityOverride}
-                  onChange={(e) => setServiceabilityOverride(e.target.checked)}
+                  onChange={(e) =>
+                    setServiceabilityOverride(e.target.checked)
+                  }
                 />
-                <span>Override delivery range (register anyway — bypasses pincode + 20 km checks)</span>
+                <span>
+                  Override delivery range (register anyway — bypasses pincode
+                  + 20 km checks)
+                </span>
               </label>
             </>
-          ) : (
-            <label style={label}>
-              Pickup point
-              <select
-                value={pickupLocationId}
-                onChange={(e) => setPickupLocationId(e.target.value)}
-                style={input}
-              >
-                <option value="">— choose a stall —</option>
-                {(locations ?? []).map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name} — {l.area}
-                  </option>
-                ))}
-              </select>
-            </label>
           )}
         </section>
 
@@ -495,7 +684,10 @@ export default function RegisterNewOrderPage() {
                 value={it.qty}
                 onChange={(e) => {
                   const next = [...items];
-                  next[i] = { ...it, qty: Math.max(1, Number(e.target.value) || 1) };
+                  next[i] = {
+                    ...it,
+                    qty: Math.max(1, Number(e.target.value) || 1),
+                  };
                   setItems(next);
                 }}
                 style={input}
@@ -523,10 +715,142 @@ export default function RegisterNewOrderPage() {
             + Add item
           </button>
           <div style={{ marginTop: "0.75rem", ...mutedNote }}>
-            Subtotal (hint): {formatINR(subtotal)}. Server re-derives from DB
-            prices; if the two disagree the order is rejected with price_mismatch.
+            {orderType === "one_time" ? (
+              <>
+                Subtotal (hint): {formatINR(subtotal)}. Server re-derives from
+                DB prices; disagreement → price_mismatch.
+              </>
+            ) : (
+              <>
+                Per-delivery units: {totalUnitsPerDelivery} (minimum 2).
+                Estimated total (hint): {formatINR(subtotal)} over{" "}
+                {subWeeks * subDays.length} deliveries. Server prices from DB
+                (MRP × (1 − sub discount%)).
+              </>
+            )}
           </div>
         </section>
+
+        {/* ── Mode-specific: schedule ── */}
+        {orderType === "one_time" ? (
+          <section style={section}>
+            <h2 style={sectionTitle}>Delivery schedule</h2>
+            <label style={label}>
+              Delivery date
+              <select
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+                style={input}
+              >
+                {dates.map((d) => (
+                  <option key={d} value={d}>
+                    {dateLabel(d)} ({d})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={label}>
+              Time slot
+              <select
+                value={deliverySlot}
+                onChange={(e) => setDeliverySlot(e.target.value)}
+                style={input}
+              >
+                {slots.map((s) => (
+                  <option
+                    key={s.value}
+                    value={s.value}
+                    disabled={s.disabled}
+                  >
+                    {formatSlotForDisplay(s.value)}
+                    {s.disabled ? " (too soon)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </section>
+        ) : (
+          <section style={section}>
+            <h2 style={sectionTitle}>Subscription schedule</h2>
+            <label style={label}>
+              Duration (weeks)
+              <select
+                value={String(subWeeks)}
+                onChange={(e) => setSubWeeks(Number(e.target.value))}
+                style={input}
+              >
+                {Array.from({ length: 26 }, (_, i) => i + 1).map((w) => (
+                  <option key={w} value={w}>
+                    {w} {w === 1 ? "week" : "weeks"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={label}>
+              Delivery days
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.4rem",
+                  flexWrap: "wrap",
+                  marginTop: "0.25rem",
+                }}
+              >
+                {DAY_OPTIONS.map((d) => (
+                  <button
+                    key={d.key}
+                    type="button"
+                    style={
+                      subDays.includes(d.key) ? chipActive : chipPrimary
+                    }
+                    onClick={() => toggleDay(d.key)}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </label>
+
+            <label style={label}>
+              Time slot (same for every delivery)
+              <select
+                value={subSlot}
+                onChange={(e) => setSubSlot(e.target.value)}
+                style={input}
+              >
+                {SUB_SLOT_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {formatSlotForDisplay(s)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={label}>
+              Initial subscription status
+              <select
+                value={subStatus}
+                onChange={(e) =>
+                  setSubStatus(
+                    e.target.value as "active" | "pending_confirmation",
+                  )
+                }
+                style={input}
+              >
+                <option value="active">Active</option>
+                <option value="pending_confirmation">
+                  Pending confirmation
+                </option>
+              </select>
+            </label>
+
+            <div style={mutedNote}>
+              First delivery uses the same generator the checkout uses.
+              Admin bypasses the 12h10m booking-lead gate.
+            </div>
+          </section>
+        )}
 
         {/* ── Payment + status ── */}
         <section style={section}>
@@ -542,40 +866,52 @@ export default function RegisterNewOrderPage() {
               <option value="paid">Mark as paid (cash collected)</option>
             </select>
           </label>
-          <label style={label}>
-            Initial status
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              style={input}
-            >
-              <option value="pending">Pending</option>
-              <option value="confirmed">Confirmed</option>
-            </select>
-          </label>
+          {orderType === "one_time" && (
+            <label style={label}>
+              Initial order status
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                style={input}
+              >
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+              </select>
+            </label>
+          )}
         </section>
-      </div>
 
-      <div
-        style={{
-          marginTop: "1.5rem",
-          display: "flex",
-          gap: "0.75rem",
-          justifyContent: "flex-end",
-        }}
-      >
-        <Link href="/admin/orders" style={chipNeutral} className="uppercase">
-          Cancel
-        </Link>
-        <button
-          type="button"
-          onClick={() => void submit()}
-          disabled={!canSubmit}
-          style={{ ...chipPrimary, opacity: canSubmit ? 1 : 0.5 }}
-          className="uppercase"
+        {/* ── Submit row ── */}
+        <div
+          style={{
+            marginTop: "0.5rem",
+            display: "flex",
+            gap: "0.75rem",
+            justifyContent: "flex-end",
+            flexWrap: "wrap",
+          }}
         >
-          {submitBusy ? "Registering…" : "Register order"}
-        </button>
+          <Link
+            href="/admin/orders"
+            style={chipNeutral}
+            className="uppercase"
+          >
+            Cancel
+          </Link>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={!canSubmit}
+            style={{ ...chipPrimary, opacity: canSubmit ? 1 : 0.5 }}
+            className="uppercase"
+          >
+            {submitBusy
+              ? "Registering…"
+              : orderType === "one_time"
+                ? "Register order"
+                : "Register subscription"}
+          </button>
+        </div>
       </div>
     </AdminShell>
   );
@@ -583,9 +919,11 @@ export default function RegisterNewOrderPage() {
 
 // ── Styles (match admin/orders/page.tsx palette) ─────────────────────
 
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+const pageWrap: React.CSSProperties = {
+  maxWidth: 640,
+  margin: "0 auto",
+  display: "flex",
+  flexDirection: "column",
   gap: "1.25rem",
 };
 
@@ -687,7 +1025,6 @@ const errorBox: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: "0.8rem",
   borderRadius: 4,
-  marginBottom: "1rem",
 };
 
 const okBox: React.CSSProperties = {
@@ -698,5 +1035,4 @@ const okBox: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: "0.8rem",
   borderRadius: 4,
-  marginBottom: "1rem",
 };

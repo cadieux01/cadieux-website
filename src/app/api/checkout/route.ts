@@ -15,6 +15,10 @@ import {
   logProximitySuggestion,
 } from "@/lib/order-checkout";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
+import {
+  buildMultiVariantSubscriptionInsert,
+  insertMultiVariantSubscription,
+} from "@/lib/subscription-checkout";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -519,85 +523,44 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const primary = snapItems[0];
-      const { data: sub, error: subErr } = await supabaseAdmin
-        .from("subscriptions")
-        .insert({
-          // Legacy mirror columns — primary variant + blended totals so old
-          // admin views still render. Per-variant truth lives in subscription_items.
-          bread_slug: primary.product_slug,
-          bread_name: primary.product_name,
-          bread_price: primary.price_snapshot_inr,
-          weeks,
-          days: dayKeys,
-          slot_mode,
-          slot: slot_mode === "same" ? slot : null,
-          slots_by_day: slot_mode === "custom" ? slots_by_day : null,
-          total: serverAmount,
-          customer_name,
-          customer_phone,
-          customer_address,
-          customer_city,
-          customer_pincode,
-          status: subStatus,
-          customer_id,
-          product_slug: primary.product_slug,
-          product_name: primary.product_name,
-          quantity_per_delivery: totalUnits,
-          frequency,
-          day_of_week: dayKeys[0] ?? null,
-          time_slot: slot_mode === "same" ? slot : (slots_by_day?.[dayKeys[0]] ?? null),
-          total_weeks: weeks,
-          delivery_address: deliveryAddressJson,
-          total_amount: serverAmount,
-          payment_status: "pending",
-          payment_method: paymentMethod,
-        })
-        .select("id")
-        .single();
-
-      if (subErr || !sub) {
-        console.error("❌ Subscription insert failed:", subErr);
-        return NextResponse.json(
-          { error: "Failed to create subscription", details: subErr?.message },
-          { status: 500 },
-        );
-      }
-
-      const { error: itemsErr } = await supabaseAdmin
-        .from("subscription_items")
-        .insert(
-          snapItems.map((s) => ({ subscription_id: sub.id, ...s })),
-        );
-      if (itemsErr) {
-        console.error("❌ subscription_items insert failed:", itemsErr);
-        return NextResponse.json(
-          { error: "Failed to create subscription items", details: itemsErr.message },
-          { status: 500 },
-        );
-      }
-
-      const deliveryRows = deliveryTemplate.map((d) => ({
-        subscription_id: sub.id,
-        ...d,
-      }));
-      if (deliveryRows.length > 0) {
-        const { error: delErr } = await supabaseAdmin
-          .from("subscription_deliveries")
-          .insert(deliveryRows);
-        if (delErr) {
-          console.error("❌ Delivery insert failed:", delErr);
-          return NextResponse.json(
-            { error: "Failed to create deliveries", details: delErr.message },
-            { status: 500 },
-          );
-        }
+      // Delegate the three inserts (subscriptions → subscription_items →
+      // subscription_deliveries) to the shared helper so both public
+      // checkout and admin manual-entry write identical rows. Column
+      // shapes and error strings are preserved byte-identical there.
+      const subInsertRow = buildMultiVariantSubscriptionInsert({
+        primary: snapItems[0],
+        totalUnits,
+        weeks,
+        dayKeys,
+        slot_mode,
+        slot,
+        slots_by_day,
+        serverAmount,
+        frequency,
+        customer_id,
+        customer_name,
+        customer_phone,
+        customer_address,
+        customer_city,
+        customer_pincode,
+        deliveryAddressJson,
+        subStatus,
+        paymentMethod,
+      });
+      const write = await insertMultiVariantSubscription(
+        supabaseAdmin,
+        subInsertRow,
+        snapItems,
+        deliveryTemplate,
+      );
+      if (!write.ok) {
+        return NextResponse.json(write.error.body, { status: write.error.status });
       }
 
       return NextResponse.json({
-        subscription_id: sub.id,
-        deliveries: deliveryRows.length,
-        items: snapItems.length,
+        subscription_id: write.subscription_id,
+        deliveries: write.deliveries,
+        items: write.items,
       });
     }
 
