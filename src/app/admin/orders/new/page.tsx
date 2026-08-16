@@ -502,6 +502,20 @@ export default function RegisterNewOrderPage() {
         </Link>
       }
     >
+      {/* Scoped placeholder colour so <input placeholder="..."> stays
+          legible on the darker-green input surface (inline `style` can't
+          reach the ::placeholder pseudo-element). */}
+      <style jsx>{`
+        .cdx-admin-neworder input::placeholder,
+        .cdx-admin-neworder textarea::placeholder {
+          color: rgba(251, 243, 212, 0.55);
+        }
+        .cdx-admin-neworder select option {
+          background: #024628;
+          color: #fbf3d4;
+        }
+      `}</style>
+      <div style={pageBackdrop} className="cdx-admin-neworder">
       <div style={pageWrap}>
         {loadError && <div style={errorBox}>{loadError}</div>}
         {submitOk && <div style={okBox}>{submitOk}</div>}
@@ -998,15 +1012,16 @@ export default function RegisterNewOrderPage() {
           </button>
         </div>
       </div>
+      </div>
     </AdminShell>
   );
 }
 
-// ── Styles — Cadieux brand palette ───────────────────────────────────
-// Foundation Green #024628, Grain Cream #FBF3D4, Core Black #1D1D1F.
-// Cream on Foundation Green = 9.88:1 (AAA). Muted cream tints stay
-// >=4.5:1 on Core Black. Selected chips flip to green-on-cream so the
-// active state is unmistakably distinct from unselected.
+// ── Styles — Cadieux two-colour brand look ───────────────────────────
+// Foundation Green #024628 (all backgrounds), Grain Cream #FBF3D4
+// (all text). Input fields sit on a slightly darker green so their
+// edges are clear inside the green page. Cream on Foundation Green
+// = 9.88:1 (AAA).
 
 const CREAM = "#FBF3D4";
 const CREAM_STRONG = "rgba(251,243,212,0.92)";
@@ -1014,7 +1029,18 @@ const CREAM_MUTED = "rgba(251,243,212,0.72)";
 const CREAM_FAINT = "rgba(251,243,212,0.55)";
 const CREAM_BORDER = "rgba(251,243,212,0.35)";
 const GREEN = "#024628";
-const CORE_BLACK = "#1D1D1F";
+const GREEN_INPUT = "#012d1a"; // darker green for input surfaces
+
+// Full-bleed green backdrop for the form area. Uses negative
+// horizontal + bottom margins to cancel the AdminShell <section>'s
+// own padding so the green touches the viewport edges rather than
+// leaving a black gutter.
+const pageBackdrop: React.CSSProperties = {
+  background: GREEN,
+  margin: "0 calc(-1 * clamp(1rem, 4vw, 1.5rem)) -4rem",
+  padding: "1.5rem clamp(1rem, 4vw, 1.5rem) 4rem",
+  minHeight: "60vh",
+};
 
 const pageWrap: React.CSSProperties = {
   maxWidth: 640,
@@ -1024,10 +1050,13 @@ const pageWrap: React.CSSProperties = {
   gap: "1.25rem",
 };
 
+// Section cards sit on the green page. A very faint cream overlay +
+// cream border keeps the card boundary visible without breaking the
+// two-colour feel.
 const section: React.CSSProperties = {
   border: `1px solid ${CREAM_BORDER}`,
   padding: "1rem",
-  background: "rgba(2,70,40,0.35)",
+  background: "rgba(251,243,212,0.04)",
   borderRadius: 6,
 };
 
@@ -1053,9 +1082,9 @@ const label: React.CSSProperties = {
 
 const input: React.CSSProperties = {
   padding: "0.55rem 0.7rem",
-  background: CORE_BLACK,
+  background: GREEN_INPUT,
   color: CREAM,
-  border: `1px solid ${CREAM_BORDER}`,
+  border: `1px solid ${CREAM}`,
   fontFamily: "var(--font-body)",
   fontSize: "0.85rem",
   borderRadius: 4,
@@ -1069,7 +1098,7 @@ const readOnlyStyle: React.CSSProperties = {
 
 const chipBase: React.CSSProperties = {
   padding: "0.4rem 0.9rem",
-  border: `1px solid ${CREAM_BORDER}`,
+  border: `1px solid ${CREAM}`,
   fontFamily: "var(--font-body)",
   fontSize: "0.65rem",
   letterSpacing: "0.22em",
@@ -1088,6 +1117,7 @@ const chipPrimary: React.CSSProperties = {
 const chipNeutral: React.CSSProperties = {
   ...chipBase,
   color: CREAM_MUTED,
+  borderColor: CREAM_BORDER,
   display: "inline-block",
   textDecoration: "none",
 };
@@ -1106,9 +1136,9 @@ const chipActive: React.CSSProperties = {
 
 const hintBox: React.CSSProperties = {
   padding: "0.5rem 0.7rem",
-  border: "1px solid rgba(34,197,94,0.45)",
-  background: "rgba(34,197,94,0.12)",
-  color: "rgba(220,252,231,0.95)",
+  border: `1px solid ${CREAM_BORDER}`,
+  background: "rgba(251,243,212,0.06)",
+  color: CREAM_STRONG,
   fontFamily: "var(--font-body)",
   fontSize: "0.75rem",
   borderRadius: 4,
@@ -1123,8 +1153,8 @@ const mutedNote: React.CSSProperties = {
 
 const errorBox: React.CSSProperties = {
   padding: "0.6rem 0.9rem",
-  border: "1px solid rgba(239,68,68,0.55)",
-  background: "rgba(239,68,68,0.12)",
+  border: "1px solid rgba(239,68,68,0.6)",
+  background: "rgba(239,68,68,0.15)",
   color: "rgba(254,226,226,0.98)",
   fontFamily: "var(--font-body)",
   fontSize: "0.8rem",
@@ -1133,9 +1163,9 @@ const errorBox: React.CSSProperties = {
 
 const okBox: React.CSSProperties = {
   padding: "0.6rem 0.9rem",
-  border: "1px solid rgba(34,197,94,0.55)",
-  background: "rgba(34,197,94,0.12)",
-  color: "rgba(220,252,231,0.98)",
+  border: `1px solid ${CREAM}`,
+  background: "rgba(251,243,212,0.08)",
+  color: CREAM,
   fontFamily: "var(--font-body)",
   fontSize: "0.8rem",
   borderRadius: 4,
@@ -1144,12 +1174,13 @@ const okBox: React.CSSProperties = {
 // Cream surface wrapper for the shared DateCalendar. The calendar's
 // internal palette (Foundation Green foreground, cream on selected
 // pills) is designed for a light background — customers already view
-// it on the ash canvas at /subscriptions/setup. In admin (dark shell)
-// we drop a cream card behind it so the same component renders
-// legibly WITHOUT any modification to the shared file.
+// it on the ash canvas at /subscriptions/setup. On the green admin
+// page we drop a cream card behind it so the same component renders
+// legibly WITHOUT any modification to the shared file (cream card on
+// green page also reads as a deliberate two-tone accent).
 const calendarSurface: React.CSSProperties = {
   background: CREAM,
   borderRadius: 12,
   padding: "0.75rem",
-  border: `1px solid ${CREAM_BORDER}`,
+  border: `1px solid ${CREAM}`,
 };
