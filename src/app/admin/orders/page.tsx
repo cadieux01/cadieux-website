@@ -409,22 +409,6 @@ function OrdersPageInner() {
     }
   };
 
-  const sendWhatsAppForOrder = async (order: AdminOrderRow) => {
-    const phone = order.customers?.phone;
-    const name = order.customers?.full_name ?? "Customer";
-    const notify = toNotifyStatus(order.status);
-    if (!phone) {
-      showNotice("Customer has no phone on file.");
-      return;
-    }
-    if (!notify || notify === "Pending") {
-      showNotice("No WhatsApp template for this status.");
-      return;
-    }
-    const res = await sendOrderWhatsApp(phone, name, notify);
-    showNotice(res.ok ? `WhatsApp sent to ${name}.` : `WhatsApp failed: ${res.error ?? ""}`);
-  };
-
   return (
     <AdminShell
       title="Today's Orders"
@@ -836,19 +820,6 @@ function OrdersPageInner() {
                             }}
                           >
                             Mark {next}
-                          </button>
-                        ) : null}
-                        {o.customers?.phone &&
-                        toNotifyStatus(o.status) &&
-                        toNotifyStatus(o.status) !== "Pending" ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void sendWhatsAppForOrder(o)}
-                            style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
-                            title={`WhatsApp ${o.customers.full_name ?? ""}`}
-                          >
-                            Send WA
                           </button>
                         ) : null}
                         {isShareable(o) ? (
