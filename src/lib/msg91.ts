@@ -80,3 +80,65 @@ export async function sendOtpSms(phone: string, otp: string): Promise<Result> {
     return { ok: false, error: "MSG91 request failed" };
   }
 }
+
+// ── Generic Flow-template sender ────────────────────────────────────────────
+//
+// Same Flow API + auth as sendOtpSms — but any DLT template, any variables.
+// Added for the pre-order schedule notification (see lib/preorder-notify.ts);
+// the sendOtpSms helper above is intentionally left byte-identical so the OTP
+// path is untouched.
+//
+// `variables` is spread into the recipient object alongside `mobiles`, so
+// each key must match a `##<name>##` placeholder in the approved template.
+// Example: template with `##order_number##` + `##date##` → pass
+// `{ order_number: "OLF123", date: "2026-09-01" }`.
+
+/** Send a self-generated MSG91 Flow template. Returns tagged result — never
+ *  throws. Caller supplies the template id (from env) + variable map. */
+export async function sendMsg91FlowTemplate(
+  phone: string,
+  template_id: string,
+  variables: Record<string, string>,
+): Promise<Result> {
+  const authkey = process.env.MSG91_AUTH_KEY;
+  if (!authkey) return { ok: false, error: "MSG91_AUTH_KEY not configured" };
+  if (!template_id) return { ok: false, error: "template_id missing" };
+
+  const sender = process.env.MSG91_SENDER_ID ?? DEFAULT_SENDER;
+  const mobiles = normalize(phone);
+  if (mobiles.length !== 12) return { ok: false, error: "Invalid phone" };
+
+  try {
+    const res = await fetch(FLOW_URL, {
+      method: "POST",
+      headers: {
+        authkey,
+        "Content-Type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        sender,
+        short_url: "0",
+        recipients: [{ mobiles, ...variables }],
+      }),
+    });
+    const data = await res
+      .json()
+      .catch(() => ({}) as Record<string, unknown>);
+    if (!res.ok || (data as { type?: string }).type === "error") {
+      const msg =
+        (data as { message?: string }).message ?? `MSG91 HTTP ${res.status}`;
+      console.error("[msg91-flow] template send failed:", {
+        template_id,
+        error: msg,
+        data,
+      });
+      return { ok: false, error: msg };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error("[msg91-flow] fetch failed:", err);
+    return { ok: false, error: "MSG91 request failed" };
+  }
+}

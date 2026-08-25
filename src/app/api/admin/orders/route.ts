@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, order_number, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, customers(id, full_name, phone, city)"
+      "id, order_number, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, customers(id, full_name, phone, city)"
     )
     .order("created_at", { ascending: false });
 

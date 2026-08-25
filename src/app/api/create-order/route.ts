@@ -29,6 +29,7 @@ import {
   orderInsertColumns,
   logProximitySuggestion,
 } from "@/lib/order-checkout";
+import { getPreorderMode } from "@/lib/preorderMode";
 import {
   normalizePhone,
   signPhoneCookie,
@@ -56,7 +57,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Identical validation + authoritative pricing as the COD path.
-  const prep = await prepareOneTimeOrder(body, req, supabaseAdmin);
+  // Pre-order mode is read fresh every request so a flip in the admin
+  // toggle takes effect immediately without invalidating any cache.
+  const preorderMode = await getPreorderMode();
+  const prep = await prepareOneTimeOrder(body, req, supabaseAdmin, {
+    preorderMode,
+  });
   if (!prep.ok) {
     return NextResponse.json(prep.body, { status: prep.status });
   }

@@ -6,6 +6,7 @@ import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/deliver
 import { canAutoRefund } from "@/lib/order-cancellation";
 import { issueRazorpayRefund } from "@/lib/razorpay-refund";
 import { computeOrderState } from "@/lib/order-state";
+import { notifyPreorderScheduled } from "@/lib/preorder-notify";
 
 // New canonical stages + legacy values that pre-date the
 // order-status-stages migration. The migration normalises existing
@@ -86,7 +87,7 @@ export async function GET(
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, order_number, customer_id, total_amount, delivery_fee, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, customers(id, full_name, phone, city)",
+      "id, order_number, customer_id, total_amount, delivery_fee, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, customers(id, full_name, phone, city)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -188,19 +189,36 @@ export async function PATCH(
   }
 
   // Capture the prior status + scheduling so we can record a clean
-  // before/after on the audit row when any of them change.
+  // before/after on the audit row when any of them change. is_preorder is
+  // read here so we know whether to fire the pre-order schedule notify on
+  // a delivery_date change below.
   const { data: before } = await supabaseAdmin
     .from("orders")
-    .select("status, delivery_date, delivery_slot")
+    .select("status, delivery_date, delivery_slot, is_preorder")
     .eq("id", params.id)
     .maybeSingle();
+
+  // If admin is setting a delivery_date on a preorder row for the first
+  // time, also stamp scheduled_delivery_date_at so downstream surfaces
+  // (My Orders row copy, admin filters) can tell a scheduled preorder
+  // apart from a plain admin date-edit. Only stamp on the transition
+  // NULL -> non-null; leave alone on subsequent edits (Sunny may want
+  // to reschedule; the "first-schedule" moment stays the historical one).
+  if (
+    before?.is_preorder &&
+    body.delivery_date !== undefined &&
+    typeof update.delivery_date === "string" &&
+    !before.delivery_date
+  ) {
+    update.scheduled_delivery_date_at = new Date().toISOString();
+  }
 
   const { data: updated, error } = await supabaseAdmin
     .from("orders")
     .update(update)
     .eq("id", params.id)
     .select(
-      "id, customer_id, status, payment_status, razorpay_payment_id, refund_status, refund_id, total_amount",
+      "id, customer_id, order_number, status, payment_status, razorpay_payment_id, refund_status, refund_id, total_amount",
     )
     .maybeSingle();
 
@@ -326,6 +344,39 @@ export async function PATCH(
         : {}),
     },
   });
+
+  // Pre-order schedule notification. Fires SMS + WhatsApp only when THIS
+  // admin update transitioned an is_preorder=true row from no-date to a
+  // real date. Fire-and-forget: the admin gets their 200 immediately; the
+  // helper never throws and logs every attempt (sent/failed/skipped) to
+  // audit_log. Missing MSG91 templates → clean skip, not a failure.
+  if (
+    before?.is_preorder &&
+    dateChanged &&
+    typeof update.delivery_date === "string" &&
+    update.delivery_date &&
+    !before.delivery_date &&
+    updated?.customer_id
+  ) {
+    void (async () => {
+      try {
+        const { data: cust } = await supabaseAdmin
+          .from("customers")
+          .select("phone")
+          .eq("id", updated.customer_id)
+          .maybeSingle();
+        await notifyPreorderScheduled({
+          req,
+          orderId: params.id,
+          orderNumber: (updated as { order_number?: string | null }).order_number ?? null,
+          customerPhone: cust?.phone ?? null,
+          deliveryDate: update.delivery_date as string,
+        });
+      } catch (e) {
+        console.error("[admin/orders PATCH] preorder notify failed:", e);
+      }
+    })();
+  }
 
   return NextResponse.json({ ok: true, refund_status: refundOutcome });
 }

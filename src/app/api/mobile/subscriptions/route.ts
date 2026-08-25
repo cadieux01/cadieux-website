@@ -40,6 +40,7 @@ import {
   type DayKey,
 } from "@/lib/subscription-dates";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
+import { getPreorderMode } from "@/lib/preorderMode";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -959,6 +960,20 @@ export async function POST(req: NextRequest) {
   const phoneLocal = toLocal10(verified.phone);
   if (phoneLocal.length !== 10) {
     return fail(400, "Verified phone is not in expected format");
+  }
+
+  // Belt-and-braces pre-order refusal. Web + mobile both block subscription
+  // creation while the site-wide toggle is ON — one-time orders still go
+  // through (see /api/mobile/checkout + /api/mobile/create-order). The
+  // customer-facing pre-order UI on the mobile app is NOT part of this
+  // batch, so a legacy build could reach here without a UI gate; this
+  // returns a clean error the app can surface as a message.
+  if (await getPreorderMode()) {
+    return fail(
+      409,
+      "Subscriptions are paused during pre-order. Place a one-time order today and subscribe when regular delivery resumes.",
+      "preorder_mode_active",
+    );
   }
 
   // 4. Parse body. A V10 multi-variant subscription sends `items: [...]`

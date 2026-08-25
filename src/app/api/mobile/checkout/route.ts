@@ -33,6 +33,7 @@ import { computeDeliveryFee } from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 import { internalJsonHeaders } from "@/lib/internal-secret";
+import { getPreorderMode } from "@/lib/preorderMode";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -125,10 +126,16 @@ export async function POST(req: NextRequest) {
   // these in a follow-up release; until then we accept null and store
   // null. When present we validate them strictly so a stale or malformed
   // value can't slip through.
+  // Site-wide pre-order mode. When ON, any delivery_date / delivery_slot
+  // the client might send is deliberately discarded (customers can't pick
+  // a real one yet), and the order row is stamped is_preorder=true.
+  // Mobile order creation is ALLOWED during pre-order (unlike subscriptions).
+  const preorderMode = await getPreorderMode();
+
   const rawObj = (raw ?? {}) as { delivery_date?: unknown; delivery_slot?: unknown };
   let deliveryDate: string | null = null;
   let deliverySlot: string | null = null;
-  if (rawObj.delivery_date !== undefined && rawObj.delivery_date !== null) {
+  if (!preorderMode && rawObj.delivery_date !== undefined && rawObj.delivery_date !== null) {
     if (
       typeof rawObj.delivery_date !== "string" ||
       !isAcceptableDeliveryDate(rawObj.delivery_date)
@@ -140,7 +147,7 @@ export async function POST(req: NextRequest) {
     }
     deliveryDate = rawObj.delivery_date;
   }
-  if (rawObj.delivery_slot !== undefined && rawObj.delivery_slot !== null) {
+  if (!preorderMode && rawObj.delivery_slot !== undefined && rawObj.delivery_slot !== null) {
     if (
       typeof rawObj.delivery_slot !== "string" ||
       !isAcceptableDeliverySlot(rawObj.delivery_slot)
@@ -306,6 +313,9 @@ export async function POST(req: NextRequest) {
       delivery_slot: deliverySlot,
       ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
       ...(distanceKm !== null ? { distance_km: distanceKm } : {}),
+      // Pre-order stamp: only when the site-wide toggle was ON at request
+      // time. Normal orders leave the column untouched (default false).
+      ...(preorderMode ? { is_preorder: true } : {}),
     })
     .select("id, order_number")
     .single();
@@ -351,6 +361,7 @@ export async function POST(req: NextRequest) {
         orderNumber: order.order_number,
         total: grandTotal,
         address: addressString,
+        preorder: preorderMode,
       }),
     }),
     "send-sms",
@@ -363,12 +374,15 @@ export async function POST(req: NextRequest) {
   const shortId =
     (typeof order.order_number === "string" && order.order_number.trim()) ||
     "#" + String(order.id).slice(0, 8).toUpperCase();
+  const waClosing = preorderMode
+    ? `This is a pre-order — we will confirm your delivery date by SMS + WhatsApp shortly. Thank you for choosing Cadieux!`
+    : `We will confirm your order shortly. Thank you for choosing Cadieux!`;
   const waMessage =
     `Hi ${fullName || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
     `Order ID: ${shortId}\n` +
     `Total: ₹${grandTotal}\n` +
     `Delivery to: ${addressString}\n\n` +
-    `We will confirm your order shortly. Thank you for choosing Cadieux!`;
+    waClosing;
   fireAndForget(
     fetch(`${SITE_URL}/api/send-whatsapp`, {
       method: "POST",

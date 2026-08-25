@@ -225,6 +225,7 @@ function OrdersPageInner() {
   }, [load]);
 
   const [editing, setEditing] = useState<AdminOrderRow | null>(null);
+  const [scheduling, setScheduling] = useState<AdminOrderRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const showNotice = useCallback((m: string) => {
     setNotice(m);
@@ -579,6 +580,21 @@ function OrdersPageInner() {
         />
       ) : null}
 
+      {scheduling ? (
+        <SchedulePreorderModal
+          order={scheduling}
+          onCancel={() => setScheduling(null)}
+          onSaved={(updated, msg) => {
+            setScheduling(null);
+            setOrders((curr) =>
+              curr.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)),
+            );
+            showNotice(msg);
+            void load();
+          }}
+        />
+      ) : null}
+
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
       {loading ? (
         <Placeholder>Loading orders…</Placeholder>
@@ -796,6 +812,23 @@ function OrdersPageInner() {
                           {o.delivery_slot}
                         </div>
                       ) : null}
+                      {o.is_preorder ? (
+                        <div
+                          style={{
+                            marginTop: 4,
+                            display: "inline-block",
+                            padding: "2px 6px",
+                            border: "1px solid rgba(245,158,11,0.5)",
+                            color: "#fbbf24",
+                            fontSize: "0.6rem",
+                            letterSpacing: "0.18em",
+                            textTransform: "uppercase",
+                            borderRadius: 3,
+                          }}
+                        >
+                          {o.delivery_date ? "Pre-order · Scheduled" : "Pre-order · Unscheduled"}
+                        </div>
+                      ) : null}
                     </td>
                     <td style={td}>
                       <span
@@ -833,6 +866,22 @@ function OrdersPageInner() {
                               opacity: busy ? 0.5 : 1,
                             }}
                           />
+                        ) : null}
+                        {o.is_preorder && !o.delivery_date ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => setScheduling(o)}
+                            style={{
+                              ...buttonSm,
+                              color: "#fbbf24",
+                              borderColor: "rgba(245,158,11,0.6)",
+                              opacity: busy ? 0.5 : 1,
+                            }}
+                            title="Set delivery date and notify customer (SMS + WhatsApp)"
+                          >
+                            Schedule
+                          </button>
                         ) : null}
                         <button
                           type="button"
@@ -1275,6 +1324,123 @@ function EditOrderModal({
               }}
             >
               {saving ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Pre-order scheduling modal — admin sets a delivery_date on an
+// is_preorder=true row that hasn't been scheduled yet. The PATCH handler
+// stamps scheduled_delivery_date_at and fires MSG91 SMS + WhatsApp
+// (env-gated templates). See src/app/api/admin/orders/[id]/route.ts.
+function SchedulePreorderModal({
+  order,
+  onCancel,
+  onSaved,
+}: {
+  order: AdminOrderRow;
+  onCancel: () => void;
+  onSaved: (updated: AdminOrderRow, message: string) => void;
+}) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayYmd = today.toISOString().slice(0, 10);
+  const [date, setDate] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const canSave = !saving && date && date >= todayYmd;
+
+  const save = async () => {
+    if (!canSave) return;
+    setErr(null);
+    setSaving(true);
+    try {
+      const updated = await adminFetch<{ order: AdminOrderRow }>(
+        `/api/admin/orders/${order.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ delivery_date: date }),
+        },
+      );
+      onSaved(
+        {
+          ...order,
+          ...(updated.order ?? {}),
+          delivery_date: date,
+          scheduled_delivery_date_at: new Date().toISOString(),
+        },
+        `Scheduled ${formatDate(date)}. Customer notified by SMS + WhatsApp.`,
+      );
+    } catch (e) {
+      if (e instanceof AdminFetchError) setErr(e.message);
+      else setErr("Schedule failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={modalBackdrop} onClick={saving ? undefined : onCancel}>
+      <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={modalHeader}>
+          <h3 style={modalTitle}>
+            Schedule pre-order · {formatOrderNumber(order)}
+          </h3>
+        </div>
+        <div style={modalScrollBody}>
+          <p
+            style={{
+              margin: "0 0 1rem",
+              color: "rgba(192,200,206,0.8)",
+              fontFamily: "var(--font-body)",
+              fontSize: "0.8rem",
+              lineHeight: 1.55,
+            }}
+          >
+            Sets the delivery date on this pre-order and sends the customer
+            an SMS + WhatsApp confirmation. Slot can be edited later from
+            the standard Edit dialog if needed.
+          </p>
+          <Field label="Delivery date">
+            <input
+              type="date"
+              value={date}
+              min={todayYmd}
+              onChange={(e) => setDate(e.target.value)}
+              disabled={saving}
+              style={modalInput}
+            />
+          </Field>
+          {err ? (
+            <p style={{ color: "#fca5a5", fontSize: "0.8rem", margin: 0 }}>
+              {err}
+            </p>
+          ) : null}
+        </div>
+        <div style={modalFooter}>
+          <div style={modalActions}>
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+              style={chipNeutral}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={!canSave}
+              style={{
+                ...chipPrimary,
+                opacity: !canSave ? 0.5 : 1,
+              }}
+            >
+              {saving ? "Scheduling…" : "Schedule + notify"}
             </button>
           </div>
         </div>

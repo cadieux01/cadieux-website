@@ -45,6 +45,7 @@ import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import { computeDeliveryFee } from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
+import { getPreorderMode } from "@/lib/preorderMode";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -140,6 +141,11 @@ export async function POST(req: NextRequest) {
   const proximityHint =
     serviceability.via === "proximity" ? serviceability : null;
 
+  // Site-wide pre-order mode. When ON, any date/slot the app sends is
+  // dropped; the order row is stamped is_preorder=true. Mobile order
+  // creation is ALLOWED during pre-order (unlike subscriptions).
+  const preorderMode = await getPreorderMode();
+
   // 4c. Optional delivery date + slot (validated strictly when present).
   const rawObj = (raw ?? {}) as {
     delivery_date?: unknown;
@@ -147,7 +153,7 @@ export async function POST(req: NextRequest) {
   };
   let deliveryDate: string | null = null;
   let deliverySlot: string | null = null;
-  if (rawObj.delivery_date !== undefined && rawObj.delivery_date !== null) {
+  if (!preorderMode && rawObj.delivery_date !== undefined && rawObj.delivery_date !== null) {
     if (
       typeof rawObj.delivery_date !== "string" ||
       !isAcceptableDeliveryDate(rawObj.delivery_date)
@@ -159,7 +165,7 @@ export async function POST(req: NextRequest) {
     }
     deliveryDate = rawObj.delivery_date;
   }
-  if (rawObj.delivery_slot !== undefined && rawObj.delivery_slot !== null) {
+  if (!preorderMode && rawObj.delivery_slot !== undefined && rawObj.delivery_slot !== null) {
     if (
       typeof rawObj.delivery_slot !== "string" ||
       !isAcceptableDeliverySlot(rawObj.delivery_slot)
@@ -347,6 +353,9 @@ export async function POST(req: NextRequest) {
         ? { latitude: orderLat, longitude: orderLng }
         : {}),
       ...(distanceKm !== null ? { distance_km: distanceKm } : {}),
+      // Pre-order stamp: only when the site-wide toggle was ON at request
+      // time. Normal orders leave the column untouched (default false).
+      ...(preorderMode ? { is_preorder: true } : {}),
     })
     .select("id")
     .single();

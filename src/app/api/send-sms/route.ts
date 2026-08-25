@@ -40,6 +40,8 @@ type SmsPayload = {
   total?: number;
   address?: string;
   status?: string;
+  /** Pre-order mode stamp — appends a "date TBD" note to order_placed. */
+  preorder?: boolean;
 };
 
 /** OLF number (preferred) → falls back to a UUID hex slice so old callers
@@ -57,11 +59,14 @@ function buildMessage(body: SmsPayload): string | null {
     const label = orderLabel(body);
     const total = body.total ?? "";
     const address = body.address ?? "";
+    const closing = body.preorder
+      ? "This is a pre-order. We will confirm your delivery date by SMS + WhatsApp shortly. Thank you!"
+      : "We will confirm shortly. Thank you!";
     return (
       `Hi ${name}! Your Cadieux order ${label} has been placed.\n` +
       `Total: Rs.${total}\n` +
       `Delivery to: ${address}\n` +
-      `We will confirm shortly. Thank you!`
+      closing
     );
   }
 

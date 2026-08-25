@@ -60,6 +60,10 @@ export type PreparedOrder = {
    *  fulfillment_type='pickup'. */
   fulfillmentType: "delivery" | "pickup";
   pickupLocationId: string | null;
+  /** True when the site-wide pre-order mode was ON at the moment this
+   *  order was prepared. Order row gets stamped is_preorder=true; admin
+   *  sets the real delivery_date later. */
+  isPreorder: boolean;
 };
 
 export type PrepareResult =
@@ -79,6 +83,12 @@ export type PrepareOptions = {
    *  extrapolated (₹92 + (km − 10) × ₹12) so the fee still scales with
    *  distance. Admin-only. */
   skipServiceability?: boolean;
+  /** When true, the site-wide pre-order mode is ON. Skip the
+   *  delivery-date + slot gates (both are optional — customers can't pick
+   *  a real one yet), stamp the prepared order with is_preorder=true, and
+   *  let the caller flip it into `orderInsertColumns`. Every other gate
+   *  (serviceability, price, phone, item-shape) still runs. */
+  preorderMode?: boolean;
 };
 
 /**
@@ -173,7 +183,11 @@ export async function prepareOneTimeOrder(
   const deliverySlot =
     typeof body.delivery_slot === "string" ? body.delivery_slot : "";
 
-  if (!isPickup) {
+  // In pre-order mode, customers cannot pick a real delivery date/slot yet
+  // (admin will schedule it after the launch). Skip the date/slot gates
+  // entirely; delivery_date + delivery_slot are left NULL on the order row
+  // and stamped later by the admin PATCH.
+  if (!isPickup && !opts.preorderMode) {
     if (!isAcceptableDeliveryDate(deliveryDate)) {
       return {
         ok: false,
@@ -330,8 +344,11 @@ export async function prepareOneTimeOrder(
       custPhone: cust.phone ?? null,
       deliveryAddress: delivery_address!,
       pincode: pinFromAddress ?? "",
-      deliveryDate,
-      deliverySlot,
+      // In pre-order mode we deliberately drop whatever the client sent for
+      // date/slot — even if the client hasn't been updated yet — so the row
+      // hits the DB with NULLs and admin becomes the authoritative source.
+      deliveryDate: opts.preorderMode ? "" : deliveryDate,
+      deliverySlot: opts.preorderMode ? "" : deliverySlot,
       items: reconciled.items,
       subtotal: reconciled.subtotal,
       deliveryFee,
@@ -342,6 +359,7 @@ export async function prepareOneTimeOrder(
       proximityHint,
       fulfillmentType,
       pickupLocationId,
+      isPreorder: !!opts.preorderMode,
     },
   };
 }
@@ -399,5 +417,8 @@ export function orderInsertColumns(prepared: PreparedOrder) {
     ...(isPickup && prepared.pickupLocationId
       ? { pickup_location_id: prepared.pickupLocationId }
       : {}),
+    // Pre-order stamp: only written when true, so normal orders leave the
+    // column untouched (defaulted to false server-side).
+    ...(prepared.isPreorder ? { is_preorder: true } : {}),
   };
 }

@@ -61,6 +61,8 @@ type Order = {
   // pending/placed order that's been sitting > 7 days — the tracker treats
   // it as a terminal state (like cancelled) and Pay Now is hidden.
   computed_state?: "delivered" | "cancelled" | "active" | "pending" | "expired";
+  is_preorder?: boolean | null;
+  scheduled_delivery_date_at?: string | null;
 };
 
 type ChangeRequest = {
@@ -614,11 +616,64 @@ export default function OrderDetailPage() {
 
             {/* Delivery details */}
             <Section title="Delivery">
+              {order.is_preorder && !order.delivery_date && (
+                <div
+                  style={{
+                    marginBottom: 12,
+                    padding: "12px 14px",
+                    background: "#FBF3D4",
+                    border: "1px solid rgba(2,70,40,0.25)",
+                    borderRadius: 8,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: "0 0 4px",
+                      fontFamily: "var(--font-body)",
+                      fontSize: 10,
+                      fontWeight: 500,
+                      letterSpacing: "0.35em",
+                      textTransform: "uppercase",
+                      color: "#024628",
+                    }}
+                  >
+                    Pre-order
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontFamily: "var(--font-body)",
+                      fontSize: 13,
+                      fontWeight: 300,
+                      color: "rgba(2,70,40,0.85)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Delivery date to be confirmed. We&rsquo;ll notify you by
+                    SMS and WhatsApp as soon as it&rsquo;s scheduled.
+                  </p>
+                </div>
+              )}
               {order.delivery_date && (
                 <Row
                   label="Date"
                   value={formatDeliveryDate(order.delivery_date)}
                 />
+              )}
+              {order.is_preorder && order.delivery_date && (
+                <p
+                  style={{
+                    margin: "-4px 0 10px",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 11,
+                    fontWeight: 400,
+                    letterSpacing: "0.25em",
+                    textTransform: "uppercase",
+                    color: "#024628",
+                  }}
+                >
+                  Pre-order · Scheduled
+                </p>
               )}
               {order.delivery_slot && (
                 <Row label="Slot" value={formatSlot(order.delivery_slot)} />
@@ -626,12 +681,14 @@ export default function OrderDetailPage() {
               {order.delivery_address && (
                 <Row label="Address" value={String(order.delivery_address)} />
               )}
-              <DeliveryEditor
-                orderId={id}
-                order={order}
-                changeRequest={changeRequest}
-                onChanged={fetchOrder}
-              />
+              {!(order.is_preorder && !order.delivery_date) && (
+                <DeliveryEditor
+                  orderId={id}
+                  order={order}
+                  changeRequest={changeRequest}
+                  onChanged={fetchOrder}
+                />
+              )}
               <AddressEditor
                 orderId={id}
                 order={order}
