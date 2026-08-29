@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin } from "@/lib/admin-auth";
 import { hasInternalSecret } from "@/lib/internal-secret";
+import { buildOrderPlacedSms } from "@/lib/order-messages";
 import { getVerifiedPhone, maskPhone } from "@/lib/phone-cookie";
 import { getClientIP, smsIpRateLimit, smsPhoneRateLimit } from "@/lib/ratelimit";
 import { parseBody, SendSmsSchema } from "@/lib/validation";
@@ -24,6 +25,7 @@ import { parseBody, SendSmsSchema } from "@/lib/validation";
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID ?? "";
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN ?? "";
 const FROM_NUMBER = process.env.TWILIO_PHONE_NUMBER ?? "+17179054294";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cadieux.in";
 
 /** Converts a validated 10-digit local phone into Twilio's E.164 form. */
 function toE164(local10: string): string {
@@ -56,18 +58,19 @@ function buildMessage(body: SmsPayload): string | null {
   const name = body.name ?? "Customer";
 
   if (body.type === "order_placed") {
-    const label = orderLabel(body);
-    const total = body.total ?? "";
-    const address = body.address ?? "";
-    const closing = body.preorder
-      ? "This is a pre-order. We will confirm your delivery date by SMS + WhatsApp shortly. Thank you!"
-      : "We will confirm shortly. Thank you!";
-    return (
-      `Hi ${name}! Your Cadieux order ${label} has been placed.\n` +
-      `Total: Rs.${total}\n` +
-      `Delivery to: ${address}\n` +
-      closing
-    );
+    // Delegated to the shared builder in src/lib/order-messages.ts so
+    // admin manual-entry and customer checkout paths stay byte-identical
+    // forever. The builder appends the tracking link that lets a cold
+    // customer land on /orders/[id] and OTP-verify to see their order.
+    return buildOrderPlacedSms({
+      name: body.name ?? null,
+      orderId: String(body.orderId ?? ""),
+      orderNumber: body.orderNumber ?? null,
+      total: body.total ?? "",
+      address: body.address ?? "",
+      preorder: !!body.preorder,
+      siteUrl: SITE_URL,
+    });
   }
 
   if (body.type === "status_change") {

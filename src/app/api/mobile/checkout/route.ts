@@ -33,6 +33,7 @@ import { computeDeliveryFee } from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 import { internalJsonHeaders } from "@/lib/internal-secret";
+import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
 import { getPreorderMode } from "@/lib/preorderMode";
 
 const supabaseAdmin = createClient(
@@ -368,21 +369,18 @@ export async function POST(req: NextRequest) {
     { phone: phoneLocal },
   );
 
-  // Prefer the human-facing OLF number when the trigger has assigned one
-  // (always, for new inserts); fall back to the UUID hex slice for
-  // parity with legacy behaviour if the column is somehow null.
-  const shortId =
-    (typeof order.order_number === "string" && order.order_number.trim()) ||
-    "#" + String(order.id).slice(0, 8).toUpperCase();
-  const waClosing = preorderMode
-    ? `This is a pre-order — we will confirm your delivery date by SMS + WhatsApp shortly. Thank you for choosing Cadieux!`
-    : `We will confirm your order shortly. Thank you for choosing Cadieux!`;
-  const waMessage =
-    `Hi ${fullName || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
-    `Order ID: ${shortId}\n` +
-    `Total: ₹${grandTotal}\n` +
-    `Delivery to: ${addressString}\n\n` +
-    waClosing;
+  // Shared builder in src/lib/order-messages.ts — identical wording
+  // to web checkout + admin manual-entry, including the /orders/[id]
+  // tracking link.
+  const waMessage = buildOrderPlacedWhatsApp({
+    name: fullName,
+    orderId: order.id,
+    orderNumber: order.order_number,
+    total: grandTotal,
+    address: addressString,
+    preorder: preorderMode,
+    siteUrl: SITE_URL,
+  });
   fireAndForget(
     fetch(`${SITE_URL}/api/send-whatsapp`, {
       method: "POST",

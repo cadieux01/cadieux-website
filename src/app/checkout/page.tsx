@@ -37,7 +37,13 @@ import {
 // load. Dragging it into this client component crashes hydration with
 // "supabaseUrl is required" → blank page (the b012899 bug).
 import { haversineKm } from "@/lib/haversine";
+import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
 import { usePreorderMode } from "@/hooks/usePreorderMode";
+
+// Site origin for tracking links embedded in confirmation messages.
+// NEXT_PUBLIC_ prefix so it's inlined into the client bundle at build.
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://www.cadieux.in";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -904,20 +910,19 @@ export default function CheckoutPage() {
   }
 
   async function sendOrderWhatsApp(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string, orderNumber?: string | null) {
-    const shortId =
-      (typeof orderNumber === "string" && orderNumber.trim()) ||
-      orderId.slice(0, 8).toUpperCase();
     const resolvedPhone = customerPhone.replace(/\D/g, "");
     if (!resolvedPhone) return;
-    const closing = preorderMode
-      ? `This is a pre-order — we will confirm your delivery date by SMS + WhatsApp shortly. Thank you for choosing Cadieux!`
-      : `We will confirm your order shortly. Thank you for choosing Cadieux!`;
-    const message =
-      `Hi ${customerName || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
-      `Order ID: ${shortId}\n` +
-      `Total: ₹${grandTotal}\n` +
-      `Delivery to: ${deliveryAddress}\n\n` +
-      closing;
+    // Shared builder — same wording admin manual-entry + mobile checkout
+    // send. Includes the /orders/[id] tracking link.
+    const message = buildOrderPlacedWhatsApp({
+      name: customerName,
+      orderId,
+      orderNumber,
+      total: grandTotal,
+      address: deliveryAddress,
+      preorder: !!preorderMode,
+      siteUrl: SITE_URL,
+    });
     try {
       await fetch("/api/send-whatsapp", {
         method: "POST",

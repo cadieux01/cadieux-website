@@ -11,6 +11,12 @@ import {
   prepareOneTimeOrder,
 } from "@/lib/order-checkout";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { internalJsonHeaders } from "@/lib/internal-secret";
+import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
+import { maskPhone } from "@/lib/phone-cookie";
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://www.cadieux.in";
 
 export async function GET(req: NextRequest) {
   if (!isAdmin(req)) {
@@ -214,7 +220,7 @@ export async function POST(req: NextRequest) {
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
     .insert(insertRow)
-    .select("id, customer_id, total_amount, status, payment_status")
+    .select("id, order_number, customer_id, total_amount, status, payment_status")
     .single();
 
   if (orderErr || !order) {
@@ -246,11 +252,89 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Fire-and-forget SMS + WhatsApp confirmation with tracking link.
+  // Same shared builders web + mobile checkout use → identical wording.
+  // Failures NEVER block the order response — logged + swallowed. The
+  // link lands on /orders/[id]; if the customer isn't signed in, the
+  // page triggers the standard OTP flow, then loads because R1 already
+  // linked customer_id ↔ phone via the customers_phone_unique index.
+  fireAndForgetNotification(
+    fetch(`${SITE_URL}/api/send-sms`, {
+      method: "POST",
+      headers: internalJsonHeaders(),
+      body: JSON.stringify({
+        type: "order_placed",
+        phone: phoneLocal,
+        name: fullName,
+        orderId: order.id,
+        orderNumber: order.order_number,
+        total: prepared.grandTotal,
+        address: prepared.deliveryAddress,
+        preorder: prepared.isPreorder,
+      }),
+    }),
+    "send-sms",
+    { phone: phoneLocal },
+  );
+
+  const waMessage = buildOrderPlacedWhatsApp({
+    name: fullName,
+    orderId: order.id,
+    orderNumber: order.order_number,
+    total: prepared.grandTotal,
+    address: prepared.deliveryAddress,
+    preorder: prepared.isPreorder,
+    siteUrl: SITE_URL,
+  });
+  fireAndForgetNotification(
+    fetch(`${SITE_URL}/api/send-whatsapp`, {
+      method: "POST",
+      headers: internalJsonHeaders(),
+      body: JSON.stringify({ phone: phoneLocal, message: waMessage }),
+    }),
+    "send-whatsapp",
+    { phone: phoneLocal },
+  );
+
   return NextResponse.json({
     ok: true,
     order_id: order.id,
     customer_id: customerId,
     total_amount: prepared.grandTotal,
     delivery_fee: prepared.deliveryFee,
+  });
+}
+
+/**
+ * Detaches a notification fetch from the admin-order response lifecycle.
+ * Mirror of mobile/checkout's fireAndForget — logs BOTH network failures
+ * AND non-2xx responses (Twilio errors come back as 4xx/5xx which fetch
+ * does NOT throw on). Phone is masked to the last 4 digits in logs.
+ * MUST NEVER throw or block — the order is already committed by the time
+ * we get here.
+ */
+function fireAndForgetNotification(
+  p: Promise<Response>,
+  label: string,
+  ctx: { phone: string },
+): void {
+  p.then(async (res) => {
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string | number;
+      };
+      console.error(`[admin/orders] ${label} http_failed`, {
+        status: res.status,
+        code: data.code,
+        error: data.error,
+        phone: maskPhone(ctx.phone),
+      });
+    }
+  }).catch((err) => {
+    console.error(`[admin/orders] ${label} threw`, {
+      phone: maskPhone(ctx.phone),
+      err: String(err),
+    });
   });
 }
