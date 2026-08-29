@@ -113,6 +113,11 @@ export type AdminOrderRow = {
    *  classifyOrder). See src/lib/order-state.ts. Attached by
    *  /api/admin/orders. 'expired' = unpaid pending/placed > 7 days. */
   computed_state?: "delivered" | "cancelled" | "active" | "pending" | "expired";
+  /** Preorder-mode stamp. True = order accepted during global preorder
+   *  window; delivery_date may be null until admin schedules it. */
+  is_preorder?: boolean | null;
+  /** Timestamp when admin first set delivery_date on a preorder row. */
+  scheduled_delivery_date_at?: string | null;
   customers?: AdminCustomerSummary | null;
 };
 

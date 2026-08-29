@@ -24,6 +24,7 @@ import {
 import { bookableSlots } from "@/lib/delivery-slots";
 import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 import Select from "@/components/ui/Select";
+import { usePreorderMode } from "@/hooks/usePreorderMode";
 
 const BG = "#C0C8CE";
 const GOLD = "#024628";
@@ -38,6 +39,10 @@ export default function SetupPage() {
   const [hydrated, setHydrated] = useState(false);
   const [state, setState] = useState<SetupState>(emptySetupState());
   const [step, setStep] = useState(1);
+  // Pre-order mode blocks the wizard at its entry (step 1) — the server
+  // also refuses subscription creation (belt-and-braces), but disabling
+  // Next early keeps the customer from wasting time on a doomed flow.
+  const { enabled: preorderMode } = usePreorderMode();
   // Live wizard catalogue. Starts as the hardcoded fallback so the picker
   // renders immediately; fetchSubscriptionPlans() then merges DB prices.
   const [plans, setPlans] = useState<WizardProduct[]>(SETUP_PRODUCTS);
@@ -94,6 +99,9 @@ export default function SetupPage() {
   const liveTotal = perDelivery * state.selectedDates.length;
 
   const canNext = useMemo(() => {
+    // Pre-order mode: entry-only gate. Disable Next on step 1 so the
+    // wizard can't advance; server side still refuses on submit.
+    if (preorderMode && step === 1) return false;
     switch (step) {
       case 1: return totalUnitsPerDelivery(state) >= MIN_UNITS_PER_DELIVERY;
       case 2: return state.selectedDates.length >= 1;
@@ -104,7 +112,7 @@ export default function SetupPage() {
       case 4: return deliveries.length > 0;
       default: return false;
     }
-  }, [step, state, deliveries.length]);
+  }, [step, state, deliveries.length, preorderMode]);
 
   function proceedToCheckout() {
     if (!canNext) return;
@@ -149,6 +157,24 @@ export default function SetupPage() {
           </h1>
           <ProgressDots step={step} total={TOTAL_STEPS} />
         </header>
+
+        {preorderMode ? (
+          <div
+            style={{
+              background: "#FBF3D4",
+              border: "1px solid rgba(2,70,40,0.25)",
+              padding: "16px 20px",
+              margin: "0 0 24px",
+            }}
+          >
+            <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+              Pre-order
+            </p>
+            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
+              Subscriptions open once daily deliveries begin. In the meantime, place a one-time reservation from the shop — we&apos;ll confirm your first delivery date by SMS + WhatsApp.
+            </p>
+          </div>
+        ) : null}
 
         {step === 1 && (
           <Step1Product

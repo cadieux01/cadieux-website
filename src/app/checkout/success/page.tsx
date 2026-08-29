@@ -28,6 +28,8 @@ type Order = {
   delivery_date: string | null;
   delivery_slot: string | null;
   items: OrderItem[] | null;
+  is_preorder?: boolean | null;
+  scheduled_delivery_date_at?: string | null;
 };
 
 function formatDeliveryDate(iso: string | null): string {
@@ -229,7 +231,16 @@ function SuccessInner() {
               textAlign: "left",
             }}
           >
-            {(order.delivery_date || order.delivery_slot) && (
+            {order.is_preorder ? (
+              <div style={{ marginBottom: 18 }}>
+                <p style={summaryHeading}>Delivery</p>
+                <p style={summaryValue}>
+                  {order.delivery_date
+                    ? `Scheduled: ${formatDeliveryDate(order.delivery_date)}${order.delivery_slot ? ` · ${formatSlot(order.delivery_slot)}` : ""}`
+                    : "Pre-order — we'll confirm your delivery date by SMS + WhatsApp shortly."}
+                </p>
+              </div>
+            ) : ((order.delivery_date || order.delivery_slot) && (
               <div style={{ marginBottom: 18 }}>
                 <p style={summaryHeading}>Delivery</p>
                 <p style={summaryValue}>
@@ -238,7 +249,7 @@ function SuccessInner() {
                     .join(" · ")}
                 </p>
               </div>
-            )}
+            ))}
 
             {Array.isArray(order.items) && order.items.length > 0 && (
               <div style={{ marginBottom: 18 }}>

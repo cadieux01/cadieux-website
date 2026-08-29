@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ScrollReveal from "@/components/ScrollReveal";
 import { useCart } from "@/context/CartContext";
+import { usePreorderMode } from "@/hooks/usePreorderMode";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -22,6 +23,7 @@ function chip(selected: boolean) {
 export default function CartPage() {
   const { cart, cartTotal, updateQty, removeFromCart } = useCart();
   const router = useRouter();
+  const { enabled: preorderMode } = usePreorderMode();
 
   return (
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
@@ -50,6 +52,46 @@ export default function CartPage() {
             before the customer had entered an address for this order.
             Serviceability is confirmed at the checkout address step,
             where the real pincode + GPS distance check runs. */}
+
+        {preorderMode ? (
+          <div
+            style={{
+              background: "#FBF3D4",
+              border: "1px solid rgba(2,70,40,0.25)",
+              padding: "18px 22px",
+              margin: "0 0 32px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body)",
+                fontSize: 10,
+                fontWeight: 300,
+                letterSpacing: "0.35em",
+                textTransform: "uppercase",
+                color: "#024628",
+              }}
+            >
+              Pre-order
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body)",
+                fontSize: 13,
+                fontWeight: 300,
+                lineHeight: 1.55,
+                color: "#024628",
+              }}
+            >
+              First deliveries begin soon. Reserve your loaves now — we&apos;ll confirm your delivery date by SMS + WhatsApp as soon as the schedule opens.
+            </p>
+          </div>
+        ) : null}
 
         {cart.length === 0 ? (
           <div>

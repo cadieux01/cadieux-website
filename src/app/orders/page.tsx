@@ -11,6 +11,9 @@ type RawOrder = {
   delivery_address: string;
   status: string;
   created_at: string;
+  delivery_date?: string | null;
+  is_preorder?: boolean | null;
+  scheduled_delivery_date_at?: string | null;
 };
 
 type RawSub = {
@@ -31,6 +34,8 @@ type Row = {
   status: string;
   created_at: string;
   href: string | null;
+  is_preorder?: boolean;
+  delivery_date?: string | null;
 };
 
 function buildRows(orders: RawOrder[], subs: RawSub[]): Row[] {
@@ -42,6 +47,8 @@ function buildRows(orders: RawOrder[], subs: RawSub[]): Row[] {
     status: o.status,
     created_at: o.created_at,
     href: `/orders/${encodeURIComponent(o.id)}`,
+    is_preorder: !!o.is_preorder,
+    delivery_date: o.delivery_date ?? null,
   }));
 
   const subRows: Row[] = subs.map((s) => {
@@ -190,6 +197,13 @@ function OrderRow({ row, number }: { row: Row; number: number }) {
       <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 300, color: "rgba(2,70,40,0.8)", letterSpacing: "0.02em" }}>
         {row.description}
       </p>
+      {row.is_preorder && (
+        <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400, letterSpacing: "0.2em", textTransform: "uppercase", color: "#024628" }}>
+          {row.delivery_date
+            ? `Pre-order · Scheduled ${new Date(row.delivery_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+            : "Pre-order · Delivery date TBD — we’ll confirm by SMS + WhatsApp"}
+        </p>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: statusColor }}>
           {row.status}

@@ -124,6 +124,10 @@ export const SendSmsSchema = z
     total: z.number().nonnegative().max(10_000_000).optional(),
     address: boundedText(500).optional(),
     status: boundedText(40).optional(),
+    // Pre-order mode: when true, order_placed messages append a line
+    // explaining that the delivery date is TBD and will be confirmed
+    // by a follow-up SMS + WhatsApp once scheduling opens.
+    preorder: z.boolean().optional(),
   })
   .strict();
 

@@ -14,6 +14,7 @@ import {
   orderInsertColumns,
   logProximitySuggestion,
 } from "@/lib/order-checkout";
+import { getPreorderMode } from "@/lib/preorderMode";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 import {
   buildMultiVariantSubscriptionInsert,
@@ -98,7 +99,7 @@ export async function GET(req: NextRequest) {
   const [ordersRes, subsRes] = await Promise.all([
     supabaseAdmin
       .from("orders")
-      .select("id, total_amount, delivery_address, status, created_at")
+      .select("id, order_number, total_amount, delivery_address, status, created_at, delivery_date, is_preorder, scheduled_delivery_date_at")
       .eq("customer_id", customer.id)
       .order("created_at", { ascending: false }),
     supabaseAdmin
@@ -181,7 +182,12 @@ export async function POST(req: NextRequest) {
     // helper so the COD path here and the Razorpay path in /api/create-order
     // derive an IDENTICAL grand total from the SAME logic. This route is the
     // Cash-on-Delivery path: it inserts the order immediately as pending.
-    const prep = await prepareOneTimeOrder(body, req, supabaseAdmin);
+    // Read the site-wide pre-order toggle fresh — never cached — so a flip
+    // in the admin settings takes effect on the very next placed order.
+    const preorderMode = await getPreorderMode();
+    const prep = await prepareOneTimeOrder(body, req, supabaseAdmin, {
+      preorderMode,
+    });
     if (!prep.ok) {
       return NextResponse.json(prep.body, { status: prep.status });
     }
@@ -241,6 +247,20 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === "place_subscription") {
+    // Belt-and-braces: even though the /subscribe + /subscriptions/setup
+    // CTAs are disabled in pre-order mode, refuse the write here too so a
+    // manually-crafted POST can never sneak past the UI gate. Client hook
+    // will still surface the on-page CTA copy; this is the server backstop.
+    if (await getPreorderMode()) {
+      return NextResponse.json(
+        {
+          error:
+            "Subscriptions are paused during pre-order. Place a one-time order today and subscribe when regular delivery resumes.",
+          code: "preorder_mode_active",
+        },
+        { status: 409 },
+      );
+    }
     const {
       customer_id,
       bread_slug,

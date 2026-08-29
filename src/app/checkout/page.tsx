@@ -37,6 +37,7 @@ import {
 // load. Dragging it into this client component crashes hydration with
 // "supabaseUrl is required" → blank page (the b012899 bug).
 import { haversineKm } from "@/lib/haversine";
+import { usePreorderMode } from "@/hooks/usePreorderMode";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -111,6 +112,12 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { cart, cartTotal, clearCart } = useCart();
   const total = cartTotal;
+  // Site-wide pre-order toggle. `null` while first fetch is in flight,
+  // then boolean. When true: date/slot pickers render disabled, submit
+  // step skips the "please pick a date" gate, and server-side
+  // prepareOneTimeOrder drops any client-sent date/slot anyway. Banner
+  // shown on delivery + payment steps.
+  const { enabled: preorderMode } = usePreorderMode();
 
   // GA4 begin_checkout — fire once when the checkout page first has a
   // hydrated, non-empty cart (cart loads async from localStorage).
@@ -864,8 +871,13 @@ export default function CheckoutPage() {
   /* ── Delivery step gating ─────────────────────────────────────────────── */
   function submitDeliveryStep() {
     setError("");
-    if (!deliveryDate) { setError("Please pick a delivery date."); return; }
-    if (!deliverySlot) { setError("Please pick a delivery time."); return; }
+    // During pre-order mode the date/slot pickers are disabled — admin
+    // schedules from the panel later. Skip the client-side gates entirely
+    // (server drops date/slot from the payload regardless).
+    if (!preorderMode) {
+      if (!deliveryDate) { setError("Please pick a delivery date."); return; }
+      if (!deliverySlot) { setError("Please pick a delivery time."); return; }
+    }
     setStep("payment");
   }
 
@@ -885,6 +897,7 @@ export default function CheckoutPage() {
           orderNumber: orderNumber ?? undefined,
           total: grandTotal,
           address: deliveryAddress,
+          preorder: !!preorderMode,
         }),
       });
     } catch { /* silent */ }
@@ -896,12 +909,15 @@ export default function CheckoutPage() {
       orderId.slice(0, 8).toUpperCase();
     const resolvedPhone = customerPhone.replace(/\D/g, "");
     if (!resolvedPhone) return;
+    const closing = preorderMode
+      ? `This is a pre-order — we will confirm your delivery date by SMS + WhatsApp shortly. Thank you for choosing Cadieux!`
+      : `We will confirm your order shortly. Thank you for choosing Cadieux!`;
     const message =
       `Hi ${customerName || "there"}! 🍞 Your Cadieux order has been placed successfully!\n\n` +
       `Order ID: ${shortId}\n` +
       `Total: ₹${grandTotal}\n` +
       `Delivery to: ${deliveryAddress}\n\n` +
-      `We will confirm your order shortly. Thank you for choosing Cadieux!`;
+      closing;
     try {
       await fetch("/api/send-whatsapp", {
         method: "POST",
@@ -1815,6 +1831,7 @@ export default function CheckoutPage() {
             deliverySlot={deliverySlot}
             onPickDate={(d) => { setDeliveryDate(d); setError(""); }}
             onPickSlot={(s) => { setDeliverySlot(s); setError(""); }}
+            preorderMode={!!preorderMode}
           />
         )}
 
@@ -1832,6 +1849,7 @@ export default function CheckoutPage() {
             }
             deliveryDate={deliveryDate}
             deliverySlot={deliverySlot}
+            preorderMode={!!preorderMode}
           />
         )}
 
@@ -2598,15 +2616,33 @@ function PaymentReview(props: {
   fullAddress: string;
   deliveryDate: string;
   deliverySlot: string;
+  preorderMode: boolean;
 }) {
   const {
     grandTotal, deliveryFee,
     customerName, customerPhone, fullAddress,
-    deliveryDate, deliverySlot,
+    deliveryDate, deliverySlot, preorderMode,
   } = props;
 
   return (
     <section>
+      {preorderMode ? (
+        <div
+          style={{
+            background: "#FBF3D4",
+            border: "1px solid rgba(2,70,40,0.25)",
+            padding: "16px 20px",
+            marginBottom: 18,
+          }}
+        >
+          <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+            Pre-order
+          </p>
+          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
+            First deliveries begin soon. We&apos;ll confirm your delivery date by SMS + WhatsApp as soon as the schedule opens.
+          </p>
+        </div>
+      ) : null}
       {/* Task G: cream-tinted card → paper card, FG text. Delivery slot line
           retires walnut-gold → FG@85% (still hierarchically stronger than
           address body text at 65%). */}
@@ -2626,10 +2662,16 @@ function PaymentReview(props: {
         <p style={{ margin: "4px 0 0", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.6 }}>
           {fullAddress}
         </p>
-        {deliveryDate && deliverySlot && (
+        {preorderMode ? (
           <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "#024628" }}>
-            {formatDeliveryDate(deliveryDate)} · {formatSlot12(deliverySlot)}
+            Delivery date to be scheduled
           </p>
+        ) : (
+          deliveryDate && deliverySlot && (
+            <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "#024628" }}>
+              {formatDeliveryDate(deliveryDate)} · {formatSlot12(deliverySlot)}
+            </p>
+          )
         )}
       </div>
       {/*
@@ -3090,6 +3132,7 @@ function DeliveryScheduleSection({
   deliverySlot,
   onPickDate,
   onPickSlot,
+  preorderMode,
 }: {
   tomorrowIso: string;
   dayAfterIso: string;
@@ -3097,6 +3140,7 @@ function DeliveryScheduleSection({
   deliverySlot: string;
   onPickDate: (d: string) => void;
   onPickSlot: (s: string) => void;
+  preorderMode: boolean;
 }) {
   const dates: { iso: string; tag: string }[] = [
     { iso: tomorrowIso, tag: "Tomorrow" },
@@ -3104,15 +3148,43 @@ function DeliveryScheduleSection({
   ];
   return (
     <section style={{ marginBottom: 24 }}>
+      {preorderMode ? (
+        <div
+          style={{
+            background: "#FBF3D4",
+            border: "1px solid rgba(2,70,40,0.25)",
+            padding: "16px 20px",
+            marginBottom: 22,
+          }}
+        >
+          <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+            Pre-order
+          </p>
+          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
+            First deliveries begin soon. Delivery date + time will be scheduled shortly — we&apos;ll confirm by SMS + WhatsApp.
+          </p>
+        </div>
+      ) : null}
+
       <p style={sectionHead}>Pick a Date</p>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 26 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          marginBottom: 26,
+          opacity: preorderMode ? 0.5 : 1,
+          pointerEvents: preorderMode ? "none" : "auto",
+        }}
+        aria-disabled={preorderMode || undefined}
+      >
         {dates.map((d) => {
           const active = d.iso === deliveryDate;
           return (
             <button
               key={d.iso}
               type="button"
+              disabled={preorderMode}
               onClick={() => onPickDate(d.iso)}
               style={{
                 flex: 1,
@@ -3120,7 +3192,7 @@ function DeliveryScheduleSection({
                 padding: "14px 12px",
                 background: active ? "var(--surface-brand)" : "transparent",
                 border: "1px solid #024628",
-                cursor: "pointer",
+                cursor: preorderMode ? "not-allowed" : "pointer",
                 fontFamily: "var(--font-body)",
                 color: active ? "#FBF3D4" : "#024628",
                 textAlign: "left",
@@ -3146,11 +3218,19 @@ function DeliveryScheduleSection({
       </div>
 
       <p style={sectionHead}>Pick a Time</p>
-      <SlotPicker
-        deliveryDate={deliveryDate}
-        deliverySlot={deliverySlot}
-        onPickSlot={onPickSlot}
-      />
+      <div
+        style={{
+          opacity: preorderMode ? 0.5 : 1,
+          pointerEvents: preorderMode ? "none" : "auto",
+        }}
+        aria-disabled={preorderMode || undefined}
+      >
+        <SlotPicker
+          deliveryDate={deliveryDate}
+          deliverySlot={deliverySlot}
+          onPickSlot={onPickSlot}
+        />
+      </div>
     </section>
   );
 }
