@@ -69,7 +69,10 @@ type CustomerHit = {
   city: string | null;
 };
 
-type LineItem = { slug: string; qty: number };
+// qty is kept as a string so the <input type="number"> can transiently be
+// empty while the user retypes. Coerced to an integer in [1, 99] at submit
+// time (see clampQty below); server also re-derives totals from DB price.
+type LineItem = { slug: string; qty: string };
 
 type OrderType = "one_time" | "subscription";
 
@@ -160,7 +163,7 @@ export function RegisterOrderForm({
   const [pickupLocationId, setPickupLocationId] = useState("");
 
   // ── Items (shared shape across modes) ──────────────────────────────
-  const [items, setItems] = useState<LineItem[]>([{ slug: "", qty: 1 }]);
+  const [items, setItems] = useState<LineItem[]>([{ slug: "", qty: "1" }]);
 
   // ── ONE-TIME: dates + slots (public helper) ────────────────────────
   const dates = useMemo(() => nextDeliveryDates(7), []);
@@ -211,7 +214,7 @@ export function RegisterOrderForm({
     setDeliveryAddress("");
     setPincode("");
     setPickupLocationId("");
-    setItems([{ slug: "", qty: 1 }]);
+    setItems([{ slug: "", qty: "1" }]);
     setSelectedDates([]);
     setSlotByDate({});
     setBulkSlot(TIME_SLOTS[0] ?? "");
@@ -364,10 +367,20 @@ export function RegisterOrderForm({
           .map((it) => {
             const p = activeProducts.find((x) => x.slug === it.slug);
             const price = p ? Number(p.price_inr) : 0;
-            const qty = Number(it.qty);
+            // Final clamp — user may have submitted without blurring, so
+            // the raw qty string might still be empty or >99. Server also
+            // re-derives price from DB (prepareOneTimeOrder), so this is
+            // only the client's contribution to line_total_inr.
+            const qty = Math.max(1, Math.min(99, Number(it.qty) || 1));
             return {
               slug: it.slug,
               name: p?.name ?? it.slug,
+              // `kind` is required by src/lib/order-validation.ts
+              // (ClientWebOrderItem) — the shared validator used by the
+              // public checkout paths too. This admin route is one-time
+              // only (subscriptions go to /api/admin/subscriptions/create),
+              // so the constant "once" is correct here.
+              kind: "once" as const,
               quantity: qty,
               price_inr: price,
               line_total_inr: price * qty,
@@ -778,12 +791,22 @@ export function RegisterOrderForm({
                   max={99}
                   value={it.qty}
                   onChange={(e) => {
+                    // Keep the raw string in state so the field can be
+                    // transiently empty (backspace-then-retype). Accept
+                    // only digits, cap length at 2 (max 99). Clamping to
+                    // [1, 99] happens on blur + at submit — never here.
+                    const raw = e.target.value.replace(/\D/g, "").slice(0, 2);
                     const next = [...items];
-                    next[i] = {
-                      ...it,
-                      qty: Math.max(1, Number(e.target.value) || 1),
-                    };
+                    next[i] = { ...it, qty: raw };
                     setItems(next);
+                  }}
+                  onBlur={() => {
+                    const n = Math.max(1, Math.min(99, Number(it.qty) || 1));
+                    if (String(n) !== it.qty) {
+                      const next = [...items];
+                      next[i] = { ...it, qty: String(n) };
+                      setItems(next);
+                    }
                   }}
                   style={input}
                 />
@@ -792,7 +815,7 @@ export function RegisterOrderForm({
                   style={chipNeutral}
                   onClick={() => {
                     if (items.length === 1) {
-                      setItems([{ slug: "", qty: 1 }]);
+                      setItems([{ slug: "", qty: "1" }]);
                     } else {
                       setItems(items.filter((_, idx) => idx !== i));
                     }
@@ -805,7 +828,7 @@ export function RegisterOrderForm({
             <button
               type="button"
               style={chipPrimary}
-              onClick={() => setItems([...items, { slug: "", qty: 1 }])}
+              onClick={() => setItems([...items, { slug: "", qty: "1" }])}
             >
               + Add item
             </button>
