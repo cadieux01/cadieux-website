@@ -41,6 +41,11 @@ export const AUDITED_FIELDS = [
   "is_subscription_plan",
   "subscription_title",
   "subscription_blurb",
+  // Regulatory label + per-slice nutrition (all null/empty-safe).
+  "ingredients",
+  "allergens",
+  "nutrition_per_slice",
+  "slices_per_loaf",
 ] as const;
 
 export type AuditedField = (typeof AUDITED_FIELDS)[number];

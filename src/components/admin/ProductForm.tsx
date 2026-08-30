@@ -15,6 +15,22 @@ const CREAM = "#fbf3d4";
 const FADED = "rgba(192,200,206,0.6)";
 const BORDER = "rgba(245,158,11,0.18)";
 
+// A single nutrition_per_slice row in form state. `key` is the JSON key
+// (protein_g, calories, or a custom key); `value` is stored as a string
+// so the input can be blank. Empty values are omitted on submit.
+export type NutrientEntry = { key: string; value: string };
+
+// Canonical nutrition keys the form always exposes. Custom keys already
+// present in the DB row are appended after these so they stay editable.
+const CANONICAL_NUTRIENT_KEYS = [
+  "protein_g",
+  "carbs_g",
+  "fat_g",
+  "fibre_g",
+  "sugar_g",
+  "calories",
+] as const;
+
 export type ProductFormValues = {
   slug: string;
   name: string;
@@ -23,6 +39,7 @@ export type ProductFormValues = {
   // price is derived (read-only preview) from price_inr × (1 − pct/100).
   subscription_discount_pct: string;
   weight: string;
+  slices_per_loaf: string;
   description: string;
   tagline: string;
   highlights: string; // textarea, one per line
@@ -35,6 +52,13 @@ export type ProductFormValues = {
   is_subscription_plan: boolean;
   subscription_title: string;
   subscription_blurb: string;
+  // Regulatory label paragraphs — free-form multiline.
+  ingredients: string;
+  allergens: string;
+  // Per-slice nutrition rows. Order is: canonical keys first (always
+  // shown even when blank), then any custom keys the DB already had,
+  // then any keys the admin added via the "Add custom nutrient" button.
+  nutrients: NutrientEntry[];
 };
 
 export function emptyFormValues(): ProductFormValues {
@@ -44,6 +68,7 @@ export function emptyFormValues(): ProductFormValues {
     price_inr: "",
     subscription_discount_pct: "10",
     weight: "",
+    slices_per_loaf: "",
     description: "",
     tagline: "",
     highlights: "",
@@ -55,10 +80,33 @@ export function emptyFormValues(): ProductFormValues {
     is_subscription_plan: false,
     subscription_title: "",
     subscription_blurb: "",
+    ingredients: "",
+    allergens: "",
+    nutrients: CANONICAL_NUTRIENT_KEYS.map((key) => ({ key, value: "" })),
   };
 }
 
 export function formValuesFromRow(row: AdminProductRow): ProductFormValues {
+  // Seed the nutrient rows: always show every canonical key (value from
+  // the DB row when present, else blank), then append any custom keys
+  // the DB already had so they stay editable and are never dropped.
+  const dbNutri = row.nutrition_per_slice ?? {};
+  const canonicalRows = CANONICAL_NUTRIENT_KEYS.map((key) => ({
+    key,
+    value:
+      typeof dbNutri[key] === "number" && Number.isFinite(dbNutri[key])
+        ? String(dbNutri[key])
+        : "",
+  }));
+  const customRows = Object.entries(dbNutri)
+    .filter(
+      ([k, v]) =>
+        !(CANONICAL_NUTRIENT_KEYS as readonly string[]).includes(k) &&
+        typeof v === "number" &&
+        Number.isFinite(v),
+    )
+    .map(([k, v]) => ({ key: k, value: String(v) }));
+
   return {
     slug: row.slug,
     name: row.name,
@@ -69,6 +117,10 @@ export function formValuesFromRow(row: AdminProductRow): ProductFormValues {
         ? "10"
         : String(row.subscription_discount_pct),
     weight: row.weight ?? "",
+    slices_per_loaf:
+      row.slices_per_loaf === null || row.slices_per_loaf === undefined
+        ? ""
+        : String(row.slices_per_loaf),
     description: row.description ?? "",
     tagline: row.tagline ?? "",
     highlights: (row.highlights ?? []).join("\n"),
@@ -80,6 +132,9 @@ export function formValuesFromRow(row: AdminProductRow): ProductFormValues {
     is_subscription_plan: row.is_subscription_plan,
     subscription_title: row.subscription_title ?? "",
     subscription_blurb: row.subscription_blurb ?? "",
+    ingredients: row.ingredients ?? "",
+    allergens: row.allergens ?? "",
+    nutrients: [...canonicalRows, ...customRows],
   };
 }
 
@@ -95,6 +150,21 @@ export function valuesToPayload(v: ProductFormValues): Record<string, unknown> {
     .split("\n")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+  // Nutrition: drop empty values (unset keys), coerce to Number, drop
+  // NaN / negative. Empty result → null so the PDP hides the section.
+  const nutritionObj: Record<string, number> = {};
+  for (const entry of v.nutrients) {
+    const key = entry.key.trim();
+    if (!key) continue;
+    const raw = entry.value.trim();
+    if (raw === "") continue;
+    const num = Number(raw);
+    if (!Number.isFinite(num) || num < 0) continue;
+    nutritionObj[key] = num;
+  }
+  const nutrition_per_slice: Record<string, number> | null =
+    Object.keys(nutritionObj).length > 0 ? nutritionObj : null;
+
   const payload: Record<string, unknown> = {
     slug: v.slug.trim(),
     name: v.name.trim(),
@@ -107,7 +177,19 @@ export function valuesToPayload(v: ProductFormValues): Record<string, unknown> {
     gallery_urls,
     in_stock: v.in_stock,
     is_active: v.is_active,
+    ingredients: v.ingredients.trim() || null,
+    allergens: v.allergens.trim() || null,
+    nutrition_per_slice,
   };
+  {
+    const raw = v.slices_per_loaf.trim();
+    if (raw === "") {
+      payload.slices_per_loaf = null;
+    } else {
+      const n = Number(raw);
+      payload.slices_per_loaf = Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+    }
+  }
   // V10: send the discount %, not a raw sub price. Empty → default 10.
   {
     const raw = v.subscription_discount_pct.trim();
@@ -307,12 +389,25 @@ export function ProductForm({
         discountPct={values.subscription_discount_pct}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Field label="Weight">
           <Input
             value={values.weight}
             onChange={(v) => patch({ weight: v })}
             placeholder="400 g"
+          />
+        </Field>
+        <Field
+          label="Slices per loaf"
+          hint="Optional. Displayed alongside per-slice nutrition."
+        >
+          <Input
+            type="number"
+            value={values.slices_per_loaf}
+            onChange={(v) => patch({ slices_per_loaf: v })}
+            placeholder="8"
+            min={0}
+            step={1}
           />
         </Field>
         <Field label="Sort order" hint="Lower numbers appear first.">
@@ -351,6 +446,35 @@ export function ProductForm({
           onChange={(v) => patch({ highlights: v })}
           rows={4}
           placeholder={"High protein\nSourdough fermented\n240g"}
+        />
+      </Field>
+
+      <Field
+        label="Ingredients"
+        hint="Regulatory-label paragraph. Free-form multiline. Empty = section hidden on PDP."
+      >
+        <Textarea
+          value={values.ingredients}
+          onChange={(v) => patch({ ingredients: v })}
+          rows={5}
+          placeholder={"Whole wheat flour, oats, seeds (sunflower, flax, pumpkin), whey protein concentrate, sourdough starter, salt, water."}
+        />
+      </Field>
+
+      <NutritionEditor
+        entries={values.nutrients}
+        onChange={(next) => patch({ nutrients: next })}
+      />
+
+      <Field
+        label="Allergen info"
+        hint="Free-form multiline. Empty = section hidden on PDP."
+      >
+        <Textarea
+          value={values.allergens}
+          onChange={(v) => patch({ allergens: v })}
+          rows={3}
+          placeholder={"Contains: wheat, milk. May contain traces of tree nuts and soy."}
         />
       </Field>
 
@@ -640,6 +764,146 @@ function SubPricePreview({
           Enter a valid one-time price to preview the subscription price.
         </span>
       )}
+    </div>
+  );
+}
+
+// Per-slice nutrition editor. Renders one row per entry (canonical keys
+// first, then any custom keys the DB already had, then admin-added). The
+// key input is disabled for canonical rows so a slip can't rename them.
+// Empty values are omitted on submit (see valuesToPayload).
+function NutritionEditor({
+  entries,
+  onChange,
+}: {
+  entries: NutrientEntry[];
+  onChange: (next: NutrientEntry[]) => void;
+}) {
+  function updateAt(i: number, patch: Partial<NutrientEntry>) {
+    onChange(entries.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
+  }
+  function removeAt(i: number) {
+    onChange(entries.filter((_, idx) => idx !== i));
+  }
+  function add() {
+    onChange([...entries, { key: "", value: "" }]);
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <span
+        className="uppercase"
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: "0.7rem",
+          letterSpacing: "0.22em",
+          color: CREAM,
+        }}
+      >
+        Nutrition per slice
+      </span>
+      <span
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: "0.72rem",
+          color: FADED,
+        }}
+      >
+        Leave a value blank to omit that nutrient. All-blank = section hidden on PDP.
+        Canonical keys (protein_g, carbs_g, fat_g, fibre_g, sugar_g, calories) stay in the payload as long as they have values.
+      </span>
+      <div className="flex flex-col gap-2">
+        {entries.map((entry, i) => {
+          const isCanonical = (CANONICAL_NUTRIENT_KEYS as readonly string[]).includes(
+            entry.key,
+          );
+          return (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={entry.key}
+                onChange={(e) => updateAt(i, { key: e.target.value })}
+                placeholder="custom_key"
+                disabled={isCanonical}
+                className="px-3 py-2 bg-transparent outline-none"
+                style={{
+                  border: `1px solid ${BORDER}`,
+                  color: isCanonical ? FADED : CREAM,
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.85rem",
+                  flex: "1 1 40%",
+                  minWidth: 0,
+                }}
+              />
+              <input
+                type="number"
+                value={entry.value}
+                onChange={(e) => updateAt(i, { value: e.target.value })}
+                placeholder="0"
+                min={0}
+                step="any"
+                className="px-3 py-2 bg-transparent outline-none"
+                style={{
+                  border: `1px solid ${BORDER}`,
+                  color: CREAM,
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.9rem",
+                  flex: "1 1 30%",
+                  minWidth: 0,
+                }}
+              />
+              {isCanonical ? (
+                <span
+                  className="uppercase"
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.7rem",
+                    letterSpacing: "0.2em",
+                    color: FADED,
+                    padding: "0.3rem 0.6rem",
+                  }}
+                >
+                  {entry.key === "calories" ? "kcal" : "g"}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => removeAt(i)}
+                  className="uppercase"
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.7rem",
+                    letterSpacing: "0.2em",
+                    color: FADED,
+                    background: "transparent",
+                    border: "none",
+                    padding: "0.3rem 0.6rem",
+                  }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div>
+        <button
+          type="button"
+          onClick={add}
+          className="uppercase"
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "0.7rem",
+            letterSpacing: "0.25em",
+            color: GOLD,
+            border: `1px solid ${GOLD}`,
+            padding: "0.45rem 0.9rem",
+            background: "transparent",
+          }}
+        >
+          + Add custom nutrient
+        </button>
+      </div>
     </div>
   );
 }

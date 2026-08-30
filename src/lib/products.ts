@@ -33,6 +33,15 @@ export type ProductRow = {
   in_stock: boolean;
   sort_order: number;
   updated_at: string;
+  // Regulatory label fields — free-form multiline. Rendered on the PDP
+  // beneath the description as separate sections; empty/null hides.
+  ingredients: string | null;
+  allergens: string | null;
+  // Per-slice nutrition JSONB. Open-ended shape; canonical keys are
+  // protein_g / carbs_g / fat_g / fibre_g / sugar_g / calories, but
+  // custom keys are allowed and preserved by admin edits.
+  nutrition_per_slice: Record<string, number> | null;
+  slices_per_loaf: number | null;
 };
 
 const supabaseAnon = createClient(
@@ -49,7 +58,7 @@ export const getActiveProducts = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, sort_order, updated_at",
+        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, sort_order, updated_at, ingredients, allergens, nutrition_per_slice, slices_per_loaf",
       )
       .eq("is_active", true)
       .eq("is_archived", false)

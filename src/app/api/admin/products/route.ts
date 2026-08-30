@@ -27,7 +27,7 @@ function bustProductCaches(): void {
 }
 
 const PRODUCT_SELECT =
-  "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
+  "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb, ingredients, allergens, nutrition_per_slice, slices_per_loaf";
 
 // GET /api/admin/products?include_archived=1
 //   Returns every product (newest first) so the admin can scroll the
@@ -215,6 +215,12 @@ export async function POST(req: NextRequest) {
     is_subscription_plan: isPlan,
     subscription_title: subTitle,
     subscription_blurb: subBlurb,
+    // Regulatory label + per-slice nutrition. All null by default —
+    // admin fills them in via the details tab on the next save.
+    ingredients: null,
+    allergens: null,
+    nutrition_per_slice: null,
+    slices_per_loaf: null,
   };
 
   const { data: inserted, error: insertErr } = await supabaseAdmin

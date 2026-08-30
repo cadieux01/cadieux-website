@@ -145,6 +145,15 @@ export type AdminProductRow = {
   is_subscription_plan: boolean;
   subscription_title: string | null;
   subscription_blurb: string | null;
+  // Regulatory label fields (free-form). Rendered on PDP beneath the
+  // description as separate sections; empty/null values are hidden.
+  ingredients: string | null;
+  allergens: string | null;
+  // Per-slice nutrition JSONB. Open-ended shape — canonical keys are
+  // protein_g / carbs_g / fat_g / fibre_g / sugar_g / calories, but
+  // custom keys are allowed. Empty object === null (no section rendered).
+  nutrition_per_slice: Record<string, number> | null;
+  slices_per_loaf: number | null;
 };
 
 export type AdminProductChangeRow = {

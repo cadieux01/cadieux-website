@@ -24,7 +24,7 @@ function bustProductCaches(): void {
 }
 
 const PRODUCT_SELECT =
-  "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb";
+  "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, is_archived, archived_at, sort_order, updated_at, is_subscription_plan, subscription_title, subscription_blurb, ingredients, allergens, nutrition_per_slice, slices_per_loaf";
 
 // GET /api/admin/products/[id]
 //   Returns { product, history } where history is the last 50 audit
@@ -194,6 +194,55 @@ export async function PATCH(
     update.gallery_urls = (update.gallery_urls as unknown[])
       .filter((u): u is string => typeof u === "string" && u.trim().length > 0)
       .map((u) => u.trim());
+  }
+
+  // Regulatory label paragraphs — trim + normalise empty→null so the
+  // PDP's empty-state hide (`if (!ingredients) return null`) fires.
+  for (const f of ["ingredients", "allergens"] as const) {
+    if (f in update) {
+      const raw = update[f];
+      if (raw === null) continue;
+      const s = typeof raw === "string" ? raw.trim() : "";
+      update[f] = s.length > 0 ? s : null;
+    }
+  }
+
+  // Per-slice nutrition JSONB. Empty object === null (cleared). Zod
+  // already vetted value types + key shape; we just normalise here.
+  if ("nutrition_per_slice" in update) {
+    const raw = update.nutrition_per_slice;
+    if (raw === null) {
+      // explicit clear
+    } else if (raw && typeof raw === "object") {
+      const cleaned: Record<string, number> = {};
+      for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof v !== "number" || !Number.isFinite(v) || v < 0) continue;
+        const key = k.trim();
+        if (!key) continue;
+        cleaned[key] = v;
+      }
+      update.nutrition_per_slice = Object.keys(cleaned).length > 0 ? cleaned : null;
+    } else {
+      return NextResponse.json(
+        { error: "nutrition_per_slice must be an object or null" },
+        { status: 400 },
+      );
+    }
+  }
+
+  if ("slices_per_loaf" in update) {
+    if (update.slices_per_loaf === null) {
+      // explicit clear
+    } else {
+      const n = Number(update.slices_per_loaf);
+      if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+        return NextResponse.json(
+          { error: "slices_per_loaf must be a non-negative integer" },
+          { status: 400 },
+        );
+      }
+      update.slices_per_loaf = n === 0 ? null : n;
+    }
   }
 
   if (Object.keys(update).length === 0) {

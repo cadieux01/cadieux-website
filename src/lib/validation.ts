@@ -93,6 +93,19 @@ export const ProductUpdateSchema = z
     is_subscription_plan: z.boolean().optional(),
     subscription_title: boundedText(80).nullable().optional(),
     subscription_blurb: boundedText(200).nullable().optional(),
+    // Regulatory label paragraphs — free-form multiline, capped for
+    // storage hygiene. Nullable so admin can clear them.
+    ingredients: boundedText(4000).nullable().optional(),
+    allergens: boundedText(2000).nullable().optional(),
+    // Per-slice nutrition JSONB. Open shape — canonical keys are
+    // *_g / calories, but custom keys are allowed. Values must be
+    // finite non-negative numbers; empty object === null (cleared).
+    // The admin form omits empty inputs so we never write NaN.
+    nutrition_per_slice: z
+      .record(z.string().min(1).max(40), z.number().finite().nonnegative().max(10000))
+      .nullable()
+      .optional(),
+    slices_per_loaf: z.number().int().min(0).max(1000).nullable().optional(),
   })
   .strict()
   .refine((o) => Object.keys(o).length > 0, { message: "No fields to update" });
