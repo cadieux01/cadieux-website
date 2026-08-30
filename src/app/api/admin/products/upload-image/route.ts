@@ -4,12 +4,28 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 
 const BUCKET = "product-images";
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
-const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+// Bumped to 50 MB so short product videos (mp4/webm/mov) fit alongside
+// stills. Admin uploads are trusted (admin-only route) — the cap exists
+// to catch pathological uploads, not to enforce policy.
+const MAX_BYTES = 50 * 1024 * 1024; // 50 MB
+// Product media = images AND videos. Bucket name is legacy ("product-images")
+// but the same bucket stores both; the frontend uses the file extension in
+// the returned URL to decide how to render each tile.
+const ALLOWED_MIME = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+]);
 const EXT_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/quicktime": "mov",
 };
 
 // POST /api/admin/products/upload-image
@@ -39,7 +55,9 @@ export async function POST(req: NextRequest) {
   }
   if (!ALLOWED_MIME.has(file.type)) {
     return NextResponse.json(
-      { error: `Unsupported mime "${file.type}". Use jpeg/png/webp.` },
+      {
+        error: `Unsupported mime "${file.type}". Use jpeg/png/webp or mp4/webm/mov.`,
+      },
       { status: 400 },
     );
   }

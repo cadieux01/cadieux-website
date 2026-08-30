@@ -10,10 +10,22 @@ import { adminAuthHeaders } from "@/lib/admin-client";
 import { AdminProductRow } from "@/lib/admin-shared";
 import { subscriptionUnitPrice, subscriptionSavingsInr } from "@/lib/subscription-pricing";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+// Brand palette (only): Foundation Green, Grain Cream, Core Black.
+// No greys, no plain whites, no legacy gold. These three colors carry
+// every surface, text and border in the admin product form.
+const FG = "#024628"; // Foundation Green — borders, labels, primary accent
+const CREAM = "#FBF3D4"; // Grain Cream — input backgrounds, CTA text
+const INK = "#1D1D1F"; // Core Black — body text, placeholders (at alpha)
+// FG at 70% alpha for hint / secondary label copy. Still on-palette
+// (rgba of Foundation Green), and stays legible on the ash canvas.
+const FG_MUTED = "rgba(2, 70, 40, 0.7)";
+
+// True when the URL is a product-video upload. Used by the media grid
+// to pick <img> vs <video> preview. The uploader stamps a real
+// extension (mp4/webm/mov/jpg/png/webp) so the string check is enough.
+function isVideoUrl(url: string): boolean {
+  return /\.(mp4|webm|mov)(\?|$)/i.test(url);
+}
 
 // A single nutrition_per_slice row in form state. `key` is the JSON key
 // (protein_g, calories, or a custom key); `value` is stored as a string
@@ -219,10 +231,6 @@ export function ProductForm({
   error: string | null;
 }) {
   const [values, setValues] = useState<ProductFormValues>(initial);
-  const [uploadBusy, setUploadBusy] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [galleryBusy, setGalleryBusy] = useState(false);
-  const [galleryError, setGalleryError] = useState<string | null>(null);
 
   useEffect(() => {
     setValues(initial);
@@ -230,89 +238,6 @@ export function ProductForm({
 
   function patch(p: Partial<ProductFormValues>) {
     setValues((v) => ({ ...v, ...p }));
-  }
-
-  async function handleUpload(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadBusy(true);
-    setUploadError(null);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      // Raw fetch (not adminFetch) so the browser sets the multipart
-      // boundary itself — but still attach the admin bearer token via
-      // adminAuthHeaders so it authenticates when Safari drops the cookie.
-      const res = await fetch("/api/admin/products/upload-image", {
-        method: "POST",
-        headers: adminAuthHeaders(),
-        credentials: "include",
-        body: fd,
-      });
-      const json = (await res.json().catch(() => ({}))) as {
-        url?: string;
-        error?: string;
-      };
-      if (!res.ok || !json.url) {
-        throw new Error(json.error ?? `Upload failed (${res.status})`);
-      }
-      patch({ image_url: json.url });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Upload failed";
-      setUploadError(msg);
-    } finally {
-      setUploadBusy(false);
-      // Reset the input so the same file can be re-selected after an error.
-      e.target.value = "";
-    }
-  }
-
-  // Gallery upload: accepts multiple files, uploads each through the same
-  // admin-gated /upload-image route (service-role write server-side — the
-  // browser never sees the service key), and appends each returned public
-  // URL as a new line to the gallery textarea. Partial success is kept:
-  // any files that uploaded before an error are still appended.
-  async function handleGalleryUpload(e: ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    setGalleryBusy(true);
-    setGalleryError(null);
-    const added: string[] = [];
-    try {
-      for (const file of Array.from(files)) {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await fetch("/api/admin/products/upload-image", {
-          method: "POST",
-          headers: adminAuthHeaders(),
-          credentials: "include",
-          body: fd,
-        });
-        const json = (await res.json().catch(() => ({}))) as {
-          url?: string;
-          error?: string;
-        };
-        if (!res.ok || !json.url) {
-          throw new Error(json.error ?? `Upload failed (${res.status})`);
-        }
-        added.push(json.url);
-      }
-    } catch (err) {
-      setGalleryError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      if (added.length > 0) {
-        setValues((v) => {
-          const existing = v.gallery_urls.trim();
-          const appended = added.join("\n");
-          return {
-            ...v,
-            gallery_urls: existing ? `${existing}\n${appended}` : appended,
-          };
-        });
-      }
-      setGalleryBusy(false);
-      e.target.value = "";
-    }
   }
 
   function submit(e: FormEvent) {
@@ -327,10 +252,12 @@ export function ProductForm({
         <div
           className="p-3"
           style={{
-            border: "1px solid #ef4444",
-            color: "#fecaca",
+            border: `1px solid ${FG}`,
+            backgroundColor: CREAM,
+            color: FG,
             fontFamily: "var(--font-body)",
             fontSize: "0.85rem",
+            borderRadius: 6,
           }}
         >
           {error}
@@ -478,130 +405,11 @@ export function ProductForm({
         />
       </Field>
 
-      <Field label="Image">
-        <div className="flex flex-col gap-3">
-          {values.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={values.image_url}
-              alt=""
-              style={{
-                maxWidth: 240,
-                border: `1px solid ${BORDER}`,
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: 240,
-                height: 160,
-                border: `1px dashed ${BORDER}`,
-                color: FADED,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "0.75rem",
-                fontFamily: "var(--font-body)",
-              }}
-            >
-              No image
-            </div>
-          )}
-          <Input
-            value={values.image_url}
-            onChange={(v) => patch({ image_url: v })}
-            placeholder="https://… (or use the upload button)"
-          />
-          <div className="flex items-center gap-3">
-            <label
-              className="uppercase cursor-pointer"
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: "0.7rem",
-                letterSpacing: "0.25em",
-                color: GOLD,
-                border: `1px solid ${GOLD}`,
-                padding: "0.45rem 0.9rem",
-                opacity: uploadBusy ? 0.5 : 1,
-              }}
-            >
-              {uploadBusy ? "Uploading…" : "Upload image"}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={handleUpload}
-                disabled={uploadBusy}
-                style={{ display: "none" }}
-              />
-            </label>
-            {values.image_url ? (
-              <button
-                type="button"
-                onClick={() => patch({ image_url: "" })}
-                className="uppercase"
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontSize: "0.7rem",
-                  letterSpacing: "0.25em",
-                  color: FADED,
-                  background: "transparent",
-                }}
-              >
-                Clear
-              </button>
-            ) : null}
-          </div>
-          {uploadError ? (
-            <p style={{ color: "#fecaca", fontSize: "0.8rem" }}>
-              {uploadError}
-            </p>
-          ) : null}
-        </div>
-      </Field>
-
-      <Field
-        label="Gallery images"
-        hint="One image URL per line. These become the product page gallery (in order). Leave blank to keep the current gallery. Upload buttons come next."
-      >
-        <div className="flex flex-col gap-3">
-          <GalleryPreview raw={values.gallery_urls} />
-          <Textarea
-            value={values.gallery_urls}
-            onChange={(v) => patch({ gallery_urls: v })}
-            rows={4}
-            placeholder={"https://…/photo-1.jpg\nhttps://…/photo-2.jpg"}
-          />
-          <div className="flex items-center gap-3">
-            <label
-              className="uppercase cursor-pointer"
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: "0.7rem",
-                letterSpacing: "0.25em",
-                color: GOLD,
-                border: `1px solid ${GOLD}`,
-                padding: "0.45rem 0.9rem",
-                opacity: galleryBusy ? 0.5 : 1,
-              }}
-            >
-              {galleryBusy ? "Uploading…" : "Upload gallery images"}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                onChange={handleGalleryUpload}
-                disabled={galleryBusy}
-                style={{ display: "none" }}
-              />
-            </label>
-          </div>
-          {galleryError ? (
-            <p style={{ color: "#fecaca", fontSize: "0.8rem" }}>
-              {galleryError}
-            </p>
-          ) : null}
-        </div>
-      </Field>
+      <MediaUploader
+        imageUrl={values.image_url}
+        galleryRaw={values.gallery_urls}
+        onChange={(next) => patch(next)}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Checkbox
@@ -623,7 +431,7 @@ export function ProductForm({
           display strings; per-loaf price comes from the field above. */}
       <div
         className="flex flex-col gap-4 p-4"
-        style={{ border: `1px solid ${BORDER}` }}
+        style={{ border: `1px solid ${FG}`, borderRadius: 6 }}
       >
         <span
           className="uppercase"
@@ -631,7 +439,8 @@ export function ProductForm({
             fontFamily: "var(--font-body)",
             fontSize: "0.72rem",
             letterSpacing: "0.25em",
-            color: GOLD,
+            fontWeight: 500,
+            color: FG,
           }}
         >
           Subscription plan
@@ -677,11 +486,14 @@ export function ProductForm({
             fontFamily: "var(--font-body)",
             fontSize: "0.75rem",
             letterSpacing: "0.25em",
-            color: GOLD,
-            border: `1px solid ${GOLD}`,
-            padding: "0.6rem 1.2rem",
-            background: "transparent",
+            fontWeight: 500,
+            color: CREAM,
+            backgroundColor: FG,
+            border: `1px solid ${FG}`,
+            borderRadius: 6,
+            padding: "0.7rem 1.4rem",
             opacity: busy ? 0.5 : 1,
+            cursor: busy ? "not-allowed" : "pointer",
           }}
         >
           {busy ? "Saving…" : submitLabel}
@@ -691,32 +503,287 @@ export function ProductForm({
   );
 }
 
-// Live thumbnail strip for the gallery textarea. Renders each non-empty
-// line as a small preview so the operator sees exactly what the PDP will
-// show, in order. Broken URLs simply fail to load (browser default).
-function GalleryPreview({ raw }: { raw: string }) {
-  const urls = raw
+// Unified media uploader: images AND videos, multi-select + drag-drop,
+// live thumbnail grid, per-tile delete + "make primary", per-batch
+// progress. Treats the combined `[image_url, ...gallery_urls]` list as
+// the ordered source of truth — index 0 is always the primary shown on
+// the shop grid. Uploads go through the same admin-gated
+// /api/admin/products/upload-image route; the service-role write stays
+// server-side. Bucket + storage policies are untouched.
+function MediaUploader({
+  imageUrl,
+  galleryRaw,
+  onChange,
+}: {
+  imageUrl: string;
+  galleryRaw: string;
+  onChange: (next: { image_url: string; gallery_urls: string }) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ i: number; total: number } | null>(
+    null,
+  );
+  const [err, setErr] = useState<string | null>(null);
+  const [drag, setDrag] = useState(false);
+
+  const gallery = galleryRaw
     .split("\n")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
-  if (urls.length === 0) return null;
+  const combined: string[] = imageUrl ? [imageUrl, ...gallery] : gallery;
+
+  // Serialise the combined ordered list back into (image_url, gallery_urls).
+  // First item = primary, everything else joins the gallery in order.
+  function serialize(list: string[]) {
+    if (list.length === 0) {
+      onChange({ image_url: "", gallery_urls: "" });
+      return;
+    }
+    onChange({
+      image_url: list[0],
+      gallery_urls: list.slice(1).join("\n"),
+    });
+  }
+
+  async function uploadFiles(files: File[]) {
+    if (files.length === 0) return;
+    setBusy(true);
+    setErr(null);
+    const added: string[] = [];
+    try {
+      for (let i = 0; i < files.length; i += 1) {
+        setProgress({ i: i + 1, total: files.length });
+        const fd = new FormData();
+        fd.append("file", files[i]);
+        const res = await fetch("/api/admin/products/upload-image", {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          credentials: "include",
+          body: fd,
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          url?: string;
+          error?: string;
+        };
+        if (!res.ok || !json.url) {
+          throw new Error(json.error ?? `Upload failed (${res.status})`);
+        }
+        added.push(json.url);
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      // Preserve partial success: any file that uploaded before an
+      // error still gets appended so the operator doesn't lose work.
+      if (added.length > 0) serialize([...combined, ...added]);
+      setBusy(false);
+      setProgress(null);
+    }
+  }
+
+  function onFilePick(e: ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    void uploadFiles(files);
+    // Reset so the same file can be re-selected after an error.
+    e.target.value = "";
+  }
+
+  function onDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    setDrag(false);
+    if (busy) return;
+    const files = Array.from(e.dataTransfer.files ?? []);
+    void uploadFiles(files);
+  }
+
+  function removeAt(i: number) {
+    serialize(combined.filter((_, idx) => idx !== i));
+  }
+
+  function promoteAt(i: number) {
+    if (i === 0) return;
+    const next = [...combined];
+    const [pick] = next.splice(i, 1);
+    next.unshift(pick);
+    serialize(next);
+  }
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {urls.map((src, i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={`${i}-${src}`}
-          src={src}
-          alt=""
-          style={{
-            width: 88,
-            height: 88,
-            objectFit: "cover",
-            border: `1px solid ${BORDER}`,
+    <Field
+      label="Media (photos + videos)"
+      hint="First tile is the primary cover on the shop grid. Drag files onto the drop zone or click to pick multiple. Both images and videos are accepted."
+    >
+      <div className="flex flex-col gap-3">
+        {combined.length > 0 ? (
+          <div
+            className="grid gap-2"
+            style={{
+              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+            }}
+          >
+            {combined.map((url, i) => {
+              const video = isVideoUrl(url);
+              return (
+                <div
+                  key={`${i}-${url}`}
+                  style={{
+                    border: `1px solid ${FG}`,
+                    borderRadius: 6,
+                    overflow: "hidden",
+                    backgroundColor: CREAM,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  {video ? (
+                    <video
+                      src={url}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      style={{
+                        width: "100%",
+                        aspectRatio: "1 / 1",
+                        objectFit: "cover",
+                        display: "block",
+                        backgroundColor: INK,
+                      }}
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={url}
+                      alt=""
+                      style={{
+                        width: "100%",
+                        aspectRatio: "1 / 1",
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    />
+                  )}
+                  <div
+                    className="flex items-center justify-between"
+                    style={{
+                      padding: "0.35rem 0.5rem",
+                      backgroundColor: FG,
+                      color: CREAM,
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.62rem",
+                      letterSpacing: "0.14em",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    <span
+                      className="uppercase"
+                      style={{ fontWeight: 500 }}
+                    >
+                      {i === 0
+                        ? video
+                          ? "Primary · video"
+                          : "Primary"
+                        : video
+                        ? `#${i + 1} · video`
+                        : `#${i + 1}`}
+                    </span>
+                    <div className="flex gap-2">
+                      {i !== 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => promoteAt(i)}
+                          className="uppercase"
+                          title="Make primary"
+                          style={{
+                            color: CREAM,
+                            background: "transparent",
+                            border: "none",
+                            padding: 0,
+                            fontSize: "0.62rem",
+                            letterSpacing: "0.14em",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Make primary
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => removeAt(i)}
+                        className="uppercase"
+                        title="Remove"
+                        style={{
+                          color: CREAM,
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                          fontSize: "0.62rem",
+                          letterSpacing: "0.14em",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!busy) setDrag(true);
           }}
-        />
-      ))}
-    </div>
+          onDragLeave={() => setDrag(false)}
+          onDrop={onDrop}
+          className="uppercase cursor-pointer text-center block"
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "0.75rem",
+            letterSpacing: "0.22em",
+            fontWeight: 500,
+            color: FG,
+            border: `2px dashed ${FG}`,
+            borderRadius: 6,
+            padding: "1.4rem 1rem",
+            backgroundColor: drag ? CREAM : "rgba(251, 243, 212, 0.4)",
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {busy && progress
+            ? `Uploading ${progress.i} of ${progress.total}…`
+            : combined.length === 0
+            ? "Drop photos or videos here, or click to choose"
+            : "Add more — drop files or click to choose"}
+          <input
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            onChange={onFilePick}
+            disabled={busy}
+            style={{ display: "none" }}
+          />
+        </label>
+
+        {err ? (
+          <p
+            style={{
+              color: FG,
+              fontFamily: "var(--font-body)",
+              fontSize: "0.8rem",
+              backgroundColor: CREAM,
+              border: `1px solid ${FG}`,
+              borderRadius: 6,
+              padding: "0.5rem 0.75rem",
+            }}
+          >
+            {err}
+          </p>
+        ) : null}
+      </div>
+    </Field>
   );
 }
 
@@ -739,7 +806,11 @@ function SubPricePreview({
   return (
     <div
       className="flex flex-col gap-1 p-3"
-      style={{ border: `1px solid ${BORDER}` }}
+      style={{
+        border: `1px solid ${FG}`,
+        backgroundColor: CREAM,
+        borderRadius: 6,
+      }}
     >
       <span
         className="uppercase"
@@ -747,20 +818,21 @@ function SubPricePreview({
           fontFamily: "var(--font-body)",
           fontSize: "0.68rem",
           letterSpacing: "0.22em",
-          color: FADED,
+          fontWeight: 500,
+          color: FG,
         }}
       >
         Subscription price (derived, read-only)
       </span>
       {valid ? (
-        <span style={{ fontFamily: "var(--font-body)", color: CREAM, fontSize: "0.95rem" }}>
+        <span style={{ fontFamily: "var(--font-body)", color: INK, fontSize: "0.95rem" }}>
           ₹{unit.toFixed(2)} / loaf{" "}
-          <span style={{ color: FADED }}>
+          <span style={{ color: FG_MUTED }}>
             (MRP ₹{mrp} · save ₹{savings.toFixed(2)} · {pct}% off)
           </span>
         </span>
       ) : (
-        <span style={{ fontFamily: "var(--font-body)", color: FADED, fontSize: "0.85rem" }}>
+        <span style={{ fontFamily: "var(--font-body)", color: FG_MUTED, fontSize: "0.85rem" }}>
           Enter a valid one-time price to preview the subscription price.
         </span>
       )}
@@ -794,9 +866,10 @@ function NutritionEditor({
         className="uppercase"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.7rem",
+          fontSize: "0.75rem",
           letterSpacing: "0.22em",
-          color: CREAM,
+          fontWeight: 500,
+          color: FG,
         }}
       >
         Nutrition per slice
@@ -804,8 +877,8 @@ function NutritionEditor({
       <span
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.72rem",
-          color: FADED,
+          fontSize: "0.75rem",
+          color: FG_MUTED,
         }}
       >
         Leave a value blank to omit that nutrient. All-blank = section hidden on PDP.
@@ -824,12 +897,17 @@ function NutritionEditor({
                 onChange={(e) => updateAt(i, { key: e.target.value })}
                 placeholder="custom_key"
                 disabled={isCanonical}
-                className="px-3 py-2 bg-transparent outline-none"
+                className="px-3 py-2 outline-none"
                 style={{
-                  border: `1px solid ${BORDER}`,
-                  color: isCanonical ? FADED : CREAM,
+                  backgroundColor: CREAM,
+                  color: INK,
+                  caretColor: FG,
+                  border: `1px solid ${FG}`,
+                  borderRadius: 6,
                   fontFamily: "var(--font-body)",
                   fontSize: "0.85rem",
+                  fontWeight: isCanonical ? 500 : 400,
+                  opacity: isCanonical ? 0.85 : 1,
                   flex: "1 1 40%",
                   minWidth: 0,
                 }}
@@ -838,13 +916,16 @@ function NutritionEditor({
                 type="number"
                 value={entry.value}
                 onChange={(e) => updateAt(i, { value: e.target.value })}
-                placeholder="0"
+                placeholder="—"
                 min={0}
                 step="any"
-                className="px-3 py-2 bg-transparent outline-none"
+                className="px-3 py-2 outline-none"
                 style={{
-                  border: `1px solid ${BORDER}`,
-                  color: CREAM,
+                  backgroundColor: CREAM,
+                  color: INK,
+                  caretColor: FG,
+                  border: `1px solid ${FG}`,
+                  borderRadius: 6,
                   fontFamily: "var(--font-body)",
                   fontSize: "0.9rem",
                   flex: "1 1 30%",
@@ -858,7 +939,8 @@ function NutritionEditor({
                     fontFamily: "var(--font-body)",
                     fontSize: "0.7rem",
                     letterSpacing: "0.2em",
-                    color: FADED,
+                    fontWeight: 500,
+                    color: FG,
                     padding: "0.3rem 0.6rem",
                   }}
                 >
@@ -873,9 +955,10 @@ function NutritionEditor({
                     fontFamily: "var(--font-body)",
                     fontSize: "0.7rem",
                     letterSpacing: "0.2em",
-                    color: FADED,
+                    color: FG,
                     background: "transparent",
-                    border: "none",
+                    border: `1px solid ${FG}`,
+                    borderRadius: 6,
                     padding: "0.3rem 0.6rem",
                   }}
                 >
@@ -895,10 +978,11 @@ function NutritionEditor({
             fontFamily: "var(--font-body)",
             fontSize: "0.7rem",
             letterSpacing: "0.25em",
-            color: GOLD,
-            border: `1px solid ${GOLD}`,
+            color: FG,
+            border: `1px solid ${FG}`,
+            borderRadius: 6,
             padding: "0.45rem 0.9rem",
-            background: "transparent",
+            background: CREAM,
           }}
         >
           + Add custom nutrient
@@ -927,21 +1011,22 @@ function Field({
         className="uppercase"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.7rem",
+          fontSize: "0.75rem",
           letterSpacing: "0.22em",
-          color: CREAM,
+          fontWeight: 500,
+          color: FG,
         }}
       >
         {label}
-        {required ? <span style={{ color: GOLD }}> *</span> : null}
+        {required ? <span style={{ color: FG }}> *</span> : null}
       </span>
       {children}
       {hint ? (
         <span
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.72rem",
-            color: FADED,
+            fontSize: "0.75rem",
+            color: FG_MUTED,
           }}
         >
           {hint}
@@ -977,10 +1062,13 @@ function Input({
       required={required}
       min={min}
       step={step}
-      className="px-3 py-2 bg-transparent outline-none"
+      className="px-3 py-2 outline-none"
       style={{
-        border: `1px solid ${BORDER}`,
-        color: CREAM,
+        backgroundColor: CREAM,
+        color: INK,
+        caretColor: FG,
+        border: `1px solid ${FG}`,
+        borderRadius: 6,
         fontFamily: "var(--font-body)",
         fontSize: "0.9rem",
       }}
@@ -1005,10 +1093,13 @@ function Textarea({
       onChange={(e) => onChange(e.target.value)}
       rows={rows}
       placeholder={placeholder}
-      className="px-3 py-2 bg-transparent outline-none resize-y"
+      className="px-3 py-2 outline-none resize-y"
       style={{
-        border: `1px solid ${BORDER}`,
-        color: CREAM,
+        backgroundColor: CREAM,
+        color: INK,
+        caretColor: FG,
+        border: `1px solid ${FG}`,
+        borderRadius: 6,
         fontFamily: "var(--font-body)",
         fontSize: "0.9rem",
       }}
@@ -1042,7 +1133,8 @@ function Checkbox({
             fontFamily: "var(--font-body)",
             fontSize: "0.75rem",
             letterSpacing: "0.2em",
-            color: CREAM,
+            fontWeight: 500,
+            color: FG,
           }}
         >
           {label}
@@ -1052,8 +1144,8 @@ function Checkbox({
             className="block"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.72rem",
-              color: FADED,
+              fontSize: "0.75rem",
+              color: FG_MUTED,
             }}
           >
             {hint}
