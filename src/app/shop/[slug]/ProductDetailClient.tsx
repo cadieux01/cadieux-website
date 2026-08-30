@@ -77,6 +77,17 @@ export type PdpStatTile = {
 // (imported as `faqs` via props so the client stays server-safe).
 export type PdpFaqRow = { q: string; a: string };
 
+// Regulatory label + per-slice nutrition, resolved on the server from
+// products.{ingredients, allergens, nutrition_per_slice, slices_per_loaf}.
+// Every field is nullable — the render below hides its own section when
+// the underlying value is empty, so a partially-filled admin row is fine.
+export type PdpLabelInfo = {
+  ingredients: string | null;
+  allergens: string | null;
+  nutritionPerSlice: Record<string, number> | null;
+  slicesPerLoaf: number | null;
+};
+
 export default function ProductDetailClient({
   slug,
   urlSlug,
@@ -89,6 +100,7 @@ export default function ProductDetailClient({
   media = [],
   heroImage,
   faqs = [],
+  labelInfo = null,
 }: {
   // Internal slug (`high-protein` | `multigrain`) — the key for PRODUCTS,
   // PRODUCT_DETAILS, and the review scope. Never changes across a URL
@@ -125,6 +137,10 @@ export default function ProductDetailClient({
   // visible <section> so the DOM matches the FAQPage JSON-LD schema
   // Google requires for FAQ rich results.
   faqs?: PdpFaqRow[];
+  // Admin-owned regulatory label + per-slice nutrition. Any subset can
+  // be null; each of the three sections below hides itself when its own
+  // field is empty. Distinct from `ingredients` (structured DB grid).
+  labelInfo?: PdpLabelInfo | null;
 }) {
   const typedSlug = slug as ProductSlug;
   const product = PRODUCTS.find((p) => p.slug === typedSlug);
@@ -553,6 +569,8 @@ export default function ProductDetailClient({
           </div>
         </div>
 
+        <LabelInfoSections labelInfo={labelInfo} />
+
         {ingredients.length > 0 && (
           <>
             <hr style={DIVIDER_STYLE} />
@@ -954,6 +972,162 @@ function Gallery({
       `}</style>
     </div>
   );
+}
+
+// Regulatory label + per-slice nutrition + allergens. Each of the three
+// sub-sections renders ONLY when its own field is non-empty, and each
+// gets its own divider so a partially-filled row still looks clean. The
+// section keys (protein_g etc.) are DB-owned — canonical *_g suffixes
+// get stripped + title-cased with a "g" unit; `calories` renders "kcal";
+// other custom keys render title-cased with no unit.
+function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
+  if (!labelInfo) return null;
+  const { ingredients, allergens, nutritionPerSlice, slicesPerLoaf } = labelInfo;
+  const ingText = (ingredients ?? "").trim();
+  const allergText = (allergens ?? "").trim();
+  const nutriEntries = nutritionPerSlice
+    ? Object.entries(nutritionPerSlice).filter(
+        ([, v]) => typeof v === "number" && Number.isFinite(v),
+      )
+    : [];
+  if (!ingText && !allergText && nutriEntries.length === 0) return null;
+
+  const nutriSubtitle =
+    typeof slicesPerLoaf === "number" && slicesPerLoaf > 0
+      ? `Values per single slice (approx. ${slicesPerLoaf} slices per loaf).`
+      : "Values per single slice.";
+
+  return (
+    <>
+      {ingText ? (
+        <>
+          <hr style={DIVIDER_STYLE} />
+          <Section label="On the label" title="Ingredients">
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+                lineHeight: 1.75,
+                fontWeight: 300,
+                color: "#024628",
+                whiteSpace: "pre-wrap",
+                maxWidth: 720,
+              }}
+            >
+              {ingText}
+            </p>
+          </Section>
+        </>
+      ) : null}
+
+      {nutriEntries.length > 0 ? (
+        <>
+          <hr style={DIVIDER_STYLE} />
+          <Section label="Nutrition" title="Per slice">
+            <p
+              style={{
+                margin: "-16px 0 20px",
+                fontFamily: "var(--font-body)",
+                fontSize: 12,
+                lineHeight: 1.6,
+                fontWeight: 300,
+                color: "rgba(2,70,40,0.7)",
+              }}
+            >
+              {nutriSubtitle}
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto",
+                columnGap: 24,
+                rowGap: 0,
+                maxWidth: 480,
+                border: "1px solid rgba(2,70,40,0.25)",
+                borderRadius: 8,
+                overflow: "hidden",
+              }}
+            >
+              {nutriEntries.map(([key, value], i) => {
+                const { label, unit } = formatNutrientKey(key);
+                const isLast = i === nutriEntries.length - 1;
+                const cellStyle: React.CSSProperties = {
+                  padding: "14px 18px",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 14,
+                  color: "#024628",
+                  borderBottom: isLast ? "none" : "1px solid rgba(2,70,40,0.15)",
+                };
+                return (
+                  <div key={key} style={{ display: "contents" }}>
+                    <div style={{ ...cellStyle, fontWeight: 400 }}>{label}</div>
+                    <div
+                      style={{
+                        ...cellStyle,
+                        textAlign: "right",
+                        fontWeight: 500,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {formatNutrientValue(value)}
+                      {unit ? ` ${unit}` : ""}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
+        </>
+      ) : null}
+
+      {allergText ? (
+        <>
+          <hr style={DIVIDER_STYLE} />
+          <Section label="Good to know" title="Allergen info">
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body)",
+                fontSize: 13,
+                lineHeight: 1.7,
+                fontWeight: 300,
+                color: "rgba(2,70,40,0.75)",
+                whiteSpace: "pre-wrap",
+                maxWidth: 720,
+              }}
+            >
+              {allergText}
+            </p>
+          </Section>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+// Turn a DB nutrient key into a display label + unit.
+//   `protein_g` → { label: "Protein", unit: "g" }
+//   `calories`  → { label: "Calories", unit: "kcal" }
+//   `custom`    → { label: "Custom",  unit: "" }
+function formatNutrientKey(key: string): { label: string; unit: string } {
+  if (key === "calories") return { label: "Calories", unit: "kcal" };
+  const stripped = key.endsWith("_g") ? key.slice(0, -2) : key;
+  const label = stripped
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+  const unit = key.endsWith("_g") ? "g" : "";
+  return { label: label || key, unit };
+}
+
+// Trim trailing zeros; keep one decimal for non-integer values (matches
+// how nutrition figures are typically read on food labels).
+function formatNutrientValue(v: number): string {
+  if (!Number.isFinite(v)) return "—";
+  if (Number.isInteger(v)) return String(v);
+  return v.toFixed(1);
 }
 
 function Section({ label, title, children }: { label: string; title: string; children: React.ReactNode }) {

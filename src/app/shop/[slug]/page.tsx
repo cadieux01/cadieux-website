@@ -284,6 +284,12 @@ export default async function ProductDetailPage({
         media={media}
         heroImage={heroImage}
         faqs={PDP_FAQS}
+        labelInfo={{
+          ingredients: productRow?.ingredients ?? null,
+          allergens: productRow?.allergens ?? null,
+          nutritionPerSlice: productRow?.nutrition_per_slice ?? null,
+          slicesPerLoaf: productRow?.slices_per_loaf ?? null,
+        }}
       />
     </>
   );
