@@ -60,3 +60,28 @@ export const getActiveLocations = unstable_cache(
   ["pickup-locations-active"],
   { revalidate: 300, tags: ["pickup-locations"] },
 );
+
+// Lowercase-hyphen slug form of a pickup_locations.area string. Matches
+// the slug convention used by service_areas.slug — e.g.
+// "Pothinamallayya Palem" → "pothinamallayya-palem", "MVP Colony" →
+// "mvp-colony". Zero-maintenance join: any area whose plain-text name
+// slugifies to the service-area's slug is automatically bucketed onto
+// the corresponding /delivery/[area] page.
+export function slugifyArea(area: string): string {
+  return area
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+// Returns every active pickup_location whose slugified `area` matches
+// the given service-area slug. Powers /delivery/[area] pages so their
+// "Also stocked at" block reflects live admin state instead of a
+// hardcoded RETAILERS map. Same cache + tag as getActiveLocations()
+// so admin CRUD invalidates both together.
+export async function getActiveLocationsByAreaSlug(
+  slug: string,
+): Promise<PickupLocationRow[]> {
+  const all = await getActiveLocations();
+  return all.filter((row) => slugifyArea(row.area) === slug);
+}
