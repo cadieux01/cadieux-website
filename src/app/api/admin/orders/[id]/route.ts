@@ -69,8 +69,10 @@ const STATUS_PUSH_COPY: Record<string, { title: string; body: string }> = {
 
 // Admin-gated single-order GET. Mirrors the SELECT + pickup side-fetch +
 // computed_state enrichment of /api/admin/orders (list) so consumers (the
-// per-order print page) get the exact same row shape as an entry in the
-// list response. Kept intentionally minimal — no writes, no side-effects.
+// per-order print page and the /admin/orders/[id] detail page) get the exact
+// same row shape as an entry in the list response, plus the payment,
+// refund and timeline columns that only the single-order surfaces need.
+// Kept intentionally minimal — no writes, no side-effects.
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } },
@@ -87,7 +89,7 @@ export async function GET(
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, order_number, customer_id, total_amount, delivery_fee, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, customers(id, full_name, phone, city)",
+      "id, order_number, customer_id, total_amount, delivery_fee, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, razorpay_order_id, razorpay_payment_id, paid_at, status_updated_at, cancelled_at, cancellation_reason, refund_status, refund_id, refunded_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, customers(id, full_name, phone, email, city)",
     )
     .eq("id", id)
     .maybeSingle();

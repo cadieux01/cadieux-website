@@ -62,6 +62,9 @@ export type AdminCustomerSummary = {
   full_name: string | null;
   phone: string | null;
   city: string | null;
+  /** Only projected by the single-order GET (/api/admin/orders/[id]);
+   *  the list route omits it, so treat absent as unknown, not empty. */
+  email?: string | null;
 };
 
 export type AdminOrderItemSnapshot = {
@@ -98,6 +101,8 @@ export type AdminOrderRow = {
    *  once the new build is live. Null for everything before. */
   latitude?: number | null;
   longitude?: number | null;
+  /** Road distance used to price the delivery fee. Single-order GET only. */
+  distance_km?: number | null;
   /** 'delivery' | 'pickup'. Legacy rows may be null → treat as delivery. */
   fulfillment_type?: string | null;
   pickup_location_id?: string | null;
@@ -109,6 +114,18 @@ export type AdminOrderRow = {
     area?: string | null;
     address?: string | null;
   } | null;
+  /** Payment, refund and lifecycle-timestamp columns. Projected by the
+   *  single-order GET only (/api/admin/orders/[id]) — the list route
+   *  leaves them undefined to keep its payload small. */
+  razorpay_order_id?: string | null;
+  razorpay_payment_id?: string | null;
+  paid_at?: string | null;
+  status_updated_at?: string | null;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
+  refund_status?: string | null;
+  refund_id?: string | null;
+  refunded_at?: string | null;
   /** Server-computed lifecycle state (mirror of the WhatsApp bot's
    *  classifyOrder). See src/lib/order-state.ts. Attached by
    *  /api/admin/orders. 'expired' = unpaid pending/placed > 7 days. */
