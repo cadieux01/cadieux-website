@@ -9,9 +9,12 @@
 //   • Delivery WINDOW is city-wide — one fact for every area, sourced
 //     directly from src/lib/delivery-slots.ts. No per-area column, no
 //     placeholder copy.
-//   • Stockists are drawn from RETAILERS in src/lib/data.ts (same
-//     source as /store-locator). Not every service area has stockists
-//     yet — those pages omit the block entirely.
+//   • Stockists are drawn LIVE from public.pickup_locations via
+//     getActiveLocationsByAreaSlug() — same table that powers /find-us,
+//     the mobile Find Us screen, and the /store-locator page. When the
+//     admin toggles a row in /admin/locations the revalidateTag on
+//     "pickup-locations" flushes this page too. Not every service area
+//     has pickup locations yet — those pages omit the block entirely.
 //   • No FAQPage schema, no aggregateRating, no nutrition figures,
 //     no invented "opening hours" or freshness claims.
 //   • local_note is admin-written copy. If null, the paragraph is
@@ -23,8 +26,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { RETAILERS } from "@/lib/data";
 import { ADMIN_PHONE } from "@/lib/delivery-slots";
+import {
+  getActiveLocationsByAreaSlug,
+  type PickupLocationRow,
+} from "@/lib/pickup-locations";
 import { toUrlSlug } from "@/lib/product-slugs";
 import {
   displayAreaName,
@@ -41,24 +47,17 @@ const GOLD = "251,243,212";
 // checkout lookups together when admin updates a row.
 export const revalidate = 3600;
 
-// Static list of URL-visible service-area slugs → RETAILERS keys.
-// Explicit, hand-mapped — the two sets have no shared join key and
-// fuzzy matching would misfile stockists onto the wrong area page.
-// Slugs not in this map render without a "Also stocked at" block.
-const STOCKISTS_BY_SLUG: Record<string, string[]> = {
-  madhurawada: ["Madhurawada / P.M. Palem"],
-  "mvp-colony": ["MVP Colony"],
-  // Pothinamallayya Palem (P.M. Palem) is grouped with Madhurawada in
-  // RETAILERS — same two nearby stockists apply.
-  "pothinamallayya-palem": ["Madhurawada / P.M. Palem"],
-};
-
 // Universal Google Maps directions URL — mirrors /store-locator so
 // tap behaviour is identical (opens Maps app on mobile, google.com/maps
-// on desktop). No coordinates guessed; Google geocodes the storefront.
-function directionsUrl(name: string, address: string): string {
-  const dest = encodeURIComponent(`${name}, ${address}`);
-  return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+// on desktop). Prefers admin-attached google_place_id when set (higher
+// accuracy — Google routes to the exact storefront pin instead of
+// geocoding a name+address string).
+function directionsUrl(row: PickupLocationRow): string {
+  const dest = encodeURIComponent(`${row.name}, ${row.address}`);
+  const base = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+  return row.google_place_id
+    ? `${base}&destination_place_id=${encodeURIComponent(row.google_place_id)}`
+    : base;
 }
 
 // Dial form of ADMIN_PHONE — matches /store-locator so LocalBusiness
@@ -119,8 +118,10 @@ export default async function DeliveryAreaPage({
   if (!group) notFound();
 
   const name = displayAreaName(group.area_name);
-  const stockistKeys = STOCKISTS_BY_SLUG[group.slug] ?? [];
-  const stockists = stockistKeys.flatMap((k) => RETAILERS[k] ?? []);
+  // Live pickup locations whose slugified area matches this
+  // service-area slug. Empty array → "Also stocked at" block is
+  // omitted entirely (no placeholder copy).
+  const stockists = await getActiveLocationsByAreaSlug(group.slug);
 
   return (
     <div
@@ -351,8 +352,8 @@ export default async function DeliveryAreaPage({
           </p>
         </section>
 
-        {/* Stockists — SSR'd only when the slug is mapped AND the
-            RETAILERS lookup returns ≥1 store. Otherwise the whole
+        {/* Stockists — SSR'd only when the live pickup_locations
+            lookup returns ≥1 row for this slug. Otherwise the whole
             section is omitted. No placeholder, no "coming soon". */}
         {stockists.length > 0 ? (
           <section aria-labelledby="stockists-heading" style={{ marginBottom: 28 }}>
@@ -372,9 +373,9 @@ export default async function DeliveryAreaPage({
             </h2>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {stockists.map((r, i) => (
+              {stockists.map((r) => (
                 <article
-                  key={`${group.slug}-stockist-${i}`}
+                  key={r.id}
                   style={{
                     background: "#024628",
                     border: `0.25px solid rgba(${GOLD},0.35)`,
@@ -410,6 +411,22 @@ export default async function DeliveryAreaPage({
                   >
                     {r.address}
                   </p>
+                  {r.notes ? (
+                    <p
+                      style={{
+                        margin: 0,
+                        fontFamily: "var(--font-body)",
+                        fontSize: 11,
+                        fontWeight: 300,
+                        color: "rgba(251,243,212,0.6)",
+                        letterSpacing: "0.02em",
+                        lineHeight: 1.5,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      {r.notes}
+                    </p>
+                  ) : null}
                   <div
                     style={{
                       display: "flex",
@@ -418,7 +435,7 @@ export default async function DeliveryAreaPage({
                     }}
                   >
                     <a
-                      href={directionsUrl(r.name, r.address)}
+                      href={directionsUrl(r)}
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={`Get directions to ${r.name}`}
