@@ -1,7 +1,10 @@
 /**
  * Distance-based delivery fee logic (server-authoritative).
  *
- * Fee table — distance rounds UP to the next whole km:
+ * Fee table — sub-1 km is banded on the RAW distance; from 1 km up the
+ * distance rounds UP to the next whole km:
+ *  < 0.5 km → ₹5
+ *  < 1 km   → ₹10
  *   ≤ 3 km  → ₹22
  *    4 km   → ₹30
  *    5 km   → ₹42
@@ -31,6 +34,11 @@ export function computeDeliveryFee(distanceKm: number): {
   serviceable: boolean;
   feeInr: number;
 } {
+  // Doorstep bands. Checked on the RAW distance before the ceil, because
+  // rounding up would collapse everything under 1 km into the ≤3 km tier.
+  if (distanceKm < 0.5) return { serviceable: true, feeInr: 5 };
+  if (distanceKm < 1)   return { serviceable: true, feeInr: 10 };
+
   const c = Math.ceil(distanceKm);
   if (c <= 3)   return { serviceable: true,  feeInr: 22 };
   if (c === 4)  return { serviceable: true,  feeInr: 30 };

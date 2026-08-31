@@ -13,6 +13,7 @@
 // for the "Delivery" column and a single-line "—" for items.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
@@ -128,7 +129,14 @@ function AdminLoading() {
   );
 }
 
+// Interactive descendants of a row that must keep their own click
+// behaviour — clicking any of these must NOT navigate to the detail page.
+// `[role="option"]`/`[role="combobox"]` cover the custom Select widget.
+const ROW_INTERACTIVE_SELECTOR =
+  'a, button, input, select, textarea, label, [role="button"], [role="combobox"], [role="listbox"], [role="option"]';
+
 function OrdersPageInner() {
+  const router = useRouter();
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -641,7 +649,22 @@ function OrdersPageInner() {
                 return (
                   <tr
                     key={o.id}
+                    onClick={(e) => {
+                      // Row-wide navigation, minus the controls that own
+                      // their own click (checkbox, status Select, actions).
+                      if (
+                        (e.target as HTMLElement).closest(
+                          ROW_INTERACTIVE_SELECTOR,
+                        )
+                      ) {
+                        return;
+                      }
+                      if (window.getSelection()?.toString()) return;
+                      router.push(`/admin/orders/${o.id}`);
+                    }}
+                    title="Open order detail"
                     style={{
+                      cursor: "pointer",
                       background:
                         i % 2 === 0
                           ? "rgba(245,158,11,0.025)"
