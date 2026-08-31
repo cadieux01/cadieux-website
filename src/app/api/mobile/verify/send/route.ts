@@ -12,9 +12,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isValidMobileAppKey, normalizePhone } from "@/lib/phone-cookie";
-import { otpRateLimit } from "@/lib/ratelimit";
+import { otpRateLimit, getClientIP } from "@/lib/ratelimit";
 import { generateOtp, putOtp } from "@/lib/otp-store";
 import { sendOtpSms } from "@/lib/msg91";
+import { otpAuditMeta, logOtpSend } from "@/lib/otp-audit";
 
 export async function POST(req: NextRequest) {
   // Fail closed if MOBILE_APP_KEY isn't configured — never accept requests.
@@ -56,9 +57,16 @@ export async function POST(req: NextRequest) {
   }
   // ──────────────────────────────────────────────────────────────
 
+  // This route has NO Turnstile — the x-app-key header is its only gate,
+  // and that key is extractable from the compiled bundle. Until we decide
+  // what to put in front of it, the audit rows below are how we find out
+  // whether anyone is actually abusing it.
+  const meta = otpAuditMeta(req, getClientIP(req), "mobile");
+
   // Same Upstash key prefix as the web route -> shared 3/hr/phone budget.
   const { success, limit, remaining, reset } = await otpRateLimit.limit(to);
   if (!success) {
+    logOtpSend("BLOCKED", to, { ...meta, outcome: "rate_limited" });
     return NextResponse.json(
       {
         ok: false,
@@ -91,10 +99,16 @@ export async function POST(req: NextRequest) {
   const sent = await sendOtpSms(to, otp);
   if (!sent.ok) {
     console.error("MSG91 send error (mobile):", sent.error);
+    logOtpSend("BLOCKED", to, {
+      ...meta,
+      outcome: "send_failed",
+      error: sent.error,
+    });
     return NextResponse.json(
       { ok: false, error: "Failed to send code." },
       { status: 502 }
     );
   }
+  logOtpSend("CREATE", to, { ...meta, outcome: "sent" });
   return NextResponse.json({ ok: true });
 }

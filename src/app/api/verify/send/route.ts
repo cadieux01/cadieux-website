@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizePhone } from "@/lib/phone-cookie";
 import { verifyTurnstileToken } from "@/lib/turnstile";
-import { otpRateLimit } from "@/lib/ratelimit";
+import { otpRateLimit, getClientIP } from "@/lib/ratelimit";
 import { generateOtp, putOtp } from "@/lib/otp-store";
 import { sendOtpSms } from "@/lib/msg91";
+import { otpAuditMeta, logOtpSend } from "@/lib/otp-audit";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
@@ -15,11 +16,26 @@ export async function POST(req: NextRequest) {
   }
 
   const to = normalizePhone(phone);
+  const meta = otpAuditMeta(req, getClientIP(req), "web");
+
+  // Bot gate FIRST. This used to run AFTER the rate limit, which meant a
+  // request carrying a junk token still consumed one of that phone's
+  // three hourly slots — three junk POSTs could lock a real buyer out of
+  // checkout for an hour. A slot is now only ever spent by a caller that
+  // has already proved it is human.
+  const isHuman = await verifyTurnstileToken(turnstileToken);
+  if (!isHuman) {
+    logOtpSend("BLOCKED", to, { ...meta, outcome: "turnstile_failed" });
+    return NextResponse.json(
+      { ok: false, error: "Human verification failed. Please try again." },
+      { status: 403 }
+    );
+  }
 
   // Distributed rate limit: 3 OTP sends per phone per hour (Upstash Redis).
-  // Runs before Turnstile so abusive clients can't burn siteverify quota.
   const { success, limit, remaining, reset } = await otpRateLimit.limit(to);
   if (!success) {
+    logOtpSend("BLOCKED", to, { ...meta, outcome: "rate_limited" });
     return NextResponse.json(
       {
         ok: false,
@@ -34,15 +50,6 @@ export async function POST(req: NextRequest) {
           "X-RateLimit-Reset": reset.toString(),
         },
       }
-    );
-  }
-
-  // Bot gate: every OTP send must be human-verified via Cloudflare Turnstile.
-  const isHuman = await verifyTurnstileToken(turnstileToken);
-  if (!isHuman) {
-    return NextResponse.json(
-      { ok: false, error: "Human verification failed. Please try again." },
-      { status: 403 }
     );
   }
 
@@ -61,10 +68,16 @@ export async function POST(req: NextRequest) {
   const sent = await sendOtpSms(to, otp);
   if (!sent.ok) {
     console.error("MSG91 send error:", sent.error);
+    logOtpSend("BLOCKED", to, {
+      ...meta,
+      outcome: "send_failed",
+      error: sent.error,
+    });
     return NextResponse.json(
       { ok: false, error: "Failed to send code." },
       { status: 502 }
     );
   }
+  logOtpSend("CREATE", to, { ...meta, outcome: "sent" });
   return NextResponse.json({ ok: true });
 }

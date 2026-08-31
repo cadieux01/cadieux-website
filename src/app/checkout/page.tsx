@@ -194,6 +194,8 @@ export default function CheckoutPage() {
 
   // Loading states
   const [sendingOtp, setSendingOtp] = useState(false);
+  // Synchronous mirror of `sendingOtp` — see the guard in sendOtp().
+  const sendingOtpRef = useRef(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [orderLoading, setOrderLoading] = useState(false);
@@ -302,14 +304,26 @@ export default function CheckoutPage() {
     TURNSTILE_BYPASS ? "preview-bypass" : "",
   );
   const turnstileRef = useRef<TurnstileHandle>(null);
-  // Reset the widget only on Turnstile expiry/error or on an OTP-send
-  // server failure. We do NOT reset after a successful OTP send — the
-  // token stays as the client-side gate for Continue.
+  // Reset the widget after EVERY OTP send attempt — success or failure —
+  // and on Turnstile expiry/error. Cloudflare siteverify tokens are
+  // single-use: replaying one returns `timeout-or-duplicate`, so holding
+  // the spent token made the Resend button 403 with "Human verification
+  // failed" every time. Resetting re-arms the widget, which auto-solves
+  // and hands back a fresh token via the onVerify callback.
   const refreshTurnstile = () => {
     if (TURNSTILE_BYPASS) return; // keep the sentinel; no real widget to reset
     setTurnstileToken("");
     turnstileRef.current?.reset();
   };
+
+  // Client-side "is this a human?" signal for the Continue-to-Delivery gate.
+  // A held Turnstile token OR a completed OTP — the OTP is the stronger
+  // proof, and the server re-checks it independently (place_order requires
+  // the phone-verified cookie). Accepting either matters because
+  // refreshTurnstile() now blanks the token after every send: the widget
+  // re-solves in about a second, and this stops that gap from disabling
+  // Continue for someone who has already verified their phone.
+  const humanVerified = Boolean(turnstileToken) || otpVerified;
 
   // Set just before finishOrder fires clearCart() so the empty-cart
   // bounce effect below doesn't race the /checkout/success redirect.
@@ -672,9 +686,15 @@ export default function CheckoutPage() {
 
   /* ── OTP ──────────────────────────────────────────────────────────────── */
   async function sendOtp() {
+    // In-flight guard. The `disabled={sendingOtp}` on the send buttons
+    // reads React state, which isn't committed until after the current
+    // tick — two clicks landing in the same tick both pass it and fire
+    // two POSTs (two SMS, two MSG91 credits). A ref flips synchronously.
+    if (sendingOtpRef.current) return;
     const digits = phone.replace(/\D/g, "");
     if (digits.length !== 10) { setOtpError("Enter a valid 10-digit number."); return; }
     if (!turnstileToken) { setOtpError("Please complete the human-verification check below."); return; }
+    sendingOtpRef.current = true;
     setSendingOtp(true); setOtpError("");
     try {
       const res = await fetch("/api/verify/send", {
@@ -690,13 +710,14 @@ export default function CheckoutPage() {
       }
       setOtpSent(true);
       setOtpCode("");
-      // Intentionally NOT calling refreshTurnstile() here — the same
-      // solved token continues to satisfy the Continue-to-Delivery
-      // client gate so the customer never re-solves the captcha.
+      // The token we just spent is dead to Cloudflare. Re-arm the widget
+      // so Resend has a fresh one — without this, Resend always 403s.
+      refreshTurnstile();
     } catch {
       setOtpError("Network error. Try again.");
       refreshTurnstile();
     } finally {
+      sendingOtpRef.current = false;
       setSendingOtp(false);
     }
   }
@@ -730,11 +751,10 @@ export default function CheckoutPage() {
   /* ── Address step → save_customer → delivery step ─────────────────────── */
   async function submitAddressStep() {
     setError("");
-    // Human-verification gate — uses the single Turnstile token that
-    // also gates Send OTP. Applies to BOTH the returning-customer
-    // saved-details fast path (no server call) and the new-address
-    // form path. The customer solves the challenge once per session.
-    if (!turnstileToken) {
+    // Human-verification gate. Applies to BOTH the returning-customer
+    // saved-details fast path (no server call) and the new-address form
+    // path. Satisfied by a held Turnstile token or a completed OTP.
+    if (!humanVerified) {
       setError("Please complete the human-verification check below.");
       return;
     }
@@ -1977,14 +1997,14 @@ export default function CheckoutPage() {
               onClick={submitAddressStep}
               disabled={
                 submitting ||
-                !turnstileToken ||
+                !humanVerified ||
                 // locQuestion only applies to the delivery form (fresh/edit).
                 // Pickup has no address to answer "are you there?" about.
                 (!isPickup && formMode !== "returning" && locQuestion === "unanswered")
               }
               style={primaryBtn(
                 submitting ||
-                  !turnstileToken ||
+                  !humanVerified ||
                   (!isPickup && formMode !== "returning" && locQuestion === "unanswered"),
               )}
             >
