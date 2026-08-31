@@ -125,9 +125,9 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
       "Same careful process as our multigrain, just a milder crumb built for daily use: toast, sandwiches, kids' lunches, late-night eggs.",
       "High in protein. Eight slices per loaf. Nothing hidden.",
     ],
-    media: [
-      { type: "video", src: "/bread-eating-01.mp4", alt: "Bread being enjoyed" },
-    ],
+    // Intentionally empty — this loaf's gallery comes from the database
+    // (products.image_url / gallery_urls) via resolveProductMedia.
+    media: [],
     ingredients: [
       { name: "Whole wheat flour", role: "Primary flour — no maida" },
       { name: "Whey protein isolate", role: "Premium protein source, clean taste" },

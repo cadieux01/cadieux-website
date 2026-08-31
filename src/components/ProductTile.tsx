@@ -159,6 +159,31 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             WebkitOverflowScrolling: "touch",
           }}
         >
+          {/* No admin-uploaded photo yet — hold the tile's aspect ratio with a
+              neutral placeholder instead of a decorative brand asset. */}
+          {media.length === 0 && (
+            <div
+              style={{
+                flex: "0 0 100%",
+                width: "100%",
+                height: "100%",
+                position: "relative",
+                background: "#024628",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 16,
+                textAlign: "center",
+                fontFamily: "var(--font-body)",
+                fontSize: 10,
+                letterSpacing: "0.26em",
+                textTransform: "uppercase",
+                color: "rgba(251,243,212,0.6)",
+              }}
+            >
+              Photography coming soon
+            </div>
+          )}
           {media.map((m, i) => (
             <div
               key={i}
