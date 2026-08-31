@@ -2242,7 +2242,11 @@ function AddressForm(props: {
               }}
               placeholder="10-digit number"
               style={{
-                flex: 1, background: "none", border: "none", outline: "none",
+                // minWidth:0 for the same reason as the wrapper — without it
+                // the input keeps its ~186px intrinsic width and its text
+                // renders past the field's right border.
+                flex: 1, minWidth: 0,
+                background: "none", border: "none", outline: "none",
                 padding: "0 12px", height: 46,
                 fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200,
                 color: "#024628", letterSpacing: "0.05em",
