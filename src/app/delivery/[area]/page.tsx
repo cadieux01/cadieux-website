@@ -103,7 +103,17 @@ export async function generateMetadata({
       url: `${SITE_URL}/delivery/${group.slug}`,
       title,
       description,
-      images: [{ url: `${SITE_URL}/og-cover.jpg` }],
+      // The Cadieux logo. This used to point at /og-cover.jpg, a file that has
+      // never existed in public/ — it 404'd across all six area pages, so
+      // scrapers ignored it and picked an image out of the page themselves.
+      images: [
+        {
+          url: `${SITE_URL}/icons/icon-512.png`,
+          width: 512,
+          height: 512,
+          alt: "Cadieux logo",
+        },
+      ],
     },
     twitter: { card: "summary_large_image", title, description },
   };

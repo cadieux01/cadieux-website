@@ -84,17 +84,19 @@ export async function getProductBySlug(slug: string): Promise<ProductRow | null>
 // fields into what the storefront renders. The admin writes products.image_url
 // (main) + products.gallery_urls (gallery) from /admin, and those are the ONLY
 // sources of a product photo. There is deliberately no bundled-asset fallback:
-// /hero.jpg and /grains.jpg are decorative brand shots, not photos of the
-// actual loaf, and showing them implied a product photo existed when it did
-// not. A product with no admin image now resolves to null and the page renders
-// its empty state. Video has no DB column, so it only ever comes from the
-// bundled PRODUCT_DETAILS media (below) — never from the DB.
+// the old stock/AI bread-and-grain shots that used to fill this gap were not
+// photos of the actual loaf, and showing them implied a product photo existed
+// when it did not. A product with no admin image now resolves to null and the
+// page renders its empty state. Video has no DB column, so it only ever comes
+// from the bundled PRODUCT_DETAILS media (below) — never from the DB.
 
-// Social-share preview ONLY. This is a brand image for the OG card when a
-// link is pasted into WhatsApp/Twitter — it is NOT a product photo and must
-// never enter the product gallery or Product JSON-LD. Reachable only through
+// Social-share preview ONLY. The Cadieux logo — real branding, never a stand-in
+// photo of bread or ingredients. It is NOT a product photo and must never enter
+// the product gallery or Product JSON-LD. Reachable only through
 // resolveOgImage(); resolveHeroImage/resolveProductMedia cannot return it.
-const OG_FALLBACK_IMAGE = "/hero.jpg";
+// Square: callers must declare 512x512, not the 1200x630 OG default.
+export const OG_FALLBACK_IMAGE = "/icons/icon-512.png";
+export const OG_FALLBACK_SIZE = 512;
 
 // Resolve the product's primary photo. DB-only: products.image_url, or null.
 // Callers must handle null by rendering a placeholder — NOT by substituting a
@@ -112,8 +114,11 @@ export function resolveHeroImage(
 }
 
 // og:image for social scrapers. Prefers the real product photo and falls back
-// to the brand image so a shared link is never previewed with a blank card.
-// Kept separate from resolveHeroImage so the gallery can never pick this up.
+// to the Cadieux logo so a shared link is never previewed with a blank card —
+// and never with a stock photo of bread the customer will not receive. Callers
+// must pair this with hasRealProductImage() to pick the right declared
+// dimensions. Kept separate from resolveHeroImage so the gallery can never
+// pick this up.
 export function resolveOgImage(
   imageUrl: string | null | undefined,
   slug: string,
@@ -138,7 +143,8 @@ export function hasRealProductImage(
 //   3. a single tile derived from products.image_url.
 // When all three are empty this returns an EMPTY array and the caller renders
 // its empty state. It never substitutes a decorative brand asset — a tile
-// showing /hero.jpg reads as "here is the loaf" when no photo exists.
+// showing a generic flour-and-wheat stock shot reads as "here is the loaf"
+// when no photo exists.
 export function resolveProductMedia(
   slug: string,
   imageUrl: string | null | undefined,

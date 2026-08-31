@@ -6,9 +6,6 @@ import Image from "next/image";
 import Link from "next/link";
 import QASection from "./QASection";
 
-/* ── Helpers ── */
-const sr    = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
-
 /* Autoplay a background video and keep it playing for the entire life of the
    page — it NEVER pauses: not off-screen, not because another video plays,
    never. play() on mount and retry on canplay/loadeddata in case a too-early
@@ -50,19 +47,6 @@ const PROTEIN_BENEFITS = [
   { n: "05", title: "Sharper Mind",       desc: "Made to keep up with your day." },
 ];
 
-/* ── Deterministic floating grain data ── */
-const GRAINS = Array.from({ length: 6 }, (_, i) => ({
-  id:    i,
-  x:     sr(i * 13 + 1) * 88,
-  y:     sr(i * 13 + 2) * 95,
-  size:  44 + sr(i * 13 + 3) * 46,
-  rot:   sr(i * 13 + 4) * 360,
-  op:    0.07 + sr(i * 13 + 5) * 0.07,
-  dur:   8  + sr(i * 13 + 6) * 12,
-  delay: sr(i * 13 + 7) * 8,
-  anim:  i % 2 === 0 ? "grain-float" : "grain-sway",
-}));
-
 const N_C = INGREDIENTS.length;
 
 // ── Founder section (homepage bottom, above footer) ────────────────
@@ -81,10 +65,8 @@ const FOUNDER_LINK_LABEL = "Read the full story \u2192 Behind Cadieux";
 
 export default function PageContent({ introActive = false }: { introActive?: boolean }) {
   const router = useRouter();
-  const grainRefs     = useRef<(HTMLImageElement | null)[]>([]);
   const cardsOuterRef = useRef<HTMLDivElement>(null);
   const videoRef      = useRef<HTMLVideoElement>(null);
-  const heroRef       = useRef<HTMLDivElement>(null);
   const proteinOuterRef = useRef<HTMLDivElement>(null);
   const [proteinRevealed, setProteinRevealed] = useState(false);
 
@@ -178,101 +160,20 @@ export default function PageContent({ introActive = false }: { introActive?: boo
     return () => io.disconnect();
   }, []);
 
-  /* ── Grains — gated on hero visibility ──
-     Perf: the grain layer sits at zIndex:0 inside the outer wrapper;
-     every section past the hero (QASection sticky, §4/§4.5 stickies,
-     §5 founder, §6 CTA, footer) fully covers the viewport with an
-     opaque #024628 background. Verified by code trace: grains cannot
-     visibly show past the hero. So instead of a per-grain observer
-     (which reports occluded-but-in-viewport grains as visible and
-     keeps them compositing), a single observer on the hero element
-     hides ALL 22 grains + pauses their animation the moment the hero
-     leaves the viewport. `mix-blend-mode: screen` composite cost
-     across the entire page height drops to zero past the hero, with
-     zero visual change.
-
-     Grains inherit their base opacity from the inline style at the
-     JSX site (no per-grain opacity manipulation from JS). */
-  useEffect(() => {
-    const hero = heroRef.current;
-    if (!hero) return;
-    const applyHeroVisibility = (visible: boolean) => {
-      const cv = visible ? "visible" : "hidden";
-      const ps = visible ? "running" : "paused";
-      grainRefs.current.forEach(el => {
-        if (!el) return;
-        el.style.contentVisibility = cv;
-        el.style.animationPlayState = ps;
-      });
-    };
-    const io = new IntersectionObserver(
-      entries => entries.forEach(e => applyHeroVisibility(e.isIntersecting)),
-      { threshold: 0 }
-    );
-    io.observe(hero);
-    return () => io.disconnect();
-  }, []);
-
   const N_P = PROTEIN_BENEFITS.length;
 
   return (
     <>
-      <style>{`
-        @keyframes grain-float {
-          0%,100% { transform: translateY(0px)   rotate(var(--gr)); }
-          50%      { transform: translateY(-26px) rotate(calc(var(--gr) + 5deg)); }
-        }
-        @keyframes grain-sway {
-          0%,100% { transform: translateX(0px)   rotate(var(--gr)); }
-          50%      { transform: translateX(15px)  rotate(calc(var(--gr) - 7deg)); }
-        }
-
-      `}</style>
-
       <div style={{ position: "relative", background: "#024628", overflowX: "clip" }}>
-
-        {/* ── Floating grain layer ── */}
-        <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
-          {GRAINS.map((g, i) => (
-            <img
-              key={g.id}
-              ref={el => { grainRefs.current[i] = el; }}
-              src="/grains.jpg"
-              alt=""
-              data-op={g.op.toFixed(3)}
-              style={{
-                position: "absolute",
-                left: `${g.x}%`, top: `${g.y}%`,
-                width: g.size, height: g.size,
-                objectFit: "cover",
-                opacity: g.op,
-                mixBlendMode: "screen",
-                animationName: g.anim,
-                animationDuration: `${g.dur}s`,
-                animationDelay: `${-g.delay}s`,
-                animationTimingFunction: "ease-in-out",
-                animationIterationCount: "infinite",
-                transition: "opacity 0.6s ease",
-                "--gr": `${g.rot}deg`,
-              } as React.CSSProperties}
-            />
-          ))}
-        </div>
 
         <div style={{ position: "relative", zIndex: 1 }}>
 
           {/* ══ SECTION 1 — VIDEO ══
-              `heroRef` is observed by the grain-layer effect above so
-              all 22 mix-blend-mode grains are paused + hidden the moment
-              the hero leaves the viewport.
-
               NOTE: do NOT put `content-visibility: auto` on this wrapper.
               It contains the hero <video>; skipping its rendering
               off-screen leaves the video frozen on its first frame and it
-              never resumes on re-entry. The grain layer is gated via the
-              per-node content-visibility toggle in the effect above, which
-              is safe because those nodes are <img>, not <video>. */}
-          <div ref={heroRef} style={{
+              never resumes on re-entry. */}
+          <div style={{
             position: "relative", height: "100dvh",
           }}>
             <section style={{

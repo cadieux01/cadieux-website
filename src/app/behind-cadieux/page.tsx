@@ -11,6 +11,9 @@
 // country-of-origin, premix, or formulation provenance. The story
 // frames the recipe as developed and refined in-house.
 
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -25,6 +28,17 @@ const GOLD = "#024628";
 const ENDURANCE_BLUE = "#4369B2";
 
 const GRAIN = "url(/grain.svg)";
+
+// Founder portrait. The old /founder.jpg was an AI-generated image (it shipped
+// with a visible "Meta AI" watermark) and was deleted; there is deliberately NO
+// substitute — a placeholder or a stand-in photo of someone else is worse than
+// nothing on an origin story. The portrait block below is skipped entirely
+// while the file is absent. Dropping a real photo back at public/founder.jpg
+// and redeploying restores it with no code change.
+const FOUNDER_PORTRAIT = "/founder.jpg";
+const hasFounderPortrait = existsSync(
+  path.join(process.cwd(), "public", "founder.jpg"),
+);
 
 // ── SEO ─────────────────────────────────────────────────────────────
 // Reads behind.seo.title + behind.seo.description from content_strings so
@@ -207,34 +221,36 @@ export default async function BehindCadieuxPage() {
       >
         {/* Hero */}
         <ScrollReveal>
-          <div
-            data-stagger
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              marginBottom: 40,
-            }}
-          >
+          {hasFounderPortrait && (
             <div
+              data-stagger
               style={{
-                width: "min(280px, 70vw)",
-                aspectRatio: "4 / 5",
-                borderRadius: 8,
-                overflow: "hidden",
-                position: "relative",
-                background: "rgba(251,243,212,0.06)",
+                display: "flex",
+                justifyContent: "center",
+                marginBottom: 40,
               }}
             >
-              <Image
-                src="/founder.jpg"
-                alt="Sunny Raja, founder of Cadieux"
-                fill
-                priority
-                sizes="(max-width: 640px) 70vw, 280px"
-                style={{ objectFit: "cover" }}
-              />
+              <div
+                style={{
+                  width: "min(280px, 70vw)",
+                  aspectRatio: "4 / 5",
+                  borderRadius: 8,
+                  overflow: "hidden",
+                  position: "relative",
+                  background: "rgba(251,243,212,0.06)",
+                }}
+              >
+                <Image
+                  src={FOUNDER_PORTRAIT}
+                  alt="Sunny Raja, founder of Cadieux"
+                  fill
+                  priority
+                  sizes="(max-width: 640px) 70vw, 280px"
+                  style={{ objectFit: "cover" }}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <p
             data-stagger

@@ -16,6 +16,19 @@ export const metadata: Metadata = {
     title: "Cadieux — High Protein Bread, Baked Fresh in Visakhapatnam",
     description:
       "Premium high protein bread from Cadieux — lab-tested, low-carb, and delivered fresh across Visakhapatnam.",
+    // MUST be declared here. Next.js replaces the parent openGraph object
+    // wholesale rather than merging field-by-field, so omitting `images` wiped
+    // the root layout's entry and left the page with NO og:image at all —
+    // which sent WhatsApp/Instagram scrapers off to pick an image out of the
+    // page themselves. They landed on a decorative stock grain texture.
+    images: [
+      {
+        url: "https://www.cadieux.in/icons/icon-512.png",
+        width: 512,
+        height: 512,
+        alt: "Cadieux logo",
+      },
+    ],
   },
 };
 

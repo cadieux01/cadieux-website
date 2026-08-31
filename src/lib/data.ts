@@ -38,6 +38,10 @@ export const SUB_WEEKS = [2, 3, 4, 6];
 // are food-label data and live only in public.products / product_stat_tiles —
 // a bundled copy silently went stale (240g / 8 slices against a DB saying
 // 250g / 7) and shipped to customers. If the DB is dark, render nothing.
+//
+// Also carries NO `image`. Product photos come from products.image_url /
+// gallery_urls via @/lib/products; the old bundled paths pointed at stock
+// bread-and-grain shots and were read by nothing.
 export const PRODUCTS = [
   {
     slug: "multigrain",
@@ -49,7 +53,6 @@ export const PRODUCTS = [
     protein: "High protein content",
     subtitle: "Ancient grains, seeds, whey protein. Baked to lock in structure.",
     desc: "Ancient grains, seeds, and five distinct protein sources — slow-fermented, cold-proofed, and baked to lock in structure.",
-    image: "/hero.jpg",
   },
   {
     slug: "high-protein",
@@ -61,7 +64,6 @@ export const PRODUCTS = [
     protein: "High protein content",
     subtitle: "Clean sandwich bread built for protein without the fuss. Soft slices, no compromise.",
     desc: "Clean, everyday bread built for high protein without the fuss. Soft sandwich slices with no compromise on nutrition.",
-    image: "/grains.jpg",
   },
 ];
 

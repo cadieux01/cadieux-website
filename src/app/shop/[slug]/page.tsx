@@ -21,6 +21,7 @@ import type { Metadata } from "next";
 
 import { PRODUCTS } from "@/lib/data";
 import {
+  OG_FALLBACK_SIZE,
   getProductAvailability,
   getProductBySlug,
   hasRealProductImage,
@@ -40,8 +41,8 @@ import { PDP_FAQS } from "./faqs";
 const SITE_URL = "https://www.cadieux.in";
 
 // JSON-LD requires absolute URLs. Product image_url may be a Supabase
-// storage URL (already absolute) or a repo-relative path like "/hero.jpg";
-// this normalises either form.
+// storage URL (already absolute) or a repo-relative path like
+// "/icons/icon-512.png"; this normalises either form.
 function toAbsoluteUrl(src: string): string {
   if (/^https?:\/\//i.test(src)) return src;
   if (src.startsWith("/")) return `${SITE_URL}${src}`;
@@ -89,10 +90,18 @@ export async function generateMetadata({
   const ogName =
     pickString(content, "pdp.name", internalSlug) || productRow?.name || bundled?.name || internalSlug;
   // OG card only — resolveOgImage is the one path allowed to fall back to the
-  // decorative brand image, so a shared link never previews blank. The on-page
-  // gallery and Product JSON-LD use resolveHeroImage/hasRealProductImage and
-  // stay null when no admin photo exists.
+  // Cadieux logo, so a shared link never previews blank. The on-page gallery
+  // and Product JSON-LD use resolveHeroImage/hasRealProductImage and stay null
+  // when no admin photo exists.
+  //
+  // The declared dimensions must describe the image we actually sent: an admin
+  // upload is a landscape product shot (1200x630), the logo fallback is square
+  // (512x512). Declaring 1200x630 for a square file makes WhatsApp/Instagram
+  // letterbox or crop the preview.
   const ogImage = resolveOgImage(productRow?.image_url, internalSlug);
+  const ogIsProductPhoto = hasRealProductImage(productRow?.image_url);
+  const ogWidth = ogIsProductPhoto ? 1200 : OG_FALLBACK_SIZE;
+  const ogHeight = ogIsProductPhoto ? 630 : OG_FALLBACK_SIZE;
 
   return {
     title,
@@ -106,8 +115,8 @@ export async function generateMetadata({
       images: [
         {
           url: ogImage,
-          width: 1200,
-          height: 630,
+          width: ogWidth,
+          height: ogHeight,
           alt: ogName,
         },
       ],

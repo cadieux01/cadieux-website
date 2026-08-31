@@ -82,7 +82,17 @@ export const metadata: Metadata = {
     title: "Protein Bread Subscription in Visakhapatnam | Cadieux",
     description:
       "Save 10% on every loaf with a Cadieux subscription. Pick your dates, pick your slot, delivered fresh across Visakhapatnam.",
-    images: [{ url: `${SITE_URL}/og-cover.jpg` }],
+    // The Cadieux logo. This used to point at /og-cover.jpg, a file that has
+    // never existed in public/ — it 404'd, so scrapers ignored it and went
+    // back to picking an image out of the page themselves.
+    images: [
+      {
+        url: `${SITE_URL}/icons/icon-512.png`,
+        width: 512,
+        height: 512,
+        alt: "Cadieux logo",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
