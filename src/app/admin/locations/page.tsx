@@ -296,7 +296,7 @@ export default function AdminLocationsPage() {
                 className="uppercase"
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: "0.62rem",
+                  fontSize: "0.875rem",
                   letterSpacing: "0.2em",
                   padding: "0.3rem 0.7rem",
                   color: active ? "#06120c" : GOLD_SOFT,
@@ -323,7 +323,7 @@ export default function AdminLocationsPage() {
             background: "transparent",
             color: CREAM,
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             minWidth: "260px",
             maxWidth: "420px",
           }}
@@ -338,7 +338,7 @@ export default function AdminLocationsPage() {
               padding: "0.75rem 1rem",
               color: "#fecaca",
               fontFamily: "var(--font-body)",
-              fontSize: "0.85rem",
+              fontSize: "1rem",
               lineHeight: 1.5,
             }}
           >
@@ -359,7 +359,7 @@ export default function AdminLocationsPage() {
                 borderCollapse: "collapse",
                 fontFamily: "var(--font-body)",
                 color: CREAM,
-                fontSize: "0.82rem",
+                fontSize: "1rem",
                 minWidth: 760,
               }}
             >
@@ -368,7 +368,7 @@ export default function AdminLocationsPage() {
                   style={{
                     textAlign: "left",
                     color: GOLD_SOFT,
-                    fontSize: "0.62rem",
+                    fontSize: "0.875rem",
                     letterSpacing: "0.22em",
                     textTransform: "uppercase",
                   }}
@@ -452,7 +452,7 @@ export default function AdminLocationsPage() {
                             <div
                               style={{
                                 color: "rgba(239,68,68,0.85)",
-                                fontSize: "0.65rem",
+                                fontSize: "0.875rem",
                                 letterSpacing: "0.2em",
                                 textTransform: "uppercase",
                                 marginTop: 2,
@@ -533,7 +533,7 @@ export default function AdminLocationsPage() {
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.72rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.22em",
               color: CREAM,
             }}
@@ -679,7 +679,7 @@ export default function AdminLocationsPage() {
             justifyContent: "center",
             color: FADED,
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.2em",
             textTransform: "uppercase",
           }}
@@ -780,7 +780,7 @@ function ConfirmModal({
           <p
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.85rem",
+              fontSize: "1rem",
               color: FADED,
               lineHeight: 1.55,
               margin: 0,
@@ -1140,7 +1140,7 @@ function LocationModal({
           <div
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.72rem",
+              fontSize: "1rem",
               letterSpacing: "0.06em",
               color: pinTouched ? GOLD_SOFT : FADED,
               marginBottom: "0.85rem",
@@ -1259,7 +1259,7 @@ function LocationModal({
               style={{
                 color: "#fca5a5",
                 fontFamily: "var(--font-body)",
-                fontSize: "0.78rem",
+                fontSize: "1rem",
                 marginTop: "0.75rem",
               }}
             >
@@ -1315,7 +1315,7 @@ function Label({ children }: { children: React.ReactNode }) {
       style={{
         display: "block",
         fontFamily: "var(--font-body)",
-        fontSize: "0.6rem",
+        fontSize: "0.875rem",
         letterSpacing: "0.22em",
         color: FADED,
         marginBottom: "0.3rem",
@@ -1351,7 +1351,7 @@ const td: React.CSSProperties = {
 };
 const refreshBtn: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.7rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   color: GOLD,
   border: `1px solid ${GOLD}`,
@@ -1361,7 +1361,7 @@ const refreshBtn: React.CSSProperties = {
 };
 const miniBtn: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.62rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   color: GOLD_SOFT,
   border: `1px solid rgba(245,158,11,0.4)`,
@@ -1376,5 +1376,5 @@ const textInput: React.CSSProperties = {
   background: "transparent",
   color: CREAM,
   fontFamily: "var(--font-body)",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
 };

@@ -182,7 +182,7 @@ export default function ProductCard({
               right: 14,
               zIndex: 4,
               fontFamily: "var(--font-body)",
-              fontSize: 9,
+              fontSize: 14,
               fontWeight: 500,
               letterSpacing: "2px",
               textTransform: "uppercase",
@@ -199,7 +199,7 @@ export default function ProductCard({
             }}
           >
             <span>Test Reports</span>
-            <span aria-hidden="true" style={{ fontSize: 10, lineHeight: 1 }}>✓</span>
+            <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>✓</span>
           </div>
 
           {/* Floating particles */}
@@ -321,8 +321,8 @@ export default function ProductCard({
           <div
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 400,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "3px",
               textTransform: "uppercase",
               color: "#8a7a5a",
@@ -352,7 +352,7 @@ export default function ProductCard({
           <div
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 12,
+              fontSize: 16,
               fontWeight: 300,
               color: "#7a7060",
               lineHeight: 1.55,
@@ -402,7 +402,7 @@ export default function ProductCard({
                 <div
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: 9,
+                    fontSize: 14,
                     letterSpacing: "1.5px",
                     textTransform: "uppercase",
                     color: "#5a5040",
@@ -459,8 +459,8 @@ export default function ProductCard({
               }}
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: 11,
-                fontWeight: 400,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "2px",
                 textTransform: "uppercase",
                 color: "#024628",

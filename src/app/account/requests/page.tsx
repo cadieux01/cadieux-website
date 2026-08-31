@@ -187,8 +187,8 @@ export default function YourRequestsPage() {
           left: "calc(20px + env(safe-area-inset-left))",
           zIndex: 101,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
-          fontWeight: 200,
+          fontSize: 14,
+          fontWeight: 500,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
           color: "#024628",
@@ -198,7 +198,7 @@ export default function YourRequestsPage() {
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 14 }}>←</span> Cadieux
+        <span style={{ fontSize: 16 }}>←</span> Cadieux
       </Link>
 
       <div
@@ -227,8 +227,8 @@ export default function YourRequestsPage() {
           style={{
             margin: "8px 0 36px",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 200,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.7)",
@@ -255,7 +255,7 @@ export default function YourRequestsPage() {
             <p
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: 200,
                 color: "rgba(2,70,40,0.8)",
                 lineHeight: 1.7,
@@ -273,8 +273,8 @@ export default function YourRequestsPage() {
                 border: "1px solid #024628",
                 background: "#024628",
                 fontFamily: "var(--font-body)",
-                fontSize: 11,
-                fontWeight: 400,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.4em",
                 textTransform: "uppercase",
                 color: "#FBF3D4",
@@ -291,7 +291,7 @@ export default function YourRequestsPage() {
           <p
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 14,
+              fontSize: 16,
               color: "#991B1B",
             }}
           >
@@ -325,8 +325,8 @@ export default function YourRequestsPage() {
                     border: "none",
                     padding: "12px 14px",
                     fontFamily: "var(--font-body)",
-                    fontSize: 10,
-                    fontWeight: 400,
+                    fontSize: 14,
+                    fontWeight: 500,
                     letterSpacing: "0.3em",
                     textTransform: "uppercase",
                     color:
@@ -390,7 +390,7 @@ function EmptyState({ text }: { text: string }) {
     <p
       style={{
         fontFamily: "var(--font-body)",
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: 200,
         color: "rgba(2,70,40,0.7)",
         lineHeight: 1.7,
@@ -412,8 +412,8 @@ function StatusBadge({ status }: { status: string }) {
         color: fg,
         border: `1px solid ${border}`,
         fontFamily: "var(--font-body)",
-        fontSize: 9,
-        fontWeight: 400,
+        fontSize: 14,
+        fontWeight: 500,
         letterSpacing: "0.3em",
         textTransform: "uppercase",
       }}
@@ -458,8 +458,8 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
           <div
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 9,
-              fontWeight: 400,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.4em",
               textTransform: "uppercase",
               color: "rgba(2,70,40,0.65)",
@@ -476,7 +476,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
             href={`/orders/${cr.order_id}`}
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 14,
+              fontSize: 16,
               color: "#024628",
               textDecoration: "none",
             }}
@@ -517,7 +517,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
         <p
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 13,
+            fontSize: 16,
             color: "rgba(2,70,40,0.8)",
             margin: "8px 0 0",
           }}
@@ -533,7 +533,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
         <p
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 16,
             color: "rgba(2,70,40,0.7)",
             margin: "10px 0 0",
             fontStyle: "italic",
@@ -547,7 +547,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
         <p
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 16,
             color: "rgba(2,70,40,0.7)",
             margin: "10px 0 0",
           }}
@@ -560,7 +560,7 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
         style={{
           marginTop: 12,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
+          fontSize: 14,
           letterSpacing: "0.2em",
           color: "rgba(2,70,40,0.55)",
         }}
@@ -589,8 +589,8 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
           <div
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 9,
-              fontWeight: 400,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.4em",
               textTransform: "uppercase",
               color: "rgba(2,70,40,0.65)",
@@ -603,7 +603,7 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
             href={`/subscriptions/${cr.subscription_id}`}
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 14,
+              fontSize: 16,
               color: "#024628",
               textDecoration: "none",
             }}
@@ -633,7 +633,7 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
         <p
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 16,
             color: "rgba(2,70,40,0.7)",
             margin: "10px 0 0",
             fontStyle: "italic",
@@ -647,7 +647,7 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
         <p
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 16,
             color: "rgba(2,70,40,0.7)",
             margin: "10px 0 0",
           }}
@@ -660,7 +660,7 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
         style={{
           marginTop: 12,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
+          fontSize: 14,
           letterSpacing: "0.2em",
           color: "rgba(2,70,40,0.55)",
         }}
@@ -689,7 +689,7 @@ function PaymentCard({ p }: { p: PaymentRow }) {
           href={`/orders/${p.order_id}`}
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 14,
+            fontSize: 16,
             color: "#024628",
             textDecoration: "none",
           }}
@@ -701,7 +701,7 @@ function PaymentCard({ p }: { p: PaymentRow }) {
       <div
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: 13,
+          fontSize: 16,
           color: "rgba(2,70,40,0.8)",
         }}
       >
@@ -712,7 +712,7 @@ function PaymentCard({ p }: { p: PaymentRow }) {
         style={{
           marginTop: 10,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
+          fontSize: 14,
           letterSpacing: "0.2em",
           color: "rgba(2,70,40,0.55)",
         }}
@@ -733,7 +733,7 @@ function DiffGrid({ rows }: { rows: Array<[string, string, string]> }) {
         rowGap: 6,
         columnGap: 12,
         fontFamily: "var(--font-body)",
-        fontSize: 13,
+        fontSize: 16,
         color: "rgba(2,70,40,0.8)",
       }}
     >

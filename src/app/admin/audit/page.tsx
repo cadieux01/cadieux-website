@@ -365,7 +365,7 @@ export default function UnifiedAuditPage() {
         <span
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.8rem",
+            fontSize: "1rem",
             letterSpacing: "0.04em",
             color: CREAM,
           }}
@@ -401,7 +401,7 @@ export default function UnifiedAuditPage() {
               background: "transparent",
               color: CREAM,
               fontFamily: "var(--font-body)",
-              fontSize: "0.85rem",
+              fontSize: "1rem",
               padding: "0.5rem 0.75rem",
               minWidth: 280,
               flex: "1 1 280px",
@@ -419,7 +419,7 @@ export default function UnifiedAuditPage() {
             padding: "0.85rem 1rem",
             color: "#fecaca",
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             marginBottom: "1rem",
           }}
         >
@@ -436,7 +436,7 @@ export default function UnifiedAuditPage() {
               borderCollapse: "collapse",
               fontFamily: MONO,
               color: CREAM,
-              fontSize: "0.8rem",
+              fontSize: "1rem",
             }}
           >
             <thead>
@@ -444,7 +444,7 @@ export default function UnifiedAuditPage() {
                 style={{
                   textAlign: "left",
                   color: GOLD_SOFT,
-                  fontSize: "0.6rem",
+                  fontSize: "0.875rem",
                   letterSpacing: "0.2em",
                   textTransform: "uppercase",
                   fontFamily: "var(--font-body)",
@@ -497,7 +497,7 @@ export default function UnifiedAuditPage() {
       </div>
 
       <div className="flex items-center justify-between flex-wrap gap-3" style={{ marginTop: "1rem" }}>
-        <span style={{ color: FADED, fontSize: "0.75rem", fontFamily: "var(--font-body)" }}>
+        <span style={{ color: FADED, fontSize: "1rem", fontFamily: "var(--font-body)" }}>
           {rows.length === 0
             ? "No events"
             : `Showing ${(page - 1) * PER_PAGE + 1}–${Math.min(page * PER_PAGE, rows.length)} of ${rows.length}`}
@@ -512,7 +512,7 @@ export default function UnifiedAuditPage() {
           >
             ← Newer
           </button>
-          <span style={{ color: FADED, fontSize: "0.72rem", alignSelf: "center", fontFamily: "var(--font-body)" }}>
+          <span style={{ color: FADED, fontSize: "1rem", alignSelf: "center", fontFamily: "var(--font-body)" }}>
             Page {page} of {totalPages}
           </span>
           <button
@@ -564,7 +564,7 @@ function FragmentRow({
         <td style={{ ...td, fontFamily: "var(--font-body)" }}>
           {r.description || "—"}
           {r.entity_id ? (
-            <div style={{ color: FADED, fontSize: "0.68rem", wordBreak: "break-all", marginTop: 2 }}>
+            <div style={{ color: FADED, fontSize: "1rem", wordBreak: "break-all", marginTop: 2 }}>
               {r.entity_type ? `${r.entity_type} · ` : ""}
               {r.entity_id}
             </div>
@@ -578,7 +578,7 @@ function FragmentRow({
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.6rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.18em",
                 color: GOLD_SOFT,
                 border: `1px solid ${BORDER}`,
@@ -622,7 +622,7 @@ function HumanDiff({ oldValue, newValue }: { oldValue: unknown; newValue: unknow
         padding: "0.9rem 1rem",
         fontFamily: "var(--font-body)",
         color: CREAM,
-        fontSize: "0.85rem",
+        fontSize: "1rem",
         lineHeight: 1.55,
       }}
     >
@@ -695,7 +695,7 @@ function DiffSection({
         style={{
           color: tone,
           fontFamily: "var(--font-body)",
-          fontSize: "0.62rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.22em",
           marginBottom: "0.45rem",
         }}
@@ -721,7 +721,7 @@ function BulletList({ items }: { items: string[] }) {
 
 function PlainLine({ children, muted }: { children: React.ReactNode; muted?: boolean }) {
   return (
-    <div style={{ color: muted ? FADED : CREAM, fontSize: "0.8rem" }}>{children}</div>
+    <div style={{ color: muted ? FADED : CREAM, fontSize: "1rem" }}>{children}</div>
   );
 }
 
@@ -734,7 +734,7 @@ function SourceBadge({ source }: { source: string | null }) {
       className="uppercase"
       style={{
         fontFamily: "var(--font-body)",
-        fontSize: "0.58rem",
+        fontSize: "0.875rem",
         letterSpacing: "0.16em",
         color,
         border: `1px solid ${color}`,
@@ -752,7 +752,7 @@ function FilterLabel({ children }: { children: React.ReactNode }) {
       className="uppercase"
       style={{
         color: FADED,
-        fontSize: "0.6rem",
+        fontSize: "0.875rem",
         letterSpacing: "0.22em",
         fontFamily: "var(--font-body)",
         minWidth: 56,
@@ -796,7 +796,7 @@ const td: React.CSSProperties = {
 };
 const chipBtn: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.7rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   color: GOLD,
   border: `1px solid ${GOLD}`,
@@ -805,7 +805,7 @@ const chipBtn: React.CSSProperties = {
 };
 const pagerBtn: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   padding: "0.35rem 0.85rem",
   color: GOLD_SOFT,

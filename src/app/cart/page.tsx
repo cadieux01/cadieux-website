@@ -10,7 +10,7 @@ const GRAIN = "url(/grain.svg)";
 
 function chip(selected: boolean) {
   return {
-    fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+    fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
     letterSpacing: "0.25em", textTransform: "uppercase" as const,
     padding: "8px 18px", cursor: "pointer", border: "none",
     background: selected ? "#024628" : "rgba(2,70,40,0.07)",
@@ -32,12 +32,12 @@ export default function CartPage() {
       {/* Back link */}
       <Link href="/shop" style={{
         position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-        fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
         letterSpacing: "0.35em", textTransform: "uppercase",
         color: "#024628", textDecoration: "none",
         display: "flex", alignItems: "center", gap: 8,
       }}>
-        <span style={{ fontSize: 14 }}>←</span> Shop
+        <span style={{ fontSize: 16 }}>←</span> Shop
       </Link>
 
       <div style={{ position: "relative", zIndex: 1, padding: "100px clamp(28px,8vw,120px) 120px" }}>
@@ -69,8 +69,8 @@ export default function CartPage() {
               style={{
                 margin: 0,
                 fontFamily: "var(--font-body)",
-                fontSize: 10,
-                fontWeight: 300,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.35em",
                 textTransform: "uppercase",
                 color: "#024628",
@@ -82,7 +82,7 @@ export default function CartPage() {
               style={{
                 margin: 0,
                 fontFamily: "var(--font-body)",
-                fontSize: 13,
+                fontSize: 16,
                 fontWeight: 300,
                 lineHeight: 1.55,
                 color: "#024628",
@@ -95,8 +95,8 @@ export default function CartPage() {
 
         {cart.length === 0 ? (
           <div>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "rgba(2,70,40,0.65)", letterSpacing: "0.1em", marginBottom: 32 }}>Your cart is empty.</p>
-            <Link href="/shop" style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "#FBF3D4", textDecoration: "none", background: "#024628", padding: "14px 28px", display: "inline-block" }}>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, color: "rgba(2,70,40,0.65)", letterSpacing: "0.1em", marginBottom: 32 }}>Your cart is empty.</p>
+            <Link href="/shop" style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#FBF3D4", textDecoration: "none", background: "#024628", padding: "14px 28px", display: "inline-block" }}>
               Explore Breads
             </Link>
           </div>
@@ -113,8 +113,8 @@ export default function CartPage() {
                   {item.orderType === "sub" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                        <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#024628", border: "1px solid rgba(2,70,40,0.3)", padding: "4px 12px" }}>Subscription</span>
-                        <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(2,70,40,0.6)", padding: "4px 0" }}>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.3em", textTransform: "uppercase", color: "#024628", border: "1px solid rgba(2,70,40,0.3)", padding: "4px 12px" }}>Subscription</span>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(2,70,40,0.6)", padding: "4px 0" }}>
                           {item.weeks} {item.weeks === 1 ? "week" : "weeks"}
                           {item.days && item.days.length > 0 ? ` · ${item.days.length} ${item.days.length === 1 ? "day" : "days"}/wk` : ""}
                         </span>
@@ -122,14 +122,14 @@ export default function CartPage() {
                       {item.slotMode === "custom" && item.slotsByDay ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingLeft: 2 }}>
                           {(item.days || []).map((label) => (
-                            <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, color: "rgba(2,70,40,0.75)", letterSpacing: "0.05em" }}>
+                            <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(2,70,40,0.75)", letterSpacing: "0.05em" }}>
                               <span>{label}</span>
                               <span>{item.slotsByDay![label.toLowerCase().slice(0, 3)] || "—"}</span>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, color: "rgba(2,70,40,0.75)", letterSpacing: "0.05em" }}>
+                        <div style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(2,70,40,0.75)", letterSpacing: "0.05em" }}>
                           {(item.days || (item.day ? [item.day] : [])).join(", ")}
                           {item.slot || item.time ? ` · ${item.slot || item.time}` : ""}
                         </div>
@@ -139,24 +139,24 @@ export default function CartPage() {
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     {item.orderType === "sub" ? (
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.25em", color: "rgba(2,70,40,0.6)", textTransform: "uppercase" }}>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.25em", color: "rgba(2,70,40,0.6)", textTransform: "uppercase" }}>
                         Full plan
                       </span>
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid rgba(2,70,40,0.25)" }}>
                         <button onClick={() => (item.qty <= 1 ? removeFromCart(i) : updateQty(i, item.qty - 1))} style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}>−</button>
-                        <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "#024628", width: 34, textAlign: "center" }}>{item.qty}</span>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, color: "#024628", width: 34, textAlign: "center" }}>{item.qty}</span>
                         <button onClick={() => updateQty(i, item.qty + 1)} style={{ ...chip(false), padding: "7px 14px", fontSize: 16, lineHeight: 1 }}>+</button>
                       </div>
                     )}
 
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.2em", color: "rgba(2,70,40,0.6)", textTransform: "uppercase" }}>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", color: "rgba(2,70,40,0.6)", textTransform: "uppercase" }}>
                       {item.orderType === "sub" ? `₹${item.price} total` : `₹${item.price} each`}
                     </span>
 
                     <button
                       onClick={() => removeFromCart(i)}
-                      style={{ background: "none", border: "1px solid rgba(2,70,40,0.2)", cursor: "pointer", padding: "7px 14px", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.6)", WebkitTapHighlightColor: "transparent", transition: "color 0.2s, border-color 0.2s" }}
+                      style={{ background: "none", border: "1px solid rgba(2,70,40,0.2)", cursor: "pointer", padding: "7px 14px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.6)", WebkitTapHighlightColor: "transparent", transition: "color 0.2s, border-color 0.2s" }}
                       onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#991B1B"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(153,27,27,0.4)"; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(2,70,40,0.6)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(2,70,40,0.2)"; }}
                     >Remove</button>
@@ -167,15 +167,15 @@ export default function CartPage() {
 
             <div style={{ borderTop: "1px solid rgba(2,70,40,0.25)", paddingTop: 28, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>Total</p>
-                <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(2,70,40,0.55)" }}>Incl. GST</p>
+                <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>Total</p>
+                <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(2,70,40,0.55)" }}>Incl. GST</p>
               </div>
               <p style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: "clamp(28px,6vw,42px)", fontWeight: 300, color: "#024628" }}>₹{cartTotal}</p>
             </div>
 
             <button
               onClick={() => router.push("/checkout")}
-              style={{ display: "block", width: "100%", marginTop: 32, background: "#024628", border: "none", padding: "18px 0", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.45em", textTransform: "uppercase", color: "#FBF3D4", WebkitTapHighlightColor: "transparent" }}
+              style={{ display: "block", width: "100%", marginTop: 32, background: "#024628", border: "none", padding: "18px 0", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.45em", textTransform: "uppercase", color: "#FBF3D4", WebkitTapHighlightColor: "transparent" }}
             >
               Proceed to Checkout
             </button>

@@ -190,7 +190,7 @@ function PrintOrdersPageInner() {
           <h1 style={{ fontSize: "1.4rem", margin: 0, letterSpacing: "0.1em" }}>
             Cadieux — Orders
           </h1>
-          <p style={{ margin: "0.3rem 0 0", color: "#444", fontSize: "0.85rem" }}>
+          <p style={{ margin: "0.3rem 0 0", color: "#444", fontSize: "1rem" }}>
             {rangeLabel} · Status: {status} · Search: {q || "—"} · Generated{" "}
             {new Date().toLocaleString("en-IN")}
           </p>
@@ -206,11 +206,11 @@ function PrintOrdersPageInner() {
         <h1 style={{ fontSize: "1.4rem", margin: 0, letterSpacing: "0.1em" }}>
           Cadieux — Orders
         </h1>
-        <p style={{ margin: "0.3rem 0 0", color: "#444", fontSize: "0.85rem" }}>
+        <p style={{ margin: "0.3rem 0 0", color: "#444", fontSize: "1rem" }}>
           {rangeLabel} · Status: {status} · Search: {q || "—"} · Generated{" "}
           {new Date().toLocaleString("en-IN")}
         </p>
-        <p style={{ margin: "0.3rem 0 0", fontSize: "0.85rem" }}>
+        <p style={{ margin: "0.3rem 0 0", fontSize: "1rem" }}>
           {filtered.length} order{filtered.length === 1 ? "" : "s"}
         </p>
       </header>
@@ -296,14 +296,14 @@ const printTh: React.CSSProperties = {
   border: "1px solid #ccc",
   padding: "6px 8px",
   textAlign: "left",
-  fontSize: "0.75rem",
+  fontSize: "1rem",
   background: "#f3f3f3",
 };
 
 const printTd: React.CSSProperties = {
   border: "1px solid #ccc",
   padding: "6px 8px",
-  fontSize: "0.8rem",
+  fontSize: "1rem",
   verticalAlign: "top",
 };
 
@@ -316,7 +316,7 @@ const groupHeading: React.CSSProperties = {
 };
 
 const slotHeading: React.CSSProperties = {
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   margin: "0.6rem 0 0.3rem",
   letterSpacing: "0.04em",
   color: "#000",

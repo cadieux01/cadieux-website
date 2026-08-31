@@ -132,7 +132,7 @@ export default function DatePicker({
     minHeight: 46,
     textAlign: "left",
     fontFamily: "var(--font-body)",
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 200,
     letterSpacing: "0.04em",
     color: selected ? CREAM : "rgba(251,243,212,0.7)",
@@ -238,7 +238,7 @@ export default function DatePicker({
             <div
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: 300,
                 letterSpacing: "0.06em",
                 color: CREAM,
@@ -271,8 +271,8 @@ export default function DatePicker({
                 key={d}
                 style={{
                   textAlign: "center",
-                  fontSize: 10,
-                  fontWeight: 400,
+                  fontSize: 14,
+                  fontWeight: 500,
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   color: "rgba(251,243,212,0.7)",
@@ -331,7 +331,7 @@ export default function DatePicker({
                         ? "#024628"
                         : CREAM,
                     fontFamily: "var(--font-body)",
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: isSelected ? 600 : 300,
                     transition: "background 0.1s ease",
                   }}

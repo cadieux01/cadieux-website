@@ -854,7 +854,7 @@ export default function ServiceAreasPage() {
             border: "1px solid rgba(34,197,94,0.45)",
             color: "#bbf7d0",
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 16,
             letterSpacing: "0.05em",
           }}
         >
@@ -876,7 +876,7 @@ export default function ServiceAreasPage() {
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.65rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.3em",
             color: GOLD,
             marginBottom: 12,
@@ -889,7 +889,7 @@ export default function ServiceAreasPage() {
             margin: "0 0 12px",
             color: FADED,
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 16,
             lineHeight: 1.5,
           }}
         >
@@ -1085,7 +1085,7 @@ export default function ServiceAreasPage() {
                             : "transparent",
                           color: CREAM,
                           fontFamily: "var(--font-body)",
-                          fontSize: 13,
+                          fontSize: 16,
                           lineHeight: 1.35,
                         }}
                       >
@@ -1094,7 +1094,7 @@ export default function ServiceAreasPage() {
                           <div
                             style={{
                               color: FADED,
-                              fontSize: 11,
+                              fontSize: 16,
                               marginTop: 2,
                             }}
                           >
@@ -1149,7 +1149,7 @@ export default function ServiceAreasPage() {
               margin: "10px 0 0",
               color: "#ef4444",
               fontFamily: "var(--font-body)",
-              fontSize: 12,
+              fontSize: 16,
             }}
           >
             {addError}
@@ -1182,7 +1182,7 @@ export default function ServiceAreasPage() {
                 color: active ? CREAM : "rgba(251,243,212,0.55)",
                 padding: "6px 14px",
                 fontFamily: "var(--font-body)",
-                fontSize: "0.65rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.22em",
                 cursor: "pointer",
               }}
@@ -1283,7 +1283,7 @@ export default function ServiceAreasPage() {
                           className="uppercase"
                           style={{
                             fontFamily: "var(--font-body)",
-                            fontSize: "0.55rem",
+                            fontSize: "0.875rem",
                             letterSpacing: "0.25em",
                             padding: "2px 8px",
                             borderRadius: 99,
@@ -1360,7 +1360,7 @@ export default function ServiceAreasPage() {
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.7rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.22em",
                 color: CREAM,
               }}
@@ -1402,7 +1402,7 @@ export default function ServiceAreasPage() {
                 style={{
                   ...dangerBtn,
                   padding: "8px 16px",
-                  fontSize: "0.65rem",
+                  fontSize: "0.875rem",
                   cursor: bulkBusy ? "wait" : "pointer",
                   opacity: bulkBusy ? 0.6 : 1,
                 }}
@@ -1483,7 +1483,7 @@ export default function ServiceAreasPage() {
               <p
                 style={{
                   margin: 0,
-                  fontSize: "0.85rem",
+                  fontSize: "1rem",
                   color: "rgba(251,243,212,0.75)",
                   lineHeight: 1.5,
                 }}
@@ -1527,7 +1527,7 @@ export default function ServiceAreasPage() {
                 style={{
                   ...dangerBtn,
                   padding: "8px 16px",
-                  fontSize: "0.65rem",
+                  fontSize: "0.875rem",
                   cursor: bulkBusy ? "wait" : "pointer",
                   opacity: bulkBusy ? 0.6 : 1,
                 }}
@@ -1598,7 +1598,7 @@ export default function ServiceAreasPage() {
               <p
                 style={{
                   margin: "0.5rem 0 0",
-                  fontSize: "0.75rem",
+                  fontSize: "1rem",
                   color: FADED,
                   lineHeight: 1.5,
                 }}
@@ -1637,7 +1637,7 @@ export default function ServiceAreasPage() {
                   resize: "vertical",
                   minHeight: 200,
                   fontFamily: "var(--font-mono, ui-monospace, monospace)",
-                  fontSize: 13,
+                  fontSize: 16,
                   lineHeight: 1.5,
                   whiteSpace: "pre",
                 }}
@@ -1655,7 +1655,7 @@ export default function ServiceAreasPage() {
                     background: "rgba(245,158,11,0.06)",
                     border: `1px solid ${BORDER}`,
                     borderRadius: 6,
-                    fontSize: 12,
+                    fontSize: 16,
                   }}
                 >
                   <span style={{ color: "#bbf7d0" }}>
@@ -1684,7 +1684,7 @@ export default function ServiceAreasPage() {
               {parsedBulk.invalidLines.length > 0 && (
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize: 16,
                     color: "rgba(239,68,68,0.85)",
                     fontFamily: "var(--font-mono, ui-monospace, monospace)",
                     background: "rgba(239,68,68,0.05)",
@@ -1699,7 +1699,7 @@ export default function ServiceAreasPage() {
                     className="uppercase"
                     style={{
                       letterSpacing: "0.2em",
-                      fontSize: 10,
+                      fontSize: 14,
                       marginBottom: 4,
                       color: "#ef4444",
                     }}
@@ -1723,7 +1723,7 @@ export default function ServiceAreasPage() {
                     margin: 0,
                     color: "#ef4444",
                     fontFamily: "var(--font-body)",
-                    fontSize: 12,
+                    fontSize: 16,
                   }}
                 >
                   {bulkImportError}
@@ -1791,7 +1791,7 @@ const inputBase: React.CSSProperties = {
   padding: "8px 12px",
   color: CREAM,
   fontFamily: "var(--font-body)",
-  fontSize: 13,
+  fontSize: 16,
   letterSpacing: "0.04em",
   outline: "none",
 };
@@ -1800,7 +1800,7 @@ const primaryBtn: React.CSSProperties = {
   border: `1px solid ${GOLD}`,
   color: GOLD,
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   padding: "8px 16px",
   background: "transparent",
@@ -1811,7 +1811,7 @@ const dangerBtn: React.CSSProperties = {
   border: "1px solid rgba(239,68,68,0.5)",
   color: "#ef4444",
   fontFamily: "var(--font-body)",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   padding: "6px 12px",
   background: "transparent",
@@ -1822,17 +1822,17 @@ const th: React.CSSProperties = {
   textAlign: "left",
   padding: "10px 14px",
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   color: FADED,
   textTransform: "uppercase",
-  fontWeight: 400,
+  fontWeight: 500,
 };
 
 const td: React.CSSProperties = {
   padding: "10px 14px",
   fontFamily: "var(--font-body)",
-  fontSize: 13,
+  fontSize: 16,
   color: "rgba(251,243,212,0.85)",
   verticalAlign: "middle",
 };
@@ -1840,5 +1840,5 @@ const td: React.CSSProperties = {
 const mutedText: React.CSSProperties = {
   color: FADED,
   fontFamily: "var(--font-body)",
-  fontSize: 13,
+  fontSize: 16,
 };

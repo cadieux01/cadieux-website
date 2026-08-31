@@ -165,7 +165,7 @@ export function ServiceabilityPanel() {
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.2em",
             color: "rgba(192,200,206,0.55)",
           }}
@@ -179,7 +179,7 @@ export function ServiceabilityPanel() {
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.65rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.22em",
             padding: "0.35rem 0.85rem",
             background: "transparent",
@@ -202,7 +202,7 @@ export function ServiceabilityPanel() {
             border: "1px solid rgba(34,197,94,0.45)",
             color: "#bbf7d0",
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 16,
             letterSpacing: "0.05em",
           }}
         >
@@ -228,7 +228,7 @@ export function ServiceabilityPanel() {
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.65rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 padding: "6px 14px",
                 background: active ? "rgba(245,158,11,0.15)" : "transparent",
@@ -288,7 +288,7 @@ export function ServiceabilityPanel() {
                     className="uppercase"
                     style={{
                       fontFamily: "var(--font-body)",
-                      fontSize: "0.6rem",
+                      fontSize: "0.875rem",
                       letterSpacing: "0.25em",
                       padding: "3px 10px",
                       borderRadius: 99,
@@ -299,7 +299,7 @@ export function ServiceabilityPanel() {
                   >
                     {r.status}
                   </span>
-                  <span style={{ ...mutedText, fontSize: 12 }}>
+                  <span style={{ ...mutedText, fontSize: 16 }}>
                     {new Date(r.created_at).toLocaleString("en-IN", {
                       day: "2-digit",
                       month: "short",
@@ -422,7 +422,7 @@ const inputBase: React.CSSProperties = {
   padding: "8px 12px",
   color: CREAM,
   fontFamily: "var(--font-body)",
-  fontSize: 13,
+  fontSize: 16,
   letterSpacing: "0.04em",
   outline: "none",
 };
@@ -431,7 +431,7 @@ const primaryBtn: React.CSSProperties = {
   border: `1px solid ${GOLD}`,
   color: GOLD,
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   padding: "8px 16px",
   background: "transparent",
@@ -442,7 +442,7 @@ const dangerBtn: React.CSSProperties = {
   border: "1px solid rgba(239,68,68,0.5)",
   color: "#ef4444",
   fontFamily: "var(--font-body)",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   padding: "6px 12px",
   background: "transparent",
@@ -451,7 +451,7 @@ const dangerBtn: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   color: FADED,
   textTransform: "uppercase",
@@ -461,12 +461,12 @@ const labelStyle: React.CSSProperties = {
 
 const valueStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: 13,
+  fontSize: 16,
   color: "rgba(251,243,212,0.85)",
 };
 
 const mutedText: React.CSSProperties = {
   color: FADED,
   fontFamily: "var(--font-body)",
-  fontSize: 13,
+  fontSize: 16,
 };

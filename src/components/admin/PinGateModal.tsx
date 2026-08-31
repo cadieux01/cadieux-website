@@ -199,7 +199,7 @@ function PinGateModal({
           style={{
             fontFamily: "var(--font-body)",
             color: FADED,
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             lineHeight: 1.55,
             margin: "1rem 0 1rem",
           }}
@@ -212,7 +212,7 @@ function PinGateModal({
           className="uppercase block"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.62rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.22em",
             color: FADED,
             marginBottom: "0.5rem",
@@ -254,7 +254,7 @@ function PinGateModal({
             style={{
               color: "#fecaca",
               fontFamily: "var(--font-body)",
-              fontSize: "0.78rem",
+              fontSize: "1rem",
               margin: "0.7rem 0 0",
             }}
           >
@@ -269,7 +269,7 @@ function PinGateModal({
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.22em",
               color: FADED,
               background: "transparent",
@@ -287,7 +287,7 @@ function PinGateModal({
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.22em",
               color: CREAM,
               background: GREEN,

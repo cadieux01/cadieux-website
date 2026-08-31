@@ -378,7 +378,7 @@ const brandName: React.CSSProperties = {
 const brandTagline: React.CSSProperties = {
   marginTop: "0.15rem",
   color: "#444",
-  fontSize: "0.8rem",
+  fontSize: "1rem",
   letterSpacing: "0.03em",
 };
 
@@ -399,7 +399,7 @@ const metaGrid: React.CSSProperties = {
 };
 
 const metaLabel: React.CSSProperties = {
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.14em",
   textTransform: "uppercase",
   color: "#555",
@@ -407,7 +407,7 @@ const metaLabel: React.CSSProperties = {
 };
 
 const metaValue: React.CSSProperties = {
-  fontSize: "0.9rem",
+  fontSize: "1rem",
   fontWeight: 500,
   color: "#000",
 };
@@ -425,7 +425,7 @@ const colBox: React.CSSProperties = {
 };
 
 const sectionHeading: React.CSSProperties = {
-  fontSize: "0.7rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.14em",
   textTransform: "uppercase",
   color: "#555",
@@ -433,13 +433,13 @@ const sectionHeading: React.CSSProperties = {
 };
 
 const detailValue: React.CSSProperties = {
-  fontSize: "0.9rem",
+  fontSize: "1rem",
   color: "#000",
   lineHeight: 1.35,
 };
 
 const detailMuted: React.CSSProperties = {
-  fontSize: "0.8rem",
+  fontSize: "1rem",
   color: "#444",
   lineHeight: 1.35,
 };
@@ -454,14 +454,14 @@ const itemsTh: React.CSSProperties = {
   border: "1px solid #ccc",
   padding: "6px 8px",
   textAlign: "left",
-  fontSize: "0.75rem",
+  fontSize: "1rem",
   background: "#f3f3f3",
 };
 
 const itemsTd: React.CSSProperties = {
   border: "1px solid #ccc",
   padding: "6px 8px",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   verticalAlign: "top",
 };
 
@@ -477,7 +477,7 @@ const totalsBlock: React.CSSProperties = {
 const totalsRow: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   padding: "0.15rem 0",
 };
 
@@ -493,7 +493,7 @@ const footer: React.CSSProperties = {
   marginTop: "1.5rem",
   paddingTop: "0.5rem",
   borderTop: "1px solid #ccc",
-  fontSize: "0.75rem",
+  fontSize: "1rem",
   color: "#555",
   textAlign: "center",
   letterSpacing: "0.05em",
@@ -505,7 +505,7 @@ const printBtn: React.CSSProperties = {
   border: "1px solid #024628",
   borderRadius: 4,
   padding: "0.4rem 0.9rem",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   cursor: "pointer",
   letterSpacing: "0.05em",
 };

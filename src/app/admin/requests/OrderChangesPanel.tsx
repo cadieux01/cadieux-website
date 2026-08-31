@@ -167,7 +167,7 @@ export function OrderChangesPanel() {
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.25em",
             color: "#f59e0b",
             border: "1px solid #f59e0b",
@@ -197,7 +197,7 @@ export function OrderChangesPanel() {
                   color: active ? "#fbf3d4" : "rgba(251,243,212,0.55)",
                   padding: "6px 14px",
                   fontFamily: "var(--font-body)",
-                  fontSize: "0.65rem",
+                  fontSize: "0.875rem",
                   letterSpacing: "0.22em",
                   cursor: "pointer",
                 }}
@@ -219,7 +219,7 @@ export function OrderChangesPanel() {
             padding: "0.8rem 1rem",
             color: "#fca5a5",
             marginBottom: "1rem",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             fontFamily: "var(--font-body)",
           }}
         >
@@ -261,7 +261,7 @@ export function OrderChangesPanel() {
                   gap: 10,
                   fontFamily: "var(--font-body)",
                   color: "#fbf3d4",
-                  fontSize: "0.82rem",
+                  fontSize: "1rem",
                 }}
               >
                 <div
@@ -293,7 +293,7 @@ export function OrderChangesPanel() {
                       style={{
                         marginTop: 4,
                         color: "rgba(251,243,212,0.6)",
-                        fontSize: "0.78rem",
+                        fontSize: "1rem",
                       }}
                     >
                       {r.customer?.full_name ?? "—"} · {r.customer?.phone ?? "—"}
@@ -303,7 +303,7 @@ export function OrderChangesPanel() {
                         style={{
                           marginTop: 2,
                           color: "rgba(251,243,212,0.45)",
-                          fontSize: "0.72rem",
+                          fontSize: "0.875rem",
                           textTransform: "uppercase",
                           letterSpacing: "0.12em",
                         }}
@@ -334,7 +334,7 @@ export function OrderChangesPanel() {
                         color: statusColor,
                         border: `1px solid ${statusColor}`,
                         padding: "4px 12px",
-                        fontSize: "0.6rem",
+                        fontSize: "0.875rem",
                         letterSpacing: "0.22em",
                       }}
                     >
@@ -351,7 +351,7 @@ export function OrderChangesPanel() {
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
                     gap: 12,
-                    fontSize: "0.78rem",
+                    fontSize: "1rem",
                     paddingTop: 6,
                     borderTop: "1px solid rgba(245,158,11,0.1)",
                   }}
@@ -364,7 +364,7 @@ export function OrderChangesPanel() {
                     <div
                       style={{
                         color: "rgba(251,243,212,0.5)",
-                        fontSize: "0.72rem",
+                        fontSize: "1rem",
                       }}
                     >
                       {formatSlotForDisplay(order?.delivery_slot) || "—"}
@@ -372,7 +372,7 @@ export function OrderChangesPanel() {
                     <div
                       style={{
                         color: "rgba(251,243,212,0.5)",
-                        fontSize: "0.72rem",
+                        fontSize: "1rem",
                         marginTop: 2,
                       }}
                     >
@@ -392,7 +392,7 @@ export function OrderChangesPanel() {
                       <div
                         style={{
                           color: "rgba(251,243,212,0.6)",
-                          fontSize: "0.72rem",
+                          fontSize: "1rem",
                         }}
                       >
                         {formatSlotForDisplay(r.requested_delivery_slot)}
@@ -402,7 +402,7 @@ export function OrderChangesPanel() {
                       <div
                         style={{
                           color: "rgba(251,243,212,0.85)",
-                          fontSize: "0.72rem",
+                          fontSize: "1rem",
                           marginTop: 2,
                         }}
                       >
@@ -421,7 +421,7 @@ export function OrderChangesPanel() {
                 {r.reason ? (
                   <div
                     style={{
-                      fontSize: "0.78rem",
+                      fontSize: "1rem",
                       color: "rgba(251,243,212,0.7)",
                       fontStyle: "italic",
                       borderLeft: "2px solid rgba(245,158,11,0.4)",
@@ -434,7 +434,7 @@ export function OrderChangesPanel() {
 
                 {!isPending && r.admin_response ? (
                   <div
-                    style={{ fontSize: "0.75rem", color: "rgba(251,243,212,0.6)" }}
+                    style={{ fontSize: "1rem", color: "rgba(251,243,212,0.6)" }}
                   >
                     <span style={{ color: "rgba(245,158,11,0.7)" }}>Response:</span>{" "}
                     {r.admin_response}
@@ -460,12 +460,12 @@ export function OrderChangesPanel() {
                         color: "#fbf3d4",
                         padding: "8px 10px",
                         fontFamily: "var(--font-body)",
-                        fontSize: "0.78rem",
+                        fontSize: "1rem",
                         resize: "vertical",
                       }}
                     />
                     {errors[r.id] ? (
-                      <div style={{ color: "#ff8181", fontSize: "0.72rem" }}>
+                      <div style={{ color: "#ff8181", fontSize: "1rem" }}>
                         {errors[r.id]}
                       </div>
                     ) : null}
@@ -487,7 +487,7 @@ export function OrderChangesPanel() {
                           color: "#ff8181",
                           padding: "6px 14px",
                           fontFamily: "var(--font-body)",
-                          fontSize: "0.65rem",
+                          fontSize: "0.875rem",
                           letterSpacing: "0.2em",
                           cursor: busy[r.id] ? "not-allowed" : "pointer",
                           opacity: busy[r.id] ? 0.5 : 1,
@@ -506,7 +506,7 @@ export function OrderChangesPanel() {
                           color: "#7bd88f",
                           padding: "6px 14px",
                           fontFamily: "var(--font-body)",
-                          fontSize: "0.65rem",
+                          fontSize: "0.875rem",
                           letterSpacing: "0.2em",
                           cursor: busy[r.id] ? "not-allowed" : "pointer",
                           opacity: busy[r.id] ? 0.5 : 1,
@@ -519,7 +519,7 @@ export function OrderChangesPanel() {
                 ) : null}
 
                 <div
-                  style={{ fontSize: "0.7rem", color: "rgba(251,243,212,0.4)" }}
+                  style={{ fontSize: "1rem", color: "rgba(251,243,212,0.4)" }}
                 >
                   Submitted{" "}
                   {new Date(r.created_at).toLocaleString("en-IN", {
@@ -567,7 +567,7 @@ export function OrderChangesPanel() {
                     gap: 12,
                     fontFamily: "var(--font-body)",
                     color: "rgba(251,243,212,0.75)",
-                    fontSize: "0.78rem",
+                    fontSize: "1rem",
                     flexWrap: "wrap",
                   }}
                 >
@@ -589,7 +589,7 @@ export function OrderChangesPanel() {
                     <span
                       style={{
                         color: "rgba(251,243,212,0.5)",
-                        fontSize: "0.72rem",
+                        fontSize: "1rem",
                       }}
                     >
                       {r.customer?.full_name ?? "—"} ·{" "}
@@ -605,7 +605,7 @@ export function OrderChangesPanel() {
                       color: sc,
                       border: `1px solid ${sc}`,
                       padding: "3px 10px",
-                      fontSize: "0.58rem",
+                      fontSize: "0.875rem",
                       letterSpacing: "0.22em",
                     }}
                   >
@@ -661,7 +661,7 @@ function ItemsDiff({ r }: { r: DeliveryRequest }) {
             display: "flex",
             justifyContent: "space-between",
             gap: 12,
-            fontSize: "0.78rem",
+            fontSize: "1rem",
           }}
         >
           <span style={{ color: "#fbf3d4" }}>{l.name}</span>
@@ -679,7 +679,7 @@ function ItemsDiff({ r }: { r: DeliveryRequest }) {
           display: "flex",
           justifyContent: "space-between",
           gap: 12,
-          fontSize: "0.78rem",
+          fontSize: "1rem",
           marginTop: 4,
           paddingTop: 6,
           borderTop: "1px solid rgba(245,158,11,0.1)",
@@ -715,11 +715,11 @@ function formatScheduledDate(iso: string | null): string {
 const mutedText: React.CSSProperties = {
   color: "rgba(192,200,206,0.5)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
 };
 
 const smallLabel: React.CSSProperties = {
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
   color: "rgba(251,243,212,0.45)",

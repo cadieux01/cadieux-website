@@ -201,7 +201,7 @@ export default function CustomerDetailPage() {
             padding: "0.7rem 1rem",
             marginBottom: "1rem",
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             letterSpacing: "0.03em",
           }}
         >
@@ -259,7 +259,7 @@ export default function CustomerDetailPage() {
 
         <Card title="Push tokens">
           {data.push_tokens.length === 0 ? (
-            <p style={{ color: "rgba(192,200,206,0.55)", fontSize: "0.8rem" }}>
+            <p style={{ color: "rgba(192,200,206,0.55)", fontSize: "1rem" }}>
               No active tokens.
             </p>
           ) : (
@@ -463,7 +463,7 @@ function SendEmailModal({
             />
           </label>
           {err ? (
-            <p style={{ color: "#fca5a5", fontSize: "0.8rem", margin: 0 }}>
+            <p style={{ color: "#fca5a5", fontSize: "1rem", margin: 0 }}>
               {err}
             </p>
           ) : null}
@@ -508,7 +508,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
       <h4
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.62rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.25em",
           textTransform: "uppercase",
           color: "rgba(245,158,11,0.9)",
@@ -531,7 +531,7 @@ function KeyVal({ k, v }: { k: string; v: React.ReactNode }) {
         gap: "1rem",
         padding: "0.25rem 0",
         fontFamily: "var(--font-body)",
-        fontSize: "0.82rem",
+        fontSize: "1rem",
       }}
     >
       <span style={{ color: "rgba(192,200,206,0.55)" }}>{k}</span>
@@ -557,7 +557,7 @@ function Table({ headers, children }: { headers: string[]; children: React.React
               background: "rgba(245,158,11,0.08)",
               color: "rgba(245,158,11,0.9)",
               textTransform: "uppercase",
-              fontSize: "0.6rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.22em",
             }}
           >
@@ -582,7 +582,7 @@ function Placeholder({ children }: { children: React.ReactNode }) {
         padding: "2rem 1rem",
         textAlign: "center",
         color: "rgba(192,200,206,0.55)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
         marginBottom: "2rem",
       }}
     >
@@ -593,7 +593,7 @@ function Placeholder({ children }: { children: React.ReactNode }) {
 
 const sectionHeading: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.72rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   textTransform: "uppercase",
   color: "rgba(245,158,11,0.85)",
@@ -612,7 +612,7 @@ const td: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   color: "#fbf3d4",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   verticalAlign: "top",
   borderBottom: "1px solid rgba(245,158,11,0.06)",
 };
@@ -621,7 +621,7 @@ const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
   border: "1px solid rgba(245,158,11,0.4)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   background: "transparent",
   cursor: "pointer",
@@ -702,7 +702,7 @@ const modalLabel: React.CSSProperties = {
   gap: "0.3rem",
   margin: "0 0 0.9rem",
   fontFamily: "var(--font-body)",
-  fontSize: "0.7rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.2em",
   textTransform: "uppercase",
   color: "rgba(245,158,11,0.85)",
@@ -713,7 +713,7 @@ const modalInput: React.CSSProperties = {
   border: "1px solid rgba(245,158,11,0.3)",
   color: "#fbf3d4",
   padding: "0.55rem 0.7rem",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   letterSpacing: "0.02em",
   outline: "none",
   textTransform: "none",
@@ -729,7 +729,7 @@ const mapsLink: React.CSSProperties = {
   color: "#f59e0b",
   textDecoration: "underline",
   textUnderlineOffset: "2px",
-  fontSize: "0.82rem",
+  fontSize: "1rem",
   fontFamily: "var(--font-body)",
   whiteSpace: "nowrap",
 };

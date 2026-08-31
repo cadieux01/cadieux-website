@@ -398,8 +398,8 @@ export default function OrderDetailPage() {
           left: 20,
           zIndex: 101,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
-          fontWeight: 200,
+          fontSize: 14,
+          fontWeight: 500,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
           color: "#024628",
@@ -409,7 +409,7 @@ export default function OrderDetailPage() {
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 14 }}>←</span> Orders
+        <span style={{ fontSize: 16 }}>←</span> Orders
       </Link>
 
       <div
@@ -453,7 +453,7 @@ export default function OrderDetailPage() {
               style={{
                 margin: "0 0 28px",
                 fontFamily: "var(--font-body)",
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: 200,
                 color: "rgba(2,70,40,0.7)",
                 lineHeight: 1.7,
@@ -474,8 +474,8 @@ export default function OrderDetailPage() {
                 background: "#f59e0b",
                 textDecoration: "none",
                 fontFamily: "var(--font-body)",
-                fontSize: 11,
-                fontWeight: 400,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.4em",
                 textTransform: "uppercase",
                 color: "#024628",
@@ -505,7 +505,7 @@ export default function OrderDetailPage() {
               style={{
                 margin: "0 0 28px",
                 fontFamily: "var(--font-body)",
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: 200,
                 color: "rgba(2,70,40,0.7)",
                 lineHeight: 1.7,
@@ -526,8 +526,8 @@ export default function OrderDetailPage() {
                 border: "1px solid rgba(2,70,40,0.25)",
                 textDecoration: "none",
                 fontFamily: "var(--font-body)",
-                fontSize: 11,
-                fontWeight: 300,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.4em",
                 textTransform: "uppercase",
                 color: "rgba(2,70,40,0.75)",
@@ -552,8 +552,8 @@ export default function OrderDetailPage() {
               <span
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
-                  fontWeight: 200,
+                  fontSize: 14,
+                  fontWeight: 500,
                   letterSpacing: "0.35em",
                   textTransform: "uppercase",
                   color: "#024628",
@@ -564,8 +564,8 @@ export default function OrderDetailPage() {
               <span
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
-                  fontWeight: 300,
+                  fontSize: 14,
+                  fontWeight: 500,
                   letterSpacing: "0.3em",
                   textTransform: "uppercase",
                   color: statusColor(order.status),
@@ -630,7 +630,7 @@ export default function OrderDetailPage() {
                     style={{
                       margin: "0 0 4px",
                       fontFamily: "var(--font-body)",
-                      fontSize: 10,
+                      fontSize: 14,
                       fontWeight: 500,
                       letterSpacing: "0.35em",
                       textTransform: "uppercase",
@@ -643,7 +643,7 @@ export default function OrderDetailPage() {
                     style={{
                       margin: 0,
                       fontFamily: "var(--font-body)",
-                      fontSize: 13,
+                      fontSize: 16,
                       fontWeight: 300,
                       color: "rgba(2,70,40,0.85)",
                       lineHeight: 1.5,
@@ -665,8 +665,8 @@ export default function OrderDetailPage() {
                   style={{
                     margin: "-4px 0 10px",
                     fontFamily: "var(--font-body)",
-                    fontSize: 11,
-                    fontWeight: 400,
+                    fontSize: 14,
+                    fontWeight: 500,
                     letterSpacing: "0.25em",
                     textTransform: "uppercase",
                     color: "#024628",
@@ -704,7 +704,7 @@ export default function OrderDetailPage() {
                   style={{
                     margin: 0,
                     fontFamily: "var(--font-body)",
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: 200,
                     color: "rgba(2,70,40,0.6)",
                   }}
@@ -734,7 +734,7 @@ export default function OrderDetailPage() {
                         style={{
                           margin: 0,
                           fontFamily: "var(--font-body)",
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: 300,
                           color: "#024628",
                           letterSpacing: "0.02em",
@@ -746,8 +746,8 @@ export default function OrderDetailPage() {
                         style={{
                           margin: "3px 0 0",
                           fontFamily: "var(--font-body)",
-                          fontSize: 11,
-                          fontWeight: 200,
+                          fontSize: 14,
+                          fontWeight: 500,
                           letterSpacing: "0.25em",
                           textTransform: "uppercase",
                           color: "rgba(2,70,40,0.6)",
@@ -760,7 +760,7 @@ export default function OrderDetailPage() {
                     <span
                       style={{
                         fontFamily: "var(--font-body)",
-                        fontSize: 14,
+                        fontSize: 16,
                         fontWeight: 200,
                         color: "#024628",
                         whiteSpace: "nowrap",
@@ -810,8 +810,8 @@ export default function OrderDetailPage() {
                 <span
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: 11,
-                    fontWeight: 300,
+                    fontSize: 14,
+                    fontWeight: 500,
                     letterSpacing: "0.35em",
                     textTransform: "uppercase",
                     color: "rgba(2,70,40,0.7)",
@@ -846,8 +846,8 @@ export default function OrderDetailPage() {
                 <span
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: 11,
-                    fontWeight: 200,
+                    fontSize: 14,
+                    fontWeight: 500,
                     letterSpacing: "0.3em",
                     textTransform: "uppercase",
                     color: "rgba(2,70,40,0.6)",
@@ -859,8 +859,8 @@ export default function OrderDetailPage() {
                 <span
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: 13,
-                    fontWeight: 300,
+                    fontSize: 14,
+                    fontWeight: 500,
                     letterSpacing: "0.2em",
                     textTransform: "uppercase",
                     color: paymentColor(
@@ -899,8 +899,8 @@ export default function OrderDetailPage() {
                         border: "none",
                         cursor: paying ? "default" : "pointer",
                         fontFamily: "var(--font-body)",
-                        fontSize: 11,
-                        fontWeight: 400,
+                        fontSize: 14,
+                        fontWeight: 500,
                         letterSpacing: "0.4em",
                         textTransform: "uppercase",
                         color: "#024628",
@@ -915,7 +915,7 @@ export default function OrderDetailPage() {
                         style={{
                           margin: "12px 0 0",
                           fontFamily: "var(--font-body)",
-                          fontSize: 12,
+                          fontSize: 16,
                           fontWeight: 200,
                           lineHeight: 1.6,
                           color: "#991B1B",
@@ -952,7 +952,7 @@ export default function OrderDetailPage() {
                   style={{
                     margin: 0,
                     fontFamily: "var(--font-body)",
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: 200,
                     lineHeight: 1.65,
                     color: "rgba(2,70,40,0.8)",
@@ -970,8 +970,8 @@ export default function OrderDetailPage() {
               style={{
                 margin: "32px 0 0",
                 fontFamily: "var(--font-body)",
-                fontSize: 11,
-                fontWeight: 200,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
                 color: "rgba(2,70,40,0.55)",
@@ -1006,7 +1006,7 @@ function Section({
         style={{
           margin: "0 0 14px",
           fontFamily: "var(--font-body)",
-          fontSize: 11,
+          fontSize: 14,
           fontWeight: 300,
           letterSpacing: "0.4em",
           textTransform: "uppercase",
@@ -1037,7 +1037,7 @@ function StatusTracker({
           style={{
             margin: "0 0 14px",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: 300,
             letterSpacing: "0.4em",
             textTransform: "uppercase",
@@ -1051,7 +1051,7 @@ function StatusTracker({
             margin: 0,
             fontFamily: "var(--font-body)",
             fontSize: 14,
-            fontWeight: 300,
+            fontWeight: 500,
             letterSpacing: "0.05em",
             color: "#024628",
             textTransform: "uppercase",
@@ -1071,7 +1071,7 @@ function StatusTracker({
         style={{
           margin: "0 0 18px",
           fontFamily: "var(--font-body)",
-          fontSize: 11,
+          fontSize: 14,
           fontWeight: 300,
           letterSpacing: "0.4em",
           textTransform: "uppercase",
@@ -1146,7 +1146,7 @@ function StatusTracker({
                   justifyContent: "center",
                   color: "#024628",
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
+                  fontSize: 16,
                   fontWeight: 500,
                   lineHeight: 1,
                   boxShadow: active
@@ -1159,8 +1159,8 @@ function StatusTracker({
               <span
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: 10,
-                  fontWeight: 300,
+                  fontSize: 14,
+                  fontWeight: 500,
                   letterSpacing: "0.15em",
                   textTransform: "uppercase",
                   color: labelColor,
@@ -1180,8 +1180,8 @@ function StatusTracker({
           style={{
             margin: "20px 0 0",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 200,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.25em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.6)",
@@ -1335,7 +1335,7 @@ function DeliveryEditor({
         style={{
           marginTop: 14,
           fontFamily: "var(--font-body)",
-          fontSize: 12,
+          fontSize: 16,
           fontWeight: 200,
           lineHeight: 1.6,
           color: "rgba(2,70,40,0.65)",
@@ -1385,8 +1385,8 @@ function DeliveryEditor({
           style={{
             margin: "0 0 12px",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 400,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "#024628",
@@ -1400,8 +1400,8 @@ function DeliveryEditor({
               style={{
                 margin: "0 0 2px",
                 fontFamily: "var(--font-body)",
-                fontSize: 10,
-                fontWeight: 200,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
                 color: "rgba(2,70,40,0.6)",
@@ -1413,7 +1413,7 @@ function DeliveryEditor({
               style={{
                 margin: 0,
                 fontFamily: "var(--font-body)",
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: 200,
                 color: "#024628",
                 lineHeight: 1.5,
@@ -1432,7 +1432,7 @@ function DeliveryEditor({
             style={{
               margin: "8px 0 0",
               fontFamily: "var(--font-body)",
-              fontSize: 12,
+              fontSize: 16,
               fontWeight: 200,
               fontStyle: "italic",
               color: "rgba(2,70,40,0.7)",
@@ -1443,7 +1443,7 @@ function DeliveryEditor({
           </p>
         )}
         {err && (
-          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B" }}>
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#991B1B" }}>
             {err}
           </p>
         )}
@@ -1459,8 +1459,8 @@ function DeliveryEditor({
               border: "1px solid rgba(255,129,129,0.4)",
               cursor: busy ? "default" : "pointer",
               fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 300,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
               color: "#991B1B",
@@ -1479,8 +1479,8 @@ function DeliveryEditor({
               border: "1px solid rgba(2,70,40,0.25)",
               cursor: busy ? "default" : "pointer",
               fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 300,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
               color: "rgba(2,70,40,0.75)",
@@ -1507,8 +1507,8 @@ function DeliveryEditor({
             border: "1px solid rgba(2,70,40,0.25)",
             cursor: "pointer",
             fontFamily: "var(--font-body)",
-            fontSize: 10,
-            fontWeight: 300,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.8)",
@@ -1534,7 +1534,7 @@ function DeliveryEditor({
         style={{
           margin: "0 0 16px",
           fontFamily: "var(--font-body)",
-          fontSize: 12,
+          fontSize: 16,
           fontWeight: 200,
           lineHeight: 1.6,
           color: "rgba(2,70,40,0.7)",
@@ -1566,8 +1566,8 @@ function DeliveryEditor({
                 border: "1px solid #024628",
                 cursor: "pointer",
                 fontFamily: "var(--font-body)",
-                fontSize: 11,
-                fontWeight: 300,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.1em",
                 color: sel ? "#FBF3D4" : "#024628",
               }}
@@ -1597,7 +1597,7 @@ function DeliveryEditor({
                 cursor: s.disabled ? "not-allowed" : "pointer",
                 opacity: s.disabled ? 0.3 : 1,
                 fontFamily: "var(--font-body)",
-                fontSize: 11,
+                fontSize: 14,
                 fontWeight: 300,
                 letterSpacing: "0.05em",
                 color: sel ? "#FBF3D4" : "#024628",
@@ -1609,7 +1609,7 @@ function DeliveryEditor({
           );
         })}
         {date && slots.length === 0 && (
-          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(2,70,40,0.6)" }}>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 16, color: "rgba(2,70,40,0.6)" }}>
             No slots available for this date.
           </span>
         )}
@@ -1633,7 +1633,7 @@ function DeliveryEditor({
               color: "#024628",
               caretColor: "#024628",
               fontFamily: "var(--font-body)",
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: 200,
               resize: "vertical",
             }}
@@ -1658,13 +1658,13 @@ function DeliveryEditor({
           color: "#024628",
           caretColor: "#024628",
           fontFamily: "var(--font-body)",
-          fontSize: 14,
+          fontSize: 16,
           fontWeight: 200,
         }}
       />
 
       {err && (
-        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B", lineHeight: 1.6 }}>
+        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#991B1B", lineHeight: 1.6 }}>
           {err}
         </p>
       )}
@@ -1681,8 +1681,8 @@ function DeliveryEditor({
             border: "none",
             cursor: busy ? "default" : "pointer",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 400,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.35em",
             textTransform: "uppercase",
             color: "#024628",
@@ -1704,8 +1704,8 @@ function DeliveryEditor({
             border: "1px solid rgba(2,70,40,0.25)",
             cursor: busy ? "default" : "pointer",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 300,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.75)",
@@ -1721,8 +1721,8 @@ function DeliveryEditor({
 const editorLabel: React.CSSProperties = {
   margin: "0 0 8px",
   fontFamily: "var(--font-body)",
-  fontSize: 10,
-  fontWeight: 300,
+  fontSize: 14,
+  fontWeight: 500,
   letterSpacing: "0.3em",
   textTransform: "uppercase",
   color: "#024628",
@@ -1875,7 +1875,7 @@ function ItemEditor({
         style={{
           marginTop: 16,
           fontFamily: "var(--font-body)",
-          fontSize: 12,
+          fontSize: 16,
           fontWeight: 200,
           lineHeight: 1.6,
           color: "rgba(2,70,40,0.65)",
@@ -1917,8 +1917,8 @@ function ItemEditor({
           style={{
             margin: "0 0 12px",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 400,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "#024628",
@@ -1940,7 +1940,7 @@ function ItemEditor({
             <span
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: 300,
                 color: "#024628",
               }}
@@ -1950,7 +1950,7 @@ function ItemEditor({
             <span
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: 13,
+                fontSize: 16,
                 fontWeight: 200,
                 color: "#024628",
                 whiteSpace: "nowrap",
@@ -1978,8 +1978,8 @@ function ItemEditor({
           <span
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 300,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
               color: "rgba(2,70,40,0.7)",
@@ -1990,7 +1990,7 @@ function ItemEditor({
           <span
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: 200,
               color: "#024628",
               whiteSpace: "nowrap",
@@ -2010,7 +2010,7 @@ function ItemEditor({
             style={{
               margin: "10px 0 0",
               fontFamily: "var(--font-body)",
-              fontSize: 12,
+              fontSize: 16,
               fontWeight: 200,
               fontStyle: "italic",
               color: "rgba(2,70,40,0.7)",
@@ -2021,7 +2021,7 @@ function ItemEditor({
           </p>
         )}
         {err && (
-          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B" }}>
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#991B1B" }}>
             {err}
           </p>
         )}
@@ -2037,8 +2037,8 @@ function ItemEditor({
               border: "1px solid rgba(255,129,129,0.4)",
               cursor: busy ? "default" : "pointer",
               fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 300,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
               color: "#991B1B",
@@ -2057,8 +2057,8 @@ function ItemEditor({
               border: "1px solid rgba(2,70,40,0.25)",
               cursor: busy ? "default" : "pointer",
               fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 300,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
               color: "rgba(2,70,40,0.75)",
@@ -2085,8 +2085,8 @@ function ItemEditor({
             border: "1px solid rgba(2,70,40,0.25)",
             cursor: "pointer",
             fontFamily: "var(--font-body)",
-            fontSize: 10,
-            fontWeight: 300,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.8)",
@@ -2112,7 +2112,7 @@ function ItemEditor({
         style={{
           margin: "0 0 16px",
           fontFamily: "var(--font-body)",
-          fontSize: 12,
+          fontSize: 16,
           fontWeight: 200,
           lineHeight: 1.6,
           color: "rgba(2,70,40,0.7)",
@@ -2142,7 +2142,7 @@ function ItemEditor({
                 style={{
                   margin: 0,
                   fontFamily: "var(--font-body)",
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: 300,
                   color: "#024628",
                 }}
@@ -2153,7 +2153,7 @@ function ItemEditor({
                 style={{
                   margin: "2px 0 0",
                   fontFamily: "var(--font-body)",
-                  fontSize: 12,
+                  fontSize: 16,
                   fontWeight: 200,
                   color: "rgba(2,70,40,0.65)",
                 }}
@@ -2177,7 +2177,7 @@ function ItemEditor({
                   minWidth: 28,
                   textAlign: "center",
                   fontFamily: "var(--font-body)",
-                  fontSize: 15,
+                  fontSize: 16,
                   fontWeight: 300,
                   color: "#024628",
                 }}
@@ -2213,8 +2213,8 @@ function ItemEditor({
         <span
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 10,
-            fontWeight: 300,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.7)",
@@ -2235,7 +2235,7 @@ function ItemEditor({
       </div>
 
       {err && (
-        <p style={{ margin: "12px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B", lineHeight: 1.6 }}>
+        <p style={{ margin: "12px 0 0", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#991B1B", lineHeight: 1.6 }}>
           {err}
         </p>
       )}
@@ -2252,8 +2252,8 @@ function ItemEditor({
             border: "none",
             cursor: busy ? "default" : "pointer",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 400,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.35em",
             textTransform: "uppercase",
             color: "#024628",
@@ -2275,8 +2275,8 @@ function ItemEditor({
             border: "1px solid rgba(2,70,40,0.25)",
             cursor: busy ? "default" : "pointer",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 300,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.75)",
@@ -2415,8 +2415,8 @@ function AddressEditor({
           style={{
             margin: "0 0 12px",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 400,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "#024628",
@@ -2428,8 +2428,8 @@ function AddressEditor({
           style={{
             margin: "0 0 6px",
             fontFamily: "var(--font-body)",
-            fontSize: 10,
-            fontWeight: 200,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.6)",
@@ -2441,7 +2441,7 @@ function AddressEditor({
           style={{
             margin: 0,
             fontFamily: "var(--font-body)",
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: 200,
             color: "#024628",
             lineHeight: 1.6,
@@ -2458,7 +2458,7 @@ function AddressEditor({
             style={{
               margin: "10px 0 0",
               fontFamily: "var(--font-body)",
-              fontSize: 12,
+              fontSize: 16,
               fontWeight: 200,
               fontStyle: "italic",
               color: "rgba(2,70,40,0.7)",
@@ -2469,7 +2469,7 @@ function AddressEditor({
           </p>
         )}
         {err && (
-          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B" }}>
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#991B1B" }}>
             {err}
           </p>
         )}
@@ -2485,8 +2485,8 @@ function AddressEditor({
               border: "1px solid rgba(255,129,129,0.4)",
               cursor: busy ? "default" : "pointer",
               fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 300,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
               color: "#991B1B",
@@ -2505,8 +2505,8 @@ function AddressEditor({
               border: "1px solid rgba(2,70,40,0.25)",
               cursor: busy ? "default" : "pointer",
               fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 300,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
               color: "rgba(2,70,40,0.75)",
@@ -2533,8 +2533,8 @@ function AddressEditor({
             border: "1px solid rgba(2,70,40,0.25)",
             cursor: "pointer",
             fontFamily: "var(--font-body)",
-            fontSize: 10,
-            fontWeight: 300,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.8)",
@@ -2560,7 +2560,7 @@ function AddressEditor({
         style={{
           margin: "0 0 16px",
           fontFamily: "var(--font-body)",
-          fontSize: 12,
+          fontSize: 16,
           fontWeight: 200,
           lineHeight: 1.6,
           color: "rgba(2,70,40,0.7)",
@@ -2586,7 +2586,7 @@ function AddressEditor({
           color: "#024628",
           caretColor: "#024628",
           fontFamily: "var(--font-body)",
-          fontSize: 14,
+          fontSize: 16,
           fontWeight: 200,
           resize: "vertical",
         }}
@@ -2608,13 +2608,13 @@ function AddressEditor({
           color: "#024628",
           caretColor: "#024628",
           fontFamily: "var(--font-body)",
-          fontSize: 14,
+          fontSize: 16,
           fontWeight: 200,
         }}
       />
 
       {err && (
-        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#991B1B", lineHeight: 1.6 }}>
+        <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#991B1B", lineHeight: 1.6 }}>
           {err}
         </p>
       )}
@@ -2631,8 +2631,8 @@ function AddressEditor({
             border: "none",
             cursor: busy ? "default" : "pointer",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 400,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.35em",
             textTransform: "uppercase",
             color: "#024628",
@@ -2654,8 +2654,8 @@ function AddressEditor({
             border: "1px solid rgba(2,70,40,0.25)",
             cursor: busy ? "default" : "pointer",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 300,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.75)",
@@ -2701,8 +2701,8 @@ function Row({ label, value }: { label: string; value: string }) {
       <span
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: 11,
-          fontWeight: 200,
+          fontSize: 14,
+          fontWeight: 500,
           letterSpacing: "0.3em",
           textTransform: "uppercase",
           color: "rgba(2,70,40,0.6)",
@@ -2714,7 +2714,7 @@ function Row({ label, value }: { label: string; value: string }) {
       <span
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: 14,
+          fontSize: 16,
           fontWeight: 200,
           color: "#024628",
           textAlign: "right",

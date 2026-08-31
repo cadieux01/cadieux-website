@@ -85,12 +85,12 @@ export default function ShopListClient({
       {/* Back link */}
       <Link href="/" style={{
         position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-        fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
         letterSpacing: "0.35em", textTransform: "uppercase",
         color: "#4369B2", textDecoration: "none",
         display: "flex", alignItems: "center", gap: 8,
       }}>
-        <span style={{ fontSize: 14 }}>←</span> Cadieux
+        <span style={{ fontSize: 16 }}>←</span> Cadieux
       </Link>
 
       <div style={{ position: "relative", zIndex: 1, padding: "72px clamp(18px,5vw,80px) 80px", maxWidth: 1200, margin: "0 auto" }}>
@@ -101,7 +101,7 @@ export default function ShopListClient({
           <p data-stagger style={{
             margin: "0 0 20px",
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 16,
             fontWeight: 400,
             lineHeight: 1.55,
             color: "#024628",
@@ -233,16 +233,16 @@ function SubscribePanel() {
                   </div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                     {showStrike && (
-                      <span style={{ fontSize: 13, color: "#024628", opacity: 0.55, textDecoration: "line-through" }}>
+                      <span style={{ fontSize: 16, color: "#024628", opacity: 0.55, textDecoration: "line-through" }}>
                         ₹{money(mrp!)}
                       </span>
                     )}
-                    <span style={{ fontSize: 15, fontWeight: 500, color: "#024628" }}>₹{money(p.price)}</span>
+                    <span style={{ fontSize: 16, fontWeight: 500, color: "#024628" }}>₹{money(p.price)}</span>
                   </div>
                 </div>
-                <div style={{ marginTop: 4, fontSize: 13, color: "#024628" }}>{p.blurb}</div>
+                <div style={{ marginTop: 4, fontSize: 16, color: "#024628" }}>{p.blurb}</div>
                 {savings > 0 && (
-                  <div style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: "#1D1D1F" }}>
+                  <div style={{ marginTop: 6, fontSize: 16, fontWeight: 500, color: "#1D1D1F" }}>
                     You save ₹{money(savings)}{pct > 0 ? ` (${pct}%)` : ""} per loaf
                   </div>
                 )}
@@ -251,7 +251,7 @@ function SubscribePanel() {
           })}
         </div>
 
-        <p style={{ fontSize: 12, color: "#024628", lineHeight: 1.55, marginBottom: 18, maxWidth: 460 }}>
+        <p style={{ fontSize: 16, color: "#024628", lineHeight: 1.55, marginBottom: 18, maxWidth: 460 }}>
           Mix any combination of loaves — a subscription needs at least 2 loaves
           per delivery in total. Pick your dates and delivery windows in the next step.
         </p>
@@ -265,7 +265,7 @@ function SubscribePanel() {
             background: GOLD,
             color: "#FBF3D4",
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: 600,
             letterSpacing: "0.1em",
             textTransform: "uppercase",

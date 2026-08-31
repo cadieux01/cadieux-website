@@ -180,7 +180,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                 padding: 16,
                 textAlign: "center",
                 fontFamily: "var(--font-body)",
-                fontSize: 10,
+                fontSize: 14,
                 letterSpacing: "0.26em",
                 textTransform: "uppercase",
                 color: "rgba(251,243,212,0.6)",
@@ -246,7 +246,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             top: 12,
             right: 12,
             fontFamily: "var(--font-body)",
-            fontSize: 9,
+            fontSize: 14,
             fontWeight: 500,
             letterSpacing: "0.2em",
             textTransform: "uppercase",
@@ -262,7 +262,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           }}
         >
           <span>Test Reports</span>
-          <span aria-hidden="true" style={{ fontSize: 10, lineHeight: 1 }}>✓</span>
+          <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>✓</span>
         </div>
 
         {/* Out-of-stock pill — warning-on-brand red-300 for AAA on FG. */}
@@ -273,7 +273,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               bottom: 12,
               right: 12,
               fontFamily: "var(--font-body)",
-              fontSize: 9,
+              fontSize: 14,
               fontWeight: 500,
               letterSpacing: "0.25em",
               textTransform: "uppercase",
@@ -297,7 +297,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               top: 12,
               left: 12,
               fontFamily: "var(--font-body)",
-              fontSize: 8,
+              fontSize: 14,
               fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
@@ -351,7 +351,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
         <div
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 9,
+            fontSize: 14,
             fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
@@ -378,7 +378,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           style={{
             margin: "10px 0 14px",
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 16,
             lineHeight: 1.5,
             fontWeight: 300,
             color: "#C0C8CE",
@@ -414,8 +414,8 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                 style={{
                   marginTop: 4,
                   fontFamily: "var(--font-body)",
-                  fontSize: 8,
-                  fontWeight: 400,
+                  fontSize: 14,
+                  fontWeight: 500,
                   letterSpacing: "0.2em",
                   textTransform: "uppercase",
                   color: "#C0C8CE",
@@ -455,7 +455,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             <span
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: 10,
+                fontSize: 14,
                 fontWeight: 500,
                 letterSpacing: "0.2em",
                 textTransform: "uppercase",
@@ -472,7 +472,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                 onClick={handleAdd}
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: 10,
+                  fontSize: 14,
                   fontWeight: 600,
                   letterSpacing: "0.2em",
                   textTransform: "uppercase",
@@ -513,7 +513,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                     minWidth: 26,
                     textAlign: "center",
                     fontFamily: "var(--font-body)",
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: 600,
                     color: "#FBF3D4",
                   }}

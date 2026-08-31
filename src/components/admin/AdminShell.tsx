@@ -285,7 +285,7 @@ export function AdminShell({
             padding: "0.65rem 1rem",
             textAlign: "center",
             fontFamily: "var(--font-body)",
-            fontSize: "0.78rem",
+            fontSize: "1rem",
             letterSpacing: "0.06em",
           }}
         >
@@ -376,7 +376,7 @@ export function AdminShell({
                   className="mt-1 uppercase"
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: "0.7rem",
+                    fontSize: "0.875rem",
                     letterSpacing: "0.2em",
                     color: "rgba(192,200,206,0.55)",
                     wordBreak: "break-word",
@@ -529,8 +529,8 @@ function AdminDrawer({
             style={{
               margin: 0,
               fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 300,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.5em",
               textTransform: "uppercase",
               color: "rgba(200,144,58,0.65)",
@@ -545,7 +545,7 @@ function AdminDrawer({
             style={{
               marginTop: "0.85rem",
               fontFamily: "var(--font-body)",
-              fontSize: "0.62rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.28em",
               color: FADED,
               border: `1px solid rgba(245,158,11,0.3)`,
@@ -587,8 +587,8 @@ function AdminDrawer({
                   margin: "0 0 0.5rem",
                   padding: "0 0.5rem",
                   fontFamily: "var(--font-body)",
-                  fontSize: "0.55rem",
-                  fontWeight: 400,
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
                   letterSpacing: "0.32em",
                   textTransform: "uppercase",
                   color: "rgba(200,144,58,0.55)",
@@ -620,7 +620,7 @@ function AdminDrawer({
                           display: "block",
                           padding: "0.65rem 0.75rem",
                           fontFamily: "var(--font-heading)",
-                          fontSize: "0.95rem",
+                          fontSize: "1rem",
                           fontWeight: 300,
                           letterSpacing: "0.04em",
                           color: active ? CREAM : "rgba(251,243,212,0.7)",
@@ -781,7 +781,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
               color: "#fbf3d4",
               fontFamily: "var(--font-body)",
               letterSpacing: "0.1em",
-              fontSize: "0.9rem",
+              fontSize: "1rem",
             }}
           />
           <button
@@ -812,7 +812,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
             color: "#f59e0b",
             fontFamily: "var(--font-body)",
             letterSpacing: "0.25em",
-            fontSize: "0.75rem",
+            fontSize: "0.875rem",
             background: "transparent",
           }}
         >
@@ -839,7 +839,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
             marginTop: "0.25rem",
             color: "rgba(251, 243, 212, 0.35)",
             fontFamily: "var(--font-body)",
-            fontSize: "0.65rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
           }}

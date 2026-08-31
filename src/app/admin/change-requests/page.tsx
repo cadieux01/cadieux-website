@@ -131,7 +131,7 @@ export default function ChangeRequestsPage() {
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.25em",
             color: "#f59e0b",
             border: "1px solid #f59e0b",
@@ -160,7 +160,7 @@ export default function ChangeRequestsPage() {
                 color: active ? "#fbf3d4" : "rgba(251,243,212,0.55)",
                 padding: "6px 14px",
                 fontFamily: "var(--font-body)",
-                fontSize: "0.65rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.22em",
                 cursor: "pointer",
               }}
@@ -179,7 +179,7 @@ export default function ChangeRequestsPage() {
             padding: "0.8rem 1rem",
             color: "#fca5a5",
             marginBottom: "1rem",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             fontFamily: "var(--font-body)",
           }}
         >
@@ -214,7 +214,7 @@ export default function ChangeRequestsPage() {
                   gap: 10,
                   fontFamily: "var(--font-body)",
                   color: "#fbf3d4",
-                  fontSize: "0.82rem",
+                  fontSize: "1rem",
                 }}
               >
                 <div
@@ -241,7 +241,7 @@ export default function ChangeRequestsPage() {
                       style={{
                         marginTop: 4,
                         color: "rgba(251,243,212,0.6)",
-                        fontSize: "0.78rem",
+                        fontSize: "1rem",
                       }}
                     >
                       {r.customer?.full_name ?? "—"} · {r.customer?.phone ?? "—"}
@@ -272,7 +272,7 @@ export default function ChangeRequestsPage() {
                         color: statusColor,
                         border: `1px solid ${statusColor}`,
                         padding: "4px 12px",
-                        fontSize: "0.6rem",
+                        fontSize: "0.875rem",
                         letterSpacing: "0.22em",
                       }}
                     >
@@ -286,7 +286,7 @@ export default function ChangeRequestsPage() {
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
                     gap: 12,
-                    fontSize: "0.78rem",
+                    fontSize: "1rem",
                     paddingTop: 6,
                     borderTop: "1px solid rgba(245,158,11,0.1)",
                   }}
@@ -302,7 +302,7 @@ export default function ChangeRequestsPage() {
                         <div
                           style={{
                             color: "rgba(251,243,212,0.5)",
-                            fontSize: "0.72rem",
+                            fontSize: "1rem",
                           }}
                         >
                           {r.delivery.scheduled_time_slot}
@@ -330,7 +330,7 @@ export default function ChangeRequestsPage() {
                       <div
                         style={{
                           color: "rgba(251,243,212,0.6)",
-                          fontSize: "0.72rem",
+                          fontSize: "1rem",
                         }}
                       >
                         {r.requested_time_slot}
@@ -345,7 +345,7 @@ export default function ChangeRequestsPage() {
                 {r.reason ? (
                   <div
                     style={{
-                      fontSize: "0.78rem",
+                      fontSize: "1rem",
                       color: "rgba(251,243,212,0.7)",
                       fontStyle: "italic",
                       borderLeft: "2px solid rgba(245,158,11,0.4)",
@@ -358,7 +358,7 @@ export default function ChangeRequestsPage() {
 
                 {!isPending && r.admin_response ? (
                   <div
-                    style={{ fontSize: "0.75rem", color: "rgba(251,243,212,0.6)" }}
+                    style={{ fontSize: "1rem", color: "rgba(251,243,212,0.6)" }}
                   >
                     <span style={{ color: "rgba(245,158,11,0.7)" }}>Response:</span>{" "}
                     {r.admin_response}
@@ -383,12 +383,12 @@ export default function ChangeRequestsPage() {
                         color: "#fbf3d4",
                         padding: "8px 10px",
                         fontFamily: "var(--font-body)",
-                        fontSize: "0.78rem",
+                        fontSize: "1rem",
                         resize: "vertical",
                       }}
                     />
                     {errors[r.id] ? (
-                      <div style={{ color: "#ff8181", fontSize: "0.72rem" }}>
+                      <div style={{ color: "#ff8181", fontSize: "1rem" }}>
                         {errors[r.id]}
                       </div>
                     ) : null}
@@ -410,7 +410,7 @@ export default function ChangeRequestsPage() {
                           color: "#ff8181",
                           padding: "6px 14px",
                           fontFamily: "var(--font-body)",
-                          fontSize: "0.65rem",
+                          fontSize: "0.875rem",
                           letterSpacing: "0.2em",
                           cursor: busy[r.id] ? "not-allowed" : "pointer",
                           opacity: busy[r.id] ? 0.5 : 1,
@@ -429,7 +429,7 @@ export default function ChangeRequestsPage() {
                           color: "#7bd88f",
                           padding: "6px 14px",
                           fontFamily: "var(--font-body)",
-                          fontSize: "0.65rem",
+                          fontSize: "0.875rem",
                           letterSpacing: "0.2em",
                           cursor: busy[r.id] ? "not-allowed" : "pointer",
                           opacity: busy[r.id] ? 0.5 : 1,
@@ -443,7 +443,7 @@ export default function ChangeRequestsPage() {
 
                 <div
                   style={{
-                    fontSize: "0.7rem",
+                    fontSize: "1rem",
                     color: "rgba(251,243,212,0.4)",
                   }}
                 >
@@ -493,7 +493,7 @@ export default function ChangeRequestsPage() {
                     gap: 12,
                     fontFamily: "var(--font-body)",
                     color: "rgba(251,243,212,0.75)",
-                    fontSize: "0.78rem",
+                    fontSize: "1rem",
                     flexWrap: "wrap",
                   }}
                 >
@@ -512,7 +512,7 @@ export default function ChangeRequestsPage() {
                     <span
                       style={{
                         color: "rgba(251,243,212,0.5)",
-                        fontSize: "0.72rem",
+                        fontSize: "1rem",
                       }}
                     >
                       {r.customer?.full_name ?? "—"} ·{" "}
@@ -528,7 +528,7 @@ export default function ChangeRequestsPage() {
                       color: sc,
                       border: `1px solid ${sc}`,
                       padding: "3px 10px",
-                      fontSize: "0.58rem",
+                      fontSize: "0.875rem",
                       letterSpacing: "0.22em",
                     }}
                   >
@@ -558,11 +558,11 @@ function formatScheduledDate(iso: string): string {
 const mutedText: React.CSSProperties = {
   color: "rgba(192,200,206,0.5)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
 };
 
 const smallLabel: React.CSSProperties = {
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
   color: "rgba(251,243,212,0.45)",

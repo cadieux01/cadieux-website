@@ -44,7 +44,7 @@ const BTN_PRIMARY: React.CSSProperties = {
   color: GOLD,
   background: "transparent",
   fontFamily: "var(--font-body)",
-  fontSize: "0.72rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase" as const,
   padding: "0.65rem 1.4rem",
@@ -56,7 +56,7 @@ const BTN_GHOST: React.CSSProperties = {
   color: FADED,
   background: "transparent",
   fontFamily: "var(--font-body)",
-  fontSize: "0.72rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase" as const,
   padding: "0.65rem 1.4rem",
@@ -66,7 +66,7 @@ const BTN_GHOST: React.CSSProperties = {
 const LABEL: React.CSSProperties = {
   display: "block",
   fontFamily: "var(--font-body)",
-  fontSize: "0.62rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.28em",
   textTransform: "uppercase" as const,
   color: MUTED,
@@ -75,14 +75,14 @@ const LABEL: React.CSSProperties = {
 const ERROR_STYLE: React.CSSProperties = {
   color: "#ef4444",
   fontFamily: "var(--font-body)",
-  fontSize: "0.78rem",
+  fontSize: "1rem",
   letterSpacing: "0.06em",
   marginTop: "0.5rem",
 };
 const SUCCESS_STYLE: React.CSSProperties = {
   color: "#4ade80",
   fontFamily: "var(--font-body)",
-  fontSize: "0.78rem",
+  fontSize: "1rem",
   letterSpacing: "0.06em",
   marginTop: "0.5rem",
 };
@@ -181,7 +181,7 @@ function GeneratePanel({ onSuccess }: { onSuccess: () => void }) {
         <p
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.82rem",
+            fontSize: "1rem",
             color: FADED,
             letterSpacing: "0.06em",
             marginBottom: "1rem",
@@ -226,7 +226,7 @@ function GeneratePanel({ onSuccess }: { onSuccess: () => void }) {
       <p
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.82rem",
+          fontSize: "1rem",
           color: FADED,
           letterSpacing: "0.06em",
           marginBottom: "1.25rem",
@@ -292,7 +292,7 @@ function SetPinPanel({
       <p
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.82rem",
+          fontSize: "1rem",
           color: FADED,
           letterSpacing: "0.06em",
           lineHeight: 1.6,
@@ -378,7 +378,7 @@ function ForgotPinPanel({ onSuccess }: { onSuccess: () => void }) {
       <p
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.82rem",
+          fontSize: "1rem",
           color: FADED,
           letterSpacing: "0.06em",
           lineHeight: 1.6,
@@ -469,7 +469,7 @@ export default function AdminProfilePage() {
         <p
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.82rem",
+            fontSize: "1rem",
             color: FADED,
             letterSpacing: "0.06em",
             lineHeight: 1.7,
@@ -478,7 +478,7 @@ export default function AdminProfilePage() {
         >
           This admin area uses a{" "}
           <strong style={{ color: CREAM }}>single shared password</strong> for access, set via
-          the <code style={{ color: GOLD, fontSize: "0.78rem" }}>ADMIN_PASSWORD</code> environment
+          the <code style={{ color: GOLD, fontSize: "1rem" }}>ADMIN_PASSWORD</code> environment
           variable — contact whoever manages the server to rotate it. There is no per-operator
           login ID. The security PIN below is a{" "}
           <strong style={{ color: CREAM }}>separate, additional layer</strong> you can use to
@@ -503,7 +503,7 @@ export default function AdminProfilePage() {
             <span
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.65rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.22em",
                 textTransform: "uppercase",
                 padding: "0.25rem 0.7rem",
@@ -519,14 +519,14 @@ export default function AdminProfilePage() {
         </div>
 
         {loading ? (
-          <p style={{ color: MUTED, fontFamily: "var(--font-body)", fontSize: "0.8rem" }}>
+          <p style={{ color: MUTED, fontFamily: "var(--font-body)", fontSize: "1rem" }}>
             Loading…
           </p>
         ) : pinLocked ? (
           <p
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.82rem",
+              fontSize: "1rem",
               color: "#ef4444",
               letterSpacing: "0.06em",
               lineHeight: 1.6,
@@ -540,7 +540,7 @@ export default function AdminProfilePage() {
                 color: GOLD,
                 cursor: "pointer",
                 fontFamily: "var(--font-body)",
-                fontSize: "0.82rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.06em",
                 padding: 0,
                 textDecoration: "underline",
@@ -580,7 +580,7 @@ export default function AdminProfilePage() {
 
             {activeFlow === "generate" && (
               <>
-                <p style={{ ...SECTION_TITLE, fontSize: "0.78rem", marginBottom: "0.75rem" }}>
+                <p style={{ ...SECTION_TITLE, fontSize: "1rem", marginBottom: "0.75rem" }}>
                   Generate a random PIN
                 </p>
                 <GeneratePanel onSuccess={handleSuccess} />
@@ -589,7 +589,7 @@ export default function AdminProfilePage() {
 
             {activeFlow === "set" && (
               <>
-                <p style={{ ...SECTION_TITLE, fontSize: "0.78rem", marginBottom: "0.75rem" }}>
+                <p style={{ ...SECTION_TITLE, fontSize: "1rem", marginBottom: "0.75rem" }}>
                   {pinExists ? "Change PIN" : "Set a PIN"}
                 </p>
                 <SetPinPanel
@@ -601,7 +601,7 @@ export default function AdminProfilePage() {
 
             {activeFlow === "forgot" && (
               <>
-                <p style={{ ...SECTION_TITLE, fontSize: "0.78rem", marginBottom: "0.75rem" }}>
+                <p style={{ ...SECTION_TITLE, fontSize: "1rem", marginBottom: "0.75rem" }}>
                   Forgot PIN — reset via security question
                 </p>
                 <ForgotPinPanel
@@ -617,7 +617,7 @@ export default function AdminProfilePage() {
       <div
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.72rem",
+          fontSize: "1rem",
           color: MUTED,
           letterSpacing: "0.05em",
           lineHeight: 1.7,

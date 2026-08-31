@@ -180,7 +180,7 @@ export default function EditProductPage() {
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.7rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 fontWeight: 500,
                 color: FG,
@@ -199,7 +199,7 @@ export default function EditProductPage() {
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.7rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 fontWeight: 500,
                 color: product.is_archived ? FG : CREAM,
@@ -224,7 +224,7 @@ export default function EditProductPage() {
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               fontWeight: 500,
               color: FG,
@@ -270,7 +270,7 @@ export default function EditProductPage() {
                   className="uppercase"
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: "0.72rem",
+                    fontSize: "0.875rem",
                     letterSpacing: "0.25em",
                     fontWeight: 500,
                     color: active ? FG : FG_MUTED,
@@ -369,7 +369,7 @@ export default function EditProductPage() {
             border: "1px solid rgba(251,243,212,0.3)",
             padding: "0.7rem 1.2rem",
             fontFamily: "var(--font-body)",
-            fontSize: "0.8rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.08em",
             boxShadow: "0 16px 40px -12px rgba(0,0,0,0.6)",
           }}
@@ -388,7 +388,7 @@ function HistoryPanel({ history }: { history: AdminProductChangeRow[] }) {
         className="uppercase mb-3"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.72rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.25em",
           fontWeight: 500,
           color: FG,
@@ -401,7 +401,7 @@ function HistoryPanel({ history }: { history: AdminProductChangeRow[] }) {
           style={{
             color: FG_MUTED,
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
           }}
         >
           No changes recorded yet.
@@ -417,7 +417,7 @@ function HistoryPanel({ history }: { history: AdminProductChangeRow[] }) {
                 borderRadius: 6,
                 backgroundColor: CREAM,
                 fontFamily: "var(--font-body)",
-                fontSize: "0.82rem",
+                fontSize: "1rem",
                 color: INK,
               }}
             >
@@ -425,7 +425,7 @@ function HistoryPanel({ history }: { history: AdminProductChangeRow[] }) {
                 <span style={{ color: FG, fontWeight: 500 }}>
                   {h.field_changed}
                 </span>
-                <span style={{ color: FG_MUTED, fontSize: "0.72rem" }}>
+                <span style={{ color: FG_MUTED, fontSize: "1rem" }}>
                   {formatDateTime(h.changed_at)}
                 </span>
               </div>

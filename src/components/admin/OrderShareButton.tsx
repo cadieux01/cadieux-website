@@ -104,7 +104,7 @@ export function OrderShareButton({
             border: `1px solid ${BORDER}`,
             padding: 8,
             fontFamily: "var(--font-body)",
-            fontSize: "0.8rem",
+            fontSize: "1rem",
             color: CREAM,
             boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
           }}
@@ -113,7 +113,7 @@ export function OrderShareButton({
             style={{
               padding: "4px 8px",
               color: FADED,
-              fontSize: "0.65rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.15em",
               textTransform: "uppercase",
             }}
@@ -147,7 +147,7 @@ export function OrderShareButton({
                 style={menuItemStyle}
               >
                 <span>{p.name}</span>
-                <span style={{ color: FADED, fontSize: "0.7rem" }}>
+                <span style={{ color: FADED, fontSize: "1rem" }}>
                   WhatsApp
                 </span>
               </a>
@@ -166,7 +166,7 @@ export function OrderShareButton({
           >
             <button type="button" onClick={handleCopy} style={menuItemStyle}>
               <span>{copied ? "Copied!" : "Copy message"}</span>
-              <span style={{ color: FADED, fontSize: "0.7rem" }}>Clipboard</span>
+              <span style={{ color: FADED, fontSize: "1rem" }}>Clipboard</span>
             </button>
             <a
               href={`https://wa.me/?text=${encoded}`}
@@ -176,7 +176,7 @@ export function OrderShareButton({
               style={menuItemStyle}
             >
               <span>Share (other)</span>
-              <span style={{ color: FADED, fontSize: "0.7rem" }}>Pick contact</span>
+              <span style={{ color: FADED, fontSize: "1rem" }}>Pick contact</span>
             </a>
           </div>
         </div>
@@ -197,7 +197,7 @@ const menuItemStyle: React.CSSProperties = {
   border: "none",
   cursor: "pointer",
   fontFamily: "var(--font-body)",
-  fontSize: "0.8rem",
+  fontSize: "1rem",
   textAlign: "left",
   width: "100%",
 };

@@ -82,7 +82,7 @@ export default function StoreLocatorSearch({ areas }: { areas: AreaRef[] }) {
           padding: "14px 44px 14px 18px",
           color: "#FBF3D4",
           fontFamily: "var(--font-body)",
-          fontSize: 14, fontWeight: 300,
+          fontSize: 16, fontWeight: 300,
           letterSpacing: "0.04em",
           outline: "none",
           WebkitTapHighlightColor: "transparent",
@@ -127,7 +127,7 @@ export default function StoreLocatorSearch({ areas }: { areas: AreaRef[] }) {
           {predictions.length === 0 && (
             <p style={{
               margin: 0, padding: "14px 18px",
-              fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300,
+              fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300,
               color: "rgba(251,243,212,0.55)", letterSpacing: "0.04em",
             }}>No matches for &ldquo;{query}&rdquo;.</p>
           )}
@@ -157,7 +157,7 @@ export default function StoreLocatorSearch({ areas }: { areas: AreaRef[] }) {
                 minWidth: 0, flex: 1,
               }}>
                 <span aria-hidden="true" style={{
-                  fontSize: 11,
+                  fontSize: 16,
                   color: `rgba(${GOLD},0.7)`,
                   flexShrink: 0,
                   width: 14, textAlign: "center",
@@ -167,7 +167,7 @@ export default function StoreLocatorSearch({ areas }: { areas: AreaRef[] }) {
                 }}>{p.label}</span>
               </span>
               <span style={{
-                fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                 color: "rgba(251,243,212,0.6)",
                 letterSpacing: "0.18em", textTransform: "uppercase",
                 flexShrink: 0,

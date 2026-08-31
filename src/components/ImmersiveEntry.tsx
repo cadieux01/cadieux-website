@@ -73,7 +73,7 @@ export default function ImmersiveEntry() {
         {/* Scene tag — desktop only */}
         {!isMobile && (
           <div style={{ position: "absolute", top: 36, left: 48, zIndex: 10, pointerEvents: "none",
-            fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200,
+            fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
             letterSpacing: "0.45em", color: "#5a4a38", textTransform: "uppercase" as const,
             opacity: sceneTagOp }}>
             {scenes[si]}
@@ -88,7 +88,7 @@ export default function ImmersiveEntry() {
           <div style={{ fontFamily: "var(--font-heading)", fontSize: isMobile ? 11 : 12,
             fontWeight: 300, letterSpacing: "0.25em", color: "#f0dfc8" }}>Cadieux</div>
           {!isMobile && (
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 200,
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
               letterSpacing: "0.4em", color: "#5a4a38", marginTop: 5 }}>SAME BREAD. BETTER BUILT.</div>
           )}
         </div>
@@ -97,7 +97,7 @@ export default function ImmersiveEntry() {
         <div style={{ position: "absolute", bottom: isMobile ? 28 : 36, left: "50%",
           transform: "translateX(-50%)", zIndex: 10,
           display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 8,
-          fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 200,
+          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
           letterSpacing: "0.45em", color: "#5a4a38", textTransform: "uppercase" as const,
           opacity: scrollHintOp, pointerEvents: "none" }}>
           <span>Scroll</span>

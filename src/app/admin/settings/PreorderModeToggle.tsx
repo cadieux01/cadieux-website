@@ -104,7 +104,7 @@ export default function PreorderModeToggle() {
           margin: "0 0 1rem 0",
           color: FADED,
           fontFamily: "var(--font-body)",
-          fontSize: "0.85rem",
+          fontSize: "1rem",
           lineHeight: 1.55,
         }}
       >
@@ -123,7 +123,7 @@ export default function PreorderModeToggle() {
             marginBottom: "0.85rem",
             borderRadius: 6,
             fontFamily: "var(--font-body)",
-            fontSize: "0.8rem",
+            fontSize: "1rem",
           }}
         >
           {error}
@@ -148,7 +148,7 @@ export default function PreorderModeToggle() {
             background: enabled ? CREAM : "transparent",
             color: enabled ? GREEN : CREAM,
             fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.22em",
             textTransform: "uppercase",
             padding: "0.65rem 1.1rem",
@@ -169,7 +169,7 @@ export default function PreorderModeToggle() {
         <span
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.72rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.16em",
             textTransform: "uppercase",
             color: enabled ? "#fbf3d4" : FADED,

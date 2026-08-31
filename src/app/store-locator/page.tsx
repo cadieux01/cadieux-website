@@ -91,12 +91,12 @@ export default async function StoreLocatorPage() {
       {/* Back link */}
       <Link href="/" style={{
         position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-        fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
         letterSpacing: "0.35em", textTransform: "uppercase",
         color: "#024628", textDecoration: "none",
         display: "flex", alignItems: "center", gap: 8,
       }}>
-        <span style={{ fontSize: 14 }}>←</span> Cadieux
+        <span style={{ fontSize: 16 }}>←</span> Cadieux
       </Link>
 
       <div style={{ position: "relative", zIndex: 1, padding: "100px clamp(24px,6vw,80px) 120px", maxWidth: 720, margin: "0 auto" }}>
@@ -113,7 +113,7 @@ export default async function StoreLocatorPage() {
 
         <p style={{
           margin: "0 0 20px",
-          fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
+          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
           letterSpacing: "0.3em", textTransform: "uppercase",
           color: "rgba(2,70,40,0.75)",
         }}>
@@ -128,7 +128,7 @@ export default async function StoreLocatorPage() {
             phone. */}
         <p style={{
           margin: "0 0 24px",
-          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 400,
+          fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 400,
           color: "#024628", lineHeight: 1.5,
           letterSpacing: "0.01em",
         }}>
@@ -161,7 +161,7 @@ export default async function StoreLocatorPage() {
             <p style={{
               margin: 0,
               fontFamily: "var(--font-body)",
-              fontSize: 14, fontWeight: 400,
+              fontSize: 16, fontWeight: 400,
               color: "#FBF3D4",
               lineHeight: 1.55,
             }}>
@@ -220,7 +220,7 @@ export default async function StoreLocatorPage() {
                         letterSpacing: "0.01em",
                       }}>{area}</h2>
                       <span style={{
-                        fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                         color: "rgba(251,243,212,0.6)",
                         letterSpacing: "0.15em", textTransform: "uppercase",
                       }}>{rows.length} {rows.length === 1 ? "place" : "places"}</span>
@@ -237,7 +237,7 @@ export default async function StoreLocatorPage() {
                         margin: "8px 0 0",
                         paddingLeft: 20,
                         fontFamily: "var(--font-body)",
-                        fontSize: 12,
+                        fontSize: 16,
                         fontWeight: 400,
                         color: "rgba(2,70,40,0.85)",
                         letterSpacing: "0.02em",
@@ -280,7 +280,7 @@ export default async function StoreLocatorPage() {
                             <p style={{
                               margin: 0,
                               fontFamily: "var(--font-body)",
-                              fontSize: 14, fontWeight: 400,
+                              fontSize: 16, fontWeight: 400,
                               color: "#FBF3D4",
                               letterSpacing: "0.02em",
                               flex: "1 1 auto",
@@ -290,7 +290,7 @@ export default async function StoreLocatorPage() {
                               aria-label={`Location type: ${typeLabel(r.type)}`}
                               style={{
                                 fontFamily: "var(--font-body)",
-                                fontSize: 9, fontWeight: 400,
+                                fontSize: 14, fontWeight: 500,
                                 letterSpacing: "0.2em", textTransform: "uppercase",
                                 color: `rgba(${GOLD},0.85)`,
                                 border: `1px solid rgba(${GOLD},0.4)`,
@@ -303,7 +303,7 @@ export default async function StoreLocatorPage() {
                           <p style={{
                             margin: 0,
                             fontFamily: "var(--font-body)",
-                            fontSize: 11, fontWeight: 300,
+                            fontSize: 16, fontWeight: 300,
                             color: "rgba(251,243,212,0.7)",
                             letterSpacing: "0.04em",
                             lineHeight: 1.5,
@@ -316,7 +316,7 @@ export default async function StoreLocatorPage() {
                             <p style={{
                               margin: 0,
                               fontFamily: "var(--font-body)",
-                              fontSize: 11, fontWeight: 300,
+                              fontSize: 16, fontWeight: 300,
                               color: "rgba(251,243,212,0.6)",
                               letterSpacing: "0.02em",
                               lineHeight: 1.5,
@@ -345,7 +345,7 @@ export default async function StoreLocatorPage() {
                                 borderRadius: 6,
                                 padding: "8px 14px",
                                 fontFamily: "var(--font-body)",
-                                fontSize: 10, fontWeight: 400,
+                                fontSize: 14, fontWeight: 500,
                                 letterSpacing: "0.25em", textTransform: "uppercase",
                                 color: `rgba(${GOLD},0.95)`,
                                 textDecoration: "none",
@@ -353,7 +353,7 @@ export default async function StoreLocatorPage() {
                                 WebkitTapHighlightColor: "transparent",
                               }}
                             >
-                              <span aria-hidden="true" style={{ fontSize: 12, lineHeight: 1 }}>↗</span>
+                              <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>↗</span>
                               Directions
                             </a>
                           </div>

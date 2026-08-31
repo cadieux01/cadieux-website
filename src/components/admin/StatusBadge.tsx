@@ -46,7 +46,7 @@ export function StatusBadge({ status }: { status: string | null | undefined }) {
       className="inline-flex items-center uppercase"
       style={{
         fontFamily: "var(--font-body)",
-        fontSize: "0.6rem",
+        fontSize: "0.875rem",
         letterSpacing: "0.18em",
         color: colors.fg,
         border: `1px solid ${colors.border}`,

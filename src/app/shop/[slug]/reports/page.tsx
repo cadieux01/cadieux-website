@@ -34,8 +34,8 @@ export default function ProductReportsPage() {
           left: "calc(20px + env(safe-area-inset-left))",
           zIndex: 101,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
-          fontWeight: 200,
+          fontSize: 14,
+          fontWeight: 500,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
           color: "#024628",
@@ -45,7 +45,7 @@ export default function ProductReportsPage() {
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 14 }}>←</span> Back to {product.title}
+        <span style={{ fontSize: 16 }}>←</span> Back to {product.title}
       </Link>
 
       <div
@@ -73,7 +73,7 @@ export default function ProductReportsPage() {
           <div
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 10,
+              fontSize: 14,
               fontWeight: 500,
               letterSpacing: "0.4em",
               textTransform: "uppercase",
@@ -102,7 +102,7 @@ export default function ProductReportsPage() {
             style={{
               margin: "0 0 20px",
               fontFamily: "var(--font-body)",
-              fontSize: 13,
+              fontSize: 16,
               fontWeight: 300,
               letterSpacing: "0.04em",
               color: "rgba(251,243,212,0.85)",
@@ -141,7 +141,7 @@ export default function ProductReportsPage() {
             style={{
               margin: "0 0 10px",
               fontFamily: "var(--font-body)",
-              fontSize: 14,
+              fontSize: 16,
               lineHeight: 1.75,
               fontWeight: 300,
               color: "rgba(251, 243, 212, 0.65)",
@@ -154,8 +154,8 @@ export default function ProductReportsPage() {
             style={{
               margin: "22px 0 0",
               fontFamily: "var(--font-body)",
-              fontSize: 11,
-              fontWeight: 400,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
               color: "rgba(251,243,212,0.75)",
@@ -187,7 +187,7 @@ export default function ProductReportsPage() {
                 border: "1px solid #FBF3D4",
                 color: "#FBF3D4",
                 fontFamily: "var(--font-body)",
-                fontSize: 10,
+                fontSize: 14,
                 fontWeight: 500,
                 letterSpacing: "0.35em",
                 textTransform: "uppercase",
@@ -205,7 +205,7 @@ export default function ProductReportsPage() {
                 border: "1px solid rgba(251,243,212,0.3)",
                 color: "rgba(251,243,212,0.75)",
                 fontFamily: "var(--font-body)",
-                fontSize: 10,
+                fontSize: 14,
                 fontWeight: 500,
                 letterSpacing: "0.35em",
                 textTransform: "uppercase",

@@ -235,8 +235,8 @@ export default function IngredientStory() {
                   <p style={{
                     margin: "0 0 20px",
                     fontFamily: "var(--font-body)",
-                    fontSize: 8,
-                    fontWeight: 200,
+                    fontSize: 14,
+                    fontWeight: 500,
                     letterSpacing: "0.5em",
                     textTransform: "uppercase",
                     color: "rgba(200,144,58,0.4)",
@@ -268,8 +268,8 @@ export default function IngredientStory() {
                   <p style={{
                     margin: 0,
                     fontFamily: "var(--font-body)",
-                    fontSize: 9,
-                    fontWeight: 200,
+                    fontSize: 14,
+                    fontWeight: 500,
                     letterSpacing: "0.4em",
                     textTransform: "uppercase",
                     color: "rgb(200,144,58)",

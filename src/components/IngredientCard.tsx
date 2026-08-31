@@ -204,7 +204,7 @@ export default function IngredientCard({
             <span
               style={{
                 color: ingredient.color,
-                fontSize: "0.6rem",
+                fontSize: "1rem",
                 marginRight: "8px",
                 verticalAlign: "middle",
               }}
@@ -214,7 +214,7 @@ export default function IngredientCard({
             <span
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.68rem",
+                fontSize: "0.875rem",
                 fontWeight: 500,
                 letterSpacing: "0.12em",
                 textTransform: "uppercase",
@@ -227,7 +227,7 @@ export default function IngredientCard({
           <div
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.72rem",
+              fontSize: "1rem",
               fontWeight: 300,
               lineHeight: 1.6,
               color: "rgba(251,243,212,0.65)",
@@ -243,8 +243,8 @@ export default function IngredientCard({
       <div
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.55rem",
-          fontWeight: 300,
+          fontSize: "0.875rem",
+          fontWeight: 500,
           letterSpacing: "0.18em",
           color: "rgba(251,243,212,0.2)",
           textTransform: "uppercase",

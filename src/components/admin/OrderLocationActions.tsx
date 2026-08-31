@@ -56,7 +56,7 @@ export function OrderLocationActions({
         style={{
           marginTop: 6,
           color: MUTED,
-          fontSize: "0.7rem",
+          fontSize: "1rem",
           letterSpacing: "0.05em",
           fontStyle: "italic",
         }}
@@ -101,7 +101,7 @@ export function OrderLocationActions({
     cursor: "pointer",
     padding: "0 8px",
     fontFamily: "var(--font-body)",
-    fontSize: "0.7rem",
+    fontSize: "0.875rem",
     letterSpacing: "0.1em",
     textDecoration: "none",
     textTransform: "uppercase",

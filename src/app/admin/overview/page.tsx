@@ -147,7 +147,7 @@ function AdminLoading() {
         padding: "2rem",
         color: FADED,
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
         letterSpacing: "0.05em",
       }}
     >
@@ -229,7 +229,7 @@ function OverviewPageInner() {
             color: "#fca5a5",
             margin: "1rem 0",
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
           }}
         >
           {error}
@@ -273,7 +273,7 @@ function TopSelector({
         htmlFor="metric-select"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.6rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.25em",
           textTransform: "uppercase",
           color: FADED,
@@ -384,7 +384,7 @@ function KpiStrip({
             style={{
               color: FADED,
               fontFamily: "var(--font-body)",
-              fontSize: "0.58rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.22em",
               textTransform: "uppercase",
               marginBottom: "0.55rem",
@@ -407,7 +407,7 @@ function KpiStrip({
             <div
               style={{
                 color: "rgba(251,243,212,0.35)",
-                fontSize: "0.66rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.12em",
                 textTransform: "uppercase",
                 marginTop: "0.45rem",
@@ -445,7 +445,7 @@ function MetricDetail({
           borderRadius: 8,
           color: CREAM,
           fontFamily: "var(--font-body)",
-          fontSize: "0.62rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.2em",
           textTransform: "uppercase",
           padding: "0.45rem 0.9rem",
@@ -470,7 +470,7 @@ function MetricDetail({
         <h3
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.62rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.25em",
             textTransform: "uppercase",
             color: FADED,
@@ -511,7 +511,7 @@ function Headline({
           style={{
             color: FADED,
             fontFamily: "var(--font-body)",
-            fontSize: "0.72rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.16em",
             textTransform: "uppercase",
             marginTop: "0.6rem",
@@ -737,7 +737,7 @@ function FormulaPanel({
             width: "100%",
             borderCollapse: "collapse",
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             color: CREAM,
           }}
         >
@@ -751,10 +751,10 @@ function FormulaPanel({
                     padding: "0.6rem 0.75rem",
                     borderBottom: `1px solid ${BORDER}`,
                     color: FADED,
-                    fontSize: "0.62rem",
+                    fontSize: "0.875rem",
                     letterSpacing: "0.2em",
                     textTransform: "uppercase",
-                    fontWeight: 400,
+                    fontWeight: 500,
                     whiteSpace: "nowrap",
                     width: "60%",
                   }}
@@ -783,7 +783,7 @@ function FormulaPanel({
           marginTop: "0.85rem",
           color: "rgba(251,243,212,0.5)",
           fontFamily: "var(--font-body)",
-          fontSize: "0.72rem",
+          fontSize: "1rem",
           letterSpacing: "0.04em",
           lineHeight: 1.5,
         }}
@@ -804,7 +804,7 @@ function EmptyChart({ label }: { label: string }) {
         justifyContent: "center",
         color: FADED,
         fontFamily: "var(--font-body)",
-        fontSize: "0.8rem",
+        fontSize: "1rem",
         border: `1px dashed ${BORDER}`,
         borderRadius: 8,
       }}
@@ -846,13 +846,13 @@ const skel = (h: number): React.CSSProperties => ({
 });
 
 const chartMargin = { top: 10, right: 16, left: 0, bottom: 0 };
-const axisTick = { fill: CREAM, fontSize: 10 } as const;
+const axisTick = { fill: CREAM, fontSize: 16 } as const;
 
 const tooltipStyle: React.CSSProperties = {
   background: GREEN,
   border: `1px solid ${CREAM}`,
   borderRadius: 6,
   fontFamily: "var(--font-body)",
-  fontSize: "0.78rem",
+  fontSize: "1rem",
   color: CREAM,
 };

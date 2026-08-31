@@ -221,8 +221,8 @@ export default function FindUsClient({
           left: 20,
           zIndex: 101,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
-          fontWeight: 200,
+          fontSize: 14,
+          fontWeight: 500,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
           color: "#024628",
@@ -232,7 +232,7 @@ export default function FindUsClient({
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 14 }}>←</span> Cadieux
+        <span style={{ fontSize: 16 }}>←</span> Cadieux
       </Link>
 
       <div
@@ -261,7 +261,7 @@ export default function FindUsClient({
           style={{
             margin: "0 0 36px",
             fontFamily: "var(--font-body)",
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: 300,
             color: "rgba(2,70,40,0.8)",
             letterSpacing: "0.02em",
@@ -314,10 +314,10 @@ export default function FindUsClient({
                   onCloseClick={() => setSelectedId(null)}
                 >
                   <div style={{ color: "#1a1612", maxWidth: 240, padding: 4 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                    <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
                       {selected.name}
                     </div>
-                    <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 6 }}>
+                    <div style={{ fontSize: 16, opacity: 0.75, marginBottom: 6 }}>
                       {typeBadge(selected.type)} · {selected.area}
                     </div>
                     <button
@@ -329,7 +329,7 @@ export default function FindUsClient({
                         border: "none",
                         borderRadius: 4,
                         padding: "6px 10px",
-                        fontSize: 11,
+                        fontSize: 14,
                         letterSpacing: "0.1em",
                         textTransform: "uppercase",
                         cursor: "pointer",
@@ -351,7 +351,7 @@ export default function FindUsClient({
                 justifyContent: "center",
                 color: "rgba(251,243,212,0.4)",
                 fontFamily: "var(--font-body)",
-                fontSize: 12,
+                fontSize: 14,
                 letterSpacing: "0.2em",
                 textTransform: "uppercase",
               }}
@@ -369,7 +369,7 @@ export default function FindUsClient({
             flexWrap: "wrap",
             marginBottom: 32,
             fontFamily: "var(--font-body)",
-            fontSize: 11,
+            fontSize: 14,
             color: "rgba(2,70,40,0.8)",
             letterSpacing: "0.15em",
             textTransform: "uppercase",
@@ -404,8 +404,8 @@ export default function FindUsClient({
               style={{
                 display: "block",
                 fontFamily: "var(--font-body)",
-                fontSize: 10,
-                fontWeight: 400,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.25em",
                 textTransform: "uppercase",
                 color: "rgba(251,243,212,0.55)",
@@ -434,7 +434,7 @@ export default function FindUsClient({
                 color: "#FBF3D4",
                 caretColor: "#FBF3D4",
                 fontFamily: "var(--font-body)",
-                fontSize: 14,
+                fontSize: 16,
                 outline: "none",
               }}
             />
@@ -449,8 +449,8 @@ export default function FindUsClient({
               borderRadius: 8,
               padding: "12px 22px",
               fontFamily: "var(--font-body)",
-              fontSize: 11,
-              fontWeight: 400,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.25em",
               textTransform: "uppercase",
               color: "#FBF3D4",
@@ -466,7 +466,7 @@ export default function FindUsClient({
                 margin: 0,
                 width: "100%",
                 fontFamily: "var(--font-body)",
-                fontSize: 13,
+                fontSize: 16,
                 color:
                   pincodeResult.kind === "served"
                     ? "#9bd0a3"
@@ -536,8 +536,8 @@ export default function FindUsClient({
                     borderRadius: 999,
                     padding: "8px 16px",
                     fontFamily: "var(--font-body)",
-                    fontSize: 11,
-                    fontWeight: 400,
+                    fontSize: 14,
+                    fontWeight: 500,
                     letterSpacing: "0.2em",
                     textTransform: "uppercase",
                     color: isActive ? "#FBF3D4" : "#024628",
@@ -568,7 +568,7 @@ export default function FindUsClient({
             color: "#024628",
             caretColor: "#024628",
             fontFamily: "var(--font-body)",
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: 300,
             letterSpacing: "0.04em",
             outline: "none",
@@ -581,7 +581,7 @@ export default function FindUsClient({
           <p
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 13,
+              fontSize: 16,
               color: "rgba(2,70,40,0.7)",
               textAlign: "center",
               padding: "40px 0",
@@ -637,8 +637,8 @@ export default function FindUsClient({
                     <span
                       style={{
                         fontFamily: "var(--font-body)",
-                        fontSize: 9,
-                        fontWeight: 400,
+                        fontSize: 14,
+                        fontWeight: 500,
                         letterSpacing: "0.18em",
                         textTransform: "uppercase",
                         color: pinColorFor(loc.type),
@@ -655,7 +655,7 @@ export default function FindUsClient({
                     style={{
                       margin: 0,
                       fontFamily: "var(--font-body)",
-                      fontSize: 11,
+                      fontSize: 16,
                       fontWeight: 300,
                       color: "rgba(251,243,212,0.75)",
                       letterSpacing: "0.03em",
@@ -669,8 +669,8 @@ export default function FindUsClient({
                       style={{
                         margin: 0,
                         fontFamily: "var(--font-body)",
-                        fontSize: 10,
-                        fontWeight: 300,
+                        fontSize: 14,
+                        fontWeight: 500,
                         color: "rgba(251,243,212,0.6)",
                         letterSpacing: "0.18em",
                         textTransform: "uppercase",
@@ -699,8 +699,8 @@ export default function FindUsClient({
                         borderRadius: 6,
                         padding: "7px 14px",
                         fontFamily: "var(--font-body)",
-                        fontSize: 10,
-                        fontWeight: 400,
+                        fontSize: 14,
+                        fontWeight: 500,
                         letterSpacing: "0.25em",
                         textTransform: "uppercase",
                         color: "#FBF3D4",
@@ -741,7 +741,7 @@ export default function FindUsClient({
           <p
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 13,
+              fontSize: 16,
               fontWeight: 300,
               color: "rgba(2,70,40,0.8)",
               margin: "0 0 16px",
@@ -760,8 +760,8 @@ export default function FindUsClient({
               borderRadius: 8,
               padding: "12px 22px",
               fontFamily: "var(--font-body)",
-              fontSize: 11,
-              fontWeight: 400,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.25em",
               textTransform: "uppercase",
               color: "#FBF3D4",

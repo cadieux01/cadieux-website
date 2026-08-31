@@ -55,7 +55,7 @@ export default function AdminError({
         <p
           style={{
             color: FADED,
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             marginBottom: "1.5rem",
           }}
         >
@@ -70,7 +70,7 @@ export default function AdminError({
             background: "rgba(239,68,68,0.08)",
             padding: "1rem 1.2rem",
             color: "#fecaca",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             lineHeight: 1.5,
             marginBottom: "1.5rem",
           }}
@@ -91,7 +91,7 @@ export default function AdminError({
               wordBreak: "break-word",
               fontFamily:
                 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
-              fontSize: "0.78rem",
+              fontSize: "1rem",
               margin: 0,
             }}
           >
@@ -101,7 +101,7 @@ export default function AdminError({
             <p
               style={{
                 marginTop: "0.75rem",
-                fontSize: "0.7rem",
+                fontSize: "0.875rem",
                 color: "rgba(254,202,202,0.7)",
                 letterSpacing: "0.08em",
               }}
@@ -115,7 +115,7 @@ export default function AdminError({
                 style={{
                   cursor: "pointer",
                   color: "#fca5a5",
-                  fontSize: "0.7rem",
+                  fontSize: "0.875rem",
                   letterSpacing: "0.18em",
                   textTransform: "uppercase",
                 }}
@@ -127,7 +127,7 @@ export default function AdminError({
                   marginTop: "0.5rem",
                   fontFamily:
                     'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
-                  fontSize: "0.72rem",
+                  fontSize: "1rem",
                   color: "rgba(254,202,202,0.75)",
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
@@ -146,7 +146,7 @@ export default function AdminError({
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: GOLD,
               border: `1px solid ${GOLD}`,
@@ -162,7 +162,7 @@ export default function AdminError({
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: FADED,
               border: `1px solid rgba(245,158,11,0.25)`,

@@ -140,10 +140,10 @@ export default function AndroidInstallPrompt() {
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, letterSpacing: "0.02em" }}>
+        <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: "0.02em" }}>
           Install Cadieux
         </div>
-        <div style={{ fontSize: 11, color: "rgba(245,240,232,0.65)", marginTop: 2 }}>
+        <div style={{ fontSize: 16, color: "rgba(245,240,232,0.65)", marginTop: 2 }}>
           Add to home screen for faster ordering.
         </div>
       </div>
@@ -155,7 +155,7 @@ export default function AndroidInstallPrompt() {
           color: "rgba(245,240,232,0.6)",
           border: "none",
           padding: "6px 10px",
-          fontSize: 11,
+          fontSize: 14,
           letterSpacing: "0.18em",
           textTransform: "uppercase",
           cursor: "pointer",
@@ -172,7 +172,7 @@ export default function AndroidInstallPrompt() {
           color: "#024628",
           border: "none",
           padding: "8px 14px",
-          fontSize: 11,
+          fontSize: 14,
           fontWeight: 600,
           letterSpacing: "0.18em",
           textTransform: "uppercase",

@@ -43,7 +43,8 @@ export default function LegalPage({ title, html, children }: Props) {
         .legal-page__back {
           display: inline-block;
           font-family: var(--font-body);
-          font-size: 0.75rem;
+          font-size: 0.875rem;
+          font-weight: 500;
           letter-spacing: 0.3em;
           text-transform: uppercase;
           color: rgba(192,200,206,0.75);
@@ -90,7 +91,8 @@ export default function LegalPage({ title, html, children }: Props) {
         .legal-page__body [data-custom-class='subtitle'] * {
           font-family: var(--font-body) !important;
           color: rgba(192,200,206,0.6) !important;
-          font-size: 0.8rem !important;
+          font-size: 0.875rem !important;
+          font-weight: 500 !important;
           letter-spacing: 0.15em !important;
           text-transform: uppercase !important;
         }

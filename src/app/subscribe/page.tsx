@@ -149,8 +149,8 @@ export default async function SubscribeLandingPage() {
           left: "calc(20px + env(safe-area-inset-left))",
           zIndex: 101,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
-          fontWeight: 200,
+          fontSize: 14,
+          fontWeight: 500,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
           color: "#024628",
@@ -160,7 +160,7 @@ export default async function SubscribeLandingPage() {
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 14 }}>←</span> Cadieux
+        <span style={{ fontSize: 16 }}>←</span> Cadieux
       </Link>
 
       <div
@@ -179,8 +179,8 @@ export default async function SubscribeLandingPage() {
           style={{
             margin: "0 0 20px",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
-            fontWeight: 200,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(2,70,40,0.75)",
@@ -212,10 +212,10 @@ export default async function SubscribeLandingPage() {
               margin: "0 0 24px",
             }}
           >
-            <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+            <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
               Pre-order
             </p>
-            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
+            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
               Subscriptions open once daily deliveries begin. In the meantime, reserve a single loaf now — we&apos;ll confirm your first delivery date by SMS + WhatsApp.
             </p>
           </div>
@@ -228,7 +228,7 @@ export default async function SubscribeLandingPage() {
           style={{
             margin: "0 0 28px",
             fontFamily: "var(--font-body)",
-            fontSize: 15,
+            fontSize: 16,
             fontWeight: 400,
             color: "#024628",
             lineHeight: 1.55,
@@ -277,7 +277,7 @@ export default async function SubscribeLandingPage() {
                   display: "flex",
                   gap: 14,
                   fontFamily: "var(--font-body)",
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: 400,
                   color: "#024628",
                   lineHeight: 1.55,
@@ -295,7 +295,7 @@ export default async function SubscribeLandingPage() {
                     alignItems: "center",
                     justifyContent: "center",
                     fontFamily: "var(--font-heading)",
-                    fontSize: 13,
+                    fontSize: 16,
                     color: "#024628",
                     background: "transparent",
                   }}
@@ -360,7 +360,7 @@ export default async function SubscribeLandingPage() {
             style={{
               margin: "0 0 14px",
               fontFamily: "var(--font-body)",
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: 400,
               color: "#024628",
               lineHeight: 1.55,
@@ -390,7 +390,7 @@ export default async function SubscribeLandingPage() {
                     borderRadius: 999,
                     border: "1px solid rgba(2,70,40,0.35)",
                     fontFamily: "var(--font-body)",
-                    fontSize: 12,
+                    fontSize: 16,
                     fontWeight: 400,
                     letterSpacing: "0.02em",
                     color: "#024628",
@@ -410,7 +410,7 @@ export default async function SubscribeLandingPage() {
             style={{
               margin: 0,
               fontFamily: "var(--font-body)",
-              fontSize: 13,
+              fontSize: 16,
               fontWeight: 300,
               color: "rgba(2,70,40,0.75)",
               lineHeight: 1.5,
@@ -466,7 +466,7 @@ export default async function SubscribeLandingPage() {
                   style={{
                     margin: 0,
                     fontFamily: "var(--font-body)",
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: 400,
                     color: "#024628",
                     lineHeight: 1.55,
@@ -511,7 +511,7 @@ export default async function SubscribeLandingPage() {
             style={{
               margin: 0,
               fontFamily: "var(--font-body)",
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: 300,
               color: "rgba(251,243,212,0.85)",
               letterSpacing: "0.01em",
@@ -557,7 +557,7 @@ export default async function SubscribeLandingPage() {
                   borderRadius: 999,
                   padding: "12px 22px",
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
+                  fontSize: 14,
                   fontWeight: 500,
                   letterSpacing: "0.25em",
                   textTransform: "uppercase",
@@ -567,7 +567,7 @@ export default async function SubscribeLandingPage() {
                 }}
               >
                 Start your subscription
-                <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>
+                <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
                   →
                 </span>
               </span>
@@ -585,7 +585,7 @@ export default async function SubscribeLandingPage() {
                   borderRadius: 999,
                   padding: "12px 22px",
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
+                  fontSize: 14,
                   fontWeight: 500,
                   letterSpacing: "0.25em",
                   textTransform: "uppercase",
@@ -594,7 +594,7 @@ export default async function SubscribeLandingPage() {
                 }}
               >
                 Start your subscription
-                <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>
+                <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
                   →
                 </span>
               </Link>
@@ -612,8 +612,8 @@ export default async function SubscribeLandingPage() {
                 borderRadius: 999,
                 padding: "12px 22px",
                 fontFamily: "var(--font-body)",
-                fontSize: 11,
-                fontWeight: 400,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.25em",
                 textTransform: "uppercase",
                 textDecoration: "none",
@@ -634,7 +634,7 @@ export default async function SubscribeLandingPage() {
           style={{
             margin: 0,
             fontFamily: "var(--font-body)",
-            fontSize: 13,
+            fontSize: 16,
             fontWeight: 300,
             color: "rgba(2,70,40,0.75)",
             lineHeight: 1.5,
@@ -739,7 +739,7 @@ function PlanCard({ plan }: { plan: SubscriptionPlanDTO }) {
             <span
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: 13,
+                fontSize: 16,
                 color: "rgba(251,243,212,0.55)",
                 textDecoration: "line-through",
               }}
@@ -764,7 +764,7 @@ function PlanCard({ plan }: { plan: SubscriptionPlanDTO }) {
           style={{
             margin: 0,
             fontFamily: "var(--font-body)",
-            fontSize: 13,
+            fontSize: 16,
             fontWeight: 300,
             color: "rgba(251,243,212,0.75)",
             lineHeight: 1.5,
@@ -778,7 +778,7 @@ function PlanCard({ plan }: { plan: SubscriptionPlanDTO }) {
           style={{
             margin: "4px 0 0",
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 16,
             fontWeight: 400,
             color: `rgba(${GOLD},0.9)`,
             letterSpacing: "0.02em",

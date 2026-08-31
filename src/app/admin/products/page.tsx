@@ -81,7 +81,7 @@ export default function AdminProductsPage() {
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: GOLD,
               border: `1px solid ${GOLD}`,
@@ -99,7 +99,7 @@ export default function AdminProductsPage() {
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: includeArchived ? CREAM : FADED,
               border: `1px solid ${BORDER}`,
@@ -114,7 +114,7 @@ export default function AdminProductsPage() {
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: GOLD,
               border: `1px solid ${GOLD}`,
@@ -198,7 +198,7 @@ export default function AdminProductsPage() {
                     </Link>
                   </Td>
                   <Td>
-                    <code style={{ color: FADED, fontSize: "0.85em" }}>
+                    <code style={{ color: FADED, fontSize: "1rem" }}>
                       {r.slug}
                     </code>
                   </Td>
@@ -212,7 +212,7 @@ export default function AdminProductsPage() {
                     <StatusFlags row={r} />
                   </Td>
                   <Td>
-                    <span style={{ color: FADED, fontSize: "0.85em" }}>
+                    <span style={{ color: FADED, fontSize: "1rem" }}>
                       {formatDateTime(r.updated_at)}
                     </span>
                   </Td>
@@ -239,7 +239,7 @@ function StatusFlags({ row }: { row: AdminProductRow }) {
           key={t.label}
           className="uppercase"
           style={{
-            fontSize: "0.65rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.18em",
             color: t.color,
             border: `1px solid ${t.color}`,
@@ -266,10 +266,10 @@ function Th({
       style={{
         textAlign: align,
         padding: "0.6rem 0.75rem",
-        fontSize: "0.65rem",
+        fontSize: "0.875rem",
         letterSpacing: "0.22em",
         color: FADED,
-        fontWeight: 400,
+        fontWeight: 500,
       }}
     >
       {children}
@@ -289,7 +289,7 @@ function Td({
       style={{
         textAlign: align,
         padding: "0.7rem 0.75rem",
-        fontSize: "0.9rem",
+        fontSize: "1rem",
       }}
     >
       {children}
@@ -311,7 +311,7 @@ function ErrorBox({
         border: "1px solid #ef4444",
         color: "#fecaca",
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
       }}
     >
       {message}{" "}

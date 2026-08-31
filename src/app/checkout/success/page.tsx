@@ -202,7 +202,7 @@ function SuccessInner() {
           <p
             style={{
               margin: "0 0 10px",
-              fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200,
+              fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
               letterSpacing: "0.35em", textTransform: "uppercase",
               color: "rgba(2,70,40,0.7)",
             }}
@@ -213,7 +213,7 @@ function SuccessInner() {
         <p
           style={{
             margin: "0 0 28px", maxWidth: 380,
-            fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
+            fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200,
             letterSpacing: "0.05em", color: "rgba(2,70,40,0.7)", lineHeight: 1.7,
           }}
         >
@@ -298,7 +298,7 @@ function SuccessInner() {
             width: "100%", maxWidth: 360, height: 56,
             background: "#f59e0b",
             textDecoration: "none",
-            fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400,
+            fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
             letterSpacing: "0.4em", textTransform: "uppercase",
             color: "#024628",
             marginBottom: 14,
@@ -315,7 +315,7 @@ function SuccessInner() {
             background: "transparent",
             border: "1px solid rgba(2,70,40,0.25)",
             textDecoration: "none",
-            fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+            fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
             letterSpacing: "0.4em", textTransform: "uppercase",
             color: "rgba(2,70,40,0.7)",
             WebkitTapHighlightColor: "transparent",
@@ -331,7 +331,7 @@ function SuccessInner() {
 const summaryHeading: React.CSSProperties = {
   margin: "0 0 6px",
   fontFamily: "var(--font-body)",
-  fontSize: 10,
+  fontSize: 14,
   fontWeight: 500,
   letterSpacing: "0.35em",
   textTransform: "uppercase",
@@ -341,7 +341,7 @@ const summaryHeading: React.CSSProperties = {
 const summaryValue: React.CSSProperties = {
   margin: 0,
   fontFamily: "var(--font-body)",
-  fontSize: 13,
+  fontSize: 16,
   fontWeight: 300,
   color: "rgba(2,70,40,0.85)",
   letterSpacing: "0.03em",

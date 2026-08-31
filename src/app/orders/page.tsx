@@ -120,12 +120,12 @@ export default function OrdersPage() {
 
       <Link href="/" style={{
         position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-        fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
         letterSpacing: "0.35em", textTransform: "uppercase",
         color: "#024628", textDecoration: "none",
         display: "flex", alignItems: "center", gap: 8,
       }}>
-        <span style={{ fontSize: 14 }}>←</span> Cadieux
+        <span style={{ fontSize: 16 }}>←</span> Cadieux
       </Link>
 
       <div style={{ position: "relative", zIndex: 1, padding: "100px clamp(24px,6vw,80px) 120px", maxWidth: 720, margin: "0 auto" }}>
@@ -133,9 +133,9 @@ export default function OrdersPage() {
           <h1 style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: "clamp(48px,11vw,88px)", fontWeight: 300, color: "#024628", letterSpacing: "0.02em", lineHeight: 1 }}>
             Orders
           </h1>
-          <button onClick={() => fetchOrders(true)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628", WebkitTapHighlightColor: "transparent" }}>↻ Refresh</button>
+          <button onClick={() => fetchOrders(true)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628", WebkitTapHighlightColor: "transparent" }}>↻ Refresh</button>
         </div>
-        <p style={{ margin: "0 0 36px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>
+        <p style={{ margin: "0 0 36px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>
           One-time orders & subscriptions
         </p>
 
@@ -143,7 +143,7 @@ export default function OrdersPage() {
           <p style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "rgba(2,70,40,0.6)", letterSpacing: "0.1em" }}>Loading…</p>
         )}
         {phoneMissing && (
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "rgba(2,70,40,0.7)", lineHeight: 1.7 }}>Place an order from the cart first — we look up your orders by phone number.</p>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(2,70,40,0.7)", lineHeight: 1.7 }}>Place an order from the cart first — we look up your orders by phone number.</p>
         )}
         {!loading && !phoneMissing && rows.length === 0 && (
           <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(2,70,40,0.7)", lineHeight: 1.7 }}>No orders yet. Add something to your cart to get started.</p>
@@ -171,14 +171,14 @@ function OrderRow({ row, number }: { row: Row; number: number }) {
   const inner = (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, alignItems: "center", gap: 12 }}>
-        <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.75)" }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.75)" }}>
           #{String(number).padStart(6, "0")}
         </span>
         <span
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 10,
-            fontWeight: 300,
+            fontSize: 14,
+            fontWeight: 500,
             letterSpacing: "0.25em",
             textTransform: "uppercase",
             padding: "3px 9px",
@@ -190,25 +190,25 @@ function OrderRow({ row, number }: { row: Row; number: number }) {
         >
           {typeLabel}
         </span>
-        <span style={{ fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 400, color: "#024628" }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 400, color: "#024628" }}>
           ₹{Number(row.total).toLocaleString("en-IN")}
         </span>
       </div>
-      <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 300, color: "rgba(2,70,40,0.8)", letterSpacing: "0.02em" }}>
+      <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, color: "rgba(2,70,40,0.8)", letterSpacing: "0.02em" }}>
         {row.description}
       </p>
       {row.is_preorder && (
-        <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400, letterSpacing: "0.2em", textTransform: "uppercase", color: "#024628" }}>
+        <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "#024628" }}>
           {row.delivery_date
             ? `Pre-order · Scheduled ${new Date(row.delivery_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
             : "Pre-order · Delivery date TBD — we’ll confirm by SMS + WhatsApp"}
         </p>
       )}
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, letterSpacing: "0.3em", textTransform: "uppercase", color: statusColor }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.3em", textTransform: "uppercase", color: statusColor }}>
           {row.status}
         </span>
-        <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, color: "rgba(2,70,40,0.6)" }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, color: "rgba(2,70,40,0.6)" }}>
           {new Date(row.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
         </span>
       </div>

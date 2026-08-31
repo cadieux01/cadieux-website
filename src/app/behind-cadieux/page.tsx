@@ -196,8 +196,8 @@ export default async function BehindCadieuxPage() {
           left: 20,
           zIndex: 101,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
-          fontWeight: 200,
+          fontSize: 14,
+          fontWeight: 500,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
           color: ENDURANCE_BLUE,
@@ -207,7 +207,7 @@ export default async function BehindCadieuxPage() {
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 14 }}>←</span> Cadieux
+        <span style={{ fontSize: 16 }}>←</span> Cadieux
       </Link>
 
       <main
@@ -257,8 +257,8 @@ export default async function BehindCadieuxPage() {
             style={{
               margin: "0 0 12px",
               fontFamily: "var(--font-body)",
-              fontSize: 11,
-              fontWeight: 300,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.35em",
               textTransform: "uppercase",
               color: GOLD,
@@ -391,7 +391,7 @@ export default async function BehindCadieuxPage() {
                           style={{
                             margin: 0,
                             fontFamily: "var(--font-body)",
-                            fontSize: 12,
+                            fontSize: 14,
                             fontWeight: 500,
                             letterSpacing: "0.25em",
                             textTransform: "uppercase",
@@ -461,7 +461,7 @@ export default async function BehindCadieuxPage() {
                 border: "0.5px solid rgba(251,243,212,0.3)",
                 borderRadius: 4,
                 fontFamily: "var(--font-body)",
-                fontSize: 13,
+                fontSize: 16,
                 fontWeight: 300,
                 letterSpacing: "0.04em",
                 color: "rgba(251,243,212,0.9)",
@@ -506,8 +506,8 @@ export default async function BehindCadieuxPage() {
                   <span
                     style={{
                       fontFamily: "var(--font-body)",
-                      fontSize: 11,
-                      fontWeight: 400,
+                      fontSize: 14,
+                      fontWeight: 500,
                       letterSpacing: "0.18em",
                       textTransform: "uppercase",
                       color: "rgba(251,243,212,0.75)",
@@ -526,7 +526,7 @@ export default async function BehindCadieuxPage() {
               style={{
                 margin: "20px 0 0",
                 fontFamily: "var(--font-body)",
-                fontSize: 13,
+                fontSize: 16,
                 fontWeight: 300,
                 fontStyle: "italic",
                 color: "rgba(251,243,212,0.7)",
@@ -617,7 +617,7 @@ export default async function BehindCadieuxPage() {
               style={{
                 margin: "32px 0 0",
                 fontFamily: "var(--font-body)",
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: 500,
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",

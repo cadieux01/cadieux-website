@@ -72,7 +72,7 @@ function AdminLoading() {
         padding: "2rem",
         color: "rgba(245,158,11,0.7)",
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
         letterSpacing: "0.05em",
       }}
     >
@@ -236,7 +236,7 @@ function SubscriptionsPageInner() {
             padding: "0.8rem 1rem",
             color: "#fca5a5",
             marginBottom: "1rem",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             fontFamily: "var(--font-body)",
           }}
         >
@@ -303,7 +303,7 @@ function SubscriptionsPageInner() {
                           <span
                             style={{
                               color: "rgba(245,158,11,0.85)",
-                              fontSize: "0.75rem",
+                              fontSize: "1rem",
                             }}
                           >
                             {s.customer.phone}
@@ -321,7 +321,7 @@ function SubscriptionsPageInner() {
                       <div
                         style={{
                           color: "rgba(192,200,206,0.55)",
-                          fontSize: "0.72rem",
+                          fontSize: "1rem",
                         }}
                       >
                         {s.quantity_per_delivery}× · {s.frequency}
@@ -407,7 +407,7 @@ function SubscriptionsPageInner() {
         style={{
           marginTop: "1.5rem",
           color: "rgba(192,200,206,0.5)",
-          fontSize: "0.75rem",
+          fontSize: "1rem",
           fontFamily: "var(--font-body)",
           maxWidth: 720,
           lineHeight: 1.6,
@@ -566,7 +566,7 @@ function SubscriptionDrawer({
             <p
               style={{
                 margin: 0,
-                fontSize: "0.65rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
                 color: "rgba(245,158,11,0.75)",
@@ -588,7 +588,7 @@ function SubscriptionDrawer({
             <p
               style={{
                 margin: "4px 0 0",
-                fontSize: "0.75rem",
+                fontSize: "1rem",
                 color: "rgba(251,243,212,0.55)",
                 display: "flex",
                 alignItems: "center",
@@ -646,7 +646,7 @@ function SubscriptionDrawer({
           >
             <span
               style={{
-                fontSize: "0.6rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
                 color: "rgba(245,158,11,0.8)",
@@ -673,7 +673,7 @@ function SubscriptionDrawer({
           >
             <span
               style={{
-                fontSize: "0.6rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
                 color: "rgba(251,243,212,0.5)",
@@ -693,7 +693,7 @@ function SubscriptionDrawer({
             style={{
               display: "flex",
               justifyContent: "space-between",
-              fontSize: "0.78rem",
+              fontSize: "1rem",
             }}
           >
             <span style={{ color: "rgba(251,243,212,0.5)" }}>Plan</span>
@@ -706,7 +706,7 @@ function SubscriptionDrawer({
             style={{
               display: "flex",
               justifyContent: "space-between",
-              fontSize: "0.78rem",
+              fontSize: "1rem",
             }}
           >
             <span style={{ color: "rgba(251,243,212,0.5)" }}>Total</span>
@@ -717,7 +717,7 @@ function SubscriptionDrawer({
           {addrLine ? (
             <div
               style={{
-                fontSize: "0.75rem",
+                fontSize: "1rem",
                 color: "rgba(251,243,212,0.55)",
                 lineHeight: 1.5,
               }}
@@ -736,7 +736,7 @@ function SubscriptionDrawer({
         <p
           style={{
             margin: "0 0 14px",
-            fontSize: "0.6rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "rgba(245,158,11,0.75)",
@@ -760,7 +760,7 @@ function SubscriptionDrawer({
             />
           ))}
           {!loading && deliveries.length === 0 && !error ? (
-            <p style={{ color: "rgba(251,243,212,0.45)", fontSize: "0.78rem" }}>
+            <p style={{ color: "rgba(251,243,212,0.45)", fontSize: "1rem" }}>
               No deliveries scheduled.
             </p>
           ) : null}
@@ -804,7 +804,7 @@ function DeliveryCard({
       >
         <span
           style={{
-            fontSize: "0.65rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.25em",
             textTransform: "uppercase",
             color: "rgba(245,158,11,0.75)",
@@ -823,7 +823,7 @@ function DeliveryCard({
           }))}
         />
       </div>
-      <div style={{ fontSize: "0.85rem", color: "#fbf3d4" }}>
+      <div style={{ fontSize: "1rem", color: "#fbf3d4" }}>
         {formatScheduledDate(delivery.scheduled_date)}
         <span style={{ color: "rgba(251,243,212,0.5)" }}>
           {" "}
@@ -833,7 +833,7 @@ function DeliveryCard({
       {delivery.status_updated_at ? (
         <div
           style={{
-            fontSize: "0.65rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             color: "rgba(251,243,212,0.35)",
@@ -852,7 +852,7 @@ function DeliveryCard({
         <span
           style={{
             alignSelf: "flex-start",
-            fontSize: "0.6rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.2em",
             textTransform: "uppercase",
             color: "#7bd88f",
@@ -876,7 +876,7 @@ function DeliveryCard({
               color: "#fbf3d4",
               padding: "0.45rem 0.6rem",
               fontFamily: "var(--font-body)",
-              fontSize: "0.8rem",
+              fontSize: "1rem",
               resize: "vertical",
               outline: "none",
             }}
@@ -907,7 +907,7 @@ function DeliveryCard({
       ) : delivery.admin_notes ? (
         <div
           style={{
-            fontSize: "0.75rem",
+            fontSize: "1rem",
             color: "rgba(251,243,212,0.6)",
             fontStyle: "italic",
             whiteSpace: "pre-wrap",
@@ -919,7 +919,7 @@ function DeliveryCard({
             onClick={() => setEditing(true)}
             style={{
               ...buttonSm,
-              fontSize: "0.55rem",
+              fontSize: "0.875rem",
               padding: "0.15rem 0.5rem",
               marginLeft: 6,
             }}
@@ -933,7 +933,7 @@ function DeliveryCard({
           onClick={() => setEditing(true)}
           style={{
             ...buttonSm,
-            fontSize: "0.6rem",
+            fontSize: "0.875rem",
             padding: "0.2rem 0.6rem",
             alignSelf: "flex-start",
           }}
@@ -962,7 +962,7 @@ const drawerSelect: React.CSSProperties = {
   border: "1px solid rgba(245,158,11,0.4)",
   padding: "5px 10px",
   fontFamily: "var(--font-body)",
-  fontSize: "0.72rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.12em",
   textTransform: "uppercase",
   cursor: "pointer",
@@ -999,7 +999,7 @@ function Placeholder({ children }: { children: React.ReactNode }) {
         textAlign: "center",
         color: "rgba(192,200,206,0.55)",
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
       }}
     >
       {children}
@@ -1011,7 +1011,7 @@ const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
   border: "1px solid rgba(245,158,11,0.4)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   background: "transparent",
   cursor: "pointer",
@@ -1027,7 +1027,7 @@ const tableHeadRow: React.CSSProperties = {
   background: "rgba(245,158,11,0.08)",
   color: "rgba(245,158,11,0.9)",
   textTransform: "uppercase",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
 };
 
@@ -1043,7 +1043,7 @@ const td: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   color: "#fbf3d4",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   verticalAlign: "top",
   borderBottom: "1px solid rgba(245,158,11,0.06)",
 };
@@ -1054,7 +1054,7 @@ const buttonSm: React.CSSProperties = {
   border: "1px solid rgba(245,158,11,0.45)",
   color: "#f59e0b",
   fontFamily: "var(--font-body)",
-  fontSize: "0.62rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
   cursor: "pointer",

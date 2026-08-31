@@ -120,7 +120,7 @@ function AdminLoading() {
         padding: "2rem",
         color: "rgba(245,158,11,0.7)",
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
         letterSpacing: "0.05em",
       }}
     >
@@ -257,7 +257,7 @@ function AuditLogPageInner() {
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: GOLD,
               border: `1px solid ${GOLD}`,
@@ -275,7 +275,7 @@ function AuditLogPageInner() {
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: GOLD,
               border: `1px solid ${GOLD}`,
@@ -319,7 +319,7 @@ function AuditLogPageInner() {
               background: "transparent",
               color: CREAM,
               fontFamily: "var(--font-body)",
-              fontSize: "0.85rem",
+              fontSize: "1rem",
               minWidth: "260px",
               flex: "1 1 260px",
             }}
@@ -331,7 +331,7 @@ function AuditLogPageInner() {
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.62rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.22em",
                 color: FADED,
                 border: `1px solid ${BORDER}`,
@@ -353,7 +353,7 @@ function AuditLogPageInner() {
               padding: "0.85rem 1rem",
               color: "#fecaca",
               fontFamily: "var(--font-body)",
-              fontSize: "0.85rem",
+              fontSize: "1rem",
               lineHeight: 1.5,
               display: "flex",
               flexWrap: "wrap",
@@ -375,7 +375,7 @@ function AuditLogPageInner() {
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.65rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.22em",
                 color: "#fecaca",
                 border: "1px solid rgba(254,202,202,0.6)",
@@ -406,7 +406,7 @@ function AuditLogPageInner() {
                 borderCollapse: "collapse",
                 fontFamily: "var(--font-body)",
                 color: CREAM,
-                fontSize: "0.82rem",
+                fontSize: "1rem",
               }}
             >
               <thead>
@@ -414,7 +414,7 @@ function AuditLogPageInner() {
                   style={{
                     textAlign: "left",
                     color: GOLD_SOFT,
-                    fontSize: "0.62rem",
+                    fontSize: "0.875rem",
                     letterSpacing: "0.22em",
                     textTransform: "uppercase",
                   }}
@@ -459,7 +459,7 @@ function AuditLogPageInner() {
                           <div
                             style={{
                               color: FADED,
-                              fontSize: "0.7rem",
+                              fontSize: "1rem",
                               wordBreak: "break-all",
                             }}
                           >
@@ -476,7 +476,7 @@ function AuditLogPageInner() {
                             <summary
                               style={{
                                 color: GOLD_SOFT,
-                                fontSize: "0.65rem",
+                                fontSize: "0.875rem",
                                 letterSpacing: "0.18em",
                                 textTransform: "uppercase",
                                 cursor: "pointer",
@@ -487,7 +487,7 @@ function AuditLogPageInner() {
                             <pre
                               style={{
                                 color: FADED,
-                                fontSize: "0.72rem",
+                                fontSize: "1rem",
                                 whiteSpace: "pre-wrap",
                                 wordBreak: "break-all",
                                 marginTop: "0.25rem",
@@ -498,7 +498,7 @@ function AuditLogPageInner() {
                           </details>
                         ) : null}
                       </td>
-                      <td style={{ ...td, color: FADED, fontSize: "0.72rem" }}>
+                      <td style={{ ...td, color: FADED, fontSize: "1rem" }}>
                         {r.ip_address || "—"}
                       </td>
                     </tr>
@@ -510,7 +510,7 @@ function AuditLogPageInner() {
         </div>
 
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <span style={{ color: FADED, fontSize: "0.75rem" }}>
+          <span style={{ color: FADED, fontSize: "1rem" }}>
             Page {page + 1} of {totalPages}
           </span>
           <div className="flex gap-2">
@@ -563,7 +563,7 @@ function FilterChips({
       <span
         style={{
           color: FADED,
-          fontSize: "0.65rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.22em",
           textTransform: "uppercase",
           minWidth: "70px",
@@ -581,7 +581,7 @@ function FilterChips({
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.62rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.2em",
               padding: "0.3rem 0.7rem",
               color: active ? "#06120c" : GOLD_SOFT,
@@ -601,7 +601,7 @@ function FilterChips({
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.6rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.22em",
             color: FADED,
             background: "transparent",
@@ -630,7 +630,7 @@ const td: React.CSSProperties = {
 
 const pagerBtn: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   padding: "0.35rem 0.85rem",
   color: GOLD_SOFT,
