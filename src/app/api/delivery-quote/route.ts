@@ -75,10 +75,14 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // Fee is computed off the RAW distance; only the returned display value
+  // is rounded. 2 decimals (not 1) because the sub-1 km bands are priced on
+  // the raw value — at 1 decimal both 0.95 km (₹10) and 1.04 km (₹22) render
+  // as "1 km", so two customers would see the same distance at different fees.
   const { serviceable, feeInr } = computeDeliveryFee(distanceKm);
   return NextResponse.json({
     serviceable,
     feeInr,
-    distanceKm: Math.round(distanceKm * 10) / 10,
+    distanceKm: Math.round(distanceKm * 100) / 100,
   });
 }
