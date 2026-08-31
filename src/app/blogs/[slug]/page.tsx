@@ -146,8 +146,8 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
           left: "calc(20px + env(safe-area-inset-left))",
           zIndex: 101,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
-          fontWeight: 200,
+          fontSize: 14,
+          fontWeight: 500,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
           color: "#024628",
@@ -157,7 +157,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 14 }}>←</span> All Stories
+        <span style={{ fontSize: 16 }}>←</span> All Stories
       </Link>
 
       <main
@@ -193,7 +193,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
               marginBottom: "48px",
               paddingBottom: "24px",
               borderBottom: "1px solid rgba(2,70,40,0.2)",
-              fontSize: 12,
+              fontSize: 16,
               color: "rgba(2,70,40,0.75)",
               fontFamily: "var(--font-body)",
               fontWeight: 200,
@@ -209,7 +209,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
           <div
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 13,
+              fontSize: 16,
               fontWeight: 200,
               lineHeight: 1.9,
               color: "#024628",

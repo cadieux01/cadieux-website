@@ -141,7 +141,7 @@ export default function SetupPage() {
     <main style={pageStyle}>
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <header style={{ marginBottom: 28 }}>
-          <Link href="/subscriptions/track" style={{ fontSize: 13, color: FADED, textDecoration: "none" }}>
+          <Link href="/subscriptions/track" style={{ fontSize: 16, color: FADED, textDecoration: "none" }}>
             ← Back to subscriptions
           </Link>
           <h1
@@ -167,10 +167,10 @@ export default function SetupPage() {
               margin: "0 0 24px",
             }}
           >
-            <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+            <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
               Pre-order
             </p>
-            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
+            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
               Subscriptions open once daily deliveries begin. In the meantime, place a one-time reservation from the shop — we&apos;ll confirm your first delivery date by SMS + WhatsApp.
             </p>
           </div>
@@ -314,7 +314,7 @@ function NavRow({
             border: `1px solid ${FAINT}`,
             borderRadius: 999,
             color: step === 1 ? FAINT : TEXT,
-            fontSize: 13,
+            fontSize: 14,
             cursor: step === 1 ? "not-allowed" : "pointer",
             letterSpacing: "0.05em",
             textTransform: "uppercase",
@@ -332,7 +332,7 @@ function NavRow({
             border: "none",
             borderRadius: 999,
             color: canNext ? "#FBF3D4" : FADED,
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: 600,
             cursor: canNext ? "pointer" : "not-allowed",
             letterSpacing: "0.05em",
@@ -363,7 +363,7 @@ function Step1Product({
   return (
     <section>
       <StepTitle>Choose your breads</StepTitle>
-      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 18 }}>
+      <p style={{ color: FADED, fontSize: 16, marginTop: -6, marginBottom: 18 }}>
         Mix any combination — a subscription needs at least{" "}
         {MIN_UNITS_PER_DELIVERY} loaves per delivery in total.
       </p>
@@ -402,16 +402,16 @@ function Step1Product({
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                   {showStrike && (
-                    <span style={{ fontSize: 13, color: FADED, textDecoration: "line-through" }}>
+                    <span style={{ fontSize: 16, color: FADED, textDecoration: "line-through" }}>
                       ₹{fmtMoney(mrp!)}
                     </span>
                   )}
-                  <span style={{ fontSize: 15, color: GOLD }}>₹{fmtMoney(p.price)}</span>
+                  <span style={{ fontSize: 16, color: GOLD }}>₹{fmtMoney(p.price)}</span>
                 </div>
               </div>
-              <div style={{ marginTop: 4, fontSize: 13, color: FADED }}>{p.blurb}</div>
+              <div style={{ marginTop: 4, fontSize: 16, color: FADED }}>{p.blurb}</div>
               {savings > 0 && (
-                <div style={{ marginTop: 6, fontSize: 12, color: "#1D1D1F", fontWeight: 500 }}>
+                <div style={{ marginTop: 6, fontSize: 16, color: "#1D1D1F", fontWeight: 500 }}>
                   You save ₹{fmtMoney(savings)}{pct > 0 ? ` (${pct}%)` : ""} per loaf
                 </div>
               )}
@@ -435,7 +435,7 @@ function Step1Product({
                 >
                   +
                 </button>
-                <div style={{ fontSize: 13, color: FADED, marginLeft: 4 }}>per delivery</div>
+                <div style={{ fontSize: 16, color: FADED, marginLeft: 4 }}>per delivery</div>
               </div>
             </div>
           );
@@ -444,7 +444,7 @@ function Step1Product({
 
       <div
         style={{
-          fontSize: 13,
+          fontSize: 16,
           color: short > 0 ? "#991B1B" : "#1D1D1F", fontWeight: 500,
           letterSpacing: "0.02em",
         }}
@@ -496,10 +496,10 @@ function Step2Dates({
   return (
     <section>
       <StepTitle>Choose your delivery dates</StepTitle>
-      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 6 }}>
+      <p style={{ color: FADED, fontSize: 16, marginTop: -6, marginBottom: 6 }}>
         Pick any dates that work for you. We&apos;ll deliver fresh on each.
       </p>
-      <p style={{ color: FADED, fontSize: 13, marginTop: 0, marginBottom: 18 }}>
+      <p style={{ color: FADED, fontSize: 16, marginTop: 0, marginBottom: 18 }}>
         We bake fresh for you — please pick a delivery time at least 12 hours
         from now so your loaf comes straight from the oven.
       </p>
@@ -550,10 +550,10 @@ function Step3Slots({
   return (
     <section>
       <StepTitle>Pick a time slot for each delivery</StepTitle>
-      <p style={{ color: FADED, fontSize: 13, marginTop: -6, marginBottom: 6 }}>
+      <p style={{ color: FADED, fontSize: 16, marginTop: -6, marginBottom: 6 }}>
         30-minute delivery windows from 7:30 AM to 9:00 PM.
       </p>
-      <p style={{ color: FADED, fontSize: 13, marginTop: 0, marginBottom: 18 }}>
+      <p style={{ color: FADED, fontSize: 16, marginTop: 0, marginBottom: 18 }}>
         We bake fresh for you — please pick a delivery time at least 12 hours
         from now so your loaf comes straight from the oven.
       </p>
@@ -571,7 +571,7 @@ function Step3Slots({
           flexWrap: "wrap",
         }}
       >
-        <div style={{ fontSize: 13, color: FADED, flex: "0 0 auto" }}>Set same time for all:</div>
+        <div style={{ fontSize: 16, color: FADED, flex: "0 0 auto" }}>Set same time for all:</div>
         <div style={{ minWidth: 180, flex: "0 0 auto" }}>
           <Select
             value={bulkSlot}
@@ -590,7 +590,7 @@ function Step3Slots({
             border: "none",
             background: bulkSlot ? GOLD : FAINT,
             color: bulkSlot ? "#FBF3D4" : FADED,
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: 600,
             cursor: bulkSlot ? "pointer" : "not-allowed",
             letterSpacing: "0.05em",
@@ -629,7 +629,7 @@ function Step3Slots({
                 <div
                   style={{
                     minWidth: 170,
-                    fontSize: 12,
+                    fontSize: 16,
                     color: "#991B1B",
                     letterSpacing: "0.02em",
                     lineHeight: 1.4,
@@ -706,26 +706,26 @@ function Step4Review({
               <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 20 }}>
                 {l.product.title} × {l.qty}
               </div>
-              <div style={{ fontSize: 14, color: GOLD }}>
+              <div style={{ fontSize: 16, color: GOLD }}>
                 ₹{fmtMoney(l.product.price * l.qty)}
               </div>
             </div>
           ))}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderTop: `1px solid ${FAINT}`, paddingTop: 10 }}>
-          <div style={{ fontSize: 13, color: FADED }}>
+          <div style={{ fontSize: 16, color: FADED }}>
             ₹{fmtMoney(perDelivery)} / delivery × {deliveries.length}
           </div>
-          <div style={{ fontSize: 15, color: GOLD }}>₹{totalAmount.toLocaleString("en-IN")} total</div>
+          <div style={{ fontSize: 16, color: GOLD }}>₹{totalAmount.toLocaleString("en-IN")} total</div>
         </div>
         {totalSavings > 0 && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#1D1D1F", fontWeight: 500 }}>
+          <div style={{ marginTop: 8, fontSize: 16, color: "#1D1D1F", fontWeight: 500 }}>
             You save ₹{fmtMoney(totalSavings)} versus one-time prices.
           </div>
         )}
       </div>
 
-      <div style={{ fontSize: 12, color: FADED, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
+      <div style={{ fontSize: 14, color: FADED, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
         Schedule
       </div>
       <div style={{ display: "grid", gap: 8 }}>
@@ -748,7 +748,7 @@ function Step4Review({
                 {longDayLabel(parseIso(d.delivery_date))}
               </div>
             </div>
-            <div style={{ fontSize: 12, color: GOLD }}>{formatSlot(d.slot)}</div>
+            <div style={{ fontSize: 16, color: GOLD }}>{formatSlot(d.slot)}</div>
           </div>
         ))}
       </div>

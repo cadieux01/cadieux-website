@@ -65,7 +65,7 @@ export default function RequestsPage() {
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.7rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.22em",
                 padding: "10px 18px",
                 background: isActive ? "rgba(245,158,11,0.12)" : "transparent",

@@ -96,19 +96,19 @@ const inputSt: React.CSSProperties = {
   background: "transparent",
   border: "1px solid #024628",
   padding: "14px 14px", outline: "none",
-  fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200,
+  fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200,
   color: "#024628", letterSpacing: "0.04em",
   minHeight: 48,
 };
 const labelSt: React.CSSProperties = {
   display: "block", marginBottom: 8,
-  fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
   letterSpacing: "0.4em", textTransform: "uppercase",
   color: "#024628",
 };
 const sectionHead: React.CSSProperties = {
   margin: "0 0 18px",
-  fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
   letterSpacing: "0.5em", textTransform: "uppercase",
   color: "#024628",
 };
@@ -1372,7 +1372,7 @@ export default function CheckoutPage() {
               background: "none", border: "none", cursor: "pointer",
               padding: 10, minWidth: 44, minHeight: 44,
               display: "flex", alignItems: "center",
-              fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+              fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
               letterSpacing: "0.35em", textTransform: "uppercase",
               color: "rgba(251,243,212,0.7)",
               WebkitTapHighlightColor: "transparent",
@@ -1397,7 +1397,7 @@ export default function CheckoutPage() {
           <div
             style={{
               justifySelf: "end",
-              fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+              fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
               letterSpacing: "0.25em", textTransform: "uppercase",
               color: "rgba(251,243,212,0.7)",
               // Right cell capped tighter + minWidth 0 so it can shrink
@@ -1423,7 +1423,7 @@ export default function CheckoutPage() {
         <p
           style={{
             margin: "0 0 6px",
-            fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+            fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
             letterSpacing: "0.5em", textTransform: "uppercase",
             color: "#024628",
           }}
@@ -1474,7 +1474,7 @@ export default function CheckoutPage() {
               padding: "12px 16px", marginBottom: 24,
               background: "rgba(153,27,27,0.06)",
               border: "1px solid rgba(153,27,27,0.35)",
-              fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200,
+              fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200,
               color: "var(--warning-on-light)", letterSpacing: "0.03em", lineHeight: 1.5,
             }}
           >
@@ -1498,10 +1498,10 @@ export default function CheckoutPage() {
                   padding: "12px 0",
                 }}
               >
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
                   {item.name} × {item.qty}
                 </span>
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628" }}>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628" }}>
                   ₹{item.price * item.qty}
                 </span>
               </div>
@@ -1513,15 +1513,15 @@ export default function CheckoutPage() {
                 padding: "12px 0",
               }}
             >
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628" }}>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628" }}>
                 Delivery fee
                 {deliveryQuote?.distanceKm !== null && deliveryQuote?.distanceKm !== undefined && (
-                  <span style={{ fontSize: 11, color: "#024628", marginLeft: 6 }}>
+                  <span style={{ fontSize: 16, color: "#024628", marginLeft: 6 }}>
                     ({deliveryQuote.distanceKm} km)
                   </span>
                 )}
               </span>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628", opacity: quoteLoading ? 0.5 : 1 }}>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", opacity: quoteLoading ? 0.5 : 1 }}>
                 {quoteLoading ? "…" : `₹${deliveryFee}`}
               </span>
             </div>
@@ -1532,7 +1532,7 @@ export default function CheckoutPage() {
                 paddingTop: 14, marginTop: 4,
               }}
             >
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>Total (incl. GST)</span>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>Total (incl. GST)</span>
               <span style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 300, color: "#024628" }}>₹{grandTotal}</span>
             </div>
           </section>
@@ -1601,7 +1601,7 @@ export default function CheckoutPage() {
                       style={{
                         background: "none", border: "1px solid #024628",
                         padding: "4px 10px", cursor: "pointer",
-                        fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
+                        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                         letterSpacing: "0.3em", textTransform: "uppercase",
                         color: "#024628",
                         WebkitTapHighlightColor: "transparent",
@@ -1627,7 +1627,7 @@ export default function CheckoutPage() {
                       style={{
                         background: "none", border: "1px solid rgba(153,27,27,0.4)",
                         padding: "4px 10px", cursor: "pointer",
-                        fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300,
+                        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                         letterSpacing: "0.3em", textTransform: "uppercase",
                         color: "var(--warning-on-light)",
                         WebkitTapHighlightColor: "transparent",
@@ -1640,11 +1640,11 @@ export default function CheckoutPage() {
                   <p style={{ margin: "0 0 6px", paddingRight: 120, fontFamily: "var(--font-body)", fontSize: 17, fontWeight: 300, color: "#024628", letterSpacing: "0.04em" }}>
                     {savedCustomer.full_name}
                   </p>
-                  <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "#024628", letterSpacing: "0.04em" }}>
+                  <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.04em" }}>
                     +91 {savedCustomer.phone}
                   </p>
                   {savedCustomer.delivery_address && (
-                    <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.7 }}>
+                    <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.7 }}>
                       {savedCustomer.delivery_address}
                     </p>
                   )}
@@ -1661,8 +1661,8 @@ export default function CheckoutPage() {
                     <p style={{
                       margin: "0 0 10px",
                       fontFamily: "var(--font-body)",
-                      fontSize: 10,
-                      fontWeight: 300,
+                      fontSize: 14,
+                      fontWeight: 500,
                       letterSpacing: "0.35em",
                       textTransform: "uppercase",
                       color: "rgba(2,70,40,0.7)",
@@ -1696,8 +1696,8 @@ export default function CheckoutPage() {
                               alignItems: "center",
                               gap: 8,
                               marginBottom: 4,
-                              fontSize: 10,
-                              fontWeight: 400,
+                              fontSize: 14,
+                              fontWeight: 500,
                               letterSpacing: "0.25em",
                               textTransform: "uppercase",
                             }}>
@@ -1705,13 +1705,13 @@ export default function CheckoutPage() {
                               {a.is_default && <span style={{ opacity: 0.7 }}>• Default</span>}
                               {active && <span style={{ marginLeft: "auto", opacity: 0.8 }}>Selected</span>}
                             </div>
-                            <div style={{ fontSize: 13, fontWeight: 300, lineHeight: 1.5 }}>
+                            <div style={{ fontSize: 16, fontWeight: 300, lineHeight: 1.5 }}>
                               {a.full_name}
                             </div>
-                            <div style={{ fontSize: 12, fontWeight: 200, lineHeight: 1.5, opacity: 0.85 }}>
+                            <div style={{ fontSize: 16, fontWeight: 200, lineHeight: 1.5, opacity: 0.85 }}>
                               {a.line1}{a.area ? `, ${a.area}` : ""}
                             </div>
-                            <div style={{ fontSize: 12, fontWeight: 200, lineHeight: 1.5, opacity: 0.75 }}>
+                            <div style={{ fontSize: 16, fontWeight: 200, lineHeight: 1.5, opacity: 0.75 }}>
                               {a.city}{a.pincode ? `, ${a.pincode}` : ""}
                             </div>
                           </button>
@@ -1747,7 +1747,7 @@ export default function CheckoutPage() {
                   />
                 )}
                 {otpVerified && (
-                  <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.25em", textTransform: "uppercase", color: "#024628" }}>
+                  <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.25em", textTransform: "uppercase", color: "#024628" }}>
                     ✓ Phone Verified
                   </p>
                 )}
@@ -1760,7 +1760,7 @@ export default function CheckoutPage() {
                     border: "1px solid #024628",
                     minHeight: 48, padding: "14px 0",
                     cursor: "pointer",
-                    fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                    fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                     letterSpacing: "0.4em", textTransform: "uppercase",
                     color: "#024628",
                     WebkitTapHighlightColor: "transparent",
@@ -1772,7 +1772,7 @@ export default function CheckoutPage() {
 
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
                   <div style={{ flex: 1, height: 1, background: "#024628" }} />
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>or</span>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>or</span>
                   <div style={{ flex: 1, height: 1, background: "#024628" }} />
                 </div>
 
@@ -1787,7 +1787,7 @@ export default function CheckoutPage() {
                     display: "block", width: "100%",
                     background: "none", border: "none",
                     cursor: "pointer", padding: "12px 0",
-                    fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+                    fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                     letterSpacing: "0.35em", textTransform: "uppercase",
                     color: "#024628",
                     WebkitTapHighlightColor: "transparent",
@@ -1879,7 +1879,7 @@ export default function CheckoutPage() {
         )}
 
         {error && (
-          <p style={{ margin: "16px 0 0", fontFamily: "var(--font-body)", fontSize: 13, color: "var(--warning-on-light)", letterSpacing: "0.04em" }}>
+          <p style={{ margin: "16px 0 0", fontFamily: "var(--font-body)", fontSize: 16, color: "var(--warning-on-light)", letterSpacing: "0.04em" }}>
             {error}
           </p>
         )}
@@ -1904,8 +1904,8 @@ export default function CheckoutPage() {
               style={{
                 margin: "0 0 10px",
                 fontFamily: "var(--font-body)",
-                fontSize: 10,
-                fontWeight: 300,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.35em",
                 textTransform: "uppercase",
                 color: "#024628",
@@ -1917,7 +1917,7 @@ export default function CheckoutPage() {
               style={{
                 margin: "0 0 12px",
                 fontFamily: "var(--font-body)",
-                fontSize: 12,
+                fontSize: 16,
                 fontWeight: 200,
                 lineHeight: 1.5,
                 letterSpacing: "0.02em",
@@ -1967,7 +1967,7 @@ export default function CheckoutPage() {
               }}
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                <span style={{ fontSize: 10, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#024628" }}>
+                <span style={{ fontSize: 14, fontWeight: 500, letterSpacing: "0.3em", textTransform: "uppercase", color: "#024628" }}>
                   Subtotal ₹{total} · Delivery {quoteLoading ? "…" : `₹${deliveryFee}`}
                   {deliveryQuote?.distanceKm !== null && deliveryQuote?.distanceKm !== undefined && (
                     <span style={{ color: "#024628" }}>
@@ -1975,7 +1975,7 @@ export default function CheckoutPage() {
                     </span>
                   )}
                 </span>
-                <span style={{ fontSize: 11, fontWeight: 200, letterSpacing: "0.18em", textTransform: "uppercase", color: "#024628" }}>
+                <span style={{ fontSize: 14, fontWeight: 500, letterSpacing: "0.18em", textTransform: "uppercase", color: "#024628" }}>
                   Total (incl. GST)
                 </span>
               </div>
@@ -2046,7 +2046,7 @@ function primaryBtn(disabled: boolean): React.CSSProperties {
     background: "var(--surface-brand)",
     border: "none",
     cursor: disabled ? "default" : "pointer",
-    fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400,
+    fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
     letterSpacing: "0.4em", textTransform: "uppercase",
     color: "#FBF3D4",
     opacity: disabled ? 0.5 : 1,
@@ -2223,8 +2223,11 @@ function AddressForm(props: {
       <div style={{ marginBottom: 18 }}>
         <span style={labelSt}>Mobile Number *</span>
         <div style={{ display: "flex", alignItems: "stretch", gap: 10 }}>
-          <div style={{ flex: 1, display: "flex", alignItems: "center", ...inputSt, padding: 0 }}>
-            <span style={{ padding: "0 6px 0 14px", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200, color: "#024628", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
+          {/* inputSt carries display:"block", so it must be spread BEFORE the
+              flex properties or it silently wins and drops the "+91" prefix
+              onto its own line above the field. */}
+          <div style={{ ...inputSt, flex: 1, display: "flex", alignItems: "center", padding: 0 }}>
+            <span style={{ padding: "0 6px 0 14px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
             <input
               type="tel" inputMode="numeric" autoComplete="tel-national"
               value={phone}
@@ -2237,17 +2240,17 @@ function AddressForm(props: {
               style={{
                 flex: 1, background: "none", border: "none", outline: "none",
                 padding: "0 12px", height: 46,
-                fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 200,
+                fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200,
                 color: "#024628", letterSpacing: "0.05em",
               }}
             />
           </div>
           {otpVerified ? (
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 4 }}>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", color: "#024628" }}>✓ Verified</span>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", color: "#024628" }}>✓ Verified</span>
               <button
                 onClick={() => { setOtpVerified(false); setOtpSent(false); setOtpCode(""); setOtpError(""); }}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "#024628", WebkitTapHighlightColor: "transparent" }}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.3em", textTransform: "uppercase", color: "#024628", WebkitTapHighlightColor: "transparent" }}
               >
                 Edit
               </button>
@@ -2262,7 +2265,7 @@ function AddressForm(props: {
                 border: "1px solid #024628",
                 padding: "0 16px",
                 cursor: (sendingOtp || phone.replace(/\D/g, "").length < 10) ? "default" : "pointer",
-                fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                 letterSpacing: "0.3em", textTransform: "uppercase",
                 color: "#024628",
                 opacity: (sendingOtp || phone.replace(/\D/g, "").length < 10) ? 0.5 : 1,
@@ -2295,7 +2298,7 @@ function AddressForm(props: {
                 background: "var(--surface-brand)",
                 border: "none",
                 cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
-                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                 letterSpacing: "0.4em", textTransform: "uppercase",
                 color: "#FBF3D4",
                 opacity: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? 0.5 : 1,
@@ -2308,7 +2311,7 @@ function AddressForm(props: {
         )}
 
         {otpError && (
-          <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--warning-on-light)", letterSpacing: "0.04em" }}>
+          <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 16, color: "var(--warning-on-light)", letterSpacing: "0.04em" }}>
             {otpError}
           </p>
         )}
@@ -2330,7 +2333,7 @@ function AddressForm(props: {
                 background: locQuestion === choice ? "var(--surface-brand)" : "transparent",
                 border: "1px solid #024628",
                 cursor: "pointer",
-                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                 letterSpacing: "0.3em", textTransform: "uppercase",
                 color: locQuestion === choice ? "#FBF3D4" : "#024628",
                 WebkitTapHighlightColor: "transparent",
@@ -2352,7 +2355,7 @@ function AddressForm(props: {
                 background: "transparent",
                 border: "1px solid #024628",
                 cursor: locating ? "default" : "pointer",
-                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                 letterSpacing: "0.3em", textTransform: "uppercase",
                 color: "#024628",
                 opacity: locating ? 0.5 : 1,
@@ -2369,7 +2372,7 @@ function AddressForm(props: {
                 background: "transparent",
                 border: "1px solid #024628",
                 cursor: "pointer",
-                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                 letterSpacing: "0.3em", textTransform: "uppercase",
                 color: "#024628",
                 WebkitTapHighlightColor: "transparent",
@@ -2381,13 +2384,13 @@ function AddressForm(props: {
         )}
 
         {locQuestion === "no" && (
-          <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.5 }}>
+          <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 16, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.5 }}>
             No problem — please enter the delivery address below.
           </p>
         )}
 
         {locMsg && (
-          <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--warning-on-light)", letterSpacing: "0.03em", lineHeight: 1.5 }}>
+          <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 16, color: "var(--warning-on-light)", letterSpacing: "0.03em", lineHeight: 1.5 }}>
             {locMsg}
           </p>
         )}
@@ -2484,7 +2487,7 @@ function AddressForm(props: {
                   background: selected ? "var(--surface-brand)" : "transparent",
                   border: "1px solid #024628",
                   cursor: "pointer",
-                  fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                   letterSpacing: "0.3em", textTransform: "uppercase",
                   color: selected ? "#FBF3D4" : "#024628",
                   WebkitTapHighlightColor: "transparent",
@@ -2515,7 +2518,7 @@ function AddressForm(props: {
           style={{
             display: "block", width: "100%", background: "none", border: "none",
             cursor: "pointer", marginTop: 6,
-            fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+            fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
             letterSpacing: "0.3em", textTransform: "uppercase",
             color: "#024628",
             WebkitTapHighlightColor: "transparent",
@@ -2560,10 +2563,10 @@ function SavedCustomerOtpBlock(props: {
         marginBottom: 16,
       }}
     >
-      <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+      <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
         Verify Phone
       </p>
-      <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.5 }}>
+      <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.5 }}>
         We&rsquo;ll send a 6-digit code to your saved number ending in {tail}. Verify once per session to continue.
       </p>
 
@@ -2580,7 +2583,7 @@ function SavedCustomerOtpBlock(props: {
           border: "1px solid #024628",
           padding: "0 16px",
           cursor: sendingOtp ? "default" : "pointer",
-          fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
           letterSpacing: "0.35em", textTransform: "uppercase",
           color: "#024628",
           opacity: sendingOtp ? 0.5 : 1,
@@ -2611,7 +2614,7 @@ function SavedCustomerOtpBlock(props: {
               background: "var(--surface-brand)",
               border: "none",
               cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
-              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+              fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
               letterSpacing: "0.4em", textTransform: "uppercase",
               color: "#FBF3D4",
               opacity: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? 0.5 : 1,
@@ -2624,7 +2627,7 @@ function SavedCustomerOtpBlock(props: {
       )}
 
       {otpError && (
-        <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--warning-on-light)", letterSpacing: "0.04em" }}>
+        <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 16, color: "var(--warning-on-light)", letterSpacing: "0.04em" }}>
           {otpError}
         </p>
       )}
@@ -2660,10 +2663,10 @@ function PaymentReview(props: {
             marginBottom: 18,
           }}
         >
-          <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+          <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
             Pre-order
           </p>
-          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
+          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
             First deliveries begin soon. We&apos;ll confirm your delivery date by SMS + WhatsApp as soon as the schedule opens.
           </p>
         </div>
@@ -2672,28 +2675,28 @@ function PaymentReview(props: {
           retires walnut-gold → FG@85% (still hierarchically stronger than
           address body text at 65%). */}
       <div style={{ background: "var(--surface-paper)", border: "1px solid #024628", borderRadius: "var(--card-radius)", padding: "18px 20px", marginBottom: 22 }}>
-        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>
+        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>
           Order Total
         </p>
         <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#024628" }}>
           ₹{grandTotal}
         </p>
-        <p style={{ margin: "4px 0 12px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "#024628", letterSpacing: "0.04em" }}>
+        <p style={{ margin: "4px 0 12px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.04em" }}>
           Includes ₹{deliveryFee} delivery
         </p>
-        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
+        <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
           {customerName} · +91 {customerPhone.replace(/\D/g, "")}
         </p>
-        <p style={{ margin: "4px 0 0", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.6 }}>
+        <p style={{ margin: "4px 0 0", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.03em", lineHeight: 1.6 }}>
           {fullAddress}
         </p>
         {preorderMode ? (
-          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "#024628" }}>
+          <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "#024628" }}>
             Delivery date to be scheduled
           </p>
         ) : (
           deliveryDate && deliverySlot && (
-            <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "#024628" }}>
+            <p style={{ margin: "10px 0 0", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "#024628" }}>
               {formatDeliveryDate(deliveryDate)} · {formatSlot12(deliverySlot)}
             </p>
           )
@@ -2749,10 +2752,10 @@ function FulfillmentToggle({
           WebkitTapHighlightColor: "transparent",
         }}
       >
-        <span style={{ fontSize: 11, fontWeight: 400, letterSpacing: "0.35em", textTransform: "uppercase" }}>
+        <span style={{ fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase" }}>
           {label}
         </span>
-        <span style={{ fontSize: 11, fontWeight: 200, letterSpacing: "0.02em", opacity: active ? 0.85 : 0.7 }}>
+        <span style={{ fontSize: 16, fontWeight: 200, letterSpacing: "0.02em", opacity: active ? 0.85 : 0.7 }}>
           {hint}
         </span>
       </button>
@@ -2760,7 +2763,7 @@ function FulfillmentToggle({
   };
   return (
     <section style={{ marginBottom: 22 }}>
-      <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>
+      <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>
         How would you like your bread?
       </p>
       <div style={{ display: "flex", gap: 10 }}>
@@ -2834,7 +2837,7 @@ function PickupSection(props: {
             <p style={{ margin: "0 0 6px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, color: "#024628", letterSpacing: "0.04em" }}>
               {savedCustomer!.full_name}
             </p>
-            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
+            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
               +91 {savedCustomer!.phone}
             </p>
           </div>
@@ -2853,7 +2856,7 @@ function PickupSection(props: {
               verifyingOtp={verifyingOtp}
             />
           ) : (
-            <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.25em", textTransform: "uppercase", color: "#024628" }}>
+            <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.25em", textTransform: "uppercase", color: "#024628" }}>
               ✓ Phone Verified
             </p>
           )}
@@ -2865,7 +2868,7 @@ function PickupSection(props: {
               display: "block", width: "100%",
               background: "none", border: "none",
               cursor: "pointer", padding: "12px 0",
-              fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+              fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
               letterSpacing: "0.35em", textTransform: "uppercase",
               color: "#024628",
               WebkitTapHighlightColor: "transparent",
@@ -2912,7 +2915,7 @@ function PickupSection(props: {
               />
               {otpVerified ? (
                 <div style={{ flexShrink: 0, display: "flex", alignItems: "center", padding: "0 12px" }}>
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", color: "#024628" }}>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", color: "#024628" }}>
                     ✓ Verified
                   </span>
                 </div>
@@ -2927,7 +2930,7 @@ function PickupSection(props: {
                     border: "1px solid #024628",
                     padding: "0 16px",
                     cursor: (sendingOtp || phone.replace(/\D/g, "").length < 10) ? "default" : "pointer",
-                    fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300,
+                    fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                     letterSpacing: "0.35em", textTransform: "uppercase",
                     color: "#024628",
                     opacity: (sendingOtp || phone.replace(/\D/g, "").length < 10) ? 0.4 : 1,
@@ -2963,7 +2966,7 @@ function PickupSection(props: {
                   background: "var(--surface-brand)",
                   border: "none",
                   cursor: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? "default" : "pointer",
-                  fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                   letterSpacing: "0.4em", textTransform: "uppercase",
                   color: "#FBF3D4",
                   opacity: (verifyingOtp || otpCode.replace(/\D/g, "").length < 6) ? 0.5 : 1,
@@ -2973,7 +2976,7 @@ function PickupSection(props: {
                 {verifyingOtp ? "Verifying…" : "Verify"}
               </button>
               {otpError && (
-                <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--warning-on-light)", letterSpacing: "0.04em" }}>
+                <p style={{ margin: "8px 0 0", fontFamily: "var(--font-body)", fontSize: 16, color: "var(--warning-on-light)", letterSpacing: "0.04em" }}>
                   {otpError}
                 </p>
               )}
@@ -2986,19 +2989,19 @@ function PickupSection(props: {
       <section style={{ marginTop: 8, marginBottom: 8 }}>
         <p style={sectionHead}>Choose a pickup point</p>
         {pickupLocationsLoading && pickupLocations.length === 0 && (
-          <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
+          <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
             Loading nearby stalls…
           </p>
         )}
         {!pickupLocationsLoading && pickupLocations.length === 0 && (
-          <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, color: "var(--warning-on-light)", letterSpacing: "0.03em" }}>
+          <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "var(--warning-on-light)", letterSpacing: "0.03em" }}>
             No pickup points available right now. Please switch to Delivery, or try again in a moment.
           </p>
         )}
         {pickupLocations.length > 0 && (
           <>
             {customerHasCoords && (
-              <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+              <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
                 Sorted by nearest to you
               </p>
             )}
@@ -3024,17 +3027,17 @@ function PickupSection(props: {
                   >
                     <div style={{
                       display: "flex", alignItems: "center", gap: 8, marginBottom: 4,
-                      fontSize: 10, fontWeight: 400,
+                      fontSize: 14, fontWeight: 500,
                       letterSpacing: "0.25em", textTransform: "uppercase",
                     }}>
                       <span>{loc.area}</span>
                       {active && <span style={{ marginLeft: "auto", opacity: 0.8 }}>Selected</span>}
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 300, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 16, fontWeight: 300, lineHeight: 1.5 }}>
                       {loc.name}
                     </div>
                     {loc.address && (
-                      <div style={{ marginTop: 2, fontSize: 12, fontWeight: 200, lineHeight: 1.5, opacity: 0.8 }}>
+                      <div style={{ marginTop: 2, fontSize: 16, fontWeight: 200, lineHeight: 1.5, opacity: 0.8 }}>
                         {loc.address}
                       </div>
                     )}
@@ -3067,7 +3070,7 @@ function PaymentButtons({
           background: "#024628",
           border: "none",
           cursor: loading ? "default" : "pointer",
-          fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400,
+          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
           letterSpacing: "0.4em", textTransform: "uppercase",
           color: "#FBF3D4",
           opacity: loading ? 0.6 : 1,
@@ -3084,7 +3087,7 @@ function PaymentButtons({
           background: "transparent",
           border: "1px solid #024628",
           cursor: loading ? "default" : "pointer",
-          fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
           letterSpacing: "0.4em", textTransform: "uppercase",
           color: "#024628",
           opacity: loading ? 0.5 : 1,
@@ -3130,7 +3133,7 @@ function PincodeStatusStrip({ pinStatus }: { pinStatus: PinState }) {
         border,
         background: bg,
         fontFamily: "var(--font-body)",
-        fontSize: 13,
+        fontSize: 16,
         fontWeight: 300,
         letterSpacing: "0.04em",
         color: fg,
@@ -3182,10 +3185,10 @@ function DeliveryScheduleSection({
             marginBottom: 22,
           }}
         >
-          <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+          <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
             Pre-order
           </p>
-          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
+          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
             First deliveries begin soon. Delivery date + time will be scheduled shortly — we&apos;ll confirm by SMS + WhatsApp.
           </p>
         </div>
@@ -3226,7 +3229,7 @@ function DeliveryScheduleSection({
             >
               <div
                 style={{
-                  fontSize: 9, fontWeight: 200,
+                  fontSize: 14, fontWeight: 500,
                   letterSpacing: "0.35em", textTransform: "uppercase",
                   color: active ? "rgba(251,243,212,0.75)" : "#024628",
                   marginBottom: 6,
@@ -3234,7 +3237,7 @@ function DeliveryScheduleSection({
               >
                 {d.tag}
               </div>
-              <div style={{ fontSize: 14, fontWeight: 300, letterSpacing: "0.04em" }}>
+              <div style={{ fontSize: 16, fontWeight: 300, letterSpacing: "0.04em" }}>
                 {formatDeliveryDate(d.iso)}
               </div>
             </button>
@@ -3287,7 +3290,7 @@ function SlotPicker({
           border: "1px solid #024628",
           background: "var(--surface-paper)",
           color: "#024628",
-          fontSize: 13,
+          fontSize: 16,
           lineHeight: 1.5,
           letterSpacing: "0.02em",
         }}

@@ -56,7 +56,7 @@ function Para({ children }: { children: React.ReactNode }) {
       style={{
         fontFamily: "var(--font-body)",
         fontWeight: 300,
-        fontSize: "0.95rem",
+        fontSize: "1rem",
         color: "rgba(192,200,206,0.82)",
         lineHeight: 1.75,
         letterSpacing: "0.01em",
@@ -94,7 +94,7 @@ function BulletList({ items }: { items: string[] }) {
         paddingLeft: "1.4rem",
         fontFamily: "var(--font-body)",
         fontWeight: 300,
-        fontSize: "0.95rem",
+        fontSize: "1rem",
         color: "rgba(192,200,206,0.82)",
         lineHeight: 1.75,
         letterSpacing: "0.01em",
@@ -116,8 +116,8 @@ export default function DeleteAccountPage() {
       <p
         style={{
           fontFamily: "var(--font-body)",
-          fontWeight: 300,
-          fontSize: "0.78rem",
+          fontWeight: 500,
+          fontSize: "0.875rem",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
           color: "rgba(192,200,206,0.45)",
@@ -146,7 +146,7 @@ export default function DeleteAccountPage() {
             style={{
               fontFamily: "var(--font-body)",
               fontWeight: 500,
-              fontSize: "0.9rem",
+              fontSize: "1rem",
               color: "rgba(192,200,206,0.9)",
               letterSpacing: "0.02em",
               margin: "0 0 0.2rem",

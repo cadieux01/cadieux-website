@@ -359,7 +359,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
           <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, color: "#024628", fontWeight: 500 }}>
             {avgRating.toFixed(1)}
           </div>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(2,70,40,0.65)" }}>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(2,70,40,0.65)" }}>
             {reviews.length} review{reviews.length === 1 ? "" : "s"}
           </div>
         </div>
@@ -367,7 +367,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
 
       {/* Submission form */}
       <form onSubmit={submitReview} style={formStyle}>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628", marginBottom: 14 }}>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628", marginBottom: 14 }}>
           {scope === "product" ? "Leave a review" : "Share your feedback"}
         </div>
         <div style={{ display: "grid", gap: 10 }}>
@@ -389,7 +389,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
           )}
           {(scope === "product" || slugChoice) && (
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>
                 Rating
               </span>
               <Stars rating={rating} size={20} onChange={setRating} />
@@ -405,7 +405,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
             style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }}
           />
           {error && (
-            <div style={{ color: "#991B1B", fontSize: 12, fontFamily: "var(--font-body)" }}>{error}</div>
+            <div style={{ color: "#991B1B", fontSize: 16, fontFamily: "var(--font-body)" }}>{error}</div>
           )}
           <TurnstileWidget
             ref={turnstileRef}
@@ -517,9 +517,9 @@ export default function ReviewSection({ productSlug, scope }: Props) {
                   {rev.replies.map((rp) => (
                     <div key={rp.id}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-                        <span style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 500, color: "#024628" }}>{rp.author_name}</span>
+                        <span style={{ fontFamily: "var(--font-heading)", fontSize: 16, fontWeight: 500, color: "#024628" }}>{rp.author_name}</span>
                         {rp.is_admin && <span style={adminPill}>Cadieux Team</span>}
-                        <span style={{ ...dateStyle, fontSize: 9 }}>
+                        <span style={{ ...dateStyle, fontSize: 16 }}>
                           {formatDate(rp.created_at)}
                           {rp.edited_at && <span style={editedTagStyle}> (edited)</span>}
                         </span>
@@ -539,7 +539,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
                           </div>
                         </div>
                       ) : (
-                        <p style={{ ...bodyStyle, fontSize: 12 }}>{rp.body}</p>
+                        <p style={{ ...bodyStyle, fontSize: 16 }}>{rp.body}</p>
                       )}
                       {editingReply !== rp.id && (
                         <div style={{ display: "flex", gap: 12, marginTop: 6, alignItems: "center" }}>
@@ -581,7 +581,7 @@ const inputStyle: React.CSSProperties = {
   color: "#024628",
   caretColor: "#024628",
   fontFamily: "var(--font-body)",
-  fontSize: 13,
+  fontSize: 16,
   fontWeight: 300,
   outline: "none",
 };
@@ -594,8 +594,8 @@ const btnPrimary: React.CSSProperties = {
   borderRadius: 6,
   color: "#FBF3D4",
   fontFamily: "var(--font-body)",
-  fontSize: 11,
-  fontWeight: 400,
+  fontSize: 14,
+  fontWeight: 500,
   letterSpacing: "0.3em",
   textTransform: "uppercase",
   cursor: "pointer",
@@ -618,8 +618,8 @@ const editedTagStyle: React.CSSProperties = {
 
 const dateStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: 10,
-  fontWeight: 300,
+  fontSize: 14,
+  fontWeight: 500,
   letterSpacing: "0.2em",
   textTransform: "uppercase",
   color: "rgba(2,70,40,0.6)",
@@ -628,7 +628,7 @@ const dateStyle: React.CSSProperties = {
 const bodyStyle: React.CSSProperties = {
   margin: 0,
   fontFamily: "var(--font-body)",
-  fontSize: 13,
+  fontSize: 16,
   lineHeight: 1.7,
   fontWeight: 300,
   color: "#024628",
@@ -636,8 +636,8 @@ const bodyStyle: React.CSSProperties = {
 
 const pillStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: 9,
-  fontWeight: 400,
+  fontSize: 14,
+  fontWeight: 500,
   letterSpacing: "0.25em",
   textTransform: "uppercase",
   color: "#024628",
@@ -662,7 +662,7 @@ const iconBtn: React.CSSProperties = {
   padding: 0,
   color: "rgba(2,70,40,0.75)",
   fontFamily: "var(--font-body)",
-  fontSize: 12,
+  fontSize: 16,
   fontWeight: 300,
   cursor: "pointer",
 };
@@ -673,8 +673,8 @@ const textBtn: React.CSSProperties = {
   padding: 0,
   color: "rgba(2,70,40,0.75)",
   fontFamily: "var(--font-body)",
-  fontSize: 12,
-  fontWeight: 300,
+  fontSize: 14,
+  fontWeight: 500,
   letterSpacing: "0.15em",
   textTransform: "uppercase",
   cursor: "pointer",
@@ -682,7 +682,7 @@ const textBtn: React.CSSProperties = {
 
 const disclosureStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: 11,
+  fontSize: 16,
   fontWeight: 300,
   lineHeight: 1.55,
   color: "rgba(2,70,40,0.7)",
@@ -693,8 +693,8 @@ const emptyStyle: React.CSSProperties = {
   padding: "32px 0",
   textAlign: "center",
   fontFamily: "var(--font-body)",
-  fontSize: 12,
-  fontWeight: 300,
+  fontSize: 14,
+  fontWeight: 500,
   letterSpacing: "0.15em",
   textTransform: "uppercase",
   color: "rgba(2,70,40,0.6)",

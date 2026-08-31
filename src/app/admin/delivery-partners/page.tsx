@@ -177,7 +177,7 @@ export default function DeliveryPartnersPage() {
             border: "none",
             padding: "8px 16px",
             fontFamily: "var(--font-body)",
-            fontSize: "0.75rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
             cursor: "pointer",
@@ -205,7 +205,7 @@ export default function DeliveryPartnersPage() {
                 style={{
                   color: FADED,
                   fontFamily: "var(--font-body)",
-                  fontSize: "0.75rem",
+                  fontSize: "0.875rem",
                   letterSpacing: "0.15em",
                   textTransform: "uppercase",
                   margin: "0 0 12px",
@@ -261,7 +261,7 @@ function PartnerTable({
           width: "100%",
           borderCollapse: "collapse",
           fontFamily: "var(--font-body)",
-          fontSize: "0.85rem",
+          fontSize: "1rem",
         }}
       >
         <thead>
@@ -270,7 +270,7 @@ function PartnerTable({
               background: "rgba(245,158,11,0.05)",
               color: FADED,
               textAlign: "left",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.15em",
               textTransform: "uppercase",
             }}
@@ -328,7 +328,7 @@ function ArchivedTable({
           width: "100%",
           borderCollapse: "collapse",
           fontFamily: "var(--font-body)",
-          fontSize: "0.85rem",
+          fontSize: "1rem",
         }}
       >
         <tbody>
@@ -361,7 +361,7 @@ const rowBtnStyle: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   padding: "4px 10px",
   fontFamily: "var(--font-body)",
-  fontSize: "0.7rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.1em",
   textTransform: "uppercase",
   cursor: "pointer",
@@ -441,13 +441,13 @@ function EditorModal({
             placeholder="9989153747 or +91 9989153747"
             style={inputStyle}
           />
-          <span style={{ color: FADED, fontSize: "0.7rem", marginTop: 4 }}>
+          <span style={{ color: FADED, fontSize: "1rem", marginTop: 4 }}>
             10-digit Indian mobile is auto-prefixed with +91.
           </span>
         </label>
 
         {error && (
-          <p style={{ color: DANGER, fontSize: "0.8rem", margin: "8px 0 0" }}>
+          <p style={{ color: DANGER, fontSize: "1rem", margin: "8px 0 0" }}>
             {error}
           </p>
         )}
@@ -481,7 +481,7 @@ function EditorModal({
               color: "#0a0a0a",
               border: "none",
               padding: "8px 16px",
-              fontSize: "0.75rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
               cursor: saving ? "wait" : "pointer",
@@ -501,7 +501,7 @@ const labelStyle: React.CSSProperties = {
   flexDirection: "column",
   gap: 4,
   marginBottom: 14,
-  fontSize: "0.75rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.1em",
   textTransform: "uppercase",
   color: FADED,
@@ -513,7 +513,7 @@ const inputStyle: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   padding: "10px 12px",
   fontFamily: "var(--font-body)",
-  fontSize: "0.9rem",
+  fontSize: "1rem",
   letterSpacing: "0.02em",
   textTransform: "none",
 };

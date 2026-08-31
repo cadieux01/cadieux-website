@@ -201,13 +201,13 @@ export default function SubscriptionHubPage() {
         href="/"
         style={{
           position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-          fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
           letterSpacing: "0.35em", textTransform: "uppercase",
           color: "#4369B2", textDecoration: "none",
           display: "flex", alignItems: "center", gap: 8,
         }}
       >
-        <span style={{ fontSize: 14 }}>←</span> Cadieux
+        <span style={{ fontSize: 16 }}>←</span> Cadieux
       </Link>
 
       <div
@@ -251,7 +251,7 @@ export default function SubscriptionHubPage() {
           style={{
             margin: "0 0 48px",
             fontFamily: "var(--font-body)",
-            fontSize: 13,
+            fontSize: 16,
             fontWeight: 300,
             letterSpacing: "0.02em",
             color: "rgba(251,243,212,0.65)",
@@ -305,7 +305,7 @@ export default function SubscriptionHubPage() {
               <div
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: 13,
+                  fontSize: 16,
                   fontWeight: 300,
                   lineHeight: 1.45,
                   color: "rgba(245,240,232,0.62)",

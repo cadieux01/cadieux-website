@@ -950,7 +950,7 @@ export function RegisterOrderForm({
                         <div
                           style={{
                             fontFamily: "var(--font-body)",
-                            fontSize: "0.8rem",
+                            fontSize: "1rem",
                             color: CREAM_STRONG,
                           }}
                         >
@@ -1114,7 +1114,7 @@ const section: React.CSSProperties = {
 
 const sectionTitle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.75rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
   color: CREAM,
@@ -1128,7 +1128,7 @@ const label: React.CSSProperties = {
   gap: "0.35rem",
   marginBottom: "0.75rem",
   fontFamily: "var(--font-body)",
-  fontSize: "0.75rem",
+  fontSize: "1rem",
   color: CREAM_STRONG,
 };
 
@@ -1138,7 +1138,7 @@ const input: React.CSSProperties = {
   color: CREAM,
   border: `1px solid ${CREAM}`,
   fontFamily: "var(--font-body)",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   borderRadius: 4,
   outline: "none",
 };
@@ -1152,7 +1152,7 @@ const chipBase: React.CSSProperties = {
   padding: "0.4rem 0.9rem",
   border: `1px solid ${CREAM}`,
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   background: "transparent",
   cursor: "pointer",
@@ -1190,14 +1190,14 @@ const hintBox: React.CSSProperties = {
   background: "rgba(251,243,212,0.06)",
   color: CREAM_STRONG,
   fontFamily: "var(--font-body)",
-  fontSize: "0.75rem",
+  fontSize: "1rem",
   borderRadius: 4,
   marginBottom: "0.75rem",
 };
 
 const mutedNote: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.7rem",
+  fontSize: "1rem",
   color: CREAM_FAINT,
 };
 
@@ -1207,7 +1207,7 @@ const errorBox: React.CSSProperties = {
   background: "rgba(239,68,68,0.15)",
   color: "rgba(254,226,226,0.98)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.8rem",
+  fontSize: "1rem",
   borderRadius: 4,
 };
 
@@ -1217,7 +1217,7 @@ const okBox: React.CSSProperties = {
   background: "rgba(251,243,212,0.08)",
   color: CREAM,
   fontFamily: "var(--font-body)",
-  fontSize: "0.8rem",
+  fontSize: "1rem",
   borderRadius: 4,
 };
 

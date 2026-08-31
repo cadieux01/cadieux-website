@@ -174,7 +174,7 @@ export default function PaymentPage() {
   return (
     <main style={pageStyle}>
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
-        <Link href="/subscriptions/setup/checkout" style={{ fontSize: 13, color: FADED, textDecoration: "none" }}>
+        <Link href="/subscriptions/setup/checkout" style={{ fontSize: 16, color: FADED, textDecoration: "none" }}>
           ← Back to address
         </Link>
         <h1
@@ -188,7 +188,7 @@ export default function PaymentPage() {
         >
           Payment
         </h1>
-        <p style={{ color: FADED, fontSize: 14, marginTop: 0, marginBottom: 28 }}>
+        <p style={{ color: FADED, fontSize: 16, marginTop: 0, marginBottom: 28 }}>
           How would you like to pay?
         </p>
 
@@ -211,7 +211,7 @@ export default function PaymentPage() {
                 <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 18 }}>
                   {l.product.title} × {l.qty}
                 </div>
-                <div style={{ fontSize: 13, color: FADED }}>
+                <div style={{ fontSize: 16, color: FADED }}>
                   ₹{(l.product.price * l.qty).toLocaleString("en-IN")} / delivery
                 </div>
               </div>
@@ -227,10 +227,10 @@ export default function PaymentPage() {
               borderTop: `1px solid ${FAINT}`,
             }}
           >
-            <div style={{ fontSize: 14, color: TEXT }}>Total</div>
-            <div style={{ fontSize: 14, color: GOLD }}>₹{totalAmount.toLocaleString("en-IN")}</div>
+            <div style={{ fontSize: 16, color: TEXT }}>Total</div>
+            <div style={{ fontSize: 16, color: GOLD }}>₹{totalAmount.toLocaleString("en-IN")}</div>
           </div>
-          <div style={{ marginTop: 4, fontSize: 13, color: FADED }}>
+          <div style={{ marginTop: 4, fontSize: 16, color: FADED }}>
             {deliveries.length} {deliveries.length === 1 ? "delivery" : "deliveries"}
             {deliveries[0] && (
               <>
@@ -238,7 +238,7 @@ export default function PaymentPage() {
               </>
             )}
           </div>
-          <div style={{ marginTop: 8, fontSize: 12, color: FADED }}>
+          <div style={{ marginTop: 8, fontSize: 16, color: FADED }}>
             Delivering to: {address.full_name} · {address.address}, {address.city}
           </div>
         </div>
@@ -258,7 +258,7 @@ export default function PaymentPage() {
           {/* TODO: integrate Cashfree/Razorpay here for online payments. */}
         </div>
 
-        {error && <div style={{ marginBottom: 14, fontSize: 13, color: RED }}>{error}</div>}
+        {error && <div style={{ marginBottom: 14, fontSize: 16, color: RED }}>{error}</div>}
 
         <button
           onClick={placeOrder}
@@ -331,7 +331,7 @@ function PaymentCard({
       />
       <div style={{ flex: 1 }}>
         <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 20 }}>{title}</div>
-        <div style={{ fontSize: 13, color: FADED, marginTop: 3 }}>{sub}</div>
+        <div style={{ fontSize: 16, color: FADED, marginTop: 3 }}>{sub}</div>
       </div>
     </button>
   );
@@ -369,7 +369,7 @@ function DisabledCard({ title, sub }: { title: string; sub: string }) {
           </div>
           <span
             style={{
-              fontSize: 10,
+              fontSize: 14,
               padding: "3px 9px",
               borderRadius: 999,
               border: `1px solid ${FAINT}`,
@@ -381,7 +381,7 @@ function DisabledCard({ title, sub }: { title: string; sub: string }) {
             Coming soon
           </span>
         </div>
-        <div style={{ fontSize: 13, color: FADED, marginTop: 3 }}>{sub}</div>
+        <div style={{ fontSize: 16, color: FADED, marginTop: 3 }}>{sub}</div>
       </div>
     </div>
   );

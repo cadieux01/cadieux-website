@@ -33,7 +33,7 @@ export default function OfflinePage() {
     >
       <div
         style={{
-          fontSize: 10,
+          fontSize: 14,
           letterSpacing: "0.4em",
           textTransform: "uppercase",
           color: "rgba(201,169,110,0.7)",
@@ -60,7 +60,7 @@ export default function OfflinePage() {
         style={{
           margin: "20px 0 32px",
           maxWidth: 420,
-          fontSize: 14,
+          fontSize: 16,
           fontWeight: 300,
           lineHeight: 1.6,
           color: "rgba(251,243,212,0.7)",
@@ -73,7 +73,7 @@ export default function OfflinePage() {
       <Link
         href="/"
         style={{
-          fontSize: 11,
+          fontSize: 14,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
           color: GOLD,

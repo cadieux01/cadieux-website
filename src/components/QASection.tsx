@@ -53,7 +53,7 @@ const qStyle: React.CSSProperties = {
 const aStyle: React.CSSProperties = {
   margin: "32px auto 0",
   fontFamily: "var(--font-body)",
-  fontSize: 14,
+  fontSize: 16,
   lineHeight: 1.95,
   color: "rgba(251,243,212,0.85)",
   maxWidth: 540,

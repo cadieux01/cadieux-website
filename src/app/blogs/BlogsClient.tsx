@@ -14,12 +14,12 @@ export default function BlogsClient() {
       {/* Back link */}
       <Link href="/" style={{
         position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-        fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
         letterSpacing: "0.35em", textTransform: "uppercase",
         color: "#024628", textDecoration: "none",
         display: "flex", alignItems: "center", gap: 8,
       }}>
-        <span style={{ fontSize: 14 }}>←</span> Cadieux
+        <span style={{ fontSize: 16 }}>←</span> Cadieux
       </Link>
 
       <div style={{ position: "relative", zIndex: 1, padding: "100px clamp(28px,8vw,120px) 120px" }}>
@@ -43,8 +43,8 @@ export default function BlogsClient() {
               }}
             >
               <p style={{ margin: "0 0 12px", fontFamily: "var(--font-heading)", fontSize: "clamp(20px,4vw,32px)", fontWeight: 300, color: "#024628", letterSpacing: "0.01em", lineHeight: 1.2 }}>{post.title}</p>
-              <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 300, lineHeight: 1.8, color: "rgba(2,70,40,0.75)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as never, overflow: "hidden" }}>{post.brief}</p>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 300, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>Read more →</span>
+              <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, lineHeight: 1.8, color: "rgba(2,70,40,0.75)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as never, overflow: "hidden" }}>{post.brief}</p>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628" }}>Read more →</span>
             </Link>
           ))}
         </ScrollReveal>

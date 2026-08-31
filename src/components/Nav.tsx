@@ -127,7 +127,7 @@ export default function Nav() {
           padding: "calc(100px + env(safe-area-inset-top)) calc(28px + env(safe-area-inset-right)) 24px calc(28px + env(safe-area-inset-left))",
           flexShrink: 0,
         }}>
-          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 200, letterSpacing: "0.5em", textTransform: "uppercase", color: "#024628" }}>Menu</p>
+          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.5em", textTransform: "uppercase", color: "#024628" }}>Menu</p>
         </div>
 
         {/* Scrollable nav body — everything below the sticky header.
@@ -177,8 +177,8 @@ export default function Nav() {
             const sectionLabelStyle: React.CSSProperties = {
               margin: "0 0 6px",
               fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 200,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "0.4em",
               textTransform: "uppercase",
               color: "rgba(2,70,40,0.6)",

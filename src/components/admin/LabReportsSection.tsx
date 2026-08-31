@@ -214,7 +214,7 @@ export function LabReportsSection({
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.25em",
             color: GOLD,
             border: `1px solid ${GOLD}`,
@@ -230,7 +230,7 @@ export function LabReportsSection({
         className="mb-4"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.85rem",
+          fontSize: "1rem",
           letterSpacing: "0.04em",
           color: GOLD,
           border: `1px solid ${BORDER}`,
@@ -254,7 +254,7 @@ export function LabReportsSection({
           style={{
             color: FADED,
             fontFamily: "var(--font-body)",
-            fontSize: "0.9rem",
+            fontSize: "1rem",
           }}
         >
           No lab reports uploaded yet.
@@ -349,7 +349,7 @@ function ReportCard({
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.62rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.25em",
             color: GOLD,
           }}
@@ -361,7 +361,7 @@ function ReportCard({
           style={{
             color: FADED,
             fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
+            fontSize: "1rem",
           }}
         >
           {formatDateTime(report.uploaded_at)}
@@ -410,7 +410,7 @@ function ReportCard({
                 style={{
                   minHeight: 0,
                   borderColor: BORDER,
-                  fontSize: "0.85rem",
+                  fontSize: "1rem",
                   textTransform: "none",
                   letterSpacing: "0.05em",
                 }}
@@ -437,7 +437,7 @@ function ReportCard({
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.65rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 color: GOLD,
                 border: `1px solid ${GOLD}`,
@@ -457,7 +457,7 @@ function ReportCard({
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.65rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 color: FADED,
                 border: `1px solid ${BORDER}`,
@@ -476,7 +476,7 @@ function ReportCard({
               style={{
                 fontFamily: "var(--font-body)",
                 color: FADED,
-                fontSize: "0.7rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.08em",
                 marginBottom: "0.15rem",
               }}
@@ -488,7 +488,7 @@ function ReportCard({
             style={{
               fontFamily: "var(--font-body)",
               color: CREAM,
-              fontSize: "0.95rem",
+              fontSize: "1rem",
               marginBottom: "0.35rem",
             }}
           >
@@ -499,7 +499,7 @@ function ReportCard({
               style={{
                 fontFamily: "var(--font-body)",
                 color: FADED,
-                fontSize: "0.8rem",
+                fontSize: "1rem",
                 lineHeight: 1.5,
                 marginBottom: "0.5rem",
               }}
@@ -515,7 +515,7 @@ function ReportCard({
             style={{
               fontFamily: "var(--font-body)",
               color: GOLD,
-              fontSize: "0.78rem",
+              fontSize: "1rem",
               wordBreak: "break-all",
               textDecoration: "underline",
             }}
@@ -526,7 +526,7 @@ function ReportCard({
             style={{
               fontFamily: "var(--font-body)",
               color: FADED,
-              fontSize: "0.7rem",
+              fontSize: "1rem",
               marginTop: "0.25rem",
             }}
           >
@@ -541,7 +541,7 @@ function ReportCard({
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.62rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 color: FADED,
                 border: `1px solid ${BORDER}`,
@@ -558,7 +558,7 @@ function ReportCard({
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.62rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 color: report.is_archived ? GOLD : FADED,
                 border: `1px solid ${report.is_archived ? GOLD : BORDER}`,
@@ -576,7 +576,7 @@ function ReportCard({
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.62rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 color: "#ef4444",
                 border: "1px solid #ef4444",
@@ -721,7 +721,7 @@ function AddReportModal({
                 ariaLabel="Report category"
                 style={{
                   borderColor: BORDER,
-                  fontSize: "0.9rem",
+                  fontSize: "1rem",
                   textTransform: "none",
                   letterSpacing: "0.05em",
                 }}
@@ -743,7 +743,7 @@ function AddReportModal({
               style={{
                 color: CREAM,
                 fontFamily: "var(--font-body)",
-                fontSize: "0.85rem",
+                fontSize: "1rem",
                 textTransform: "none",
                 letterSpacing: "0.02em",
               }}
@@ -754,7 +754,7 @@ function AddReportModal({
                   display: "block",
                   marginTop: "0.35rem",
                   color: CREAM,
-                  fontSize: "0.8rem",
+                  fontSize: "1rem",
                   textTransform: "none",
                   letterSpacing: 0,
                 }}
@@ -770,7 +770,7 @@ function AddReportModal({
                 margin: 0,
                 color: "#fecaca",
                 fontFamily: "var(--font-body)",
-                fontSize: "0.85rem",
+                fontSize: "1rem",
               }}
             >
               {err}
@@ -796,7 +796,7 @@ function AddReportModal({
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: FADED,
               border: `1px solid ${BORDER}`,
@@ -813,7 +813,7 @@ function AddReportModal({
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: GOLD,
               border: `1px solid ${GOLD}`,
@@ -833,7 +833,7 @@ function AddReportModal({
 const fieldLabel: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   color: FADED,
-  fontSize: "0.7rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.2em",
   textTransform: "uppercase",
 };
@@ -843,7 +843,7 @@ const fieldInput: React.CSSProperties = {
   background: "transparent",
   color: CREAM,
   fontFamily: "var(--font-body)",
-  fontSize: "0.9rem",
+  fontSize: "1rem",
   letterSpacing: "0.05em",
   textTransform: "none",
 };

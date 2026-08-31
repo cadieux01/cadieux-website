@@ -61,7 +61,7 @@ export default function AdminContentPage() {
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: FADED,
             }}
@@ -78,7 +78,7 @@ export default function AdminContentPage() {
                 className="uppercase"
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: "0.7rem",
+                  fontSize: "0.875rem",
                   letterSpacing: "0.25em",
                   color: active ? CREAM : FADED,
                   border: `1px solid ${active ? GOLD : BORDER}`,
@@ -107,7 +107,7 @@ export default function AdminContentPage() {
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.72rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 color: active ? CREAM : FADED,
                 background: "transparent",

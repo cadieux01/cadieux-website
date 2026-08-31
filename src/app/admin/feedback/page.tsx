@@ -282,7 +282,7 @@ export default function FeedbackPage() {
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.25em",
             color: "#f59e0b",
             border: "1px solid #f59e0b",
@@ -320,7 +320,7 @@ export default function FeedbackPage() {
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.62rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.22em",
                 padding: "6px 12px",
                 borderRadius: 99,
@@ -397,7 +397,7 @@ export default function FeedbackPage() {
                         style={{
                           color: "#024628",
                           fontFamily: "var(--font-body)",
-                          fontSize: "0.85rem",
+                          fontSize: "1rem",
                         }}
                       >
                         {"★".repeat(rev.rating)}
@@ -407,7 +407,7 @@ export default function FeedbackPage() {
                     <span
                       style={{
                         fontFamily: "var(--font-body)",
-                        fontSize: "0.7rem",
+                        fontSize: "1rem",
                         color: "rgba(192,200,206,0.5)",
                       }}
                     >
@@ -424,7 +424,7 @@ export default function FeedbackPage() {
                     <span
                       style={{
                         fontFamily: "var(--font-body)",
-                        fontSize: "0.7rem",
+                        fontSize: "1rem",
                         color: "rgba(192,200,206,0.5)",
                       }}
                     >
@@ -566,7 +566,7 @@ export default function FeedbackPage() {
                       margin: 0,
                       color: "rgba(251,243,212,0.85)",
                       fontFamily: "var(--font-body)",
-                      fontSize: "0.85rem",
+                      fontSize: "1rem",
                       lineHeight: 1.6,
                       whiteSpace: "pre-wrap",
                     }}
@@ -613,7 +613,7 @@ export default function FeedbackPage() {
                                 style={{
                                   color: "#fbf3d4",
                                   fontFamily: "var(--font-heading)",
-                                  fontSize: "0.85rem",
+                                  fontSize: "1rem",
                                 }}
                               >
                                 {rp.author_name}
@@ -624,7 +624,7 @@ export default function FeedbackPage() {
                               <span
                                 style={{
                                   fontFamily: "var(--font-body)",
-                                  fontSize: "0.65rem",
+                                  fontSize: "1rem",
                                   color: "rgba(192,200,206,0.4)",
                                 }}
                               >
@@ -633,7 +633,7 @@ export default function FeedbackPage() {
                               <span
                                 style={{
                                   fontFamily: "var(--font-body)",
-                                  fontSize: "0.65rem",
+                                  fontSize: "1rem",
                                   color: "rgba(192,200,206,0.4)",
                                 }}
                               >
@@ -698,7 +698,7 @@ export default function FeedbackPage() {
                                   margin: 0,
                                   color: "rgba(251,243,212,0.78)",
                                   fontFamily: "var(--font-body)",
-                                  fontSize: "0.78rem",
+                                  fontSize: "1rem",
                                   lineHeight: 1.55,
                                   whiteSpace: "pre-wrap",
                                 }}
@@ -767,7 +767,7 @@ export default function FeedbackPage() {
                       borderRadius: 4,
                       color: "#fbf3d4",
                       fontFamily: "var(--font-body)",
-                      fontSize: "0.8rem",
+                      fontSize: "1rem",
                       resize: "vertical",
                     }}
                   />
@@ -792,13 +792,13 @@ export default function FeedbackPage() {
 const mutedText: React.CSSProperties = {
   color: "rgba(192,200,206,0.5)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
 };
 
 const fieldLabel: React.CSSProperties = {
   display: "block",
   fontFamily: "var(--font-body)",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
   color: "rgba(192,200,206,0.6)",
@@ -813,12 +813,12 @@ const textInput: React.CSSProperties = {
   borderRadius: 4,
   color: "#fbf3d4",
   fontFamily: "var(--font-body)",
-  fontSize: "0.82rem",
+  fontSize: "1rem",
 };
 
 const tagPill: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   textTransform: "uppercase",
   color: "#024628",
@@ -829,7 +829,7 @@ const tagPill: React.CSSProperties = {
 
 const teamPill: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.55rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   textTransform: "uppercase",
   color: "#FBF3D4",
@@ -841,7 +841,7 @@ const teamPill: React.CSSProperties = {
 
 const statusBadge: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.55rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.2em",
   textTransform: "uppercase",
   color: "rgba(192,200,206,0.7)",
@@ -852,7 +852,7 @@ const statusBadge: React.CSSProperties = {
 
 const deletedBadge: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.55rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.2em",
   textTransform: "uppercase",
   color: "#ef4444",
@@ -865,7 +865,7 @@ const dangerButton: React.CSSProperties = {
   border: "1px solid rgba(239,68,68,0.5)",
   color: "#ef4444",
   fontFamily: "var(--font-body)",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.2em",
   padding: "4px 10px",
   background: "transparent",
@@ -876,7 +876,7 @@ const dangerButtonSmall: React.CSSProperties = {
   border: "1px solid rgba(239,68,68,0.4)",
   color: "#ef4444",
   fontFamily: "var(--font-body)",
-  fontSize: "0.55rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.2em",
   padding: "2px 8px",
   background: "transparent",
@@ -888,7 +888,7 @@ const restoreButton: React.CSSProperties = {
   border: "1px solid rgba(245,158,11,0.5)",
   color: "#f59e0b",
   fontFamily: "var(--font-body)",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.2em",
   padding: "4px 10px",
   background: "transparent",
@@ -899,7 +899,7 @@ const restoreButtonSmall: React.CSSProperties = {
   border: "1px solid rgba(245,158,11,0.4)",
   color: "#f59e0b",
   fontFamily: "var(--font-body)",
-  fontSize: "0.55rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.2em",
   padding: "2px 8px",
   background: "transparent",
@@ -911,7 +911,7 @@ const secondaryButton: React.CSSProperties = {
   border: "1px solid rgba(192,200,206,0.3)",
   color: "rgba(192,200,206,0.8)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.2em",
   padding: "8px 14px",
   background: "transparent",
@@ -922,7 +922,7 @@ const secondaryButtonSmall: React.CSSProperties = {
   border: "1px solid rgba(192,200,206,0.3)",
   color: "rgba(192,200,206,0.8)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.55rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.2em",
   padding: "2px 8px",
   background: "transparent",
@@ -934,7 +934,7 @@ const primaryButton: React.CSSProperties = {
   border: "1px solid rgba(245,158,11,0.5)",
   color: "#f59e0b",
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   padding: "8px 14px",
   background: "transparent",

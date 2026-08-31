@@ -259,8 +259,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 />
                 <p style={{
                   margin: "0 0 16px",
-                  fontFamily: "var(--font-body)", fontSize: 10,
-                  fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
+                  fontFamily: "var(--font-body)", fontSize: 14,
+                  fontWeight: 500, letterSpacing: "0.45em", textTransform: "uppercase",
                   color: "#FBF3D4", pointerEvents: "none",
                 }}>Cadieux</p>
                 {/* Primary hero heading. Rendered as an <h1> (the page's only
@@ -286,7 +286,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               onClick={() => router.push("/shop")}
               style={{
                 position: "absolute", bottom: 48, left: "clamp(28px, 8vw, 80px)", zIndex: 4,
-                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                 letterSpacing: "0.4em", textTransform: "uppercase",
                 color: "#FBF3D4", background: "#024628",
                 border: "none", padding: "10px 24px", cursor: "pointer",
@@ -356,7 +356,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 <p style={{
                   margin: "18px auto 0",
                   fontFamily: "var(--font-body)",
-                  fontSize: 14,
+                  fontSize: 16,
                   lineHeight: 1.95,
                   color: "rgba(251,243,212,0.85)",
                   maxWidth: 540,
@@ -447,7 +447,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                           <p style={{
                             margin: "10px 0 0",
                             fontFamily: "var(--font-body)",
-                            fontSize: 11, fontWeight: 300,
+                            fontSize: 14, fontWeight: 500,
                             letterSpacing: "0.18em", textTransform: "uppercase",
                             color: reached ? "#FFF8E0" : "rgba(251,243,212,0.32)",
                             lineHeight: 1.6,
@@ -602,7 +602,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                           <p style={{
                             margin: "10px 0 0",
                             fontFamily: "var(--font-body)",
-                            fontSize: 11, fontWeight: 300,
+                            fontSize: 16, fontWeight: 300,
                             letterSpacing: "0.05em",
                             color: reached ? "#FFF8E0" : "rgba(251,243,212,0.4)",
                             lineHeight: 1.6,
@@ -691,7 +691,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               <p style={{
                 margin: "24px 0 0",
                 fontFamily: "var(--font-body)",
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: 500,
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
@@ -705,8 +705,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 style={{
                   marginTop: 32,
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
-                  fontWeight: 300,
+                  fontSize: 14,
+                  fontWeight: 500,
                   letterSpacing: "0.25em",
                   textTransform: "uppercase",
                   color: "rgba(251,243,212,0.75)",
@@ -774,15 +774,15 @@ export default function PageContent({ introActive = false }: { introActive?: boo
 
             <p style={{
               position: "relative", zIndex: 3,
-              margin: "20px 0 0", fontFamily: "var(--font-body)", fontSize: 9,
-              fontWeight: 200, letterSpacing: "0.45em", textTransform: "uppercase",
+              margin: "20px 0 0", fontFamily: "var(--font-body)", fontSize: 14,
+              fontWeight: 500, letterSpacing: "0.45em", textTransform: "uppercase",
               color: "#4369B2",
             }}>Same Bread. Better Built.</p>
 
             <button style={{
               position: "relative", zIndex: 3,
               display: "block", width: "100%", maxWidth: 320, marginTop: 28,
-              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+              fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
               letterSpacing: "0.4em", textTransform: "uppercase",
               color: "#FBF3D4", background: "#024628",
               border: "none", padding: 18, cursor: "pointer",
@@ -809,12 +809,12 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             }}>
               <p style={{
                 margin: 0,
-                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200,
+                fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200,
                 letterSpacing: "0.04em", lineHeight: 1.7,
                 color: "rgba(251,243,212,0.6)",
                 maxWidth: 380,
               }}>
-                <span style={{ display: "block", fontSize: 9, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)", marginBottom: 6 }}>Manufactured at</span>
+                <span style={{ display: "block", fontSize: 14, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)", marginBottom: 6 }}>Manufactured at</span>
                 D.No. 13/18, Plot 78, PM Palem Main Road,<br />
                 Revenue Ward 4, PM Palem,<br />
                 Visakhapatnam, Andhra Pradesh 530041
@@ -825,7 +825,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
-                  fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+                  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
                   letterSpacing: "0.3em", textTransform: "uppercase",
                   color: "#C8903A", textDecoration: "none",
                   borderBottom: "1px solid rgba(200,144,58,0.4)",
@@ -850,7 +850,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               >
                 <span style={{
                   width: "100%",
-                  fontSize: 9, letterSpacing: "0.35em", textTransform: "uppercase",
+                  fontSize: 14, letterSpacing: "0.35em", textTransform: "uppercase",
                   color: "rgba(200,144,58,0.65)",
                   marginBottom: 4,
                 }}>Site</span>
@@ -865,8 +865,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                     href={href}
                     style={{
                       fontFamily: "var(--font-body)",
-                      fontSize: 10,
-                      fontWeight: 300,
+                      fontSize: 14,
+                      fontWeight: 500,
                       letterSpacing: "0.18em",
                       textTransform: "uppercase",
                       color: "rgba(251,243,212,0.55)",
@@ -894,7 +894,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               >
                 <span style={{
                   width: "100%",
-                  fontSize: 9, letterSpacing: "0.35em", textTransform: "uppercase",
+                  fontSize: 14, letterSpacing: "0.35em", textTransform: "uppercase",
                   color: "rgba(200,144,58,0.65)",
                   marginBottom: 4,
                 }}>Legal</span>
@@ -911,8 +911,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                     href={href}
                     style={{
                       fontFamily: "var(--font-body)",
-                      fontSize: 10,
-                      fontWeight: 300,
+                      fontSize: 14,
+                      fontWeight: 500,
                       letterSpacing: "0.18em",
                       textTransform: "uppercase",
                       color: "rgba(251,243,212,0.55)",
@@ -931,8 +931,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               <p style={{
                 margin: "10px 0 0",
                 fontFamily: "var(--font-body)",
-                fontSize: 9,
-                fontWeight: 300,
+                fontSize: 14,
+                fontWeight: 500,
                 letterSpacing: "0.35em",
                 textTransform: "uppercase",
                 color: "rgba(251,243,212,0.4)",

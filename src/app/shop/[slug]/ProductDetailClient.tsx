@@ -223,8 +223,8 @@ export default function ProductDetailClient({
           left: "calc(20px + env(safe-area-inset-left))",
           zIndex: 101,
           fontFamily: "var(--font-body)",
-          fontSize: 10,
-          fontWeight: 200,
+          fontSize: 14,
+          fontWeight: 500,
           letterSpacing: "0.35em",
           textTransform: "uppercase",
           color: "#4369B2",
@@ -234,7 +234,7 @@ export default function ProductDetailClient({
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 14 }}>←</span> Shop
+        <span style={{ fontSize: 16 }}>←</span> Shop
       </Link>
 
       <div
@@ -263,7 +263,7 @@ export default function ProductDetailClient({
               <div
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: 10,
+                  fontSize: 14,
                   fontWeight: 500,
                   letterSpacing: "0.35em",
                   textTransform: "uppercase",
@@ -296,7 +296,7 @@ export default function ProductDetailClient({
               style={{
                 margin: "18px 0 28px",
                 fontFamily: "var(--font-body)",
-                fontSize: 14,
+                fontSize: 16,
                 lineHeight: 1.65,
                 fontWeight: 300,
                 color: "#024628",
@@ -312,7 +312,12 @@ export default function ProductDetailClient({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                // Content-sized rather than equal thirds: at 14px the tracked
+                // uppercase labels ("PROTEIN/SLICE") are wider than a 1fr
+                // column at 390px, and "/" is not a line-break opportunity, so
+                // equal columns made the label spill into its neighbour.
+                gridTemplateColumns: "auto auto auto",
+                justifyContent: "space-between",
                 gap: 12,
                 padding: "18px 0",
                 borderTop: "1px solid rgba(2,70,40,0.25)",
@@ -337,8 +342,8 @@ export default function ProductDetailClient({
                     style={{
                       marginTop: 6,
                       fontFamily: "var(--font-body)",
-                      fontSize: 9,
-                      fontWeight: 400,
+                      fontSize: 14,
+                      fontWeight: 500,
                       letterSpacing: "0.22em",
                       textTransform: "uppercase",
                       color: "#024628",
@@ -356,7 +361,7 @@ export default function ProductDetailClient({
                 marginTop: -20,
                 marginBottom: 32,
                 fontFamily: "var(--font-body)",
-                fontSize: 11,
+                fontSize: 16,
                 fontWeight: 400,
                 letterSpacing: "0.04em",
                 color: "#1D1D1F",
@@ -380,7 +385,7 @@ export default function ProductDetailClient({
               <div
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
+                  fontSize: 16,
                   fontWeight: 400,
                   color: "#024628",
                 }}
@@ -411,7 +416,7 @@ export default function ProductDetailClient({
                     background: orderType === type ? "#024628" : "transparent",
                     color: orderType === type ? "#C0C8CE" : "#024628",
                     fontFamily: "var(--font-body)",
-                    fontSize: 10,
+                    fontSize: 14,
                     fontWeight: 500,
                     letterSpacing: "0.28em",
                     textTransform: "uppercase",
@@ -431,7 +436,7 @@ export default function ProductDetailClient({
                   marginBottom: 14,
                   padding: "10px 14px",
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
+                  fontSize: 14,
                   fontWeight: 500,
                   letterSpacing: "0.25em",
                   textTransform: "uppercase",
@@ -451,7 +456,7 @@ export default function ProductDetailClient({
                 <span
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: 10,
+                    fontSize: 14,
                     fontWeight: 500,
                     letterSpacing: "0.3em",
                     textTransform: "uppercase",
@@ -516,7 +521,7 @@ export default function ProductDetailClient({
                   color: added ? "#FBF3D4" : "#024628",
                   opacity: outOfStock ? 0.5 : 1,
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
+                  fontSize: 14,
                   fontWeight: 500,
                   letterSpacing: "0.35em",
                   textTransform: "uppercase",
@@ -545,7 +550,7 @@ export default function ProductDetailClient({
                   style={{
                     margin: "0 0 14px",
                     fontFamily: "var(--font-body)",
-                    fontSize: 13,
+                    fontSize: 16,
                     lineHeight: 1.75,
                     fontWeight: 300,
                     color: "#024628",
@@ -624,7 +629,7 @@ export default function ProductDetailClient({
                   border: "1px solid rgba(2,70,40,0.25)",
                   borderRadius: 4,
                   fontFamily: "var(--font-body)",
-                  fontSize: 13,
+                  fontSize: 16,
                   fontWeight: 400,
                   letterSpacing: "0.04em",
                   color: "#1D1D1F",
@@ -666,7 +671,7 @@ export default function ProductDetailClient({
                     <summary
                       style={{
                         fontFamily: "var(--font-body)",
-                        fontSize: 15,
+                        fontSize: 16,
                         fontWeight: 500,
                         color: "#024628",
                         letterSpacing: "0.01em",
@@ -694,7 +699,7 @@ export default function ProductDetailClient({
                       style={{
                         margin: "12px 0 0",
                         fontFamily: "var(--font-body)",
-                        fontSize: 14,
+                        fontSize: 16,
                         lineHeight: 1.6,
                         fontWeight: 300,
                         color: "#024628",
@@ -793,7 +798,7 @@ function Gallery({
               padding: 24,
               textAlign: "center",
               fontFamily: "var(--font-body)",
-              fontSize: 11,
+              fontSize: 14,
               letterSpacing: "0.28em",
               textTransform: "uppercase",
               color: "rgba(251,243,212,0.65)",
@@ -892,7 +897,7 @@ function Gallery({
               top: 14,
               left: 14,
               fontFamily: "var(--font-body)",
-              fontSize: 9,
+              fontSize: 14,
               fontWeight: 500,
               letterSpacing: "0.3em",
               textTransform: "uppercase",
@@ -1035,7 +1040,7 @@ function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
               style={{
                 margin: 0,
                 fontFamily: "var(--font-body)",
-                fontSize: 14,
+                fontSize: 16,
                 lineHeight: 1.75,
                 fontWeight: 300,
                 color: "#024628",
@@ -1057,7 +1062,7 @@ function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
               style={{
                 margin: "-16px 0 20px",
                 fontFamily: "var(--font-body)",
-                fontSize: 12,
+                fontSize: 16,
                 lineHeight: 1.6,
                 fontWeight: 300,
                 color: "rgba(2,70,40,0.7)",
@@ -1083,7 +1088,7 @@ function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
                 const cellStyle: React.CSSProperties = {
                   padding: "14px 18px",
                   fontFamily: "var(--font-body)",
-                  fontSize: 14,
+                  fontSize: 16,
                   color: "#024628",
                   borderBottom: isLast ? "none" : "1px solid rgba(2,70,40,0.15)",
                 };
@@ -1117,7 +1122,7 @@ function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
               style={{
                 margin: 0,
                 fontFamily: "var(--font-body)",
-                fontSize: 13,
+                fontSize: 16,
                 lineHeight: 1.7,
                 fontWeight: 300,
                 color: "rgba(2,70,40,0.75)",
@@ -1164,7 +1169,7 @@ function Section({ label, title, children }: { label: string; title: string; chi
       <div
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: 10,
+          fontSize: 14,
           fontWeight: 500,
           letterSpacing: "0.4em",
           textTransform: "uppercase",
@@ -1206,7 +1211,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
           <div
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 10,
+              fontSize: 14,
               fontWeight: 500,
               letterSpacing: "0.4em",
               textTransform: "uppercase",
@@ -1245,7 +1250,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                     <div
                       style={{
                         fontFamily: "var(--font-body)",
-                        fontSize: 10,
+                        fontSize: 14,
                         letterSpacing: "0.12em",
                         color: "#024628",
                         marginBottom: 4,
@@ -1257,7 +1262,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                   <div
                     style={{
                       fontFamily: "var(--font-body)",
-                      fontSize: 14,
+                      fontSize: 16,
                       fontWeight: 500,
                       letterSpacing: "0.02em",
                       marginBottom: 6,
@@ -1269,7 +1274,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                     <div
                       style={{
                         fontFamily: "var(--font-body)",
-                        fontSize: 12,
+                        fontSize: 16,
                         lineHeight: 1.5,
                         color: "#024628",
                         marginBottom: 8,
@@ -1281,7 +1286,7 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                   <div
                     style={{
                       fontFamily: "var(--font-body)",
-                      fontSize: 11,
+                      fontSize: 14,
                       letterSpacing: "0.2em",
                       textTransform: "uppercase",
                       color: "#024628",

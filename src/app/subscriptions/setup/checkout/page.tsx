@@ -79,7 +79,7 @@ export default function CheckoutPage() {
   return (
     <main style={pageStyle}>
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
-        <Link href="/subscriptions/setup" style={{ fontSize: 13, color: FADED, textDecoration: "none" }}>
+        <Link href="/subscriptions/setup" style={{ fontSize: 16, color: FADED, textDecoration: "none" }}>
           ← Back to schedule
         </Link>
         <h1
@@ -93,7 +93,7 @@ export default function CheckoutPage() {
         >
           Delivery address
         </h1>
-        <p style={{ color: FADED, fontSize: 14, marginTop: 0, marginBottom: 28 }}>
+        <p style={{ color: FADED, fontSize: 16, marginTop: 0, marginBottom: 28 }}>
           Where should we deliver?
         </p>
 
@@ -141,7 +141,7 @@ function SavedCard({
   if (loading) {
     return (
       <div style={cardStyle(false)}>
-        <div style={{ color: FADED, fontSize: 14 }}>Looking up saved address…</div>
+        <div style={{ color: FADED, fontSize: 16 }}>Looking up saved address…</div>
       </div>
     );
   }
@@ -151,7 +151,7 @@ function SavedCard({
         <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 18, marginBottom: 4 }}>
           No saved address
         </div>
-        <div style={{ color: FADED, fontSize: 13 }}>
+        <div style={{ color: FADED, fontSize: 16 }}>
           Add a new address below to verify your phone and continue.
         </div>
       </div>
@@ -163,17 +163,17 @@ function SavedCard({
         <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 22 }}>
           Use saved address
         </div>
-        <div style={{ fontSize: 11, color: GOLD, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+        <div style={{ fontSize: 14, color: GOLD, letterSpacing: "0.1em", textTransform: "uppercase" }}>
           Verified
         </div>
       </div>
-      <div style={{ marginTop: 10, fontSize: 14, color: TEXT }}>
+      <div style={{ marginTop: 10, fontSize: 16, color: TEXT }}>
         {customer.full_name || "—"}
       </div>
-      <div style={{ marginTop: 4, fontSize: 13, color: FADED }}>
+      <div style={{ marginTop: 4, fontSize: 16, color: FADED }}>
         {customer.delivery_address || "No address on file"}
       </div>
-      <div style={{ marginTop: 4, fontSize: 13, color: FADED }}>
+      <div style={{ marginTop: 4, fontSize: 16, color: FADED }}>
         {customer.city ? `${customer.city} · ` : ""}+91 {customer.phone.replace(/\D/g, "").slice(-10)}
       </div>
     </button>
@@ -186,7 +186,7 @@ function NewAddressCard({ onSelect }: { onSelect: () => void }) {
       <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 22 }}>
         Add new address
       </div>
-      <div style={{ marginTop: 6, fontSize: 13, color: FADED }}>
+      <div style={{ marginTop: 6, fontSize: 16, color: FADED }}>
         We'll verify your phone with a one-time code.
       </div>
     </button>
@@ -374,7 +374,7 @@ function NewAddressForm({
 
       {!otpVerified && (
         <div style={cardStyle(false)}>
-          <div style={{ fontSize: 12, color: FADED, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
+          <div style={{ fontSize: 14, color: FADED, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
             Verify phone
           </div>
 
@@ -400,7 +400,7 @@ function NewAddressForm({
 
           {otpSent && (
             <>
-              <div style={{ fontSize: 13, color: FADED, marginBottom: 10 }}>
+              <div style={{ fontSize: 16, color: FADED, marginBottom: 10 }}>
                 We sent a 6-digit code to +91 {phone}.
               </div>
               <input
@@ -426,18 +426,18 @@ function NewAddressForm({
           )}
 
           {otpError && (
-            <div style={{ marginTop: 10, fontSize: 13, color: RED }}>{otpError}</div>
+            <div style={{ marginTop: 10, fontSize: 16, color: RED }}>{otpError}</div>
           )}
         </div>
       )}
 
       {otpVerified && (
-        <div style={{ ...cardStyle(false), borderColor: GOLD, color: GOLD, fontSize: 13 }}>
+        <div style={{ ...cardStyle(false), borderColor: GOLD, color: GOLD, fontSize: 16 }}>
           ✓ Phone verified.
         </div>
       )}
 
-      {error && <div style={{ fontSize: 13, color: RED }}>{error}</div>}
+      {error && <div style={{ fontSize: 16, color: RED }}>{error}</div>}
 
       <div style={{ display: "flex", gap: 10, justifyContent: "space-between", marginTop: 6 }}>
         <button onClick={onCancel} style={ghostBtnStyle}>Back</button>
@@ -456,7 +456,7 @@ function NewAddressForm({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: FADED, marginBottom: 5, letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ fontSize: 16, color: FADED, marginBottom: 5, letterSpacing: "0.05em" }}>{label}</div>
       {children}
     </label>
   );
@@ -469,7 +469,7 @@ const inputStyle: React.CSSProperties = {
   border: `1px solid ${FAINT}`,
   borderRadius: 8,
   color: TEXT,
-  fontSize: 14,
+  fontSize: 16,
   fontFamily: "var(--font-body)",
 };
 
@@ -480,7 +480,7 @@ function primaryBtnStyle(active: boolean): React.CSSProperties {
     border: "none",
     background: active ? GOLD : FAINT,
     color: active ? "#FBF3D4" : FADED,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 600,
     letterSpacing: "0.05em",
     textTransform: "uppercase",
@@ -494,7 +494,7 @@ const ghostBtnStyle: React.CSSProperties = {
   border: `1px solid ${FAINT}`,
   background: "transparent",
   color: TEXT,
-  fontSize: 13,
+  fontSize: 14,
   letterSpacing: "0.05em",
   textTransform: "uppercase",
   cursor: "pointer",

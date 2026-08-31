@@ -129,6 +129,25 @@ textarea::placeholder {
   color: rgba(29, 29, 31, 0.55);
 }
 
+/* iOS Safari zooms the viewport when a focused field's text is under 16px,
+   which yanks the user out of the layout mid-checkout. 16px is the documented
+   threshold, so every form control gets a floor here. Written as a floor
+   rather than a fixed size: max() keeps anything already larger, and any
+   inline fontSize still wins on specificity (all of those are >= 16px). */
+input,
+textarea,
+select {
+  font-size: max(16px, 1em);
+}
+
+/* The UA default for <button> is ~13.33px, which is under our 14px floor and
+   applies to every button that never sets a size of its own. Floored, not
+   fixed: the 14px uppercase CTA classes (.cdx-cta-*, .cdx-tab) beat this on
+   specificity, and inline sizes beat it outright. */
+button {
+  font-size: max(14px, 1em);
+}
+
 /* Admin pages: restore native cursor. ClientLayoutChrome returns null on
    /admin so no custom cursor component mounts, but `body { cursor: none }`
    above is still active. AdminShell adds `admin-page` to <html> so this
@@ -154,7 +173,7 @@ html.admin-page body {
 .label-text {
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: 0.65rem;
+  font-size: 0.875rem;
   letter-spacing: 0.35em;
   text-transform: uppercase;
   /* Foundation Green at 0.75 alpha on ash canvas — reads as muted-but-legible
@@ -253,8 +272,8 @@ select option:disabled {
 
 .ingredient-name {
   font-family: var(--font-body);
-  font-size: 0.8rem;
-  font-weight: 400;
+  font-size: 0.875rem;
+  font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #fbf3d4;
@@ -262,14 +281,14 @@ select option:disabled {
 
 .ingredient-desc {
   font-family: var(--font-body);
-  font-size: 0.68rem;
-  font-weight: 300;
+  font-size: 1rem;
+  font-weight: 400;
   color: rgba(192, 200, 206, 0.6);
   line-height: 1.5;
 }
 
 .ingredient-arrow {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #436cb4;
   margin-bottom: 4px;
 }
@@ -336,8 +355,8 @@ select option:disabled {
 .hi-desc {
   display: block;
   font-family: var(--font-body);
-  font-size: clamp(0.6rem, 1vw, 0.68rem);
-  font-weight: 300;
+  font-size: 0.875rem;
+  font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: rgba(192,200,206,0.55);
@@ -496,7 +515,7 @@ select option:disabled {
   padding: 13px 26px;
   border-radius: 999px;
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -520,7 +539,7 @@ select option:disabled {
   padding: 12px 25px;
   border-radius: 999px;
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -556,8 +575,8 @@ select option:disabled {
   background: transparent;
   color: var(--surface-brand);
   font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: 400;
+  font-size: 14px;
+  font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   cursor: pointer;

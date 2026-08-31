@@ -150,7 +150,7 @@ export default function TrackPage() {
           >
             Your subscriptions
           </h1>
-          <Link href="/subscriptions/past" style={{ fontSize: 13, color: GOLD }}>
+          <Link href="/subscriptions/past" style={{ fontSize: 16, color: GOLD }}>
             View past →
           </Link>
         </div>
@@ -209,7 +209,7 @@ export default function TrackPage() {
                     <div
                       style={{
                         marginTop: 4,
-                        fontSize: 13,
+                        fontSize: 16,
                         color: "rgba(2,70,40,0.65)",
                       }}
                     >
@@ -222,7 +222,7 @@ export default function TrackPage() {
                     <div
                       style={{
                         marginTop: 8,
-                        fontSize: 13,
+                        fontSize: 16,
                         color: "rgba(2,70,40,0.55)",
                       }}
                     >
@@ -234,7 +234,7 @@ export default function TrackPage() {
 
                 <div style={{ display: "grid", gap: 10 }}>
                   {deliveries.length === 0 && (
-                    <div style={{ fontSize: 13, color: "rgba(2,70,40,0.55)" }}>
+                    <div style={{ fontSize: 16, color: "rgba(2,70,40,0.55)" }}>
                       Loading deliveries…
                     </div>
                   )}
@@ -297,7 +297,7 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
             position: "absolute",
             top: 8,
             right: 10,
-            fontSize: 11,
+            fontSize: 16,
             lineHeight: 1,
             color:
               mode === "direct"
@@ -320,7 +320,7 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
         >
           Week {delivery.week_number}
         </div>
-        <div style={{ marginTop: 4, fontSize: 13, color: "rgba(2,70,40,0.65)" }}>
+        <div style={{ marginTop: 4, fontSize: 16, color: "rgba(2,70,40,0.65)" }}>
           {formatDate(delivery.scheduled_date)} · {delivery.scheduled_time_slot}
         </div>
         {!isCancelled && (
@@ -420,7 +420,7 @@ function Pill({ text, color }: { text: string; color: string }) {
         display: "inline-block",
         padding: "4px 10px",
         borderRadius: 999,
-        fontSize: 11,
+        fontSize: 14,
         letterSpacing: "0.15em",
         textTransform: "uppercase",
         color,
@@ -466,7 +466,7 @@ function PlacedToast() {
         background: "rgba(2,70,40,0.12)",
         border: `1px solid ${GOLD}`,
         color: "#024628",
-        fontSize: 13,
+        fontSize: 16,
         fontFamily: "var(--font-body)",
         letterSpacing: "0.02em",
         boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
@@ -503,7 +503,7 @@ function CancelButton({ subId, onCancelled }: { subId: string; onCancelled: () =
           borderRadius: 999,
           color: "#991B1B",
           padding: "8px 16px",
-          fontSize: 12,
+          fontSize: 14,
           cursor: "pointer",
           letterSpacing: "0.05em",
           textTransform: "uppercase",
@@ -515,7 +515,7 @@ function CancelButton({ subId, onCancelled }: { subId: string; onCancelled: () =
   }
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <span style={{ fontSize: 13, color: "rgba(2,70,40,0.7)" }}>Are you sure?</span>
+      <span style={{ fontSize: 16, color: "rgba(2,70,40,0.7)" }}>Are you sure?</span>
       <button
         onClick={() => setConfirmOpen(false)}
         style={{
@@ -524,7 +524,7 @@ function CancelButton({ subId, onCancelled }: { subId: string; onCancelled: () =
           borderRadius: 999,
           color: "#024628",
           padding: "6px 14px",
-          fontSize: 12,
+          fontSize: 14,
           cursor: "pointer",
         }}
       >
@@ -539,7 +539,7 @@ function CancelButton({ subId, onCancelled }: { subId: string; onCancelled: () =
           borderRadius: 999,
           color: "#FBF3D4",
           padding: "6px 14px",
-          fontSize: 12,
+          fontSize: 14,
           fontWeight: 600,
           cursor: "pointer",
         }}

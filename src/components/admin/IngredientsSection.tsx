@@ -218,7 +218,7 @@ export function IngredientsSection({
               style={{
                 color: FADED,
                 fontFamily: "var(--font-body)",
-                fontSize: "0.9rem",
+                fontSize: "1rem",
                 marginBottom: "1rem",
               }}
             >
@@ -342,7 +342,7 @@ export function IngredientsSection({
               className="uppercase"
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: "0.7rem",
+                fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 color: GOLD,
                 marginBottom: "0.5rem",
@@ -382,7 +382,7 @@ export function IngredientsSection({
                 className="uppercase"
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: "0.7rem",
+                  fontSize: "0.875rem",
                   letterSpacing: "0.25em",
                   color: GOLD,
                   border: `1px solid ${GOLD}`,
@@ -415,13 +415,13 @@ const fieldStyle: React.CSSProperties = {
   background: "transparent",
   color: CREAM,
   fontFamily: "var(--font-body)",
-  fontSize: "0.9rem",
+  fontSize: "1rem",
 };
 
 const labelStyle: React.CSSProperties = {
   color: FADED,
   fontFamily: "var(--font-body)",
-  fontSize: "0.66rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
 };
@@ -429,7 +429,7 @@ const labelStyle: React.CSSProperties = {
 function arrowStyle(disabled: boolean): React.CSSProperties {
   return {
     fontFamily: "var(--font-body)",
-    fontSize: "0.65rem",
+    fontSize: "1rem",
     lineHeight: 1.1,
     color: disabled ? "rgba(192,200,206,0.25)" : FADED,
     background: "transparent",
@@ -442,7 +442,7 @@ function arrowStyle(disabled: boolean): React.CSSProperties {
 function pillStyle(color: string, busy: boolean): React.CSSProperties {
   return {
     fontFamily: "var(--font-body)",
-    fontSize: "0.62rem",
+    fontSize: "0.875rem",
     letterSpacing: "0.25em",
     color,
     border: `1px solid ${color}`,

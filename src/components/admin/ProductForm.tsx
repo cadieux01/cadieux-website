@@ -256,7 +256,7 @@ export function ProductForm({
             backgroundColor: CREAM,
             color: FG,
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             borderRadius: 6,
           }}
         >
@@ -437,7 +437,7 @@ export function ProductForm({
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.72rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.25em",
             fontWeight: 500,
             color: FG,
@@ -484,7 +484,7 @@ export function ProductForm({
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.75rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.25em",
             fontWeight: 500,
             color: CREAM,
@@ -669,7 +669,7 @@ function MediaUploader({
                       backgroundColor: FG,
                       color: CREAM,
                       fontFamily: "var(--font-body)",
-                      fontSize: "0.62rem",
+                      fontSize: "0.875rem",
                       letterSpacing: "0.14em",
                       gap: "0.4rem",
                     }}
@@ -698,7 +698,7 @@ function MediaUploader({
                             background: "transparent",
                             border: "none",
                             padding: 0,
-                            fontSize: "0.62rem",
+                            fontSize: "0.875rem",
                             letterSpacing: "0.14em",
                             cursor: "pointer",
                           }}
@@ -716,7 +716,7 @@ function MediaUploader({
                           background: "transparent",
                           border: "none",
                           padding: 0,
-                          fontSize: "0.62rem",
+                          fontSize: "0.875rem",
                           letterSpacing: "0.14em",
                           cursor: "pointer",
                         }}
@@ -741,7 +741,7 @@ function MediaUploader({
           className="uppercase cursor-pointer text-center block"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.75rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.22em",
             fontWeight: 500,
             color: FG,
@@ -772,7 +772,7 @@ function MediaUploader({
             style={{
               color: FG,
               fontFamily: "var(--font-body)",
-              fontSize: "0.8rem",
+              fontSize: "1rem",
               backgroundColor: CREAM,
               border: `1px solid ${FG}`,
               borderRadius: 6,
@@ -816,7 +816,7 @@ function SubPricePreview({
         className="uppercase"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.68rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.22em",
           fontWeight: 500,
           color: FG,
@@ -825,14 +825,14 @@ function SubPricePreview({
         Subscription price (derived, read-only)
       </span>
       {valid ? (
-        <span style={{ fontFamily: "var(--font-body)", color: INK, fontSize: "0.95rem" }}>
+        <span style={{ fontFamily: "var(--font-body)", color: INK, fontSize: "1rem" }}>
           ₹{unit.toFixed(2)} / loaf{" "}
           <span style={{ color: FG_MUTED }}>
             (MRP ₹{mrp} · save ₹{savings.toFixed(2)} · {pct}% off)
           </span>
         </span>
       ) : (
-        <span style={{ fontFamily: "var(--font-body)", color: FG_MUTED, fontSize: "0.85rem" }}>
+        <span style={{ fontFamily: "var(--font-body)", color: FG_MUTED, fontSize: "1rem" }}>
           Enter a valid one-time price to preview the subscription price.
         </span>
       )}
@@ -866,7 +866,7 @@ function NutritionEditor({
         className="uppercase"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.75rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.22em",
           fontWeight: 500,
           color: FG,
@@ -877,7 +877,7 @@ function NutritionEditor({
       <span
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.75rem",
+          fontSize: "1rem",
           color: FG_MUTED,
         }}
       >
@@ -905,7 +905,7 @@ function NutritionEditor({
                   border: `1px solid ${FG}`,
                   borderRadius: 6,
                   fontFamily: "var(--font-body)",
-                  fontSize: "0.85rem",
+                  fontSize: "1rem",
                   fontWeight: isCanonical ? 500 : 400,
                   opacity: isCanonical ? 0.85 : 1,
                   flex: "1 1 40%",
@@ -927,7 +927,7 @@ function NutritionEditor({
                   border: `1px solid ${FG}`,
                   borderRadius: 6,
                   fontFamily: "var(--font-body)",
-                  fontSize: "0.9rem",
+                  fontSize: "1rem",
                   flex: "1 1 30%",
                   minWidth: 0,
                 }}
@@ -937,7 +937,7 @@ function NutritionEditor({
                   className="uppercase"
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: "0.7rem",
+                    fontSize: "0.875rem",
                     letterSpacing: "0.2em",
                     fontWeight: 500,
                     color: FG,
@@ -953,7 +953,7 @@ function NutritionEditor({
                   className="uppercase"
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: "0.7rem",
+                    fontSize: "0.875rem",
                     letterSpacing: "0.2em",
                     color: FG,
                     background: "transparent",
@@ -976,7 +976,7 @@ function NutritionEditor({
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.25em",
             color: FG,
             border: `1px solid ${FG}`,
@@ -1011,7 +1011,7 @@ function Field({
         className="uppercase"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.75rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.22em",
           fontWeight: 500,
           color: FG,
@@ -1025,7 +1025,7 @@ function Field({
         <span
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.75rem",
+            fontSize: "1rem",
             color: FG_MUTED,
           }}
         >
@@ -1070,7 +1070,7 @@ function Input({
         border: `1px solid ${FG}`,
         borderRadius: 6,
         fontFamily: "var(--font-body)",
-        fontSize: "0.9rem",
+        fontSize: "1rem",
       }}
     />
   );
@@ -1101,7 +1101,7 @@ function Textarea({
         border: `1px solid ${FG}`,
         borderRadius: 6,
         fontFamily: "var(--font-body)",
-        fontSize: "0.9rem",
+        fontSize: "1rem",
       }}
     />
   );
@@ -1131,7 +1131,7 @@ function Checkbox({
           className="uppercase block"
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.75rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.2em",
             fontWeight: 500,
             color: FG,
@@ -1144,7 +1144,7 @@ function Checkbox({
             className="block"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.75rem",
+              fontSize: "1rem",
               color: FG_MUTED,
             }}
           >

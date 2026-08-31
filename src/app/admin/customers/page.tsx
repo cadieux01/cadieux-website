@@ -49,7 +49,7 @@ function AdminLoading() {
         padding: "2rem",
         color: "rgba(245,158,11,0.7)",
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
         letterSpacing: "0.05em",
       }}
     >
@@ -171,12 +171,12 @@ function CustomersPageInner() {
             border: "1px solid rgba(245,158,11,0.3)",
             color: "#fbf3d4",
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             letterSpacing: "0.05em",
             minWidth: 280,
           }}
         />
-        <span style={{ color: "rgba(192,200,206,0.55)", fontSize: "0.75rem" }}>
+        <span style={{ color: "rgba(192,200,206,0.55)", fontSize: "1rem" }}>
           {visible.length} result{visible.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -188,7 +188,7 @@ function CustomersPageInner() {
             padding: "0.8rem 1rem",
             color: "#fca5a5",
             marginBottom: "1rem",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             fontFamily: "var(--font-body)",
           }}
         >
@@ -245,7 +245,7 @@ function CustomersPageInner() {
                         <span
                           style={{
                             color: "rgba(245,158,11,0.85)",
-                            fontSize: "0.78rem",
+                            fontSize: "1rem",
                           }}
                         >
                           {c.phone}
@@ -291,7 +291,7 @@ function Placeholder({ children }: { children: React.ReactNode }) {
         textAlign: "center",
         color: "rgba(192,200,206,0.55)",
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
       }}
     >
       {children}
@@ -303,7 +303,7 @@ const tableHeadRow: React.CSSProperties = {
   background: "rgba(245,158,11,0.08)",
   color: "rgba(245,158,11,0.9)",
   textTransform: "uppercase",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
 };
 
@@ -319,7 +319,7 @@ const td: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   color: "#fbf3d4",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   verticalAlign: "top",
   borderBottom: "1px solid rgba(245,158,11,0.06)",
 };
@@ -328,7 +328,7 @@ const chipNeutral: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
   border: "1px solid rgba(245,158,11,0.4)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   background: "transparent",
   color: "rgba(245,158,11,0.85)",
@@ -342,7 +342,7 @@ const buttonSmAnchor: React.CSSProperties = {
   border: "1px solid rgba(245,158,11,0.45)",
   color: "#f59e0b",
   fontFamily: "var(--font-body)",
-  fontSize: "0.62rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
   textDecoration: "none",

@@ -500,7 +500,7 @@ function Placeholder({ children }: { children: React.ReactNode }) {
         padding: "2rem 1rem",
         textAlign: "center",
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
         color: "rgba(192,200,206,0.55)",
       }}
     >
@@ -519,7 +519,7 @@ const panel: React.CSSProperties = {
 
 const blockHeading: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.62rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.25em",
   textTransform: "uppercase",
   color: "rgba(245,158,11,0.9)",
@@ -537,7 +537,7 @@ const orderNumber: React.CSSProperties = {
 
 const mutedLine: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.78rem",
+  fontSize: "1rem",
   color: "rgba(192,200,206,0.55)",
   marginTop: "0.3rem",
 };
@@ -548,7 +548,7 @@ const rowWrap: React.CSSProperties = {
   alignItems: "baseline",
   gap: "1.5rem",
   fontFamily: "var(--font-body)",
-  fontSize: "0.82rem",
+  fontSize: "1rem",
 };
 
 const keyStyle: React.CSSProperties = {
@@ -573,7 +573,7 @@ const tableHeadRow: React.CSSProperties = {
   background: "rgba(245,158,11,0.08)",
   color: "rgba(245,158,11,0.9)",
   textTransform: "uppercase",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
 };
 
@@ -589,7 +589,7 @@ const td: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   color: "#fbf3d4",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   verticalAlign: "top",
   borderBottom: "1px solid rgba(245,158,11,0.06)",
 };
@@ -607,7 +607,7 @@ const totalsRow: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   fontFamily: "var(--font-body)",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   color: "#fbf3d4",
   padding: "0.15rem 0",
 };
@@ -624,7 +624,7 @@ const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
   border: "1px solid rgba(245,158,11,0.4)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   background: "transparent",
   cursor: "pointer",
@@ -647,7 +647,7 @@ const chipNeutral: React.CSSProperties = {
 const preorderChip: React.CSSProperties = {
   ...chipBase,
   cursor: "default",
-  fontSize: "0.6rem",
+  fontSize: "1rem",
   padding: "0.3rem 0.7rem",
   color: "#f59e0b",
 };

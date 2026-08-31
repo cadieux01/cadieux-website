@@ -66,7 +66,7 @@ const backLink: React.CSSProperties = {
   padding: "0.4rem 0.9rem",
   border: "1px solid #FBF3D4",
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   background: "transparent",
   color: "#FBF3D4",

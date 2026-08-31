@@ -160,7 +160,7 @@ export default function LocationPickerModal(props: {
       >
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderBottom: "1px solid rgba(200,144,58,0.18)" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(240,223,200,0.8)" }}>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(240,223,200,0.8)" }}>
             Pick delivery location
           </span>
           <button
@@ -198,7 +198,7 @@ export default function LocationPickerModal(props: {
                   border: "1px solid rgba(200,144,58,0.3)",
                   outline: "none",
                   padding: "0 14px",
-                  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 200,
+                  fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200,
                   color: "#FBF3D4",
                   letterSpacing: "0.03em",
                 }}
@@ -212,7 +212,7 @@ export default function LocationPickerModal(props: {
                 border: "1px solid rgba(200,144,58,0.18)",
                 display: "flex", alignItems: "center",
                 padding: "0 14px",
-                fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 200,
+                fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200,
                 color: "rgba(240,223,200,0.45)",
               }}
             >
@@ -244,7 +244,7 @@ export default function LocationPickerModal(props: {
               />
             </GoogleMap>
           ) : (
-            <div style={{ height: 320, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(240,223,200,0.5)", fontFamily: "var(--font-body)", fontSize: 12, letterSpacing: "0.04em" }}>
+            <div style={{ height: 320, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(240,223,200,0.5)", fontFamily: "var(--font-body)", fontSize: 16, letterSpacing: "0.04em" }}>
               {resolving ? "Detecting your location…" : "Loading map…"}
             </div>
           )}
@@ -253,12 +253,12 @@ export default function LocationPickerModal(props: {
         {/* Status + Confirm */}
         <div style={{ padding: "14px 18px", borderTop: "1px solid rgba(200,144,58,0.18)" }}>
           {errMsg && (
-            <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 12, color: "#e09a5a", letterSpacing: "0.03em", lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 16, color: "#e09a5a", letterSpacing: "0.03em", lineHeight: 1.5 }}>
               {errMsg}
             </p>
           )}
 
-          <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, color: "rgba(240,223,200,0.55)", letterSpacing: "0.03em", lineHeight: 1.5 }}>
+          <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(240,223,200,0.55)", letterSpacing: "0.03em", lineHeight: 1.5 }}>
             Drag the pin or search to fine-tune. We'll fill the address from this point.
           </p>
 
@@ -271,7 +271,7 @@ export default function LocationPickerModal(props: {
               background: (confirming || !isLoaded) ? "rgba(240,223,200,0.12)" : "#f0dfc8",
               border: "none",
               cursor: (confirming || !isLoaded) ? "default" : "pointer",
-              fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 300,
+              fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
               letterSpacing: "0.4em", textTransform: "uppercase",
               color: (confirming || !isLoaded) ? "rgba(29,29,31,0.35)" : "#024628",
               WebkitTapHighlightColor: "transparent",

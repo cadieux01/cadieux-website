@@ -120,7 +120,7 @@ function AdminLoading() {
         padding: "2rem",
         color: "rgba(245,158,11,0.7)",
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
         letterSpacing: "0.05em",
       }}
     >
@@ -515,7 +515,7 @@ function OrdersPageInner() {
             border: "1px solid rgba(245,158,11,0.3)",
             color: "#fbf3d4",
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             letterSpacing: "0.05em",
             minWidth: 240,
           }}
@@ -565,7 +565,7 @@ function OrdersPageInner() {
             padding: "0.7rem 1rem",
             marginBottom: "1rem",
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
             letterSpacing: "0.03em",
           }}
         >
@@ -683,7 +683,7 @@ function OrdersPageInner() {
                       <span
                         style={{
                           fontFamily: "var(--font-body)",
-                          fontSize: "0.7rem",
+                          fontSize: "0.875rem",
                           letterSpacing: "0.1em",
                           color: "#fbf3d4",
                         }}
@@ -693,7 +693,7 @@ function OrdersPageInner() {
                       </span>
                     </td>
                     <td style={td}>
-                      <div style={{ color: "#fbf3d4", fontSize: "0.85rem" }}>
+                      <div style={{ color: "#fbf3d4", fontSize: "1rem" }}>
                         {o.customers?.full_name ?? "—"}
                       </div>
                       {o.customers?.phone ? (
@@ -701,7 +701,7 @@ function OrdersPageInner() {
                           <span
                             style={{
                               color: "rgba(245,158,11,0.85)",
-                              fontSize: "0.75rem",
+                              fontSize: "1rem",
                               letterSpacing: "0.05em",
                             }}
                           >
@@ -721,7 +721,7 @@ function OrdersPageInner() {
                           className="inline-flex items-center uppercase"
                           style={{
                             fontFamily: "var(--font-body)",
-                            fontSize: "0.55rem",
+                            fontSize: "0.875rem",
                             letterSpacing: "0.2em",
                             color: "#fcd34d",
                             border: "1px solid rgba(252,211,77,0.5)",
@@ -736,7 +736,7 @@ function OrdersPageInner() {
                       <div
                         style={{
                           color: "#fbf3d4",
-                          fontSize: "0.78rem",
+                          fontSize: "1rem",
                           lineHeight: 1.4,
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-word",
@@ -748,7 +748,7 @@ function OrdersPageInner() {
                         <div
                           style={{
                             color: "rgba(252,211,77,0.85)",
-                            fontSize: "0.7rem",
+                            fontSize: "1rem",
                             letterSpacing: "0.03em",
                             marginTop: 2,
                           }}
@@ -760,7 +760,7 @@ function OrdersPageInner() {
                         <div
                           style={{
                             color: "rgba(192,200,206,0.65)",
-                            fontSize: "0.7rem",
+                            fontSize: "1rem",
                             letterSpacing: "0.05em",
                             marginTop: 2,
                           }}
@@ -778,7 +778,7 @@ function OrdersPageInner() {
                       )}
                     </td>
                     <td style={td}>
-                      <span style={{ color: "#fbf3d4", fontSize: "0.85rem" }}>
+                      <span style={{ color: "#fbf3d4", fontSize: "1rem" }}>
                         {formatINR(o.total_amount)}
                       </span>
                     </td>
@@ -821,14 +821,14 @@ function OrdersPageInner() {
                       </div>
                     </td>
                     <td style={td}>
-                      <div style={{ color: "#fbf3d4", fontSize: "0.8rem" }}>
+                      <div style={{ color: "#fbf3d4", fontSize: "1rem" }}>
                         {o.delivery_date ? formatDate(o.delivery_date) : "—"}
                       </div>
                       {o.delivery_slot ? (
                         <div
                           style={{
                             color: "rgba(192,200,206,0.65)",
-                            fontSize: "0.7rem",
+                            fontSize: "1rem",
                             letterSpacing: "0.05em",
                           }}
                         >
@@ -843,7 +843,7 @@ function OrdersPageInner() {
                             padding: "2px 6px",
                             border: "1px solid rgba(245,158,11,0.5)",
                             color: "#fbbf24",
-                            fontSize: "0.6rem",
+                            fontSize: "0.875rem",
                             letterSpacing: "0.18em",
                             textTransform: "uppercase",
                             borderRadius: 3,
@@ -857,7 +857,7 @@ function OrdersPageInner() {
                       <span
                         style={{
                           color: "rgba(192,200,206,0.7)",
-                          fontSize: "0.75rem",
+                          fontSize: "1rem",
                         }}
                       >
                         {formatDateTime(o.created_at)}
@@ -1008,7 +1008,7 @@ function BulkToolbar({
         style={{
           color: "#fbf3d4",
           fontFamily: "var(--font-body)",
-          fontSize: "0.78rem",
+          fontSize: "1rem",
           letterSpacing: "0.05em",
         }}
       >
@@ -1136,7 +1136,7 @@ function ResultModal({
                 padding: "0.5rem 0.8rem",
                 color: "#fca5a5",
                 fontFamily: "var(--font-body)",
-                fontSize: "0.78rem",
+                fontSize: "1rem",
                 listStyle: "none",
                 margin: 0,
               }}
@@ -1315,7 +1315,7 @@ function EditOrderModal({
               margin: "0.5rem 0 1rem",
               color: "rgba(192,200,206,0.8)",
               fontFamily: "var(--font-body)",
-              fontSize: "0.78rem",
+              fontSize: "1rem",
             }}
           >
             <input
@@ -1327,7 +1327,7 @@ function EditOrderModal({
             Send SMS + WhatsApp to customer about this change
           </label>
           {err ? (
-            <p style={{ color: "#fca5a5", fontSize: "0.8rem", margin: 0 }}>
+            <p style={{ color: "#fca5a5", fontSize: "1rem", margin: 0 }}>
               {err}
             </p>
           ) : null}
@@ -1420,7 +1420,7 @@ function SchedulePreorderModal({
               margin: "0 0 1rem",
               color: "rgba(192,200,206,0.8)",
               fontFamily: "var(--font-body)",
-              fontSize: "0.8rem",
+              fontSize: "1rem",
               lineHeight: 1.55,
             }}
           >
@@ -1439,7 +1439,7 @@ function SchedulePreorderModal({
             />
           </Field>
           {err ? (
-            <p style={{ color: "#fca5a5", fontSize: "0.8rem", margin: 0 }}>
+            <p style={{ color: "#fca5a5", fontSize: "1rem", margin: 0 }}>
               {err}
             </p>
           ) : null}
@@ -1481,7 +1481,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
         gap: "0.3rem",
         margin: "0 0 0.8rem",
         fontFamily: "var(--font-body)",
-        fontSize: "0.68rem",
+        fontSize: "0.875rem",
         letterSpacing: "0.18em",
         textTransform: "uppercase",
         color: "rgba(245,158,11,0.85)",
@@ -1498,7 +1498,7 @@ const modalInput: React.CSSProperties = {
   border: "1px solid rgba(245,158,11,0.3)",
   color: "#fbf3d4",
   padding: "0.55rem 0.7rem",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   letterSpacing: "0.02em",
   outline: "none",
   textTransform: "none",
@@ -1528,7 +1528,7 @@ function Placeholder({ children }: { children: React.ReactNode }) {
         textAlign: "center",
         color: "rgba(192,200,206,0.55)",
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
         letterSpacing: "0.05em",
       }}
     >
@@ -1583,7 +1583,7 @@ function PaymentBadge({
         background: bg,
         color,
         fontFamily: "var(--font-body)",
-        fontSize: "0.7rem",
+        fontSize: "0.875rem",
         fontWeight: 500,
         letterSpacing: "0.08em",
         textTransform: "uppercase",
@@ -1611,7 +1611,7 @@ function ErrorBanner({
         marginBottom: "1rem",
         color: "#fca5a5",
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
         display: "flex",
         gap: "1rem",
         alignItems: "center",
@@ -1632,7 +1632,7 @@ const statusSelect: React.CSSProperties = {
   border: "1px solid rgba(245,158,11,0.45)",
   color: "#fbf3d4",
   fontFamily: "var(--font-body)",
-  fontSize: "0.72rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.1em",
   textTransform: "uppercase",
   cursor: "pointer",
@@ -1645,7 +1645,7 @@ const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
   border: "1px solid rgba(245,158,11,0.4)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   background: "transparent",
   cursor: "pointer",
@@ -1668,7 +1668,7 @@ const tableHeadRow: React.CSSProperties = {
   background: "rgba(245,158,11,0.08)",
   color: "rgba(245,158,11,0.9)",
   textTransform: "uppercase",
-  fontSize: "0.6rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
 };
 
@@ -1693,7 +1693,7 @@ const buttonSm: React.CSSProperties = {
   border: "1px solid rgba(245,158,11,0.45)",
   color: "#f59e0b",
   fontFamily: "var(--font-body)",
-  fontSize: "0.62rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
   cursor: "pointer",
@@ -1704,7 +1704,7 @@ const bulkButton: React.CSSProperties = {
   background: "transparent",
   border: "1px solid rgba(245,158,11,0.45)",
   fontFamily: "var(--font-body)",
-  fontSize: "0.65rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
   cursor: "pointer",
@@ -1767,7 +1767,7 @@ const modalTitle: React.CSSProperties = {
 
 const modalBody: React.CSSProperties = {
   fontFamily: "var(--font-body)",
-  fontSize: "0.85rem",
+  fontSize: "1rem",
   color: "rgba(192,200,206,0.85)",
   lineHeight: 1.5,
   margin: 0,

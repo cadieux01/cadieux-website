@@ -199,7 +199,7 @@ export default function AdminSubscriptionPlansPage() {
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: FADED,
               border: `1px solid ${BORDER}`,
@@ -218,7 +218,7 @@ export default function AdminSubscriptionPlansPage() {
             border: "1px solid #ef4444",
             color: "#fecaca",
             fontFamily: "var(--font-body)",
-            fontSize: "0.85rem",
+            fontSize: "1rem",
           }}
         >
           {error}
@@ -295,7 +295,7 @@ export default function AdminSubscriptionPlansPage() {
             border: "1px solid rgba(251,243,212,0.3)",
             padding: "0.7rem 1.2rem",
             fontFamily: "var(--font-body)",
-            fontSize: "0.8rem",
+            fontSize: "0.875rem",
             letterSpacing: "0.08em",
             boxShadow: "0 16px 40px -12px rgba(0,0,0,0.6)",
           }}
@@ -324,7 +324,7 @@ function SectionHeader({ label, hint }: { label: string; hint: string }) {
         className="uppercase"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.78rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.3em",
           color: GOLD,
         }}
@@ -334,7 +334,7 @@ function SectionHeader({ label, hint }: { label: string; hint: string }) {
       <p
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.82rem",
+          fontSize: "1rem",
           color: FADED,
           marginTop: "0.4rem",
           maxWidth: 560,
@@ -354,7 +354,7 @@ function EmptyState({ message }: { message: string }) {
         border: `1px dashed ${BORDER}`,
         color: FADED,
         fontFamily: "var(--font-body)",
-        fontSize: "0.85rem",
+        fontSize: "1rem",
       }}
     >
       {message}
@@ -410,7 +410,7 @@ function PlanRow({
           <div
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.72rem",
+              fontSize: "0.875rem",
               color: FADED,
               letterSpacing: "0.15em",
               textTransform: "uppercase",
@@ -560,7 +560,7 @@ function CataloguePromoteRow({
         <div
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.95rem",
+            fontSize: "1rem",
             color: CREAM,
           }}
         >
@@ -569,7 +569,7 @@ function CataloguePromoteRow({
         <div
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.72rem",
+            fontSize: "0.875rem",
             color: FADED,
             letterSpacing: "0.15em",
             textTransform: "uppercase",
@@ -617,7 +617,7 @@ function LabeledInput({
         className="uppercase"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.68rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.22em",
           color: FADED,
         }}
@@ -636,7 +636,7 @@ function LabeledInput({
           border: `1px solid ${BORDER}`,
           color: CREAM,
           fontFamily: "var(--font-body)",
-          fontSize: "0.85rem",
+          fontSize: "1rem",
         }}
       />
     </label>
@@ -660,7 +660,7 @@ function DisplayField({
         className="uppercase"
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.68rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.22em",
           color: FADED,
         }}
@@ -670,7 +670,7 @@ function DisplayField({
       <span
         style={{
           fontFamily: "var(--font-body)",
-          fontSize: "0.9rem",
+          fontSize: "1rem",
           color: muted ? FADED : CREAM,
           fontStyle: muted ? "italic" : "normal",
         }}
@@ -681,7 +681,7 @@ function DisplayField({
         <span
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: "0.7rem",
+            fontSize: "1rem",
             color: FADED,
           }}
         >
@@ -695,7 +695,7 @@ function DisplayField({
 function chipBtn(color: string, disabled = false): React.CSSProperties {
   return {
     fontFamily: "var(--font-body)",
-    fontSize: "0.7rem",
+    fontSize: "0.875rem",
     letterSpacing: "0.25em",
     color,
     border: `1px solid ${color}`,

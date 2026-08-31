@@ -81,11 +81,11 @@ export default function PastPage() {
           <h1 style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: "clamp(28px,5vw,42px)", margin: 0 }}>
             Subscription history
           </h1>
-          <Link href="/subscription" style={{ fontSize: 13, color: GOLD, textDecoration: "none" }}>
+          <Link href="/subscription" style={{ fontSize: 16, color: GOLD, textDecoration: "none" }}>
             ← Hub
           </Link>
         </div>
-        <p style={{ marginTop: 0, marginBottom: 32, fontSize: 13, color: FADED }}>
+        <p style={{ marginTop: 0, marginBottom: 32, fontSize: 16, color: FADED }}>
           Every plan you&apos;ve placed — active, completed, and cancelled.
         </p>
 
@@ -123,7 +123,7 @@ export default function PastPage() {
                   <div style={{ fontSize: 16, fontWeight: 500, color: TEXT }}>
                     {s.product_name} × {s.quantity_per_delivery}
                   </div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: FADED }}>
+                  <div style={{ marginTop: 4, fontSize: 16, color: FADED }}>
                     Placed {formatDate(s.created_at.slice(0, 10))} ·{" "}
                     {s.deliveries_count}{" "}
                     {s.deliveries_count === 1 ? "delivery" : "deliveries"}
@@ -135,7 +135,7 @@ export default function PastPage() {
                       display: "inline-block",
                       padding: "4px 10px",
                       borderRadius: 999,
-                      fontSize: 11,
+                      fontSize: 14,
                       letterSpacing: "0.15em",
                       textTransform: "uppercase",
                       color: tone.color,
@@ -144,7 +144,7 @@ export default function PastPage() {
                   >
                     {tone.label}
                   </span>
-                  <div style={{ marginTop: 8, fontSize: 13, color: "rgba(240,223,200,0.5)" }}>
+                  <div style={{ marginTop: 8, fontSize: 16, color: "rgba(240,223,200,0.5)" }}>
                     ₹{Number(s.total_amount).toLocaleString("en-IN")}
                   </div>
                 </div>

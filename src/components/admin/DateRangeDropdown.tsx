@@ -252,7 +252,7 @@ export function DateRangeDropdown({
                     border: `1px solid ${CREAM}`,
                     borderRadius: 4,
                     padding: "0.25rem 0.6rem",
-                    fontSize: "0.8rem",
+                    fontSize: "0.875rem",
                     cursor: "pointer",
                   }}
                 >
@@ -271,7 +271,7 @@ export function DateRangeDropdown({
                   ariaLabel="From date"
                   placeholder="From…"
                   onChange={(v) => setCustomFrom(v)}
-                  style={{ minHeight: 0, fontSize: "0.85rem" }}
+                  style={{ minHeight: 0, fontSize: "1rem" }}
                 />
               </div>
               <span style={{ color: CREAM, opacity: 0.6 }}>—</span>
@@ -281,7 +281,7 @@ export function DateRangeDropdown({
                   ariaLabel="To date"
                   placeholder="To…"
                   onChange={(v) => setCustomTo(v)}
-                  style={{ minHeight: 0, fontSize: "0.85rem" }}
+                  style={{ minHeight: 0, fontSize: "1rem" }}
                 />
               </div>
             </div>
@@ -294,7 +294,7 @@ export function DateRangeDropdown({
                 ariaLabel="Date"
                 placeholder="Pick a date…"
                 onChange={(v) => setSingleDate(v)}
-                style={{ minHeight: 0, fontSize: "0.85rem" }}
+                style={{ minHeight: 0, fontSize: "1rem" }}
               />
             </div>
           ) : null}
@@ -316,7 +316,7 @@ export function DateRangeDropdown({
                   border: `1px solid ${CREAM}`,
                   borderRadius: 4,
                   padding: "0.3rem 0.5rem",
-                  fontSize: "0.85rem",
+                  fontSize: "1rem",
                   width: 120,
                 }}
               />
@@ -334,7 +334,7 @@ export function DateRangeDropdown({
                 border: `1px solid ${CREAM}`,
                 borderRadius: 4,
                 padding: "0.35rem 0.9rem",
-                fontSize: "0.85rem",
+                fontSize: "0.875rem",
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -342,7 +342,7 @@ export function DateRangeDropdown({
               Apply
             </button>
             {customError ? (
-              <span style={{ color: CREAM, fontSize: "0.78rem", opacity: 0.85 }}>
+              <span style={{ color: CREAM, fontSize: "1rem", opacity: 0.85 }}>
                 {customError}
               </span>
             ) : null}

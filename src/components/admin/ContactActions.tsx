@@ -202,7 +202,7 @@ function MessageModal({
               margin: "4px 0 0",
               fontFamily: "var(--font-body)",
               color: FADED,
-              fontSize: "0.75rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.1em",
             }}
           >
@@ -230,7 +230,7 @@ function MessageModal({
               background: "transparent",
               color: CREAM,
               fontFamily: "var(--font-body)",
-              fontSize: "0.9rem",
+              fontSize: "1rem",
               lineHeight: 1.5,
               resize: "vertical",
             }}
@@ -254,7 +254,7 @@ function MessageModal({
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: FADED,
               border: `1px solid ${BORDER}`,
@@ -270,7 +270,7 @@ function MessageModal({
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: "0.7rem",
+              fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: GOLD,
               border: `1px solid ${GOLD}`,

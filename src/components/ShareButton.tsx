@@ -136,7 +136,7 @@ export function ShareButton({
           cursor: "pointer",
           borderRadius: 999,
           fontFamily: "var(--font-body)",
-          fontSize: "0.72rem",
+          fontSize: "0.875rem",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
         }}
@@ -212,7 +212,7 @@ const menuItemStyle: React.CSSProperties = {
   textDecoration: "none",
   textAlign: "left",
   fontFamily: "var(--font-body)",
-  fontSize: "0.78rem",
+  fontSize: "0.875rem",
   letterSpacing: "0.08em",
   borderRadius: 8,
 };

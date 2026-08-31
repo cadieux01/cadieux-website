@@ -175,7 +175,7 @@ export default function DeliveryDetailPage() {
         <div style={{ color: "rgba(2,70,40,0.55)", marginBottom: 16 }}>
           We couldn&apos;t find that delivery.
         </div>
-        <Link href="/subscriptions/track" style={{ color: GOLD, fontSize: 14 }}>
+        <Link href="/subscriptions/track" style={{ color: GOLD, fontSize: 16 }}>
           ← Back to subscriptions
         </Link>
       </Shell>
@@ -190,7 +190,7 @@ export default function DeliveryDetailPage() {
     <Shell>
       <Link
         href="/subscriptions/track"
-        style={{ fontSize: 13, color: GOLD, display: "inline-block", marginBottom: 18 }}
+        style={{ fontSize: 16, color: GOLD, display: "inline-block", marginBottom: 18 }}
       >
         ← Back
       </Link>
@@ -206,10 +206,10 @@ export default function DeliveryDetailPage() {
       >
         Week {delivery.week_number}
       </h1>
-      <div style={{ color: "rgba(2,70,40,0.65)", fontSize: 14, marginBottom: 4 }}>
+      <div style={{ color: "rgba(2,70,40,0.65)", fontSize: 16, marginBottom: 4 }}>
         {sub.product_name} × {sub.quantity_per_delivery}
       </div>
-      <div style={{ color: "rgba(2,70,40,0.6)", fontSize: 13, marginBottom: 28 }}>
+      <div style={{ color: "rgba(2,70,40,0.6)", fontSize: 16, marginBottom: 28 }}>
         Scheduled {formatDate(delivery.scheduled_date)} · {formatSlot(delivery.scheduled_time_slot)}
       </div>
 
@@ -223,7 +223,7 @@ export default function DeliveryDetailPage() {
             color: "#991B1B",
             letterSpacing: "0.06em",
             textTransform: "uppercase",
-            fontSize: 12,
+            fontSize: 14,
           }}
         >
           Delivery cancelled
@@ -260,7 +260,7 @@ export default function DeliveryDetailPage() {
             border: "1px solid rgba(2,70,40,0.2)",
             borderRadius: 12,
             background: "transparent",
-            fontSize: 13,
+            fontSize: 16,
             color: "rgba(2,70,40,0.65)",
           }}
         >
@@ -280,7 +280,7 @@ export default function DeliveryDetailPage() {
             borderRadius: 999,
             background: "#024628",
             color: "#FBF3D4",
-            fontSize: 13,
+            fontSize: 16,
             fontWeight: 600,
             letterSpacing: "0.04em",
             boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
@@ -358,7 +358,7 @@ function Timeline({ currentStep }: { currentStep: number }) {
             <div
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: 15,
+                fontSize: 16,
                 color: labelColor,
                 letterSpacing: "0.03em",
               }}
@@ -512,7 +512,7 @@ function DirectEditPanel({
         <span style={{ fontSize: 18 }}>{open ? "▴" : "▾"}</span>
       </button>
 
-      <div style={{ marginTop: 8, fontSize: 12, color: "rgba(2,70,40,0.55)" }}>
+      <div style={{ marginTop: 8, fontSize: 16, color: "rgba(2,70,40,0.55)" }}>
         Changes apply instantly while you&apos;re more than 14 hours out.
       </div>
 
@@ -530,7 +530,7 @@ function DirectEditPanel({
         >
           <div
             style={{
-              fontSize: 12,
+              fontSize: 16,
               lineHeight: 1.5,
               color: "rgba(2,70,40,0.7)",
               padding: "10px 12px",
@@ -569,7 +569,7 @@ function DirectEditPanel({
             theme="dark"
           />
 
-          {err && <div style={{ color: "#991B1B", fontSize: 13 }}>{err}</div>}
+          {err && <div style={{ color: "#991B1B", fontSize: 16 }}>{err}</div>}
 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button
@@ -584,7 +584,7 @@ function DirectEditPanel({
                 border: "1px solid rgba(2,70,40,0.35)",
                 borderRadius: 999,
                 color: "#024628",
-                fontSize: 13,
+                fontSize: 14,
                 cursor: "pointer",
                 fontFamily: "inherit",
               }}
@@ -601,7 +601,7 @@ function DirectEditPanel({
                 border: "none",
                 borderRadius: 999,
                 color: !busy && turnstileToken ? "#FBF3D4" : "rgba(2,70,40,0.55)",
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: 600,
                 cursor: busy || !turnstileToken ? "not-allowed" : "pointer",
                 fontFamily: "inherit",
@@ -642,7 +642,7 @@ function CallAdminPanel({
       >
         <div
           style={{
-            fontSize: 11,
+            fontSize: 14,
             letterSpacing: "0.2em",
             textTransform: "uppercase",
             color: GOLD,
@@ -651,7 +651,7 @@ function CallAdminPanel({
         >
           Within 14 hours of delivery
         </div>
-        <div style={{ fontSize: 14, marginBottom: 12 }}>
+        <div style={{ fontSize: 16, marginBottom: 12 }}>
           To change a delivery within 14 hours, please call us at{" "}
           <a
             href={telHref}
@@ -661,7 +661,7 @@ function CallAdminPanel({
           </a>
           .
         </div>
-        <div style={{ fontSize: 12, color: "rgba(2,70,40,0.6)" }}>
+        <div style={{ fontSize: 16, color: "rgba(2,70,40,0.6)" }}>
           Need same-day changes? A quick call is faster — we&apos;ll update
           your delivery on the spot.
         </div>
@@ -674,7 +674,7 @@ function CallAdminPanel({
             background: "transparent",
             border: "1px solid #991B1B",
             borderRadius: 12,
-            fontSize: 13,
+            fontSize: 16,
             color: "rgba(2,70,40,0.85)",
           }}
         >
@@ -689,7 +689,7 @@ function CallAdminPanel({
             background: "transparent",
             border: "1px solid rgba(2,70,40,0.2)",
             borderRadius: 12,
-            fontSize: 12,
+            fontSize: 16,
             color: "rgba(2,70,40,0.6)",
           }}
         >
@@ -706,7 +706,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <div
         style={{
-          fontSize: 11,
+          fontSize: 14,
           letterSpacing: "0.2em",
           textTransform: "uppercase",
           color: "rgba(2,70,40,0.55)",

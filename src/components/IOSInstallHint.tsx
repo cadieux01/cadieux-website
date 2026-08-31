@@ -92,10 +92,10 @@ export default function IOSInstallHint() {
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, letterSpacing: "0.02em" }}>
+          <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: "0.02em" }}>
             Install Cadieux on your iPhone
           </div>
-          <div style={{ fontSize: 11, color: "rgba(245,240,232,0.7)", marginTop: 6, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 16, color: "rgba(245,240,232,0.7)", marginTop: 6, lineHeight: 1.5 }}>
             Tap{" "}
             <span aria-hidden style={{ display: "inline-flex", alignItems: "center", verticalAlign: "middle" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#024628" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

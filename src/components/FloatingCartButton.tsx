@@ -120,7 +120,10 @@ export default function FloatingCartButton() {
             color: "#FBF3D4",
             border: "1.5px solid #024628",
             fontFamily: "var(--font-body)",
-            fontSize: 11,
+            // 14px, not 16: this is a count chip in a 22px pill pinned to the
+            // corner of a 56px circle, and "99+" at 16px pushes past the FAB.
+            // 14px is the floor and stays legible.
+            fontSize: 14,
             fontWeight: 600,
             display: "inline-flex",
             alignItems: "center",

@@ -14,19 +14,19 @@ export default function ReportsPage() {
 
       <Link href="/" style={{
         position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-        fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 200,
+        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
         letterSpacing: "0.35em", textTransform: "uppercase",
         color: "#024628", textDecoration: "none",
         display: "flex", alignItems: "center", gap: 8,
       }}>
-        <span style={{ fontSize: 14 }}>←</span> Cadieux
+        <span style={{ fontSize: 16 }}>←</span> Cadieux
       </Link>
 
       <div style={{ position: "relative", zIndex: 1, padding: "100px clamp(24px,6vw,80px) 120px", maxWidth: 720, margin: "0 auto" }}>
         <h1 style={{ margin: "0 0 12px", fontFamily: "var(--font-heading)", fontSize: "clamp(48px,11vw,88px)", fontWeight: 300, color: "#024628", letterSpacing: "0.02em", lineHeight: 1 }}>
           Reports
         </h1>
-        <p style={{ margin: "0 0 36px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>
+        <p style={{ margin: "0 0 36px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>
           Independent test reports for each loaf
         </p>
 
@@ -43,7 +43,7 @@ export default function ReportsPage() {
             }}
           >
             <span style={{ fontFamily: "var(--font-heading)", fontSize: 24, fontWeight: 300, color: "#024628", letterSpacing: "0.03em" }}>{p.title}</span>
-            <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 200, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(2,70,40,0.75)" }}>View →</span>
+            <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(2,70,40,0.75)" }}>View →</span>
           </button>
         ))}
       </div>

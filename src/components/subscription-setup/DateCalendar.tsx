@@ -150,7 +150,7 @@ export function DateCalendar({
           >
             {MONTH_LABELS[viewM]} {viewY}
           </span>
-          <span aria-hidden style={{ fontSize: 12, color: GOLD, transform: pickerOpen ? "rotate(180deg)" : "none", transition: "transform 0.18s ease" }}>▾</span>
+          <span aria-hidden style={{ fontSize: 16, color: GOLD, transform: pickerOpen ? "rotate(180deg)" : "none", transition: "transform 0.18s ease" }}>▾</span>
         </button>
         <NavArrow
           dir="next"
@@ -172,7 +172,7 @@ export function DateCalendar({
             key={d}
             style={{
               textAlign: "center",
-              fontSize: 11,
+              fontSize: 14,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
               color: GOLD,
@@ -230,7 +230,7 @@ export function DateCalendar({
                 cursor: blocked ? "not-allowed" : "pointer",
                 borderRadius: 999,
                 fontFamily: "var(--font-body)",
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: cell.isToday ? 600 : 400,
                 position: "relative",
                 transition: "background 0.15s ease, color 0.15s ease",
@@ -318,7 +318,7 @@ function BillBar({ count, total }: { count: number; total: number }) {
         <span
           style={{
             fontFamily: "var(--font-body)",
-            fontSize: 12,
+            fontSize: 14,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
             color: "rgba(251,243,212,0.7)",
@@ -418,7 +418,7 @@ function MonthPickerOverlay({
               <span
                 style={{
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
+                  fontSize: 14,
                   letterSpacing: "0.1em",
                   color: FADED,
                 }}
