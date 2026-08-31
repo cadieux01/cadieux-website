@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRef, useState } from "react";
-import type { ProductMedia, ProductStat } from "@/lib/data";
+import type { ProductMedia } from "@/lib/data";
 import { toUrlSlug } from "@/lib/product-slugs";
 import { useCart } from "@/context/CartContext";
 
@@ -23,6 +23,11 @@ const qtyBtnStyle: React.CSSProperties = {
   WebkitTapHighlightColor: "transparent",
 };
 
+// Stat strip entries, resolved server-side from product_stat_tiles (with
+// net_weight/slices read through to the products row). Never bundled —
+// an empty array renders no strip at all.
+export type TileStat = { id: string; value: string; label: string };
+
 type Props = {
   slug: string;
   productIndex: number;
@@ -31,7 +36,7 @@ type Props = {
   title: string;
   subtitle: string;
   price: number;
-  stats: ProductStat[];
+  stats: TileStat[];
   media: ProductMedia[];
   outOfStock?: boolean;
 };
@@ -382,6 +387,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           {subtitle}
         </p>
 
+        {stats.length > 0 && (
         <div
           style={{
             display: "flex",
@@ -392,7 +398,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           }}
         >
           {stats.map((s) => (
-            <div key={s.label} style={{ flex: 1, textAlign: "left" }}>
+            <div key={s.id} style={{ flex: 1, textAlign: "left" }}>
               <div
                 style={{
                   fontFamily: "var(--font-heading)",
@@ -402,7 +408,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   lineHeight: 1,
                 }}
               >
-                {s.blank ? "—" : <>{s.target}{s.suffix}</>}
+                {s.value}
               </div>
               <div
                 style={{
@@ -420,6 +426,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             </div>
           ))}
         </div>
+        )}
 
         {/* Price + ADD pinned to card bottom (FIX 2 equal-height alignment). */}
         <div

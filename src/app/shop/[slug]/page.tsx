@@ -28,6 +28,7 @@ import {
   resolveOgImage,
   resolveProductMedia,
 } from "@/lib/products";
+import { parseWeightGrams } from "@/lib/stat-tiles";
 import { getProductReports } from "@/lib/product-reports";
 import { getProductIngredients } from "@/lib/ingredients";
 import { getPageContent, pickString } from "@/lib/content";
@@ -234,14 +235,18 @@ export default async function ProductDetailPage({
         : "https://schema.org/InStock",
     };
   }
-  // Physical loaf weight — same 240g across both variants. Static in
-  // the Product schema (not Offer) since it's an intrinsic product
-  // property, not a purchase-option variable.
-  productSchema.weight = {
-    "@type": "QuantitativeValue",
-    value: 240,
-    unitCode: "GRM",
-  };
+  // Physical loaf weight, read live from products.weight. Google treats
+  // this as a food label, so it must match the row that feeds the on-page
+  // stat strip and nutrition table — never a hardcoded number. Omitted
+  // entirely when the weight is missing or not parseable to grams.
+  const weightGrams = parseWeightGrams(productRow?.weight);
+  if (weightGrams !== null) {
+    productSchema.weight = {
+      "@type": "QuantitativeValue",
+      value: weightGrams,
+      unitCode: "GRM",
+    };
+  }
 
   const breadcrumbSchema = {
     "@context": "https://schema.org",

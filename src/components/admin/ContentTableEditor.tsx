@@ -66,6 +66,15 @@ function looksLikeMacro(s: string): boolean {
   return /\b\d+(\.\d+)?\s*(g|gram|grams|kcal|cal|mg|kj)\b/i.test(s);
 }
 
+// Rows whose value is not editable here because the storefront reads it from
+// somewhere else (e.g. the net weight tile reads products.weight). Keyed by
+// the row's natural key, listing which field keys are locked, the value that
+// will actually render, and where it comes from.
+export type DerivedFieldMap = Record<
+  string,
+  { fields: string[]; value: string | null; note: string }
+>;
+
 export function ContentTableEditor({
   spec,
   productId,
@@ -73,6 +82,7 @@ export function ContentTableEditor({
   requirePin,
   title,
   subtitle,
+  derivedFields,
 }: {
   spec: TableSpec;
   productId?: string;
@@ -80,6 +90,7 @@ export function ContentTableEditor({
   requirePin: () => Promise<string | null>;
   title: string;
   subtitle?: string;
+  derivedFields?: DerivedFieldMap;
 }) {
   const [rows, setRows] = useState<ContentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -360,6 +371,22 @@ export function ContentTableEditor({
                             "";
                           const showWarn =
                             f.warnMacros && looksLikeMacro(String(current));
+                          const derived =
+                            derivedFields?.[String(r[spec.naturalKey] ?? "")];
+                          if (derived && derived.fields.includes(f.key)) {
+                            return (
+                              <LabelCell key={f.key} label={f.label}>
+                                <input
+                                  value={derived.value ?? "(not set)"}
+                                  readOnly
+                                  disabled
+                                  className="w-full px-3 py-2"
+                                  style={{ ...fieldStyle, opacity: 0.65 }}
+                                />
+                                <p style={hintStyle}>{derived.note}</p>
+                              </LabelCell>
+                            );
+                          }
                           return (
                             <LabelCell key={f.key} label={f.label}>
                               {f.kind === "image" ? (

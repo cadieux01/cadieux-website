@@ -123,8 +123,9 @@ export default function ProductDetailClient({
   price?: number | null;
   // Atomic PDP strings (server-resolved with critical fallbacks).
   pdpStrings?: PdpStrings;
-  // Stat tiles (content-driven). When empty, fall back to the bundled
-  // PRODUCTS[].stats array so the page still renders sensible numbers.
+  // Stat tiles, server-resolved from product_stat_tiles with net_weight +
+  // slices read through to the products row. NO bundled fallback: when this
+  // is empty the strip is not rendered at all.
   statTiles?: PdpStatTile[];
   // Server-resolved gallery media. Blends admin (products.image_url +
   // gallery_urls) with bundled PRODUCT_DETAILS editorial media. MAY be
@@ -305,6 +306,9 @@ export default function ProductDetailClient({
               {dispSubtitle}
             </p>
 
+            {/* Stat strip is DB-only. No bundled fallback: an empty strip is
+                correct, a hardcoded number on a food label is not. */}
+            {statTiles.length > 0 && (
             <div
               style={{
                 display: "grid",
@@ -316,19 +320,8 @@ export default function ProductDetailClient({
                 marginBottom: 32,
               }}
             >
-              {(statTiles.length > 0
-                ? statTiles.map((t) => ({
-                    key: t.id,
-                    value: t.value,
-                    label: t.label,
-                  }))
-                : product.stats.map((s) => ({
-                    key: s.label,
-                    value: s.blank ? "—" : `${s.target}${s.suffix ?? ""}`,
-                    label: s.label,
-                  }))
-              ).map((tile) => (
-                <div key={tile.key}>
+              {statTiles.map((tile) => (
+                <div key={tile.id}>
                   <div
                     style={{
                       fontFamily: "var(--font-heading)",
@@ -356,6 +349,7 @@ export default function ProductDetailClient({
                 </div>
               ))}
             </div>
+            )}
 
             <p
               style={{

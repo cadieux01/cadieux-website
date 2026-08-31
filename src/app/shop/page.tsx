@@ -53,6 +53,14 @@ export default async function ShopPage() {
       tag: pickString(c, "pdp.tag", slug),
       title: pickString(c, "pdp.title", slug),
       subtitle: pickString(c, "pdp.subtitle", slug),
+      // Same DB tiles the PDP renders (net weight + slices already read
+      // through to the products row by getPageContent), so the grid can
+      // never disagree with the product page.
+      stats: c.stat_tiles.map((t) => ({
+        id: t.id,
+        value: t.value,
+        label: t.label,
+      })),
     };
   });
 

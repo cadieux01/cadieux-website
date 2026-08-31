@@ -14,6 +14,11 @@ import {
   ContentTableEditor,
   STAT_TILES_SPEC,
 } from "@/components/admin/ContentTableEditor";
+import {
+  DERIVED_TILE_KEYS,
+  derivedTileNote,
+  derivedTileValue,
+} from "@/lib/stat-tiles";
 import { ContentStringsSection } from "@/components/admin/ContentStringsSection";
 import { IngredientsSection } from "@/components/admin/IngredientsSection";
 import { LabReportsSection } from "@/components/admin/LabReportsSection";
@@ -314,6 +319,16 @@ export default function EditProductPage() {
               requirePin={requirePin}
               title="Stat tiles"
               subtitle="Small value/label tiles shown above the fold on the PDP."
+              derivedFields={Object.fromEntries(
+                DERIVED_TILE_KEYS.map((key) => [
+                  key,
+                  {
+                    fields: ["value"],
+                    value: derivedTileValue(key, product),
+                    note: derivedTileNote(key) ?? "",
+                  },
+                ]),
+              )}
             />
           ) : null}
 

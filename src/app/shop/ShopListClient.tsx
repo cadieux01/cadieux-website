@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import ProductTile from "@/components/ProductTile";
+import ProductTile, { type TileStat } from "@/components/ProductTile";
 import ScrollReveal from "@/components/ScrollReveal";
 import { PRODUCTS, type ProductMedia } from "@/lib/data";
 import type { AvailabilityMap } from "@/lib/products";
@@ -28,7 +28,14 @@ type ShopMode = "onetime" | "subscribe";
 
 export type ShopContentBySlug = Record<
   string,
-  { name: string; tag: string; title: string; subtitle: string }
+  {
+    name: string;
+    tag: string;
+    title: string;
+    subtitle: string;
+    // Resolved product_stat_tiles for this slug. Empty = no strip.
+    stats: TileStat[];
+  }
 >;
 
 export default function ShopListClient({
@@ -135,7 +142,7 @@ export default function ShopListClient({
                       title={c?.title || p.title}
                       subtitle={c?.subtitle || p.subtitle}
                       price={priceBySlug?.[p.slug] ?? p.price}
-                      stats={p.stats}
+                      stats={c?.stats ?? []}
                       media={mediaBySlug?.[p.slug] ?? []}
                       outOfStock={availability?.outOfStock.has(p.slug) ?? false}
                     />

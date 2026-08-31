@@ -19,6 +19,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 
+import { resolveStatTiles } from "@/lib/stat-tiles";
+
 export const CONTENT_CACHE_TAG = "content";
 
 export type ContentLocale = "en" | "te" | "hi";
@@ -249,18 +251,35 @@ async function fetchStatTiles(
   productId: string,
 ): Promise<StatTile[]> {
   const sb = anon();
-  const { data, error } = await sb
-    .from("product_stat_tiles")
-    .select("id, tile_key, value, label, sort_order")
-    .eq("locale", locale)
-    .eq("product_id", productId)
-    .eq("is_visible", true)
-    .order("sort_order", { ascending: true });
-  if (error) {
-    console.error("[content] fetchStatTiles:", error.message);
+  const [tilesRes, productRes] = await Promise.all([
+    sb
+      .from("product_stat_tiles")
+      .select("id, tile_key, value, label, sort_order")
+      .eq("locale", locale)
+      .eq("product_id", productId)
+      .eq("is_visible", true)
+      .order("sort_order", { ascending: true }),
+    // Source of truth for the derived tiles (net weight, slice count). Read
+    // here rather than in each page so the website, the mobile content API
+    // and anything added later all get the same figures — a food label must
+    // not depend on the caller remembering to resolve it.
+    sb
+      .from("products")
+      .select("weight, slices_per_loaf")
+      .eq("slug", productId)
+      .maybeSingle(),
+  ]);
+  if (tilesRes.error) {
+    console.error("[content] fetchStatTiles:", tilesRes.error.message);
     return [];
   }
-  return (data ?? []) as StatTile[];
+  if (productRes.error) {
+    console.error("[content] fetchStatTiles product:", productRes.error.message);
+  }
+  return resolveStatTiles(
+    (tilesRes.data ?? []) as StatTile[],
+    productRes.data ?? null,
+  );
 }
 
 async function fetchIngredients(

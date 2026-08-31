@@ -29,19 +29,15 @@ export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export const TIMES = ["7 – 9 am", "9 – 11 am", "12 – 2 pm", "5 – 7 pm", "7 – 9 pm"];
 export const SUB_WEEKS = [2, 3, 4, 6];
 
-export type ProductStat = {
-  target: number;
-  suffix?: string;
-  label: string;
-  // When true, render the value as an em-dash "—" instead of the number.
-  // Used to hold back specific nutrition figures until lab-verified.
-  blank?: boolean;
-};
-
 // @deprecated: prefer getActiveProducts() from @/lib/products for live
 // price/name/weight (Supabase-backed). PRODUCTS stays as a typed shape used
 // by rich-content lookups (PRODUCT_DETAILS) and as a graceful fallback if
 // Supabase is unreachable. Values here MUST match the DB rows.
+//
+// Deliberately carries NO net weight, slice count or nutrition figures. Those
+// are food-label data and live only in public.products / product_stat_tiles —
+// a bundled copy silently went stale (240g / 8 slices against a DB saying
+// 250g / 7) and shipped to customers. If the DB is dark, render nothing.
 export const PRODUCTS = [
   {
     slug: "multigrain",
@@ -51,15 +47,9 @@ export const PRODUCTS = [
     tags: ["Multi Grains", "No Maida"],
     price: 149,
     protein: "High protein content",
-    weight: "240g net weight",
     subtitle: "Ancient grains, seeds, whey protein. Baked to lock in structure.",
     desc: "Ancient grains, seeds, and five distinct protein sources — slow-fermented, cold-proofed, and baked to lock in structure.",
     image: "/hero.jpg",
-    stats: [
-      { target: 8, label: "Slices" },
-      { target: 240, suffix: "g", label: "Net weight" },
-      { target: 6, suffix: "g", label: "Fibre/slice", blank: true },
-    ] as ProductStat[],
   },
   {
     slug: "high-protein",
@@ -69,14 +59,9 @@ export const PRODUCTS = [
     tags: ["Sandwich Bread", "8 Slices"],
     price: 109,
     protein: "High protein content",
-    weight: "240g net weight",
     subtitle: "Clean sandwich bread built for protein without the fuss. Soft slices, no compromise.",
     desc: "Clean, everyday bread built for high protein without the fuss. Soft sandwich slices with no compromise on nutrition.",
     image: "/grains.jpg",
-    stats: [
-      { target: 8, label: "Slices" },
-      { target: 240, suffix: "g", label: "Net Weight" },
-    ] as ProductStat[],
   },
 ];
 
@@ -123,7 +108,7 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
     description: [
       "Plain is the everyday Cadieux — a soft, clean sandwich loaf that happens to carry serious protein.",
       "Same careful process as our multigrain, just a milder crumb built for daily use: toast, sandwiches, kids' lunches, late-night eggs.",
-      "High in protein. Eight slices per loaf. Nothing hidden.",
+      "High in protein. Nothing hidden.",
     ],
     // Intentionally empty — this loaf's gallery comes from the database
     // (products.image_url / gallery_urls) via resolveProductMedia.
@@ -139,9 +124,7 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
     ],
     testReports: [
       { metric: "Protein", value: "High", note: "NABL-accredited lab verified" },
-      { metric: "Net weight", value: "240 g", note: "Per packet · verified on line" },
       { metric: "Added sugar", value: "None", note: "Trace honey for ferment only" },
-      { metric: "Slices per loaf", value: "8", note: "Precision-cut on every bake" },
     ],
   },
 };
