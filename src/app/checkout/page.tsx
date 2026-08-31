@@ -2225,8 +2225,12 @@ function AddressForm(props: {
         <div style={{ display: "flex", alignItems: "stretch", gap: 10 }}>
           {/* inputSt carries display:"block", so it must be spread BEFORE the
               flex properties or it silently wins and drops the "+91" prefix
-              onto its own line above the field. */}
-          <div style={{ ...inputSt, flex: 1, display: "flex", alignItems: "center", padding: 0 }}>
+              onto its own line above the field.
+              minWidth:0 is required too: as a flex item this defaults to
+              min-width:auto, which floors it at the inner <input>'s intrinsic
+              width (~185px), so flex:1 cannot actually shrink and the
+              non-shrinking "Send OTP" button spills past the viewport at 390px. */}
+          <div style={{ ...inputSt, flex: 1, minWidth: 0, display: "flex", alignItems: "center", padding: 0 }}>
             <span style={{ padding: "0 6px 0 14px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", userSelect: "none", letterSpacing: "0.05em" }}>+91</span>
             <input
               type="tel" inputMode="numeric" autoComplete="tel-national"
@@ -2909,7 +2913,9 @@ function PickupSection(props: {
                   }
                 }}
                 placeholder="10-digit mobile"
-                style={{ ...inputSt, flex: 1 }}
+                // minWidth:0 so flex:1 can shrink below the input's intrinsic
+                // width — otherwise the flexShrink:0 sibling button overflows.
+                style={{ ...inputSt, flex: 1, minWidth: 0 }}
                 autoComplete="tel"
                 maxLength={10}
               />
