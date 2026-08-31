@@ -99,12 +99,9 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
       "Every batch is cold-proofed overnight, then baked on a falling temperature curve that locks in a tight, even crumb. The result is a dense, nourishing slice that holds structure under anything you put on it.",
       "Rich in protein. Rich in fiber. No maida, no refined sugar, no shortcuts.",
     ],
-    media: [
-      { type: "video", src: "/product-video-05.mp4", alt: "Multigrain bread close-up" },
-      { type: "video", src: "/bread-making-01.mp4", alt: "Bread being made" },
-      { type: "image", src: "/hero.jpg", alt: "Multigrain loaf hero" },
-      { type: "image", src: "/grains.jpg", alt: "Grains and seeds" },
-    ],
+    // Intentionally empty — this loaf's gallery comes from the database
+    // (products.image_url / gallery_urls) via resolveProductMedia.
+    media: [],
     ingredients: [
       { name: "Rye sourdough ferment", role: "Base structure & gut-friendly acids" },
       { name: "Whole wheat flour", role: "Core body of the loaf" },
@@ -128,12 +125,9 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
       "Same careful process as our multigrain, just a milder crumb built for daily use: toast, sandwiches, kids' lunches, late-night eggs.",
       "High in protein. Eight slices per loaf. Nothing hidden.",
     ],
-    media: [
-      { type: "video", src: "/product-video-06.mp4", alt: "Plain protein bread close-up" },
-      { type: "video", src: "/bread-eating-01.mp4", alt: "Bread being enjoyed" },
-      { type: "image", src: "/grains.jpg", alt: "Grains used" },
-      { type: "image", src: "/hero.jpg", alt: "Loaf hero shot" },
-    ],
+    // Intentionally empty — this loaf's gallery comes from the database
+    // (products.image_url / gallery_urls) via resolveProductMedia.
+    media: [],
     ingredients: [
       { name: "Whole wheat flour", role: "Primary flour — no maida" },
       { name: "Whey protein isolate", role: "Premium protein source, clean taste" },

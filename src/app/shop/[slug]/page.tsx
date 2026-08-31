@@ -25,6 +25,7 @@ import {
   getProductBySlug,
   hasRealProductImage,
   resolveHeroImage,
+  resolveOgImage,
   resolveProductMedia,
 } from "@/lib/products";
 import { getProductReports } from "@/lib/product-reports";
@@ -86,7 +87,11 @@ export async function generateMetadata({
   const description = pickString(content, "pdp.seo.description", internalSlug);
   const ogName =
     pickString(content, "pdp.name", internalSlug) || productRow?.name || bundled?.name || internalSlug;
-  const ogImage = resolveHeroImage(productRow?.image_url, internalSlug);
+  // OG card only — resolveOgImage is the one path allowed to fall back to the
+  // decorative brand image, so a shared link never previews blank. The on-page
+  // gallery and Product JSON-LD use resolveHeroImage/hasRealProductImage and
+  // stay null when no admin photo exists.
+  const ogImage = resolveOgImage(productRow?.image_url, internalSlug);
 
   return {
     title,
@@ -210,11 +215,9 @@ export default async function ProductDetailPage({
     url: canonicalUrl,
   };
   // Only claim a product image in JSON-LD when an admin-uploaded photo
-  // exists. resolveHeroImage's decorative fallbacks (/hero.jpg,
-  // /grains.jpg) are safe for on-page rendering + OG scrapers but must
-  // NOT be presented to Google as the canonical product photo — the
-  // Plain PDP historically emitted /grains.jpg here.
-  if (hasRealProductImage(productRow?.image_url)) {
+  // exists. heroImage is null in that case, so this also keeps the
+  // decorative OG fallback out of the schema.
+  if (heroImage && hasRealProductImage(productRow?.image_url)) {
     productSchema.image = [toAbsoluteUrl(heroImage)];
   }
   if (productRow?.price_inr) {

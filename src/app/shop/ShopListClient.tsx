@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import ProductTile from "@/components/ProductTile";
 import ScrollReveal from "@/components/ScrollReveal";
-import { PRODUCTS, PRODUCT_DETAILS, type ProductMedia, type ProductSlug } from "@/lib/data";
+import { PRODUCTS, type ProductMedia } from "@/lib/data";
 import type { AvailabilityMap } from "@/lib/products";
 import {
   SETUP_PRODUCTS,
@@ -43,9 +43,9 @@ export default function ShopListClient({
   // never silently disagree with the products table.
   priceBySlug?: Record<string, number>;
   // Live DB image/gallery media per slug (products.image_url +
-  // products.gallery_urls, resolved server-side with bundled fallback).
-  // Falls back to the bundled PRODUCT_DETAILS media only when a slug is
-  // missing (offline / fetch failure) so tiles never go blank.
+  // products.gallery_urls, resolved server-side). A slug may be absent
+  // (offline / fetch failure) or map to an empty array when no admin photo
+  // exists — the tile renders its empty state in both cases.
   mediaBySlug?: Record<string, ProductMedia[]>;
   // Per-slug content (name/tag/title/subtitle) sourced from
   // content_strings via getPageContent with critical-string fallbacks.
@@ -136,7 +136,7 @@ export default function ShopListClient({
                       subtitle={c?.subtitle || p.subtitle}
                       price={priceBySlug?.[p.slug] ?? p.price}
                       stats={p.stats}
-                      media={mediaBySlug?.[p.slug] ?? PRODUCT_DETAILS[p.slug as ProductSlug].media}
+                      media={mediaBySlug?.[p.slug] ?? []}
                       outOfStock={availability?.outOfStock.has(p.slug) ?? false}
                     />
                   </div>

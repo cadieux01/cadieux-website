@@ -31,10 +31,13 @@ import {
   AdminProductRow,
 } from "@/lib/admin-shared";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+// Brand palette (only): Foundation Green, Grain Cream, Core Black.
+// Same three-colour system as ProductForm — no greys, no legacy gold.
+const FG = "#024628"; // Foundation Green
+const CREAM = "#FBF3D4"; // Grain Cream
+const INK = "#1D1D1F"; // Core Black
+const FG_MUTED = "rgba(2, 70, 40, 0.7)";
+const DANGER = "#7f1d1d"; // deep red — reserved for destructive archive CTA
 
 type EditorTab =
   | "details"
@@ -174,8 +177,11 @@ export default function EditProductPage() {
                 fontFamily: "var(--font-body)",
                 fontSize: "0.7rem",
                 letterSpacing: "0.25em",
-                color: FADED,
-                border: `1px solid ${BORDER}`,
+                fontWeight: 500,
+                color: FG,
+                backgroundColor: CREAM,
+                border: `1px solid ${FG}`,
+                borderRadius: 6,
                 padding: "0.45rem 0.9rem",
               }}
             >
@@ -190,13 +196,14 @@ export default function EditProductPage() {
                 fontFamily: "var(--font-body)",
                 fontSize: "0.7rem",
                 letterSpacing: "0.25em",
-                color: product.is_archived ? GOLD : "#ef4444",
-                border: `1px solid ${
-                  product.is_archived ? GOLD : "#ef4444"
-                }`,
+                fontWeight: 500,
+                color: product.is_archived ? FG : CREAM,
+                backgroundColor: product.is_archived ? CREAM : DANGER,
+                border: `1px solid ${product.is_archived ? FG : DANGER}`,
+                borderRadius: 6,
                 padding: "0.45rem 0.9rem",
-                background: "transparent",
                 opacity: archiveBusy ? 0.5 : 1,
+                cursor: archiveBusy ? "not-allowed" : "pointer",
               }}
             >
               {archiveBusy
@@ -214,8 +221,11 @@ export default function EditProductPage() {
               fontFamily: "var(--font-body)",
               fontSize: "0.7rem",
               letterSpacing: "0.25em",
-              color: FADED,
-              border: `1px solid ${BORDER}`,
+              fontWeight: 500,
+              color: FG,
+              backgroundColor: CREAM,
+              border: `1px solid ${FG}`,
+              borderRadius: 6,
               padding: "0.45rem 0.9rem",
             }}
           >
@@ -225,16 +235,25 @@ export default function EditProductPage() {
       }
     >
       {loadErr ? (
-        <p style={{ color: "#fecaca", fontFamily: "var(--font-body)" }}>
+        <p
+          style={{
+            color: FG,
+            backgroundColor: CREAM,
+            border: `1px solid ${FG}`,
+            borderRadius: 6,
+            padding: "0.6rem 0.9rem",
+            fontFamily: "var(--font-body)",
+          }}
+        >
           {loadErr}
         </p>
       ) : loading || !product ? (
-        <p style={{ color: FADED, fontFamily: "var(--font-body)" }}>Loading…</p>
+        <p style={{ color: FG_MUTED, fontFamily: "var(--font-body)" }}>Loading…</p>
       ) : (
         <>
           <div
             className="flex gap-1 mb-8 flex-wrap"
-            style={{ borderBottom: `1px solid ${BORDER}` }}
+            style={{ borderBottom: `1px solid ${FG}` }}
           >
             {TABS.map((t) => {
               const active = tab === t.key;
@@ -248,12 +267,14 @@ export default function EditProductPage() {
                     fontFamily: "var(--font-body)",
                     fontSize: "0.72rem",
                     letterSpacing: "0.25em",
-                    color: active ? CREAM : FADED,
+                    fontWeight: 500,
+                    color: active ? FG : FG_MUTED,
                     background: "transparent",
                     border: "none",
-                    borderBottom: `2px solid ${active ? GOLD : "transparent"}`,
+                    borderBottom: `2px solid ${active ? FG : "transparent"}`,
                     padding: "0.6rem 1rem",
                     marginBottom: "-1px",
+                    cursor: "pointer",
                   }}
                 >
                   {t.label}
@@ -354,7 +375,8 @@ function HistoryPanel({ history }: { history: AdminProductChangeRow[] }) {
           fontFamily: "var(--font-body)",
           fontSize: "0.72rem",
           letterSpacing: "0.25em",
-          color: FADED,
+          fontWeight: 500,
+          color: FG,
         }}
       >
         Change history
@@ -362,7 +384,7 @@ function HistoryPanel({ history }: { history: AdminProductChangeRow[] }) {
       {history.length === 0 ? (
         <p
           style={{
-            color: FADED,
+            color: FG_MUTED,
             fontFamily: "var(--font-body)",
             fontSize: "0.85rem",
           }}
@@ -376,28 +398,32 @@ function HistoryPanel({ history }: { history: AdminProductChangeRow[] }) {
               key={h.id}
               className="p-3"
               style={{
-                border: `1px solid ${BORDER}`,
+                border: `1px solid ${FG}`,
+                borderRadius: 6,
+                backgroundColor: CREAM,
                 fontFamily: "var(--font-body)",
                 fontSize: "0.82rem",
-                color: CREAM,
+                color: INK,
               }}
             >
               <div className="flex items-baseline justify-between gap-2">
-                <span style={{ color: GOLD }}>{h.field_changed}</span>
-                <span style={{ color: FADED, fontSize: "0.72rem" }}>
+                <span style={{ color: FG, fontWeight: 500 }}>
+                  {h.field_changed}
+                </span>
+                <span style={{ color: FG_MUTED, fontSize: "0.72rem" }}>
                   {formatDateTime(h.changed_at)}
                 </span>
               </div>
-              <div className="mt-1" style={{ color: FADED }}>
+              <div className="mt-1" style={{ color: FG_MUTED }}>
                 {h.context ?? "update"}
               </div>
               <div className="mt-2 grid grid-cols-[60px_1fr] gap-x-3 gap-y-1">
-                <span style={{ color: FADED }}>from</span>
-                <code style={{ wordBreak: "break-word" }}>
+                <span style={{ color: FG_MUTED }}>from</span>
+                <code style={{ wordBreak: "break-word", color: INK }}>
                   {renderValue(h.old_value)}
                 </code>
-                <span style={{ color: FADED }}>to</span>
-                <code style={{ wordBreak: "break-word" }}>
+                <span style={{ color: FG_MUTED }}>to</span>
+                <code style={{ wordBreak: "break-word", color: INK }}>
                   {renderValue(h.new_value)}
                 </code>
               </div>

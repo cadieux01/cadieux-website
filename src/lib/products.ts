@@ -79,45 +79,52 @@ export async function getProductBySlug(slug: string): Promise<ProductRow | null>
   return products.find((p) => p.slug === slug) ?? null;
 }
 
-// ── image / media resolution (DB-first, hardcoded fallback) ──────────────────
+// ── image / media resolution (DB-only) ──────────────────────────────────────
 // Single source of truth for turning a product row's admin-owned image
 // fields into what the storefront renders. The admin writes products.image_url
-// (main) + products.gallery_urls (gallery) from /admin; these resolvers prefer
-// those and fall back to the bundled lib/data.ts assets so an image NEVER goes
-// blank. Fallbacks are logged server-side so a missing admin image is visible
-// in the logs. Video has no DB column, so it only ever comes from the bundled
-// PRODUCT_DETAILS media (below) — never from the DB.
+// (main) + products.gallery_urls (gallery) from /admin, and those are the ONLY
+// sources of a product photo. There is deliberately no bundled-asset fallback:
+// /hero.jpg and /grains.jpg are decorative brand shots, not photos of the
+// actual loaf, and showing them implied a product photo existed when it did
+// not. A product with no admin image now resolves to null and the page renders
+// its empty state. Video has no DB column, so it only ever comes from the
+// bundled PRODUCT_DETAILS media (below) — never from the DB.
 
+// Social-share preview ONLY. This is a brand image for the OG card when a
+// link is pasted into WhatsApp/Twitter — it is NOT a product photo and must
+// never enter the product gallery or Product JSON-LD. Reachable only through
+// resolveOgImage(); resolveHeroImage/resolveProductMedia cannot return it.
 const OG_FALLBACK_IMAGE = "/hero.jpg";
 
-// Resolve the main / hero / OG image with a DB-first fallback chain:
-//   products.image_url (admin) → bundled PRODUCTS[].image → /hero.jpg.
+// Resolve the product's primary photo. DB-only: products.image_url, or null.
+// Callers must handle null by rendering a placeholder — NOT by substituting a
+// bundled asset.
 export function resolveHeroImage(
   imageUrl: string | null | undefined,
   slug: string,
-): string {
+): string | null {
   const trimmed = (imageUrl ?? "").trim();
   if (trimmed) return trimmed;
-  const bundled = PRODUCTS.find((p) => p.slug === slug)?.image;
-  if (bundled) {
-    console.info(
-      `[lib/products] hero image fallback → bundled asset for "${slug}" (products.image_url empty)`,
-    );
-    return bundled;
-  }
   console.info(
-    `[lib/products] hero image fallback → brand default for "${slug}" (no bundled image)`,
+    `[lib/products] no product image for "${slug}" (products.image_url empty) — rendering empty state`,
   );
-  return OG_FALLBACK_IMAGE;
+  return null;
+}
+
+// og:image for social scrapers. Prefers the real product photo and falls back
+// to the brand image so a shared link is never previewed with a blank card.
+// Kept separate from resolveHeroImage so the gallery can never pick this up.
+export function resolveOgImage(
+  imageUrl: string | null | undefined,
+  slug: string,
+): string {
+  return resolveHeroImage(imageUrl, slug) ?? OG_FALLBACK_IMAGE;
 }
 
 // Companion to resolveHeroImage: true iff the DB row has a real admin-uploaded
-// product photo. When false, resolveHeroImage falls through to a decorative
-// bundled asset (e.g. /grains.jpg, /hero.jpg) that is NOT a photo of the
-// actual product — safe to render on the page and pass to OG scrapers, but
-// NOT safe to claim as `image` in the Product JSON-LD (Google will treat a
-// mismatched decorative image as the canonical product photo). Callers that
-// emit schema.image should gate on this and OMIT the field when false.
+// product photo. Callers that emit schema.image should gate on this and OMIT
+// the field when false, so Google is never handed the decorative OG fallback
+// as the canonical product photo.
 export function hasRealProductImage(
   imageUrl: string | null | undefined,
 ): boolean {
@@ -128,10 +135,10 @@ export function hasRealProductImage(
 //   1. products.gallery_urls (admin) non-empty → these image tiles ARE the
 //      gallery (Sunny owns product photos from /admin).
 //   2. bundled PRODUCT_DETAILS[slug].media — editorial videos + images.
-//   3. a single tile derived from the resolved hero image.
-// An empty admin gallery never yields an empty gallery — it falls through to
-// the bundled media (today's exact behaviour), so shipped editorial videos
-// stay until a gallery is uploaded. No live regression.
+//   3. a single tile derived from products.image_url.
+// When all three are empty this returns an EMPTY array and the caller renders
+// its empty state. It never substitutes a decorative brand asset — a tile
+// showing /hero.jpg reads as "here is the loaf" when no photo exists.
 export function resolveProductMedia(
   slug: string,
   imageUrl: string | null | undefined,
@@ -156,6 +163,7 @@ export function resolveProductMedia(
     return bundled;
   }
   const heroImage = resolveHeroImage(imageUrl, slug);
+  if (!heroImage) return [];
   return [
     {
       type: "image",

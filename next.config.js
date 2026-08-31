@@ -60,6 +60,16 @@ const nextConfig = {
   // Drop the X-Powered-By: Next.js banner.
   poweredByHeader: false,
   images: {
+    // Product photos uploaded through the admin live in the Supabase
+    // `product-images` bucket, so next/image must be allowed to optimise
+    // that host (CSP img-src already whitelists it).
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "uejagupcwevadfhfuadv.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
     formats: ["image/avif", "image/webp"],
     deviceSizes: [360, 414, 640, 750, 828, 1080, 1280, 1920, 2048],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],

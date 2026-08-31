@@ -126,13 +126,14 @@ export default function ProductDetailClient({
   // Stat tiles (content-driven). When empty, fall back to the bundled
   // PRODUCTS[].stats array so the page still renders sensible numbers.
   statTiles?: PdpStatTile[];
-  // Server-resolved gallery media. Blends admin (products.image_url) +
-  // bundled PRODUCT_DETAILS. Guaranteed non-empty — always at least one
-  // hero tile so an empty admin field never renders a broken image.
+  // Server-resolved gallery media. Blends admin (products.image_url +
+  // gallery_urls) with bundled PRODUCT_DETAILS editorial media. MAY be
+  // empty — see galleryMedia below.
   media?: ProductMedia[];
-  // Server-resolved primary image URL (admin image_url → bundled → /hero.jpg).
-  // Used for meta share button + any single-image lookup on the client.
-  heroImage?: string;
+  // Server-resolved primary image URL — products.image_url, or null when the
+  // admin hasn't uploaded a photo. Null means render the empty state; there
+  // is no bundled fallback.
+  heroImage?: string | null;
   // FAQ rows resolved on the server (PDP_FAQS in page.tsx). Rendered as a
   // visible <section> so the DOM matches the FAQPage JSON-LD schema
   // Google requires for FAQ rich results.
@@ -145,22 +146,16 @@ export default function ProductDetailClient({
   const typedSlug = slug as ProductSlug;
   const product = PRODUCTS.find((p) => p.slug === typedSlug);
   const detail = product ? PRODUCT_DETAILS[typedSlug] : undefined;
-  // Final client-side gallery fallback: if the server somehow shipped an
-  // empty media list (shouldn't happen — resolveGalleryMedia always
-  // returns ≥1 tile), synthesize one from heroImage / bundled / brand
-  // default so <Gallery/> never receives an empty array.
+  // Server-resolved media is authoritative. When it's empty there genuinely
+  // is no admin-uploaded photo for this product, so the gallery renders its
+  // empty state — we deliberately do NOT synthesize a tile from a bundled
+  // brand asset, which would read as a photo of the loaf.
   const galleryMedia: ProductMedia[] =
     media.length > 0
       ? media
-      : detail?.media && detail.media.length > 0
-        ? detail.media
-        : [
-            {
-              type: "image",
-              src: heroImage || product?.image || "/hero.jpg",
-              alt: product?.name || "Product image",
-            },
-          ];
+      : heroImage
+        ? [{ type: "image", src: heroImage, alt: product?.name || "Product image" }]
+        : [];
 
   // Resolve display strings with PRODUCTS-bundled fallbacks (in case the
   // server didn't pass pdpStrings — e.g. a stale call site).
@@ -777,6 +772,45 @@ function Gallery({
     }
     el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
   };
+
+  // No admin-uploaded photo for this product yet. Hold the layout with a
+  // neutral placeholder rather than a decorative brand shot.
+  if (media.length === 0) {
+    return (
+      <div style={{ minWidth: 0 }}>
+        <div
+          className="pdp-main-media"
+          style={{
+            position: "relative",
+            width: "100%",
+            background: "#024628",
+            borderRadius: 14,
+            overflow: "hidden",
+            border: "1px solid rgba(2,70,40,0.25)",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 24,
+              textAlign: "center",
+              fontFamily: "var(--font-body)",
+              fontSize: 11,
+              letterSpacing: "0.28em",
+              textTransform: "uppercase",
+              color: "rgba(251,243,212,0.65)",
+            }}
+          >
+            Photography coming soon
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minWidth: 0 }}>
