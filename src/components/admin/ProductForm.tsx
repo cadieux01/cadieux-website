@@ -10,15 +10,22 @@ import { adminAuthHeaders } from "@/lib/admin-client";
 import { AdminProductRow } from "@/lib/admin-shared";
 import { subscriptionUnitPrice, subscriptionSavingsInr } from "@/lib/subscription-pricing";
 
-// Brand palette (only): Foundation Green, Grain Cream, Core Black.
-// No greys, no plain whites, no legacy gold. These three colors carry
-// every surface, text and border in the admin product form.
-const FG = "#024628"; // Foundation Green — borders, labels, primary accent
-const CREAM = "#FBF3D4"; // Grain Cream — input backgrounds, CTA text
-const INK = "#1D1D1F"; // Core Black — body text, placeholders (at alpha)
-// FG at 70% alpha for hint / secondary label copy. Still on-palette
-// (rgba of Foundation Green), and stays legible on the ash canvas.
-const FG_MUTED = "rgba(2, 70, 40, 0.7)";
+import {
+  CREAM,
+  INK,
+  TEXT_MUTED,
+  SURFACE_TEXT_MUTED,
+  SURFACE_BORDER,
+} from "./theme";
+
+// The form renders directly on the INK page, so anything written on the page
+// is CREAM. FG used to be Foundation Green (#024628) for both roles at once —
+// which is how "NAME", "SLUG", "WEIGHT" and the hint copy ended up as dark
+// green on near-black, i.e. invisible. Split by surface instead:
+//   FG / FG_MUTED  -> on the INK page
+//   INK / SURFACE_* -> on a CREAM card or input
+const FG = CREAM;
+const FG_MUTED = TEXT_MUTED;
 
 // True when the URL is a product-video upload. Used by the media grid
 // to pick <img> vs <video> preview. The uploader stamps a real
@@ -252,9 +259,9 @@ export function ProductForm({
         <div
           className="p-3"
           style={{
-            border: `1px solid ${FG}`,
+            border: `1px solid ${SURFACE_BORDER}`,
             backgroundColor: CREAM,
-            color: FG,
+            color: INK,
             fontFamily: "var(--font-body)",
             fontSize: "1rem",
             borderRadius: 6,
@@ -439,7 +446,7 @@ export function ProductForm({
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.25em",
-            fontWeight: 500,
+            fontWeight: 600,
             color: FG,
           }}
         >
@@ -488,8 +495,8 @@ export function ProductForm({
             letterSpacing: "0.25em",
             fontWeight: 500,
             color: CREAM,
-            backgroundColor: FG,
-            border: `1px solid ${FG}`,
+            backgroundColor: INK,
+            border: `1px solid ${CREAM}`,
             borderRadius: 6,
             padding: "0.7rem 1.4rem",
             opacity: busy ? 0.5 : 1,
@@ -666,7 +673,7 @@ function MediaUploader({
                     className="flex items-center justify-between"
                     style={{
                       padding: "0.35rem 0.5rem",
-                      backgroundColor: FG,
+                      backgroundColor: INK,
                       color: CREAM,
                       fontFamily: "var(--font-body)",
                       fontSize: "0.875rem",
@@ -744,8 +751,8 @@ function MediaUploader({
             fontSize: "0.875rem",
             letterSpacing: "0.22em",
             fontWeight: 500,
-            color: FG,
-            border: `2px dashed ${FG}`,
+            color: INK,
+            border: `2px dashed ${SURFACE_BORDER}`,
             borderRadius: 6,
             padding: "1.4rem 1rem",
             backgroundColor: drag ? CREAM : "rgba(251, 243, 212, 0.4)",
@@ -770,11 +777,11 @@ function MediaUploader({
         {err ? (
           <p
             style={{
-              color: FG,
+              color: INK,
               fontFamily: "var(--font-body)",
               fontSize: "1rem",
               backgroundColor: CREAM,
-              border: `1px solid ${FG}`,
+              border: `1px solid ${SURFACE_BORDER}`,
               borderRadius: 6,
               padding: "0.5rem 0.75rem",
             }}
@@ -807,7 +814,7 @@ function SubPricePreview({
     <div
       className="flex flex-col gap-1 p-3"
       style={{
-        border: `1px solid ${FG}`,
+        border: `1px solid ${SURFACE_BORDER}`,
         backgroundColor: CREAM,
         borderRadius: 6,
       }}
@@ -818,8 +825,8 @@ function SubPricePreview({
           fontFamily: "var(--font-body)",
           fontSize: "0.875rem",
           letterSpacing: "0.22em",
-          fontWeight: 500,
-          color: FG,
+          fontWeight: 600,
+          color: INK,
         }}
       >
         Subscription price (derived, read-only)
@@ -827,12 +834,19 @@ function SubPricePreview({
       {valid ? (
         <span style={{ fontFamily: "var(--font-body)", color: INK, fontSize: "1rem" }}>
           ₹{unit.toFixed(2)} / loaf{" "}
-          <span style={{ color: FG_MUTED }}>
+          <span style={{ color: SURFACE_TEXT_MUTED, fontWeight: 500 }}>
             (MRP ₹{mrp} · save ₹{savings.toFixed(2)} · {pct}% off)
           </span>
         </span>
       ) : (
-        <span style={{ fontFamily: "var(--font-body)", color: FG_MUTED, fontSize: "1rem" }}>
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            color: SURFACE_TEXT_MUTED,
+            fontSize: "1rem",
+            fontWeight: 500,
+          }}
+        >
           Enter a valid one-time price to preview the subscription price.
         </span>
       )}
@@ -868,7 +882,7 @@ function NutritionEditor({
           fontFamily: "var(--font-body)",
           fontSize: "0.875rem",
           letterSpacing: "0.22em",
-          fontWeight: 500,
+          fontWeight: 600,
           color: FG,
         }}
       >
@@ -879,6 +893,7 @@ function NutritionEditor({
           fontFamily: "var(--font-body)",
           fontSize: "1rem",
           color: FG_MUTED,
+          fontWeight: 500,
         }}
       >
         Leave a value blank to omit that nutrient. All-blank = section hidden on PDP.
@@ -901,8 +916,8 @@ function NutritionEditor({
                 style={{
                   backgroundColor: CREAM,
                   color: INK,
-                  caretColor: FG,
-                  border: `1px solid ${FG}`,
+                  caretColor: INK,
+                  border: `1px solid ${CREAM}`,
                   borderRadius: 6,
                   fontFamily: "var(--font-body)",
                   fontSize: "1rem",
@@ -923,8 +938,8 @@ function NutritionEditor({
                 style={{
                   backgroundColor: CREAM,
                   color: INK,
-                  caretColor: FG,
-                  border: `1px solid ${FG}`,
+                  caretColor: INK,
+                  border: `1px solid ${CREAM}`,
                   borderRadius: 6,
                   fontFamily: "var(--font-body)",
                   fontSize: "1rem",
@@ -978,10 +993,11 @@ function NutritionEditor({
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.25em",
-            color: FG,
-            border: `1px solid ${FG}`,
+            color: INK,
+            border: `1px solid ${SURFACE_BORDER}`,
             borderRadius: 6,
             padding: "0.45rem 0.9rem",
+            fontWeight: 600,
             background: CREAM,
           }}
         >
@@ -1013,7 +1029,7 @@ function Field({
           fontFamily: "var(--font-body)",
           fontSize: "0.875rem",
           letterSpacing: "0.22em",
-          fontWeight: 500,
+          fontWeight: 600,
           color: FG,
         }}
       >
@@ -1027,6 +1043,7 @@ function Field({
             fontFamily: "var(--font-body)",
             fontSize: "1rem",
             color: FG_MUTED,
+            fontWeight: 500,
           }}
         >
           {hint}
@@ -1066,8 +1083,8 @@ function Input({
       style={{
         backgroundColor: CREAM,
         color: INK,
-        caretColor: FG,
-        border: `1px solid ${FG}`,
+        caretColor: INK,
+        border: `1px solid ${CREAM}`,
         borderRadius: 6,
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
@@ -1097,8 +1114,8 @@ function Textarea({
       style={{
         backgroundColor: CREAM,
         color: INK,
-        caretColor: FG,
-        border: `1px solid ${FG}`,
+        caretColor: INK,
+        border: `1px solid ${CREAM}`,
         borderRadius: 6,
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
@@ -1133,7 +1150,7 @@ function Checkbox({
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.2em",
-            fontWeight: 500,
+            fontWeight: 600,
             color: FG,
           }}
         >
@@ -1146,6 +1163,7 @@ function Checkbox({
               fontFamily: "var(--font-body)",
               fontSize: "1rem",
               color: FG_MUTED,
+              fontWeight: 500,
             }}
           >
             {hint}

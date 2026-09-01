@@ -70,7 +70,7 @@ function AdminLoading() {
     <div
       style={{
         padding: "2rem",
-        color: "rgba(245,158,11,0.7)",
+        color: "rgba(251,243,212,0.7)",
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
         letterSpacing: "0.05em",
@@ -218,9 +218,9 @@ function SubscriptionsPageInner() {
               onClick={() => setFilter(f.value)}
               style={{
                 ...chipBase,
-                color: active ? "#06120c" : "rgba(245,158,11,0.85)",
-                background: active ? "#f59e0b" : "transparent",
-                borderColor: active ? "#f59e0b" : "rgba(245,158,11,0.4)",
+                color: active ? "#1D1D1F" : "rgba(251,243,212,0.85)",
+                background: active ? "#FBF3D4" : "transparent",
+                borderColor: active ? "#FBF3D4" : "rgba(251,243,212,0.4)",
               }}
             >
               {f.label}
@@ -234,7 +234,7 @@ function SubscriptionsPageInner() {
           style={{
             border: "1px solid rgba(239,68,68,0.45)",
             padding: "0.8rem 1rem",
-            color: "#fca5a5",
+            color: "#EF4444",
             marginBottom: "1rem",
             fontSize: "1rem",
             fontFamily: "var(--font-body)",
@@ -251,7 +251,7 @@ function SubscriptionsPageInner() {
       ) : (
         <div
           style={{
-            border: "1px solid rgba(245,158,11,0.18)",
+            border: "1px solid rgba(251,243,212,0.18)",
             borderRadius: 6,
             overflow: "hidden",
           }}
@@ -283,7 +283,7 @@ function SubscriptionsPageInner() {
                     style={{
                       background:
                         i % 2 === 0
-                          ? "rgba(245,158,11,0.025)"
+                          ? "rgba(251,243,212,0.025)"
                           : "transparent",
                     }}
                   >
@@ -294,7 +294,7 @@ function SubscriptionsPageInner() {
                             ? `/admin/customers/${s.customer_id}`
                             : "#"
                         }
-                        style={{ color: "#fbf3d4", textDecoration: "none" }}
+                        style={{ color: "#FBF3D4", textDecoration: "none" }}
                       >
                         {s.customer?.full_name ?? "—"}
                       </Link>
@@ -302,7 +302,7 @@ function SubscriptionsPageInner() {
                         <div className="flex flex-wrap items-center gap-2 mt-1">
                           <span
                             style={{
-                              color: "rgba(245,158,11,0.85)",
+                              color: "rgba(251,243,212,0.85)",
                               fontSize: "1rem",
                             }}
                           >
@@ -320,7 +320,7 @@ function SubscriptionsPageInner() {
                       <div>{s.product_name}</div>
                       <div
                         style={{
-                          color: "rgba(192,200,206,0.55)",
+                          color: "rgba(251,243,212,0.55)",
                           fontSize: "1rem",
                         }}
                       >
@@ -376,7 +376,7 @@ function SubscriptionsPageInner() {
                             }}
                             style={{
                               ...buttonSm,
-                              color: "#ef4444",
+                              color: "#EF4444",
                               borderColor: "rgba(239,68,68,0.45)",
                               opacity: busy ? 0.5 : 1,
                             }}
@@ -406,7 +406,7 @@ function SubscriptionsPageInner() {
       <p
         style={{
           marginTop: "1.5rem",
-          color: "rgba(192,200,206,0.5)",
+          color: "rgba(251,243,212,0.5)",
           fontSize: "1rem",
           fontFamily: "var(--font-body)",
           maxWidth: 720,
@@ -534,7 +534,7 @@ function SubscriptionDrawer({
         position: "fixed",
         inset: 0,
         zIndex: 200,
-        background: "rgba(0,0,0,0.7)",
+        background: "rgba(29,29,31,0.7)",
         display: "flex",
         justifyContent: "flex-end",
       }}
@@ -545,12 +545,12 @@ function SubscriptionDrawer({
           maxHeight: "100dvh",
           height: "100dvh",
           background: "#1D1D1F",
-          borderLeft: "1px solid rgba(245,158,11,0.25)",
+          borderLeft: "1px solid rgba(251,243,212,0.25)",
           overflowY: "auto",
           overscrollBehavior: "contain",
           padding:
             "28px 28px calc(60px + env(safe-area-inset-bottom)) 28px",
-          color: "#fbf3d4",
+          color: "#FBF3D4",
           fontFamily: "var(--font-body)",
         }}
       >
@@ -569,7 +569,7 @@ function SubscriptionDrawer({
                 fontSize: "0.875rem",
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
-                color: "rgba(245,158,11,0.75)",
+                color: "rgba(251,243,212,0.75)",
               }}
             >
               Subscription
@@ -626,8 +626,8 @@ function SubscriptionDrawer({
 
         <div
           style={{
-            background: "rgba(245,158,11,0.05)",
-            border: "1px solid rgba(245,158,11,0.35)",
+            background: "rgba(251,243,212,0.05)",
+            border: "1px solid rgba(251,243,212,0.35)",
             padding: "14px 16px",
             marginBottom: 18,
             display: "flex",
@@ -649,7 +649,7 @@ function SubscriptionDrawer({
                 fontSize: "0.875rem",
                 letterSpacing: "0.3em",
                 textTransform: "uppercase",
-                color: "rgba(245,158,11,0.8)",
+                color: "rgba(251,243,212,0.8)",
               }}
             >
               Overall status
@@ -724,7 +724,7 @@ function SubscriptionDrawer({
             >
               {addr?.name ? (
                 <>
-                  <b style={{ color: "#fbf3d4", fontWeight: 500 }}>{addr.name}</b>
+                  <b style={{ color: "#FBF3D4", fontWeight: 500 }}>{addr.name}</b>
                   <br />
                 </>
               ) : null}
@@ -739,7 +739,7 @@ function SubscriptionDrawer({
             fontSize: "0.875rem",
             letterSpacing: "0.3em",
             textTransform: "uppercase",
-            color: "rgba(245,158,11,0.75)",
+            color: "rgba(251,243,212,0.75)",
           }}
         >
           Deliveries · {deliveries.length}
@@ -748,7 +748,7 @@ function SubscriptionDrawer({
         {loading ? (
           <p style={{ color: "rgba(251,243,212,0.45)" }}>Loading…</p>
         ) : null}
-        {error ? <p style={{ color: "#e05a5a" }}>Error: {error}</p> : null}
+        {error ? <p style={{ color: "#EF4444" }}>Error: {error}</p> : null}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {deliveries.map((d) => (
@@ -785,8 +785,8 @@ function DeliveryCard({
   return (
     <div
       style={{
-        border: "1px solid rgba(245,158,11,0.2)",
-        background: "rgba(245,158,11,0.03)",
+        border: "1px solid rgba(251,243,212,0.2)",
+        background: "rgba(251,243,212,0.03)",
         padding: "12px 14px",
         display: "flex",
         flexDirection: "column",
@@ -807,7 +807,7 @@ function DeliveryCard({
             fontSize: "0.875rem",
             letterSpacing: "0.25em",
             textTransform: "uppercase",
-            color: "rgba(245,158,11,0.75)",
+            color: "rgba(251,243,212,0.75)",
           }}
         >
           Week {delivery.week_number}
@@ -823,7 +823,7 @@ function DeliveryCard({
           }))}
         />
       </div>
-      <div style={{ fontSize: "1rem", color: "#fbf3d4" }}>
+      <div style={{ fontSize: "1rem", color: "#FBF3D4" }}>
         {formatScheduledDate(delivery.scheduled_date)}
         <span style={{ color: "rgba(251,243,212,0.5)" }}>
           {" "}
@@ -855,8 +855,8 @@ function DeliveryCard({
             fontSize: "0.875rem",
             letterSpacing: "0.2em",
             textTransform: "uppercase",
-            color: "#7bd88f",
-            border: "1px solid rgba(123,216,143,0.5)",
+            color: "#FBF3D4",
+            border: "1px solid rgba(251,243,212,0.5)",
             padding: "2px 8px",
             borderRadius: 999,
           }}
@@ -872,8 +872,8 @@ function DeliveryCard({
             rows={3}
             style={{
               background: "transparent",
-              border: "1px solid rgba(245,158,11,0.3)",
-              color: "#fbf3d4",
+              border: "1px solid rgba(251,243,212,0.3)",
+              color: "#FBF3D4",
               padding: "0.45rem 0.6rem",
               fontFamily: "var(--font-body)",
               fontSize: "1rem",
@@ -957,9 +957,9 @@ function formatScheduledDate(iso: string): string {
 }
 
 const drawerSelect: React.CSSProperties = {
-  background: "rgba(0,0,0,0.4)",
-  color: "#fbf3d4",
-  border: "1px solid rgba(245,158,11,0.4)",
+  background: "rgba(29,29,31,0.4)",
+  color: "#FBF3D4",
+  border: "1px solid rgba(251,243,212,0.4)",
   padding: "5px 10px",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
@@ -994,10 +994,10 @@ function Placeholder({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        border: "1px dashed rgba(245,158,11,0.2)",
+        border: "1px dashed rgba(251,243,212,0.2)",
         padding: "3rem 1rem",
         textAlign: "center",
-        color: "rgba(192,200,206,0.55)",
+        color: "rgba(251,243,212,0.55)",
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
       }}
@@ -1009,7 +1009,7 @@ function Placeholder({ children }: { children: React.ReactNode }) {
 
 const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
-  border: "1px solid rgba(245,158,11,0.4)",
+  border: "1px solid rgba(251,243,212,0.4)",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -1020,12 +1020,12 @@ const chipBase: React.CSSProperties = {
 
 const chipNeutral: React.CSSProperties = {
   ...chipBase,
-  color: "rgba(245,158,11,0.85)",
+  color: "rgba(251,243,212,0.85)",
 };
 
 const tableHeadRow: React.CSSProperties = {
-  background: "rgba(245,158,11,0.08)",
-  color: "rgba(245,158,11,0.9)",
+  background: "rgba(251,243,212,0.08)",
+  color: "rgba(251,243,212,0.9)",
   textTransform: "uppercase",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -1036,23 +1036,23 @@ const th: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   fontWeight: 400,
-  borderBottom: "1px solid rgba(245,158,11,0.15)",
+  borderBottom: "1px solid rgba(251,243,212,0.15)",
 };
 
 const td: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
-  color: "#fbf3d4",
+  color: "#FBF3D4",
   fontSize: "1rem",
   verticalAlign: "top",
-  borderBottom: "1px solid rgba(245,158,11,0.06)",
+  borderBottom: "1px solid rgba(251,243,212,0.06)",
 };
 
 const buttonSm: React.CSSProperties = {
   padding: "0.3rem 0.7rem",
   background: "transparent",
-  border: "1px solid rgba(245,158,11,0.45)",
-  color: "#f59e0b",
+  border: "1px solid rgba(251,243,212,0.45)",
+  color: "#FBF3D4",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",

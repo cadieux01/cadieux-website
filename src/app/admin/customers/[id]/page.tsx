@@ -195,9 +195,9 @@ export default function CustomerDetailPage() {
       {toast ? (
         <div
           style={{
-            border: "1px solid rgba(245,158,11,0.45)",
-            background: "rgba(245,158,11,0.07)",
-            color: "#fbf3d4",
+            border: "1px solid rgba(251,243,212,0.45)",
+            background: "rgba(251,243,212,0.07)",
+            color: "#FBF3D4",
             padding: "0.7rem 1rem",
             marginBottom: "1rem",
             fontFamily: "var(--font-body)",
@@ -223,7 +223,7 @@ export default function CustomerDetailPage() {
             v={
               c.phone ? (
                 <span className="inline-flex items-center gap-2 flex-wrap">
-                  <span style={{ color: "#fbf3d4" }}>{c.phone}</span>
+                  <span style={{ color: "#FBF3D4" }}>{c.phone}</span>
                   <ContactActions
                     phone={c.phone}
                     customerName={c.full_name}
@@ -259,7 +259,7 @@ export default function CustomerDetailPage() {
 
         <Card title="Push tokens">
           {data.push_tokens.length === 0 ? (
-            <p style={{ color: "rgba(192,200,206,0.55)", fontSize: "1rem" }}>
+            <p style={{ color: "rgba(251,243,212,0.55)", fontSize: "1rem" }}>
               No active tokens.
             </p>
           ) : (
@@ -463,7 +463,7 @@ function SendEmailModal({
             />
           </label>
           {err ? (
-            <p style={{ color: "#fca5a5", fontSize: "1rem", margin: 0 }}>
+            <p style={{ color: "#EF4444", fontSize: "1rem", margin: 0 }}>
               {err}
             </p>
           ) : null}
@@ -500,7 +500,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   return (
     <div
       style={{
-        border: "1px solid rgba(245,158,11,0.18)",
+        border: "1px solid rgba(251,243,212,0.18)",
         padding: "1rem",
         borderRadius: 6,
       }}
@@ -511,7 +511,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
           fontSize: "0.875rem",
           letterSpacing: "0.25em",
           textTransform: "uppercase",
-          color: "rgba(245,158,11,0.9)",
+          color: "rgba(251,243,212,0.9)",
           margin: "0 0 0.6rem 0",
         }}
       >
@@ -534,8 +534,8 @@ function KeyVal({ k, v }: { k: string; v: React.ReactNode }) {
         fontSize: "1rem",
       }}
     >
-      <span style={{ color: "rgba(192,200,206,0.55)" }}>{k}</span>
-      <span style={{ color: "#fbf3d4", textAlign: "right" }}>{v}</span>
+      <span style={{ color: "rgba(251,243,212,0.55)" }}>{k}</span>
+      <span style={{ color: "#FBF3D4", textAlign: "right" }}>{v}</span>
     </div>
   );
 }
@@ -544,7 +544,7 @@ function Table({ headers, children }: { headers: string[]; children: React.React
   return (
     <div
       style={{
-        border: "1px solid rgba(245,158,11,0.18)",
+        border: "1px solid rgba(251,243,212,0.18)",
         borderRadius: 6,
         overflow: "hidden",
         marginBottom: "2rem",
@@ -554,8 +554,8 @@ function Table({ headers, children }: { headers: string[]; children: React.React
         <thead>
           <tr
             style={{
-              background: "rgba(245,158,11,0.08)",
-              color: "rgba(245,158,11,0.9)",
+              background: "rgba(251,243,212,0.08)",
+              color: "rgba(251,243,212,0.9)",
               textTransform: "uppercase",
               fontSize: "0.875rem",
               letterSpacing: "0.22em",
@@ -578,10 +578,10 @@ function Placeholder({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        border: "1px dashed rgba(245,158,11,0.2)",
+        border: "1px dashed rgba(251,243,212,0.2)",
         padding: "2rem 1rem",
         textAlign: "center",
-        color: "rgba(192,200,206,0.55)",
+        color: "rgba(251,243,212,0.55)",
         fontSize: "1rem",
         marginBottom: "2rem",
       }}
@@ -596,7 +596,7 @@ const sectionHeading: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.25em",
   textTransform: "uppercase",
-  color: "rgba(245,158,11,0.85)",
+  color: "rgba(251,243,212,0.85)",
   margin: "1.5rem 0 0.8rem",
 };
 
@@ -605,21 +605,21 @@ const th: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   fontWeight: 400,
-  borderBottom: "1px solid rgba(245,158,11,0.15)",
+  borderBottom: "1px solid rgba(251,243,212,0.15)",
 };
 
 const td: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
-  color: "#fbf3d4",
+  color: "#FBF3D4",
   fontSize: "1rem",
   verticalAlign: "top",
-  borderBottom: "1px solid rgba(245,158,11,0.06)",
+  borderBottom: "1px solid rgba(251,243,212,0.06)",
 };
 
 const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
-  border: "1px solid rgba(245,158,11,0.4)",
+  border: "1px solid rgba(251,243,212,0.4)",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -632,13 +632,13 @@ const chipBase: React.CSSProperties = {
 
 const chipPrimary: React.CSSProperties = {
   ...chipBase,
-  color: "#f59e0b",
-  borderColor: "rgba(245,158,11,0.55)",
+  color: "#FBF3D4",
+  borderColor: "rgba(251,243,212,0.55)",
 };
 
 const chipNeutral: React.CSSProperties = {
   ...chipBase,
-  color: "rgba(245,158,11,0.85)",
+  color: "rgba(251,243,212,0.85)",
 };
 
 const modalBackdrop: React.CSSProperties = {
@@ -655,8 +655,8 @@ const modalBackdrop: React.CSSProperties = {
 const modalCard: React.CSSProperties = {
   width: "100%",
   maxWidth: 540,
-  background: "rgb(12,8,4)",
-  border: "1px solid rgba(245,158,11,0.4)",
+  background: "rgb(29,29,31)",
+  border: "1px solid rgba(251,243,212,0.4)",
   borderRadius: 6,
   // 3-zone scrollable layout: sticky header + scrollable body + sticky footer
   display: "flex",
@@ -669,8 +669,8 @@ const modalCard: React.CSSProperties = {
 const modalHeader: React.CSSProperties = {
   flexShrink: 0,
   padding: "1.1rem 1.4rem 0.9rem",
-  background: "rgb(12,8,4)",
-  borderBottom: "1px solid rgba(245,158,11,0.18)",
+  background: "rgb(29,29,31)",
+  borderBottom: "1px solid rgba(251,243,212,0.18)",
 };
 
 const modalScrollBody: React.CSSProperties = {
@@ -684,14 +684,14 @@ const modalScrollBody: React.CSSProperties = {
 const modalFooter: React.CSSProperties = {
   flexShrink: 0,
   padding: "0.9rem 1.4rem",
-  background: "rgb(12,8,4)",
-  borderTop: "1px solid rgba(245,158,11,0.18)",
+  background: "rgb(29,29,31)",
+  borderTop: "1px solid rgba(251,243,212,0.18)",
 };
 
 const modalTitle: React.CSSProperties = {
   fontFamily: "var(--font-heading)",
   fontSize: "1.05rem",
-  color: "#fbf3d4",
+  color: "#FBF3D4",
   margin: 0,
   letterSpacing: "0.04em",
 };
@@ -705,13 +705,13 @@ const modalLabel: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.2em",
   textTransform: "uppercase",
-  color: "rgba(245,158,11,0.85)",
+  color: "rgba(251,243,212,0.85)",
 };
 
 const modalInput: React.CSSProperties = {
   background: "transparent",
-  border: "1px solid rgba(245,158,11,0.3)",
-  color: "#fbf3d4",
+  border: "1px solid rgba(251,243,212,0.3)",
+  color: "#FBF3D4",
   padding: "0.55rem 0.7rem",
   fontSize: "1rem",
   letterSpacing: "0.02em",
@@ -726,7 +726,7 @@ const modalActions: React.CSSProperties = {
 };
 
 const mapsLink: React.CSSProperties = {
-  color: "#f59e0b",
+  color: "#FBF3D4",
   textDecoration: "underline",
   textUnderlineOffset: "2px",
   fontSize: "1rem",

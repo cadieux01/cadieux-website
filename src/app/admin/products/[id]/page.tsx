@@ -36,13 +36,22 @@ import {
   AdminProductRow,
 } from "@/lib/admin-shared";
 
-// Brand palette (only): Foundation Green, Grain Cream, Core Black.
-// Same three-colour system as ProductForm — no greys, no legacy gold.
-const FG = "#024628"; // Foundation Green
-const CREAM = "#FBF3D4"; // Grain Cream
-const INK = "#1D1D1F"; // Core Black
-const FG_MUTED = "rgba(2, 70, 40, 0.7)";
-const DANGER = "#7f1d1d"; // deep red — reserved for destructive archive CTA
+import {
+  CREAM,
+  INK,
+  TEXT_MUTED,
+  TEXT_FADED,
+  BORDER,
+  SURFACE_TEXT_MUTED,
+  SURFACE_BORDER,
+  DANGER,
+} from "@/components/admin/theme";
+
+// Same split as ProductForm: FG / FG_MUTED are for text on the INK page,
+// INK / SURFACE_* for text on a CREAM card. Dark green used to serve both
+// and was unreadable in the first role.
+const FG = CREAM;
+const FG_MUTED = TEXT_MUTED;
 
 type EditorTab =
   | "details"
@@ -183,9 +192,9 @@ export default function EditProductPage() {
                 fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 fontWeight: 500,
-                color: FG,
+                color: INK,
                 backgroundColor: CREAM,
-                border: `1px solid ${FG}`,
+                border: `1px solid ${SURFACE_BORDER}`,
                 borderRadius: 6,
                 padding: "0.45rem 0.9rem",
               }}
@@ -202,9 +211,9 @@ export default function EditProductPage() {
                 fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 fontWeight: 500,
-                color: product.is_archived ? FG : CREAM,
+                color: product.is_archived ? INK : CREAM,
                 backgroundColor: product.is_archived ? CREAM : DANGER,
-                border: `1px solid ${product.is_archived ? FG : DANGER}`,
+                border: `1px solid ${product.is_archived ? SURFACE_BORDER : DANGER}`,
                 borderRadius: 6,
                 padding: "0.45rem 0.9rem",
                 opacity: archiveBusy ? 0.5 : 1,
@@ -227,9 +236,9 @@ export default function EditProductPage() {
               fontSize: "0.875rem",
               letterSpacing: "0.25em",
               fontWeight: 500,
-              color: FG,
+              color: INK,
               backgroundColor: CREAM,
-              border: `1px solid ${FG}`,
+              border: `1px solid ${SURFACE_BORDER}`,
               borderRadius: 6,
               padding: "0.45rem 0.9rem",
             }}
@@ -242,9 +251,9 @@ export default function EditProductPage() {
       {loadErr ? (
         <p
           style={{
-            color: FG,
+            color: INK,
             backgroundColor: CREAM,
-            border: `1px solid ${FG}`,
+            border: `1px solid ${SURFACE_BORDER}`,
             borderRadius: 6,
             padding: "0.6rem 0.9rem",
             fontFamily: "var(--font-body)",
@@ -258,7 +267,7 @@ export default function EditProductPage() {
         <>
           <div
             className="flex gap-1 mb-8 flex-wrap"
-            style={{ borderBottom: `1px solid ${FG}` }}
+            style={{ borderBottom: `1px solid ${BORDER}` }}
           >
             {TABS.map((t) => {
               const active = tab === t.key;
@@ -273,7 +282,7 @@ export default function EditProductPage() {
                     fontSize: "0.875rem",
                     letterSpacing: "0.25em",
                     fontWeight: 500,
-                    color: active ? FG : FG_MUTED,
+                    color: active ? CREAM : TEXT_FADED,
                     background: "transparent",
                     border: "none",
                     borderBottom: `2px solid ${active ? FG : "transparent"}`,
@@ -364,14 +373,14 @@ export default function EditProductPage() {
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 410,
-            background: "#024628",
-            color: "#fbf3d4",
+            background: "#1D1D1F",
+            color: "#FBF3D4",
             border: "1px solid rgba(251,243,212,0.3)",
             padding: "0.7rem 1.2rem",
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.08em",
-            boxShadow: "0 16px 40px -12px rgba(0,0,0,0.6)",
+            boxShadow: "0 16px 40px -12px rgba(29,29,31,0.6)",
           }}
         >
           ✓ {toast}
@@ -413,7 +422,7 @@ function HistoryPanel({ history }: { history: AdminProductChangeRow[] }) {
               key={h.id}
               className="p-3"
               style={{
-                border: `1px solid ${FG}`,
+                border: `1px solid ${SURFACE_BORDER}`,
                 borderRadius: 6,
                 backgroundColor: CREAM,
                 fontFamily: "var(--font-body)",
@@ -422,22 +431,22 @@ function HistoryPanel({ history }: { history: AdminProductChangeRow[] }) {
               }}
             >
               <div className="flex items-baseline justify-between gap-2">
-                <span style={{ color: FG, fontWeight: 500 }}>
+                <span style={{ color: INK, fontWeight: 600 }}>
                   {h.field_changed}
                 </span>
-                <span style={{ color: FG_MUTED, fontSize: "1rem" }}>
+                <span style={{ color: SURFACE_TEXT_MUTED, fontWeight: 500, fontSize: "1rem" }}>
                   {formatDateTime(h.changed_at)}
                 </span>
               </div>
-              <div className="mt-1" style={{ color: FG_MUTED }}>
+              <div className="mt-1" style={{ color: SURFACE_TEXT_MUTED, fontWeight: 500 }}>
                 {h.context ?? "update"}
               </div>
               <div className="mt-2 grid grid-cols-[60px_1fr] gap-x-3 gap-y-1">
-                <span style={{ color: FG_MUTED }}>from</span>
+                <span style={{ color: SURFACE_TEXT_MUTED, fontWeight: 500 }}>from</span>
                 <code style={{ wordBreak: "break-word", color: INK }}>
                   {renderValue(h.old_value)}
                 </code>
-                <span style={{ color: FG_MUTED }}>to</span>
+                <span style={{ color: SURFACE_TEXT_MUTED, fontWeight: 500 }}>to</span>
                 <code style={{ wordBreak: "break-word", color: INK }}>
                   {renderValue(h.new_value)}
                 </code>

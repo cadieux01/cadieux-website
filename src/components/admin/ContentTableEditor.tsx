@@ -18,10 +18,9 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 
 import { adminFetch, AdminFetchError, adminAuthHeaders } from "@/lib/admin-client";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
 
 export type ContentTable =
   | "content_strings"
@@ -303,7 +302,7 @@ export function ContentTableEditor({
       )}
 
       {loadErr ? (
-        <p style={{ color: "#fecaca", fontFamily: "var(--font-body)" }}>
+        <p style={{ color: "#EF4444", fontFamily: "var(--font-body)" }}>
           {loadErr}
         </p>
       ) : loading ? (
@@ -333,8 +332,8 @@ export function ContentTableEditor({
                     style={{
                       border: `1px solid ${BORDER}`,
                       background: r.is_visible
-                        ? "rgba(0,0,0,0.18)"
-                        : "rgba(120,30,30,0.12)",
+                        ? "rgba(29,29,31,0.18)"
+                        : "rgba(239,68,68,0.12)",
                     }}
                   >
                     <div className="flex items-start gap-2">
@@ -446,7 +445,7 @@ export function ContentTableEditor({
                         disabled={busy}
                         className="uppercase"
                         style={pillStyle(
-                          r.is_visible ? GOLD : "#9ca3af",
+                          r.is_visible ? CREAM : "rgba(251,243,212,0.7)",
                           busy,
                         )}
                       >
@@ -458,7 +457,7 @@ export function ContentTableEditor({
                           onClick={() => saveRow(r.id)}
                           disabled={busy}
                           className="uppercase"
-                          style={pillStyle(GOLD, busy)}
+                          style={pillStyle(CREAM, busy)}
                         >
                           Save
                         </button>
@@ -468,7 +467,7 @@ export function ContentTableEditor({
                         onClick={() => deleteRow(r)}
                         disabled={busy}
                         className="uppercase"
-                        style={pillStyle("#ef4444", busy)}
+                        style={pillStyle("#EF4444", busy)}
                       >
                         Delete
                       </button>
@@ -484,7 +483,7 @@ export function ContentTableEditor({
             className="p-3"
             style={{
               border: `1px dashed ${BORDER}`,
-              background: "rgba(0,0,0,0.12)",
+              background: "rgba(29,29,31,0.12)",
             }}
           >
             <p
@@ -493,7 +492,7 @@ export function ContentTableEditor({
                 fontFamily: "var(--font-body)",
                 fontSize: "0.875rem",
                 letterSpacing: "0.25em",
-                color: GOLD,
+                color: CREAM,
                 marginBottom: "0.5rem",
               }}
             >
@@ -568,8 +567,8 @@ export function ContentTableEditor({
                   fontFamily: "var(--font-body)",
                   fontSize: "0.875rem",
                   letterSpacing: "0.25em",
-                  color: GOLD,
-                  border: `1px solid ${GOLD}`,
+                  color: CREAM,
+                  border: `1px solid ${CREAM}`,
                   padding: "0.45rem 0.9rem",
                   background: "transparent",
                   opacity: busy ? 0.5 : 1,
@@ -585,7 +584,7 @@ export function ContentTableEditor({
       {err ? (
         <p
           className="mt-3"
-          style={{ color: "#fecaca", fontFamily: "var(--font-body)" }}
+          style={{ color: "#EF4444", fontFamily: "var(--font-body)" }}
         >
           {err}
         </p>
@@ -676,7 +675,7 @@ function ImageUpload({
         onClick={() => inputRef.current?.click()}
         disabled={controlDisabled}
         className="uppercase"
-        style={pillStyle(GOLD, controlDisabled)}
+        style={pillStyle(CREAM, controlDisabled)}
       >
         {busy ? "Uploading…" : value ? "Replace" : "Upload"}
       </button>
@@ -686,13 +685,13 @@ function ImageUpload({
           onClick={() => onChange("")}
           disabled={controlDisabled}
           className="uppercase"
-          style={pillStyle("#9ca3af", controlDisabled)}
+          style={pillStyle("rgba(251,243,212,0.7)", controlDisabled)}
         >
           Clear
         </button>
       ) : null}
       {uErr ? (
-        <p style={{ ...warnStyle, color: "#fecaca", width: "100%" }}>{uErr}</p>
+        <p style={{ ...warnStyle, color: "#EF4444", width: "100%" }}>{uErr}</p>
       ) : null}
     </div>
   );
@@ -732,7 +731,7 @@ const fieldStyle: React.CSSProperties = {
 };
 
 const codeStyle: React.CSSProperties = {
-  color: GOLD,
+  color: CREAM,
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
   letterSpacing: "0.06em",
@@ -746,7 +745,7 @@ const hintStyle: React.CSSProperties = {
 };
 
 const warnStyle: React.CSSProperties = {
-  color: "#fbbf24",
+  color: "#FBF3D4",
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
   marginTop: "0.2rem",
@@ -757,7 +756,7 @@ function arrowStyle(disabled: boolean): React.CSSProperties {
     fontFamily: "var(--font-body)",
     fontSize: "1rem",
     lineHeight: 1.1,
-    color: disabled ? "rgba(192,200,206,0.25)" : FADED,
+    color: disabled ? "rgba(251,243,212,0.25)" : FADED,
     background: "transparent",
     border: "none",
     cursor: disabled ? "not-allowed" : "pointer",

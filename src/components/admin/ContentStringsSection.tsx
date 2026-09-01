@@ -14,10 +14,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
 
 type Row = {
   id: string;
@@ -259,7 +258,7 @@ export function ContentStringsSection({
       )}
 
       {loadErr ? (
-        <p style={{ color: "#fecaca", fontFamily: "var(--font-body)" }}>
+        <p style={{ color: "#EF4444", fontFamily: "var(--font-body)" }}>
           {loadErr}
         </p>
       ) : loading ? (
@@ -290,14 +289,14 @@ export function ContentStringsSection({
                     style={{
                       border: `1px solid ${BORDER}`,
                       background: r.is_visible
-                        ? "rgba(0,0,0,0.18)"
-                        : "rgba(120,30,30,0.12)",
+                        ? "rgba(29,29,31,0.18)"
+                        : "rgba(239,68,68,0.12)",
                     }}
                   >
                     <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
                       <code
                         style={{
-                          color: GOLD,
+                          color: CREAM,
                           fontFamily: "var(--font-body)",
                           fontSize: "1rem",
                           letterSpacing: "0.04em",
@@ -336,7 +335,7 @@ export function ContentStringsSection({
                     {showWarn ? (
                       <p
                         style={{
-                          color: "#fbbf24",
+                          color: "#FBF3D4",
                           fontFamily: "var(--font-body)",
                           fontSize: "1rem",
                           marginTop: "0.3rem",
@@ -365,7 +364,7 @@ export function ContentStringsSection({
                         onClick={() => toggleVisible(r)}
                         disabled={busy}
                         className="uppercase"
-                        style={pillStyle(r.is_visible ? GOLD : "#9ca3af", busy)}
+                        style={pillStyle(r.is_visible ? CREAM : "rgba(251,243,212,0.7)", busy)}
                       >
                         {r.is_visible ? "Visible" : "Hidden"}
                       </button>
@@ -375,7 +374,7 @@ export function ContentStringsSection({
                           onClick={() => saveRow(r)}
                           disabled={busy}
                           className="uppercase"
-                          style={pillStyle(GOLD, busy)}
+                          style={pillStyle(CREAM, busy)}
                         >
                           Save
                         </button>
@@ -385,7 +384,7 @@ export function ContentStringsSection({
                         onClick={() => deleteRow(r)}
                         disabled={busy}
                         className="uppercase"
-                        style={pillStyle("#ef4444", busy)}
+                        style={pillStyle("#EF4444", busy)}
                       >
                         Delete
                       </button>
@@ -401,7 +400,7 @@ export function ContentStringsSection({
             className="p-3"
             style={{
               border: `1px dashed ${BORDER}`,
-              background: "rgba(0,0,0,0.12)",
+              background: "rgba(29,29,31,0.12)",
             }}
           >
             <p
@@ -410,7 +409,7 @@ export function ContentStringsSection({
                 fontFamily: "var(--font-body)",
                 fontSize: "0.875rem",
                 letterSpacing: "0.25em",
-                color: GOLD,
+                color: CREAM,
                 marginBottom: "0.5rem",
               }}
             >
@@ -448,7 +447,7 @@ export function ContentStringsSection({
                 {looksLikeMacro(newValue) ? (
                   <p
                     style={{
-                      color: "#fbbf24",
+                      color: "#FBF3D4",
                       fontFamily: "var(--font-body)",
                       fontSize: "1rem",
                       marginTop: "0.2rem",
@@ -470,8 +469,8 @@ export function ContentStringsSection({
                   fontFamily: "var(--font-body)",
                   fontSize: "0.875rem",
                   letterSpacing: "0.25em",
-                  color: GOLD,
-                  border: `1px solid ${GOLD}`,
+                  color: CREAM,
+                  border: `1px solid ${CREAM}`,
                   padding: "0.45rem 0.9rem",
                   background: "transparent",
                   opacity: busy || !newKey.trim() ? 0.5 : 1,
@@ -487,7 +486,7 @@ export function ContentStringsSection({
       {err ? (
         <p
           className="mt-3"
-          style={{ color: "#fecaca", fontFamily: "var(--font-body)" }}
+          style={{ color: "#EF4444", fontFamily: "var(--font-body)" }}
         >
           {err}
         </p>

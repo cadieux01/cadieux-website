@@ -133,8 +133,8 @@ export default function ChangeRequestsPage() {
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.25em",
-            color: "#f59e0b",
-            border: "1px solid #f59e0b",
+            color: "#FBF3D4",
+            border: "1px solid #FBF3D4",
             padding: "0.45rem 0.9rem",
             background: "transparent",
             cursor: refreshing ? "wait" : "pointer",
@@ -155,9 +155,9 @@ export default function ChangeRequestsPage() {
               onClick={() => setFilter(f)}
               className="uppercase"
               style={{
-                background: active ? "rgba(245,158,11,0.15)" : "transparent",
-                border: `1px solid ${active ? "rgba(245,158,11,0.7)" : "rgba(245,158,11,0.25)"}`,
-                color: active ? "#fbf3d4" : "rgba(251,243,212,0.55)",
+                background: active ? "rgba(251,243,212,0.15)" : "transparent",
+                border: `1px solid ${active ? "rgba(251,243,212,0.7)" : "rgba(251,243,212,0.25)"}`,
+                color: active ? "#FBF3D4" : "rgba(251,243,212,0.55)",
                 padding: "6px 14px",
                 fontFamily: "var(--font-body)",
                 fontSize: "0.875rem",
@@ -177,7 +177,7 @@ export default function ChangeRequestsPage() {
           style={{
             border: "1px solid rgba(239,68,68,0.45)",
             padding: "0.8rem 1rem",
-            color: "#fca5a5",
+            color: "#EF4444",
             marginBottom: "1rem",
             fontSize: "1rem",
             fontFamily: "var(--font-body)",
@@ -199,21 +199,21 @@ export default function ChangeRequestsPage() {
             const isPending = r.status === "pending";
             const statusColor =
               r.status === "approved"
-                ? "#7bd88f"
+                ? "#FBF3D4"
                 : r.status === "rejected"
-                  ? "#ff8181"
-                  : "#e3b341";
+                  ? "#EF4444"
+                  : "#FBF3D4";
             return (
               <div
                 key={r.id}
                 style={{
-                  border: "1px solid rgba(245,158,11,0.18)",
-                  background: "rgba(245,158,11,0.03)",
+                  border: "1px solid rgba(251,243,212,0.18)",
+                  background: "rgba(251,243,212,0.03)",
                   padding: "16px 18px",
                   display: "grid",
                   gap: 10,
                   fontFamily: "var(--font-body)",
-                  color: "#fbf3d4",
+                  color: "#FBF3D4",
                   fontSize: "1rem",
                 }}
               >
@@ -288,7 +288,7 @@ export default function ChangeRequestsPage() {
                     gap: 12,
                     fontSize: "1rem",
                     paddingTop: 6,
-                    borderTop: "1px solid rgba(245,158,11,0.1)",
+                    borderTop: "1px solid rgba(251,243,212,0.1)",
                   }}
                 >
                   <div>
@@ -316,7 +316,7 @@ export default function ChangeRequestsPage() {
                     <div
                       style={{
                         ...smallLabel,
-                        color: "rgba(245,158,11,0.7)",
+                        color: "rgba(251,243,212,0.7)",
                       }}
                     >
                       Requested
@@ -348,7 +348,7 @@ export default function ChangeRequestsPage() {
                       fontSize: "1rem",
                       color: "rgba(251,243,212,0.7)",
                       fontStyle: "italic",
-                      borderLeft: "2px solid rgba(245,158,11,0.4)",
+                      borderLeft: "2px solid rgba(251,243,212,0.4)",
                       paddingLeft: 10,
                     }}
                   >
@@ -360,7 +360,7 @@ export default function ChangeRequestsPage() {
                   <div
                     style={{ fontSize: "1rem", color: "rgba(251,243,212,0.6)" }}
                   >
-                    <span style={{ color: "rgba(245,158,11,0.7)" }}>Response:</span>{" "}
+                    <span style={{ color: "rgba(251,243,212,0.7)" }}>Response:</span>{" "}
                     {r.admin_response}
                   </div>
                 ) : null}
@@ -378,9 +378,9 @@ export default function ChangeRequestsPage() {
                       rows={2}
                       style={{
                         width: "100%",
-                        background: "rgba(0,0,0,0.4)",
-                        border: `1px solid ${errors[r.id] ? "rgba(255,129,129,0.7)" : "rgba(245,158,11,0.25)"}`,
-                        color: "#fbf3d4",
+                        background: "rgba(29,29,31,0.4)",
+                        border: `1px solid ${errors[r.id] ? "rgba(239,68,68,0.7)" : "rgba(251,243,212,0.25)"}`,
+                        color: "#FBF3D4",
                         padding: "8px 10px",
                         fontFamily: "var(--font-body)",
                         fontSize: "1rem",
@@ -388,7 +388,7 @@ export default function ChangeRequestsPage() {
                       }}
                     />
                     {errors[r.id] ? (
-                      <div style={{ color: "#ff8181", fontSize: "1rem" }}>
+                      <div style={{ color: "#EF4444", fontSize: "1rem" }}>
                         {errors[r.id]}
                       </div>
                     ) : null}
@@ -406,8 +406,8 @@ export default function ChangeRequestsPage() {
                         className="uppercase"
                         style={{
                           background: "transparent",
-                          border: "1px solid rgba(255,129,129,0.55)",
-                          color: "#ff8181",
+                          border: "1px solid rgba(239,68,68,0.55)",
+                          color: "#EF4444",
                           padding: "6px 14px",
                           fontFamily: "var(--font-body)",
                           fontSize: "0.875rem",
@@ -424,9 +424,9 @@ export default function ChangeRequestsPage() {
                         onClick={() => void act(r.id, "approve")}
                         className="uppercase"
                         style={{
-                          background: "rgba(123,216,143,0.12)",
-                          border: "1px solid rgba(123,216,143,0.55)",
-                          color: "#7bd88f",
+                          background: "rgba(251,243,212,0.12)",
+                          border: "1px solid rgba(251,243,212,0.55)",
+                          color: "#FBF3D4",
                           padding: "6px 14px",
                           fontFamily: "var(--font-body)",
                           fontSize: "0.875rem",
@@ -479,13 +479,13 @@ export default function ChangeRequestsPage() {
           </h3>
           <div style={{ display: "grid", gap: 8 }}>
             {recentResolved.map((r) => {
-              const sc = r.status === "approved" ? "#7bd88f" : "#ff8181";
+              const sc = r.status === "approved" ? "#FBF3D4" : "#EF4444";
               return (
                 <div
                   key={r.id}
                   style={{
-                    border: "1px solid rgba(245,158,11,0.12)",
-                    background: "rgba(255,255,255,0.015)",
+                    border: "1px solid rgba(251,243,212,0.12)",
+                    background: "rgba(251,243,212,0.015)",
                     padding: "10px 14px",
                     display: "flex",
                     justifyContent: "space-between",
@@ -505,7 +505,7 @@ export default function ChangeRequestsPage() {
                       minWidth: 0,
                     }}
                   >
-                    <span style={{ color: "#fbf3d4" }}>
+                    <span style={{ color: "#FBF3D4" }}>
                       {r.subscription?.product_name ?? "—"}
                       {r.delivery ? ` · Week ${r.delivery.week_number}` : ""}
                     </span>
@@ -556,7 +556,7 @@ function formatScheduledDate(iso: string): string {
 }
 
 const mutedText: React.CSSProperties = {
-  color: "rgba(192,200,206,0.5)",
+  color: "rgba(251,243,212,0.5)",
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
 };

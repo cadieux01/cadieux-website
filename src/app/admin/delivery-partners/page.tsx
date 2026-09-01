@@ -17,11 +17,10 @@ import {
   normalizeWhatsAppPhone,
 } from "@/lib/delivery-partner-phone";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
-const DANGER = "#ef4444";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
+const DANGER = "#EF4444";
 
 type DeliveryPartner = {
   id: string;
@@ -172,8 +171,8 @@ export default function DeliveryPartnersPage() {
           type="button"
           onClick={openCreate}
           style={{
-            background: GOLD,
-            color: "#0a0a0a",
+            background: CREAM,
+            color: "#1D1D1F",
             border: "none",
             padding: "8px 16px",
             fontFamily: "var(--font-body)",
@@ -267,7 +266,7 @@ function PartnerTable({
         <thead>
           <tr
             style={{
-              background: "rgba(245,158,11,0.05)",
+              background: "rgba(251,243,212,0.05)",
               color: FADED,
               textAlign: "left",
               fontSize: "0.875rem",
@@ -357,7 +356,7 @@ function ArchivedTable({
 
 const rowBtnStyle: React.CSSProperties = {
   background: "transparent",
-  color: GOLD,
+  color: CREAM,
   border: `1px solid ${BORDER}`,
   padding: "4px 10px",
   fontFamily: "var(--font-body)",
@@ -388,7 +387,7 @@ function EditorModal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.65)",
+        background: "rgba(29,29,31,0.65)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -399,7 +398,7 @@ function EditorModal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "#141414",
+          background: "#1D1D1F",
           border: `1px solid ${BORDER}`,
           padding: 24,
           width: "100%",
@@ -414,7 +413,7 @@ function EditorModal({
             fontSize: "1rem",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            color: GOLD,
+            color: CREAM,
           }}
         >
           {editor.mode === "create" ? "Add partner" : "Edit partner"}
@@ -477,8 +476,8 @@ function EditorModal({
             onClick={onSave}
             disabled={saving}
             style={{
-              background: GOLD,
-              color: "#0a0a0a",
+              background: CREAM,
+              color: "#1D1D1F",
               border: "none",
               padding: "8px 16px",
               fontSize: "0.875rem",
@@ -508,7 +507,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 const inputStyle: React.CSSProperties = {
-  background: "#0a0a0a",
+  background: "#1D1D1F",
   color: CREAM,
   border: `1px solid ${BORDER}`,
   padding: "10px 12px",

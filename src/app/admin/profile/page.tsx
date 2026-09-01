@@ -13,24 +13,22 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 
 // ─── shared design tokens (match AdminShell) ─────────────────────────────────
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const MUTED = "rgba(192,200,206,0.4)";
-const GREEN = "#024628";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const MUTED = "rgba(251,243,212,0.4)";
 
 const CARD: React.CSSProperties = {
-  border: "1px solid rgba(245,158,11,0.18)",
+  border: "1px solid rgba(251,243,212,0.18)",
   borderRadius: 2,
   padding: "1.5rem",
-  background: "rgba(255,255,255,0.02)",
+  background: "rgba(251,243,212,0.02)",
   marginBottom: "1.25rem",
 };
 const INPUT: React.CSSProperties = {
   display: "block",
   width: "100%",
   background: "transparent",
-  border: "1px solid rgba(245,158,11,0.3)",
+  border: "1px solid rgba(251,243,212,0.3)",
   color: CREAM,
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
@@ -40,8 +38,8 @@ const INPUT: React.CSSProperties = {
   borderRadius: 0,
 };
 const BTN_PRIMARY: React.CSSProperties = {
-  border: `1px solid ${GOLD}`,
-  color: GOLD,
+  border: `1px solid ${CREAM}`,
+  color: CREAM,
   background: "transparent",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
@@ -52,7 +50,7 @@ const BTN_PRIMARY: React.CSSProperties = {
   WebkitTapHighlightColor: "transparent",
 };
 const BTN_GHOST: React.CSSProperties = {
-  border: "1px solid rgba(192,200,206,0.25)",
+  border: "1px solid rgba(251,243,212,0.25)",
   color: FADED,
   background: "transparent",
   fontFamily: "var(--font-body)",
@@ -73,14 +71,14 @@ const LABEL: React.CSSProperties = {
   marginBottom: "0.45rem",
 };
 const ERROR_STYLE: React.CSSProperties = {
-  color: "#ef4444",
+  color: "#EF4444",
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
   letterSpacing: "0.06em",
   marginTop: "0.5rem",
 };
 const SUCCESS_STYLE: React.CSSProperties = {
-  color: "#4ade80",
+  color: "#FBF3D4",
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
   letterSpacing: "0.06em",
@@ -204,7 +202,7 @@ function GeneratePanel({ onSuccess }: { onSuccess: () => void }) {
               fontFamily: "var(--font-heading)",
               fontSize: "2rem",
               letterSpacing: "0.4em",
-              color: GOLD,
+              color: CREAM,
               fontWeight: 300,
             }}
           >
@@ -478,7 +476,7 @@ export default function AdminProfilePage() {
         >
           This admin area uses a{" "}
           <strong style={{ color: CREAM }}>single shared password</strong> for access, set via
-          the <code style={{ color: GOLD, fontSize: "1rem" }}>ADMIN_PASSWORD</code> environment
+          the <code style={{ color: CREAM, fontSize: "1rem" }}>ADMIN_PASSWORD</code> environment
           variable — contact whoever manages the server to rotate it. There is no per-operator
           login ID. The security PIN below is a{" "}
           <strong style={{ color: CREAM }}>separate, additional layer</strong> you can use to
@@ -508,9 +506,9 @@ export default function AdminProfilePage() {
                 textTransform: "uppercase",
                 padding: "0.25rem 0.7rem",
                 border: `1px solid ${
-                  pinLocked ? "#ef4444" : pinExists ? GREEN : "rgba(245,158,11,0.4)"
+                  pinLocked ? "#EF4444" : pinExists ? CREAM : "rgba(251,243,212,0.4)"
                 }`,
-                color: pinLocked ? "#ef4444" : pinExists ? "#4ade80" : GOLD,
+                color: pinLocked ? "#EF4444" : pinExists ? "#FBF3D4" : CREAM,
               }}
             >
               {pinLocked ? "Locked" : pinExists ? "Active" : "Not set"}
@@ -527,7 +525,7 @@ export default function AdminProfilePage() {
             style={{
               fontFamily: "var(--font-body)",
               fontSize: "1rem",
-              color: "#ef4444",
+              color: "#EF4444",
               letterSpacing: "0.06em",
               lineHeight: 1.6,
             }}
@@ -537,7 +535,7 @@ export default function AdminProfilePage() {
               style={{
                 background: "none",
                 border: "none",
-                color: GOLD,
+                color: CREAM,
                 cursor: "pointer",
                 fontFamily: "var(--font-body)",
                 fontSize: "0.875rem",
@@ -624,11 +622,11 @@ export default function AdminProfilePage() {
         }}
       >
         <p style={{ margin: "0 0 0.25rem" }}>
-          <strong style={{ color: "rgba(192,200,206,0.55)" }}>PIN storage:</strong> Only a
+          <strong style={{ color: "rgba(251,243,212,0.55)" }}>PIN storage:</strong> Only a
           scrypt hash is stored — the plaintext PIN is never persisted anywhere.
         </p>
         <p style={{ margin: 0 }}>
-          <strong style={{ color: "rgba(192,200,206,0.55)" }}>Separate systems:</strong> This
+          <strong style={{ color: "rgba(251,243,212,0.55)" }}>Separate systems:</strong> This
           PIN is independent of the admin password and the logistics dashboard&apos;s PIN.
         </p>
       </div>

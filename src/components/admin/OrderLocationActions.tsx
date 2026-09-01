@@ -21,10 +21,9 @@ import { useState } from "react";
 
 import { formatOrderNumber } from "@/lib/order-number";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const BORDER = "rgba(245,158,11,0.35)";
-const MUTED = "rgba(192,200,206,0.55)";
+const CREAM = "#FBF3D4";
+const BORDER = "rgba(251,243,212,0.35)";
+const MUTED = "rgba(251,243,212,0.55)";
 
 export function OrderLocationActions({
   latitude,
@@ -97,7 +96,7 @@ export function OrderLocationActions({
     justifyContent: "center",
     border: `1px solid ${BORDER}`,
     background: "transparent",
-    color: GOLD,
+    color: CREAM,
     cursor: "pointer",
     padding: "0 8px",
     fontFamily: "var(--font-body)",

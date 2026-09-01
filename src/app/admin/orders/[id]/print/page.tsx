@@ -155,7 +155,7 @@ export default function PrintOrderReceiptPage({
     return (
       <main style={page}>
         <h1 style={{ fontSize: "1.2rem", margin: 0 }}>Order not found</h1>
-        <p style={{ marginTop: "0.6rem", color: "#444" }}>
+        <p style={{ marginTop: "0.6rem", color: "rgba(29,29,31,0.7)" }}>
           No order matches this id. It may have been deleted or the link is
           stale.
         </p>
@@ -165,7 +165,7 @@ export default function PrintOrderReceiptPage({
   if (error || !order) {
     return (
       <main style={page}>
-        <p style={{ color: "#b91c1c" }}>
+        <p style={{ color: "#EF4444" }}>
           Could not load order: {error ?? "unknown error"}
         </p>
       </main>
@@ -352,8 +352,8 @@ export default function PrintOrderReceiptPage({
 const page: React.CSSProperties = {
   fontFamily:
     "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-  color: "#000",
-  background: "#fff",
+  color: "#1D1D1F",
+  background: "#FBF3D4",
   padding: "1.5rem",
   maxWidth: "820px",
   margin: "0 auto",
@@ -364,7 +364,7 @@ const brandHeader: React.CSSProperties = {
   alignItems: "flex-start",
   justifyContent: "space-between",
   gap: "1rem",
-  borderBottom: "2px solid #000",
+  borderBottom: "2px solid #1D1D1F",
   paddingBottom: "0.75rem",
   marginBottom: "1rem",
 };
@@ -377,7 +377,7 @@ const brandName: React.CSSProperties = {
 
 const brandTagline: React.CSSProperties = {
   marginTop: "0.15rem",
-  color: "#444",
+  color: "rgba(29,29,31,0.7)",
   fontSize: "1rem",
   letterSpacing: "0.03em",
 };
@@ -387,7 +387,7 @@ const docType: React.CSSProperties = {
   fontWeight: 600,
   letterSpacing: "0.12em",
   textTransform: "uppercase",
-  border: "1px solid #000",
+  border: "1px solid #1D1D1F",
   padding: "0.3rem 0.7rem",
 };
 
@@ -402,14 +402,14 @@ const metaLabel: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.14em",
   textTransform: "uppercase",
-  color: "#555",
+  color: "rgba(29,29,31,0.7)",
   marginBottom: "0.15rem",
 };
 
 const metaValue: React.CSSProperties = {
   fontSize: "1rem",
   fontWeight: 500,
-  color: "#000",
+  color: "#1D1D1F",
 };
 
 const twoCol: React.CSSProperties = {
@@ -419,7 +419,7 @@ const twoCol: React.CSSProperties = {
 };
 
 const colBox: React.CSSProperties = {
-  border: "1px solid #ccc",
+  border: "1px solid rgba(29,29,31,0.25)",
   padding: "0.7rem 0.85rem",
   borderRadius: 4,
 };
@@ -428,19 +428,19 @@ const sectionHeading: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.14em",
   textTransform: "uppercase",
-  color: "#555",
+  color: "rgba(29,29,31,0.7)",
   marginBottom: "0.35rem",
 };
 
 const detailValue: React.CSSProperties = {
   fontSize: "1rem",
-  color: "#000",
+  color: "#1D1D1F",
   lineHeight: 1.35,
 };
 
 const detailMuted: React.CSSProperties = {
   fontSize: "1rem",
-  color: "#444",
+  color: "rgba(29,29,31,0.7)",
   lineHeight: 1.35,
 };
 
@@ -451,15 +451,15 @@ const itemsTable: React.CSSProperties = {
 };
 
 const itemsTh: React.CSSProperties = {
-  border: "1px solid #ccc",
+  border: "1px solid rgba(29,29,31,0.25)",
   padding: "6px 8px",
   textAlign: "left",
   fontSize: "1rem",
-  background: "#f3f3f3",
+  background: "rgba(29,29,31,0.08)",
 };
 
 const itemsTd: React.CSSProperties = {
-  border: "1px solid #ccc",
+  border: "1px solid rgba(29,29,31,0.25)",
   padding: "6px 8px",
   fontSize: "1rem",
   verticalAlign: "top",
@@ -482,7 +482,7 @@ const totalsRow: React.CSSProperties = {
 };
 
 const totalsRowGrand: React.CSSProperties = {
-  borderTop: "2px solid #000",
+  borderTop: "2px solid #1D1D1F",
   marginTop: "0.35rem",
   paddingTop: "0.4rem",
   fontSize: "1rem",
@@ -492,17 +492,17 @@ const totalsRowGrand: React.CSSProperties = {
 const footer: React.CSSProperties = {
   marginTop: "1.5rem",
   paddingTop: "0.5rem",
-  borderTop: "1px solid #ccc",
+  borderTop: "1px solid rgba(29,29,31,0.25)",
   fontSize: "1rem",
-  color: "#555",
+  color: "rgba(29,29,31,0.7)",
   textAlign: "center",
   letterSpacing: "0.05em",
 };
 
 const printBtn: React.CSSProperties = {
-  background: "#024628",
-  color: "#fbf3d4",
-  border: "1px solid #024628",
+  background: "#1D1D1F",
+  color: "#FBF3D4",
+  border: "1px solid #1D1D1F",
   borderRadius: 4,
   padding: "0.4rem 0.9rem",
   fontSize: "1rem",

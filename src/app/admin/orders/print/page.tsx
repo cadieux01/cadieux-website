@@ -175,7 +175,7 @@ function PrintOrdersPageInner() {
   if (error) {
     return (
       <main style={page}>
-        <p style={{ color: "#b91c1c" }}>Could not load orders: {error}</p>
+        <p style={{ color: "#EF4444" }}>Could not load orders: {error}</p>
       </main>
     );
   }
@@ -190,7 +190,7 @@ function PrintOrdersPageInner() {
           <h1 style={{ fontSize: "1.4rem", margin: 0, letterSpacing: "0.1em" }}>
             Cadieux — Orders
           </h1>
-          <p style={{ margin: "0.3rem 0 0", color: "#444", fontSize: "1rem" }}>
+          <p style={{ margin: "0.3rem 0 0", color: "rgba(29,29,31,0.7)", fontSize: "1rem" }}>
             {rangeLabel} · Status: {status} · Search: {q || "—"} · Generated{" "}
             {new Date().toLocaleString("en-IN")}
           </p>
@@ -206,7 +206,7 @@ function PrintOrdersPageInner() {
         <h1 style={{ fontSize: "1.4rem", margin: 0, letterSpacing: "0.1em" }}>
           Cadieux — Orders
         </h1>
-        <p style={{ margin: "0.3rem 0 0", color: "#444", fontSize: "1rem" }}>
+        <p style={{ margin: "0.3rem 0 0", color: "rgba(29,29,31,0.7)", fontSize: "1rem" }}>
           {rangeLabel} · Status: {status} · Search: {q || "—"} · Generated{" "}
           {new Date().toLocaleString("en-IN")}
         </p>
@@ -225,7 +225,7 @@ function PrintOrdersPageInner() {
             <div key={slot} style={{ marginBottom: "0.8rem" }}>
               <h3 style={slotHeading}>
                 Slot: {slot === "__no_slot__" ? "Unscheduled" : slot}{" "}
-                <span style={{ fontWeight: 400, color: "#444" }}>
+                <span style={{ fontWeight: 400, color: "rgba(29,29,31,0.7)" }}>
                   · {rows.length} order{rows.length === 1 ? "" : "s"}
                 </span>
               </h3>
@@ -282,8 +282,8 @@ function PrintOrdersPageInner() {
 const page: React.CSSProperties = {
   fontFamily:
     "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-  color: "#000",
-  background: "#fff",
+  color: "#1D1D1F",
+  background: "#FBF3D4",
   padding: "1.5rem",
 };
 
@@ -293,15 +293,15 @@ const printTable: React.CSSProperties = {
 };
 
 const printTh: React.CSSProperties = {
-  border: "1px solid #ccc",
+  border: "1px solid rgba(29,29,31,0.25)",
   padding: "6px 8px",
   textAlign: "left",
   fontSize: "1rem",
-  background: "#f3f3f3",
+  background: "rgba(29,29,31,0.08)",
 };
 
 const printTd: React.CSSProperties = {
-  border: "1px solid #ccc",
+  border: "1px solid rgba(29,29,31,0.25)",
   padding: "6px 8px",
   fontSize: "1rem",
   verticalAlign: "top",
@@ -311,7 +311,7 @@ const groupHeading: React.CSSProperties = {
   fontSize: "1rem",
   margin: "0 0 0.4rem",
   letterSpacing: "0.05em",
-  borderBottom: "2px solid #000",
+  borderBottom: "2px solid #1D1D1F",
   paddingBottom: "0.2rem",
 };
 
@@ -319,7 +319,7 @@ const slotHeading: React.CSSProperties = {
   fontSize: "1rem",
   margin: "0.6rem 0 0.3rem",
   letterSpacing: "0.04em",
-  color: "#000",
+  color: "#1D1D1F",
 };
 
 function formatItems(items: AdminOrderItemSnapshot[] | null): string {

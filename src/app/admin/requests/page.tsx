@@ -32,8 +32,7 @@ const TABS: { value: Tab; label: string; subtitle: string }[] = [
   },
 ];
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
+const CREAM = "#FBF3D4";
 
 export default function RequestsPage() {
   const [tab, setTab] = useState<Tab>("serviceability");
@@ -49,7 +48,7 @@ export default function RequestsPage() {
           gap: 8,
           flexWrap: "wrap",
           marginBottom: 24,
-          borderBottom: "1px solid rgba(245,158,11,0.18)",
+          borderBottom: "1px solid rgba(251,243,212,0.18)",
           paddingBottom: 0,
         }}
       >
@@ -68,9 +67,9 @@ export default function RequestsPage() {
                 fontSize: "0.875rem",
                 letterSpacing: "0.22em",
                 padding: "10px 18px",
-                background: isActive ? "rgba(245,158,11,0.12)" : "transparent",
+                background: isActive ? "rgba(251,243,212,0.12)" : "transparent",
                 border: "none",
-                borderBottom: `2px solid ${isActive ? GOLD : "transparent"}`,
+                borderBottom: `2px solid ${isActive ? CREAM : "transparent"}`,
                 color: isActive ? CREAM : "rgba(251,243,212,0.55)",
                 cursor: "pointer",
                 marginBottom: -1,

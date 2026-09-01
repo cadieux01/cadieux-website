@@ -32,17 +32,16 @@ import {
   GOOGLE_MAPS_LOADER_ID,
 } from "@/lib/google-maps-loader";
 
-const GOLD = "#f59e0b";
-const GOLD_SOFT = "rgba(245,158,11,0.85)";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
-const DANGER = "#ef4444";
+const CREAM_SOFT = "rgba(251,243,212,0.85)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
+const DANGER = "#EF4444";
 
 // Pin colours per type — matches /find-us legend.
-const COLOR_KITCHEN = "#16a34a";
-const COLOR_STALL = "#024628";
-const COLOR_PARTNER = "#3b82f6";
+const COLOR_KITCHEN = "#FBF3D4";
+const COLOR_STALL = "#FBF3D4";
+const COLOR_PARTNER = "#FBF3D4";
 
 const VIZAG_CENTER = { lat: 17.74, lng: 83.3 };
 
@@ -267,7 +266,7 @@ export default function AdminLocationsPage() {
             type="button"
             onClick={() => setCreating(true)}
             className="uppercase"
-            style={{ ...refreshBtn, color: CREAM, background: GOLD, borderColor: GOLD }}
+            style={{ ...refreshBtn, color: CREAM, background: CREAM, borderColor: CREAM }}
           >
             + Add location
           </button>
@@ -299,9 +298,9 @@ export default function AdminLocationsPage() {
                   fontSize: "0.875rem",
                   letterSpacing: "0.2em",
                   padding: "0.3rem 0.7rem",
-                  color: active ? "#06120c" : GOLD_SOFT,
-                  background: active ? GOLD : "transparent",
-                  border: `1px solid ${active ? GOLD : "rgba(245,158,11,0.4)"}`,
+                  color: active ? "#1D1D1F" : CREAM_SOFT,
+                  background: active ? CREAM : "transparent",
+                  border: `1px solid ${active ? CREAM : "rgba(251,243,212,0.4)"}`,
                   cursor: "pointer",
                 }}
               >
@@ -336,7 +335,7 @@ export default function AdminLocationsPage() {
               border: "1px solid rgba(239,68,68,0.55)",
               background: "rgba(239,68,68,0.08)",
               padding: "0.75rem 1rem",
-              color: "#fecaca",
+              color: "#EF4444",
               fontFamily: "var(--font-body)",
               fontSize: "1rem",
               lineHeight: 1.5,
@@ -349,7 +348,7 @@ export default function AdminLocationsPage() {
         <div
           style={{
             border: `1px solid ${BORDER}`,
-            background: "rgba(0,0,0,0.18)",
+            background: "rgba(29,29,31,0.18)",
           }}
         >
           <div className="overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
@@ -367,7 +366,7 @@ export default function AdminLocationsPage() {
                 <tr
                   style={{
                     textAlign: "left",
-                    color: GOLD_SOFT,
+                    color: CREAM_SOFT,
                     fontSize: "0.875rem",
                     letterSpacing: "0.22em",
                     textTransform: "uppercase",
@@ -418,7 +417,7 @@ export default function AdminLocationsPage() {
                         style={{
                           borderTop: `1px solid ${BORDER}`,
                           background: isSel
-                            ? "rgba(245,158,11,0.06)"
+                            ? "rgba(251,243,212,0.06)"
                             : undefined,
                         }}
                       >
@@ -442,7 +441,7 @@ export default function AdminLocationsPage() {
                                 height: 10,
                                 borderRadius: 5,
                                 background: colorFor(r.type),
-                                border: "1px solid #000",
+                                border: "1px solid #1D1D1F",
                                 flexShrink: 0,
                               }}
                             />
@@ -584,9 +583,9 @@ export default function AdminLocationsPage() {
               className="uppercase"
               style={{
                 ...miniBtn,
-                color: "#06120c",
-                background: GOLD,
-                borderColor: GOLD,
+                color: "#1D1D1F",
+                background: CREAM,
+                borderColor: CREAM,
                 opacity: bulkBusy ? 0.5 : 1,
               }}
             >
@@ -603,7 +602,7 @@ export default function AdminLocationsPage() {
             className="uppercase"
             style={{
               ...miniBtn,
-              color: "#fff",
+              color: "#FBF3D4",
               background: DANGER,
               borderColor: DANGER,
               opacity: bulkBusy ? 0.5 : 1,
@@ -621,7 +620,7 @@ export default function AdminLocationsPage() {
           title={`Archive ${selectionCount} location${selectionCount === 1 ? "" : "s"}?`}
           message={`They'll be hidden from /find-us and the app, kept for history.`}
           confirmLabel={bulkBusy ? "Archiving…" : `Archive ${selectionCount}`}
-          confirmStyle={{ background: GOLD, borderColor: GOLD, color: "#06120c" }}
+          confirmStyle={{ background: CREAM, borderColor: CREAM, color: "#1D1D1F" }}
           confirmDisabled={bulkBusy}
           onConfirm={() => void runBulk("archive")}
         />
@@ -637,7 +636,7 @@ export default function AdminLocationsPage() {
           title={`Permanently delete ${selectionCount} location${selectionCount === 1 ? "" : "s"}?`}
           message={`This cannot be undone. Type DELETE in capitals to confirm.`}
           confirmLabel={bulkBusy ? "Deleting…" : `Delete ${selectionCount}`}
-          confirmStyle={{ background: DANGER, borderColor: DANGER, color: "#fff" }}
+          confirmStyle={{ background: DANGER, borderColor: DANGER, color: "#FBF3D4" }}
           confirmDisabled={bulkBusy || deleteText !== "DELETE"}
           onConfirm={() => void runBulk("delete")}
         >
@@ -672,7 +671,7 @@ export default function AdminLocationsPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.8)",
+            background: "rgba(29,29,31,0.8)",
             zIndex: 500,
             display: "flex",
             alignItems: "center",
@@ -723,7 +722,7 @@ function ConfirmModal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.78)",
+        background: "rgba(29,29,31,0.78)",
         zIndex: 600,
         display: "flex",
         alignItems: "center",
@@ -736,7 +735,7 @@ function ConfirmModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "min(460px, 100%)",
-          background: "rgb(6,4,2)",
+          background: "rgb(29,29,31)",
           border: `1px solid ${BORDER}`,
           // 3-zone scrollable layout
           display: "flex",
@@ -750,7 +749,7 @@ function ConfirmModal({
           style={{
             flexShrink: 0,
             padding: "1.1rem 1.25rem 0.9rem",
-            background: "rgb(6,4,2)",
+            background: "rgb(29,29,31)",
             borderBottom: `1px solid ${BORDER}`,
           }}
         >
@@ -794,7 +793,7 @@ function ConfirmModal({
           style={{
             flexShrink: 0,
             padding: "0.9rem 1.25rem",
-            background: "rgb(6,4,2)",
+            background: "rgb(29,29,31)",
             borderTop: `1px solid ${BORDER}`,
           }}
         >
@@ -988,7 +987,7 @@ function LocationModal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.78)",
+        background: "rgba(29,29,31,0.78)",
         zIndex: 500,
         display: "flex",
         alignItems: "center",
@@ -1005,7 +1004,7 @@ function LocationModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "min(720px, 100%)",
-          background: "rgb(6,4,2)",
+          background: "rgb(29,29,31)",
           border: `1px solid ${BORDER}`,
           maxHeight: "calc(100dvh - 2rem)",
           display: "flex",
@@ -1020,7 +1019,7 @@ function LocationModal({
             flexShrink: 0,
             padding: "1.1rem 1.25rem",
             borderBottom: `1px solid ${BORDER}`,
-            background: "rgb(6,4,2)",
+            background: "rgb(29,29,31)",
           }}
         >
           <h3
@@ -1127,7 +1126,7 @@ function LocationModal({
                   scale: 9,
                   fillColor: colorFor(type),
                   fillOpacity: 0.95,
-                  strokeColor: "#000",
+                  strokeColor: "#1D1D1F",
                   strokeWeight: 1,
                 }}
               />
@@ -1142,7 +1141,7 @@ function LocationModal({
               fontFamily: "var(--font-body)",
               fontSize: "1rem",
               letterSpacing: "0.06em",
-              color: pinTouched ? GOLD_SOFT : FADED,
+              color: pinTouched ? CREAM_SOFT : FADED,
               marginBottom: "0.85rem",
             }}
           >
@@ -1257,7 +1256,7 @@ function LocationModal({
           {err ? (
             <p
               style={{
-                color: "#fca5a5",
+                color: "#EF4444",
                 fontFamily: "var(--font-body)",
                 fontSize: "1rem",
                 marginTop: "0.75rem",
@@ -1275,7 +1274,7 @@ function LocationModal({
             flexShrink: 0,
             padding: "0.9rem 1.25rem",
             borderTop: `1px solid ${BORDER}`,
-            background: "rgb(6,4,2)",
+            background: "rgb(29,29,31)",
           }}
         >
           <button
@@ -1293,9 +1292,9 @@ function LocationModal({
             className="uppercase"
             style={{
               ...miniBtn,
-              color: "#06120c",
-              background: GOLD,
-              borderColor: GOLD,
+              color: "#1D1D1F",
+              background: CREAM,
+              borderColor: CREAM,
               opacity: saving ? 0.6 : 1,
               cursor: saving ? "wait" : "pointer",
             }}
@@ -1353,8 +1352,8 @@ const refreshBtn: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.25em",
-  color: GOLD,
-  border: `1px solid ${GOLD}`,
+  color: CREAM,
+  border: `1px solid ${CREAM}`,
   padding: "0.45rem 0.9rem",
   background: "transparent",
   cursor: "pointer",
@@ -1363,8 +1362,8 @@ const miniBtn: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
-  color: GOLD_SOFT,
-  border: `1px solid rgba(245,158,11,0.4)`,
+  color: CREAM_SOFT,
+  border: `1px solid rgba(251,243,212,0.4)`,
   padding: "0.32rem 0.7rem",
   background: "transparent",
   cursor: "pointer",

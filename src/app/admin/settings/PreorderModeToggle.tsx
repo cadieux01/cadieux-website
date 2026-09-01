@@ -9,8 +9,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 
-const CREAM = "#fbf3d4";
-const GREEN = "#024628";
+const CREAM = "#FBF3D4";
+const INK = "#1D1D1F";
 const FADED = "rgba(251,243,212,0.55)";
 const BORDER = "rgba(251,243,212,0.16)";
 
@@ -119,7 +119,7 @@ export default function PreorderModeToggle() {
           style={{
             border: "1px solid rgba(239,68,68,0.45)",
             padding: "0.6rem 0.85rem",
-            color: "#fca5a5",
+            color: "#EF4444",
             marginBottom: "0.85rem",
             borderRadius: 6,
             fontFamily: "var(--font-body)",
@@ -146,7 +146,7 @@ export default function PreorderModeToggle() {
             appearance: "none",
             border: `1px solid ${enabled ? CREAM : BORDER}`,
             background: enabled ? CREAM : "transparent",
-            color: enabled ? GREEN : CREAM,
+            color: enabled ? INK : CREAM,
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.22em",
@@ -172,7 +172,7 @@ export default function PreorderModeToggle() {
             fontSize: "0.875rem",
             letterSpacing: "0.16em",
             textTransform: "uppercase",
-            color: enabled ? "#fbf3d4" : FADED,
+            color: enabled ? "#FBF3D4" : FADED,
           }}
         >
           {enabled ? "Pre-order mode is LIVE" : "Normal mode"}

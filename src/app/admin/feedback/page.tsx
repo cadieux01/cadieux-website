@@ -284,8 +284,8 @@ export default function FeedbackPage() {
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.25em",
-            color: "#f59e0b",
-            border: "1px solid #f59e0b",
+            color: "#FBF3D4",
+            border: "1px solid #FBF3D4",
             padding: "0.45rem 0.9rem",
             background: "transparent",
             cursor: refreshing ? "wait" : "pointer",
@@ -325,9 +325,9 @@ export default function FeedbackPage() {
                 padding: "6px 12px",
                 borderRadius: 99,
                 cursor: "pointer",
-                color: active ? "#1D1D1F" : "#024628",
-                background: active ? "#024628" : "transparent",
-                border: "1px solid rgba(201,169,110,0.5)",
+                color: active ? "#1D1D1F" : "#FBF3D4",
+                background: active ? "#FBF3D4" : "transparent",
+                border: "1px solid rgba(251,243,212,0.5)",
               }}
             >
               {label}
@@ -339,7 +339,7 @@ export default function FeedbackPage() {
       {loading ? (
         <p style={mutedText}>Loading feedback…</p>
       ) : error ? (
-        <p style={{ ...mutedText, color: "#ef4444" }}>{error}</p>
+        <p style={{ ...mutedText, color: "#EF4444" }}>{error}</p>
       ) : visibleReviews.length === 0 ? (
         <p style={mutedText}>No feedback yet.</p>
       ) : (
@@ -352,11 +352,11 @@ export default function FeedbackPage() {
                 style={{
                   padding: 18,
                   background: rev.is_deleted
-                    ? "rgba(40,8,8,0.4)"
+                    ? "rgba(239,68,68,0.4)"
                     : "rgba(29,29,31,0.5)",
                   border: rev.is_deleted
                     ? "1px solid rgba(239,68,68,0.45)"
-                    : "1px solid rgba(245,158,11,0.18)",
+                    : "1px solid rgba(251,243,212,0.18)",
                   borderRadius: 8,
                   opacity: rev.is_deleted ? 0.85 : 1,
                 }}
@@ -381,7 +381,7 @@ export default function FeedbackPage() {
                   >
                     <strong
                       style={{
-                        color: "#fbf3d4",
+                        color: "#FBF3D4",
                         fontFamily: "var(--font-heading)",
                         fontSize: "1rem",
                         fontWeight: 500,
@@ -395,7 +395,7 @@ export default function FeedbackPage() {
                     {rev.rating != null && (
                       <span
                         style={{
-                          color: "#024628",
+                          color: "#FBF3D4",
                           fontFamily: "var(--font-body)",
                           fontSize: "1rem",
                         }}
@@ -408,7 +408,7 @@ export default function FeedbackPage() {
                       style={{
                         fontFamily: "var(--font-body)",
                         fontSize: "1rem",
-                        color: "rgba(192,200,206,0.5)",
+                        color: "rgba(251,243,212,0.5)",
                       }}
                     >
                       ♥ {rev.likes_count}
@@ -425,7 +425,7 @@ export default function FeedbackPage() {
                       style={{
                         fontFamily: "var(--font-body)",
                         fontSize: "1rem",
-                        color: "rgba(192,200,206,0.5)",
+                        color: "rgba(251,243,212,0.5)",
                       }}
                     >
                       {new Date(rev.created_at).toLocaleString("en-IN", {
@@ -499,7 +499,7 @@ export default function FeedbackPage() {
                               background: "transparent",
                               border: "none",
                               cursor: "pointer",
-                              color: "#024628",
+                              color: "#FBF3D4",
                               fontSize: "1.2rem",
                               lineHeight: 1,
                               padding: 0,
@@ -580,7 +580,7 @@ export default function FeedbackPage() {
                     style={{
                       marginTop: 12,
                       paddingLeft: 14,
-                      borderLeft: "1px solid rgba(245,158,11,0.2)",
+                      borderLeft: "1px solid rgba(251,243,212,0.2)",
                       display: "flex",
                       flexDirection: "column",
                       gap: 8,
@@ -611,7 +611,7 @@ export default function FeedbackPage() {
                             >
                               <strong
                                 style={{
-                                  color: "#fbf3d4",
+                                  color: "#FBF3D4",
                                   fontFamily: "var(--font-heading)",
                                   fontSize: "1rem",
                                 }}
@@ -625,7 +625,7 @@ export default function FeedbackPage() {
                                 style={{
                                   fontFamily: "var(--font-body)",
                                   fontSize: "1rem",
-                                  color: "rgba(192,200,206,0.4)",
+                                  color: "rgba(251,243,212,0.4)",
                                 }}
                               >
                                 ♥ {rp.likes_count}
@@ -634,7 +634,7 @@ export default function FeedbackPage() {
                                 style={{
                                   fontFamily: "var(--font-body)",
                                   fontSize: "1rem",
-                                  color: "rgba(192,200,206,0.4)",
+                                  color: "rgba(251,243,212,0.4)",
                                 }}
                               >
                                 {new Date(rp.created_at).toLocaleString(
@@ -763,9 +763,9 @@ export default function FeedbackPage() {
                       flex: 1,
                       padding: "8px 10px",
                       background: "rgba(29,29,31,0.6)",
-                      border: "1px solid rgba(245,158,11,0.25)",
+                      border: "1px solid rgba(251,243,212,0.25)",
                       borderRadius: 4,
-                      color: "#fbf3d4",
+                      color: "#FBF3D4",
                       fontFamily: "var(--font-body)",
                       fontSize: "1rem",
                       resize: "vertical",
@@ -790,7 +790,7 @@ export default function FeedbackPage() {
 }
 
 const mutedText: React.CSSProperties = {
-  color: "rgba(192,200,206,0.5)",
+  color: "rgba(251,243,212,0.5)",
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
 };
@@ -801,7 +801,7 @@ const fieldLabel: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
-  color: "rgba(192,200,206,0.6)",
+  color: "rgba(251,243,212,0.6)",
   marginBottom: 4,
 };
 
@@ -809,9 +809,9 @@ const textInput: React.CSSProperties = {
   width: "100%",
   padding: "8px 10px",
   background: "rgba(29,29,31,0.6)",
-  border: "1px solid rgba(245,158,11,0.25)",
+  border: "1px solid rgba(251,243,212,0.25)",
   borderRadius: 4,
-  color: "#fbf3d4",
+  color: "#FBF3D4",
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
 };
@@ -821,8 +821,8 @@ const tagPill: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.25em",
   textTransform: "uppercase",
-  color: "#024628",
-  border: "1px solid rgba(201,169,110,0.4)",
+  color: "#FBF3D4",
+  border: "1px solid rgba(251,243,212,0.4)",
   borderRadius: 99,
   padding: "2px 8px",
 };
@@ -833,8 +833,8 @@ const teamPill: React.CSSProperties = {
   letterSpacing: "0.25em",
   textTransform: "uppercase",
   color: "#FBF3D4",
-  background: "rgba(201,169,110,0.22)",
-  border: "1px solid rgba(201,169,110,0.5)",
+  background: "rgba(251,243,212,0.22)",
+  border: "1px solid rgba(251,243,212,0.5)",
   borderRadius: 99,
   padding: "1px 7px",
 };
@@ -844,8 +844,8 @@ const statusBadge: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.2em",
   textTransform: "uppercase",
-  color: "rgba(192,200,206,0.7)",
-  border: "1px solid rgba(192,200,206,0.3)",
+  color: "rgba(251,243,212,0.7)",
+  border: "1px solid rgba(251,243,212,0.3)",
   borderRadius: 99,
   padding: "1px 7px",
 };
@@ -855,7 +855,7 @@ const deletedBadge: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.2em",
   textTransform: "uppercase",
-  color: "#ef4444",
+  color: "#EF4444",
   border: "1px solid rgba(239,68,68,0.5)",
   borderRadius: 99,
   padding: "1px 7px",
@@ -863,7 +863,7 @@ const deletedBadge: React.CSSProperties = {
 
 const dangerButton: React.CSSProperties = {
   border: "1px solid rgba(239,68,68,0.5)",
-  color: "#ef4444",
+  color: "#EF4444",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.2em",
@@ -874,7 +874,7 @@ const dangerButton: React.CSSProperties = {
 
 const dangerButtonSmall: React.CSSProperties = {
   border: "1px solid rgba(239,68,68,0.4)",
-  color: "#ef4444",
+  color: "#EF4444",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.2em",
@@ -885,8 +885,8 @@ const dangerButtonSmall: React.CSSProperties = {
 };
 
 const restoreButton: React.CSSProperties = {
-  border: "1px solid rgba(245,158,11,0.5)",
-  color: "#f59e0b",
+  border: "1px solid rgba(251,243,212,0.5)",
+  color: "#FBF3D4",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.2em",
@@ -896,8 +896,8 @@ const restoreButton: React.CSSProperties = {
 };
 
 const restoreButtonSmall: React.CSSProperties = {
-  border: "1px solid rgba(245,158,11,0.4)",
-  color: "#f59e0b",
+  border: "1px solid rgba(251,243,212,0.4)",
+  color: "#FBF3D4",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.2em",
@@ -908,8 +908,8 @@ const restoreButtonSmall: React.CSSProperties = {
 };
 
 const secondaryButton: React.CSSProperties = {
-  border: "1px solid rgba(192,200,206,0.3)",
-  color: "rgba(192,200,206,0.8)",
+  border: "1px solid rgba(251,243,212,0.3)",
+  color: "rgba(251,243,212,0.8)",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.2em",
@@ -919,8 +919,8 @@ const secondaryButton: React.CSSProperties = {
 };
 
 const secondaryButtonSmall: React.CSSProperties = {
-  border: "1px solid rgba(192,200,206,0.3)",
-  color: "rgba(192,200,206,0.8)",
+  border: "1px solid rgba(251,243,212,0.3)",
+  color: "rgba(251,243,212,0.8)",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.2em",
@@ -931,8 +931,8 @@ const secondaryButtonSmall: React.CSSProperties = {
 };
 
 const primaryButton: React.CSSProperties = {
-  border: "1px solid rgba(245,158,11,0.5)",
-  color: "#f59e0b",
+  border: "1px solid rgba(251,243,212,0.5)",
+  color: "#FBF3D4",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.25em",
