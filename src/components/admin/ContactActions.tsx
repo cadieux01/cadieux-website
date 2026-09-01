@@ -15,10 +15,9 @@ import {
   whatsAppHrefWithText,
 } from "@/lib/phone-utils";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.35)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.35)";
 
 type Channel = "whatsapp" | "sms";
 
@@ -78,7 +77,7 @@ export function ContactActions({
     justifyContent: "center",
     border: `1px solid ${BORDER}`,
     background: "transparent",
-    color: GOLD,
+    color: CREAM,
     cursor: "pointer",
     padding: 0,
   };
@@ -159,13 +158,13 @@ function MessageModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ background: "rgba(0,0,0,0.7)" }}
+      style={{ background: "rgba(29,29,31,0.7)" }}
       onClick={onCancel}
     >
       <div
         className="w-full max-w-md"
         style={{
-          background: "rgb(6,4,2)",
+          background: "rgb(29,29,31)",
           border: `1px solid ${BORDER}`,
           // 3-zone scrollable layout
           display: "flex",
@@ -180,7 +179,7 @@ function MessageModal({
           style={{
             flexShrink: 0,
             padding: "1.25rem 1.5rem 0.85rem",
-            background: "rgb(6,4,2)",
+            background: "rgb(29,29,31)",
             borderBottom: `1px solid ${BORDER}`,
           }}
         >
@@ -241,7 +240,7 @@ function MessageModal({
           style={{
             flexShrink: 0,
             padding: "1rem 1.5rem 1.25rem",
-            background: "rgb(6,4,2)",
+            background: "rgb(29,29,31)",
             borderTop: `1px solid ${BORDER}`,
             display: "flex",
             justifyContent: "flex-end",
@@ -272,8 +271,8 @@ function MessageModal({
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",
               letterSpacing: "0.25em",
-              color: GOLD,
-              border: `1px solid ${GOLD}`,
+              color: CREAM,
+              border: `1px solid ${CREAM}`,
               padding: "0.45rem 0.9rem",
               background: "transparent",
             }}

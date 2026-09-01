@@ -13,10 +13,9 @@ import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { AdminProductRow } from "@/lib/admin-shared";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
 
 export default function AdminProductsPage() {
   const [rows, setRows] = useState<AdminProductRow[]>([]);
@@ -83,8 +82,8 @@ export default function AdminProductsPage() {
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",
               letterSpacing: "0.25em",
-              color: GOLD,
-              border: `1px solid ${GOLD}`,
+              color: CREAM,
+              border: `1px solid ${CREAM}`,
               padding: "0.45rem 0.9rem",
               background: "transparent",
               cursor: refreshing ? "wait" : "pointer",
@@ -116,8 +115,8 @@ export default function AdminProductsPage() {
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",
               letterSpacing: "0.25em",
-              color: GOLD,
-              border: `1px solid ${GOLD}`,
+              color: CREAM,
+              border: `1px solid ${CREAM}`,
               padding: "0.45rem 0.9rem",
             }}
           >
@@ -228,10 +227,10 @@ export default function AdminProductsPage() {
 
 function StatusFlags({ row }: { row: AdminProductRow }) {
   const tags: { label: string; color: string }[] = [];
-  if (row.is_archived) tags.push({ label: "Archived", color: "#9ca3af" });
-  if (!row.is_active) tags.push({ label: "Hidden", color: "#9ca3af" });
-  if (row.is_active && !row.is_archived) tags.push({ label: "Live", color: GOLD });
-  if (!row.in_stock) tags.push({ label: "Out of stock", color: "#ef4444" });
+  if (row.is_archived) tags.push({ label: "Archived", color: "rgba(251,243,212,0.7)" });
+  if (!row.is_active) tags.push({ label: "Hidden", color: "rgba(251,243,212,0.7)" });
+  if (row.is_active && !row.is_archived) tags.push({ label: "Live", color: CREAM });
+  if (!row.in_stock) tags.push({ label: "Out of stock", color: "#EF4444" });
   return (
     <div className="flex flex-wrap gap-1">
       {tags.map((t) => (
@@ -308,8 +307,8 @@ function ErrorBox({
     <div
       className="mb-4 p-3"
       style={{
-        border: "1px solid #ef4444",
-        color: "#fecaca",
+        border: "1px solid #EF4444",
+        color: "#EF4444",
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
       }}
@@ -320,7 +319,7 @@ function ErrorBox({
         onClick={onRetry}
         style={{
           marginLeft: 8,
-          color: GOLD,
+          color: CREAM,
           textDecoration: "underline",
         }}
       >

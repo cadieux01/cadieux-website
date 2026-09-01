@@ -11,9 +11,8 @@
 
 import { useEffect } from "react";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
 
 export default function AdminError({
   error,
@@ -32,7 +31,7 @@ export default function AdminError({
     <main
       className="min-h-screen relative"
       style={{
-        background: "rgb(6,4,2)",
+        background: "rgb(29,29,31)",
         padding: "3rem 1.5rem",
         fontFamily: "var(--font-body)",
         color: CREAM,
@@ -69,7 +68,7 @@ export default function AdminError({
             border: "1px solid rgba(239,68,68,0.55)",
             background: "rgba(239,68,68,0.08)",
             padding: "1rem 1.2rem",
-            color: "#fecaca",
+            color: "#EF4444",
             fontSize: "1rem",
             lineHeight: 1.5,
             marginBottom: "1.5rem",
@@ -77,7 +76,7 @@ export default function AdminError({
         >
           <strong
             style={{
-              color: "#fca5a5",
+              color: "#EF4444",
               letterSpacing: "0.1em",
               display: "block",
               marginBottom: "0.5rem",
@@ -102,7 +101,7 @@ export default function AdminError({
               style={{
                 marginTop: "0.75rem",
                 fontSize: "0.875rem",
-                color: "rgba(254,202,202,0.7)",
+                color: "rgba(239,68,68,0.7)",
                 letterSpacing: "0.08em",
               }}
             >
@@ -114,7 +113,7 @@ export default function AdminError({
               <summary
                 style={{
                   cursor: "pointer",
-                  color: "#fca5a5",
+                  color: "#EF4444",
                   fontSize: "0.875rem",
                   letterSpacing: "0.18em",
                   textTransform: "uppercase",
@@ -128,7 +127,7 @@ export default function AdminError({
                   fontFamily:
                     'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
                   fontSize: "1rem",
-                  color: "rgba(254,202,202,0.75)",
+                  color: "rgba(239,68,68,0.75)",
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
                 }}
@@ -148,8 +147,8 @@ export default function AdminError({
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",
               letterSpacing: "0.25em",
-              color: GOLD,
-              border: `1px solid ${GOLD}`,
+              color: CREAM,
+              border: `1px solid ${CREAM}`,
               padding: "0.55rem 1.1rem",
               background: "transparent",
               cursor: "pointer",
@@ -165,7 +164,7 @@ export default function AdminError({
               fontSize: "0.875rem",
               letterSpacing: "0.25em",
               color: FADED,
-              border: `1px solid rgba(245,158,11,0.25)`,
+              border: `1px solid rgba(251,243,212,0.25)`,
               padding: "0.55rem 1.1rem",
               background: "transparent",
               textDecoration: "none",

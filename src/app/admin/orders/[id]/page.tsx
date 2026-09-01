@@ -441,14 +441,14 @@ export default function AdminOrderDetailPage({
           html,
           body,
           main {
-            background: #fff !important;
+            background: #FBF3D4 !important;
           }
           main > div > section {
             padding: 0 !important;
           }
           main,
           main * {
-            color: #000 !important;
+            color: #1D1D1F !important;
             background: transparent !important;
             box-shadow: none !important;
           }
@@ -457,7 +457,7 @@ export default function AdminOrderDetailPage({
           #order-detail th,
           #order-detail td,
           #order-detail [data-panel] {
-            border-color: #999 !important;
+            border-color: rgba(29,29,31,0.35) !important;
           }
         }
       `}</style>
@@ -495,13 +495,13 @@ function Placeholder({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        border: "1px dashed rgba(245,158,11,0.2)",
+        border: "1px dashed rgba(251,243,212,0.2)",
         borderRadius: 6,
         padding: "2rem 1rem",
         textAlign: "center",
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
-        color: "rgba(192,200,206,0.55)",
+        color: "rgba(251,243,212,0.55)",
       }}
     >
       {children}
@@ -512,7 +512,7 @@ function Placeholder({ children }: { children: React.ReactNode }) {
 // ── styles (existing admin palette — nothing new invented) ────────────────
 
 const panel: React.CSSProperties = {
-  border: "1px solid rgba(245,158,11,0.18)",
+  border: "1px solid rgba(251,243,212,0.18)",
   borderRadius: 6,
   padding: "1rem 1.1rem",
 };
@@ -522,7 +522,7 @@ const blockHeading: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.25em",
   textTransform: "uppercase",
-  color: "rgba(245,158,11,0.9)",
+  color: "rgba(251,243,212,0.9)",
   margin: "0 0 0.85rem",
 };
 
@@ -531,14 +531,14 @@ const orderNumber: React.CSSProperties = {
   fontWeight: 300,
   fontSize: "clamp(1.6rem, 5vw, 2.2rem)",
   letterSpacing: "0.14em",
-  color: "#fbf3d4",
+  color: "#FBF3D4",
   lineHeight: 1.1,
 };
 
 const mutedLine: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
-  color: "rgba(192,200,206,0.55)",
+  color: "rgba(251,243,212,0.55)",
   marginTop: "0.3rem",
 };
 
@@ -552,26 +552,26 @@ const rowWrap: React.CSSProperties = {
 };
 
 const keyStyle: React.CSSProperties = {
-  color: "rgba(192,200,206,0.55)",
+  color: "rgba(251,243,212,0.55)",
   whiteSpace: "nowrap",
 };
 
 const valStyle: React.CSSProperties = {
-  color: "#fbf3d4",
+  color: "#FBF3D4",
   textAlign: "right",
   wordBreak: "break-word",
   minWidth: 0,
 };
 
 const tableWrap: React.CSSProperties = {
-  border: "1px solid rgba(245,158,11,0.18)",
+  border: "1px solid rgba(251,243,212,0.18)",
   borderRadius: 6,
   overflow: "hidden",
 };
 
 const tableHeadRow: React.CSSProperties = {
-  background: "rgba(245,158,11,0.08)",
-  color: "rgba(245,158,11,0.9)",
+  background: "rgba(251,243,212,0.08)",
+  color: "rgba(251,243,212,0.9)",
   textTransform: "uppercase",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -582,16 +582,16 @@ const th: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   fontWeight: 400,
-  borderBottom: "1px solid rgba(245,158,11,0.15)",
+  borderBottom: "1px solid rgba(251,243,212,0.15)",
 };
 
 const td: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
-  color: "#fbf3d4",
+  color: "#FBF3D4",
   fontSize: "1rem",
   verticalAlign: "top",
-  borderBottom: "1px solid rgba(245,158,11,0.06)",
+  borderBottom: "1px solid rgba(251,243,212,0.06)",
 };
 
 const totalsBlock: React.CSSProperties = {
@@ -608,21 +608,21 @@ const totalsRow: React.CSSProperties = {
   justifyContent: "space-between",
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
-  color: "#fbf3d4",
+  color: "#FBF3D4",
   padding: "0.15rem 0",
 };
 
 const totalsGrand: React.CSSProperties = {
-  borderTop: "1px solid rgba(245,158,11,0.35)",
+  borderTop: "1px solid rgba(251,243,212,0.35)",
   marginTop: "0.35rem",
   paddingTop: "0.5rem",
   fontSize: "1rem",
-  color: "#f59e0b",
+  color: "#FBF3D4",
 };
 
 const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
-  border: "1px solid rgba(245,158,11,0.4)",
+  border: "1px solid rgba(251,243,212,0.4)",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -635,13 +635,13 @@ const chipBase: React.CSSProperties = {
 
 const chipPrimary: React.CSSProperties = {
   ...chipBase,
-  color: "#f59e0b",
-  borderColor: "rgba(245,158,11,0.55)",
+  color: "#FBF3D4",
+  borderColor: "rgba(251,243,212,0.55)",
 };
 
 const chipNeutral: React.CSSProperties = {
   ...chipBase,
-  color: "rgba(245,158,11,0.85)",
+  color: "rgba(251,243,212,0.85)",
 };
 
 const preorderChip: React.CSSProperties = {
@@ -649,11 +649,11 @@ const preorderChip: React.CSSProperties = {
   cursor: "default",
   fontSize: "1rem",
   padding: "0.3rem 0.7rem",
-  color: "#f59e0b",
+  color: "#FBF3D4",
 };
 
 const mapsLink: React.CSSProperties = {
-  color: "#f59e0b",
+  color: "#FBF3D4",
   textDecoration: "underline",
   textUnderlineOffset: "2px",
 };

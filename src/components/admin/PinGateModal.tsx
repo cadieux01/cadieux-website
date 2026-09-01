@@ -19,9 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { adminAuthHeaders } from "@/lib/admin-client";
 
-const GREEN = "#024628";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.7)";
+import { CREAM, INK, BORDER, TEXT_MUTED } from "./theme";
 
 // ── module-level grant cache ──────────────────────────────────────────────
 // Survives across product pages within the 5-minute window so the operator
@@ -162,7 +160,7 @@ function PinGateModal({
         position: "fixed",
         inset: 0,
         zIndex: 400,
-        background: "rgba(0,0,0,0.72)",
+        background: "rgba(29,29,31,0.72)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -172,9 +170,9 @@ function PinGateModal({
       <div
         style={{
           width: "min(420px, 100%)",
-          background: "rgb(8,10,8)",
-          border: `1px solid ${GREEN}`,
-          boxShadow: "0 24px 60px -12px rgba(0,0,0,0.7)",
+          background: INK,
+          border: `1px solid ${BORDER}`,
+          boxShadow: "0 24px 60px -12px rgba(29,29,31,0.7)",
           padding: "1.6rem",
         }}
       >
@@ -198,7 +196,7 @@ function PinGateModal({
         <p
           style={{
             fontFamily: "var(--font-body)",
-            color: FADED,
+            color: TEXT_MUTED,
             fontSize: "1rem",
             lineHeight: 1.55,
             margin: "1rem 0 1rem",
@@ -214,7 +212,7 @@ function PinGateModal({
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.22em",
-            color: FADED,
+            color: TEXT_MUTED,
             marginBottom: "0.5rem",
           }}
         >
@@ -252,7 +250,7 @@ function PinGateModal({
           <p
             role="alert"
             style={{
-              color: "#fecaca",
+              color: "#EF4444",
               fontFamily: "var(--font-body)",
               fontSize: "1rem",
               margin: "0.7rem 0 0",
@@ -271,7 +269,7 @@ function PinGateModal({
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",
               letterSpacing: "0.22em",
-              color: FADED,
+              color: TEXT_MUTED,
               background: "transparent",
               border: "1px solid rgba(251,243,212,0.25)",
               padding: "0.55rem 1.1rem",
@@ -290,8 +288,8 @@ function PinGateModal({
               fontSize: "0.875rem",
               letterSpacing: "0.22em",
               color: CREAM,
-              background: GREEN,
-              border: `1px solid ${GREEN}`,
+              background: INK,
+              border: `1px solid ${CREAM}`,
               padding: "0.55rem 1.1rem",
               cursor: busy || pin.length !== 6 ? "not-allowed" : "pointer",
               opacity: busy || pin.length !== 6 ? 0.5 : 1,

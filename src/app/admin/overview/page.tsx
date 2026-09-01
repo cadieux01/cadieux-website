@@ -12,9 +12,9 @@
 // Retention/Run Rate divide-by-zero-guarded (render "—" when no
 // subscription base to compute against).
 //
-// Palette: Foundation Green (#024628) + Grain Cream (#FBF3D4) on the
+// Palette: see components/admin/theme.ts — INK (#1D1D1F) + CREAM (#FBF3D4) on the
 // admin's dark base. Cream is used for the data marks (high contrast on
-// dark); green for selection/accent.
+// dark); the INK fill carries selection/accent.
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -108,8 +108,8 @@ function formatPercent(v: number | null): string {
 }
 
 // ---- palette ------------------------------------------------------------
-const GREEN = "#024628";
-const CREAM = "#fbf3d4";
+const INK = "#1D1D1F";
+const CREAM = "#FBF3D4";
 const GRID = "rgba(251,243,212,0.12)";
 const FADED = "rgba(251,243,212,0.5)";
 const BORDER = "rgba(251,243,212,0.16)";
@@ -226,7 +226,7 @@ function OverviewPageInner() {
           style={{
             border: "1px solid rgba(239,68,68,0.45)",
             padding: "0.8rem 1rem",
-            color: "#fca5a5",
+            color: "#EF4444",
             margin: "1rem 0",
             fontFamily: "var(--font-body)",
             fontSize: "1rem",
@@ -287,7 +287,7 @@ function TopSelector({
           ariaLabel="What do you want to see?"
           value={selected ?? ""}
           onChange={(v) => onSelect(v ? (v as MetricKey) : null)}
-          style={{ background: GREEN, borderColor: GREEN }}
+          style={{ background: INK, borderColor: INK }}
           options={[
             { value: "", label: "Segments — all tiles" },
             ...METRICS.map((m) => ({ value: m.key, label: m.label })),
@@ -373,7 +373,7 @@ function KpiStrip({
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.borderColor = CREAM;
-            e.currentTarget.style.background = "rgba(2,70,40,0.22)";
+            e.currentTarget.style.background = "rgba(251,243,212,0.08)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.borderColor = BORDER;
@@ -849,7 +849,7 @@ const chartMargin = { top: 10, right: 16, left: 0, bottom: 0 };
 const axisTick = { fill: CREAM, fontSize: 16 } as const;
 
 const tooltipStyle: React.CSSProperties = {
-  background: GREEN,
+  background: INK,
   border: `1px solid ${CREAM}`,
   borderRadius: 6,
   fontFamily: "var(--font-body)",

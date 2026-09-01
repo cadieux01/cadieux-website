@@ -1,6 +1,6 @@
 // Instant skeleton for /admin/audit — a list of audit log entries.
 
-const BG = "rgb(6,4,2)";
+const BG = "rgb(29,29,31)";
 const BORDER = "rgba(251,243,212,0.16)";
 const BLOCK = "rgba(251,243,212,0.05)";
 

@@ -47,7 +47,7 @@ function AdminLoading() {
     <div
       style={{
         padding: "2rem",
-        color: "rgba(245,158,11,0.7)",
+        color: "rgba(251,243,212,0.7)",
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
         letterSpacing: "0.05em",
@@ -168,15 +168,15 @@ function CustomersPageInner() {
           placeholder="Search name or phone"
           className="px-3 py-2 bg-transparent outline-none"
           style={{
-            border: "1px solid rgba(245,158,11,0.3)",
-            color: "#fbf3d4",
+            border: "1px solid rgba(251,243,212,0.3)",
+            color: "#FBF3D4",
             fontFamily: "var(--font-body)",
             fontSize: "1rem",
             letterSpacing: "0.05em",
             minWidth: 280,
           }}
         />
-        <span style={{ color: "rgba(192,200,206,0.55)", fontSize: "1rem" }}>
+        <span style={{ color: "rgba(251,243,212,0.55)", fontSize: "1rem" }}>
           {visible.length} result{visible.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -186,7 +186,7 @@ function CustomersPageInner() {
           style={{
             border: "1px solid rgba(239,68,68,0.45)",
             padding: "0.8rem 1rem",
-            color: "#fca5a5",
+            color: "#EF4444",
             marginBottom: "1rem",
             fontSize: "1rem",
             fontFamily: "var(--font-body)",
@@ -202,7 +202,7 @@ function CustomersPageInner() {
       ) : (
         <div
           style={{
-            border: "1px solid rgba(245,158,11,0.18)",
+            border: "1px solid rgba(251,243,212,0.18)",
             borderRadius: 6,
             overflow: "hidden",
           }}
@@ -227,14 +227,14 @@ function CustomersPageInner() {
                   style={{
                     background:
                       i % 2 === 0
-                        ? "rgba(245,158,11,0.025)"
+                        ? "rgba(251,243,212,0.025)"
                         : "transparent",
                   }}
                 >
                   <td style={td}>
                     <Link
                       href={`/admin/customers/${c.id}`}
-                      style={{ color: "#fbf3d4", textDecoration: "none" }}
+                      style={{ color: "#FBF3D4", textDecoration: "none" }}
                     >
                       {c.full_name ?? "—"}
                     </Link>
@@ -244,7 +244,7 @@ function CustomersPageInner() {
                       <div className="flex flex-wrap gap-2 items-center">
                         <span
                           style={{
-                            color: "rgba(245,158,11,0.85)",
+                            color: "rgba(251,243,212,0.85)",
                             fontSize: "1rem",
                           }}
                         >
@@ -286,10 +286,10 @@ function Placeholder({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        border: "1px dashed rgba(245,158,11,0.2)",
+        border: "1px dashed rgba(251,243,212,0.2)",
         padding: "3rem 1rem",
         textAlign: "center",
-        color: "rgba(192,200,206,0.55)",
+        color: "rgba(251,243,212,0.55)",
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
       }}
@@ -300,8 +300,8 @@ function Placeholder({ children }: { children: React.ReactNode }) {
 }
 
 const tableHeadRow: React.CSSProperties = {
-  background: "rgba(245,158,11,0.08)",
-  color: "rgba(245,158,11,0.9)",
+  background: "rgba(251,243,212,0.08)",
+  color: "rgba(251,243,212,0.9)",
   textTransform: "uppercase",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -312,26 +312,26 @@ const th: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   fontWeight: 400,
-  borderBottom: "1px solid rgba(245,158,11,0.15)",
+  borderBottom: "1px solid rgba(251,243,212,0.15)",
 };
 
 const td: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
-  color: "#fbf3d4",
+  color: "#FBF3D4",
   fontSize: "1rem",
   verticalAlign: "top",
-  borderBottom: "1px solid rgba(245,158,11,0.06)",
+  borderBottom: "1px solid rgba(251,243,212,0.06)",
 };
 
 const chipNeutral: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
-  border: "1px solid rgba(245,158,11,0.4)",
+  border: "1px solid rgba(251,243,212,0.4)",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
   background: "transparent",
-  color: "rgba(245,158,11,0.85)",
+  color: "rgba(251,243,212,0.85)",
   cursor: "pointer",
   textTransform: "uppercase",
 };
@@ -339,8 +339,8 @@ const chipNeutral: React.CSSProperties = {
 const buttonSmAnchor: React.CSSProperties = {
   padding: "0.3rem 0.7rem",
   background: "transparent",
-  border: "1px solid rgba(245,158,11,0.45)",
-  color: "#f59e0b",
+  border: "1px solid rgba(251,243,212,0.45)",
+  color: "#FBF3D4",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",

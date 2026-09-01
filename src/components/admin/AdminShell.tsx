@@ -11,7 +11,7 @@
 // replaced because the operator routinely deals with 10+ admin sections
 // and we want a single discoverable place for ALL of them on every
 // screen size. The drawer mirrors the look of the public Nav widget
-// (dark walnut + gold accents) while staying visually distinct so the
+// (INK surface, CREAM marks) while staying visually distinct so the
 // operator never confuses the two surfaces.
 
 import Link from "next/link";
@@ -19,6 +19,7 @@ import { usePathname } from "next/navigation";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ADMIN_SESSION_KEY } from "@/lib/admin-shared";
+import { CREAM, INK, TEXT_FADED, BORDER } from "./theme";
 import {
   ADMIN_AUTH_LOGOUT_EVENT,
   adminTokenValid,
@@ -137,12 +138,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const DARK_GREEN = "#024628";
-const FADED = "rgba(192,200,206,0.6)";
-const NAV_BG = "#0a0a0a";
-
 export function AdminShell({
   title,
   subtitle,
@@ -251,7 +246,7 @@ export function AdminShell({
 
   if (!authed) {
     return (
-      <main className="min-h-screen relative" style={{ background: "rgb(6,4,2)" }}>
+      <main className="min-h-screen relative" style={{ background: INK }}>
         <GrainOverlay />
         <PasswordGate
           onSuccess={() => {
@@ -269,7 +264,7 @@ export function AdminShell({
   }
 
   return (
-    <main className="min-h-screen relative" style={{ background: "rgb(6,4,2)" }}>
+    <main className="min-h-screen relative" style={{ background: INK }}>
       <GrainOverlay />
       {idleWarning ? (
         <div
@@ -280,8 +275,8 @@ export function AdminShell({
             left: 0,
             right: 0,
             zIndex: 400,
-            background: "rgba(245,158,11,0.95)",
-            color: "#0a0a0a",
+            background: "rgba(251,243,212,0.95)",
+            color: "#1D1D1F",
             padding: "0.65rem 1rem",
             textAlign: "center",
             fontFamily: "var(--font-body)",
@@ -296,7 +291,7 @@ export function AdminShell({
         <header
           className="border-b"
           style={{
-            borderColor: "rgba(245,158,11,0.18)",
+            borderColor: "rgba(251,243,212,0.18)",
             padding:
               "1rem clamp(1rem, 4vw, 1.5rem) 1rem calc(clamp(1rem, 4vw, 1.5rem) + env(safe-area-inset-left))",
           }}
@@ -378,7 +373,7 @@ export function AdminShell({
                     fontFamily: "var(--font-body)",
                     fontSize: "0.875rem",
                     letterSpacing: "0.2em",
-                    color: "rgba(192,200,206,0.55)",
+                    color: "rgba(251,243,212,0.55)",
                     wordBreak: "break-word",
                   }}
                 >
@@ -430,7 +425,7 @@ function HamburgerButton({
       aria-expanded={open}
       style={{
         background: "transparent",
-        border: "1px solid rgba(245,158,11,0.35)",
+        border: "1px solid rgba(251,243,212,0.35)",
         cursor: "pointer",
         padding: "0.55rem 0.7rem",
         display: "flex",
@@ -447,7 +442,7 @@ function HamburgerButton({
             display: "block",
             width: 22,
             height: 1.5,
-            background: open ? CREAM : GOLD,
+            background: CREAM,
             transition: "background 0.2s",
           }}
         />
@@ -476,7 +471,7 @@ function AdminDrawer({
             position: "fixed",
             inset: 0,
             zIndex: 304,
-            background: "rgba(0,0,0,0.6)",
+            background: "rgba(29,29,31,0.6)",
           }}
         />
       ) : null}
@@ -499,7 +494,7 @@ function AdminDrawer({
           height: "100dvh",
           transform: open ? "translateX(0)" : "translateX(-100%)",
           transition: "transform 0.32s cubic-bezier(0.22,1,0.36,1)",
-          boxShadow: open ? "0 20px 40px -10px rgba(0,0,0,0.5)" : "none",
+          boxShadow: open ? "0 20px 40px -10px rgba(29,29,31,0.5)" : "none",
         }}
       >
         <div
@@ -507,8 +502,8 @@ function AdminDrawer({
             height: "100%",
             display: "flex",
             flexDirection: "column",
-            background: NAV_BG,
-            borderRight: `1px solid ${DARK_GREEN}`,
+            background: INK,
+            borderRight: `1px solid ${BORDER}`,
             // Strictly contain the children so the scrollable nav
             // can never push past the drawer bounds even if a child
             // miscomputes its intrinsic size.
@@ -522,7 +517,7 @@ function AdminDrawer({
             flexShrink: 0,
             padding:
               "calc(1.25rem + env(safe-area-inset-top)) 1.25rem 1rem calc(1.25rem + env(safe-area-inset-left))",
-            borderBottom: `1px solid ${DARK_GREEN}`,
+            borderBottom: `1px solid ${BORDER}`,
           }}
         >
           <p
@@ -533,7 +528,7 @@ function AdminDrawer({
               fontWeight: 500,
               letterSpacing: "0.5em",
               textTransform: "uppercase",
-              color: "rgba(200,144,58,0.65)",
+              color: "rgba(251,243,212,0.65)",
             }}
           >
             Cadieux Admin
@@ -547,8 +542,8 @@ function AdminDrawer({
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",
               letterSpacing: "0.28em",
-              color: FADED,
-              border: `1px solid rgba(245,158,11,0.3)`,
+              color: TEXT_FADED,
+              border: `1px solid rgba(251,243,212,0.3)`,
               padding: "0.4rem 0.85rem",
               background: "transparent",
               cursor: "pointer",
@@ -591,7 +586,7 @@ function AdminDrawer({
                   fontWeight: 500,
                   letterSpacing: "0.32em",
                   textTransform: "uppercase",
-                  color: "rgba(200,144,58,0.55)",
+                  color: "rgba(251,243,212,0.55)",
                 }}
               >
                 {group.label}
@@ -625,9 +620,9 @@ function AdminDrawer({
                           letterSpacing: "0.04em",
                           color: active ? CREAM : "rgba(251,243,212,0.7)",
                           background: active
-                            ? "rgba(245,158,11,0.12)"
+                            ? "rgba(251,243,212,0.12)"
                             : "transparent",
-                          borderLeft: `2px solid ${active ? GOLD : "transparent"}`,
+                          borderLeft: `2px solid ${active ? CREAM : "transparent"}`,
                           textDecoration: "none",
                           WebkitTapHighlightColor: "transparent",
                         }}
@@ -741,7 +736,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
           className="text-center uppercase"
           style={{
             fontFamily: "var(--font-heading)",
-            color: "#fbf3d4",
+            color: "#FBF3D4",
             fontWeight: 300,
             fontSize: "clamp(2.75rem, 7vw, 4.5rem)",
             letterSpacing: "0.2em",
@@ -777,8 +772,8 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
             placeholder="Password"
             className="w-full px-4 py-3 pr-12 bg-transparent outline-none"
             style={{
-              border: "1px solid rgba(245, 158, 11, 0.35)",
-              color: "#fbf3d4",
+              border: "1px solid rgba(251,243,212,0.35)",
+              color: "#FBF3D4",
               fontFamily: "var(--font-body)",
               letterSpacing: "0.1em",
               fontSize: "1rem",
@@ -790,7 +785,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
             aria-label={showPassword ? "Hide password" : "Show password"}
             tabIndex={-1}
             className="absolute right-3 top-1/2 -translate-y-1/2 transition-opacity"
-            style={{ color: showPassword ? "#fbf3d4" : "rgba(251, 243, 212, 0.45)" }}
+            style={{ color: showPassword ? "#FBF3D4" : "rgba(251, 243, 212, 0.45)" }}
           >
             {showPassword ? (
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -808,8 +803,8 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
           type="submit"
           className="w-full px-4 py-3 uppercase"
           style={{
-            border: "1px solid #f59e0b",
-            color: "#f59e0b",
+            border: "1px solid #FBF3D4",
+            color: "#FBF3D4",
             fontFamily: "var(--font-body)",
             letterSpacing: "0.25em",
             fontSize: "0.875rem",
@@ -822,7 +817,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
           <p
             className="text-center text-sm"
             style={{
-              color: "#ef4444",
+              color: "#EF4444",
               fontFamily: "var(--font-body)",
               letterSpacing: "0.1em",
             }}

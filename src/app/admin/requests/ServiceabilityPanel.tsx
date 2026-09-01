@@ -30,10 +30,9 @@ type RequestRow = {
   customer: { id: string; full_name: string | null } | null;
 };
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
 
 const FILTERS: { value: "pending" | "serviceable" | "rejected" | "all"; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -167,7 +166,7 @@ export function ServiceabilityPanel() {
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.2em",
-            color: "rgba(192,200,206,0.55)",
+            color: "rgba(251,243,212,0.55)",
           }}
         >
           {counts.total} {filter}
@@ -183,8 +182,8 @@ export function ServiceabilityPanel() {
             letterSpacing: "0.22em",
             padding: "0.35rem 0.85rem",
             background: "transparent",
-            border: `1px solid ${GOLD}`,
-            color: GOLD,
+            border: `1px solid ${CREAM}`,
+            color: CREAM,
             cursor: refreshing ? "wait" : "pointer",
             opacity: refreshing ? 0.6 : 1,
           }}
@@ -198,9 +197,9 @@ export function ServiceabilityPanel() {
           style={{
             marginBottom: 16,
             padding: "10px 14px",
-            background: "rgba(34,197,94,0.12)",
-            border: "1px solid rgba(34,197,94,0.45)",
-            color: "#bbf7d0",
+            background: "rgba(251,243,212,0.12)",
+            border: "1px solid rgba(251,243,212,0.45)",
+            color: "#FBF3D4",
             fontFamily: "var(--font-body)",
             fontSize: 16,
             letterSpacing: "0.05em",
@@ -231,9 +230,9 @@ export function ServiceabilityPanel() {
                 fontSize: "0.875rem",
                 letterSpacing: "0.25em",
                 padding: "6px 14px",
-                background: active ? "rgba(245,158,11,0.15)" : "transparent",
-                border: `1px solid ${active ? GOLD : BORDER}`,
-                color: active ? GOLD : FADED,
+                background: active ? "rgba(251,243,212,0.15)" : "transparent",
+                border: `1px solid ${active ? CREAM : BORDER}`,
+                color: active ? CREAM : FADED,
                 cursor: "pointer",
               }}
             >
@@ -246,7 +245,7 @@ export function ServiceabilityPanel() {
       {loading ? (
         <p style={mutedText}>Loading…</p>
       ) : error ? (
-        <p style={{ ...mutedText, color: "#ef4444" }}>{error}</p>
+        <p style={{ ...mutedText, color: "#EF4444" }}>{error}</p>
       ) : rows.length === 0 ? (
         <p style={mutedText}>No requests in this status.</p>
       ) : (
@@ -321,7 +320,7 @@ export function ServiceabilityPanel() {
                   {r.customer?.full_name ? (
                     <a
                       href={`/admin/customers/${r.customer.id}`}
-                      style={{ color: GOLD, textDecoration: "none" }}
+                      style={{ color: CREAM, textDecoration: "none" }}
                     >
                       {r.customer.full_name}
                     </a>
@@ -398,21 +397,21 @@ export function ServiceabilityPanel() {
 }
 
 function statusColor(s: RequestRow["status"]): string {
-  if (s === "serviceable") return "#bbf7d0";
-  if (s === "rejected") return "rgba(192,200,206,0.6)";
-  return "#fcd34d";
+  if (s === "serviceable") return "#FBF3D4";
+  if (s === "rejected") return "rgba(251,243,212,0.6)";
+  return "#FBF3D4";
 }
 
 function statusBorder(s: RequestRow["status"]): string {
-  if (s === "serviceable") return "1px solid rgba(34,197,94,0.5)";
-  if (s === "rejected") return "1px solid rgba(192,200,206,0.3)";
-  return "1px solid rgba(245,158,11,0.5)";
+  if (s === "serviceable") return "1px solid rgba(251,243,212,0.5)";
+  if (s === "rejected") return "1px solid rgba(251,243,212,0.3)";
+  return "1px solid rgba(251,243,212,0.5)";
 }
 
 function statusBg(s: RequestRow["status"]): string {
-  if (s === "serviceable") return "rgba(34,197,94,0.12)";
+  if (s === "serviceable") return "rgba(251,243,212,0.12)";
   if (s === "rejected") return "transparent";
-  return "rgba(245,158,11,0.12)";
+  return "rgba(251,243,212,0.12)";
 }
 
 const inputBase: React.CSSProperties = {
@@ -428,8 +427,8 @@ const inputBase: React.CSSProperties = {
 };
 
 const primaryBtn: React.CSSProperties = {
-  border: `1px solid ${GOLD}`,
-  color: GOLD,
+  border: `1px solid ${CREAM}`,
+  color: CREAM,
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.25em",
@@ -440,7 +439,7 @@ const primaryBtn: React.CSSProperties = {
 
 const dangerBtn: React.CSSProperties = {
   border: "1px solid rgba(239,68,68,0.5)",
-  color: "#ef4444",
+  color: "#EF4444",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.25em",

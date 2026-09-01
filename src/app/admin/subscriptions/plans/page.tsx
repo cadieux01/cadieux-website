@@ -20,10 +20,9 @@ import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatINR } from "@/lib/admin-formatting";
 import { AdminProductRow } from "@/lib/admin-shared";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
 
 type PlanEdits = {
   subscription_title: string;
@@ -215,8 +214,8 @@ export default function AdminSubscriptionPlansPage() {
         <div
           className="p-3 mb-6"
           style={{
-            border: "1px solid #ef4444",
-            color: "#fecaca",
+            border: "1px solid #EF4444",
+            color: "#EF4444",
             fontFamily: "var(--font-body)",
             fontSize: "1rem",
           }}
@@ -290,14 +289,14 @@ export default function AdminSubscriptionPlansPage() {
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 410,
-            background: "#024628",
-            color: "#fbf3d4",
+            background: "#1D1D1F",
+            color: "#FBF3D4",
             border: "1px solid rgba(251,243,212,0.3)",
             padding: "0.7rem 1.2rem",
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.08em",
-            boxShadow: "0 16px 40px -12px rgba(0,0,0,0.6)",
+            boxShadow: "0 16px 40px -12px rgba(29,29,31,0.6)",
           }}
         >
           ✓ {toast}
@@ -326,7 +325,7 @@ function SectionHeader({ label, hint }: { label: string; hint: string }) {
           fontFamily: "var(--font-body)",
           fontSize: "0.875rem",
           letterSpacing: "0.3em",
-          color: GOLD,
+          color: CREAM,
         }}
       >
         {label}
@@ -391,8 +390,8 @@ function PlanRow({
       style={{
         border: `1px solid ${BORDER}`,
         background: row.is_active
-          ? "rgba(245,158,11,0.04)"
-          : "rgba(192,200,206,0.04)",
+          ? "rgba(251,243,212,0.04)"
+          : "rgba(251,243,212,0.04)",
         opacity: row.is_active ? 1 : 0.7,
       }}
     >
@@ -435,7 +434,7 @@ function PlanRow({
             onClick={() => onToggleActive(!row.is_active)}
             disabled={busy}
             className="uppercase"
-            style={chipBtn(row.is_active ? "#ef4444" : GOLD, busy)}
+            style={chipBtn(row.is_active ? "#EF4444" : CREAM, busy)}
           >
             {row.is_active ? "🔒 Deactivate" : "🔒 Activate"}
           </button>
@@ -444,7 +443,7 @@ function PlanRow({
             onClick={() => onTogglePlan(false)}
             disabled={busy}
             className="uppercase"
-            style={chipBtn("#ef4444", busy)}
+            style={chipBtn("#EF4444", busy)}
           >
             🔒 Remove from plans
           </button>
@@ -508,7 +507,7 @@ function PlanRow({
               onClick={onSave}
               disabled={busy}
               className="uppercase"
-              style={chipBtn(GOLD, busy)}
+              style={chipBtn(CREAM, busy)}
             >
               {busy ? "Saving…" : "🔒 Save"}
             </button>
@@ -528,7 +527,7 @@ function PlanRow({
             onClick={onStartEdit}
             disabled={busy}
             className="uppercase"
-            style={chipBtn(GOLD, busy)}
+            style={chipBtn(CREAM, busy)}
           >
             Edit plan details
           </button>
@@ -586,7 +585,7 @@ function CataloguePromoteRow({
         disabled={!canPromote || busy}
         onClick={onPromote}
         className="uppercase"
-        style={chipBtn(GOLD, !canPromote || busy)}
+        style={chipBtn(CREAM, !canPromote || busy)}
       >
         {busy ? "Working…" : "🔒 Add to plans"}
       </button>

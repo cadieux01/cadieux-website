@@ -20,10 +20,9 @@ import {
   ProductReportCategory,
 } from "@/lib/product-reports";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
 
 export function LabReportsSection({
   productId,
@@ -216,8 +215,8 @@ export function LabReportsSection({
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.25em",
-            color: GOLD,
-            border: `1px solid ${GOLD}`,
+            color: CREAM,
+            border: `1px solid ${CREAM}`,
             padding: "0.45rem 0.9rem",
             background: "transparent",
           }}
@@ -232,9 +231,9 @@ export function LabReportsSection({
           fontFamily: "var(--font-body)",
           fontSize: "1rem",
           letterSpacing: "0.04em",
-          color: GOLD,
+          color: CREAM,
           border: `1px solid ${BORDER}`,
-          background: "rgba(245,158,11,0.06)",
+          background: "rgba(251,243,212,0.06)",
           padding: "0.6rem 0.9rem",
         }}
       >
@@ -242,7 +241,7 @@ export function LabReportsSection({
       </p>
 
       {loadErr ? (
-        <p style={{ color: "#fecaca", fontFamily: "var(--font-body)" }}>
+        <p style={{ color: "#EF4444", fontFamily: "var(--font-body)" }}>
           {loadErr}
         </p>
       ) : loading ? (
@@ -279,7 +278,7 @@ export function LabReportsSection({
       {rowErr ? (
         <p
           className="mt-3"
-          style={{ color: "#fecaca", fontFamily: "var(--font-body)" }}
+          style={{ color: "#EF4444", fontFamily: "var(--font-body)" }}
         >
           {rowErr}
         </p>
@@ -340,7 +339,7 @@ function ReportCard({
       className="p-4"
       style={{
         border: `1px solid ${BORDER}`,
-        background: "rgba(0,0,0,0.18)",
+        background: "rgba(29,29,31,0.18)",
         opacity: report.is_archived ? 0.55 : 1,
       }}
     >
@@ -351,7 +350,7 @@ function ReportCard({
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.25em",
-            color: GOLD,
+            color: CREAM,
           }}
         >
           {PRODUCT_REPORT_CATEGORY_LABEL[report.category]}
@@ -439,8 +438,8 @@ function ReportCard({
                 fontFamily: "var(--font-body)",
                 fontSize: "0.875rem",
                 letterSpacing: "0.25em",
-                color: GOLD,
-                border: `1px solid ${GOLD}`,
+                color: CREAM,
+                border: `1px solid ${CREAM}`,
                 padding: "0.35rem 0.7rem",
                 background: "transparent",
                 opacity: busy || !name.trim() ? 0.5 : 1,
@@ -514,7 +513,7 @@ function ReportCard({
             className="block"
             style={{
               fontFamily: "var(--font-body)",
-              color: GOLD,
+              color: CREAM,
               fontSize: "1rem",
               wordBreak: "break-all",
               textDecoration: "underline",
@@ -560,8 +559,8 @@ function ReportCard({
                 fontFamily: "var(--font-body)",
                 fontSize: "0.875rem",
                 letterSpacing: "0.25em",
-                color: report.is_archived ? GOLD : FADED,
-                border: `1px solid ${report.is_archived ? GOLD : BORDER}`,
+                color: report.is_archived ? CREAM : FADED,
+                border: `1px solid ${report.is_archived ? CREAM : BORDER}`,
                 padding: "0.3rem 0.65rem",
                 background: "transparent",
                 opacity: busy ? 0.5 : 1,
@@ -578,8 +577,8 @@ function ReportCard({
                 fontFamily: "var(--font-body)",
                 fontSize: "0.875rem",
                 letterSpacing: "0.25em",
-                color: "#ef4444",
-                border: "1px solid #ef4444",
+                color: "#EF4444",
+                border: "1px solid #EF4444",
                 padding: "0.3rem 0.65rem",
                 background: "transparent",
                 opacity: busy ? 0.5 : 1,
@@ -628,13 +627,13 @@ function AddReportModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ background: "rgba(0,0,0,0.7)" }}
+      style={{ background: "rgba(29,29,31,0.7)" }}
       onClick={onCancel}
     >
       <div
         className="w-full max-w-md"
         style={{
-          background: "rgb(6,4,2)",
+          background: "rgb(29,29,31)",
           border: `1px solid ${BORDER}`,
           // 3-zone scrollable layout
           display: "flex",
@@ -649,7 +648,7 @@ function AddReportModal({
           style={{
             flexShrink: 0,
             padding: "1.25rem 1.5rem 1rem",
-            background: "rgb(6,4,2)",
+            background: "rgb(29,29,31)",
             borderBottom: `1px solid ${BORDER}`,
           }}
         >
@@ -768,7 +767,7 @@ function AddReportModal({
             <p
               style={{
                 margin: 0,
-                color: "#fecaca",
+                color: "#EF4444",
                 fontFamily: "var(--font-body)",
                 fontSize: "1rem",
               }}
@@ -782,7 +781,7 @@ function AddReportModal({
           style={{
             flexShrink: 0,
             padding: "1rem 1.5rem 1.25rem",
-            background: "rgb(6,4,2)",
+            background: "rgb(29,29,31)",
             borderTop: `1px solid ${BORDER}`,
             display: "flex",
             justifyContent: "flex-end",
@@ -815,8 +814,8 @@ function AddReportModal({
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",
               letterSpacing: "0.25em",
-              color: GOLD,
-              border: `1px solid ${GOLD}`,
+              color: CREAM,
+              border: `1px solid ${CREAM}`,
               padding: "0.45rem 0.9rem",
               background: "transparent",
               opacity: busy ? 0.5 : 1,

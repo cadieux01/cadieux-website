@@ -118,7 +118,7 @@ function AdminLoading() {
     <div
       style={{
         padding: "2rem",
-        color: "rgba(245,158,11,0.7)",
+        color: "rgba(251,243,212,0.7)",
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
         letterSpacing: "0.05em",
@@ -492,9 +492,9 @@ function OrdersPageInner() {
               className="uppercase"
               style={{
                 ...chipBase,
-                color: active ? "#06120c" : "rgba(245,158,11,0.85)",
-                background: active ? "#f59e0b" : "transparent",
-                borderColor: active ? "#f59e0b" : "rgba(245,158,11,0.4)",
+                color: active ? "#1D1D1F" : "rgba(251,243,212,0.85)",
+                background: active ? "#FBF3D4" : "transparent",
+                borderColor: active ? "#FBF3D4" : "rgba(251,243,212,0.4)",
               }}
             >
               {v.replace(/_/g, " ")}
@@ -512,8 +512,8 @@ function OrdersPageInner() {
           placeholder="Search name or phone"
           className="px-3 py-2 bg-transparent outline-none"
           style={{
-            border: "1px solid rgba(245,158,11,0.3)",
-            color: "#fbf3d4",
+            border: "1px solid rgba(251,243,212,0.3)",
+            color: "#FBF3D4",
             fontFamily: "var(--font-body)",
             fontSize: "1rem",
             letterSpacing: "0.05em",
@@ -559,9 +559,9 @@ function OrdersPageInner() {
       {notice ? (
         <div
           style={{
-            border: "1px solid rgba(245,158,11,0.45)",
-            background: "rgba(245,158,11,0.07)",
-            color: "#fbf3d4",
+            border: "1px solid rgba(251,243,212,0.45)",
+            background: "rgba(251,243,212,0.07)",
+            color: "#FBF3D4",
             padding: "0.7rem 1rem",
             marginBottom: "1rem",
             fontFamily: "var(--font-body)",
@@ -611,7 +611,7 @@ function OrdersPageInner() {
       ) : (
         <div
           style={{
-            border: "1px solid rgba(245,158,11,0.18)",
+            border: "1px solid rgba(251,243,212,0.18)",
             borderRadius: 6,
             overflow: "hidden",
           }}
@@ -667,7 +667,7 @@ function OrdersPageInner() {
                       cursor: "pointer",
                       background:
                         i % 2 === 0
-                          ? "rgba(245,158,11,0.025)"
+                          ? "rgba(251,243,212,0.025)"
                           : "transparent",
                     }}
                   >
@@ -685,7 +685,7 @@ function OrdersPageInner() {
                           fontFamily: "var(--font-body)",
                           fontSize: "0.875rem",
                           letterSpacing: "0.1em",
-                          color: "#fbf3d4",
+                          color: "#FBF3D4",
                         }}
                         title={o.id}
                       >
@@ -693,14 +693,14 @@ function OrdersPageInner() {
                       </span>
                     </td>
                     <td style={td}>
-                      <div style={{ color: "#fbf3d4", fontSize: "1rem" }}>
+                      <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
                         {o.customers?.full_name ?? "—"}
                       </div>
                       {o.customers?.phone ? (
                         <div className="flex flex-wrap items-center gap-2 mt-1">
                           <span
                             style={{
-                              color: "rgba(245,158,11,0.85)",
+                              color: "rgba(251,243,212,0.85)",
                               fontSize: "1rem",
                               letterSpacing: "0.05em",
                             }}
@@ -723,8 +723,8 @@ function OrdersPageInner() {
                             fontFamily: "var(--font-body)",
                             fontSize: "0.875rem",
                             letterSpacing: "0.2em",
-                            color: "#fcd34d",
-                            border: "1px solid rgba(252,211,77,0.5)",
+                            color: "#FBF3D4",
+                            border: "1px solid rgba(251,243,212,0.5)",
                             padding: "0.15rem 0.5rem",
                             borderRadius: "999px",
                             marginBottom: 4,
@@ -735,7 +735,7 @@ function OrdersPageInner() {
                       ) : null}
                       <div
                         style={{
-                          color: "#fbf3d4",
+                          color: "#FBF3D4",
                           fontSize: "1rem",
                           lineHeight: 1.4,
                           whiteSpace: "pre-wrap",
@@ -747,7 +747,7 @@ function OrdersPageInner() {
                       {o.fulfillment_type === "pickup" && o.pickup_location ? (
                         <div
                           style={{
-                            color: "rgba(252,211,77,0.85)",
+                            color: "rgba(251,243,212,0.85)",
                             fontSize: "1rem",
                             letterSpacing: "0.03em",
                             marginTop: 2,
@@ -759,7 +759,7 @@ function OrdersPageInner() {
                       ) : o.customers?.city ? (
                         <div
                           style={{
-                            color: "rgba(192,200,206,0.65)",
+                            color: "rgba(251,243,212,0.65)",
                             fontSize: "1rem",
                             letterSpacing: "0.05em",
                             marginTop: 2,
@@ -778,7 +778,7 @@ function OrdersPageInner() {
                       )}
                     </td>
                     <td style={td}>
-                      <span style={{ color: "#fbf3d4", fontSize: "1rem" }}>
+                      <span style={{ color: "#FBF3D4", fontSize: "1rem" }}>
                         {formatINR(o.total_amount)}
                       </span>
                     </td>
@@ -821,13 +821,13 @@ function OrdersPageInner() {
                       </div>
                     </td>
                     <td style={td}>
-                      <div style={{ color: "#fbf3d4", fontSize: "1rem" }}>
+                      <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
                         {o.delivery_date ? formatDate(o.delivery_date) : "—"}
                       </div>
                       {o.delivery_slot ? (
                         <div
                           style={{
-                            color: "rgba(192,200,206,0.65)",
+                            color: "rgba(251,243,212,0.65)",
                             fontSize: "1rem",
                             letterSpacing: "0.05em",
                           }}
@@ -841,8 +841,8 @@ function OrdersPageInner() {
                             marginTop: 4,
                             display: "inline-block",
                             padding: "2px 6px",
-                            border: "1px solid rgba(245,158,11,0.5)",
-                            color: "#fbbf24",
+                            border: "1px solid rgba(251,243,212,0.5)",
+                            color: "#FBF3D4",
                             fontSize: "0.875rem",
                             letterSpacing: "0.18em",
                             textTransform: "uppercase",
@@ -856,7 +856,7 @@ function OrdersPageInner() {
                     <td style={td}>
                       <span
                         style={{
-                          color: "rgba(192,200,206,0.7)",
+                          color: "rgba(251,243,212,0.7)",
                           fontSize: "1rem",
                         }}
                       >
@@ -897,8 +897,8 @@ function OrdersPageInner() {
                             onClick={() => setScheduling(o)}
                             style={{
                               ...buttonSm,
-                              color: "#fbbf24",
-                              borderColor: "rgba(245,158,11,0.6)",
+                              color: "#FBF3D4",
+                              borderColor: "rgba(251,243,212,0.6)",
                               opacity: busy ? 0.5 : 1,
                             }}
                             title="Set delivery date and notify customer (SMS + WhatsApp)"
@@ -939,7 +939,7 @@ function OrdersPageInner() {
                             }}
                             style={{
                               ...buttonSm,
-                              color: "#ef4444",
+                              color: "#EF4444",
                               borderColor: "rgba(239,68,68,0.45)",
                               opacity: busy ? 0.5 : 1,
                             }}
@@ -998,15 +998,15 @@ function BulkToolbar({
         flexWrap: "wrap",
         gap: "0.6rem",
         alignItems: "center",
-        background: "rgba(245,158,11,0.1)",
-        border: "1px solid rgba(245,158,11,0.4)",
+        background: "rgba(251,243,212,0.1)",
+        border: "1px solid rgba(251,243,212,0.4)",
         padding: "0.6rem 0.9rem",
         marginBottom: "1rem",
       }}
     >
       <span
         style={{
-          color: "#fbf3d4",
+          color: "#FBF3D4",
           fontFamily: "var(--font-body)",
           fontSize: "1rem",
           letterSpacing: "0.05em",
@@ -1023,11 +1023,11 @@ function BulkToolbar({
           disabled={running}
           style={{
             ...bulkButton,
-            color: a === "cancel" ? "#ef4444" : "#f59e0b",
+            color: a === "cancel" ? "#EF4444" : "#FBF3D4",
             borderColor:
               a === "cancel"
                 ? "rgba(239,68,68,0.45)"
-                : "rgba(245,158,11,0.45)",
+                : "rgba(251,243,212,0.45)",
             opacity: running ? 0.5 : 1,
           }}
         >
@@ -1040,8 +1040,8 @@ function BulkToolbar({
         disabled={running}
         style={{
           ...bulkButton,
-          color: "rgba(192,200,206,0.65)",
-          borderColor: "rgba(192,200,206,0.3)",
+          color: "rgba(251,243,212,0.65)",
+          borderColor: "rgba(251,243,212,0.3)",
         }}
       >
         Clear
@@ -1094,12 +1094,12 @@ function ConfirmModal({
               disabled={running}
               style={{
                 ...chipPrimary,
-                background: action === "cancel" ? "rgba(239,68,68,0.15)" : "rgba(245,158,11,0.15)",
+                background: action === "cancel" ? "rgba(239,68,68,0.15)" : "rgba(251,243,212,0.15)",
                 borderColor:
                   action === "cancel"
                     ? "rgba(239,68,68,0.6)"
-                    : "rgba(245,158,11,0.6)",
-                color: action === "cancel" ? "#fca5a5" : "#f59e0b",
+                    : "rgba(251,243,212,0.6)",
+                color: action === "cancel" ? "#EF4444" : "#FBF3D4",
                 opacity: running ? 0.6 : 1,
               }}
             >
@@ -1134,7 +1134,7 @@ function ResultModal({
               style={{
                 border: "1px solid rgba(239,68,68,0.35)",
                 padding: "0.5rem 0.8rem",
-                color: "#fca5a5",
+                color: "#EF4444",
                 fontFamily: "var(--font-body)",
                 fontSize: "1rem",
                 listStyle: "none",
@@ -1313,7 +1313,7 @@ function EditOrderModal({
               alignItems: "center",
               gap: "0.5rem",
               margin: "0.5rem 0 1rem",
-              color: "rgba(192,200,206,0.8)",
+              color: "rgba(251,243,212,0.8)",
               fontFamily: "var(--font-body)",
               fontSize: "1rem",
             }}
@@ -1327,7 +1327,7 @@ function EditOrderModal({
             Send SMS + WhatsApp to customer about this change
           </label>
           {err ? (
-            <p style={{ color: "#fca5a5", fontSize: "1rem", margin: 0 }}>
+            <p style={{ color: "#EF4444", fontSize: "1rem", margin: 0 }}>
               {err}
             </p>
           ) : null}
@@ -1418,7 +1418,7 @@ function SchedulePreorderModal({
           <p
             style={{
               margin: "0 0 1rem",
-              color: "rgba(192,200,206,0.8)",
+              color: "rgba(251,243,212,0.8)",
               fontFamily: "var(--font-body)",
               fontSize: "1rem",
               lineHeight: 1.55,
@@ -1439,7 +1439,7 @@ function SchedulePreorderModal({
             />
           </Field>
           {err ? (
-            <p style={{ color: "#fca5a5", fontSize: "1rem", margin: 0 }}>
+            <p style={{ color: "#EF4444", fontSize: "1rem", margin: 0 }}>
               {err}
             </p>
           ) : null}
@@ -1484,7 +1484,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
         fontSize: "0.875rem",
         letterSpacing: "0.18em",
         textTransform: "uppercase",
-        color: "rgba(245,158,11,0.85)",
+        color: "rgba(251,243,212,0.85)",
       }}
     >
       {label}
@@ -1495,8 +1495,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const modalInput: React.CSSProperties = {
   background: "transparent",
-  border: "1px solid rgba(245,158,11,0.3)",
-  color: "#fbf3d4",
+  border: "1px solid rgba(251,243,212,0.3)",
+  color: "#FBF3D4",
   padding: "0.55rem 0.7rem",
   fontSize: "1rem",
   letterSpacing: "0.02em",
@@ -1523,10 +1523,10 @@ function Placeholder({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        border: "1px dashed rgba(245,158,11,0.2)",
+        border: "1px dashed rgba(251,243,212,0.2)",
         padding: "3rem 1rem",
         textAlign: "center",
-        color: "rgba(192,200,206,0.55)",
+        color: "rgba(251,243,212,0.55)",
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
         letterSpacing: "0.05em",
@@ -1554,24 +1554,24 @@ function PaymentBadge({
   let bg: string;
   if (s === "paid") {
     label = "Paid";
-    color = "rgb(74,222,128)";
-    bg = "rgba(74,222,128,0.12)";
+    color = "rgb(251,243,212)";
+    bg = "rgba(251,243,212,0.12)";
   } else if (s === "failed") {
     label = "Failed";
-    color = "#ff8181";
-    bg = "rgba(255,129,129,0.12)";
+    color = "#EF4444";
+    bg = "rgba(239,68,68,0.12)";
   } else if (m === "cod") {
     label = "COD";
-    color = "rgba(192,200,206,0.85)";
-    bg = "rgba(192,200,206,0.1)";
+    color = "rgba(251,243,212,0.85)";
+    bg = "rgba(251,243,212,0.1)";
   } else if (!m && !s) {
     label = "—";
-    color = "rgba(192,200,206,0.5)";
+    color = "rgba(251,243,212,0.5)";
     bg = "transparent";
   } else {
     label = "Awaiting";
-    color = "rgb(245,158,11)";
-    bg = "rgba(245,158,11,0.12)";
+    color = "rgb(251,243,212)";
+    bg = "rgba(251,243,212,0.12)";
   }
 
   return (
@@ -1609,7 +1609,7 @@ function ErrorBanner({
         background: "rgba(239,68,68,0.06)",
         padding: "0.8rem 1rem",
         marginBottom: "1rem",
-        color: "#fca5a5",
+        color: "#EF4444",
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
         display: "flex",
@@ -1629,8 +1629,8 @@ function ErrorBanner({
 const statusSelect: React.CSSProperties = {
   padding: "0.3rem 0.5rem",
   background: "transparent",
-  border: "1px solid rgba(245,158,11,0.45)",
-  color: "#fbf3d4",
+  border: "1px solid rgba(251,243,212,0.45)",
+  color: "#FBF3D4",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.1em",
@@ -1643,7 +1643,7 @@ const statusSelect: React.CSSProperties = {
 
 const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
-  border: "1px solid rgba(245,158,11,0.4)",
+  border: "1px solid rgba(251,243,212,0.4)",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -1653,20 +1653,20 @@ const chipBase: React.CSSProperties = {
 
 const chipPrimary: React.CSSProperties = {
   ...chipBase,
-  color: "#f59e0b",
-  borderColor: "rgba(245,158,11,0.55)",
+  color: "#FBF3D4",
+  borderColor: "rgba(251,243,212,0.55)",
   display: "inline-block",
   textDecoration: "none",
 };
 
 const chipNeutral: React.CSSProperties = {
   ...chipBase,
-  color: "rgba(245,158,11,0.85)",
+  color: "rgba(251,243,212,0.85)",
 };
 
 const tableHeadRow: React.CSSProperties = {
-  background: "rgba(245,158,11,0.08)",
-  color: "rgba(245,158,11,0.9)",
+  background: "rgba(251,243,212,0.08)",
+  color: "rgba(251,243,212,0.9)",
   textTransform: "uppercase",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -1677,21 +1677,21 @@ const th: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   fontWeight: 400,
-  borderBottom: "1px solid rgba(245,158,11,0.15)",
+  borderBottom: "1px solid rgba(251,243,212,0.15)",
 };
 
 const td: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   verticalAlign: "top",
-  borderBottom: "1px solid rgba(245,158,11,0.06)",
+  borderBottom: "1px solid rgba(251,243,212,0.06)",
 };
 
 const buttonSm: React.CSSProperties = {
   padding: "0.3rem 0.7rem",
   background: "transparent",
-  border: "1px solid rgba(245,158,11,0.45)",
-  color: "#f59e0b",
+  border: "1px solid rgba(251,243,212,0.45)",
+  color: "#FBF3D4",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -1702,7 +1702,7 @@ const buttonSm: React.CSSProperties = {
 const bulkButton: React.CSSProperties = {
   padding: "0.4rem 0.85rem",
   background: "transparent",
-  border: "1px solid rgba(245,158,11,0.45)",
+  border: "1px solid rgba(251,243,212,0.45)",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -1724,8 +1724,8 @@ const modalBackdrop: React.CSSProperties = {
 const modalCard: React.CSSProperties = {
   width: "100%",
   maxWidth: 460,
-  background: "rgb(12,8,4)",
-  border: "1px solid rgba(245,158,11,0.4)",
+  background: "rgb(29,29,31)",
+  border: "1px solid rgba(251,243,212,0.4)",
   borderRadius: 6,
   // 3-zone scrollable layout: sticky header + scrollable body + sticky footer
   display: "flex",
@@ -1738,8 +1738,8 @@ const modalCard: React.CSSProperties = {
 const modalHeader: React.CSSProperties = {
   flexShrink: 0,
   padding: "1.1rem 1.4rem 0.9rem",
-  background: "rgb(12,8,4)",
-  borderBottom: "1px solid rgba(245,158,11,0.18)",
+  background: "rgb(29,29,31)",
+  borderBottom: "1px solid rgba(251,243,212,0.18)",
 };
 
 const modalScrollBody: React.CSSProperties = {
@@ -1753,14 +1753,14 @@ const modalScrollBody: React.CSSProperties = {
 const modalFooter: React.CSSProperties = {
   flexShrink: 0,
   padding: "0.9rem 1.4rem",
-  background: "rgb(12,8,4)",
-  borderTop: "1px solid rgba(245,158,11,0.18)",
+  background: "rgb(29,29,31)",
+  borderTop: "1px solid rgba(251,243,212,0.18)",
 };
 
 const modalTitle: React.CSSProperties = {
   fontFamily: "var(--font-heading)",
   fontSize: "1.05rem",
-  color: "#fbf3d4",
+  color: "#FBF3D4",
   margin: 0,
   letterSpacing: "0.04em",
 };
@@ -1768,7 +1768,7 @@ const modalTitle: React.CSSProperties = {
 const modalBody: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
-  color: "rgba(192,200,206,0.85)",
+  color: "rgba(251,243,212,0.85)",
   lineHeight: 1.5,
   margin: 0,
 };

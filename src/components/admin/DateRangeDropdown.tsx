@@ -14,15 +14,14 @@
 //     mount — parents seed their initial state with resolvePreset
 //     ("this_month") so there's no flash or redundant fetch.
 //
-// Palette: Foundation Green (#024628) + Grain Cream (#FBF3D4).
+// Palette: see components/admin/theme.ts — INK (#1D1D1F) + CREAM (#FBF3D4).
 
 import { useState } from "react";
 
 import Select from "@/components/ui/Select";
 import DatePicker from "@/components/ui/DatePicker";
 
-const GREEN = "#024628";
-const CREAM = "#fbf3d4";
+import { CREAM, INK } from "./theme";
 
 export type DateRangeValue = { from: Date; to: Date };
 
@@ -216,7 +215,7 @@ export function DateRangeDropdown({
           ariaLabel="Date range"
           value={preset}
           onChange={(v) => selectPreset(v as PresetKey)}
-          style={{ background: GREEN, borderColor: GREEN, minHeight: 0 }}
+          style={{ background: INK, borderColor: INK, minHeight: 0 }}
           options={[
             ...PRESETS.map((p) => ({ value: p.key, label: p.label })),
             { value: "custom", label: "Custom…" },
@@ -231,7 +230,7 @@ export function DateRangeDropdown({
             flexDirection: "column",
             gap: "0.5rem",
             padding: "0.6rem",
-            background: GREEN,
+            background: INK,
             border: `1px solid ${CREAM}33`,
             borderRadius: 6,
           }}
@@ -248,7 +247,7 @@ export function DateRangeDropdown({
                   aria-pressed={active}
                   style={{
                     background: active ? CREAM : "transparent",
-                    color: active ? GREEN : CREAM,
+                    color: active ? INK : CREAM,
                     border: `1px solid ${CREAM}`,
                     borderRadius: 4,
                     padding: "0.25rem 0.6rem",
@@ -312,7 +311,7 @@ export function DateRangeDropdown({
                 aria-label="Year"
                 style={{
                   background: CREAM,
-                  color: GREEN,
+                  color: INK,
                   border: `1px solid ${CREAM}`,
                   borderRadius: 4,
                   padding: "0.3rem 0.5rem",
@@ -330,7 +329,7 @@ export function DateRangeDropdown({
               onClick={applyCustom}
               style={{
                 background: CREAM,
-                color: GREEN,
+                color: INK,
                 border: `1px solid ${CREAM}`,
                 borderRadius: 4,
                 padding: "0.35rem 0.9rem",

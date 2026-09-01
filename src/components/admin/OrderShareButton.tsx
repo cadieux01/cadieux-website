@@ -16,10 +16,9 @@ import { useEffect, useRef, useState } from "react";
 import type { AdminOrderRow } from "@/lib/admin-shared";
 import { composeShareMessage } from "@/lib/order-share-message";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.35)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.35)";
 
 export type ShareablePartner = {
   id: string;
@@ -100,13 +99,13 @@ export function OrderShareButton({
             right: 0,
             zIndex: 20,
             minWidth: 240,
-            background: "#141414",
+            background: "#1D1D1F",
             border: `1px solid ${BORDER}`,
             padding: 8,
             fontFamily: "var(--font-body)",
             fontSize: "1rem",
             color: CREAM,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+            boxShadow: "0 8px 24px rgba(29,29,31,0.6)",
           }}
         >
           <div
@@ -125,7 +124,7 @@ export function OrderShareButton({
             <div style={{ padding: "6px 8px", color: FADED }}>Loading…</div>
           )}
           {partnersError && (
-            <div style={{ padding: "6px 8px", color: "#ef4444" }}>
+            <div style={{ padding: "6px 8px", color: "#EF4444" }}>
               {partnersError}
             </div>
           )}

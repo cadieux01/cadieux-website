@@ -25,10 +25,9 @@ import {
 import { ContentStringsSection } from "@/components/admin/ContentStringsSection";
 import { usePinGate } from "@/components/admin/PinGateModal";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
 
 type Tab = "milestones" | "stats" | "behind_strings" | "process" | "global_strings";
 
@@ -81,7 +80,7 @@ export default function AdminContentPage() {
                   fontSize: "0.875rem",
                   letterSpacing: "0.25em",
                   color: active ? CREAM : FADED,
-                  border: `1px solid ${active ? GOLD : BORDER}`,
+                  border: `1px solid ${active ? CREAM : BORDER}`,
                   padding: "0.35rem 0.7rem",
                   background: "transparent",
                 }}
@@ -112,7 +111,7 @@ export default function AdminContentPage() {
                 color: active ? CREAM : FADED,
                 background: "transparent",
                 border: "none",
-                borderBottom: `2px solid ${active ? GOLD : "transparent"}`,
+                borderBottom: `2px solid ${active ? CREAM : "transparent"}`,
                 padding: "0.6rem 1rem",
                 marginBottom: "-1px",
               }}

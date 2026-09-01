@@ -24,12 +24,11 @@ import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import { formatDateTime } from "@/lib/admin-formatting";
 
-const GOLD = "#f59e0b";
-const GOLD_SOFT = "rgba(245,158,11,0.85)";
-const CREAM = "#fbf3d4";
-const GREEN = "#024628";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+const CREAM_SOFT = "rgba(251,243,212,0.85)";
+const CREAM = "#FBF3D4";
+const PANEL_BORDER = "rgba(251,243,212,0.35)";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 const PER_PAGE = 50;
@@ -68,17 +67,17 @@ const CATEGORIES = [
 function actionColor(a: string | null): string {
   switch (a) {
     case "CREATE":
-      return "#4ade80";
+      return "#FBF3D4";
     case "UPDATE":
-      return GOLD;
+      return CREAM;
     case "DELETE":
-      return "#ef4444";
+      return "#EF4444";
     case "LOGIN":
-      return "#22d3ee";
+      return "#FBF3D4";
     case "BLOCKED":
-      return "#fb923c";
+      return "#FBF3D4";
     case "LOCKOUT":
-      return "#f43f5e";
+      return "#EF4444";
     default:
       return FADED;
   }
@@ -353,8 +352,8 @@ export default function UnifiedAuditPage() {
           display: "flex",
           alignItems: "center",
           gap: "0.6rem",
-          border: `1px solid ${GREEN}`,
-          background: "rgba(2,70,40,0.18)",
+          border: `1px solid ${PANEL_BORDER}`,
+          background: "rgba(251,243,212,0.06)",
           padding: "0.7rem 1rem",
           marginBottom: "1.25rem",
         }}
@@ -417,7 +416,7 @@ export default function UnifiedAuditPage() {
             border: "1px solid rgba(239,68,68,0.55)",
             background: "rgba(239,68,68,0.08)",
             padding: "0.85rem 1rem",
-            color: "#fecaca",
+            color: "#EF4444",
             fontFamily: "var(--font-body)",
             fontSize: "1rem",
             marginBottom: "1rem",
@@ -427,7 +426,7 @@ export default function UnifiedAuditPage() {
         </div>
       ) : null}
 
-      <div style={{ border: `1px solid ${BORDER}`, background: "rgba(0,0,0,0.18)" }}>
+      <div style={{ border: `1px solid ${BORDER}`, background: "rgba(29,29,31,0.18)" }}>
         <div className="overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
           <table
             style={{
@@ -443,7 +442,7 @@ export default function UnifiedAuditPage() {
               <tr
                 style={{
                   textAlign: "left",
-                  color: GOLD_SOFT,
+                  color: CREAM_SOFT,
                   fontSize: "0.875rem",
                   letterSpacing: "0.2em",
                   textTransform: "uppercase",
@@ -478,7 +477,7 @@ export default function UnifiedAuditPage() {
                     r.old_values != null || r.new_values != null;
                   const open = expanded === r.id;
                   const zebra =
-                    idx % 2 === 0 ? "transparent" : "rgba(245,158,11,0.04)";
+                    idx % 2 === 0 ? "transparent" : "rgba(251,243,212,0.04)";
                   return (
                     <FragmentRow
                       key={r.id}
@@ -580,7 +579,7 @@ function FragmentRow({
                 fontFamily: "var(--font-body)",
                 fontSize: "0.875rem",
                 letterSpacing: "0.18em",
-                color: GOLD_SOFT,
+                color: CREAM_SOFT,
                 border: `1px solid ${BORDER}`,
                 padding: "0.25rem 0.6rem",
                 background: "transparent",
@@ -595,7 +594,7 @@ function FragmentRow({
         </td>
       </tr>
       {open && hasDiff ? (
-        <tr style={{ background: "rgba(0,0,0,0.3)" }}>
+        <tr style={{ background: "rgba(29,29,31,0.3)" }}>
           <td colSpan={7} style={{ padding: "0.85rem" }}>
             <HumanDiff oldValue={r.old_values} newValue={r.new_values} />
           </td>
@@ -618,7 +617,7 @@ function HumanDiff({ oldValue, newValue }: { oldValue: unknown; newValue: unknow
     <div
       style={{
         border: `1px solid ${BORDER}`,
-        background: "rgba(0,0,0,0.25)",
+        background: "rgba(29,29,31,0.25)",
         padding: "0.9rem 1rem",
         fontFamily: "var(--font-body)",
         color: CREAM,
@@ -627,7 +626,7 @@ function HumanDiff({ oldValue, newValue }: { oldValue: unknown; newValue: unknow
       }}
     >
       {created ? (
-        <DiffSection title="New record created" tone="#4ade80">
+        <DiffSection title="New record created" tone="#FBF3D4">
           {now.length === 0 ? (
             <PlainLine muted>No fields recorded.</PlainLine>
           ) : (
@@ -635,7 +634,7 @@ function HumanDiff({ oldValue, newValue }: { oldValue: unknown; newValue: unknow
           )}
         </DiffSection>
       ) : deleted ? (
-        <DiffSection title="Record deleted" tone="#ef4444">
+        <DiffSection title="Record deleted" tone="#EF4444">
           {previously.length === 0 ? (
             <PlainLine muted>No fields recorded.</PlainLine>
           ) : (
@@ -644,7 +643,7 @@ function HumanDiff({ oldValue, newValue }: { oldValue: unknown; newValue: unknow
         </DiffSection>
       ) : (
         <div className="flex flex-col" style={{ gap: "1rem" }}>
-          <DiffSection title="What changed" tone={GOLD}>
+          <DiffSection title="What changed" tone={CREAM}>
             {changes.length === 0 ? (
               <PlainLine muted>No field-level differences.</PlainLine>
             ) : (
@@ -658,14 +657,14 @@ function HumanDiff({ oldValue, newValue }: { oldValue: unknown; newValue: unknow
             className="grid"
             style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}
           >
-            <DiffSection title="Previously" tone="#ef4444">
+            <DiffSection title="Previously" tone="#EF4444">
               {previously.length === 0 ? (
                 <PlainLine muted>(no prior values)</PlainLine>
               ) : (
                 <BulletList items={previously.map((e) => `${e.label}: ${e.value}`)} />
               )}
             </DiffSection>
-            <DiffSection title="Now" tone="#4ade80">
+            <DiffSection title="Now" tone="#FBF3D4">
               {now.length === 0 ? (
                 <PlainLine muted>(no current values)</PlainLine>
               ) : (
@@ -727,7 +726,7 @@ function PlainLine({ children, muted }: { children: React.ReactNode; muted?: boo
 
 function SourceBadge({ source }: { source: string | null }) {
   const isWebsite = source === "website";
-  const color = isWebsite ? "#4ade80" : GOLD;
+  const color = isWebsite ? "#FBF3D4" : CREAM;
   const label = source || "—";
   return (
     <span
@@ -798,8 +797,8 @@ const chipBtn: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.25em",
-  color: GOLD,
-  border: `1px solid ${GOLD}`,
+  color: CREAM,
+  border: `1px solid ${CREAM}`,
   padding: "0.45rem 0.9rem",
   background: "transparent",
 };
@@ -808,7 +807,7 @@ const pagerBtn: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
   padding: "0.35rem 0.85rem",
-  color: GOLD_SOFT,
+  color: CREAM_SOFT,
   background: "transparent",
   border: `1px solid ${BORDER}`,
   cursor: "pointer",

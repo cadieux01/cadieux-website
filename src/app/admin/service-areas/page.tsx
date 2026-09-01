@@ -48,11 +48,10 @@ type GroupedRow = {
 
 type Tab = "active" | "history" | "all";
 
-const GOLD = "#f59e0b";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
-const DARK_GREEN = "#024628";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
+const HAIRLINE = "rgba(251,243,212,0.35)";
 
 export default function ServiceAreasPage() {
   const [rows, setRows] = useState<ServiceAreaRow[]>([]);
@@ -850,9 +849,9 @@ export default function ServiceAreasPage() {
           style={{
             marginBottom: 16,
             padding: "10px 14px",
-            background: "rgba(34,197,94,0.12)",
-            border: "1px solid rgba(34,197,94,0.45)",
-            color: "#bbf7d0",
+            background: "rgba(251,243,212,0.12)",
+            border: "1px solid rgba(251,243,212,0.45)",
+            color: "#FBF3D4",
             fontFamily: "var(--font-body)",
             fontSize: 16,
             letterSpacing: "0.05em",
@@ -878,7 +877,7 @@ export default function ServiceAreasPage() {
             fontFamily: "var(--font-body)",
             fontSize: "0.875rem",
             letterSpacing: "0.3em",
-            color: GOLD,
+            color: CREAM,
             marginBottom: 12,
           }}
         >
@@ -1050,7 +1049,7 @@ export default function ServiceAreasPage() {
                     background: "#1D1D1F",
                     border: `1px solid ${BORDER}`,
                     borderRadius: 6,
-                    boxShadow: "0 12px 32px rgba(0,0,0,0.55)",
+                    boxShadow: "0 12px 32px rgba(29,29,31,0.55)",
                     maxHeight: 280,
                     overflowY: "auto",
                   }}
@@ -1081,7 +1080,7 @@ export default function ServiceAreasPage() {
                           borderRadius: 4,
                           cursor: "pointer",
                           background: isActive
-                            ? "rgba(245,158,11,0.15)"
+                            ? "rgba(251,243,212,0.15)"
                             : "transparent",
                           color: CREAM,
                           fontFamily: "var(--font-body)",
@@ -1147,7 +1146,7 @@ export default function ServiceAreasPage() {
           <p
             style={{
               margin: "10px 0 0",
-              color: "#ef4444",
+              color: "#EF4444",
               fontFamily: "var(--font-body)",
               fontSize: 16,
             }}
@@ -1177,8 +1176,8 @@ export default function ServiceAreasPage() {
               onClick={() => setTab(t)}
               className="uppercase"
               style={{
-                background: active ? "rgba(245,158,11,0.15)" : "transparent",
-                border: `1px solid ${active ? "rgba(245,158,11,0.7)" : "rgba(245,158,11,0.25)"}`,
+                background: active ? "rgba(251,243,212,0.15)" : "transparent",
+                border: `1px solid ${active ? "rgba(251,243,212,0.7)" : "rgba(251,243,212,0.25)"}`,
                 color: active ? CREAM : "rgba(251,243,212,0.55)",
                 padding: "6px 14px",
                 fontFamily: "var(--font-body)",
@@ -1205,7 +1204,7 @@ export default function ServiceAreasPage() {
       {loading ? (
         <p style={mutedText}>Loading…</p>
       ) : error ? (
-        <p style={{ ...mutedText, color: "#ef4444" }}>{error}</p>
+        <p style={{ ...mutedText, color: "#EF4444" }}>{error}</p>
       ) : filtered.length === 0 ? (
         <p style={mutedText}>No pincodes match.</p>
       ) : (
@@ -1255,7 +1254,7 @@ export default function ServiceAreasPage() {
                       style={{
                         borderTop: `1px solid ${BORDER}`,
                         background: checked
-                          ? "rgba(245,158,11,0.06)"
+                          ? "rgba(251,243,212,0.06)"
                           : "transparent",
                       }}
                     >
@@ -1288,11 +1287,11 @@ export default function ServiceAreasPage() {
                             padding: "2px 8px",
                             borderRadius: 99,
                             border: g.is_active
-                              ? "1px solid rgba(34,197,94,0.5)"
-                              : "1px solid rgba(192,200,206,0.3)",
-                            color: g.is_active ? "#bbf7d0" : FADED,
+                              ? "1px solid rgba(251,243,212,0.5)"
+                              : "1px solid rgba(251,243,212,0.3)",
+                            color: g.is_active ? "#FBF3D4" : FADED,
                             background: g.is_active
-                              ? "rgba(34,197,94,0.12)"
+                              ? "rgba(251,243,212,0.12)"
                               : "transparent",
                             whiteSpace: "nowrap",
                           }}
@@ -1340,7 +1339,7 @@ export default function ServiceAreasPage() {
             bottom: 0,
             zIndex: 200,
             background: "rgba(29,29,31,0.96)",
-            borderTop: `1px solid ${DARK_GREEN}`,
+            borderTop: `1px solid ${HAIRLINE}`,
             padding:
               "0.9rem clamp(1rem, 4vw, 1.5rem) calc(0.9rem + env(safe-area-inset-bottom))",
             backdropFilter: "blur(8px)",
@@ -1376,7 +1375,7 @@ export default function ServiceAreasPage() {
                 style={{
                   ...primaryBtn,
                   color: FADED,
-                  borderColor: "rgba(192,200,206,0.4)",
+                  borderColor: "rgba(251,243,212,0.4)",
                 }}
               >
                 Clear
@@ -1424,7 +1423,7 @@ export default function ServiceAreasPage() {
             position: "fixed",
             inset: 0,
             zIndex: 400,
-            background: "rgba(0,0,0,0.65)",
+            background: "rgba(29,29,31,0.65)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1434,7 +1433,7 @@ export default function ServiceAreasPage() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "rgb(6,4,2)",
+              background: "rgb(29,29,31)",
               border: `1px solid ${BORDER}`,
               borderRadius: 8,
               maxWidth: 420,
@@ -1453,7 +1452,7 @@ export default function ServiceAreasPage() {
               style={{
                 flexShrink: 0,
                 padding: "1.25rem 1.5rem 1rem",
-                background: "rgb(6,4,2)",
+                background: "rgb(29,29,31)",
                 borderBottom: `1px solid ${BORDER}`,
               }}
             >
@@ -1498,7 +1497,7 @@ export default function ServiceAreasPage() {
               style={{
                 flexShrink: 0,
                 padding: "1rem 1.5rem 1.25rem",
-                background: "rgb(6,4,2)",
+                background: "rgb(29,29,31)",
                 borderTop: `1px solid ${BORDER}`,
                 display: "flex",
                 justifyContent: "flex-end",
@@ -1514,7 +1513,7 @@ export default function ServiceAreasPage() {
                 style={{
                   ...primaryBtn,
                   color: FADED,
-                  borderColor: "rgba(192,200,206,0.4)",
+                  borderColor: "rgba(251,243,212,0.4)",
                 }}
               >
                 Cancel
@@ -1549,7 +1548,7 @@ export default function ServiceAreasPage() {
             position: "fixed",
             inset: 0,
             zIndex: 400,
-            background: "rgba(0,0,0,0.65)",
+            background: "rgba(29,29,31,0.65)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1559,7 +1558,7 @@ export default function ServiceAreasPage() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "rgb(6,4,2)",
+              background: "rgb(29,29,31)",
               border: `1px solid ${BORDER}`,
               borderRadius: 8,
               maxWidth: 640,
@@ -1578,7 +1577,7 @@ export default function ServiceAreasPage() {
               style={{
                 flexShrink: 0,
                 padding: "1.25rem 1.5rem 1rem",
-                background: "rgb(6,4,2)",
+                background: "rgb(29,29,31)",
                 borderBottom: `1px solid ${BORDER}`,
               }}
             >
@@ -1652,13 +1651,13 @@ export default function ServiceAreasPage() {
                     flexWrap: "wrap",
                     gap: 10,
                     padding: "10px 12px",
-                    background: "rgba(245,158,11,0.06)",
+                    background: "rgba(251,243,212,0.06)",
                     border: `1px solid ${BORDER}`,
                     borderRadius: 6,
                     fontSize: 16,
                   }}
                 >
-                  <span style={{ color: "#bbf7d0" }}>
+                  <span style={{ color: "#FBF3D4" }}>
                     Will add <strong>{parsedBulk.newCount}</strong> new
                     {parsedBulk.newCount === 1 ? " area" : " areas"}
                   </span>
@@ -1670,7 +1669,7 @@ export default function ServiceAreasPage() {
                   <span
                     style={{
                       color:
-                        parsedBulk.invalidCount > 0 ? "#ef4444" : FADED,
+                        parsedBulk.invalidCount > 0 ? "#EF4444" : FADED,
                     }}
                   >
                     {parsedBulk.invalidCount} invalid line
@@ -1701,7 +1700,7 @@ export default function ServiceAreasPage() {
                       letterSpacing: "0.2em",
                       fontSize: 14,
                       marginBottom: 4,
-                      color: "#ef4444",
+                      color: "#EF4444",
                     }}
                   >
                     Invalid lines (skipped)
@@ -1721,7 +1720,7 @@ export default function ServiceAreasPage() {
                 <p
                   style={{
                     margin: 0,
-                    color: "#ef4444",
+                    color: "#EF4444",
                     fontFamily: "var(--font-body)",
                     fontSize: 16,
                   }}
@@ -1736,7 +1735,7 @@ export default function ServiceAreasPage() {
               style={{
                 flexShrink: 0,
                 padding: "1rem 1.5rem 1.25rem",
-                background: "rgb(6,4,2)",
+                background: "rgb(29,29,31)",
                 borderTop: `1px solid ${BORDER}`,
                 display: "flex",
                 justifyContent: "flex-end",
@@ -1755,7 +1754,7 @@ export default function ServiceAreasPage() {
                 style={{
                   ...primaryBtn,
                   color: FADED,
-                  borderColor: "rgba(192,200,206,0.4)",
+                  borderColor: "rgba(251,243,212,0.4)",
                 }}
               >
                 Cancel
@@ -1797,8 +1796,8 @@ const inputBase: React.CSSProperties = {
 };
 
 const primaryBtn: React.CSSProperties = {
-  border: `1px solid ${GOLD}`,
-  color: GOLD,
+  border: `1px solid ${CREAM}`,
+  color: CREAM,
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.25em",
@@ -1809,7 +1808,7 @@ const primaryBtn: React.CSSProperties = {
 
 const dangerBtn: React.CSSProperties = {
   border: "1px solid rgba(239,68,68,0.5)",
-  color: "#ef4444",
+  color: "#EF4444",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.25em",

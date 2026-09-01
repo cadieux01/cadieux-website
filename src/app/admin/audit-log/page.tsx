@@ -38,11 +38,10 @@ import {
 const PAGE_SIZE = 100;
 const EXPORT_LIMIT = 1000;
 
-const GOLD = "#f59e0b";
-const GOLD_SOFT = "rgba(245,158,11,0.85)";
-const CREAM = "#fbf3d4";
-const FADED = "rgba(192,200,206,0.6)";
-const BORDER = "rgba(245,158,11,0.18)";
+const CREAM_SOFT = "rgba(251,243,212,0.85)";
+const CREAM = "#FBF3D4";
+const FADED = "rgba(251,243,212,0.6)";
+const BORDER = "rgba(251,243,212,0.18)";
 
 // Defensive label lookups. If the DB hands back an entity/action value
 // the TS union doesn't know about (e.g. a future enum migration that
@@ -118,7 +117,7 @@ function AdminLoading() {
     <div
       style={{
         padding: "2rem",
-        color: "rgba(245,158,11,0.7)",
+        color: "rgba(251,243,212,0.7)",
         fontFamily: "var(--font-body)",
         fontSize: "1rem",
         letterSpacing: "0.05em",
@@ -259,8 +258,8 @@ function AuditLogPageInner() {
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",
               letterSpacing: "0.25em",
-              color: GOLD,
-              border: `1px solid ${GOLD}`,
+              color: CREAM,
+              border: `1px solid ${CREAM}`,
               padding: "0.45rem 0.9rem",
               background: "transparent",
               cursor: refreshing ? "wait" : "pointer",
@@ -277,8 +276,8 @@ function AuditLogPageInner() {
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",
               letterSpacing: "0.25em",
-              color: GOLD,
-              border: `1px solid ${GOLD}`,
+              color: CREAM,
+              border: `1px solid ${CREAM}`,
               padding: "0.45rem 0.9rem",
               background: "transparent",
             }}
@@ -351,7 +350,7 @@ function AuditLogPageInner() {
               border: "1px solid rgba(239,68,68,0.55)",
               background: "rgba(239,68,68,0.08)",
               padding: "0.85rem 1rem",
-              color: "#fecaca",
+              color: "#EF4444",
               fontFamily: "var(--font-body)",
               fontSize: "1rem",
               lineHeight: 1.5,
@@ -363,7 +362,7 @@ function AuditLogPageInner() {
             }}
           >
             <div style={{ minWidth: 0, flex: "1 1 320px" }}>
-              <strong style={{ color: "#fca5a5", letterSpacing: "0.1em" }}>
+              <strong style={{ color: "#EF4444", letterSpacing: "0.1em" }}>
                 Couldn’t load audit log:
               </strong>{" "}
               {err}
@@ -377,8 +376,8 @@ function AuditLogPageInner() {
                 fontFamily: "var(--font-body)",
                 fontSize: "0.875rem",
                 letterSpacing: "0.22em",
-                color: "#fecaca",
-                border: "1px solid rgba(254,202,202,0.6)",
+                color: "#EF4444",
+                border: "1px solid rgba(239,68,68,0.6)",
                 padding: "0.4rem 0.85rem",
                 background: "transparent",
                 cursor: loading ? "wait" : "pointer",
@@ -393,7 +392,7 @@ function AuditLogPageInner() {
         <div
           style={{
             border: `1px solid ${BORDER}`,
-            background: "rgba(0,0,0,0.18)",
+            background: "rgba(29,29,31,0.18)",
           }}
         >
           <div
@@ -413,7 +412,7 @@ function AuditLogPageInner() {
                 <tr
                   style={{
                     textAlign: "left",
-                    color: GOLD_SOFT,
+                    color: CREAM_SOFT,
                     fontSize: "0.875rem",
                     letterSpacing: "0.22em",
                     textTransform: "uppercase",
@@ -475,7 +474,7 @@ function AuditLogPageInner() {
                           <details style={{ marginTop: "0.25rem" }}>
                             <summary
                               style={{
-                                color: GOLD_SOFT,
+                                color: CREAM_SOFT,
                                 fontSize: "0.875rem",
                                 letterSpacing: "0.18em",
                                 textTransform: "uppercase",
@@ -584,9 +583,9 @@ function FilterChips({
               fontSize: "0.875rem",
               letterSpacing: "0.2em",
               padding: "0.3rem 0.7rem",
-              color: active ? "#06120c" : GOLD_SOFT,
-              background: active ? GOLD : "transparent",
-              border: `1px solid ${active ? GOLD : "rgba(245,158,11,0.4)"}`,
+              color: active ? "#1D1D1F" : CREAM_SOFT,
+              background: active ? CREAM : "transparent",
+              border: `1px solid ${active ? CREAM : "rgba(251,243,212,0.4)"}`,
               cursor: "pointer",
             }}
           >
@@ -633,7 +632,7 @@ const pagerBtn: React.CSSProperties = {
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
   padding: "0.35rem 0.85rem",
-  color: GOLD_SOFT,
+  color: CREAM_SOFT,
   background: "transparent",
   border: `1px solid ${BORDER}`,
   cursor: "pointer",
