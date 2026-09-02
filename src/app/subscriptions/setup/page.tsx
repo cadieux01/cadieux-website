@@ -500,7 +500,7 @@ function Step2Dates({
         Pick any dates that work for you. We&apos;ll deliver fresh on each.
       </p>
       <p style={{ color: FADED, fontSize: 16, marginTop: 0, marginBottom: 18 }}>
-        We bake fresh for you — please pick a delivery time at least 12 hours
+        We bake fresh for you — please pick a delivery time at least 6 hours
         from now so your loaf comes straight from the oven.
       </p>
       <DateCalendar
@@ -554,7 +554,7 @@ function Step3Slots({
         30-minute delivery windows from 7:30 AM to 9:00 PM.
       </p>
       <p style={{ color: FADED, fontSize: 16, marginTop: 0, marginBottom: 18 }}>
-        We bake fresh for you — please pick a delivery time at least 12 hours
+        We bake fresh for you — please pick a delivery time at least 6 hours
         from now so your loaf comes straight from the oven.
       </p>
 

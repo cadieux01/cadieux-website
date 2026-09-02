@@ -2,7 +2,7 @@
 //
 // One source of truth for:
 //   - the slot universe (7:30 AM – 9:00 PM, every 30 min, lunch 1–2 PM skipped)
-//   - the 12 h 10 m BOOKING cutoff (placement)
+//   - the 6 h BOOKING cutoff (placement)
 //   - the 14 h SELF-EDIT cutoff (customer-driven date/slot change)
 //   - the ADMIN_PHONE message shown to customers within 14 h
 //   - IST (Asia/Kolkata) date math regardless of server clock
@@ -38,9 +38,9 @@ export const SLOT_INTERVAL_MIN = 30;
  *  O(1) lookup in the SLOTS generator. */
 export const LUNCH_SKIP_STARTS: ReadonlySet<string> = new Set(["13:00", "13:30"]);
 
-/** Booking lead time: 12 hours 10 minutes. New orders/subscriptions can't
- *  book a slot that starts within this window from "now" (IST). */
-export const BOOKING_LEAD_MINUTES = 730;
+/** Booking lead time: 6 hours. New orders/subscriptions can't book a slot
+ *  that starts within this window from "now" (IST). */
+export const BOOKING_LEAD_MINUTES = 360;
 
 /** Self-edit cutoff: if the delivery slot is ≤ 14 h away, the customer
  *  cannot self-edit and must call ADMIN_PHONE. */
@@ -66,7 +66,7 @@ export type Slot = {
 };
 
 export type BookableSlot = Slot & {
-  /** False when the slot is ≥ 12h10m from now; UI greys disabled slots.
+  /** False when the slot is ≥ 6 h from now; UI greys disabled slots.
    *  Server-side validation re-checks this regardless of client state. */
   disabled: boolean;
 };
@@ -194,7 +194,7 @@ export function slotStartUtcMs(dateIso: string, slotValue: string): number | nul
   return wallUtc - IST_OFFSET_MS;
 }
 
-// ── Booking (12h10m) rule ───────────────────────────────────────────────
+// ── Booking (6 h) rule ──────────────────────────────────────────────────
 
 /** True if `slot` on `date` starts ≥ BOOKING_LEAD_MINUTES from `now`. */
 export function isBookable(
@@ -229,7 +229,7 @@ export function dateHasAnyBookable(
 
 /** Returns the next N candidate delivery dates (IST), starting from
  *  today (so the picker can show "Today" when at least one same-day
- *  slot still satisfies the 12h10m rule). Dates with zero bookable
+ *  slot still satisfies the 6 h rule). Dates with zero bookable
  *  slots are EXCLUDED so the UI never shows a dead date pill.
  *  N defaults to 7 — one week of options. */
 export function nextDeliveryDates(
@@ -305,7 +305,7 @@ export function validateBookingSlot(
   if (!isBookable(dateIso, slotValue, now)) {
     return {
       status: 400,
-      error: "That delivery slot is too soon — orders need 12 h 10 m to bake and ship.",
+      error: "That delivery slot is too soon — orders need 6 hours to bake and ship.",
       code: "slot_too_soon",
     };
   }

@@ -540,7 +540,7 @@ function DirectEditPanel({
             }}
           >
             We bake fresh for you — please pick a delivery time at least
-            12 hours from now so your loaf comes straight from the oven.
+            6 hours from now so your loaf comes straight from the oven.
           </div>
 
           <Field label={`New date (current: ${formatDate(currentDate)})`}>
