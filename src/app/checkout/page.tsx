@@ -467,6 +467,28 @@ export default function CheckoutPage() {
     }
   }
 
+  // Apply (not just highlight) the default saved address once BOTH the
+  // address book and the customer prefill have landed. Gating on
+  // savedCustomer matters: the /api/checkout prefill resolves after the
+  // book fetch and calls setSavedCustomer + prefillAddress, which would
+  // otherwise overwrite the address we just applied. Applying it is what
+  // populates pincode + orderLat/orderLng so the delivery quote fires.
+  const autoAppliedForPhone = useRef<string | null>(null);
+  useEffect(() => {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length !== 10) return;
+    if (autoAppliedForPhone.current === digits) return;
+    if (savedAddresses.length === 0) return;
+    if (!savedCustomer) return;
+    const def = savedAddresses.find((r) => r.is_default) ?? savedAddresses[0];
+    if (!def) return;
+    // Guard is per-phone so a manual pick is never clobbered by a re-run
+    // (pickSavedAddress mutates savedCustomer, which re-triggers this).
+    autoAppliedForPhone.current = digits;
+    pickSavedAddress(def);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone, savedAddresses, savedCustomer]);
+
   // Effective pincode for serviceability check.
   const effectivePincode = (() => {
     if (formMode === "returning" && savedCustomer?.delivery_address) {
@@ -1088,6 +1110,10 @@ export default function CheckoutPage() {
             data.error ??
               "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
           );
+        } else if (data.code === "address_required") {
+          setError(data.error ?? "Please add a delivery address to continue.");
+          setFormMode("fresh");
+          setStep("address");
         } else {
           setError(data.error ?? "Order failed.");
         }
@@ -1170,6 +1196,10 @@ export default function CheckoutPage() {
           );
         } else if (errData.code === "price_mismatch") {
           setError(errData.error ?? "Price mismatch — please refresh and retry.");
+        } else if (errData.code === "address_required") {
+          setError(errData.error ?? "Please add a delivery address to continue.");
+          setFormMode("fresh");
+          setStep("address");
         } else {
           setError("Online payment unavailable. Please use Cash on Delivery.");
         }
