@@ -42,7 +42,7 @@ function buildMonthCells(y: number, m: number, today: Date, now: Date): Cell[][]
       d.setDate(gridStart.getDate() + r * 7 + c);
       const iso = isoDate(d);
       const isPast = d < today;
-      // A future date always has at least one bookable slot (>12h10m
+      // A future date always has at least one bookable slot (>6 h
       // away); today is the only date that can go fully-blocked once
       // enough of the day has passed. Skip the check on past dates.
       const noSlots = !isPast && !dateHasAnyBookable(iso, now);
@@ -217,7 +217,7 @@ export function DateCalendar({
               }${selected ? " (selected)" : ""}`}
               title={
                 cell.noSlots
-                  ? "We bake fresh — pick a date at least 12 hours from now."
+                  ? "We bake fresh — pick a date at least 6 hours from now."
                   : undefined
               }
               style={{

@@ -41,6 +41,7 @@ import {
 } from "@/lib/subscription-dates";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 import { getPreorderMode } from "@/lib/preorderMode";
+import { BOOKING_LEAD_MINUTES } from "@/lib/delivery-slots";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -82,12 +83,13 @@ const CAL_DAYS_AHEAD_MAX = 90;
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// Placement gap: slot must be at least 12 h 10 m from now (bake + ship
-// lead time). NOTE: This is for NEW order placement. The edit cutoff
-// (14 h, customer self-edit) is separate and lives in
+// Placement gap: slot must be at least BOOKING_LEAD_MINUTES from now
+// (bake + ship lead time). NOTE: This is for NEW order placement. The
+// edit cutoff (14 h, customer self-edit) is separate and lives in
 // /api/mobile/subscriptions/[id]/deliveries/[deliveryId]/edit.
-// Source of truth is BOOKING_LEAD_MINUTES in @/lib/delivery-slots.
-const PLACEMENT_GAP_MS = 730 * 60 * 1000;
+// Derived from the shared constant in @/lib/delivery-slots — do not
+// hardcode a second copy here.
+const PLACEMENT_GAP_MS = BOOKING_LEAD_MINUTES * 60 * 1000;
 // IST is UTC+5:30. Used for IST-aware slot-start calculation.
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
@@ -460,7 +462,7 @@ function validateCalendarDeliveries(deliveriesRaw: unknown):
       };
     }
 
-    // Placement gap: slot start (IST) must be ≥12 h from now.
+    // Placement gap: slot start (IST) must be ≥6 h from now.
     // Parse time_slot 'HH:MM' and compute IST epoch ms for that slot.
     const [slotH, slotM] = (d.time_slot as string).split(":").map(Number);
     const [yyyy, moPart, dayPart] = (d.date as string).split("-").map(Number);
@@ -472,7 +474,7 @@ function validateCalendarDeliveries(deliveriesRaw: unknown):
       return {
         ok: false,
         status: 400,
-        error: `deliveries[${i}].time_slot is too soon — orders need 12 h 10 m to bake and ship.`,
+        error: `deliveries[${i}].time_slot is too soon — orders need 6 hours to bake and ship.`,
         code: "slot_too_soon",
       };
     }
