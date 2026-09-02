@@ -281,7 +281,14 @@ export default function CustomerDetailPage() {
         <Table headers={["Product", "Weeks", "Frequency", "Status", "Payment", "Amount", "Started"]}>
           {data.subscriptions.map((s) => (
             <tr key={s.id}>
-              <td style={td}>{s.product_name}</td>
+              <td style={td}>
+                <Link
+                  href={`/admin/subscriptions/${s.id}`}
+                  style={{ color: "#FBF3D4" }}
+                >
+                  {s.product_name}
+                </Link>
+              </td>
               <td style={td}>{s.total_weeks}</td>
               <td style={td}>{s.frequency}</td>
               <td style={td}><StatusBadge status={s.status} /></td>

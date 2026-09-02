@@ -9,6 +9,7 @@
 // logic here.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
@@ -81,7 +82,14 @@ function AdminLoading() {
   );
 }
 
+// Interactive descendants of a row that must keep their own click
+// behaviour — clicking any of these must NOT navigate to the detail page.
+// Mirrors the same guard on /admin/orders.
+const ROW_INTERACTIVE_SELECTOR =
+  'a, button, input, select, textarea, label, [role="button"], [role="combobox"], [role="listbox"], [role="option"]';
+
 function SubscriptionsPageInner() {
+  const router = useRouter();
   const [subs, setSubs] = useState<AdminSubscriptionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -280,7 +288,22 @@ function SubscriptionsPageInner() {
                 return (
                   <tr
                     key={s.id}
+                    onClick={(e) => {
+                      // Row-wide navigation, minus the controls that own
+                      // their own click (customer link, action buttons).
+                      if (
+                        (e.target as HTMLElement).closest(
+                          ROW_INTERACTIVE_SELECTOR,
+                        )
+                      ) {
+                        return;
+                      }
+                      if (window.getSelection()?.toString()) return;
+                      router.push(`/admin/subscriptions/${s.id}`);
+                    }}
+                    title="Open subscription detail"
                     style={{
+                      cursor: "pointer",
                       background:
                         i % 2 === 0
                           ? "rgba(251,243,212,0.025)"
@@ -338,6 +361,12 @@ function SubscriptionsPageInner() {
                     <td style={td}><StatusBadge status={s.status} /></td>
                     <td style={td}>
                       <div className="flex flex-wrap gap-2">
+                        <Link
+                          href={`/admin/subscriptions/${s.id}`}
+                          style={{ ...buttonSm, textDecoration: "none" }}
+                        >
+                          Details
+                        </Link>
                         <button
                           type="button"
                           onClick={() => setDrawerId(s.id)}
