@@ -1,9 +1,76 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import {
+  buildDerivations,
+  type DeliveryLite,
+} from "@/lib/admin-subscription-derive";
 import { recordAuditEvent, type AuditAction } from "@/lib/audit-log";
 
 const ALLOWED_STATUSES = new Set(["active", "completed", "cancelled", "paused"]);
 const ALLOWED_PAYMENT_STATUSES = new Set(["pending", "paid", "failed", "refunded"]);
+
+/**
+ * Single-subscription detail for /admin/subscriptions/[id].
+ *
+ * `select("*")` deliberately — the subscriptions table carries both the
+ * current columns and the original wizard's ones (bread_*, days,
+ * slots_by_day, customer_*), and rows written by different eras of the
+ * checkout populate different subsets. The detail page shows whatever is
+ * there, so narrowing the projection would silently hide real data.
+ *
+ * Deliveries come back on the same response (the list endpoint the drawer
+ * uses is per-subscription too, but the page needs them to render at all).
+ */
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  if (!isAdmin(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: sub, error } = await supabaseAdmin
+    .from("subscriptions")
+    .select("*")
+    .eq("id", params.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[admin/subscriptions GET]", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!sub) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // customer_id is nullable on legacy rows — those fall back to the
+  // customer_name / customer_phone snapshot stored on the subscription.
+  let customer = null;
+  if (sub.customer_id) {
+    const { data } = await supabaseAdmin
+      .from("customers")
+      .select("id, full_name, phone, email, city")
+      .eq("id", sub.customer_id)
+      .maybeSingle();
+    customer = data ?? null;
+  }
+
+  const { data: deliveries } = await supabaseAdmin
+    .from("subscription_deliveries")
+    .select("*")
+    .eq("subscription_id", params.id)
+    .order("sequence", { ascending: true });
+
+  const derived = buildDerivations(
+    [{ id: sub.id, total_weeks: sub.total_weeks, created_at: sub.created_at }],
+    (deliveries as DeliveryLite[]) ?? [],
+  ).get(sub.id);
+
+  return NextResponse.json({
+    subscription: { ...sub, customer, ...derived },
+    deliveries: deliveries ?? [],
+  });
+}
 
 export async function PATCH(
   req: NextRequest,

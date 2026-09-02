@@ -208,6 +208,7 @@ export type AdminSubscriptionRow = {
     line2?: string | null;
     city?: string | null;
     pincode?: string | null;
+    phone?: string | null;
   } | null;
   customer?: AdminCustomerSummary | null;
   // Server-computed using MAX(subscription_deliveries.delivery_date)
@@ -215,6 +216,32 @@ export type AdminSubscriptionRow = {
   // derivation in src/app/api/cron/subscription-reminders/route.ts.
   derived_end_date?: string | null;
   remaining_deliveries?: number;
+
+  // Columns only the detail page renders. Both subscription routes
+  // select *, so these arrive on list rows too — they stay optional
+  // because legacy rows leave several of them null.
+  //
+  // `days` + `slots_by_day` are what the customer actually picked: a
+  // plan can run on several days a week, each with its own slot.
+  // `day_of_week` / `time_slot` carry only the FIRST of those, so a
+  // multi-day plan is not fully described without this pair.
+  days?: string[] | null;
+  slots_by_day?: Record<string, string> | null;
+  slot_mode?: string | null;
+  slot?: string | null;
+  /** Per-loaf price captured at signup. */
+  bread_price?: number | null;
+  payment_method?: string | null;
+  start_date?: string | null;
+  is_preorder?: boolean | null;
+  updated_at?: string | null;
+  // Flat address snapshot written by the original wizard, kept
+  // alongside the newer `delivery_address` jsonb.
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  customer_address?: string | null;
+  customer_city?: string | null;
+  customer_pincode?: string | null;
 };
 
 export const DELIVERY_STATUS_OPTIONS = [
@@ -250,4 +277,16 @@ export type AdminDeliveryRow = {
   status: string;
   status_updated_at: string | null;
   admin_notes: string | null;
+
+  // Generated schedule columns. `delivery_date` is the NOT NULL one the
+  // reminder cron and end-date derivation read; `scheduled_date` is the
+  // admin-editable copy the drawer edits. They match unless an admin has
+  // moved a delivery.
+  sequence?: number | null;
+  day_key?: string | null;
+  slot?: string | null;
+  delivery_date?: string | null;
+  /** Per-delivery item swap, when an admin has changed one week's order. */
+  items_override?: unknown;
+  created_at?: string | null;
 };
