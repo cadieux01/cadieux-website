@@ -36,6 +36,34 @@ const supabaseAdmin = createClient(
   }
 );
 
+/** An address is only usable for checkout prefill if it carries a
+ *  trailing 6-digit pincode — that pincode is what drives the
+ *  serviceability check and the delivery quote. */
+function hasUsablePincode(address: string | null | undefined): boolean {
+  return /(\d{6})\s*$/.test((address ?? "").trim());
+}
+
+/** Fall back to the customer's shared address book (public.addresses,
+ *  the same rows the mobile app writes) when their order history yields
+ *  no usable address. Returns "" if there's nothing to fall back to. */
+async function defaultBookAddress(customerId: string): Promise<string> {
+  const { data, error } = await supabaseAdmin
+    .from("addresses")
+    .select("label, line1, area, city, pincode")
+    .eq("customer_id", customerId)
+    .order("is_default", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[address book fallback]", error.message);
+    return "";
+  }
+  if (!data?.pincode) return "";
+  return `[${data.label}] ${data.line1}, ${data.area}, ${data.city} - ${data.pincode}`;
+}
+
 export async function GET(req: NextRequest) {
   const phone = req.nextUrl.searchParams.get("phone");
   if (!phone) return NextResponse.json({ customer: null });
@@ -67,21 +95,28 @@ export async function GET(req: NextRequest) {
   if (slim) {
     // Only the most recent address is needed for prefill. .limit(1) hits
     // the (customer_id, created_at desc) index path and returns immediately.
+    // Pickup orders carry a store placeholder with no pincode — using one
+    // as the prefill breaks that customer's NEXT delivery order, so they
+    // are excluded here. `is null` covers legacy rows written before the
+    // column existed (a bare .neq would drop them, NULL != 'pickup' is NULL).
     const { data: lastOrderRow, error: lastOrderErr } = await supabaseAdmin
       .from("orders")
       .select("delivery_address")
       .eq("customer_id", customer.id)
+      .or("fulfillment_type.is.null,fulfillment_type.neq.pickup")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (lastOrderErr) console.error("[orders fetch slim]", lastOrderErr.message);
 
+    const lastAddress = lastOrderRow?.delivery_address ?? "";
+    const delivery_address = hasUsablePincode(lastAddress)
+      ? lastAddress
+      : (await defaultBookAddress(customer.id)) || lastAddress;
+
     return NextResponse.json({
-      customer: {
-        ...customer,
-        delivery_address: lastOrderRow?.delivery_address ?? "",
-      },
+      customer: { ...customer, delivery_address },
       phone_verified,
     });
   }
@@ -99,7 +134,7 @@ export async function GET(req: NextRequest) {
   const [ordersRes, subsRes] = await Promise.all([
     supabaseAdmin
       .from("orders")
-      .select("id, order_number, total_amount, delivery_address, status, created_at, delivery_date, is_preorder, scheduled_delivery_date_at")
+      .select("id, order_number, total_amount, delivery_address, status, created_at, delivery_date, is_preorder, scheduled_delivery_date_at, fulfillment_type")
       .eq("customer_id", customer.id)
       .order("created_at", { ascending: false }),
     supabaseAdmin
@@ -117,10 +152,15 @@ export async function GET(req: NextRequest) {
 
   const orders = ordersRes.data;
   const subscriptions = subsRes.data;
-  const lastOrder = orders?.[0];
+  // Same pickup exclusion + address-book fallback as the slim path.
+  const lastDeliveryOrder = orders?.find((o) => o.fulfillment_type !== "pickup");
+  const lastAddress = lastDeliveryOrder?.delivery_address ?? "";
+  const delivery_address = hasUsablePincode(lastAddress)
+    ? lastAddress
+    : (await defaultBookAddress(customer.id)) || lastAddress;
 
   return NextResponse.json({
-    customer: { ...customer, delivery_address: lastOrder?.delivery_address ?? "" },
+    customer: { ...customer, delivery_address },
     orders: orders ?? [],
     subscriptions: subscriptions ?? [],
     phone_verified,

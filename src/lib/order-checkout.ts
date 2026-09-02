@@ -172,7 +172,15 @@ export async function prepareOneTimeOrder(
     : (body.delivery_address as string | undefined);
 
   if (!isPickup && !delivery_address) {
-    return { ok: false, status: 400, body: { error: "Missing fields" } };
+    return {
+      ok: false,
+      status: 400,
+      body: {
+        error:
+          "We need a delivery address before we can place this order. Please add one — house/flat number, area, city and 6-digit pincode — and try again.",
+        code: "address_required",
+      },
+    };
   }
 
   // Delivery date/slot are optional on pickup (the stall hands over during
