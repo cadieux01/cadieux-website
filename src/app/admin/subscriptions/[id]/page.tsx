@@ -833,11 +833,10 @@ const subtleCell: React.CSSProperties = {
   marginTop: "0.2rem",
 };
 
-// Trigger override for the shared ui/Select, which paints itself
-// Foundation Green by default. INK + cream keeps the admin surface to the
-// two theme colours; the popup menu's own green is a known limitation of
-// the shared component (see DateRangeDropdown, /admin/orders) and is NOT
-// patched here — it's a customer-facing component. 0.875rem = 14px.
+// Metrics for the shared ui/Select. Its Foundation-Green skin is already
+// repainted INK — trigger AND open menu — by the scoped rules in
+// src/app/admin/layout.tsx, so nothing here fights the colour; this only
+// sets the compact table sizing and type. 0.875rem = 14px, the floor.
 const deliverySelect: React.CSSProperties = {
   background: "rgba(29,29,31,0.4)",
   color: "#FBF3D4",
