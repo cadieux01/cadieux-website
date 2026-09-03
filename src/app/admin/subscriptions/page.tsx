@@ -1299,9 +1299,10 @@ const td: React.CSSProperties = {
   borderBottom: "1px solid rgba(251,243,212,0.06)",
 };
 
-// Trigger override for the shared ui/Select, which paints itself
-// Foundation Green by default. Same values the orders board uses, so the
-// two lists read identically. 0.875rem = 14px, the floor.
+// Metrics for the shared ui/Select — same values the orders board uses, so
+// the two lists read identically. Colour is handled globally: the scoped
+// rules in src/app/admin/layout.tsx repaint the Select's Foundation Green
+// to INK for both the trigger and the open menu. 0.875rem = 14px, the floor.
 const statusSelect: React.CSSProperties = {
   padding: "0.3rem 0.5rem",
   background: "transparent",
