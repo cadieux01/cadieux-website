@@ -7,6 +7,11 @@
 // keys are now DERIVED: the stored tile value is ignored entirely and read
 // through to the products row instead, so drift is structurally impossible.
 // Every other tile key stays exactly as the admin typed it.
+//
+// The per-slice protein and fibre tiles are derived for the same reason: they
+// restate figures that already live in products.nutrition_per_slice, the row
+// that feeds the nutrition table. Hand-editing either side could make the stat
+// strip and the table print different numbers for the same food label.
 
 export type StatTileLike = {
   id: string;
@@ -20,7 +25,21 @@ export type StatTileLike = {
 export type StatTileSource = {
   weight: string | null;
   slices_per_loaf: number | null;
+  nutrition_per_slice: Record<string, number> | null;
 };
+
+// Reads one figure out of the nutrition jsonb. Returns null unless the key
+// holds a finite, non-negative number, so a missing or malformed entry drops
+// the tile rather than printing a stale or nonsense figure. Zero is a valid
+// food-label value and is preserved.
+function nutritionFigure(
+  p: StatTileSource,
+  jsonKey: string,
+): string | null {
+  const raw = p.nutrition_per_slice?.[jsonKey];
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) return null;
+  return String(raw);
+}
 
 const DERIVED_TILE_SOURCES: Record<
   string,
@@ -36,6 +55,18 @@ const DERIVED_TILE_SOURCES: Record<
         ? String(p.slices_per_loaf)
         : null,
     note: "Read from the product's Slices per loaf field above — edit it there.",
+  },
+  // NOTE the deliberate spelling mismatch, mapped explicitly rather than
+  // inferred from the tile key: the tile key is American (`fiber_per_slice`)
+  // while the jsonb key is British (`fibre_g`). Deriving one from the other
+  // by string munging would silently return undefined and drop the tile.
+  protein_per_slice: {
+    read: (p) => nutritionFigure(p, "protein_g"),
+    note: "Read from Protein (g) in the product's per-slice nutrition fields above — edit it there.",
+  },
+  fiber_per_slice: {
+    read: (p) => nutritionFigure(p, "fibre_g"),
+    note: "Read from Fibre (g) in the product's per-slice nutrition fields above — edit it there.",
   },
 };
 
