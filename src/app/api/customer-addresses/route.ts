@@ -29,11 +29,28 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getVerifiedPhone, maskPhone } from "@/lib/phone-cookie";
+import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
+
+// The caller may only act on a phone they have PROVEN they control:
+// a valid `cdx_phone_verified` cookie (web) or Bearer token (mobile),
+// both signed at OTP time. Returns the matched 10-digit phone or null.
+// A phone in the query string is NOT proof — that was the leak.
+function verifiedCallerPhone(
+  req: NextRequest,
+  queried10: string,
+): string | null {
+  const v = getVerifiedPhone(req);
+  if (!v) return null;
+  const verified10 = v.phone.replace(/\D/g, "").slice(-10);
+  return verified10 === queried10 ? verified10 : null;
+}
 
 const ADDRESS_COLS =
   "id, customer_id, label, full_name, phone, line1, area, city, pincode, is_default, created_at, latitude, longitude";
@@ -79,12 +96,26 @@ function normalizePhone(raw: string): string {
 
 // GET: list all saved addresses for the caller's phone, default first.
 export async function GET(request: NextRequest) {
+  const { success: notRateLimited } = await apiRateLimit.limit(
+    getClientIP(request),
+  );
+  if (!notRateLimited) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  }
+
   const rawPhone = request.nextUrl.searchParams.get("phone");
   if (!rawPhone) {
     return NextResponse.json({ error: "phone required" }, { status: 400 });
   }
   const phone = normalizePhone(rawPhone);
   if (phone.length !== 10) {
+    return NextResponse.json({ addresses: [] });
+  }
+
+  // AUTH GATE. Without proof the caller controls this phone we return an
+  // empty book — the address list (incl. GPS coords) was previously
+  // readable for ANY phone typed into the query string.
+  if (!verifiedCallerPhone(request, phone)) {
     return NextResponse.json({ addresses: [] });
   }
 
@@ -114,6 +145,15 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  void recordAuditEvent({
+    req: request,
+    entity: "address",
+    action: "other",
+    targetId: customer.id,
+    context: `Address book lookup for ${maskPhone(phone)}`,
+    meta: { phone: maskPhone(phone), count: addresses?.length ?? 0 },
+  });
+
   return NextResponse.json({ addresses: addresses ?? [] });
 }
 
@@ -126,6 +166,13 @@ export async function POST(request: NextRequest) {
   const phone = normalizePhone(rawPhone);
   if (phone.length !== 10) {
     return NextResponse.json({ error: "invalid phone" }, { status: 400 });
+  }
+
+  // AUTH GATE. Creating an address (and possibly a stub customer) for a
+  // phone requires proving control of it — otherwise anyone could seed
+  // rows against someone else's number.
+  if (!verifiedCallerPhone(request, phone)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const raw = await request.json().catch(() => null);

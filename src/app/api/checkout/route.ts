@@ -3,10 +3,13 @@ import { createClient } from "@supabase/supabase-js";
 import {
   getVerifiedPhone,
   normalizePhone,
+  maskPhone,
   signPhoneCookie,
   PHONE_COOKIE_NAME,
   PHONE_COOKIE_TTL_MS,
 } from "@/lib/phone-cookie";
+import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import { recordAuditEvent } from "@/lib/audit-log";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
 import { validateBookingSlot } from "@/lib/delivery-slots";
 import {
@@ -65,8 +68,16 @@ async function defaultBookAddress(customerId: string): Promise<string> {
 }
 
 export async function GET(req: NextRequest) {
+  // IP rate limit regardless of outcome — a bare phone in the query
+  // string used to hand back a customer's name + address, so this
+  // endpoint was trivially enumerable. Cap the enumeration rate first.
+  const { success: notRateLimited } = await apiRateLimit.limit(getClientIP(req));
+  if (!notRateLimited) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  }
+
   const phone = req.nextUrl.searchParams.get("phone");
-  if (!phone) return NextResponse.json({ customer: null });
+  if (!phone) return NextResponse.json({ customer: null, phone_verified: false });
 
   // `slim=1` short-circuits past the full order + subscription history
   // fetch (used by the /orders list page) and returns only what the
@@ -76,13 +87,18 @@ export async function GET(req: NextRequest) {
   // subscriptions.customer_phone LIKE '%last10') to ~150ms.
   const slim = req.nextUrl.searchParams.get("slim") === "1";
 
-  // Tell the client whether the server already trusts this phone for
-  // this request. The web checkout uses this to skip OTP entirely
-  // for returning customers whose 30-min `cdx_phone_verified` cookie
-  // is still valid for the queried number. Server still re-checks at
-  // place_order, so this is a UX hint only — it can't grant trust.
+  // AUTH GATE. The caller must have PROVEN they control this phone —
+  // a valid `cdx_phone_verified` cookie (web) or Bearer token (mobile),
+  // both signed at OTP time. A phone in the query string is NOT proof.
+  // Without a match we return NO customer data (never someone else's
+  // name / address / order history) — the checkout page degrades to the
+  // manual-entry / re-OTP path instead of prefilling.
   const verified = getVerifiedPhone(req);
-  const phone_verified = !!verified && verified.phone === normalizePhone(phone);
+  const phone_verified =
+    !!verified && normalizePhone(verified.phone) === normalizePhone(phone);
+  if (!phone_verified) {
+    return NextResponse.json({ customer: null, phone_verified: false });
+  }
 
   const { data: customer } = await supabaseAdmin
     .from("customers")
@@ -91,6 +107,18 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   if (!customer) return NextResponse.json({ customer: null, phone_verified });
+
+  // Forensic trail: a verified caller pulled their own customer + address
+  // record. Best-effort (never awaited, never throws to the caller).
+  void recordAuditEvent({
+    req,
+    entity: "customer",
+    action: "other",
+    targetId: customer.id,
+    targetLabel: customer.full_name ?? null,
+    context: `Checkout prefill lookup for ${maskPhone(phone)}`,
+    meta: { phone: maskPhone(phone), slim },
+  });
 
   if (slim) {
     // Only the most recent address is needed for prefill. .limit(1) hits

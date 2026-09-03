@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { normalizePhone } from "@/lib/phone-cookie";
+import { getVerifiedPhone, normalizePhone, maskPhone } from "@/lib/phone-cookie";
+import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,10 +15,23 @@ const supabaseAdmin = createClient(
 // badges to differentiate. Live tracking still happens on /api/subscriptions
 // which filters to non-finished rows for the active dashboard.
 export async function GET(req: NextRequest) {
+  const { success: notRateLimited } = await apiRateLimit.limit(getClientIP(req));
+  if (!notRateLimited) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  }
+
   const phoneRaw = req.nextUrl.searchParams.get("phone");
   if (!phoneRaw) return NextResponse.json({ subscriptions: [] });
 
   const phoneNorm = normalizePhone(phoneRaw);
+
+  // AUTH GATE. Same reasoning as /api/subscriptions — proof of phone
+  // control required before returning any subscription history.
+  const verified = getVerifiedPhone(req);
+  if (!verified || normalizePhone(verified.phone) !== phoneNorm) {
+    return NextResponse.json({ subscriptions: [] });
+  }
+
   const last10 = phoneRaw.replace(/\D/g, "").slice(-10);
 
   // Match by either FK customer_id OR direct customer_phone — covers legacy
@@ -48,6 +63,14 @@ export async function GET(req: NextRequest) {
   if (!subs || subs.length === 0) {
     return NextResponse.json({ subscriptions: [] });
   }
+
+  void recordAuditEvent({
+    req,
+    entity: "subscription",
+    action: "other",
+    context: `Subscription history lookup for ${maskPhone(phoneRaw)}`,
+    meta: { phone: maskPhone(phoneRaw), count: subs.length },
+  });
 
   // Annotate each sub with its scheduled-delivery count for the row UI.
   const ids = subs.map((s) => s.id);

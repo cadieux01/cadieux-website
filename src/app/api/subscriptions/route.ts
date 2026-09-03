@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { normalizePhone } from "@/lib/phone-cookie";
+import { getVerifiedPhone, normalizePhone, maskPhone } from "@/lib/phone-cookie";
+import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import { recordAuditEvent } from "@/lib/audit-log";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,10 +16,24 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
+  const { success: notRateLimited } = await apiRateLimit.limit(getClientIP(req));
+  if (!notRateLimited) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  }
+
   const phoneRaw = req.nextUrl.searchParams.get("phone");
   if (!phoneRaw) return NextResponse.json({ subscriptions: [] });
 
   const phoneNorm = normalizePhone(phoneRaw);
+
+  // AUTH GATE. Only a caller who has proven control of this phone (signed
+  // cookie / Bearer) may read its subscriptions — a bare query param used
+  // to return full sub rows (name, address, city, pincode) for anyone.
+  const verified = getVerifiedPhone(req);
+  if (!verified || normalizePhone(verified.phone) !== phoneNorm) {
+    return NextResponse.json({ subscriptions: [] });
+  }
+
   // Match against either normalized or raw stored phone (subscriptions stored
   // whatever the customer typed). Try both common forms.
   const last10 = phoneRaw.replace(/\D/g, "").slice(-10);
@@ -40,6 +56,14 @@ export async function GET(req: NextRequest) {
   if (!subs || subs.length === 0) {
     return NextResponse.json({ subscriptions: [] });
   }
+
+  void recordAuditEvent({
+    req,
+    entity: "subscription",
+    action: "other",
+    context: `Active subscriptions lookup for ${maskPhone(phoneRaw)}`,
+    meta: { phone: maskPhone(phoneRaw), count: subs.length },
+  });
 
   const ids = subs.map((s) => s.id);
   const { data: deliveries } = await supabaseAdmin

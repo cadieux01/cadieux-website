@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { normalizePhone } from "@/lib/phone-cookie";
+import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
+import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,9 +26,18 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { deliveryId: string } }
 ) {
+  const { success: notRateLimited } = await apiRateLimit.limit(getClientIP(req));
+  if (!notRateLimited) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  }
+
   const { deliveryId } = params;
-  const phone = req.nextUrl.searchParams.get("phone") ?? "";
-  if (!phone) {
+
+  // AUTH GATE. Proof is the signed cookie / Bearer, not the query param;
+  // the parent subscription is matched against the VERIFIED phone. 404
+  // on any miss to keep the id space unprobeable.
+  const verified = getVerifiedPhone(req);
+  if (!verified) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -49,7 +59,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (!phoneMatches(sub.customer_phone, phone)) {
+  if (!phoneMatches(sub.customer_phone, verified.phone)) {
     // Avoid enumeration — same 404 as a missing row.
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

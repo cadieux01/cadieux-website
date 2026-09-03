@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { normalizePhone } from "@/lib/phone-cookie";
+import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
+import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,8 +26,21 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { success: notRateLimited } = await apiRateLimit.limit(getClientIP(req));
+  if (!notRateLimited) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  }
+
   const { id } = params;
-  const phone = req.nextUrl.searchParams.get("phone") ?? "";
+
+  // AUTH GATE. The proof is the signed cookie / Bearer, NOT the query
+  // param — we match the subscription against the VERIFIED phone. An
+  // unverified caller (or a mismatch) gets the same 404 as a missing
+  // row so the UUID space can't be probed.
+  const verified = getVerifiedPhone(req);
+  if (!verified) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const { data: sub, error } = await supabaseAdmin
     .from("subscriptions")
@@ -38,7 +52,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (!phoneMatches(sub.customer_phone, phone)) {
+  if (!phoneMatches(sub.customer_phone, verified.phone)) {
     // Avoid enumeration — same 404 as a missing row.
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

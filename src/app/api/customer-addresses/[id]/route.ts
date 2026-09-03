@@ -17,11 +17,24 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { getVerifiedPhone } from "@/lib/phone-cookie";
+import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
+
+// The caller must PROVE control of the phone (signed cookie / Bearer),
+// not merely type it into the query string, before editing or deleting
+// anyone's address. Returns true only when the verified phone matches.
+function callerControlsPhone(req: NextRequest, rawPhone: string): boolean {
+  const queried10 = rawPhone.replace(/\D/g, "").slice(-10);
+  if (queried10.length !== 10) return false;
+  const v = getVerifiedPhone(req);
+  if (!v) return false;
+  return v.phone.replace(/\D/g, "").slice(-10) === queried10;
+}
 
 const ADDRESS_COLS =
   "id, customer_id, label, full_name, phone, line1, area, city, pincode, is_default, created_at, latitude, longitude";
@@ -69,11 +82,22 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const { success: notRateLimited } = await apiRateLimit.limit(
+    getClientIP(request),
+  );
+  if (!notRateLimited) {
+    return fail(429, "Rate limit exceeded");
+  }
+
   const { id } = await params;
   if (!id) return fail(400, "Missing address id");
 
   const rawPhone = request.nextUrl.searchParams.get("phone");
   if (!rawPhone) return fail(400, "phone required");
+
+  if (!callerControlsPhone(request, rawPhone)) {
+    return fail(401, "Unauthorized");
+  }
 
   const customerId = await resolveCustomerId(rawPhone);
   if (!customerId) return fail(404, "Address not found or unauthorized");
@@ -261,11 +285,22 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const { success: notRateLimited } = await apiRateLimit.limit(
+    getClientIP(request),
+  );
+  if (!notRateLimited) {
+    return fail(429, "Rate limit exceeded");
+  }
+
   const { id } = await params;
   if (!id) return fail(400, "Missing address id");
 
   const rawPhone = request.nextUrl.searchParams.get("phone");
   if (!rawPhone) return fail(400, "phone required");
+
+  if (!callerControlsPhone(request, rawPhone)) {
+    return fail(401, "Unauthorized");
+  }
 
   const customerId = await resolveCustomerId(rawPhone);
   if (!customerId) return fail(404, "Address not found or unauthorized");
