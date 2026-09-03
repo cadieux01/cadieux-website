@@ -6,8 +6,19 @@ import {
   DerivedSub,
   SubLite,
 } from "@/lib/admin-subscription-derive";
+import {
+  matchSubscriptionCoordinates,
+  type AddressCoordRow,
+} from "@/lib/subscription-coordinates";
 
-const ALLOWED_FILTERS = new Set(["all", "active", "completed", "cancelled", "paused"]);
+const ALLOWED_FILTERS = new Set([
+  "all",
+  "pending_confirmation",
+  "active",
+  "completed",
+  "cancelled",
+  "paused",
+]);
 
 export async function GET(req: NextRequest) {
   if (!isAdmin(req)) {
@@ -51,6 +62,13 @@ export async function GET(req: NextRequest) {
   const cmap = new Map((customers ?? []).map((c) => [c.id, c]));
 
   let derivedById: Map<string, DerivedSub> | null = null;
+  // customer_id → matched non-zero coords (subscriptions have no lat/lng
+  // of their own; we pull them from public.addresses). Absent = no usable
+  // saved coords → the UI falls back to an address-text Maps search.
+  const coordsBySub = new Map<
+    string,
+    { latitude: number; longitude: number }
+  >();
   if (enrich) {
     const subIds = subs.map((s) => s.id);
     const { data: deliveries } = await supabaseAdmin
@@ -66,6 +84,28 @@ export async function GET(req: NextRequest) {
       subLites,
       (deliveries as DeliveryLite[]) ?? [],
     );
+
+    // Saved addresses for these customers, grouped for coordinate matching.
+    const { data: addresses } = await supabaseAdmin
+      .from("addresses")
+      .select("customer_id, line1, pincode, is_default, latitude, longitude")
+      .in("customer_id", customerIds);
+    const addrByCustomer = new Map<string, AddressCoordRow[]>();
+    for (const a of addresses ?? []) {
+      const list = addrByCustomer.get(a.customer_id) ?? [];
+      list.push(a);
+      addrByCustomer.set(a.customer_id, list);
+    }
+    for (const s of subs) {
+      const c = matchSubscriptionCoordinates(
+        addrByCustomer.get(s.customer_id),
+        {
+          line1: s.delivery_address?.line1 ?? s.customer_address ?? null,
+          pincode: s.delivery_address?.pincode ?? s.customer_pincode ?? null,
+        },
+      );
+      if (c) coordsBySub.set(s.id, c);
+    }
   }
 
   return NextResponse.json({
@@ -73,6 +113,7 @@ export async function GET(req: NextRequest) {
       ...s,
       customer: cmap.get(s.customer_id) ?? null,
       ...(derivedById?.get(s.id) ?? {}),
+      ...(coordsBySub.get(s.id) ?? {}),
     })),
   });
 }

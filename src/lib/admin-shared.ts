@@ -25,6 +25,11 @@ export const ORDER_STATUSES = [
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 export const SUBSCRIPTION_STATUSES = [
+  // `pending_confirmation` is the state a subscription is born in (see
+  // subscription-checkout.ts). Listing it first so the drawer's status
+  // Select shows the real current state instead of a blank option, and
+  // so the operator can move it to `active` from there too.
+  "pending_confirmation",
   "active",
   "paused",
   "completed",
@@ -216,6 +221,15 @@ export type AdminSubscriptionRow = {
   // derivation in src/app/api/cron/subscription-reminders/route.ts.
   derived_end_date?: string | null;
   remaining_deliveries?: number;
+  // Total subscription_deliveries rows for this sub (any status). Feeds
+  // the plan sentence's "N deliveries total" clause. Only present on the
+  // ?enrich=1 list payload and the detail GET.
+  total_deliveries?: number;
+  // Coordinates matched from public.addresses by customer_id (see
+  // subscription-coordinates.ts). Only set when a saved address has
+  // finite, non-zero lat/lng; otherwise absent → Maps uses address text.
+  latitude?: number | null;
+  longitude?: number | null;
 
   // Columns only the detail page renders. Both subscription routes
   // select *, so these arrive on list rows too — they stay optional
