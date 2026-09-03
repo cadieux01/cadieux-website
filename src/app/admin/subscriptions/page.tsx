@@ -22,6 +22,10 @@ import {
 } from "@/components/admin/DateRangeDropdown";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import {
+  PartnerShareButton,
+  type ShareablePartner,
+} from "@/components/admin/PartnerShareButton";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import {
@@ -30,6 +34,14 @@ import {
   formatINR,
   isoLocalDate,
 } from "@/lib/admin-formatting";
+import {
+  describeSubscriptionPlan,
+  resolveSubscriptionAddress,
+  formatAddressShort,
+  formatAddressFull,
+  phonesDiffer,
+} from "@/lib/subscription-display";
+import { composeSubscriptionShareMessage } from "@/lib/subscription-share-message";
 import {
   AdminDeliveryRow,
   AdminSubscriptionRow,
@@ -41,6 +53,7 @@ import {
 
 type FilterValue =
   | "all"
+  | "pending_confirmation"
   | "active"
   | "paused"
   | "completed"
@@ -49,12 +62,44 @@ type FilterValue =
 
 const FILTERS: { value: FilterValue; label: string }[] = [
   { value: "all", label: "All" },
+  { value: "pending_confirmation", label: "Pending" },
   { value: "active", label: "Active" },
   { value: "paused", label: "Paused" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
   { value: "expiring_7d", label: "Expiring in 7 days" },
 ];
+
+// Friendly labels for the drawer's overall-status Select (the raw column
+// values include the ungainly "pending_confirmation").
+const SUB_STATUS_OPTION_LABEL: Record<string, string> = {
+  pending_confirmation: "Pending confirmation",
+  active: "Active",
+  paused: "Paused",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+// Cancelling is the one destructive action on this board, so the
+// confirmation names the customer and spells out the plan rather than
+// asking "are you sure?" about an anonymous row. `remaining_deliveries`
+// is the non-terminal delivery count — exactly the rows the server-side
+// cascade will cancel — so the operator sees the blast radius first.
+function cancelPrompt(s: AdminSubscriptionRow): string {
+  const who =
+    s.customer?.full_name?.trim() || s.customer_name?.trim() || "this customer";
+  const plan = describeSubscriptionPlan(s, s.total_deliveries);
+  const open = s.remaining_deliveries ?? 0;
+  const tail =
+    open > 0
+      ? `\n\nThis also cancels ${open} scheduled ${
+          open === 1 ? "delivery" : "deliveries"
+        } that haven't happened yet.`
+      : "";
+  return `Cancel ${who}'s subscription?\n\n${
+    s.product_name ?? "Subscription"
+  }\n${plan}${tail}`;
+}
 
 // Suspense wrapper required by Next.js prerender for any client page
 // that reads useSearchParams() — useDateRangeFromQuery does.
@@ -100,18 +145,55 @@ function SubscriptionsPageInner() {
     resolvePreset("this_month"),
   );
 
+  // Delivery partners power the per-row "Share" button. Fetched once on
+  // mount (never polled) and passed to every PartnerShareButton — same
+  // pattern as /admin/orders.
+  const [partners, setPartners] = useState<ShareablePartner[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(true);
+  const [partnersError, setPartnersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch<{
+          partners: { id: string; name: string; phone: string }[];
+        }>("/api/admin/delivery-partners");
+        if (cancelled) return;
+        setPartners(
+          (res.partners ?? []).map((p) => ({
+            id: p.id,
+            name: p.name,
+            phone: p.phone,
+          })),
+        );
+        setPartnersError(null);
+      } catch (e) {
+        if (cancelled) return;
+        setPartnersError(
+          e instanceof AdminFetchError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : "Could not load partners.",
+        );
+      } finally {
+        if (!cancelled) setPartnersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const load = useCallback(async () => {
     setError(null);
     try {
-      // For the "expiring in 7 days" filter we still want all rows so
-      // we can compute the window client-side. Otherwise we pass the
-      // status to the server.
-      const statusParam =
-        filter === "all" || filter === "expiring_7d"
-          ? ""
-          : `&status=${filter}`;
+      // Always fetch every row (the dataset is small) and filter
+      // client-side — that lets the chips show live per-status counts
+      // and keeps the "expiring in 7 days" window computable.
       const res = await adminFetch<{ subscriptions: AdminSubscriptionRow[] }>(
-        `/api/admin/subscriptions?enrich=1${statusParam}`,
+        `/api/admin/subscriptions?enrich=1`,
       );
       setSubs(res.subscriptions ?? []);
     } catch (e) {
@@ -121,7 +203,7 @@ function SubscriptionsPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, []);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -148,18 +230,42 @@ function SubscriptionsPageInner() {
     [drawerId, subs],
   );
 
-  const filtered = useMemo(() => {
-    const inRange = subs.filter((s) => withinDateRange(s.created_at, range));
-    if (filter !== "expiring_7d") return inRange;
+  const inRange = useMemo(
+    () => subs.filter((s) => withinDateRange(s.created_at, range)),
+    [subs, range],
+  );
+
+  const isExpiring = useCallback((s: AdminSubscriptionRow): boolean => {
+    if (s.status !== "active") return false;
+    const end = s.derived_end_date;
+    if (!end) return false;
     const today = isoLocalDate(new Date());
     const horizon = addDaysISO(today, 7);
-    return inRange.filter((s) => {
-      if (s.status !== "active") return false;
-      const end = s.derived_end_date;
-      if (!end) return false;
-      return end >= today && end <= horizon;
-    });
-  }, [subs, filter, range]);
+    return end >= today && end <= horizon;
+  }, []);
+
+  const counts = useMemo(() => {
+    const c: Record<FilterValue, number> = {
+      all: inRange.length,
+      pending_confirmation: 0,
+      active: 0,
+      paused: 0,
+      completed: 0,
+      cancelled: 0,
+      expiring_7d: 0,
+    };
+    for (const s of inRange) {
+      if (s.status in c) c[s.status as FilterValue]++;
+      if (isExpiring(s)) c.expiring_7d++;
+    }
+    return c;
+  }, [inRange, isExpiring]);
+
+  const filtered = useMemo(() => {
+    if (filter === "all") return inRange;
+    if (filter === "expiring_7d") return inRange.filter(isExpiring);
+    return inRange.filter((s) => s.status === filter);
+  }, [inRange, filter, isExpiring]);
 
   const setStatus = async (
     sub: AdminSubscriptionRow,
@@ -173,8 +279,14 @@ function SubscriptionsPageInner() {
     try {
       await adminFetch(`/api/admin/subscriptions/${sub.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status: nextStatus }),
+        // Guard on the status we believe is current so a stale row can't
+        // clobber a change made elsewhere (409 → rollback + message).
+        body: JSON.stringify({
+          status: nextStatus,
+          expected_status: sub.status,
+        }),
       });
+      void load();
     } catch (e) {
       setSubs(prev);
       if (e instanceof AdminFetchError) alert(e.message);
@@ -231,7 +343,7 @@ function SubscriptionsPageInner() {
                 borderColor: active ? "#FBF3D4" : "rgba(251,243,212,0.4)",
               }}
             >
-              {f.label}
+              {f.label} · {counts[f.value]}
             </button>
           );
         })}
@@ -281,10 +393,12 @@ function SubscriptionsPageInner() {
             <tbody>
               {filtered.map((s, i) => {
                 const busy = busyId === s.id;
+                const canMarkActive = s.status === "pending_confirmation";
                 const canPause = s.status === "active";
                 const canResume = s.status === "paused";
                 const canCancel =
                   s.status !== "cancelled" && s.status !== "completed";
+                const rowAddr = resolveSubscriptionAddress(s);
                 return (
                   <tr
                     key={s.id}
@@ -343,12 +457,35 @@ function SubscriptionsPageInner() {
                       <div>{s.product_name}</div>
                       <div
                         style={{
-                          color: "rgba(251,243,212,0.55)",
+                          color: "rgba(251,243,212,0.7)",
                           fontSize: "1rem",
+                          marginTop: 2,
                         }}
                       >
-                        {s.quantity_per_delivery}× · {s.frequency}
+                        {describeSubscriptionPlan(s, s.total_deliveries)}
                       </div>
+                      {rowAddr.hasAny ? (
+                        <div
+                          title={formatAddressFull(rowAddr)}
+                          style={{
+                            color: "rgba(251,243,212,0.55)",
+                            fontSize: "0.875rem",
+                            marginTop: 4,
+                            maxWidth: 260,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {formatAddressShort(rowAddr)}
+                          {rowAddr.incomplete ? (
+                            <span style={{ color: "#EF4444" }}>
+                              {" "}
+                              · incomplete
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </td>
                     <td style={td}>{s.total_weeks}</td>
                     <td style={td}>{formatDate(s.created_at)}</td>
@@ -374,6 +511,25 @@ function SubscriptionsPageInner() {
                         >
                           Open
                         </button>
+                        <PartnerShareButton
+                          message={composeSubscriptionShareMessage(s, {
+                            deliveryCount: s.total_deliveries,
+                          })}
+                          partners={partners}
+                          partnersLoading={partnersLoading}
+                          partnersError={partnersError}
+                          buttonStyle={buttonSm}
+                        />
+                        {canMarkActive ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void setStatus(s, "active")}
+                            style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
+                          >
+                            Mark Active
+                          </button>
+                        ) : null}
                         {canPause ? (
                           <button
                             type="button"
@@ -399,7 +555,7 @@ function SubscriptionsPageInner() {
                             type="button"
                             disabled={busy}
                             onClick={() => {
-                              if (confirm("Cancel this subscription?")) {
+                              if (confirm(cancelPrompt(s))) {
                                 void setStatus(s, "cancelled");
                               }
                             }}
@@ -486,10 +642,16 @@ function SubscriptionDrawer({
   }, [fetchDeliveries]);
 
   const updateOverallStatus = async (next: string) => {
+    // Same named confirmation as the row's Cancel button — picking
+    // "Cancelled" from this Select cascades to open deliveries too.
+    if (next === "cancelled" && !confirm(cancelPrompt(subscription))) return;
     try {
       await adminFetch(`/api/admin/subscriptions/${subscription.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status: next }),
+        body: JSON.stringify({
+          status: next,
+          expected_status: subscription.status,
+        }),
       });
       onChanged();
     } catch (e) {
@@ -511,6 +673,7 @@ function SubscriptionDrawer({
 
   const updateDeliveryStatus = async (deliveryId: string, next: string) => {
     const prev = deliveries;
+    const current = prev.find((d) => d.id === deliveryId)?.status ?? null;
     setDeliveries((curr) =>
       curr.map((d) => (d.id === deliveryId ? { ...d, status: next } : d)),
     );
@@ -519,7 +682,12 @@ function SubscriptionDrawer({
         `/api/admin/subscriptions/${subscription.id}/deliveries/${deliveryId}`,
         {
           method: "PATCH",
-          body: JSON.stringify({ status: next }),
+          // Guard on the status this row was rendered with — the drawer
+          // polls every 10s, so a stale click must 409 rather than write.
+          body: JSON.stringify({
+            status: next,
+            ...(current ? { expected_status: current } : {}),
+          }),
         },
       );
       void fetchDeliveries();
@@ -549,10 +717,12 @@ function SubscriptionDrawer({
     }
   };
 
-  const addr = subscription.delivery_address ?? null;
-  const addrLine = addr
-    ? [addr.line1, addr.line2, addr.city, addr.pincode].filter(Boolean).join(", ")
-    : "";
+  const addr = resolveSubscriptionAddress(subscription);
+  const addrLine = formatAddressFull(addr);
+  // The address's own phone may differ from the customer record — show
+  // both, labelled, when they do.
+  const custPhone = subscription.customer?.phone ?? null;
+  const showBothPhones = phonesDiffer(addr.phone, custPhone);
 
   return (
     <div
@@ -688,7 +858,10 @@ function SubscriptionDrawer({
               onChange={(v) => void updateOverallStatus(v)}
               ariaLabel="Overall subscription status"
               style={drawerSelect}
-              options={SUBSCRIPTION_STATUSES.map((opt) => ({ value: opt, label: opt }))}
+              options={SUBSCRIPTION_STATUSES.map((opt) => ({
+                value: opt,
+                label: SUB_STATUS_OPTION_LABEL[opt] ?? opt,
+              }))}
             />
           </div>
           <div
@@ -726,9 +899,8 @@ function SubscriptionDrawer({
             }}
           >
             <span style={{ color: "rgba(251,243,212,0.5)" }}>Plan</span>
-            <span>
-              {subscription.frequency} · {subscription.day_of_week ?? "—"} ·{" "}
-              {subscription.time_slot ?? "—"}
+            <span style={{ textAlign: "right", maxWidth: 360 }}>
+              {describeSubscriptionPlan(subscription, deliveries.length)}
             </span>
           </div>
           <div
@@ -743,7 +915,7 @@ function SubscriptionDrawer({
               {formatINR(subscription.total_amount)} · {subscription.total_weeks} weeks
             </span>
           </div>
-          {addrLine ? (
+          {addr.hasAny ? (
             <div
               style={{
                 fontSize: "1rem",
@@ -751,13 +923,30 @@ function SubscriptionDrawer({
                 lineHeight: 1.5,
               }}
             >
-              {addr?.name ? (
+              {addr.name ? (
                 <>
-                  <b style={{ color: "#FBF3D4", fontWeight: 500 }}>{addr.name}</b>
+                  <b style={{ color: "#FBF3D4", fontWeight: 500 }}>
+                    {addr.name}
+                  </b>
                   <br />
                 </>
               ) : null}
               {addrLine}
+              {addr.incomplete ? (
+                <span style={{ color: "#EF4444" }}> · incomplete address</span>
+              ) : null}
+              {showBothPhones ? (
+                <>
+                  <br />
+                  <span style={{ color: "rgba(251,243,212,0.75)" }}>
+                    Delivery phone: {addr.phone}
+                  </span>
+                  <br />
+                  <span style={{ color: "rgba(251,243,212,0.75)" }}>
+                    Account phone: {custPhone}
+                  </span>
+                </>
+              ) : null}
             </div>
           ) : null}
         </div>

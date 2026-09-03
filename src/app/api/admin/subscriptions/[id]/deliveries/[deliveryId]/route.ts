@@ -44,6 +44,15 @@ export async function PATCH(
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
+  // Optional optimistic-concurrency guard, same contract as the parent
+  // subscription route: when the client sends the status it believes is
+  // current we only write if the row STILL has it. Omitting
+  // expected_status keeps the previous behaviour exactly.
+  const expected =
+    typeof body.expected_status === "string"
+      ? body.expected_status.toLowerCase()
+      : null;
+
   const { data: before } = await supabaseAdmin
     .from("subscription_deliveries")
     .select("status, scheduled_date, scheduled_time_slot")
@@ -51,15 +60,32 @@ export async function PATCH(
     .eq("subscription_id", params.id)
     .maybeSingle();
 
-  const { error } = await supabaseAdmin
+  let updateQuery = supabaseAdmin
     .from("subscription_deliveries")
     .update(update)
     .eq("id", params.deliveryId)
     .eq("subscription_id", params.id);
+  if (expected) {
+    updateQuery = updateQuery.eq("status", expected);
+  }
+  const { data: updatedRows, error } = await updateQuery.select("id");
 
   if (error) {
     console.error("[admin/subscription_deliveries PATCH]", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Conditional write matched no row → the status moved under us.
+  if (expected && (!updatedRows || updatedRows.length === 0)) {
+    return NextResponse.json(
+      {
+        error:
+          "This was already changed elsewhere — reload to see the current state.",
+        code: "stale",
+        current_status: before?.status ?? null,
+      },
+      { status: 409 },
+    );
   }
 
   const statusChanged =

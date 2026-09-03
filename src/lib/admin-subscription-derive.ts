@@ -25,6 +25,9 @@ export type DeliveryLite = {
 export type DerivedSub = {
   derived_end_date: string | null;
   remaining_deliveries: number;
+  // Count of ALL delivery rows for the sub (any status) — the honest
+  // "N deliveries total" the plan sentence needs, never weeks × days.
+  total_deliveries: number;
 };
 
 export function buildDerivations(
@@ -33,10 +36,12 @@ export function buildDerivations(
 ): Map<string, DerivedSub> {
   const maxByDel = new Map<string, string>();
   const remainingBySub = new Map<string, number>();
+  const totalBySub = new Map<string, number>();
   for (const row of deliveries) {
     const sid = row.subscription_id;
     const cur = maxByDel.get(sid);
     if (!cur || row.delivery_date > cur) maxByDel.set(sid, row.delivery_date);
+    totalBySub.set(sid, (totalBySub.get(sid) ?? 0) + 1);
     const isTerminal =
       row.status === "delivered" || row.status === "cancelled";
     if (!isTerminal) {
@@ -53,6 +58,7 @@ export function buildDerivations(
     out.set(sub.id, {
       derived_end_date: endDate,
       remaining_deliveries: remainingBySub.get(sub.id) ?? 0,
+      total_deliveries: totalBySub.get(sub.id) ?? 0,
     });
   }
   return out;
