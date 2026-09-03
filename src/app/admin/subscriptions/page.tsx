@@ -93,8 +93,8 @@ function cancelPrompt(s: AdminSubscriptionRow): string {
   const tail =
     open > 0
       ? `\n\nThis also cancels ${open} scheduled ${
-          open === 1 ? "delivery" : "deliveries"
-        } that haven't happened yet.`
+          open === 1 ? "delivery that hasn't" : "deliveries that haven't"
+        } happened yet.`
       : "";
   return `Cancel ${who}'s subscription?\n\n${
     s.product_name ?? "Subscription"
@@ -267,10 +267,10 @@ function SubscriptionsPageInner() {
     return inRange.filter((s) => s.status === filter);
   }, [inRange, filter, isExpiring]);
 
-  const setStatus = async (
-    sub: AdminSubscriptionRow,
-    nextStatus: "active" | "paused" | "cancelled",
-  ) => {
+  // Shared by the row's Select and its shortcut buttons, so both writes
+  // go through the same optimistic-update + expected_status guard.
+  const setStatus = async (sub: AdminSubscriptionRow, nextStatus: string) => {
+    if (nextStatus === sub.status) return;
     setBusyId(sub.id);
     const prev = subs;
     setSubs((curr) =>
@@ -495,7 +495,40 @@ function SubscriptionsPageInner() {
                         : "—"}
                     </td>
                     <td style={td}>{s.remaining_deliveries ?? 0}</td>
-                    <td style={td}><StatusBadge status={s.status} /></td>
+                    <td style={td}>
+                      {/* Inline status control, same shape as the orders
+                          board: Select to change, badge underneath so the
+                          current state still reads at a glance. */}
+                      <Select
+                        value={(s.status ?? "").toLowerCase()}
+                        disabled={busy}
+                        ariaLabel="Subscription status"
+                        style={statusSelect}
+                        onChange={(v) => {
+                          if (v === "cancelled" && !confirm(cancelPrompt(s))) {
+                            return;
+                          }
+                          void setStatus(s, v);
+                        }}
+                        options={[
+                          ...SUBSCRIPTION_STATUSES.map((opt) => ({
+                            value: opt,
+                            label: SUB_STATUS_OPTION_LABEL[opt] ?? opt,
+                          })),
+                          // A row carrying a value outside the allowed set
+                          // still needs to render its own status.
+                          ...(s.status &&
+                          !SUBSCRIPTION_STATUSES.includes(
+                            s.status as (typeof SUBSCRIPTION_STATUSES)[number],
+                          )
+                            ? [{ value: s.status, label: s.status }]
+                            : []),
+                        ]}
+                      />
+                      <div style={{ marginTop: 4 }}>
+                        <StatusBadge status={s.status} />
+                      </div>
+                    </td>
                     <td style={td}>
                       <div className="flex flex-wrap gap-2">
                         <Link
@@ -1264,6 +1297,27 @@ const td: React.CSSProperties = {
   fontSize: "1rem",
   verticalAlign: "top",
   borderBottom: "1px solid rgba(251,243,212,0.06)",
+};
+
+// Trigger override for the shared ui/Select, which paints itself
+// Foundation Green by default. Same values the orders board uses, so the
+// two lists read identically. 0.875rem = 14px, the floor.
+const statusSelect: React.CSSProperties = {
+  padding: "0.3rem 0.5rem",
+  background: "transparent",
+  border: "1px solid rgba(251,243,212,0.45)",
+  color: "#FBF3D4",
+  fontFamily: "var(--font-body)",
+  fontSize: "0.875rem",
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+  // Wider than the orders board's 140 — "Pending confirmation" is the
+  // longest label here and truncating it would hide the one status an
+  // operator most needs to recognise.
+  maxWidth: 240,
+  minHeight: 0,
+  borderRadius: 6,
 };
 
 const buttonSm: React.CSSProperties = {
