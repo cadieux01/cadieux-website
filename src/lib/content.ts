@@ -259,13 +259,14 @@ async function fetchStatTiles(
       .eq("product_id", productId)
       .eq("is_visible", true)
       .order("sort_order", { ascending: true }),
-    // Source of truth for the derived tiles (net weight, slice count). Read
-    // here rather than in each page so the website, the mobile content API
-    // and anything added later all get the same figures — a food label must
-    // not depend on the caller remembering to resolve it.
+    // Source of truth for the derived tiles (net weight, slice count, and the
+    // per-slice protein + fibre figures). Read here rather than in each page
+    // so the website, the mobile content API and anything added later all get
+    // the same figures — a food label must not depend on the caller
+    // remembering to resolve it.
     sb
       .from("products")
-      .select("weight, slices_per_loaf")
+      .select("weight, slices_per_loaf, nutrition_per_slice")
       .eq("slug", productId)
       .maybeSingle(),
   ]);
