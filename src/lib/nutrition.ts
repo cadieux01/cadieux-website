@@ -147,7 +147,7 @@ export function formatNutrient(key: string, value: unknown): string | null {
   const parsed = parseNutrientValue(value);
   if (!parsed) return null;
   const unit = nutrientUnit(key);
-  const num = formatNutrientValue(parsed.amount, unit);
+  const num = formatNutrientValue(parsed.amount, unit, parsed.isBound);
   const prefix = parsed.isBound ? "< " : "";
   return unit ? `${prefix}${num} ${unit}` : `${prefix}${num}`;
 }
