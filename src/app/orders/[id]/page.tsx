@@ -368,7 +368,7 @@ export default function OrderDetailPage() {
     0,
   );
 
-  // Customer-facing reference (CDX-XXXXXX). Deliberately NOT the OLF
+  // Customer-facing reference (CX-XXXXXX). Deliberately NOT the OLF
   // number — that is sequential and would disclose our order volume.
   // See src/lib/order-number.ts.
   const shortId = order?.id ? formatPublicRef(order) : "";
