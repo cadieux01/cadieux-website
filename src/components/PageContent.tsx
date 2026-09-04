@@ -5,25 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import QASection from "./QASection";
-
-/* Autoplay a background video and keep it playing for the entire life of the
-   page — it NEVER pauses: not off-screen, not because another video plays,
-   never. play() on mount and retry on canplay/loadeddata in case a too-early
-   play() was rejected. muted is re-asserted immediately before every play()
-   because a muted video is always allowed to autoplay (an unmuted one is
-   blocked and the browser then shows controls). */
-const playOnEnter = (el: HTMLVideoElement | null) => {
-  if (!el) return;
-  const play = () => {
-    // muted right before play() — belt-and-suspenders against a hydration race
-    // that leaves it unmuted, which would block autoplay.
-    el.muted = true;
-    void el.play().catch(() => {});
-  };
-  el.addEventListener("canplay", play);
-  el.addEventListener("loadeddata", play);
-  play();
-};
+import { lazyPlayOnEnter } from "@/lib/lazyVideo";
 
 /* ── SVG grain texture ── */
 const GRAIN =
@@ -179,6 +161,15 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             <section style={{
               position: "absolute", inset: 0, overflow: "hidden",
               display: "flex", flexDirection: "column", justifyContent: "flex-start",
+              // The Shop Now button is the last item in this column (see below)
+              // rather than absolutely positioned, so the headline and the
+              // button reserve space against each other instead of colliding on
+              // short viewports. paddingBottom keeps the button the same 48px
+              // off the bottom edge it sat at when it was positioned. (The
+              // floor on the space between the two is a marginBottom on the
+              // text block, NOT rowGap here — a gap would also apply above the
+              // text block and push the headline down 24px.)
+              paddingBottom: 48,
               // FIX 1 (Task F v2 follow-up): removed maskImage that faded
               // the video to transparent at 88% — was revealing the
               // #024628 wrapper bg below, reading as a green gradient
@@ -233,12 +224,24 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 pointerEvents: "none",
                 textShadow: "0 1px 12px rgba(0,0,0,0.5)",
               }}>Core Element</p>
+              {/* The headline's top offset, as its own flex item rather than
+                  padding on the block below. Identical at normal heights, but a
+                  flex item can shrink: on a short viewport this collapses first
+                  so the headline and the button both stay whole instead of the
+                  button being pushed out of the clipped section. */}
+              <div style={{
+                flex: "0 1 clamp(80px, 18vh, 160px)",
+                minHeight: 0,
+              }} />
               {/* Bold statement — top left */}
               <div style={{
                 position: "relative", zIndex: 3,
+                flexShrink: 0,
                 paddingLeft: "clamp(28px, 8vw, 80px)",
                 paddingRight: "clamp(28px, 8vw, 80px)",
-                paddingTop: "clamp(80px, 18vh, 160px)",
+                // Floor on the space to the Shop Now button below. It sits
+                // under the headline, so it never moves the headline itself.
+                marginBottom: 24,
               }}>
                 <img
                   src="/logo-icon.webp"
@@ -280,18 +283,26 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   Same Routine.<br />Better Protein.
                 </h1>
               </div>
+              {/* Shop Now — last item in the hero column. marginTop:auto holds
+                  it against the section's bottom padding, so it lands exactly
+                  where it did when it was position:absolute bottom:48px, but on
+                  a short viewport it is pushed by the headline instead of
+                  overlapping it. */}
+              <button
+                onClick={() => router.push("/shop")}
+                style={{
+                  position: "relative", zIndex: 4,
+                  marginTop: "auto",
+                  marginLeft: "clamp(28px, 8vw, 80px)",
+                  alignSelf: "flex-start",
+                  flexShrink: 0,
+                  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
+                  letterSpacing: "0.4em", textTransform: "uppercase",
+                  color: "#FBF3D4", background: "#024628",
+                  border: "none", padding: "10px 24px", cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                }}>Shop Now</button>
             </section>
-            {/* Shop Now — bottom right, outside masked section so it stays visible */}
-            <button
-              onClick={() => router.push("/shop")}
-              style={{
-                position: "absolute", bottom: 48, left: "clamp(28px, 8vw, 80px)", zIndex: 4,
-                fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
-                letterSpacing: "0.4em", textTransform: "uppercase",
-                color: "#FBF3D4", background: "#024628",
-                border: "none", padding: "10px 24px", cursor: "pointer",
-                WebkitTapHighlightColor: "transparent",
-              }}>Shop Now</button>
           </div>
 
           {/* FIX 6: removed Phase 1→2 gradient bridge — was creating a visible
@@ -311,10 +322,12 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               position: "relative", height: "100%", overflow: "hidden",
               background: "#024628",
             }}>
-              {/* Background video — autoplays and keeps playing while on-screen;
-                  playOnEnter pauses it only when fully off-screen (decode guard). */}
+              {/* Background video — deferred: preload="none" and no autoplay
+                  attribute, so nothing is fetched until lazyPlayOnEnter sees it
+                  approach the viewport. The poster covers the wait. Once it
+                  starts it plays for the life of the page and never pauses. */}
               <video
-                ref={playOnEnter} autoPlay muted playsInline loop preload="auto"
+                ref={lazyPlayOnEnter} muted playsInline loop preload="none"
                 disablePictureInPicture disableRemotePlayback
                 controlsList="nodownload nofullscreen noremoteplayback"
                 poster="/product-video-05.poster.jpg"
@@ -476,10 +489,12 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               position: "relative", height: "100%", overflow: "hidden",
               background: "#024628",
             }}>
-              {/* Background video — autoplays and keeps playing while on-screen;
-                  playOnEnter pauses it only when fully off-screen (decode guard). */}
+              {/* Background video — deferred: preload="none" and no autoplay
+                  attribute, so nothing is fetched until lazyPlayOnEnter sees it
+                  approach the viewport. The poster covers the wait. Once it
+                  starts it plays for the life of the page and never pauses. */}
               <video
-                ref={playOnEnter} autoPlay muted playsInline loop preload="auto"
+                ref={lazyPlayOnEnter} muted playsInline loop preload="none"
                 disablePictureInPicture disableRemotePlayback
                 controlsList="nodownload nofullscreen noremoteplayback"
                 poster="/bread-eating-01.poster.jpg"
@@ -734,10 +749,10 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             zIndex: 3,
             backgroundColor: "#024628",
           }}>
-            {/* Background video — autoplays and keeps playing while on-screen;
-                playOnEnter pauses it only when fully off-screen so this deepest
-                section's large video (15.6 MB) doesn't decode out of view. */}
-            <video ref={playOnEnter} autoPlay muted playsInline loop preload="auto"
+            {/* Background video — deferred: preload="none" and no autoplay
+                attribute, so this deepest section's file is not fetched until
+                lazyPlayOnEnter sees it approach the viewport. */}
+            <video ref={lazyPlayOnEnter} muted playsInline loop preload="none"
               disablePictureInPicture disableRemotePlayback
               controlsList="nodownload nofullscreen noremoteplayback"
               poster="/bread-making-01.poster.jpg"

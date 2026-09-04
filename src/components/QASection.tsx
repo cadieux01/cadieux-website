@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { lazyPlayOnEnter } from "@/lib/lazyVideo";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -182,27 +183,16 @@ export default function QASection() {
           transform: "translateZ(0)",
         }}
       >
-        {/* Background video */}
+        {/* Background video — deferred: preload="none" and no autoplay
+            attribute, so nothing is fetched until lazyPlayOnEnter sees it
+            approach the viewport. The poster covers the wait, and once it
+            starts it plays for the life of the page and never pauses. */}
         <video
-          ref={(el) => {
-            if (!el) return;
-            // Plays on load and NEVER pauses. Retry on canplay/loadeddata in
-            // case a too-early play() was rejected; muted is re-asserted right
-            // before every play() since a muted video is always allowed to
-            // autoplay (unmuted → blocked → browser shows controls).
-            const play = () => {
-              el.muted = true;
-              void el.play().catch(() => {});
-            };
-            el.addEventListener("canplay", play);
-            el.addEventListener("loadeddata", play);
-            play();
-          }}
-          autoPlay
+          ref={lazyPlayOnEnter}
           muted
           playsInline
           loop
-          preload="auto"
+          preload="none"
           disablePictureInPicture
           disableRemotePlayback
           controlsList="nodownload nofullscreen noremoteplayback"
