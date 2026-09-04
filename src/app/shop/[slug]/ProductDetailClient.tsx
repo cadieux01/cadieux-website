@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound, useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import {
   PRODUCTS,
   PRODUCT_DETAILS,
@@ -17,6 +17,7 @@ import {
 // arrives as a server-computed `media` prop that already blends admin
 // (products.image_url) + bundled sources.
 import { useCart } from "@/context/CartContext";
+import { formatNutrientValue } from "@/lib/stat-tiles";
 import { flyToCart } from "@/lib/fly-to-cart";
 import ReviewSection from "@/components/ReviewSection";
 import { ShareButton } from "@/components/ShareButton";
@@ -250,7 +251,7 @@ export default function ProductDetailClient({
         <div className="pdp-top">
           <Gallery media={galleryMedia} active={activeMedia} onSelect={setActiveMedia} />
 
-          <div style={{ minWidth: 0 }}>
+          <div className="pdp-info" style={{ minWidth: 0 }}>
             <div
               style={{
                 display: "flex",
@@ -310,20 +311,16 @@ export default function ProductDetailClient({
                 correct, a hardcoded number on a food label is not. */}
             {statTiles.length > 0 && (
             <div
-              style={{
-                display: "grid",
-                // Content-sized rather than equal thirds: at 14px the tracked
-                // uppercase labels ("PROTEIN/SLICE") are wider than a 1fr
-                // column at 390px, and "/" is not a line-break opportunity, so
-                // equal columns made the label spill into its neighbour.
-                gridTemplateColumns: "auto auto auto",
-                justifyContent: "space-between",
-                gap: 12,
-                padding: "18px 0",
-                borderTop: "1px solid rgba(2,70,40,0.25)",
-                borderBottom: "1px solid rgba(2,70,40,0.25)",
-                marginBottom: 32,
-              }}
+              className={
+                statTiles.length > 3
+                  ? "pdp-stat-strip pdp-stat-strip--wrap"
+                  : "pdp-stat-strip"
+              }
+              // The track count is the tile count, not a hardcoded three. The
+              // wrap behaviour lives in CSS (see .pdp-stat-strip) because it
+              // has to react to the container's width, which inline styles
+              // cannot see.
+              style={{ "--strip-tiles": statTiles.length } as CSSProperties}
             >
               {statTiles.map((tile) => (
                 <div key={tile.id}>
@@ -727,6 +724,56 @@ export default function ProductDetailClient({
           grid-template-columns: 1fr;
           gap: 32px;
           align-items: start;
+        }
+        /* The stat strip below wraps on the width of THIS column, not the
+           viewport. The two are not the same thing and do not even move in
+           the same direction: at 768px this column is the full content width
+           (~728px), and at 1024px the layout has split in two so the column
+           is NARROWER (~440px) than it was on the smaller screen. A viewport
+           media query would get that backwards. */
+        .pdp-info {
+          container-type: inline-size;
+          container-name: pdp-info;
+        }
+        /* Stat strip. One track per tile -- the count comes from
+           --strip-tiles, it is not fixed at three, so a fourth tile has
+           somewhere to go. Tracks stay content-sized (auto) with
+           space-between, which is the rhythm the three-tile strip has always
+           had.
+
+           Equal fractions were tried here and rejected, and must stay
+           rejected for the one-row case: three 1fr columns in a 351px
+           container give each tile ~117px against a 139px tracked
+           "PROTEIN/SLICE" label, and "/" is not a line-break opportunity, so
+           the label spilled into its neighbour. */
+        .pdp-stat-strip {
+          display: grid;
+          grid-template-columns: repeat(var(--strip-tiles), auto);
+          justify-content: space-between;
+          gap: 12px;
+          padding: 18px 0;
+          border-top: 1px solid rgba(2, 70, 40, 0.25);
+          border-bottom: 1px solid rgba(2, 70, 40, 0.25);
+          margin-bottom: 32px;
+        }
+        /* Four or more tiles measure ~466px across and cannot share a row in
+           a narrow column, so they START as an even 2-up (2x2 for four) and
+           only straighten into a single row once the container proves it has
+           the room. Two columns in a 351px container is ~170px each, wider
+           than the 139px label, so the spill above cannot happen here.
+
+           Starting narrow rather than wide is deliberate: browsers without
+           @container support keep the 2-up, which is merely less elegant.
+           The other way round they would keep a single row that does not
+           fit. Three tiles never take this class -- they measure 341px and
+           have always fitted the narrowest column we render. */
+        .pdp-stat-strip--wrap {
+          grid-template-columns: 1fr 1fr;
+        }
+        @container pdp-info (min-width: 480px) {
+          .pdp-stat-strip--wrap {
+            grid-template-columns: repeat(var(--strip-tiles), auto);
+          }
         }
         :global(.pdp-main-media) {
           aspect-ratio: 1 / 1;
@@ -1153,14 +1200,6 @@ function formatNutrientKey(key: string): { label: string; unit: string } {
     .join(" ");
   const unit = key.endsWith("_g") ? "g" : "";
   return { label: label || key, unit };
-}
-
-// Trim trailing zeros; keep one decimal for non-integer values (matches
-// how nutrition figures are typically read on food labels).
-function formatNutrientValue(v: number): string {
-  if (!Number.isFinite(v)) return "—";
-  if (Number.isInteger(v)) return String(v);
-  return v.toFixed(1);
 }
 
 function Section({ label, title, children }: { label: string; title: string; children: React.ReactNode }) {

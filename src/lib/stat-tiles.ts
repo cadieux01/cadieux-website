@@ -28,6 +28,21 @@ export type StatTileSource = {
   nutrition_per_slice: Record<string, number> | null;
 };
 
+// Single formatter for every nutrition figure the site prints, shared by the
+// PDP nutrition table and the stat strip. Nutrition panels round to one
+// decimal by convention, and a marketing tile reading "8.56" implies a
+// precision the lab figure doesn't carry. Rounding is DISPLAY ONLY — the
+// stored value in products.nutrition_per_slice keeps full precision.
+//
+// Lives here rather than in the PDP so there is exactly one implementation:
+// two formatters would let the same number print two ways again, which is
+// the whole problem the derived tiles exist to prevent.
+export function formatNutrientValue(v: number): string {
+  if (!Number.isFinite(v)) return "—";
+  if (Number.isInteger(v)) return String(v);
+  return v.toFixed(1);
+}
+
 // Reads one figure out of the nutrition jsonb. Returns null unless the key
 // holds a finite, non-negative number, so a missing or malformed entry drops
 // the tile rather than printing a stale or nonsense figure. Zero is a valid
@@ -38,7 +53,7 @@ function nutritionFigure(
 ): string | null {
   const raw = p.nutrition_per_slice?.[jsonKey];
   if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) return null;
-  return String(raw);
+  return formatNutrientValue(raw);
 }
 
 const DERIVED_TILE_SOURCES: Record<
