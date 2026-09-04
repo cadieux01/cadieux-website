@@ -51,10 +51,24 @@ export type StatTileSource = {
 // Trailing zeros are KEPT ("16.0", not "16") so the decimal points line up
 // down the column. Rounding is DISPLAY ONLY — products.nutrition_per_slice
 // keeps full precision.
-export function formatNutrientValue(v: number, unit: string): string {
+//
+// `roundUp` is for the numeric part of a lower bound ("<0.36"). A bound is an
+// upper limit, so it may only ever be WIDENED by display rounding. Nearest
+// rounding narrows it and can state something impossible: cholesterol
+// "<0.36" mg to nearest whole is "< 0 mg", a claim of negative cholesterol.
+// Rounded up it is "< 1 mg", which is both true and readable.
+export function formatNutrientValue(
+  v: number,
+  unit: string,
+  roundUp = false,
+): string {
   if (!Number.isFinite(v)) return "—";
-  if (unit === "mg" || unit === "kcal") return String(Math.round(v));
-  return v >= 1 ? v.toFixed(1) : v.toFixed(2);
+  const dp = unit === "mg" || unit === "kcal" ? 0 : v >= 1 ? 1 : 2;
+  const scale = 10 ** dp;
+  // The extra rounding inside the ceil absorbs float noise, so a value that
+  // is already exact (0.04 at 2 dp) is not pushed up to 0.05.
+  const n = roundUp ? Math.ceil(Number((v * scale).toFixed(6))) / scale : v;
+  return n.toFixed(dp);
 }
 
 // Reads one figure out of the nutrition jsonb. Returns null unless the key
