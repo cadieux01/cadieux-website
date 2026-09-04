@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { NUTRIENT_INPUT_PATTERN } from "@/lib/nutrition";
+
 // ── primitives ──────────────────────────────────────────────────────────────
 
 // Indian mobile: accept "+91XXXXXXXXXX", "91XXXXXXXXXX", or 10-digit local.
@@ -97,12 +99,22 @@ export const ProductUpdateSchema = z
     // storage hygiene. Nullable so admin can clear them.
     ingredients: boundedText(4000).nullable().optional(),
     allergens: boundedText(2000).nullable().optional(),
-    // Per-slice nutrition JSONB. Open shape — canonical keys are
-    // *_g / calories, but custom keys are allowed. Values must be
-    // finite non-negative numbers; empty object === null (cleared).
+    // Per-slice nutrition JSONB. Open shape — canonical keys are the ones
+    // in CANONICAL_NUTRIENT_KEYS, but custom keys are allowed. A value is
+    // either a finite non-negative number, or a lower-bound string like
+    // "<0.04" for a lab result reported as "less than" (storing 0.04 there
+    // would be a false precision claim). Empty object === null (cleared).
     // The admin form omits empty inputs so we never write NaN.
     nutrition_per_slice: z
-      .record(z.string().min(1).max(40), z.number().finite().nonnegative().max(10000))
+      .record(
+        z.string().min(1).max(40),
+        z.union([
+          z.number().finite().nonnegative().max(10000),
+          z.string().max(20).regex(new RegExp(NUTRIENT_INPUT_PATTERN), {
+            message: 'must be a number or a bound like "<0.04"',
+          }),
+        ]),
+      )
       .nullable()
       .optional(),
     slices_per_loaf: z.number().int().min(0).max(1000).nullable().optional(),

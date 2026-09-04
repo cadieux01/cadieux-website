@@ -14,6 +14,7 @@ import {
   type ProductMedia,
   type ProductSlug,
 } from "@/lib/data";
+import type { NutrientValue } from "@/lib/nutrition";
 
 export type ProductRow = {
   id: string;
@@ -37,10 +38,11 @@ export type ProductRow = {
   // beneath the description as separate sections; empty/null hides.
   ingredients: string | null;
   allergens: string | null;
-  // Per-slice nutrition JSONB. Open-ended shape; canonical keys are
-  // protein_g / carbs_g / fat_g / fibre_g / sugar_g / calories, but
-  // custom keys are allowed and preserved by admin edits.
-  nutrition_per_slice: Record<string, number> | null;
+  // Per-slice nutrition JSONB. Open-ended shape; canonical keys are in
+  // CANONICAL_NUTRIENT_KEYS, but custom keys are allowed and preserved by
+  // admin edits. A value is a number, or a lower-bound string ("<0.04") for
+  // a lab result reported as "less than" — see lib/nutrition.
+  nutrition_per_slice: Record<string, NutrientValue> | null;
   slices_per_loaf: number | null;
 };
 

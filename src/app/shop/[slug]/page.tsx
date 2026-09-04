@@ -9,8 +9,7 @@
 //   • `internalSlug` — the DB / content key (`high-protein`, `multigrain`).
 //     Used for every products-table lookup, PRODUCTS/PRODUCT_DETAILS
 //     bundled fallback, content_strings key, product_stat_tiles fetch,
-//     product_ingredients fetch, and review-scope key. Never changes
-//     across the URL rename.
+//     and review-scope key. Never changes across the URL rename.
 //
 // If the URL slug does not resolve to an internal slug, we 404 — the
 // old `/shop/high-protein` and `/shop/multigrain` paths never reach
@@ -31,7 +30,6 @@ import {
 } from "@/lib/products";
 import { parseWeightGrams } from "@/lib/stat-tiles";
 import { getProductReports } from "@/lib/product-reports";
-import { getProductIngredients } from "@/lib/ingredients";
 import { getPageContent, pickString } from "@/lib/content";
 import { resolveInternalSlug } from "@/lib/product-slugs";
 
@@ -157,11 +155,10 @@ export default async function ProductDetailPage({
 
   const outOfStock = availability?.outOfStock.has(internalSlug) ?? false;
 
-  // Live product row + lab reports + ingredients (DB) + content — all
-  // keyed on the INTERNAL slug (public.products.slug + content_strings).
-  const [productRow, ingredients, content] = await Promise.all([
+  // Live product row + lab reports + content — all keyed on the INTERNAL
+  // slug (public.products.slug + content_strings).
+  const [productRow, content] = await Promise.all([
     getProductBySlug(internalSlug),
-    getProductIngredients(internalSlug),
     getPageContent({ page: "pdp", productId: internalSlug }),
   ]);
 
@@ -183,8 +180,6 @@ export default async function ProductDetailPage({
     title: pickString(content, "pdp.title", internalSlug),
     subtitle: pickString(content, "pdp.subtitle", internalSlug),
     description: pickString(content, "pdp.description", internalSlug),
-    aboutEyebrow: pickString(content, "pdp.section.about.eyebrow"),
-    aboutTitle: pickString(content, "pdp.section.about.title"),
     reportsEyebrow: pickString(content, "pdp.section.reports.eyebrow"),
     reportsTitle: pickString(content, "pdp.section.reports.title"),
     trialsBanner: pickString(content, "compliance.trials_banner"),
@@ -294,7 +289,6 @@ export default async function ProductDetailPage({
         urlSlug={urlSlug}
         outOfStock={outOfStock}
         reports={reports}
-        ingredients={ingredients}
         price={productRow?.price_inr ?? null}
         pdpStrings={pdpStrings}
         statTiles={content.stat_tiles}

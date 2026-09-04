@@ -8,6 +8,17 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 import { adminAuthHeaders } from "@/lib/admin-client";
 import { AdminProductRow } from "@/lib/admin-shared";
+import {
+  CANONICAL_NUTRIENT_KEYS,
+  canonicalNutrientValue,
+  isCanonicalNutrientKey,
+  nutrientLabel,
+  nutrientUnit,
+  parseNutrientValue,
+  sliceWeightGrams,
+  validateNutritionPerSlice,
+  type NutrientValue,
+} from "@/lib/nutrition";
 import { subscriptionUnitPrice, subscriptionSavingsInr } from "@/lib/subscription-pricing";
 
 import {
@@ -35,20 +46,10 @@ function isVideoUrl(url: string): boolean {
 }
 
 // A single nutrition_per_slice row in form state. `key` is the JSON key
-// (protein_g, calories, or a custom key); `value` is stored as a string
-// so the input can be blank. Empty values are omitted on submit.
+// (protein_g, sodium_mg, calories, or a custom key); `value` is stored as a
+// string so the input can be blank and so a lower bound ("<0.04") can be
+// typed. Empty values are omitted on submit.
 export type NutrientEntry = { key: string; value: string };
-
-// Canonical nutrition keys the form always exposes. Custom keys already
-// present in the DB row are appended after these so they stay editable.
-const CANONICAL_NUTRIENT_KEYS = [
-  "protein_g",
-  "carbs_g",
-  "fat_g",
-  "fibre_g",
-  "sugar_g",
-  "calories",
-] as const;
 
 export type ProductFormValues = {
   slug: string;
@@ -110,21 +111,19 @@ export function formValuesFromRow(row: AdminProductRow): ProductFormValues {
   // the DB row when present, else blank), then append any custom keys
   // the DB already had so they stay editable and are never dropped.
   const dbNutri = row.nutrition_per_slice ?? {};
-  const canonicalRows = CANONICAL_NUTRIENT_KEYS.map((key) => ({
-    key,
-    value:
-      typeof dbNutri[key] === "number" && Number.isFinite(dbNutri[key])
-        ? String(dbNutri[key])
-        : "",
-  }));
+  const canonicalRows = CANONICAL_NUTRIENT_KEYS.map((key) => {
+    const parsed = parseNutrientValue(dbNutri[key]);
+    return {
+      key,
+      value: parsed ? String(canonicalNutrientValue(parsed)) : "",
+    };
+  });
   const customRows = Object.entries(dbNutri)
-    .filter(
-      ([k, v]) =>
-        !(CANONICAL_NUTRIENT_KEYS as readonly string[]).includes(k) &&
-        typeof v === "number" &&
-        Number.isFinite(v),
-    )
-    .map(([k, v]) => ({ key: k, value: String(v) }));
+    .filter(([k, v]) => !isCanonicalNutrientKey(k) && parseNutrientValue(v))
+    .map(([k, v]) => ({
+      key: k,
+      value: String(canonicalNutrientValue(parseNutrientValue(v)!)),
+    }));
 
   return {
     slug: row.slug,
@@ -157,6 +156,42 @@ export function formValuesFromRow(row: AdminProductRow): ProductFormValues {
   };
 }
 
+// Nutrition rows → the jsonb the API expects. Drops empty values (unset
+// keys) and anything that isn't a number or a lower bound. Empty result →
+// null so the PDP hides the section.
+function nutritionFromEntries(
+  entries: NutrientEntry[],
+): Record<string, NutrientValue> | null {
+  const out: Record<string, NutrientValue> = {};
+  for (const entry of entries) {
+    const key = entry.key.trim();
+    if (!key) continue;
+    const parsed = parseNutrientValue(entry.value.trim());
+    if (!parsed) continue;
+    out[key] = canonicalNutrientValue(parsed);
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+// The same guard the API runs, evaluated against live form state so a
+// misplaced decimal shows up next to the field instead of after a round
+// trip. Returns a message per offending nutrient key.
+export function nutritionErrorsForValues(
+  v: ProductFormValues,
+): Record<string, string> {
+  const issues = validateNutritionPerSlice(nutritionFromEntries(v.nutrients), {
+    weight: v.weight.trim() || null,
+    slices_per_loaf: v.slices_per_loaf.trim() === "" ? null : Number(v.slices_per_loaf),
+  });
+  const byKey: Record<string, string> = {};
+  for (const issue of issues) {
+    for (const key of issue.keys) {
+      if (!byKey[key]) byKey[key] = issue.message;
+    }
+  }
+  return byKey;
+}
+
 // Serialise a ProductFormValues into the JSON payload the API expects.
 // Numeric fields are parsed; empty strings become null where the API
 // allows null, or are omitted entirely otherwise.
@@ -169,20 +204,7 @@ export function valuesToPayload(v: ProductFormValues): Record<string, unknown> {
     .split("\n")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
-  // Nutrition: drop empty values (unset keys), coerce to Number, drop
-  // NaN / negative. Empty result → null so the PDP hides the section.
-  const nutritionObj: Record<string, number> = {};
-  for (const entry of v.nutrients) {
-    const key = entry.key.trim();
-    if (!key) continue;
-    const raw = entry.value.trim();
-    if (raw === "") continue;
-    const num = Number(raw);
-    if (!Number.isFinite(num) || num < 0) continue;
-    nutritionObj[key] = num;
-  }
-  const nutrition_per_slice: Record<string, number> | null =
-    Object.keys(nutritionObj).length > 0 ? nutritionObj : null;
+  const nutrition_per_slice = nutritionFromEntries(v.nutrients);
 
   const payload: Record<string, unknown> = {
     slug: v.slug.trim(),
@@ -247,9 +269,17 @@ export function ProductForm({
     setValues((v) => ({ ...v, ...p }));
   }
 
+  // Recomputed on every render so the inline errors clear as soon as the
+  // figure is corrected — no separate "validated" state to fall stale.
+  const nutritionErrors = nutritionErrorsForValues(values);
+  const blocked = Object.keys(nutritionErrors).length > 0;
+
   function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
+    // Blocked client-side as well as in the API: an admin who types 20.7
+    // into fibre should never get as far as a request.
+    if (blocked) return;
     void onSubmit(values);
   }
 
@@ -398,6 +428,14 @@ export function ProductForm({
       <NutritionEditor
         entries={values.nutrients}
         onChange={(next) => patch({ nutrients: next })}
+        errors={nutritionErrors}
+        sliceGrams={sliceWeightGrams({
+          weight: values.weight.trim() || null,
+          slices_per_loaf:
+            values.slices_per_loaf.trim() === ""
+              ? null
+              : Number(values.slices_per_loaf),
+        })}
       />
 
       <Field
@@ -487,7 +525,8 @@ export function ProductForm({
       <div className="flex gap-3 pt-2">
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || blocked}
+          title={blocked ? "Fix the nutrition figures flagged above." : undefined}
           className="uppercase"
           style={{
             fontFamily: "var(--font-body)",
@@ -499,8 +538,8 @@ export function ProductForm({
             border: `1px solid ${CREAM}`,
             borderRadius: 6,
             padding: "0.7rem 1.4rem",
-            opacity: busy ? 0.5 : 1,
-            cursor: busy ? "not-allowed" : "pointer",
+            opacity: busy || blocked ? 0.5 : 1,
+            cursor: busy || blocked ? "not-allowed" : "pointer",
           }}
         >
           {busy ? "Saving…" : submitLabel}
@@ -858,12 +897,21 @@ function SubPricePreview({
 // first, then any custom keys the DB already had, then admin-added). The
 // key input is disabled for canonical rows so a slip can't rename them.
 // Empty values are omitted on submit (see valuesToPayload).
+//
+// Every row carries its own unit label, read from the same explicit map the
+// PDP renders from — sodium and cholesterol are mg, so there is no field
+// where mg could be typed into a gram box unlabelled. `errors` are the
+// guard's messages, shown under the field they belong to.
 function NutritionEditor({
   entries,
   onChange,
+  errors,
+  sliceGrams,
 }: {
   entries: NutrientEntry[];
   onChange: (next: NutrientEntry[]) => void;
+  errors: Record<string, string>;
+  sliceGrams: number | null;
 }) {
   function updateAt(i: number, patch: Partial<NutrientEntry>) {
     onChange(entries.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
@@ -897,57 +945,83 @@ function NutritionEditor({
         }}
       >
         Leave a value blank to omit that nutrient. All-blank = section hidden on PDP.
-        Canonical keys (protein_g, carbs_g, fat_g, fibre_g, sugar_g, calories) stay in the payload as long as they have values.
+        Enter a lab &ldquo;less than&rdquo; result as a bound, e.g. <strong>&lt;0.04</strong> —
+        it renders as &ldquo;&lt; 0.04 g&rdquo; rather than claiming a precision the
+        report doesn&rsquo;t give.
+        {sliceGrams !== null ? (
+          <>
+            {" "}
+            One slice weighs <strong>{Number(sliceGrams.toFixed(2))} g</strong>{" "}
+            (weight ÷ slices per loaf), so protein + carbs + fibre + fat cannot
+            exceed that.
+          </>
+        ) : (
+          <>
+            {" "}
+            Set <strong>Weight</strong> and <strong>Slices per loaf</strong> above
+            to enable the slice-weight sanity check.
+          </>
+        )}
       </span>
       <div className="flex flex-col gap-2">
         {entries.map((entry, i) => {
-          const isCanonical = (CANONICAL_NUTRIENT_KEYS as readonly string[]).includes(
-            entry.key,
-          );
+          const isCanonical = isCanonicalNutrientKey(entry.key);
+          const unit = nutrientUnit(entry.key);
+          const rowError = errors[entry.key];
           return (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={entry.key}
-                onChange={(e) => updateAt(i, { key: e.target.value })}
-                placeholder="custom_key"
-                disabled={isCanonical}
-                className="px-3 py-2 outline-none"
-                style={{
-                  backgroundColor: CREAM,
-                  color: INK,
-                  caretColor: INK,
-                  border: `1px solid ${CREAM}`,
-                  borderRadius: 6,
-                  fontFamily: "var(--font-body)",
-                  fontSize: "1rem",
-                  fontWeight: isCanonical ? 500 : 400,
-                  opacity: isCanonical ? 0.85 : 1,
-                  flex: "1 1 40%",
-                  minWidth: 0,
-                }}
-              />
-              <input
-                type="number"
-                value={entry.value}
-                onChange={(e) => updateAt(i, { value: e.target.value })}
-                placeholder="—"
-                min={0}
-                step="any"
-                className="px-3 py-2 outline-none"
-                style={{
-                  backgroundColor: CREAM,
-                  color: INK,
-                  caretColor: INK,
-                  border: `1px solid ${CREAM}`,
-                  borderRadius: 6,
-                  fontFamily: "var(--font-body)",
-                  fontSize: "1rem",
-                  flex: "1 1 30%",
-                  minWidth: 0,
-                }}
-              />
-              {isCanonical ? (
+            <div key={i} className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={entry.key}
+                  onChange={(e) => updateAt(i, { key: e.target.value })}
+                  placeholder="custom_key"
+                  disabled={isCanonical}
+                  aria-label={isCanonical ? nutrientLabel(entry.key) : "Custom key"}
+                  className="px-3 py-2 outline-none"
+                  style={{
+                    backgroundColor: CREAM,
+                    color: INK,
+                    caretColor: INK,
+                    border: `1px solid ${CREAM}`,
+                    borderRadius: 6,
+                    fontFamily: "var(--font-body)",
+                    fontSize: "1rem",
+                    fontWeight: isCanonical ? 500 : 400,
+                    opacity: isCanonical ? 0.85 : 1,
+                    flex: "1 1 40%",
+                    minWidth: 0,
+                  }}
+                />
+                {/* type="text", not "number": a number input rejects the "<"
+                    of a bound outright. parseNutrientValue is the validator. */}
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={entry.value}
+                  onChange={(e) => updateAt(i, { value: e.target.value })}
+                  placeholder={unit ? `— ${unit}` : "—"}
+                  aria-label={
+                    unit
+                      ? `${nutrientLabel(entry.key)} in ${unit}`
+                      : nutrientLabel(entry.key)
+                  }
+                  aria-invalid={rowError ? true : undefined}
+                  className="px-3 py-2 outline-none"
+                  style={{
+                    backgroundColor: CREAM,
+                    color: INK,
+                    caretColor: INK,
+                    border: `1px solid ${rowError ? "#B3261E" : CREAM}`,
+                    borderRadius: 6,
+                    fontFamily: "var(--font-body)",
+                    fontSize: "1rem",
+                    flex: "1 1 30%",
+                    minWidth: 0,
+                  }}
+                />
+                {/* Unit label on EVERY row, canonical or custom — mg fields
+                    are visibly mg so a mg figure can't land in a gram box. */}
                 <span
                   className="uppercase"
                   style={{
@@ -957,29 +1031,44 @@ function NutritionEditor({
                     fontWeight: 500,
                     color: FG,
                     padding: "0.3rem 0.6rem",
+                    minWidth: "3.5rem",
                   }}
                 >
-                  {entry.key === "calories" ? "kcal" : "g"}
+                  {unit || "—"}
                 </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => removeAt(i)}
-                  className="uppercase"
+                {isCanonical ? null : (
+                  <button
+                    type="button"
+                    onClick={() => removeAt(i)}
+                    className="uppercase"
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.875rem",
+                      letterSpacing: "0.2em",
+                      color: FG,
+                      background: "transparent",
+                      border: `1px solid ${FG}`,
+                      borderRadius: 6,
+                      padding: "0.3rem 0.6rem",
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              {rowError ? (
+                <span
+                  role="alert"
                   style={{
                     fontFamily: "var(--font-body)",
-                    fontSize: "0.875rem",
-                    letterSpacing: "0.2em",
-                    color: FG,
-                    background: "transparent",
-                    border: `1px solid ${FG}`,
-                    borderRadius: 6,
-                    padding: "0.3rem 0.6rem",
+                    fontSize: "0.9375rem",
+                    fontWeight: 500,
+                    color: "#FFB4AB",
                   }}
                 >
-                  Remove
-                </button>
-              )}
+                  {rowError}
+                </span>
+              ) : null}
             </div>
           );
         })}

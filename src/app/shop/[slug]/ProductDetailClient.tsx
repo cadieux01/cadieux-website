@@ -17,8 +17,13 @@ import {
 // arrives as a server-computed `media` prop that already blends admin
 // (products.image_url) + bundled sources.
 import { useCart } from "@/context/CartContext";
-import { formatNutrientValue } from "@/lib/stat-tiles";
 import { flyToCart } from "@/lib/fly-to-cart";
+import {
+  CANONICAL_NUTRIENT_KEYS,
+  formatNutrient,
+  nutrientLabel,
+  type NutrientValue,
+} from "@/lib/nutrition";
 import ReviewSection from "@/components/ReviewSection";
 import { ShareButton } from "@/components/ShareButton";
 import {
@@ -58,8 +63,6 @@ export type PdpStrings = {
   title: string;
   subtitle: string;
   description: string;
-  aboutEyebrow: string;
-  aboutTitle: string;
   reportsEyebrow: string;
   reportsTitle: string;
   trialsBanner: string;
@@ -85,7 +88,7 @@ export type PdpFaqRow = { q: string; a: string };
 export type PdpLabelInfo = {
   ingredients: string | null;
   allergens: string | null;
-  nutritionPerSlice: Record<string, number> | null;
+  nutritionPerSlice: Record<string, NutrientValue> | null;
   slicesPerLoaf: number | null;
 };
 
@@ -94,7 +97,6 @@ export default function ProductDetailClient({
   urlSlug,
   outOfStock = false,
   reports = [],
-  ingredients = [],
   price = null,
   pdpStrings,
   statTiles = [],
@@ -114,10 +116,6 @@ export default function ProductDetailClient({
   urlSlug: string;
   outOfStock?: boolean;
   reports?: ProductReport[];
-  // DB-driven ingredient names (product_ingredients), ordered. The bundled
-  // PRODUCT_DETAILS.ingredients is no longer rendered — this list is the
-  // single source of truth, editable from the admin product editor.
-  ingredients?: string[];
   // Live DB price (products.price_inr). Falls back to the bundled PRODUCTS
   // price only when the DB read was empty, so display + cart snapshot stay
   // pinned to the products table — the single source of truth.
@@ -167,8 +165,6 @@ export default function ProductDetailClient({
   const dispName = s?.name || product?.name || "";
   const dispSubtitle = s?.subtitle || product?.subtitle || "";
   const dispDescription = s?.description || "";
-  const dispAboutEyebrow = s?.aboutEyebrow || "Inside the loaf";
-  const dispAboutTitle = s?.aboutTitle || "Ingredients";
   const dispReportsEyebrow = s?.reportsEyebrow || "Independently tested";
   const dispReportsTitle = s?.reportsTitle || "Lab Reports & Certifications";
   const dispTrialsBanner = s?.trialsBanner || "Final trials are under process.";
@@ -561,59 +557,6 @@ export default function ProductDetailClient({
         </div>
 
         <LabelInfoSections labelInfo={labelInfo} />
-
-        {ingredients.length > 0 && (
-          <>
-            <hr style={DIVIDER_STYLE} />
-
-            {/* Ingredients — DB-driven (product_ingredients table). */}
-            <Section label={dispAboutEyebrow} title={dispAboutTitle}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                  gap: 20,
-                }}
-              >
-                {ingredients.map((name) => (
-                  <div
-                    key={name}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 14,
-                      padding: "18px 18px",
-                      background: "transparent",
-                      border: "1px solid rgba(2,70,40,0.25)",
-                      borderRadius: 8,
-                    }}
-                  >
-                    <span
-                      style={{
-                        flex: "0 0 8px",
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        background: "#024628",
-                      }}
-                    />
-                    <div
-                      style={{
-                        minWidth: 0,
-                        fontFamily: "var(--font-heading)",
-                        fontSize: 18,
-                        color: "#024628",
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      {name}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          </>
-        )}
 
         {reports.length > 0 ? (
           <>
@@ -1057,18 +1000,36 @@ function Gallery({
 // Regulatory label + per-slice nutrition + allergens. Each of the three
 // sub-sections renders ONLY when its own field is non-empty, and each
 // gets its own divider so a partially-filled row still looks clean. The
-// section keys (protein_g etc.) are DB-owned — canonical *_g suffixes
-// get stripped + title-cased with a "g" unit; `calories` renders "kcal";
-// other custom keys render title-cased with no unit.
+// section keys (protein_g etc.) are DB-owned; label, unit and number
+// formatting all come from lib/nutrition so the page, the admin form and
+// the API agree on what "225 mg" and "< 0.04 g" mean.
+// Position of a key on the canonical label; unknown keys sort last (Array
+// .sort is stable, so they hold their stored order relative to each other).
+function canonicalRank(key: string): number {
+  const i = (CANONICAL_NUTRIENT_KEYS as readonly string[]).indexOf(key);
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+}
+
 function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
   if (!labelInfo) return null;
   const { ingredients, allergens, nutritionPerSlice, slicesPerLoaf } = labelInfo;
   const ingText = (ingredients ?? "").trim();
   const allergText = (allergens ?? "").trim();
+  // A value is renderable when it parses as a number OR as a lower bound
+  // ("<0.04"). Anything else is dropped rather than shown as a zero.
+  //
+  // Rows follow CANONICAL_NUTRIENT_KEYS, not jsonb key order, so the panel
+  // reads in the same sequence every time and matches the admin form. jsonb
+  // preserves insertion order, which means a value edited in later would
+  // otherwise land at the bottom of the label. Non-canonical keys keep their
+  // stored order and sort after the known ones.
   const nutriEntries = nutritionPerSlice
-    ? Object.entries(nutritionPerSlice).filter(
-        ([, v]) => typeof v === "number" && Number.isFinite(v),
-      )
+    ? Object.entries(nutritionPerSlice)
+        .flatMap(([key, v]) => {
+          const display = formatNutrient(key, v);
+          return display === null ? [] : [[key, display] as const];
+        })
+        .sort(([a], [b]) => canonicalRank(a) - canonicalRank(b))
     : [];
   if (!ingText && !allergText && nutriEntries.length === 0) return null;
 
@@ -1129,8 +1090,7 @@ function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
                 overflow: "hidden",
               }}
             >
-              {nutriEntries.map(([key, value], i) => {
-                const { label, unit } = formatNutrientKey(key);
+              {nutriEntries.map(([key, display], i) => {
                 const isLast = i === nutriEntries.length - 1;
                 const cellStyle: React.CSSProperties = {
                   padding: "14px 18px",
@@ -1141,7 +1101,9 @@ function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
                 };
                 return (
                   <div key={key} style={{ display: "contents" }}>
-                    <div style={{ ...cellStyle, fontWeight: 400 }}>{label}</div>
+                    <div style={{ ...cellStyle, fontWeight: 400 }}>
+                      {nutrientLabel(key)}
+                    </div>
                     <div
                       style={{
                         ...cellStyle,
@@ -1150,8 +1112,7 @@ function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {formatNutrientValue(value)}
-                      {unit ? ` ${unit}` : ""}
+                      {display}
                     </div>
                   </div>
                 );
@@ -1184,22 +1145,6 @@ function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
       ) : null}
     </>
   );
-}
-
-// Turn a DB nutrient key into a display label + unit.
-//   `protein_g` → { label: "Protein", unit: "g" }
-//   `calories`  → { label: "Calories", unit: "kcal" }
-//   `custom`    → { label: "Custom",  unit: "" }
-function formatNutrientKey(key: string): { label: string; unit: string } {
-  if (key === "calories") return { label: "Calories", unit: "kcal" };
-  const stripped = key.endsWith("_g") ? key.slice(0, -2) : key;
-  const label = stripped
-    .split(/[_\s]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
-  const unit = key.endsWith("_g") ? "g" : "";
-  return { label: label || key, unit };
 }
 
 function Section({ label, title, children }: { label: string; title: string; children: React.ReactNode }) {

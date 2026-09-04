@@ -9,6 +9,8 @@
 // cookie. We can't read the HttpOnly cookie from JS, so we mirror its
 // expiry here purely as UX (skip the password gate UI for 24h). The
 // server-side cookie is the real credential.
+import type { NutrientValue } from "@/lib/nutrition";
+
 export const ADMIN_SESSION_KEY = "cadieux_admin_auth";
 
 export const ORDER_STATUSES = [
@@ -171,10 +173,11 @@ export type AdminProductRow = {
   // description as separate sections; empty/null values are hidden.
   ingredients: string | null;
   allergens: string | null;
-  // Per-slice nutrition JSONB. Open-ended shape — canonical keys are
-  // protein_g / carbs_g / fat_g / fibre_g / sugar_g / calories, but
-  // custom keys are allowed. Empty object === null (no section rendered).
-  nutrition_per_slice: Record<string, number> | null;
+  // Per-slice nutrition JSONB. Open-ended shape — canonical keys are in
+  // CANONICAL_NUTRIENT_KEYS, but custom keys are allowed. Empty object ===
+  // null (no section rendered). A value is a number, or a lower-bound
+  // string ("<0.04") for a "less than" lab result — see lib/nutrition.
+  nutrition_per_slice: Record<string, NutrientValue> | null;
   slices_per_loaf: number | null;
 };
 

@@ -11,6 +11,12 @@ import {
 } from "@/lib/admin-product-audit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { logLogisticsAudit } from "@/lib/logistics-audit";
+import {
+  canonicalNutrientValue,
+  parseNutrientValue,
+  validateNutritionPerSlice,
+  type NutrientValue,
+} from "@/lib/nutrition";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import { parseBodyFromObject, ProductUpdateSchema } from "@/lib/validation";
 import { CONTENT_CACHE_TAG } from "@/lib/content";
@@ -209,17 +215,20 @@ export async function PATCH(
 
   // Per-slice nutrition JSONB. Empty object === null (cleared). Zod
   // already vetted value types + key shape; we just normalise here.
+  // A value survives as either a number or a canonical lower bound
+  // ("<0.04"); anything unparseable is dropped rather than stored.
   if ("nutrition_per_slice" in update) {
     const raw = update.nutrition_per_slice;
     if (raw === null) {
       // explicit clear
     } else if (raw && typeof raw === "object") {
-      const cleaned: Record<string, number> = {};
+      const cleaned: Record<string, NutrientValue> = {};
       for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-        if (typeof v !== "number" || !Number.isFinite(v) || v < 0) continue;
         const key = k.trim();
         if (!key) continue;
-        cleaned[key] = v;
+        const parsed = parseNutrientValue(v);
+        if (!parsed) continue;
+        cleaned[key] = canonicalNutrientValue(parsed);
       }
       update.nutrition_per_slice = Object.keys(cleaned).length > 0 ? cleaned : null;
     } else {
@@ -242,6 +251,38 @@ export async function PATCH(
         );
       }
       update.slices_per_loaf = n === 0 ? null : n;
+    }
+  }
+
+  // Physical-plausibility guard. Runs against the POST-EDIT row (incoming
+  // fields where present, the stored row otherwise) so it also fires when
+  // only the weight or the slice count moves — shrinking the loaf can
+  // invalidate nutrition that was fine before. The same function runs in
+  // the admin form before submit, so this is the backstop for a direct
+  // API call, not the first line of defence.
+  //
+  // This is the check that would have caught the figures that went live:
+  // fibre 20.7 g instead of 2.07 g in a 35.71 g slice.
+  {
+    const effective = <K extends "nutrition_per_slice" | "weight" | "slices_per_loaf">(
+      key: K,
+    ) => (key in update ? update[key] : before[key]);
+    const issues = validateNutritionPerSlice(
+      effective("nutrition_per_slice") as Record<string, unknown> | null,
+      {
+        weight: effective("weight") as string | null,
+        slices_per_loaf: effective("slices_per_loaf") as number | null,
+      },
+    );
+    if (issues.length > 0) {
+      return NextResponse.json(
+        {
+          error: issues.map((i) => i.message).join(" "),
+          code: "nutrition_implausible",
+          issues,
+        },
+        { status: 400 },
+      );
     }
   }
 

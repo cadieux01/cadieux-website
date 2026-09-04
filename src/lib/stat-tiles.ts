@@ -25,35 +25,56 @@ export type StatTileLike = {
 export type StatTileSource = {
   weight: string | null;
   slices_per_loaf: number | null;
-  nutrition_per_slice: Record<string, number> | null;
+  // `unknown` values, not `number`: the jsonb also stores lower bounds as
+  // strings ("<0.04"). This module is the dependency-free base that
+  // lib/nutrition imports, so it cannot import that parser back without a
+  // cycle — nutritionFigure below narrows the value itself instead.
+  nutrition_per_slice: Record<string, unknown> | null;
 };
 
 // Single formatter for every nutrition figure the site prints, shared by the
-// PDP nutrition table and the stat strip. Nutrition panels round to one
-// decimal by convention, and a marketing tile reading "8.56" implies a
-// precision the lab figure doesn't carry. Rounding is DISPLAY ONLY — the
-// stored value in products.nutrition_per_slice keeps full precision.
+// PDP nutrition table and the stat strip. Lives here rather than in the PDP
+// or in lib/nutrition so there is exactly one implementation: two formatters
+// would let the same number print two ways again, which is the whole problem
+// the derived tiles exist to prevent. (lib/nutrition imports this file for
+// parseWeightGrams, so the shared code has to sit on this side of that edge.)
 //
-// Lives here rather than in the PDP so there is exactly one implementation:
-// two formatters would let the same number print two ways again, which is
-// the whole problem the derived tiles exist to prevent.
-export function formatNutrientValue(v: number): string {
+// Decimal places scale with magnitude rather than being fixed, because one
+// fixed setting gets one end of the range wrong: at 1 dp saturated fat 0.14 g
+// prints as "0.1 g" and understates the label by a third, while at 2 dp
+// sodium 191.73 mg claims a precision no food label carries.
+//
+//   >= 1     -> 1 dp    6.86 -> "6.9",   16.01 -> "16.0"
+//   <  1     -> 2 dp    0.14 -> "0.14",  0.19  -> "0.19"
+//   mg, kcal -> 0 dp    191.73 -> "192", 102   -> "102"
+//
+// Trailing zeros are KEPT ("16.0", not "16") so the decimal points line up
+// down the column. Rounding is DISPLAY ONLY — products.nutrition_per_slice
+// keeps full precision.
+export function formatNutrientValue(v: number, unit: string): string {
   if (!Number.isFinite(v)) return "—";
-  if (Number.isInteger(v)) return String(v);
-  return v.toFixed(1);
+  if (unit === "mg" || unit === "kcal") return String(Math.round(v));
+  return v >= 1 ? v.toFixed(1) : v.toFixed(2);
 }
 
 // Reads one figure out of the nutrition jsonb. Returns null unless the key
 // holds a finite, non-negative number, so a missing or malformed entry drops
 // the tile rather than printing a stale or nonsense figure. Zero is a valid
 // food-label value and is preserved.
+//
+// A lower bound ("<0.04") also drops the tile. That is deliberate: the strip
+// carries the two headline figures (protein, fibre), which a lab reports as
+// real numbers — a bound there would mean the figure isn't headline material.
+// The nutrition table still renders it in full as "< 0.04 g".
 function nutritionFigure(
   p: StatTileSource,
   jsonKey: string,
 ): string | null {
   const raw = p.nutrition_per_slice?.[jsonKey];
   if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) return null;
-  return formatNutrientValue(raw);
+  // Both derived tiles are gram figures; the unit is passed explicitly so a
+  // future milligram tile can't inherit gram rounding by default.
+  return formatNutrientValue(raw, "g");
 }
 
 const DERIVED_TILE_SOURCES: Record<
