@@ -25,7 +25,7 @@ import {
   nextDeliveryDates,
 } from "@/lib/delivery-slots";
 import { trackPurchase } from "@/lib/analytics";
-import { formatOrderNumber } from "@/lib/order-number";
+import { formatPublicRef } from "@/lib/order-number";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -40,8 +40,10 @@ type OrderItem = {
 
 type Order = {
   id: string;
-  /** DB-trigger-assigned OLF number. Null on legacy pre-trigger rows. */
-  order_number?: string | null;
+  /** Customer-facing reference, 'CX-XXXXXX'. This is what we display.
+   *  There is deliberately no order_number field — the API no longer
+   *  sends the OLF number to a browser. */
+  public_ref?: string | null;
   total_amount: number;
   delivery_fee: number | null;
   status: string;
@@ -366,9 +368,10 @@ export default function OrderDetailPage() {
     0,
   );
 
-  // Human-facing order number: OLF{n} on new orders, CDX-##### on the
-  // 6 mid-2026 rows, and #<uuid-slice> on legacy pre-trigger rows.
-  const shortId = order?.id ? formatOrderNumber(order) : "";
+  // Customer-facing reference (CDX-XXXXXX). Deliberately NOT the OLF
+  // number — that is sequential and would disclose our order volume.
+  // See src/lib/order-number.ts.
+  const shortId = order?.id ? formatPublicRef(order) : "";
 
   return (
     <div

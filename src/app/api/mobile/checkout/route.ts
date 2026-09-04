@@ -318,7 +318,7 @@ export async function POST(req: NextRequest) {
       // time. Normal orders leave the column untouched (default false).
       ...(preorderMode ? { is_preorder: true } : {}),
     })
-    .select("id, order_number")
+    .select("id, order_number, public_ref")
     .single();
 
   if (orderErr || !order) {
@@ -359,7 +359,8 @@ export async function POST(req: NextRequest) {
         phone: phoneLocal,
         name: fullName,
         orderId: order.id,
-        orderNumber: order.order_number,
+        // Customer-facing reference, not the OLF number (see order-number.ts).
+        orderNumber: order.public_ref,
         total: grandTotal,
         address: addressString,
         preorder: preorderMode,
@@ -375,7 +376,7 @@ export async function POST(req: NextRequest) {
   const waMessage = buildOrderPlacedWhatsApp({
     name: fullName,
     orderId: order.id,
-    orderNumber: order.order_number,
+    publicRef: order.public_ref,
     total: grandTotal,
     address: addressString,
     preorder: preorderMode,
@@ -394,7 +395,14 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     order_id: order.id,
+    // TEMPORARY. Every web route has stopped returning order_number, because
+    // OLF<n> is sequential and discloses order volume. This one still does:
+    // the shipped app (v18) renders order_number on its confirmation screen,
+    // so dropping it now would blank that screen on every installed copy.
+    // REMOVE once a release that reads public_ref has shipped.
     order_number: order.order_number,
+    // Customer-facing reference — what the app should render.
+    public_ref: order.public_ref,
     subtotal_inr: subtotal,
     delivery_fee_inr: deliveryFee,
     total_amount_inr: grandTotal,

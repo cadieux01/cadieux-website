@@ -930,7 +930,7 @@ export default function CheckoutPage() {
   }
 
   /* ── Order confirmations (fire-and-forget) ────────────────────────────── */
-  async function sendOrderSMS(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string, orderNumber?: string | null) {
+  async function sendOrderSMS(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string, publicRef?: string | null) {
     const resolvedPhone = customerPhone.replace(/\D/g, "");
     if (!resolvedPhone) return;
     try {
@@ -942,7 +942,10 @@ export default function CheckoutPage() {
           phone: resolvedPhone,
           name: customerName || "Customer",
           orderId,
-          orderNumber: orderNumber ?? undefined,
+          // Wire field is still named orderNumber (the schema is .strict(),
+          // renaming it would 400 any older caller), but the VALUE is now
+          // the customer-facing public_ref, never the OLF number.
+          orderNumber: publicRef ?? undefined,
           total: grandTotal,
           address: deliveryAddress,
           preorder: !!preorderMode,
@@ -951,7 +954,7 @@ export default function CheckoutPage() {
     } catch { /* silent */ }
   }
 
-  async function sendOrderWhatsApp(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string, orderNumber?: string | null) {
+  async function sendOrderWhatsApp(orderId: string, deliveryAddress: string, customerPhone: string, customerName: string, publicRef?: string | null) {
     const resolvedPhone = customerPhone.replace(/\D/g, "");
     if (!resolvedPhone) return;
     // Shared builder — same wording admin manual-entry + mobile checkout
@@ -959,7 +962,7 @@ export default function CheckoutPage() {
     const message = buildOrderPlacedWhatsApp({
       name: customerName,
       orderId,
-      orderNumber,
+      publicRef,
       total: grandTotal,
       address: deliveryAddress,
       preorder: !!preorderMode,
@@ -1120,10 +1123,10 @@ export default function CheckoutPage() {
         return;
       }
       const oid = data.order_id ?? "";
-      const onum = data.order_number ?? null;
+      const ref = data.public_ref ?? null;
       if (oid) {
-        sendOrderSMS(oid, fullAddress, customerPhone, customerName, onum);
-        sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName, onum);
+        sendOrderSMS(oid, fullAddress, customerPhone, customerName, ref);
+        sendOrderWhatsApp(oid, fullAddress, customerPhone, customerName, ref);
       }
       const { city: subCity, pincode: subPincode } = extractCityPincode(fullAddress);
       const subFailed = await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);
@@ -1207,12 +1210,12 @@ export default function CheckoutPage() {
       }
       const {
         db_order_id,
-        db_order_number,
+        public_ref,
         razorpay_order_id,
         amount: serverAmount,
       } = await res.json() as {
         db_order_id: string;
-        db_order_number?: string | null;
+        public_ref?: string | null;
         razorpay_order_id: string;
         amount: number;
       };
@@ -1265,8 +1268,8 @@ export default function CheckoutPage() {
             return;
           }
           if (db_order_id) {
-            sendOrderSMS(db_order_id, fullAddress, customerPhone, customerName, db_order_number);
-            sendOrderWhatsApp(db_order_id, fullAddress, customerPhone, customerName, db_order_number);
+            sendOrderSMS(db_order_id, fullAddress, customerPhone, customerName, public_ref);
+            sendOrderWhatsApp(db_order_id, fullAddress, customerPhone, customerName, public_ref);
           }
           const { city: subCity, pincode: subPincode } = extractCityPincode(fullAddress);
           const subFailed = await submitSubscriptions(fullAddress, customerName, customerPhone, subCity, subPincode);

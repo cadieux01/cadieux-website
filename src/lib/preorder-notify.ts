@@ -19,7 +19,7 @@ import type { NextRequest } from "next/server";
 import { sendMsg91FlowTemplate } from "@/lib/msg91";
 import { sendWhatsAppTemplate } from "@/lib/msg91-whatsapp";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { formatOrderNumber } from "@/lib/order-number";
+import { formatOrderNumber, formatPublicRef } from "@/lib/order-number";
 
 const SMS_TEMPLATE_ENV = "PREORDER_SCHEDULE_SMS_TEMPLATE_ID";
 const WA_TEMPLATE_ENV = "PREORDER_SCHEDULE_WA_TEMPLATE_ID";
@@ -27,7 +27,11 @@ const WA_TEMPLATE_ENV = "PREORDER_SCHEDULE_WA_TEMPLATE_ID";
 export type PreorderNotifyInput = {
   req?: NextRequest;
   orderId: string;
+  /** Internal OLF number. Used ONLY for the admin audit_log label. */
   orderNumber: string | null;
+  /** Customer-facing reference — the value sent as ##order_number## and
+   *  as WhatsApp body_1. Never send the OLF number to a customer. */
+  publicRef: string | null;
   customerPhone: string | null; // 10-digit local OR normalised — helper handles both
   deliveryDate: string; // ISO YYYY-MM-DD
 };
@@ -37,9 +41,15 @@ export type PreorderNotifyInput = {
 export async function notifyPreorderScheduled(
   input: PreorderNotifyInput,
 ): Promise<{ sms: Outcome; whatsapp: Outcome }> {
+  // Admin audit label keeps the OLF number; the customer messages get
+  // the public reference. The two are deliberately different strings.
   const displayOrderNumber = formatOrderNumber({
     id: input.orderId,
     order_number: input.orderNumber,
+  });
+  const customerRef = formatPublicRef({
+    id: input.orderId,
+    public_ref: input.publicRef,
   });
   const phone = (input.customerPhone ?? "").trim();
 
@@ -51,8 +61,8 @@ export async function notifyPreorderScheduled(
   }
 
   const [smsOutcome, waOutcome] = await Promise.all([
-    sendSms(phone, displayOrderNumber, input.deliveryDate),
-    sendWhatsApp(phone, displayOrderNumber, input.deliveryDate),
+    sendSms(phone, customerRef, input.deliveryDate),
+    sendWhatsApp(phone, customerRef, input.deliveryDate),
   ]);
 
   await Promise.all([
@@ -70,7 +80,7 @@ type Outcome =
 
 async function sendSms(
   phone: string,
-  orderNumber: string,
+  customerRef: string,
   date: string,
 ): Promise<Outcome> {
   const templateId = process.env[SMS_TEMPLATE_ENV] ?? "";
@@ -80,8 +90,10 @@ async function sendSms(
     );
     return { status: "skipped", reason: "template_not_configured" };
   }
+  // DLT template variable is still named ##order_number## (approved on the
+  // DLT side, renaming would need re-approval) — the VALUE is public_ref.
   const result = await sendMsg91FlowTemplate(phone, templateId, {
-    order_number: orderNumber,
+    order_number: customerRef,
     date,
   });
   if (result.ok) return { status: "sent" };
@@ -90,7 +102,7 @@ async function sendSms(
 
 async function sendWhatsApp(
   phone: string,
-  orderNumber: string,
+  customerRef: string,
   date: string,
 ): Promise<Outcome> {
   const templateName = process.env[WA_TEMPLATE_ENV] ?? "";
@@ -105,7 +117,7 @@ async function sendWhatsApp(
   // pattern (body components with { type:"text", text:<value> }). Sunny will
   // tweak once the template is approved and the placeholder order is known.
   const components = {
-    body_1: { type: "text", value: orderNumber },
+    body_1: { type: "text", value: customerRef },
     body_2: { type: "text", value: date },
   };
   const result = await sendWhatsAppTemplate(phone, templateName, { components });

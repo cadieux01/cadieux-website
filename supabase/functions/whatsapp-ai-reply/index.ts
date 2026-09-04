@@ -308,7 +308,10 @@ type StoreRow = {
 
 type OrderRow = {
   id: string;
-  order_number: string | null;
+  // order_number (OLF<n>) is deliberately NOT fetched here. This function
+  // renders straight into a customer's WhatsApp thread, so the sequential
+  // number must never be in reach.
+  public_ref: string | null;
   status: string | null;
   payment_status: string | null;
   payment_method: string | null;
@@ -376,14 +379,22 @@ function subscriptionUnitPrice(mrp: number, discountPct: number): number {
   return round2(mrp * (1 - clamped / 100));
 }
 
-// Prefer the human-facing CDX-##### assigned by the orders_assign_number
-// trigger; fall back to a short hex slice of the UUID for legacy pre-2026-07-14
-// rows that never had an order_number assigned. Kept inline (not imported from
-// the Next.js src/lib/order-number.ts) because this file is a Deno Edge
-// Function and cannot reach into the app source tree.
-function shortOrderId(row: { id: string; order_number?: string | null }): string {
-  const cdx = row.order_number?.trim();
-  if (cdx) return cdx;
+// This bot talks straight to the customer, so it must quote public_ref
+// ('CX-7K4M2P') and NEVER order_number ('OLF43'). The OLF number is
+// sequential: quoting it discloses cumulative order volume, and two
+// orders weeks apart disclose the growth rate between them. public_ref
+// is random and discloses nothing.
+//
+// Falls back to a short hex slice of the UUID, which should never fire —
+// public_ref is NOT NULL and every historical row was backfilled — but a
+// partial projection must not print "undefined" at a customer.
+//
+// Kept inline (not imported from the Next.js src/lib/order-number.ts)
+// because this file is a Deno Edge Function and cannot reach into the
+// app source tree; keep it in step with formatPublicRef() there.
+function shortOrderId(row: { id: string; public_ref?: string | null }): string {
+  const ref = row.public_ref?.trim();
+  if (ref) return ref;
   return "#" + row.id.slice(0, 6);
 }
 
@@ -593,7 +604,7 @@ async function fetchCustomerContext(
       const { data: ords, error: oErr } = await admin
         .from("orders")
         .select(
-          "id, order_number, status, payment_status, payment_method, items, total_amount, delivery_date, delivery_slot, delivery_address, created_at, cancelled_at, status_updated_at",
+          "id, public_ref, status, payment_status, payment_method, items, total_amount, delivery_date, delivery_slot, delivery_address, created_at, cancelled_at, status_updated_at",
         )
         .in("customer_id", customerIds)
         .order("created_at", { ascending: false })

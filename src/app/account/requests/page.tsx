@@ -12,7 +12,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-import { formatOrderNumber } from "@/lib/order-number";
+import { formatPublicRef } from "@/lib/order-number";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -32,7 +32,9 @@ type OrderChangeRequest = {
   resolved_at: string | null;
   order: {
     id: string;
-    order_number: string | null;
+    /** Customer-facing reference. The internal OLF number is deliberately
+     *  not declared here so it can never be rendered by accident. */
+    public_ref: string | null;
     status: string;
     total_amount: number;
     delivery_date: string | null;
@@ -56,7 +58,7 @@ type SubscriptionChangeRequest = {
 
 type PaymentRow = {
   order_id: string;
-  order_number: string | null;
+  public_ref: string | null;
   status: string;
   total_amount: number;
   payment_status: string | null;
@@ -482,9 +484,9 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
             }}
           >
             Order{" "}
-            {formatOrderNumber({
+            {formatPublicRef({
               id: cr.order_id,
-              order_number: cr.order?.order_number ?? null,
+              public_ref: cr.order?.public_ref ?? null,
             })}
           </Link>
         </div>
@@ -694,7 +696,7 @@ function PaymentCard({ p }: { p: PaymentRow }) {
             textDecoration: "none",
           }}
         >
-          Order {formatOrderNumber({ id: p.order_id, order_number: p.order_number })}
+          Order {formatPublicRef({ id: p.order_id, public_ref: p.public_ref })}
         </Link>
         <StatusBadge status={label} />
       </div>

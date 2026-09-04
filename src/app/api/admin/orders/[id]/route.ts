@@ -89,7 +89,7 @@ export async function GET(
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, order_number, customer_id, total_amount, delivery_fee, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, razorpay_order_id, razorpay_payment_id, paid_at, status_updated_at, cancelled_at, cancellation_reason, refund_status, refund_id, refunded_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, customers(id, full_name, phone, email, city)",
+      "id, order_number, public_ref, customer_id, total_amount, delivery_fee, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, razorpay_order_id, razorpay_payment_id, paid_at, status_updated_at, cancelled_at, cancellation_reason, refund_status, refund_id, refunded_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, customers(id, full_name, phone, email, city)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -220,7 +220,7 @@ export async function PATCH(
     .update(update)
     .eq("id", params.id)
     .select(
-      "id, customer_id, order_number, status, payment_status, razorpay_payment_id, refund_status, refund_id, total_amount",
+      "id, customer_id, order_number, public_ref, status, payment_status, razorpay_payment_id, refund_status, refund_id, total_amount",
     )
     .maybeSingle();
 
@@ -371,6 +371,7 @@ export async function PATCH(
           req,
           orderId: params.id,
           orderNumber: (updated as { order_number?: string | null }).order_number ?? null,
+          publicRef: (updated as { public_ref?: string | null }).public_ref ?? null,
           customerPhone: cust?.phone ?? null,
           deliveryDate: update.delivery_date as string,
         });

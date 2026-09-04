@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
-import { loadMyRequests } from "@/lib/my-requests";
+import { loadMyRequests, stripInternalOrderNumbers } from "@/lib/my-requests";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     // by phone before returning an empty payload.
     try {
       const payload = await loadMyRequests(supabaseAdmin, "", phoneLocal);
-      return NextResponse.json({ ok: true, ...payload });
+      return NextResponse.json({ ok: true, ...stripInternalOrderNumbers(payload) });
     } catch {
       return NextResponse.json({
         ok: true,
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const payload = await loadMyRequests(supabaseAdmin, customer.id, phoneLocal);
-    return NextResponse.json({ ok: true, ...payload });
+    return NextResponse.json({ ok: true, ...stripInternalOrderNumbers(payload) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[my-requests] load failed:", message);

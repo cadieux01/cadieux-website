@@ -17,8 +17,10 @@
 export type OrderPlacedInput = {
   name: string | null | undefined;
   orderId: string;
-  /** Human OLF number preferred; falls back to a UUID slice for display. */
-  orderNumber?: string | null;
+  /** Customer-facing reference (`orders.public_ref`, e.g. 'CX-7K4M2P').
+   *  NEVER the OLF number — that is internal and leaks order volume.
+   *  Falls back to a UUID slice for display if somehow absent. */
+  publicRef?: string | null;
   total: number | string;
   address: string;
   /** Adds the "date TBD, we'll confirm" closing when true. */
@@ -34,16 +36,16 @@ export function orderTrackingUrl(siteUrl: string, orderId: string): string {
   return `${base}/orders/${orderId}`;
 }
 
-/** OLF number (preferred) → falls back to a UUID hex slice. */
-function orderLabel(orderId: string, orderNumber?: string | null): string {
-  const n = (orderNumber ?? "").trim();
-  if (n) return n;
+/** public_ref (preferred) → falls back to a UUID hex slice. */
+function orderLabel(orderId: string, publicRef?: string | null): string {
+  const r = (publicRef ?? "").trim();
+  if (r) return r;
   return "#" + orderId.slice(0, 8).toUpperCase();
 }
 
 export function buildOrderPlacedSms(input: OrderPlacedInput): string {
   const name = (input.name ?? "").trim() || "Customer";
-  const label = orderLabel(input.orderId, input.orderNumber);
+  const label = orderLabel(input.orderId, input.publicRef);
   const closing = input.preorder
     ? "This is a pre-order. We will confirm your delivery date by SMS + WhatsApp shortly. Thank you!"
     : "We will confirm shortly. Thank you!";
@@ -59,7 +61,7 @@ export function buildOrderPlacedSms(input: OrderPlacedInput): string {
 
 export function buildOrderPlacedWhatsApp(input: OrderPlacedInput): string {
   const name = (input.name ?? "").trim() || "there";
-  const label = orderLabel(input.orderId, input.orderNumber);
+  const label = orderLabel(input.orderId, input.publicRef);
   const closing = input.preorder
     ? `This is a pre-order — we will confirm your delivery date by SMS + WhatsApp shortly. Thank you for choosing Cadieux!`
     : `We will confirm your order shortly. Thank you for choosing Cadieux!`;

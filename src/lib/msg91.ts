@@ -91,7 +91,12 @@ export async function sendOtpSms(phone: string, otp: string): Promise<Result> {
 // `variables` is spread into the recipient object alongside `mobiles`, so
 // each key must match a `##<name>##` placeholder in the approved template.
 // Example: template with `##order_number##` + `##date##` → pass
-// `{ order_number: "OLF123", date: "2026-09-01" }`.
+// `{ order_number: "CX-7K4M2P", date: "2026-09-01" }`.
+//
+// NOTE the placeholder NAME is `order_number` because that is what was
+// approved on the DLT side and cannot be changed — but the VALUE must be
+// `orders.public_ref`, never `orders.order_number`. The OLF number is
+// sequential and would disclose our order volume to the recipient.
 
 /** Send a self-generated MSG91 Flow template. Returns tagged result — never
  *  throws. Caller supplies the template id (from env) + variable map. */

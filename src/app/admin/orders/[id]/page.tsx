@@ -29,7 +29,7 @@ import type {
   AdminOrderRow,
 } from "@/lib/admin-shared";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
-import { formatOrderNumber } from "@/lib/order-number";
+import { formatOrderNumber, formatPublicRef } from "@/lib/order-number";
 
 type OrderResponse = { order: AdminOrderRow };
 
@@ -228,6 +228,12 @@ export default function AdminOrderDetailPage({
           >
             <div style={{ minWidth: 0 }}>
               <div style={orderNumber}>{formatOrderNumber(order)}</div>
+              {/* The customer only ever sees this reference — in their SMS,
+                  WhatsApp and on the tracking page. Show it here so a
+                  phoned-in "CX-7K4M2P" maps to the OLF number above. */}
+              <div style={mutedLine}>
+                Customer ref {formatPublicRef(order)}
+              </div>
               <div style={mutedLine}>
                 Placed {formatDateTime(order.created_at)}
               </div>

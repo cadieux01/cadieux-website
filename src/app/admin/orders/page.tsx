@@ -257,7 +257,22 @@ function OrdersPageInner() {
         if (!q) return true;
         const name = (o.customers?.full_name ?? "").toLowerCase();
         const phone = (o.customers?.phone ?? "").toLowerCase();
-        return name.includes(q) || phone.includes(q);
+        // Match either reference. A customer only ever knows public_ref
+        // ("CX-7K4M2P") and will often read it out without the prefix or
+        // the hyphen, so compare on a stripped form too. order_number
+        // ("OLF43", or legacy "CDX-00006") is on the bag, so ops search
+        // that directly.
+        const ref = (o.public_ref ?? "").toLowerCase();
+        const olf = (o.order_number ?? "").toLowerCase();
+        const bareRef = ref.replace(/^cx-/, "");
+        const bareQ = q.replace(/^cx-?/, "").replace(/-/g, "");
+        return (
+          name.includes(q) ||
+          phone.includes(q) ||
+          ref.includes(q) ||
+          olf.includes(q) ||
+          (bareQ.length > 0 && bareRef.includes(bareQ))
+        );
       })
       .sort((a, b) => {
         if (sort === "delivery_asc") {
@@ -509,7 +524,7 @@ function OrdersPageInner() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search name or phone"
+          placeholder="Search name, phone, OLF or CX ref"
           className="px-3 py-2 bg-transparent outline-none"
           style={{
             border: "1px solid rgba(251,243,212,0.3)",

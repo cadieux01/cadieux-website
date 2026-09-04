@@ -143,8 +143,10 @@ export const SendSmsSchema = z
     name: boundedText(80).optional(),
     type: z.enum(["order_placed", "status_change", "customer_edit"]),
     orderId: boundedText(64).optional(),
-    // Human-facing OLF number (e.g. 'OLF7'). When supplied it replaces
-    // the UUID-slice fallback that used to be embedded in every SMS body.
+    // Customer-facing reference (orders.public_ref, e.g. 'CX-7K4M2P').
+    // When supplied it replaces the UUID-slice fallback that used to be
+    // embedded in every SMS body. Field name kept for wire compatibility
+    // (.strict() rejects unknown keys) — the OLF number never goes here.
     orderNumber: boundedText(64).optional(),
     total: z.number().nonnegative().max(10_000_000).optional(),
     address: boundedText(500).optional(),

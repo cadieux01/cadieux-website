@@ -92,6 +92,11 @@ export type AdminOrderRow = {
    *  DB trigger public.tg_orders_assign_number. Nullable for legacy rows
    *  created before the trigger existed. Render via formatOrderNumber(). */
   order_number?: string | null;
+  /** Customer-facing reference ('CX-7K4M2P'), assigned by the same
+   *  trigger but drawn at random — it encodes no order volume. Admin
+   *  shows it ALONGSIDE order_number so a customer who reads out their
+   *  reference can be matched to the OLF number on the bag. */
+  public_ref?: string | null;
   customer_id: string | null;
   total_amount: number | null;
   delivery_fee?: number | null;

@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, order_number, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, customers(id, full_name, phone, city)"
+      "id, order_number, public_ref, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, customers(id, full_name, phone, city)"
     )
     .order("created_at", { ascending: false });
 
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
     .insert(insertRow)
-    .select("id, order_number, customer_id, total_amount, status, payment_status")
+    .select("id, order_number, public_ref, customer_id, total_amount, status, payment_status")
     .single();
 
   if (orderErr || !order) {
@@ -267,7 +267,8 @@ export async function POST(req: NextRequest) {
         phone: phoneLocal,
         name: fullName,
         orderId: order.id,
-        orderNumber: order.order_number,
+        // Customer-facing reference, not the OLF number (see order-number.ts).
+        orderNumber: order.public_ref,
         total: prepared.grandTotal,
         address: prepared.deliveryAddress,
         preorder: prepared.isPreorder,
@@ -280,7 +281,7 @@ export async function POST(req: NextRequest) {
   const waMessage = buildOrderPlacedWhatsApp({
     name: fullName,
     orderId: order.id,
-    orderNumber: order.order_number,
+    publicRef: order.public_ref,
     total: prepared.grandTotal,
     address: prepared.deliveryAddress,
     preorder: prepared.isPreorder,

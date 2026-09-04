@@ -162,7 +162,9 @@ export async function GET(req: NextRequest) {
   const [ordersRes, subsRes] = await Promise.all([
     supabaseAdmin
       .from("orders")
-      .select("id, order_number, total_amount, delivery_address, status, created_at, delivery_date, is_preorder, scheduled_delivery_date_at, fulfillment_type")
+      // No order_number: this list is returned straight to the browser.
+      // The OLF number is sequential and would disclose order volume.
+      .select("id, public_ref, total_amount, delivery_address, status, created_at, delivery_date, is_preorder, scheduled_delivery_date_at, fulfillment_type")
       .eq("customer_id", customer.id)
       .order("created_at", { ascending: false }),
     supabaseAdmin
@@ -269,7 +271,7 @@ export async function POST(req: NextRequest) {
         payment_method: "cod",
         payment_status: "pending",
       })
-      .select("id, order_number")
+      .select("id, public_ref")
       .single();
 
     if (error) {
@@ -285,10 +287,11 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({
       order_id: order.id,
-      // Human-facing OLF-prefixed number assigned by the DB trigger. Used
-      // by the checkout success page + SMS/WA confirmations. Nullable for
-      // safety though the trigger always assigns.
-      order_number: order.order_number,
+      // Customer-facing reference (CX-XXXXXX). This is the label that goes
+      // into the SMS + WhatsApp confirmations and onto the tracking page.
+      // The internal OLF number is NOT returned — a browser receives this
+      // response, and OLF<n> is sequential enough to disclose order volume.
+      public_ref: order.public_ref,
       total_amount: prepared.grandTotal,
     });
     // Re-issue the verified-phone cookie so the post-checkout redirect to

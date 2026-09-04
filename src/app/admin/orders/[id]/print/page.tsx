@@ -25,7 +25,7 @@ import type {
   AdminOrderItemSnapshot,
   AdminOrderRow,
 } from "@/lib/admin-shared";
-import { formatOrderNumber } from "@/lib/order-number";
+import { formatOrderNumber, formatPublicRef } from "@/lib/order-number";
 
 type OrderResponse = { order: AdminOrderRow };
 
@@ -192,6 +192,12 @@ export default function PrintOrderReceiptPage({
         <div>
           <div style={metaLabel}>Order</div>
           <div style={metaValue}>{formatOrderId(order)}</div>
+        </div>
+        <div>
+          {/* The only reference the customer knows — printed so the slip
+              can be matched to a phoned-in enquiry. */}
+          <div style={metaLabel}>Customer ref</div>
+          <div style={metaValue}>{formatPublicRef(order)}</div>
         </div>
         <div>
           <div style={metaLabel}>Placed</div>

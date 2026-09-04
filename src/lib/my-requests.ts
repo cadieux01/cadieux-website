@@ -28,7 +28,11 @@ export type OrderChangeRequestRow = {
   resolved_at: string | null;
   order: {
     id: string;
-    order_number: string | null;
+    /** Internal OLF number. Present for the mobile app only — the web
+     *  route strips it via stripInternalOrderNumbers(). Never render it. */
+    order_number?: string | null;
+    /** Customer-facing reference — render this, not order_number. */
+    public_ref: string | null;
     status: string;
     total_amount: number;
     delivery_date: string | null;
@@ -52,7 +56,11 @@ export type SubscriptionChangeRequestRow = {
 
 export type PaymentRow = {
   order_id: string;
-  order_number: string | null;
+  /** Internal OLF number. Present for the mobile app only — the web
+   *  route strips it via stripInternalOrderNumbers(). Never render it. */
+  order_number?: string | null;
+  /** Customer-facing reference — render this, not order_number. */
+  public_ref: string | null;
   status: string;
   total_amount: number;
   payment_status: string | null;
@@ -86,6 +94,33 @@ export type MyRequestsPayload = {
 };
 
 /**
+ * Drop the internal OLF number from a payload bound for a browser.
+ *
+ * OLF<n> is sequential, so returning it would disclose cumulative order
+ * volume to anyone who opens devtools on their own order. The web route
+ * calls this; the mobile route does NOT, because the shipped app still
+ * renders order_number (see api/mobile/checkout).
+ */
+export function stripInternalOrderNumbers(
+  payload: MyRequestsPayload,
+): MyRequestsPayload {
+  return {
+    ...payload,
+    order_change_requests: payload.order_change_requests.map((r) => {
+      if (!r.order) return r;
+      const { order_number: _drop, ...order } = r.order;
+      void _drop;
+      return { ...r, order };
+    }),
+    payments: payload.payments.map((p) => {
+      const { order_number: _drop, ...rest } = p;
+      void _drop;
+      return rest;
+    }),
+  };
+}
+
+/**
  * Load the aggregated "Your Requests" payload for a single verified customer.
  *
  * Caller MUST already have authenticated the customer (cookie / bearer) and
@@ -102,7 +137,7 @@ export async function loadMyRequests(
   const { data: orders, error: ordersErr } = await supabase
     .from("orders")
     .select(
-      "id, order_number, status, total_amount, delivery_date, delivery_slot, delivery_address, payment_status, payment_method, paid_at, razorpay_payment_id, created_at",
+      "id, order_number, public_ref, status, total_amount, delivery_date, delivery_slot, delivery_address, payment_status, payment_method, paid_at, razorpay_payment_id, created_at",
     )
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
@@ -138,6 +173,7 @@ export async function loadMyRequests(
           ? {
               id: o.id,
               order_number: (o as { order_number?: string | null }).order_number ?? null,
+              public_ref: (o as { public_ref?: string | null }).public_ref ?? null,
               status: o.status,
               total_amount: Number(o.total_amount ?? 0),
               delivery_date: o.delivery_date ?? null,
@@ -169,6 +205,7 @@ export async function loadMyRequests(
   const payments: PaymentRow[] = orderRows.map((o) => ({
     order_id: o.id,
     order_number: (o as { order_number?: string | null }).order_number ?? null,
+    public_ref: (o as { public_ref?: string | null }).public_ref ?? null,
     status: o.status,
     total_amount: Number(o.total_amount ?? 0),
     payment_status: o.payment_status ?? null,
