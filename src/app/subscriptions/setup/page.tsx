@@ -25,6 +25,10 @@ import { bookableSlots } from "@/lib/delivery-slots";
 import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 import Select from "@/components/ui/Select";
 import { usePreorderMode } from "@/hooks/usePreorderMode";
+import {
+  MIN_SUBSCRIPTION_DAYS_PER_WEEK,
+  distinctWeekdaysFromDates,
+} from "@/lib/subscription-min-days";
 
 const BG = "#C0C8CE";
 const GOLD = "#024628";
@@ -104,7 +108,16 @@ export default function SetupPage() {
     if (preorderMode && step === 1) return false;
     switch (step) {
       case 1: return totalUnitsPerDelivery(state) >= MIN_UNITS_PER_DELIVERY;
-      case 2: return state.selectedDates.length >= 1;
+      case 2:
+        // Subscription rule: ≥2 DISTINCT weekdays across the picked
+        // dates. Multiple dates on the same weekday still count as one
+        // day (server enforces the same). One day = single order, not
+        // a subscription.
+        return (
+          state.selectedDates.length >= 1 &&
+          distinctWeekdaysFromDates(state.selectedDates) >=
+            MIN_SUBSCRIPTION_DAYS_PER_WEEK
+        );
       case 3: {
         const rows = listWeekDayRows(state);
         return rows.length > 0 && rows.every((r) => Boolean(state.slotByDate[r.date_iso]));
@@ -282,7 +295,10 @@ function NavRow({
   onNext: () => void;
   finalLabel: string;
 }) {
-  const nextTooltip = step === 2 && !canNext ? "Pick at least one delivery date" : "";
+  const nextTooltip =
+    step === 2 && !canNext
+      ? `A subscription needs ${MIN_SUBSCRIPTION_DAYS_PER_WEEK}+ delivery days per week. For a single day, place a one-time order instead.`
+      : "";
   return (
     <div
       style={{
@@ -493,16 +509,46 @@ function Step2Dates({
   deliveriesCount: number;
   totalAmount: number;
 }) {
+  // Live count of DISTINCT weekdays so we can render a helper line under
+  // the copy explaining why "Next" stays disabled with only one weekday
+  // selected. Matches the server-side rule enforced on all 3 endpoints.
+  const distinctWeekdays = distinctWeekdaysFromDates(selectedDates);
+  const needsMoreWeekdays =
+    selectedDates.length > 0 &&
+    distinctWeekdays < MIN_SUBSCRIPTION_DAYS_PER_WEEK;
   return (
     <section>
       <StepTitle>Choose your delivery dates</StepTitle>
       <p style={{ color: FADED, fontSize: 16, marginTop: -6, marginBottom: 6 }}>
         Pick any dates that work for you. We&apos;ll deliver fresh on each.
       </p>
-      <p style={{ color: FADED, fontSize: 16, marginTop: 0, marginBottom: 18 }}>
+      <p style={{ color: FADED, fontSize: 16, marginTop: 0, marginBottom: 6 }}>
         We bake fresh for you — please pick a delivery time at least 6 hours
         from now so your loaf comes straight from the oven.
       </p>
+      <p style={{ color: FADED, fontSize: 14, marginTop: 0, marginBottom: 18 }}>
+        A subscription needs {MIN_SUBSCRIPTION_DAYS_PER_WEEK}+ delivery days
+        per week (that&apos;s how the 10% subscription price applies). For a
+        single day, place a one-time order instead.
+      </p>
+      {needsMoreWeekdays ? (
+        <p
+          role="status"
+          style={{
+            color: TEXT,
+            fontSize: 14,
+            marginTop: 0,
+            marginBottom: 18,
+            padding: "10px 14px",
+            border: `1px solid ${FAINT}`,
+            borderRadius: 12,
+            background: "rgba(2,70,40,0.05)",
+          }}
+        >
+          Add at least one more weekday — right now you&apos;ve picked{" "}
+          {distinctWeekdays} of {MIN_SUBSCRIPTION_DAYS_PER_WEEK} required.
+        </p>
+      ) : null}
       <DateCalendar
         selectedDates={selectedDates}
         onToggleDate={onToggleDate}

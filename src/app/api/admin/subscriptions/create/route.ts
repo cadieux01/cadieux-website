@@ -58,6 +58,11 @@ import {
   type SubscriptionDeliveryRow,
   type SubscriptionSnapItem,
 } from "@/lib/subscription-checkout";
+import {
+  hasMinSubscriptionDays,
+  MIN_DAYS_ERROR_CODE,
+  MIN_DAYS_ERROR_MESSAGE,
+} from "@/lib/subscription-min-days";
 
 // Client-supplied delivery row shape — mirrors /api/checkout's
 // ClientDelivery type (see route.ts:317-324). `slot` may be null when a
@@ -172,6 +177,17 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+  }
+
+  // Subscription-vs-single-order gate — applied AFTER both branches so
+  // it catches the client-deliveries and legacy uniform-days shapes.
+  // A single delivery day is a one-time order, not a subscription;
+  // the 10% subscription discount only applies when this rule is met.
+  if (!hasMinSubscriptionDays(dayKeys)) {
+    return NextResponse.json(
+      { error: MIN_DAYS_ERROR_MESSAGE, code: MIN_DAYS_ERROR_CODE },
+      { status: 400 },
+    );
   }
 
   // 4. Slot bundle. Mirrors the checkout route: `slot` used only when

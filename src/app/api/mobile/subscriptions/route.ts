@@ -42,6 +42,11 @@ import {
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 import { getPreorderMode } from "@/lib/preorderMode";
 import { BOOKING_LEAD_MINUTES } from "@/lib/delivery-slots";
+import {
+  MIN_SUBSCRIPTION_DAYS_PER_WEEK,
+  MIN_DAYS_ERROR_CODE,
+  MIN_DAYS_ERROR_MESSAGE,
+} from "@/lib/subscription-min-days";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -315,6 +320,18 @@ function validatePatternShape(
     weekdaysSet.add(w as number);
   }
   const weekdays = Array.from(weekdaysSet).sort((a, b) => a - b);
+
+  // Subscription-vs-single-order gate: a subscription must span ≥ N
+  // distinct weekdays. Distinct-set size is what matters (0..6 integers
+  // already dedupe'd above).
+  if (weekdaysSet.size < MIN_SUBSCRIPTION_DAYS_PER_WEEK) {
+    return {
+      ok: false,
+      status: 400,
+      error: MIN_DAYS_ERROR_MESSAGE,
+      code: MIN_DAYS_ERROR_CODE,
+    };
+  }
 
   // weeks — integer 1..26
   if (
@@ -760,6 +777,10 @@ async function handleMultiVariant(
   const daysSorted = Array.from(distinctKeys).sort(
     (a, b) => DAY_KEYS.indexOf(a) - DAY_KEYS.indexOf(b),
   );
+  // Multi-variant calendar path: same ≥N-distinct-weekdays rule.
+  if (daysSorted.length < MIN_SUBSCRIPTION_DAYS_PER_WEEK) {
+    return fail(400, MIN_DAYS_ERROR_MESSAGE, MIN_DAYS_ERROR_CODE);
+  }
   const deliveryRowsTemplate: Omit<DeliveryRow, "subscription_id">[] =
     deliveries.map((item, i) => {
       const dt = parseLocalDate(item.date)!;
@@ -1125,6 +1146,11 @@ export async function POST(req: NextRequest) {
     const daysSorted = Array.from(distinctKeys).sort(
       (a, b) => DAY_KEYS.indexOf(a) - DAY_KEYS.indexOf(b),
     );
+    // Calendar mode: enforce the same ≥N-distinct-weekdays rule as pattern
+    // mode. Multiple dates on the SAME weekday still count as one day.
+    if (daysSorted.length < MIN_SUBSCRIPTION_DAYS_PER_WEEK) {
+      return fail(400, MIN_DAYS_ERROR_MESSAGE, MIN_DAYS_ERROR_CODE);
+    }
 
     deliveryRowsTemplate = body.deliveries.map((item, i) => {
       const dt = parseLocalDate(item.date)!;

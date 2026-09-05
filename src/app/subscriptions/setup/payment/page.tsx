@@ -20,6 +20,10 @@ import {
   type SetupState,
   type WizardProduct,
 } from "@/lib/subscription-setup";
+import {
+  MIN_SUBSCRIPTION_DAYS_PER_WEEK,
+  distinctWeekdaysFromDates,
+} from "@/lib/subscription-min-days";
 
 const BG = "#C0C8CE";
 const GOLD = "#024628";
@@ -47,7 +51,15 @@ export default function PaymentPage() {
     setHydrated(true);
     const s = loadSetupState();
     const a = loadAddress();
-    if (totalUnitsPerDelivery(s) < MIN_UNITS_PER_DELIVERY || s.selectedDates.length === 0) {
+    // Backstop: kick back to the wizard if stale localStorage state
+    // fails the units-per-delivery, dates-picked, OR ≥N-distinct-weekdays
+    // gate. The server rejects the same shape, but redirecting is a
+    // friendlier fail before the network round-trip.
+    if (
+      totalUnitsPerDelivery(s) < MIN_UNITS_PER_DELIVERY ||
+      s.selectedDates.length === 0 ||
+      distinctWeekdaysFromDates(s.selectedDates) < MIN_SUBSCRIPTION_DAYS_PER_WEEK
+    ) {
       router.replace("/subscriptions/setup");
       return;
     }

@@ -23,6 +23,11 @@ import {
   buildMultiVariantSubscriptionInsert,
   insertMultiVariantSubscription,
 } from "@/lib/subscription-checkout";
+import {
+  hasMinSubscriptionDays,
+  MIN_DAYS_ERROR_CODE,
+  MIN_DAYS_ERROR_MESSAGE,
+} from "@/lib/subscription-min-days";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -386,6 +391,15 @@ export async function POST(req: NextRequest) {
       .filter((d): d is DayKey => (DAY_KEYS as readonly string[]).includes(d));
     if (dayKeys.length === 0) {
       return NextResponse.json({ error: "No valid delivery days." }, { status: 400 });
+    }
+    // A subscription must span ≥2 distinct weekdays; a single day is a
+    // one-time order at full price. Enforced server-side on every path
+    // via the shared helper so the discount can never leak to 1-day plans.
+    if (!hasMinSubscriptionDays(dayKeys)) {
+      return NextResponse.json(
+        { error: MIN_DAYS_ERROR_MESSAGE, code: MIN_DAYS_ERROR_CODE },
+        { status: 400 },
+      );
     }
 
     // Build the new-tracking-model address blob (jsonb) from the legacy flat fields.
