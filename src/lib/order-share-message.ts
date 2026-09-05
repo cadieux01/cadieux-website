@@ -6,15 +6,33 @@
 import { formatOrderNumber } from "@/lib/order-number";
 import type { AdminOrderRow, AdminOrderItemSnapshot } from "@/lib/admin-shared";
 
-/** Sum of item quantities (respecting both `quantity` and legacy `qty`). */
-function totalUnits(items: AdminOrderItemSnapshot[] | null | undefined): number {
-  if (!items || items.length === 0) return 0;
-  let sum = 0;
-  for (const it of items) {
-    const q = Number(it.quantity ?? it.qty ?? 0);
-    if (Number.isFinite(q)) sum += q;
-  }
-  return sum;
+/** Quantity for one line, respecting both `quantity` and legacy `qty`. */
+function lineQty(it: AdminOrderItemSnapshot): number {
+  const q = Number(it.quantity ?? it.qty ?? 0);
+  return Number.isFinite(q) ? q : 0;
+}
+
+/**
+ * Short variant name for a rider, e.g. "Protein Bread — Multigrain" →
+ * "Multigrain". Every stored name so far is "<product> — <variant>"; if a
+ * name has no em dash we fall back to the whole thing rather than guess.
+ */
+function variantLabel(name: string | null | undefined): string {
+  const full = String(name ?? "").trim();
+  if (!full) return "Item";
+  const parts = full.split("—");
+  const tail = parts[parts.length - 1].trim();
+  return tail || full;
+}
+
+/**
+ * One "- Multigrain x2" line per item. This is the whole point of the
+ * message: a rider holding two bags needs to know WHICH breads, not just
+ * that there are two of them.
+ */
+function itemLines(items: AdminOrderItemSnapshot[] | null | undefined): string[] {
+  if (!items || items.length === 0) return [];
+  return items.map((it) => `- ${variantLabel(it.name)} x${lineQty(it)}`);
 }
 
 function formatINR(paise: number | null | undefined): string {
@@ -48,7 +66,7 @@ export function composeShareMessage(order: AdminOrderRow): string {
   const customerName = order.customers?.full_name?.trim() || "Customer";
   const customerPhone = order.customers?.phone?.trim() || "—";
 
-  const units = totalUnits(order.items);
+  const products = itemLines(order.items);
   const totalStr = formatINR(order.total_amount);
 
   const paid = order.payment_status === "paid";
@@ -83,7 +101,7 @@ export function composeShareMessage(order: AdminOrderRow): string {
     `Cadieux delivery — ${orderLabel}`,
     `Customer: ${customerName}`,
     `Phone: ${customerPhone}`,
-    `Units: ${units}`,
+    products.length > 0 ? `Items:\n${products.join("\n")}` : "Items: —",
     `Total: ${totalStr}`,
     paymentLine,
     `Delivery: ${deliveryLine}`,

@@ -58,6 +58,13 @@ import { isShareable } from "@/lib/order-share-message";
 
 type SortKey = "created_desc" | "delivery_asc";
 
+/** "out_for_delivery" → "Out for delivery"; "all" → "All statuses". */
+function statusFilterLabel(v: OrderFilterValue): string {
+  if (v === "all") return "All statuses";
+  const words = v.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 const NEXT_STATUS_DELIVERY: Record<string, OrderStatus | null> = {
   pending_payment: "confirmed",
   placed: "confirmed",
@@ -304,8 +311,8 @@ function OrdersPageInner() {
       });
   }, [orders, filter, query, sort, range]);
 
-  // Counts are scoped to the active date range so the chip badges
-  // match the rows the operator is actually looking at.
+  // Counts are scoped to the active date range so the numbers in the
+  // Status dropdown match the rows the operator is actually looking at.
   const counts = useMemo(() => {
     const inRange = orders.filter((o) => withinDateRange(o.created_at, range));
     const c: Record<string, number> = { all: inRange.length };
@@ -503,33 +510,21 @@ function OrdersPageInner() {
         <DateRangeDropdown onChange={setRange} />
       </div>
 
-      {/* Status filters */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {ORDER_FILTER_VALUES.map((v) => {
-          const count = counts[v] ?? 0;
-          const active = v === filter;
-          return (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setFilter(v)}
-              className="uppercase"
-              style={{
-                ...chipBase,
-                color: active ? "#1D1D1F" : "rgba(251,243,212,0.85)",
-                background: active ? "#FBF3D4" : "transparent",
-                borderColor: active ? "#FBF3D4" : "rgba(251,243,212,0.4)",
-              }}
-            >
-              {v.replace(/_/g, " ")}
-              <span style={{ marginLeft: 8, opacity: 0.7 }}>{count}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Search + sort */}
+      {/* Status filter + search + sort */}
       <div className="flex flex-wrap gap-3 items-center mb-6">
+        {/* One dropdown instead of 11 wrapping chips. Same filter values,
+            same live counts (range-scoped) — just folded into the label. */}
+        <div style={{ minWidth: 230 }}>
+          <Select
+            value={filter}
+            onChange={(v) => setFilter(v as OrderFilterValue)}
+            ariaLabel="Filter orders by status"
+            options={ORDER_FILTER_VALUES.map((v) => ({
+              value: v,
+              label: `${statusFilterLabel(v)} (${counts[v] ?? 0})`,
+            }))}
+          />
+        </div>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}

@@ -88,8 +88,13 @@ export async function GET(req: NextRequest) {
 //
 // Serviceability override (`serviceabilityOverride: true`): skips ONLY
 // the pincode + >20km gates in prepareOneTimeOrder. Every other gate —
-// price, date, slot, item shape, phone-match — stays hard. See
+// price, slot shape, item shape, phone-match — stays hard. See
 // PrepareOptions.skipServiceability in src/lib/order-checkout.ts.
+//
+// Back-dating: full-admin callers also get PrepareOptions.allowAnyDeliveryDate,
+// so a delivery date in the past (and a slot inside the 6 h lead) is accepted
+// — that is how an operator records an order that already happened. Team-PIN
+// callers do NOT get it and keep the public booking rules.
 //
 // Nothing on the PUBLIC checkout path is touched; the override flag is
 // only ever set here, on an isAdmin()-gated endpoint.
@@ -193,6 +198,10 @@ export async function POST(req: NextRequest) {
   const bodyForPrep = { ...body, customer_id: customerId } as Record<string, unknown>;
   const prep = await prepareOneTimeOrder(bodyForPrep, req, supabaseAdmin, {
     skipServiceability: serviceabilityOverride,
+    // Full admin only: allows recording an order that already happened
+    // (past delivery date, no 6 h lead). Team-PIN callers keep the public
+    // booking rules — same split as serviceability_override above.
+    allowAnyDeliveryDate: !isTeam,
   });
   if (!prep.ok) {
     return NextResponse.json(prep.body, { status: prep.status });

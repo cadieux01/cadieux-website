@@ -28,6 +28,7 @@ import {
   TeamOrderFetchError,
 } from "@/lib/team-order-client";
 import {
+  SLOTS,
   bookableSlots,
   dateLabel,
   formatSlotForDisplay,
@@ -166,11 +167,22 @@ export function RegisterOrderForm({
   const [items, setItems] = useState<LineItem[]>([{ slug: "", qty: "1" }]);
 
   // ── ONE-TIME: dates + slots (public helper) ────────────────────────
+  // Full admin can BACK-DATE: an order is often registered here after it
+  // has already been delivered, so the operator gets a free date field and
+  // every slot enabled. Team-PIN mode keeps the public 7-day list and the
+  // 6 h lead. The server enforces the same split via
+  // PrepareOptions.allowAnyDeliveryDate — this is UI, not the gate.
+  const canBackdate = authMode === "admin";
   const dates = useMemo(() => nextDeliveryDates(7), []);
   const [deliveryDate, setDeliveryDate] = useState<string>(dates[0] ?? "");
   const slots = useMemo(
-    () => (deliveryDate ? bookableSlots(deliveryDate) : []),
-    [deliveryDate],
+    () =>
+      deliveryDate
+        ? canBackdate
+          ? SLOTS.map((s) => ({ ...s, disabled: false }))
+          : bookableSlots(deliveryDate)
+        : [],
+    [deliveryDate, canBackdate],
   );
   const firstEnabledSlot = useMemo(
     () => slots.find((s) => !s.disabled)?.value ?? "",
@@ -851,17 +863,27 @@ export function RegisterOrderForm({
               <h2 style={sectionTitle}>Delivery schedule</h2>
               <label style={label}>
                 Delivery date
-                <select
-                  value={deliveryDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
-                  style={input}
-                >
-                  {dates.map((d) => (
-                    <option key={d} value={d}>
-                      {dateLabel(d)} ({d})
-                    </option>
-                  ))}
-                </select>
+                {canBackdate ? (
+                  // No `min` — a past date is the whole point here.
+                  <input
+                    type="date"
+                    value={deliveryDate}
+                    onChange={(e) => setDeliveryDate(e.target.value)}
+                    style={input}
+                  />
+                ) : (
+                  <select
+                    value={deliveryDate}
+                    onChange={(e) => setDeliveryDate(e.target.value)}
+                    style={input}
+                  >
+                    {dates.map((d) => (
+                      <option key={d} value={d}>
+                        {dateLabel(d)} ({d})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </label>
               <label style={label}>
                 Time slot

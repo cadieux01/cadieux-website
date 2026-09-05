@@ -21,7 +21,7 @@ import {
   isAcceptableDeliveryDate,
   isAcceptableDeliverySlot,
 } from "@/lib/order-delivery";
-import { validateBookingSlot } from "@/lib/delivery-slots";
+import { isIsoDate, validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import { computeDeliveryFee } from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
@@ -83,6 +83,14 @@ export type PrepareOptions = {
    *  extrapolated (₹92 + (km − 10) × ₹12) so the fee still scales with
    *  distance. Admin-only. */
   skipServiceability?: boolean;
+  /** When true, accept ANY valid yyyy-mm-dd delivery date — past or
+   *  future — and skip the 6 h booking-lead gate. Set ONLY by the full-admin
+   *  manual-entry path (POST /api/admin/orders), so an operator can record
+   *  an order that already happened. The slot must still be one of the
+   *  canonical values, and every other gate (price, item shape, phone,
+   *  serviceability) is unchanged. Never set for team-PIN callers, and
+   *  nothing on the public checkout path can reach it. */
+  allowAnyDeliveryDate?: boolean;
   /** When true, the site-wide pre-order mode is ON. Skip the
    *  delivery-date + slot gates (both are optional — customers can't pick
    *  a real one yet), stamp the prepared order with is_preorder=true, and
@@ -196,11 +204,21 @@ export async function prepareOneTimeOrder(
   // entirely; delivery_date + delivery_slot are left NULL on the order row
   // and stamped later by the admin PATCH.
   if (!isPickup && !opts.preorderMode) {
-    if (!isAcceptableDeliveryDate(deliveryDate)) {
+    // Admin back-dating: any real calendar date is allowed, so we check the
+    // shape only. Public callers keep the full "today or later, and it has a
+    // bookable slot" rule.
+    const dateOk = opts.allowAnyDeliveryDate
+      ? isIsoDate(deliveryDate)
+      : isAcceptableDeliveryDate(deliveryDate);
+    if (!dateOk) {
       return {
         ok: false,
         status: 400,
-        body: { error: "Please pick a delivery date with at least one bookable slot." },
+        body: {
+          error: opts.allowAnyDeliveryDate
+            ? "Please pick a delivery date."
+            : "Please pick a delivery date with at least one bookable slot.",
+        },
       };
     }
     if (!isAcceptableDeliverySlot(deliverySlot)) {
@@ -210,9 +228,14 @@ export async function prepareOneTimeOrder(
         body: { error: "Please pick a delivery time slot." },
       };
     }
-    const slotGate = validateBookingSlot(deliveryDate, deliverySlot);
-    if (slotGate) {
-      return { ok: false, status: slotGate.status, body: { error: slotGate.error, code: slotGate.code } };
+    // The 6 h bake-and-ship lead is meaningless for an order that has
+    // already been delivered, so admin back-dating skips it. Unchanged for
+    // every public caller.
+    if (!opts.allowAnyDeliveryDate) {
+      const slotGate = validateBookingSlot(deliveryDate, deliverySlot);
+      if (slotGate) {
+        return { ok: false, status: slotGate.status, body: { error: slotGate.error, code: slotGate.code } };
+      }
     }
   }
 

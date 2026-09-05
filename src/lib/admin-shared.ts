@@ -41,8 +41,8 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
 // `pending_payment` exists at the DB level for the mobile flow but the
 // existing PATCH validator on /api/admin/orders/[id] only accepts the
-// five above. We surface it as a filter chip on /admin/orders, but
-// row-actions only show the transitions /api/admin/orders/[id] will
+// five above. We surface it as a Status-dropdown option on /admin/orders,
+// but row-actions only show the transitions /api/admin/orders/[id] will
 // actually accept.
 export const ORDER_FILTER_VALUES = [
   "all",
@@ -53,7 +53,7 @@ export const ORDER_FILTER_VALUES = [
   "out_for_delivery",
   "delivered",
   "cancelled",
-  // pickup-only stages surfaced as filter chips
+  // pickup-only stages surfaced as Status-dropdown options
   "ready_for_pickup",
   "picked_up",
   // Computed filter (NOT a stored orders.status value). Matches rows where
