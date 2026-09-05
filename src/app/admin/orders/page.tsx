@@ -3,9 +3,9 @@
 // Today's Orders — operational view used during dispatch hours.
 //
 // Reads /api/admin/orders (admin-token-gated GET) and lets the operator
-// filter by status, search by customer name/phone, sort by created_at
-// or by delivery_date, and run per-row PATCH actions that match the
-// transitions the existing /api/admin/orders/[id] endpoint accepts.
+// filter by status, search by customer name/phone, sort by status group
+// (then newest-first) or by delivery_date, and run per-row PATCH actions
+// that match the transitions /api/admin/orders/[id] accepts.
 //
 // Live columns surfaced (post the orders.delivery_date + items
 // migration): delivery_date, delivery_slot, items jsonb. Rows that
@@ -44,6 +44,7 @@ import {
   ORDER_STATUSES,
   OrderFilterValue,
   OrderStatus,
+  orderStatusRank,
 } from "@/lib/admin-shared";
 import {
   sendCustomerEditSMS,
@@ -276,6 +277,8 @@ function OrdersPageInner() {
       })
       .sort((a, b) => {
         if (sort === "delivery_asc") {
+          // Packing list — stays in pure delivery order. Status grouping is
+          // deliberately NOT applied here; it would break the run order.
           // delivery_date is YYYY-MM-DD (lex-sortable). Rows that
           // predate the migration fall back to created_at so they
           // still appear at a stable position in the queue.
@@ -291,6 +294,12 @@ function OrdersPageInner() {
           if (slotCmp !== 0) return slotCmp;
           return a.created_at.localeCompare(b.created_at);
         }
+        // "Newest first" = status group first, newest-first inside each
+        // group, so delivered and cancelled orders stop pushing live work
+        // down the page. Display only — no status is written. See
+        // orderStatusRank in lib/admin-shared for the group order.
+        const rankCmp = orderStatusRank(a) - orderStatusRank(b);
+        if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
   }, [orders, filter, query, sort, range]);
@@ -541,7 +550,7 @@ function OrdersPageInner() {
             onChange={(v) => setSort(v as SortKey)}
             ariaLabel="Sort orders"
             options={[
-              { value: "created_desc", label: "Newest first" },
+              { value: "created_desc", label: "Status, newest first" },
               { value: "delivery_asc", label: "Delivery date ↑" },
             ]}
           />

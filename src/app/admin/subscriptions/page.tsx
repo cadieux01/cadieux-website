@@ -49,6 +49,7 @@ import {
   DELIVERY_STATUS_OPTIONS,
   SUBSCRIPTION_PAYMENT_STATUSES,
   SUBSCRIPTION_STATUSES,
+  subscriptionStatusRank,
 } from "@/lib/admin-shared";
 
 type FilterValue =
@@ -262,9 +263,21 @@ function SubscriptionsPageInner() {
   }, [inRange, isExpiring]);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return inRange;
-    if (filter === "expiring_7d") return inRange.filter(isExpiring);
-    return inRange.filter((s) => s.status === filter);
+    const rows =
+      filter === "all"
+        ? inRange
+        : filter === "expiring_7d"
+          ? inRange.filter(isExpiring)
+          : inRange.filter((s) => s.status === filter);
+    // Status group first, newest-first within each group, so completed and
+    // cancelled subscriptions stop pushing live ones down the page. The API
+    // already returns created_at DESC; this re-sorts a copy. Display only —
+    // no status is written. See subscriptionStatusRank in lib/admin-shared.
+    return [...rows].sort((a, b) => {
+      const rankCmp = subscriptionStatusRank(a) - subscriptionStatusRank(b);
+      if (rankCmp !== 0) return rankCmp;
+      return b.created_at.localeCompare(a.created_at);
+    });
   }, [inRange, filter, isExpiring]);
 
   // Shared by the row's Select and its shortcut buttons, so both writes

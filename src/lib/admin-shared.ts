@@ -283,6 +283,92 @@ export const DELIVERY_STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+// ---------------------------------------------------------------------------
+// Status-group sort ranks (display only — nothing is written back).
+//
+// Admin lists sort by urgency group first, newest-first within each group, so
+// finished work stops pushing live work down the page. The group order is
+// deliberately NOT the lifecycle order: `out_for_delivery` outranks
+// `preparing` because a loaf already on a bike is the thing most likely to go
+// wrong in the next hour.
+//
+//   1  pending          — nobody has touched it yet
+//   2  in transit       — ready_for_pickup / out_for_delivery
+//   3  preparing
+//   4  confirmed
+//   4.5 UNMAPPED        — see ORDER_RANK_FALLBACK below
+//   5  finished         — delivered / picked_up
+//   6  expired          — computed, not stored
+//   7  cancelled
+// ---------------------------------------------------------------------------
+
+/** Rank for a status that is not in the map below.
+ *
+ *  Deliberately mid-table rather than last: orders.status has NO check
+ *  constraint at the DB level (verified — the only status-ish constraint on
+ *  the table is orders_refund_status_check), so an unrecognised value is
+ *  reachable. Sinking it to the bottom would hide it beneath dozens of
+ *  delivered orders; this puts it in the live-work region where it gets
+ *  noticed. */
+export const ORDER_RANK_FALLBACK = 4.5;
+
+const ORDER_STATUS_RANK: Record<string, number> = {
+  pending: 1,
+  placed: 1,
+  // Mobile-flow only, zero rows in prod. Un-actioned, and "pending" is what
+  // an operator scans for.
+  pending_payment: 1,
+  ready_for_pickup: 2,
+  out_for_delivery: 2,
+  // Pre-migration alias of out_for_delivery (see lib/order-stages toStage).
+  dispatched: 2,
+  preparing: 3,
+  confirmed: 4,
+  delivered: 5,
+  // Terminal-success twin of `delivered`. Pickup and delivery run as parallel
+  // lanes: ready_for_pickup sits with out_for_delivery at 2 because a handover
+  // still has to happen; picked_up sits with delivered at 5 because it did.
+  picked_up: 5,
+  cancelled: 7,
+};
+
+/** Sort rank for an order row. Lower sorts higher.
+ *
+ *  `expired` (rank 6) is COMPUTED, never stored — those rows carry
+ *  status='pending' in the database and would otherwise land at rank 1, at the
+ *  very top of the queue. Checked first for that reason. Reads the
+ *  server-attached computed_state so this agrees with the expired filter chip
+ *  and the row badge, which both do the same. */
+export function orderStatusRank(order: {
+  status?: string | null;
+  computed_state?: string | null;
+}): number {
+  if (order.computed_state === "expired") return 6;
+  const s = (order.status ?? "").toLowerCase();
+  return ORDER_STATUS_RANK[s] ?? ORDER_RANK_FALLBACK;
+}
+
+const SUBSCRIPTION_STATUS_RANK: Record<string, number> = {
+  pending_confirmation: 1,
+  // An active subscription is live work, so it takes the same rank as an
+  // order in transit.
+  active: 2,
+  // Dormant but not finished — sits with confirmed, above anything terminal.
+  paused: 4,
+  completed: 5,
+  cancelled: 7,
+};
+
+/** Sort rank for a subscription row. Lower sorts higher. Same scale as
+ *  orderStatusRank so the two admin lists read the same way; there is no
+ *  computed expiry for subscriptions. */
+export function subscriptionStatusRank(sub: {
+  status?: string | null;
+}): number {
+  const s = (sub.status ?? "").toLowerCase();
+  return SUBSCRIPTION_STATUS_RANK[s] ?? ORDER_RANK_FALLBACK;
+}
+
 export const SUBSCRIPTION_PAYMENT_STATUSES = [
   "pending",
   "paid",
