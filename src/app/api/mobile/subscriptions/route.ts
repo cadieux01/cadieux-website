@@ -671,6 +671,28 @@ async function handleMultiVariant(
   if (!dv.ok) return fail(dv.status, dv.error, dv.code);
   const deliveries = dv.deliveries;
 
+  // Distinct-weekday rule. This depends ONLY on the picked dates, so it is
+  // enforced here — before the per-variant price reconcile below — and not
+  // after it. Ordering matters: a client that sends a stale or MRP-based
+  // price snapshot for a single-weekday plan would otherwise be told
+  // "Price mismatch — please refresh and retry", which is both the wrong
+  // reason and unactionable, since refreshing corrects the price and then
+  // surfaces this rule anyway. The customer must hear the real rule first.
+  const distinctKeys = new Set<DayKey>();
+  for (const item of deliveries) {
+    const dt = parseLocalDate(item.date);
+    if (dt) {
+      const key = JS_WEEKDAY_TO_KEY[dt.getDay()];
+      if (key) distinctKeys.add(key);
+    }
+  }
+  const daysSorted = Array.from(distinctKeys).sort(
+    (a, b) => DAY_KEYS.indexOf(a) - DAY_KEYS.indexOf(b),
+  );
+  if (daysSorted.length < MIN_SUBSCRIPTION_DAYS_PER_WEEK) {
+    return fail(400, MIN_DAYS_ERROR_MESSAGE, MIN_DAYS_ERROR_CODE);
+  }
+
   // Items: [{ product_slug, quantity_per_delivery }].
   const rawItems = raw.items as Array<{
     product_slug?: unknown;
@@ -765,22 +787,8 @@ async function handleMultiVariant(
     }
   }
 
-  // Delivery rows from the calendar dates (one row per date).
-  const distinctKeys = new Set<DayKey>();
-  for (const item of deliveries) {
-    const dt = parseLocalDate(item.date);
-    if (dt) {
-      const key = JS_WEEKDAY_TO_KEY[dt.getDay()];
-      if (key) distinctKeys.add(key);
-    }
-  }
-  const daysSorted = Array.from(distinctKeys).sort(
-    (a, b) => DAY_KEYS.indexOf(a) - DAY_KEYS.indexOf(b),
-  );
-  // Multi-variant calendar path: same ≥N-distinct-weekdays rule.
-  if (daysSorted.length < MIN_SUBSCRIPTION_DAYS_PER_WEEK) {
-    return fail(400, MIN_DAYS_ERROR_MESSAGE, MIN_DAYS_ERROR_CODE);
-  }
+  // Delivery rows from the calendar dates (one row per date). `daysSorted`
+  // was computed and rule-checked above, before the price reconcile.
   const deliveryRowsTemplate: Omit<DeliveryRow, "subscription_id">[] =
     deliveries.map((item, i) => {
       const dt = parseLocalDate(item.date)!;
@@ -1017,6 +1025,31 @@ export async function POST(req: NextRequest) {
   }
   const { body, addressString } = shape;
 
+  // 4b. Distinct-weekday rule for calendar mode. Enforced BEFORE the price
+  //     reconcile in step 5 because it depends only on the picked dates: a
+  //     client sending a stale or MRP-based snapshot for a single-weekday
+  //     plan would otherwise get "Price mismatch — please refresh and
+  //     retry", which is the wrong reason and unactionable. Pattern mode is
+  //     already checked inside validatePatternShape, well before this point.
+  let calendarDaysSorted: DayKey[] | null = null;
+  if (body.mode !== "pattern") {
+    const distinctKeys = new Set<DayKey>();
+    for (const item of body.deliveries) {
+      const dt = parseLocalDate(item.date);
+      if (!dt) {
+        return fail(400, "Invalid delivery date.", "deliveries");
+      }
+      const key = JS_WEEKDAY_TO_KEY[dt.getDay()];
+      if (key) distinctKeys.add(key);
+    }
+    calendarDaysSorted = Array.from(distinctKeys).sort(
+      (a, b) => DAY_KEYS.indexOf(a) - DAY_KEYS.indexOf(b),
+    );
+    if (calendarDaysSorted.length < MIN_SUBSCRIPTION_DAYS_PER_WEEK) {
+      return fail(400, MIN_DAYS_ERROR_MESSAGE, MIN_DAYS_ERROR_CODE);
+    }
+  }
+
   // 5. Server-side price reconcile against the products table.
   //    Subscriptions are priced off subscription_per_loaf_inr (set per
   //    product in the admin editor) — fall back to price_inr only when
@@ -1134,23 +1167,9 @@ export async function POST(req: NextRequest) {
   } else {
     // Calendar mode — one row per picked date, with explicit HH:MM time.
     // weekdays = distinct JS-weekdays from picked dates (sorted by DAY_KEYS).
-    const distinctKeys = new Set<DayKey>();
-    for (const item of body.deliveries) {
-      const dt = parseLocalDate(item.date);
-      if (!dt) {
-        return fail(400, "Invalid delivery date.", "deliveries");
-      }
-      const key = JS_WEEKDAY_TO_KEY[dt.getDay()];
-      if (key) distinctKeys.add(key);
-    }
-    const daysSorted = Array.from(distinctKeys).sort(
-      (a, b) => DAY_KEYS.indexOf(a) - DAY_KEYS.indexOf(b),
-    );
-    // Calendar mode: enforce the same ≥N-distinct-weekdays rule as pattern
-    // mode. Multiple dates on the SAME weekday still count as one day.
-    if (daysSorted.length < MIN_SUBSCRIPTION_DAYS_PER_WEEK) {
-      return fail(400, MIN_DAYS_ERROR_MESSAGE, MIN_DAYS_ERROR_CODE);
-    }
+    // Both the date parse and the ≥N-distinct-weekdays rule were already
+    // applied in step 4b, above the price reconcile.
+    const daysSorted = calendarDaysSorted!;
 
     deliveryRowsTemplate = body.deliveries.map((item, i) => {
       const dt = parseLocalDate(item.date)!;

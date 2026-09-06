@@ -60,11 +60,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, orders: [] });
   }
 
-  // Fetch orders.
+  // Fetch orders. `public_ref` (CX-XXXXXX) is the customer-facing
+  // reference — the app renders it instead of the UUID. `order_number`
+  // (OLF<n>) is deliberately NOT projected: it is sequential and would
+  // disclose order volume. See src/lib/order-number.ts.
   const { data: orders, error: ordersErr } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, total_amount, status, status_updated_at, delivery_address, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status, payment_status, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at",
+      "id, public_ref, total_amount, status, status_updated_at, delivery_address, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status, payment_status, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at",
     )
     .eq("customer_id", customer.id)
     .order("created_at", { ascending: false })
