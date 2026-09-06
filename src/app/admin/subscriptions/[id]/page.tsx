@@ -295,15 +295,7 @@ export default function AdminSubscriptionDetailPage({
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
         formatAddressFull(resolvedAddr),
       )}`;
-  const nextDelivery =
-    deliveries.find(
-      (d) => d.status !== "delivered" && d.status !== "cancelled",
-    ) ?? null;
-  const shareMessage = composeSubscriptionShareMessage(sub, {
-    deliveryCount: deliveries.length,
-    nextDeliveryDate: nextDelivery?.scheduled_date ?? nextDelivery?.delivery_date ?? null,
-    nextDeliverySlot: nextDelivery?.scheduled_time_slot ?? nextDelivery?.slot ?? null,
-  });
+  const shareMessage = composeSubscriptionShareMessage(sub);
 
   const timeline: { label: string; at: string | null | undefined }[] = [
     { label: "Subscription created", at: sub.created_at },

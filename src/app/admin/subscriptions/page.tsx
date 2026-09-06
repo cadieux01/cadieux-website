@@ -558,9 +558,7 @@ function SubscriptionsPageInner() {
                           Open
                         </button>
                         <PartnerShareButton
-                          message={composeSubscriptionShareMessage(s, {
-                            deliveryCount: s.total_deliveries,
-                          })}
+                          message={composeSubscriptionShareMessage(s)}
                           partners={partners}
                           partnersLoading={partnersLoading}
                           partnersError={partnersError}

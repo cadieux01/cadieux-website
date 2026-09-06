@@ -55,6 +55,7 @@ import {
 import Select from "@/components/ui/Select";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isShareable } from "@/lib/order-share-message";
+import { LoafDots } from "@/components/admin/LoafDots";
 
 type SortKey = "created_desc" | "delivery_asc";
 
@@ -161,6 +162,19 @@ function OrdersPageInner() {
     resolvePreset("this_month"),
   );
 
+  // Changing a status must update the row where it sits, not teleport it.
+  // Without this, flipping Pending → Preparing moves the row from group 1
+  // to group 3 mid-click and the operator loses their place. We freeze the
+  // row's sort rank at the value it had before the edit; pins are dropped
+  // on an explicit Refresh or when the filter / sort / range changes, so
+  // the grouping re-asserts itself the next time the operator asks for it.
+  const [rankPins, setRankPins] = useState<Map<string, number>>(
+    () => new Map(),
+  );
+  const clearRankPins = useCallback(() => {
+    setRankPins((curr) => (curr.size === 0 ? curr : new Map()));
+  }, []);
+
   // Delivery partners power the per-row "Share" button. Fetched once on
   // mount (never polled — the list changes only when the operator edits
   // /admin/delivery-partners) and passed down to every OrderShareButton.
@@ -220,12 +234,13 @@ function OrdersPageInner() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    clearRankPins();
     try {
       await load();
     } finally {
       setRefreshing(false);
     }
-  }, [load]);
+  }, [load, clearRankPins]);
 
   useEffect(() => {
     void load();
@@ -247,6 +262,11 @@ function OrdersPageInner() {
     setNotice(m);
     setTimeout(() => setNotice(null), 4000);
   }, []);
+
+  const rankOf = useCallback(
+    (o: AdminOrderRow) => rankPins.get(o.id) ?? orderStatusRank(o),
+    [rankPins],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -304,12 +324,13 @@ function OrdersPageInner() {
         // "Newest first" = status group first, newest-first inside each
         // group, so delivered and cancelled orders stop pushing live work
         // down the page. Display only — no status is written. See
-        // orderStatusRank in lib/admin-shared for the group order.
-        const rankCmp = orderStatusRank(a) - orderStatusRank(b);
+        // orderStatusRank in lib/admin-shared for the group order. A pinned
+        // rank keeps a just-edited row in place (see rankPins).
+        const rankCmp = rankOf(a) - rankOf(b);
         if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [orders, filter, query, sort, range]);
+  }, [orders, filter, query, sort, range, rankOf]);
 
   // Counts are scoped to the active date range so the numbers in the
   // Status dropdown match the rows the operator is actually looking at.
@@ -396,6 +417,14 @@ function OrdersPageInner() {
 
   const patchStatus = async (order: AdminOrderRow, next: OrderStatus) => {
     setBusyId(order.id);
+    // Hold this row at its current sort rank so the badge changes under
+    // the operator's cursor instead of the row jumping to another group.
+    setRankPins((curr) => {
+      if (curr.has(order.id)) return curr;
+      const next = new Map(curr);
+      next.set(order.id, orderStatusRank(order));
+      return next;
+    });
     // Optimistic — flip the status locally and roll back on failure.
     const prev = orders;
     setOrders((curr) =>
@@ -507,7 +536,12 @@ function OrdersPageInner() {
       }
     >
       <div className="mb-4">
-        <DateRangeDropdown onChange={setRange} />
+        <DateRangeDropdown
+          onChange={(v) => {
+            clearRankPins();
+            setRange(v);
+          }}
+        />
       </div>
 
       {/* Status filter + search + sort */}
@@ -517,7 +551,10 @@ function OrdersPageInner() {
         <div style={{ minWidth: 230 }}>
           <Select
             value={filter}
-            onChange={(v) => setFilter(v as OrderFilterValue)}
+            onChange={(v) => {
+              clearRankPins();
+              setFilter(v as OrderFilterValue);
+            }}
             ariaLabel="Filter orders by status"
             options={ORDER_FILTER_VALUES.map((v) => ({
               value: v,
@@ -542,7 +579,10 @@ function OrdersPageInner() {
         <div style={{ minWidth: 190 }}>
           <Select
             value={sort}
-            onChange={(v) => setSort(v as SortKey)}
+            onChange={(v) => {
+              clearRankPins();
+              setSort(v as SortKey);
+            }}
             ariaLabel="Sort orders"
             options={[
               { value: "created_desc", label: "Status, newest first" },
@@ -710,6 +750,7 @@ function OrdersPageInner() {
                       >
                         {formatOrderNumber(o)}
                       </span>
+                      <LoafDots items={o.items} />
                     </td>
                     <td style={td}>
                       <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>

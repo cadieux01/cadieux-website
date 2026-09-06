@@ -29,7 +29,10 @@ import type {
   AdminOrderRow,
 } from "@/lib/admin-shared";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
-import { formatOrderNumber, formatPublicRef } from "@/lib/order-number";
+import { formatOrderNumber } from "@/lib/order-number";
+import { isShareable } from "@/lib/order-share-message";
+import { OrderShareButton } from "@/components/admin/OrderShareButton";
+import type { ShareablePartner } from "@/components/admin/PartnerShareButton";
 
 type OrderResponse = { order: AdminOrderRow };
 
@@ -102,6 +105,37 @@ export default function AdminOrderDetailPage({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Delivery partners power the Share button (page header + Customer
+  // block). Fetched once — the list only changes when the operator edits
+  // /admin/delivery-partners.
+  const [partners, setPartners] = useState<ShareablePartner[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(true);
+  const [partnersError, setPartnersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch<{ partners: ShareablePartner[] }>(
+          "/api/admin/delivery-partners",
+        );
+        if (cancelled) return;
+        setPartners(res.partners ?? []);
+        setPartnersError(null);
+      } catch (e) {
+        if (cancelled) return;
+        setPartnersError(
+          e instanceof Error ? e.message : "Could not load partners.",
+        );
+      } finally {
+        if (!cancelled) setPartnersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const items = useMemo(
     () => (order && Array.isArray(order.items) ? order.items : []),
@@ -202,6 +236,17 @@ export default function AdminOrderDetailPage({
       title="Order"
       actions={
         <>
+          {isShareable(order) ? (
+            <span className="no-print">
+              <OrderShareButton
+                order={order}
+                partners={partners}
+                partnersLoading={partnersLoading}
+                partnersError={partnersError}
+                buttonStyle={chipPrimary}
+              />
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={() => window.print()}
@@ -227,13 +272,8 @@ export default function AdminOrderDetailPage({
             }}
           >
             <div style={{ minWidth: 0 }}>
+              {/* The OLF number IS the reference — nothing else goes here. */}
               <div style={orderNumber}>{formatOrderNumber(order)}</div>
-              {/* The customer only ever sees this reference — in their SMS,
-                  WhatsApp and on the tracking page. Show it here so a
-                  phoned-in "CX-7K4M2P" maps to the OLF number above. */}
-              <div style={mutedLine}>
-                Customer ref {formatPublicRef(order)}
-              </div>
               <div style={mutedLine}>
                 Placed {formatDateTime(order.created_at)}
               </div>
@@ -246,19 +286,45 @@ export default function AdminOrderDetailPage({
                 alignItems: "center",
               }}
             >
+              {/* Payment state is not badged here — it lives in the Payment
+                  block below, where the method and ids sit with it. */}
               <StatusBadge status={order.status ?? undefined} />
-              <StatusBadge status={order.payment_status ?? undefined} />
               {order.is_preorder ? <span style={preorderChip}>Pre-order</span> : null}
             </div>
           </div>
         </section>
 
         {/* 2 · CUSTOMER ----------------------------------------------- */}
-        <Block title="Customer">
+        {/* Name, phone, address — the three things needed to get a loaf to
+            a door, and the same three the Share message carries. Email and
+            city are gone: nobody emails an order, and the city is already
+            inside the address. */}
+        <Block
+          title="Customer"
+          action={
+            isShareable(order) ? (
+              <span className="no-print">
+                <OrderShareButton
+                  order={order}
+                  partners={partners}
+                  partnersLoading={partnersLoading}
+                  partnersError={partnersError}
+                  buttonStyle={chipSmall}
+                />
+              </span>
+            ) : null
+          }
+        >
           <KeyVal k="Name" v={show(order.customers?.full_name)} />
           <KeyVal k="Phone" v={show(order.customers?.phone)} />
-          <KeyVal k="Email" v={show(order.customers?.email)} />
-          <KeyVal k="City" v={show(order.customers?.city)} />
+          <KeyVal
+            k="Address"
+            v={show(
+              isPickup
+                ? order.pickup_location?.address
+                : order.delivery_address,
+            )}
+          />
         </Block>
 
         {/* 3 · FULFILLMENT -------------------------------------------- */}
@@ -267,7 +333,6 @@ export default function AdminOrderDetailPage({
             <>
               <KeyVal k="Pickup location" v={show(order.pickup_location?.name)} />
               <KeyVal k="Area" v={show(order.pickup_location?.area)} />
-              <KeyVal k="Address" v={show(order.pickup_location?.address)} />
               <KeyVal k="Pickup date" v={formatDate(order.delivery_date)} />
               <KeyVal k="Pickup slot" v={show(slot)} />
               <KeyVal k="Ready at" v={formatDateTime(order.pickup_ready_at)} />
@@ -275,7 +340,9 @@ export default function AdminOrderDetailPage({
             </>
           ) : (
             <>
-              <KeyVal k="Delivery address" v={show(order.delivery_address)} />
+              {/* Address lives in the Customer block above; raw lat/lng was
+                  only ever the Map link in numeric form. Neither is
+                  repeated here. */}
               <KeyVal k="Delivery date" v={formatDate(order.delivery_date)} />
               <KeyVal k="Delivery slot" v={show(slot)} />
               <KeyVal
@@ -284,12 +351,6 @@ export default function AdminOrderDetailPage({
                   typeof order.distance_km === "number"
                     ? `${order.distance_km.toFixed(1)} km`
                     : DASH
-                }
-              />
-              <KeyVal
-                k="Coordinates"
-                v={
-                  hasCoords ? `${order.latitude}, ${order.longitude}` : DASH
                 }
               />
               <div style={rowWrap}>
@@ -475,14 +536,27 @@ export default function AdminOrderDetailPage({
 
 function Block({
   title,
+  action,
   children,
 }: {
   title: string;
+  /** Optional control pinned to the right of the block heading. */
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section style={panel} data-panel>
-      <h3 style={blockHeading}>{title}</h3>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
+        }}
+      >
+        <h3 style={blockHeading}>{title}</h3>
+        {action ? <div style={{ marginBottom: "0.85rem" }}>{action}</div> : null}
+      </div>
       <div style={{ display: "grid", gap: "0.55rem" }}>{children}</div>
     </section>
   );
@@ -648,6 +722,14 @@ const chipPrimary: React.CSSProperties = {
 const chipNeutral: React.CSSProperties = {
   ...chipBase,
   color: "rgba(251,243,212,0.85)",
+};
+
+/** Compact chip for a control sitting inside a block heading. */
+const chipSmall: React.CSSProperties = {
+  ...chipBase,
+  padding: "0.25rem 0.6rem",
+  letterSpacing: "0.18em",
+  color: "#FBF3D4",
 };
 
 const preorderChip: React.CSSProperties = {
