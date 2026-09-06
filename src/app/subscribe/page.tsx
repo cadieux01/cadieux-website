@@ -58,7 +58,7 @@ const CADIEUX_PHONE_DIAL = ADMIN_PHONE.replace(/\s/g, "");
 // so the two SEO surfaces state one identical delivery promise. If slot
 // hours change, edit both this file and delivery/[area]/page.tsx.
 const DELIVERY_WINDOW_TEXT =
-  "Fresh delivery daily, 7:30 AM to 9:00 PM IST, except 1–2 PM.";
+  "Fresh delivery daily in three windows IST: Morning 6 – 10 AM, Midday 10 AM – 2 PM, Evening 4 – 9 PM.";
 
 // Rupee formatter — drops decimals for whole numbers so "₹120" stays
 // clean and "₹143.10" keeps its paisa. Mirrors the wizard's fmtMoney.
@@ -268,7 +268,7 @@ export default async function SubscribeLandingPage() {
             {[
               "Pick your loaves — a minimum of two per delivery, mixed in any ratio between multigrain and plain.",
               "Pick your dates — no fixed weekly cycle. Choose the days that fit your week.",
-              "Pick a 30-minute slot — anywhere from 7:30 AM to 9:00 PM IST, except the 1–2 PM kitchen lunch.",
+              "Pick a window — Morning (6 – 10 AM), Midday (10 AM – 2 PM), or Evening (4 – 9 PM) IST.",
               "We bake to order — every delivery leaves the kitchen the same day it reaches you. Twelve hours' notice keeps the loaf oven-fresh.",
             ].map((line, i) => (
               <li
@@ -812,7 +812,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "When do you deliver?",
-    a: "Every day of the week, in 30-minute slots between 7:30 AM and 9:00 PM IST, except the 1–2 PM kitchen lunch.",
+    a: "Every day of the week, in three delivery windows IST: Morning (6 – 10 AM), Midday (10 AM – 2 PM), and Evening (4 – 9 PM).",
   },
   {
     q: "Where do you deliver?",

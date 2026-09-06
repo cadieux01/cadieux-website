@@ -82,16 +82,14 @@ export async function fetchSubscriptionPlans(): Promise<WizardProduct[]> {
   }
 }
 
-/** Canonical 30-minute slot START values ("HH:MM"). 25 entries:
- *  07:30, …, 12:30, 14:00, …, 20:30 (kitchen lunch 1–2 PM excluded).
- *  The previous "HH:MM-HH:MM" 1-hour windows are still rendered correctly
- *  by `formatSlot()` for legacy rows. */
+/** Canonical slot VALUES for the three fixed delivery windows.
+ *  Exactly: "06:00-10:00" (Morning), "10:00-14:00" (Midday),
+ *  "16:00-21:00" (Evening). Legacy "HH:MM" or old-range values are still
+ *  rendered correctly by `formatSlot()` but are NOT valid for new writes. */
 export const TIME_SLOTS: string[] = SLOTS.map((s) => s.value);
 
-/** Pretty label for ANY stored slot value:
- *    - New "HH:MM"          → "7:30 AM"
- *    - Legacy "HH:MM-HH:MM" → "6 – 7 AM"   (preserved for legacy rows)
- *  Delegates to the unified `formatSlotForDisplay` in delivery-slots.ts. */
+/** Pretty label for ANY stored slot value. Delegates to the unified
+ *  `formatSlotForDisplay` in delivery-slots.ts. */
 export function formatSlot(slot: string): string {
   return formatSlotForDisplay(slot);
 }

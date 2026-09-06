@@ -597,7 +597,7 @@ function Step3Slots({
     <section>
       <StepTitle>Pick a time slot for each delivery</StepTitle>
       <p style={{ color: FADED, fontSize: 16, marginTop: -6, marginBottom: 6 }}>
-        30-minute delivery windows from 7:30 AM to 9:00 PM.
+        Three delivery windows: Morning (6 – 10 AM), Midday (10 AM – 2 PM), Evening (4 – 9 PM).
       </p>
       <p style={{ color: FADED, fontSize: 16, marginTop: 0, marginBottom: 18 }}>
         We bake fresh for you — please pick a delivery time at least 6 hours

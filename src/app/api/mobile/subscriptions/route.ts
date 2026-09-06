@@ -41,7 +41,10 @@ import {
 } from "@/lib/subscription-dates";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 import { getPreorderMode } from "@/lib/preorderMode";
-import { BOOKING_LEAD_MINUTES } from "@/lib/delivery-slots";
+import {
+  isValidSlotValue,
+  validateBookingSlot,
+} from "@/lib/delivery-slots";
 import {
   MIN_SUBSCRIPTION_DAYS_PER_WEEK,
   MIN_DAYS_ERROR_CODE,
@@ -85,18 +88,11 @@ const START_DAYS_AHEAD_MAX = 30;
 const CAL_DELIVERIES_MIN = 1;
 const CAL_DELIVERIES_MAX = 50;
 const CAL_DAYS_AHEAD_MAX = 90;
-const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// Placement gap: slot must be at least BOOKING_LEAD_MINUTES from now
-// (bake + ship lead time). NOTE: This is for NEW order placement. The
-// edit cutoff (14 h, customer self-edit) is separate and lives in
-// /api/mobile/subscriptions/[id]/deliveries/[deliveryId]/edit.
-// Derived from the shared constant in @/lib/delivery-slots — do not
-// hardcode a second copy here.
-const PLACEMENT_GAP_MS = BOOKING_LEAD_MINUTES * 60 * 1000;
-// IST is UTC+5:30. Used for IST-aware slot-start calculation.
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+// Slot values + 6-hour bake/ship lead time are enforced by the shared
+// `validateBookingSlot` helper from @/lib/delivery-slots below — do not
+// duplicate the regex or the IST arithmetic here.
 
 type DeliveryAddress = {
   line1: string;
@@ -437,11 +433,11 @@ function validateCalendarDeliveries(deliveriesRaw: unknown):
         code: "deliveries",
       };
     }
-    if (!isString(d.time_slot) || !HHMM_RE.test(d.time_slot)) {
+    if (!isString(d.time_slot) || !isValidSlotValue(d.time_slot)) {
       return {
         ok: false,
         status: 400,
-        error: `deliveries[${i}].time_slot must be HH:MM (24h).`,
+        error: `deliveries[${i}].time_slot must be one of the offered delivery windows.`,
         code: "deliveries",
       };
     }
@@ -479,20 +475,18 @@ function validateCalendarDeliveries(deliveriesRaw: unknown):
       };
     }
 
-    // Placement gap: slot start (IST) must be ≥6 h from now.
-    // Parse time_slot 'HH:MM' and compute IST epoch ms for that slot.
-    const [slotH, slotM] = (d.time_slot as string).split(":").map(Number);
-    const [yyyy, moPart, dayPart] = (d.date as string).split("-").map(Number);
-    // IST midnight of the date = UTC midnight - IST_OFFSET_MS
-    const istSlotStartMs =
-      Date.UTC(yyyy, moPart - 1, dayPart) - IST_OFFSET_MS +
-      slotH * 3600_000 + slotM * 60_000;
-    if (istSlotStartMs - Date.now() < PLACEMENT_GAP_MS) {
+    // Slot value + 6-hour placement gap (measured to slot START, IST)
+    // are enforced by the shared validator — single source of truth.
+    const gate = validateBookingSlot(d.date, d.time_slot);
+    if (gate) {
       return {
         ok: false,
         status: 400,
-        error: `deliveries[${i}].time_slot is too soon — orders need 6 hours to bake and ship.`,
-        code: "slot_too_soon",
+        error:
+          gate.code === "slot_too_soon"
+            ? `deliveries[${i}].time_slot is too soon — orders need 6 hours to bake and ship.`
+            : `deliveries[${i}].time_slot is invalid.`,
+        code: gate.code,
       };
     }
 

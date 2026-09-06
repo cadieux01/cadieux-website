@@ -64,12 +64,11 @@ function directionsUrl(row: PickupLocationRow): string {
 // NAP consistency is preserved across every page that renders a phone.
 const CADIEUX_PHONE_DIAL = ADMIN_PHONE.replace(/\s/g, "");
 
-// Full delivery-window fact. Derived from SLOT_START/SLOT_END + the
-// lunch break in delivery-slots.ts, kept as a single sentence so the
-// whole page reads as one story. Update in ONE place if slot hours
-// change — this string only. No per-area override.
+// Full delivery-window fact. Kept as a single sentence so the whole
+// page reads as one story. Mirrors the copy in subscribe/page.tsx —
+// update BOTH files if slot hours change. No per-area override.
 const DELIVERY_WINDOW_TEXT =
-  "Fresh delivery daily, 7:30 AM to 9:00 PM IST, except 1–2 PM.";
+  "Fresh delivery daily in three windows IST: Morning 6 – 10 AM, Midday 10 AM – 2 PM, Evening 4 – 9 PM.";
 
 export async function generateStaticParams() {
   const groups = await getServiceAreaGroups();
@@ -93,7 +92,7 @@ export async function generateMetadata({
   // Meta description kept under 160 chars. Avoid duplicating "Fresh" —
   // the loaf is described as slow-fermented; delivery is described as
   // daily with the citywide window.
-  const description = `Slow-fermented protein bread delivered in ${name}. Delivered daily, 7:30 AM to 9:00 PM IST, except 1–2 PM. Serving pincode ${group.pincodes.join(", ")}.`;
+  const description = `Slow-fermented protein bread delivered in ${name}. Three delivery windows daily IST: Morning 6 – 10 AM, Midday 10 AM – 2 PM, Evening 4 – 9 PM. Serving pincode ${group.pincodes.join(", ")}.`;
   return {
     title,
     description,

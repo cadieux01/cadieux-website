@@ -3,8 +3,8 @@
 // the unified API under the old names so callers (checkout page + API
 // routes) compile unchanged while the new rules take effect:
 //
-//   - 30-min slots from 7:30 AM to 9:00 PM
-//   - 12 h 10 m booking lead, IST-aware
+//   - 3 fixed windows: Morning (6–10 AM), Midday (10 AM–2 PM), Evening (4–9 PM)
+//   - 6 h booking lead (measured to the slot's START), IST-aware
 //   - "today + future" date list (was tomorrow / day-after only)
 //
 // New code should import from "@/lib/delivery-slots" directly.
@@ -19,10 +19,11 @@ import {
   todayIst,
 } from "./delivery-slots";
 
-/** All bookable 30-min slot START values (24-hour "HH:MM"). 29 entries. */
+/** The three canonical slot VALUES ("HH:MM-HH:MM"). Legacy alias — new
+ *  code should import `SLOTS` from `@/lib/delivery-slots` directly. */
 export const ORDER_DELIVERY_SLOTS: string[] = SLOTS.map((s) => s.value);
 
-/** Pretty 12-hour label for a stored "HH:MM" slot value (or legacy range). */
+/** Pretty label for a stored slot value (canonical range or legacy). */
 export function formatSlot12(slot: string): string {
   return formatSlotForDisplay(slot);
 }
@@ -45,7 +46,7 @@ export function getOrderDeliveryDateOptions(): { tomorrow: string; dayAfter: str
 
 /** Returns true if `iso` is a yyyy-mm-dd that has at least one bookable
  *  slot from now (IST). Today is acceptable if a same-day slot still
- *  satisfies the 12h10m rule; otherwise only future dates are accepted. */
+ *  satisfies the 6 h rule; otherwise only future dates are accepted. */
 export function isAcceptableDeliveryDate(iso: string): boolean {
   if (!isIsoDate(iso)) return false;
   // Don't accept anything strictly before IST-today.
@@ -53,7 +54,7 @@ export function isAcceptableDeliveryDate(iso: string): boolean {
   return dateHasAnyBookable(iso);
 }
 
-/** Returns true if `slot` is one of the 29 canonical "HH:MM" slot values. */
+/** Returns true if `slot` is one of the three canonical slot values. */
 export function isAcceptableDeliverySlot(slot: string): boolean {
   return isValidSlotValue(slot);
 }

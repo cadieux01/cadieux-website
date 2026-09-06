@@ -11,7 +11,7 @@ import {
 import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
-import { validateBookingSlot } from "@/lib/delivery-slots";
+import { isValidSlotValue, validateBookingSlot } from "@/lib/delivery-slots";
 import {
   prepareOneTimeOrder,
   orderInsertColumns,
@@ -484,22 +484,34 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 12 h 10 m booking lead — applied to the FIRST upcoming delivery
-    // only. Subsequent weekly deliveries are by definition far enough
-    // away to satisfy the rule. Skips when the delivery list is empty
-    // (we'll fail below on the count check anyway).
+    // Slot-value gate: EVERY delivery's slot must be one of the three
+    // canonical windows. slot_mode='custom' with per-day values and the
+    // explicit `deliveries` array both make it possible for delivery #2+
+    // to carry an unknown value that a first-delivery-only check would
+    // miss. Lead-time (6 h to slot start) is only meaningful for the
+    // first delivery — subsequent weekly deliveries are far enough out.
     {
-      const firstReal = deliveryTemplate
+      const withSlot = deliveryTemplate
         .map((d) => ({
           date: d.delivery_date,
           slot: d.slot ?? d.scheduled_time_slot ?? null,
         }))
-        .find((d) => !!d.slot);
-      if (firstReal && firstReal.slot) {
-        const gate = validateBookingSlot(firstReal.date, firstReal.slot);
+        .filter((d): d is { date: string; slot: string } => !!d.slot);
+      for (let i = 0; i < withSlot.length; i++) {
+        const d = withSlot[i];
+        // Only the earliest delivery gets the full validator (bad_date +
+        // bad_slot + slot_too_soon). Later deliveries are checked for
+        // slot-value validity only — a stale lead-time failure on week 4
+        // would be nonsense.
+        const gate =
+          i === 0
+            ? validateBookingSlot(d.date, d.slot)
+            : isValidSlotValue(d.slot)
+              ? null
+              : { status: 400, code: "bad_slot", error: "Invalid delivery slot." };
         if (gate) {
           return NextResponse.json(
-            { error: gate.error, code: gate.code },
+            { error: gate.error ?? "Invalid delivery slot.", code: gate.code },
             { status: gate.status },
           );
         }

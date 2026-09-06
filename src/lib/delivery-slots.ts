@@ -1,11 +1,17 @@
 // Unified delivery-slot lib for ONE-OFF orders AND subscriptions.
 //
-// One source of truth for:
-//   - the slot universe (7:30 AM – 9:00 PM, every 30 min, lunch 1–2 PM skipped)
-//   - the 6 h BOOKING cutoff (placement)
+// ONE SOURCE OF TRUTH for:
+//   - the slot universe (3 fixed windows: Morning / Midday / Evening)
+//   - the 6 h BOOKING cutoff (placement), measured to the slot's START
 //   - the 14 h SELF-EDIT cutoff (customer-driven date/slot change)
 //   - the ADMIN_PHONE message shown to customers within 14 h
 //   - IST (Asia/Kolkata) date math regardless of server clock
+//
+// The three windows are:
+//   - "06:00-10:00"  Morning  6 AM – 10 AM
+//   - "10:00-14:00"  Midday   10 AM – 2 PM
+//   - "16:00-21:00"  Evening  4 PM – 9 PM
+// Nothing 2 PM – 4 PM. Nothing after 9 PM. Those gaps are deliberate.
 //
 // Consumers (intentionally many):
 //   - One-off checkout    (web /api/checkout, mobile /api/mobile/checkout, /checkout page)
@@ -13,37 +19,27 @@
 //   - Self-edit endpoints (.../subscriptions/[id]/deliveries/[deliveryId]/edit)
 //   - Admin override path (no client gating — admin bypasses both rules)
 //
-// Storage format:
-//   - Slots are stored as 24-hour "HH:MM" (e.g. "07:30").
-//   - Dates are stored as IST "yyyy-mm-dd".
+// Storage format for NEW writes:
+//   - Slots stored as "HH:MM-HH:MM" (start-end); exactly one of the three
+//     canonical range strings above. `isValidSlotValue` rejects anything else.
+//   - Dates stored as IST "yyyy-mm-dd".
 //
-// Legacy compatibility:
-//   - Older subscription deliveries used "HH:MM-HH:MM" (e.g. "06:00-07:00").
-//   - `formatSlotForDisplay()` accepts both shapes so legacy rows render.
-//   - Server-side validators (isValidSlotValue) only accept the new shape
-//     for *new writes* — we never rewrite old rows in place.
+// Legacy compatibility (READ-ONLY — no rows are ever rewritten):
+//   - Older orders / subscription deliveries may hold a bare "HH:MM"
+//     (e.g. "07:30") from the old 30-minute grid, or an old range
+//     like "06:00-07:00". `formatSlotForDisplay` renders both shapes
+//     sensibly so admin views + customer history remain legible.
+//   - The 6 h server gate reads the START in either shape, so
+//     legacy values still validate for the (rare) admin re-book path.
 
 // ── Tunables ────────────────────────────────────────────────────────────
 
-/** "HH:MM" of the first bookable slot start. */
-export const SLOT_START = "07:30";
-/** "HH:MM" of the last bookable slot start (window is 20:30 → 21:00). */
-export const SLOT_END = "20:30";
-/** Slot granularity in minutes. */
-export const SLOT_INTERVAL_MIN = 30;
-
-/** Slot START values to skip — the kitchen lunch break, 1 PM – 2 PM IST.
- *  Drops the 13:00 (1–1:30 PM) and 13:30 (1:30–2 PM) slots; 12:30 is the
- *  last before lunch and 14:00 is the first after. Stored as a Set for
- *  O(1) lookup in the SLOTS generator. */
-export const LUNCH_SKIP_STARTS: ReadonlySet<string> = new Set(["13:00", "13:30"]);
-
 /** Booking lead time: 6 hours. New orders/subscriptions can't book a slot
- *  that starts within this window from "now" (IST). */
+ *  whose START is within this window from "now" (IST). */
 export const BOOKING_LEAD_MINUTES = 360;
 
-/** Self-edit cutoff: if the delivery slot is ≤ 14 h away, the customer
- *  cannot self-edit and must call ADMIN_PHONE. */
+/** Self-edit cutoff: if the delivery slot starts ≤ 14 h from now, the
+ *  customer cannot self-edit and must call ADMIN_PHONE. */
 export const SELF_EDIT_CUTOFF_MINUTES = 840;
 
 /** Customer-facing number for sub-cutoff edits. */
@@ -55,18 +51,21 @@ export const IST_TZ = "Asia/Kolkata";
 // ── Types ───────────────────────────────────────────────────────────────
 
 export type Slot = {
-  /** 24-hour start time, e.g. "07:30". This is the stored value. */
+  /** Stored value: "HH:MM-HH:MM" (start-end). One of the three canonical
+   *  range strings — this is what goes into the DB. */
   value: string;
-  /** Pretty 12-hour label, e.g. "7:30 AM". */
+  /** Period name: "Morning" | "Midday" | "Evening". */
   label: string;
-  /** 24-hour end time, e.g. "08:00" (start + SLOT_INTERVAL_MIN). */
+  /** Slot start "HH:MM" (24h). Used for the 6 h / 14 h math. */
+  startValue: string;
+  /** Slot end "HH:MM" (24h). Same 24h clock as startValue. */
   endValue: string;
-  /** Pretty 12-hour range label, e.g. "7:30–8:00 AM" (compact en-dash). */
+  /** Combined display, e.g. "Morning · 6 – 10 AM". */
   rangeLabel: string;
 };
 
 export type BookableSlot = Slot & {
-  /** False when the slot is ≥ 6 h from now; UI greys disabled slots.
+  /** False when the slot start is < 6 h from now; UI greys disabled slots.
    *  Server-side validation re-checks this regardless of client state. */
   disabled: boolean;
 };
@@ -88,9 +87,19 @@ function parseHHMM(hhmm: string): { hour: number; minute: number } | null {
   return { hour, minute };
 }
 
+/** Extract the start "HH:MM" from any accepted slot shape:
+ *    - New range "HH:MM-HH:MM"       → the left "HH:MM"
+ *    - Legacy single "HH:MM"         → itself
+ *  Returns null if the shape is unrecognised. */
+function extractStartHHMM(slotValue: string): string | null {
+  const range = /^(\d{2}:\d{2})-\d{2}:\d{2}$/.exec(slotValue);
+  if (range) return range[1];
+  if (/^\d{2}:\d{2}$/.test(slotValue)) return slotValue;
+  return null;
+}
+
 /** Pretty 12-hour clock label for a single "HH:MM" point.
- *  Used for the standalone `label` field — strips `:00` for brevity
- *  (e.g. "08:00" → "8 AM", "07:30" → "7:30 AM"). */
+ *  Strips ":00" for brevity (e.g. "08:00" → "8 AM", "07:30" → "7:30 AM"). */
 function fmt12(hhmm: string): string {
   const p = parseHHMM(hhmm);
   if (!p) return hhmm;
@@ -112,7 +121,8 @@ function fmt12Full(hhmm: string): string {
 
 /** Pretty range label using a compact en-dash (no surrounding spaces),
  *  collapsing AM/PM on the start side when start and end share a period.
- *  Examples: "7:30–8:00 AM", "12:30–1:00 PM", "8:30–9:00 PM". */
+ *  Examples: "7:30–8:00 AM", "12:30–1:00 PM", "8:30–9:00 PM". Used ONLY
+ *  for legacy (non-canonical) values so history rows stay legible. */
 function fmtRange(start: string, end: string): string {
   const ps = parseHHMM(start);
   const pe = parseHHMM(end);
@@ -124,36 +134,32 @@ function fmtRange(start: string, end: string): string {
   return `${fmt12Full(start)}–${fmt12Full(end)}`;
 }
 
-// ── Slot generation ─────────────────────────────────────────────────────
+// ── The three fixed slots ───────────────────────────────────────────────
 
-/** All bookable slot starts from SLOT_START to SLOT_END inclusive, stepping
- *  by SLOT_INTERVAL_MIN, with LUNCH_SKIP_STARTS filtered out. 25 entries
- *  total (07:30, …, 12:30, 14:00, …, 20:30). Memoised at module load. */
-export const SLOTS: Slot[] = (() => {
-  const startP = parseHHMM(SLOT_START);
-  const endP = parseHHMM(SLOT_END);
-  if (!startP || !endP) return [];
-  const startMins = startP.hour * 60 + startP.minute;
-  const endMins = endP.hour * 60 + endP.minute;
-  const out: Slot[] = [];
-  for (let m = startMins; m <= endMins; m += SLOT_INTERVAL_MIN) {
-    const sh = Math.floor(m / 60);
-    const sm = m % 60;
-    const value = `${pad2(sh)}:${pad2(sm)}`;
-    if (LUNCH_SKIP_STARTS.has(value)) continue;
-    const endM = m + SLOT_INTERVAL_MIN;
-    const eh = Math.floor(endM / 60);
-    const em = endM % 60;
-    const endValue = `${pad2(eh % 24)}:${pad2(em)}`;
-    out.push({
-      value,
-      endValue,
-      label: fmt12(value),
-      rangeLabel: fmtRange(value, endValue),
-    });
-  }
-  return out;
-})();
+/** The ONLY slots valid for new writes. Order = display order in pickers. */
+export const SLOTS: Slot[] = [
+  {
+    value: "06:00-10:00",
+    label: "Morning",
+    startValue: "06:00",
+    endValue: "10:00",
+    rangeLabel: "Morning · 6 – 10 AM",
+  },
+  {
+    value: "10:00-14:00",
+    label: "Midday",
+    startValue: "10:00",
+    endValue: "14:00",
+    rangeLabel: "Midday · 10 AM – 2 PM",
+  },
+  {
+    value: "16:00-21:00",
+    label: "Evening",
+    startValue: "16:00",
+    endValue: "21:00",
+    rangeLabel: "Evening · 4 – 9 PM",
+  },
+];
 
 /** Returns the full slot list (alias for SLOTS). */
 export function generateSlots(): Slot[] {
@@ -178,17 +184,18 @@ export function isIsoDate(s: unknown): s is string {
   return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-/** Absolute millis of an IST date + slot start. Computed via
- *  Asia/Kolkata-local fields → UTC, so callers can compare with
- *  Date.now() (UTC ms) regardless of server clock. */
+/** Absolute millis of an IST date + slot START. Accepts either the new
+ *  "HH:MM-HH:MM" range values or legacy single "HH:MM" values (so the
+ *  gate still evaluates correctly if an admin re-books an old row).
+ *  Computed via Asia/Kolkata's fixed +5:30 offset (no DST). */
 export function slotStartUtcMs(dateIso: string, slotValue: string): number | null {
   if (!isIsoDate(dateIso)) return null;
-  const p = parseHHMM(slotValue);
+  const startHHMM = extractStartHHMM(slotValue);
+  if (!startHHMM) return null;
+  const p = parseHHMM(startHHMM);
   if (!p) return null;
   const [y, m, d] = dateIso.split("-").map(Number);
   if (!y || !m || !d) return null;
-  // IST is fixed UTC+5:30 (no DST). Compose UTC ms from IST wall-clock.
-  // wallTime (UTC) - IST_OFFSET = real UTC.
   const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
   const wallUtc = Date.UTC(y, m - 1, d, p.hour, p.minute, 0, 0);
   return wallUtc - IST_OFFSET_MS;
@@ -240,7 +247,6 @@ export function nextDeliveryDates(
   const todayIso = todayIst(now);
   const [y, m, d] = todayIso.split("-").map(Number);
   for (let i = 0; i < n + 7 && out.length < n; i++) {
-    // Build a wall-clock date `i` days after IST-today.
     const future = new Date(Date.UTC(y, (m ?? 1) - 1, (d ?? 1) + i));
     const iso = future.toISOString().slice(0, 10);
     if (dateHasAnyBookable(iso, now)) out.push(iso);
@@ -266,10 +272,9 @@ export function canSelfEdit(
   slotValue: string | null,
   now: Date = new Date(),
 ): boolean {
-  // No slot stored yet → treat as the start of the day; still allow if
-  // the *start of the date* is > 14h away. Defensive — in practice every
-  // subscription delivery has a slot.
-  const effectiveSlot = slotValue && parseHHMM(slotValue) ? slotValue : SLOT_START;
+  // No slot stored yet → treat as the start of the earliest window
+  // (Morning) so the customer at least gets the benefit of the doubt.
+  const effectiveSlot = slotValue && extractStartHHMM(slotValue) ? slotValue : SLOTS[0].value;
   const startMs = slotStartUtcMs(dateIso, effectiveSlot);
   if (startMs == null) return false;
   const cutoffMs = SELF_EDIT_CUTOFF_MINUTES * 60 * 1000;
@@ -281,7 +286,8 @@ export const SELF_EDIT_BLOCKED_MESSAGE = `To change a delivery within 14 hours, 
 
 // ── Validation (server-side source of truth) ────────────────────────────
 
-/** True iff `value` matches one of the canonical "HH:MM" slots. */
+/** True iff `value` matches one of the three canonical range strings.
+ *  Legacy "HH:MM" values return FALSE — we never accept them on new writes. */
 export function isValidSlotValue(value: unknown): value is string {
   if (typeof value !== "string") return false;
   return SLOTS.some((s) => s.value === value);
@@ -314,19 +320,21 @@ export function validateBookingSlot(
 
 // ── Display helpers ─────────────────────────────────────────────────────
 
-/** Pretty label for ANY stored slot value:
- *    - New "HH:MM" → "7:30–8:00 AM"  (30-min range)
- *    - Legacy "HH:MM-HH:MM" → "6–7 AM"
- *  Storage is the start "HH:MM"; display always shows the full 30-min span. */
+/** Pretty label for ANY stored slot value. Priority:
+ *    1. Canonical range ("06:00-10:00" …) → the SLOT's rangeLabel
+ *       ("Morning · 6 – 10 AM").
+ *    2. Legacy range "HH:MM-HH:MM"        → fmtRange(start, end).
+ *    3. Legacy single "HH:MM"             → 30-min window (start → +30 min).
+ *    4. Anything else                     → the raw value (defensive). */
 export function formatSlotForDisplay(value: string | null | undefined): string {
   if (!value) return "";
-  // Legacy "HH:MM-HH:MM"
-  const m = /^(\d{2}:\d{2})-(\d{2}:\d{2})$/.exec(value);
-  if (m) return fmtRange(m[1], m[2]);
-  // New "HH:MM" — compute end = start + SLOT_INTERVAL_MIN and render range.
+  const canonical = SLOTS.find((s) => s.value === value);
+  if (canonical) return canonical.rangeLabel;
+  const rangeM = /^(\d{2}:\d{2})-(\d{2}:\d{2})$/.exec(value);
+  if (rangeM) return fmtRange(rangeM[1], rangeM[2]);
   const p = parseHHMM(value);
   if (p) {
-    const endMins = (p.hour * 60 + p.minute + SLOT_INTERVAL_MIN) % (24 * 60);
+    const endMins = (p.hour * 60 + p.minute + 30) % (24 * 60);
     const eh = Math.floor(endMins / 60);
     const em = endMins % 60;
     const endValue = `${pad2(eh)}:${pad2(em)}`;
