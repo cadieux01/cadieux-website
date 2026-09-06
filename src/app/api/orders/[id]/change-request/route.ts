@@ -25,7 +25,7 @@ import {
   rollPhoneCookieOnWebRequest,
 } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
-import { isIsoDate, isValidSlotValue, validateBookingSlot } from "@/lib/delivery-slots";
+import { isBookable, isIsoDate, isValidSlotValue, validateBookingSlot } from "@/lib/delivery-slots";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -166,17 +166,46 @@ export async function POST(
     );
   }
 
-  // Booking-lead rule on the requested date/slot. Apply when either is being
-  // changed: validate the requested date against the requested slot, falling
-  // back to the order's current value for whichever side isn't changing.
-  if (dateChanges || slotChanges) {
+  // Booking-lead rule on the requested date/slot.
+  //
+  // If the customer is CHANGING the slot, reqSlot has already passed
+  // isValidSlotValue() above (it must be one of the three canonical
+  // windows). Run the full gate against the requested date.
+  //
+  // If the customer is ONLY changing the date and leaving the slot
+  // alone, do NOT re-validate the stored slot against the current
+  // three-window universe — the order may hold a legacy bare "HH:MM"
+  // (e.g. "07:30") from before the migration and the customer isn't
+  // touching it. Still enforce the 6h lead against the NEW date using
+  // that legacy slot's start time (isBookable / extractStartHHMM
+  // accepts both range and bare shapes), so no one can slide a
+  // legacy-slot order into a start-in-one-hour window.
+  if (slotChanges) {
     const effDate = reqDate ?? order.delivery_date;
-    const effSlot = reqSlot ?? order.delivery_slot;
-    const slotErr = validateBookingSlot(effDate, effSlot);
+    const slotErr = validateBookingSlot(effDate, reqSlot);
     if (slotErr) {
       return NextResponse.json(
         { error: slotErr.error, code: slotErr.code },
         { status: slotErr.status },
+      );
+    }
+  } else if (dateChanges) {
+    const effDate = reqDate as string; // dateChanges → reqDate is non-null
+    if (!isIsoDate(effDate)) {
+      return NextResponse.json(
+        { error: "Invalid delivery date.", code: "bad_date" },
+        { status: 400 },
+      );
+    }
+    const storedSlot = order.delivery_slot ?? "";
+    if (!isBookable(effDate, storedSlot)) {
+      return NextResponse.json(
+        {
+          error:
+            "That delivery slot is too soon — orders need 6 hours to bake and ship.",
+          code: "slot_too_soon",
+        },
+        { status: 400 },
       );
     }
   }

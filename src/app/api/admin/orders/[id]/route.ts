@@ -136,6 +136,18 @@ export async function PATCH(
   const body = await req.json().catch(() => ({}));
   const update: Record<string, unknown> = {};
 
+  // Fetch the current row up-front. `before.delivery_slot` is needed so
+  // the delivery_slot validator below can pass through a byte-identical
+  // legacy value (e.g. "07:30" on an old order) without failing the
+  // canonical-list check — a form that serialises the whole order and
+  // resubmits the unchanged slot must not be rejected. Any TRULY new
+  // value still has to be one of the three canonical windows.
+  const { data: before } = await supabaseAdmin
+    .from("orders")
+    .select("status, delivery_date, delivery_slot, is_preorder")
+    .eq("id", params.id)
+    .maybeSingle();
+
   if (typeof body.status === "string") {
     const raw = body.status.toLowerCase();
     if (!ALLOWED_STATUSES.has(raw)) {
@@ -179,8 +191,17 @@ export async function PATCH(
   if (body.delivery_slot !== undefined) {
     if (body.delivery_slot === null || body.delivery_slot === "") {
       update.delivery_slot = null;
-    } else if (typeof body.delivery_slot === "string" && isValidSlotValue(body.delivery_slot)) {
-      update.delivery_slot = body.delivery_slot;
+    } else if (typeof body.delivery_slot === "string") {
+      // Byte-identical to the stored value → pass through untouched even
+      // if it's a legacy bare "HH:MM" that no longer matches the current
+      // canonical windows. Any DIFFERENT value must be one of the three.
+      if (body.delivery_slot === (before?.delivery_slot ?? null)) {
+        // no-op — nothing to write, avoids a spurious "changed" audit entry
+      } else if (isValidSlotValue(body.delivery_slot)) {
+        update.delivery_slot = body.delivery_slot;
+      } else {
+        return NextResponse.json({ error: "Invalid delivery_slot" }, { status: 400 });
+      }
     } else {
       return NextResponse.json({ error: "Invalid delivery_slot" }, { status: 400 });
     }
@@ -190,15 +211,10 @@ export async function PATCH(
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
-  // Capture the prior status + scheduling so we can record a clean
-  // before/after on the audit row when any of them change. is_preorder is
-  // read here so we know whether to fire the pre-order schedule notify on
-  // a delivery_date change below.
-  const { data: before } = await supabaseAdmin
-    .from("orders")
-    .select("status, delivery_date, delivery_slot, is_preorder")
-    .eq("id", params.id)
-    .maybeSingle();
+  // `before` was fetched above so the delivery_slot validator could
+  // compare against the stored value; it also carries status +
+  // delivery_date + is_preorder for the audit + preorder-scheduling
+  // logic below.
 
   // If admin is setting a delivery_date on a preorder row for the first
   // time, also stamp scheduled_delivery_date_at so downstream surfaces
