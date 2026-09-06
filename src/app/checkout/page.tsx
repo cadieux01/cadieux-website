@@ -1311,6 +1311,14 @@ export default function CheckoutPage() {
       rzp.open();
     } catch {
       setError("Something went wrong.");
+    } finally {
+      // Every exit from this function must re-enable the buttons, including
+      // exits nobody has written yet. The server-rejection branch above used
+      // a bare `return` and left the bar stuck on "Processing…" — so the
+      // error told the customer to use the pay-later button while that button
+      // was disabled, and their only way out was reloading the page.
+      // Reset here rather than at each return so the next `return` added to
+      // this function cannot reintroduce the same trap.
       setOrderLoading(false);
     }
   }
