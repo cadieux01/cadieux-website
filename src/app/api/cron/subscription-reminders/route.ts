@@ -119,9 +119,25 @@ interface DeliveryMaxRow {
 // ── Handler ─────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  // A missing CRON_SECRET and a wrong Authorization header are two different
+  // problems and must not produce the same response. Collapsed into one 401,
+  // a cron that has been silently dead since it shipped is indistinguishable
+  // in the logs from someone probing the endpoint.
+  //   500 = our configuration is broken, nobody is getting these reminders.
+  //   401 = config is fine, that caller just isn't authorised.
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    console.error(
+      "[cron/subscription-reminders] CRON_SECRET is not set — this cron cannot run.",
+    );
+    return NextResponse.json(
+      { error: "cron secret not configured" },
+      { status: 500 },
+    );
+  }
+
   const auth = req.headers.get("authorization") || "";
-  const expected = `Bearer ${process.env.CRON_SECRET || ""}`;
-  if (!process.env.CRON_SECRET || auth !== expected) {
+  if (auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
