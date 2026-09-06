@@ -10,6 +10,7 @@
 // expiry here purely as UX (skip the password gate UI for 24h). The
 // server-side cookie is the real credential.
 import type { NutrientValue } from "@/lib/nutrition";
+import type { NextDelivery } from "@/lib/admin-subscription-derive";
 
 export const ADMIN_SESSION_KEY = "cadieux_admin_auth";
 
@@ -198,6 +199,16 @@ export type AdminProductChangeRow = {
   context: string | null;
 };
 
+/** One variant of a subscription, from public.subscription_items.
+ *  A "2 loaves per delivery" plan is very often Multigrain 1 + Plain 1 —
+ *  the subscriptions row alone cannot say that (it carries a single
+ *  product_name and a summed quantity), so admin reads these instead. */
+export type AdminSubscriptionItem = {
+  product_slug: string;
+  product_name: string;
+  quantity_per_delivery: number;
+};
+
 export type AdminSubscriptionRow = {
   id: string;
   customer_id: string;
@@ -233,6 +244,13 @@ export type AdminSubscriptionRow = {
   // the plan sentence's "N deliveries total" clause. Only present on the
   // ?enrich=1 list payload and the detail GET.
   total_deliveries?: number;
+  // The one delivery still owed — earliest non-terminal row. null once
+  // every delivery is delivered or cancelled. Same two payloads as above.
+  next_delivery?: NextDelivery | null;
+  // Per-variant breakdown. Empty/absent on rows written before
+  // subscription_items existed — call sites fall back to product_name ×
+  // quantity_per_delivery.
+  items?: AdminSubscriptionItem[] | null;
   // Coordinates matched from public.addresses by customer_id (see
   // subscription-coordinates.ts). Only set when a saved address has
   // finite, non-zero lat/lng; otherwise absent → Maps uses address text.

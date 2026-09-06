@@ -43,11 +43,15 @@ import {
 import Select from "@/components/ui/Select";
 import {
   describeSubscriptionPlan,
+  describeDeliveryDays,
   resolveSubscriptionAddress,
   formatAddressFull,
   phonesDiffer,
 } from "@/lib/subscription-display";
-import { composeSubscriptionShareMessage } from "@/lib/subscription-share-message";
+import {
+  composeNextDeliveryShareMessage,
+  composeSubscriptionShareMessage,
+} from "@/lib/subscription-share-message";
 import { DAY_LABEL } from "@/lib/subscription-ui";
 
 type DetailResponse = {
@@ -264,24 +268,13 @@ export default function AdminSubscriptionDetailPage({
   const city = addr?.city ?? sub.customer_city ?? null;
   const pincode = addr?.pincode ?? sub.customer_pincode ?? null;
 
-  // What the customer actually picked. A plan can run on several days a
-  // week, each with its own slot — `days` + `slots_by_day` carry that,
-  // while day_of_week/time_slot only hold the first pair.
-  const days = Array.isArray(sub.days) && sub.days.length > 0
-    ? sub.days
-    : sub.day_of_week
-      ? [sub.day_of_week]
-      : [];
-  const slotFor = (day: string): string | null =>
-    sub.slots_by_day?.[day] ?? sub.slot ?? sub.time_slot ?? null;
-
   const unitPrice = num(sub.bread_price);
 
   // Normalised address (jsonb → flat fallback), the plan sentence, and a
   // coord-aware Maps link. Coords come matched from the customer's saved
   // addresses (GET route); none → an address-text search.
   const resolvedAddr = resolveSubscriptionAddress(sub);
-  const planSentence = describeSubscriptionPlan(sub, deliveries.length);
+  const planSentence = describeSubscriptionPlan(sub);
   const accountPhone = sub.customer?.phone ?? null;
   const showBothPhones = phonesDiffer(resolvedAddr.phone, accountPhone);
   const hasCoords =
@@ -295,12 +288,21 @@ export default function AdminSubscriptionDetailPage({
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
         formatAddressFull(resolvedAddr),
       )}`;
-  const shareMessage = composeSubscriptionShareMessage(sub);
-
-  const timeline: { label: string; at: string | null | undefined }[] = [
-    { label: "Subscription created", at: sub.created_at },
-    { label: "Last updated", at: sub.updated_at },
-  ].filter((e) => Boolean(e.at));
+  // The address block and the page header share one Share control. The
+  // default carries the NEXT delivery — the loaves that actually go to
+  // this address next — with the whole plan as the second option.
+  const shareScopes = [
+    {
+      id: "next",
+      label: "Next delivery",
+      message: composeNextDeliveryShareMessage(sub),
+    },
+    {
+      id: "plan",
+      label: "Whole plan",
+      message: composeSubscriptionShareMessage(sub),
+    },
+  ];
 
   return (
     <AdminShell
@@ -311,7 +313,7 @@ export default function AdminSubscriptionDetailPage({
         <>
           <span className="no-print">
             <PartnerShareButton
-              message={shareMessage}
+              message={shareScopes}
               partners={partners}
               partnersLoading={partnersLoading}
               partnersError={partnersError}
@@ -343,11 +345,12 @@ export default function AdminSubscriptionDetailPage({
             }}
           >
             <div style={{ minWidth: 0 }}>
-              <div style={headingLine}>
-                {show(sub.product_name)} × {show(sub.quantity_per_delivery)}
-              </div>
+              {/* The heading names the variants and the cadence — a bare
+                  product name and a summed quantity said "Multigrain × 2"
+                  for a Multigrain 1 + Plain 1 plan. */}
+              <div style={headingLine}>{planSentence}</div>
               <div style={mutedLine}>
-                Started {formatDateTime(sub.created_at)}
+                Ordered {formatDateTime(sub.created_at)}
               </div>
             </div>
             <div
@@ -369,7 +372,7 @@ export default function AdminSubscriptionDetailPage({
 
         {/* 2 · CUSTOMER ----------------------------------------------- */}
         <Block title="Customer">
-          <div style={rowWrap}>
+          <div className="kv-row">
             <span style={keyStyle}>Name</span>
             <span style={valStyle}>
               {sub.customer_id ? (
@@ -384,7 +387,7 @@ export default function AdminSubscriptionDetailPage({
               )}
             </span>
           </div>
-          <div style={rowWrap}>
+          <div className="kv-row">
             <span style={keyStyle}>Phone</span>
             <span style={valStyle}>
               {phone ? (
@@ -405,56 +408,14 @@ export default function AdminSubscriptionDetailPage({
           <KeyVal k="City" v={show(sub.customer?.city ?? city)} />
         </Block>
 
-        {/* 3 · PLAN — what the customer signed up for ------------------ */}
+        {/* 3 · PLAN — the sentence, when they ordered, when it goes out.
+            Slug, loaves-per-delivery, frequency, slot mode, weeks, start
+            date and remaining count are all gone: the sentence and the
+            deliveries table below say the same things, in words. */}
         <Block title="Plan">
-          <div
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: "1rem",
-              color: "#FBF3D4",
-              paddingBottom: "0.55rem",
-              marginBottom: "0.35rem",
-              borderBottom: "1px solid rgba(251,243,212,0.18)",
-            }}
-          >
-            {planSentence}
-          </div>
-          <KeyVal k="Product" v={show(sub.product_name)} />
-          <KeyVal k="Product slug" v={show(sub.product_slug)} />
-          <KeyVal
-            k="Loaves per delivery"
-            v={show(sub.quantity_per_delivery)}
-          />
-          <KeyVal k="Frequency" v={humanise(sub.frequency)} />
-          <div style={rowWrap}>
-            <span style={keyStyle}>Delivery days</span>
-            <span style={valStyle}>
-              {days.length === 0
-                ? DASH
-                : days.map((d) => {
-                    const slot = slotFor(d);
-                    return (
-                      <div key={d}>
-                        {dayLabel(d)}
-                        {slot ? (
-                          <span style={{ color: "rgba(251,243,212,0.55)" }}>
-                            {" · "}
-                            {slot}
-                          </span>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-            </span>
-          </div>
-          <KeyVal k="Slot mode" v={humanise(sub.slot_mode)} />
-          <KeyVal k="Weeks" v={show(sub.total_weeks)} />
-          <KeyVal k="Start date" v={formatDate(sub.start_date)} />
-          <KeyVal k="End date (derived)" v={formatDate(sub.derived_end_date)} />
-          <KeyVal
-            k="Deliveries remaining"
-            v={`${sub.remaining_deliveries ?? 0} of ${deliveries.length}`}
-          />
+          <KeyVal k="Ordered" v={formatDateTime(sub.created_at)} />
+          {/* Days and times on ONE line: "Sunday · 07:30". */}
+          <KeyVal k="Delivery days" v={describeDeliveryDays(sub)} />
         </Block>
 
         {/* 4 · DELIVERY ADDRESS --------------------------------------- */}
@@ -479,7 +440,7 @@ export default function AdminSubscriptionDetailPage({
             }
           />
           <KeyVal k="City" v={show(city)} />
-          <div style={rowWrap}>
+          <div className="kv-row">
             <span style={keyStyle}>Pincode</span>
             <span style={valStyle}>
               {pincode ? (
@@ -493,7 +454,7 @@ export default function AdminSubscriptionDetailPage({
           </div>
           {/* No coords AND no address text would search Maps for "—". */}
           {hasCoords || resolvedAddr.hasAny ? (
-            <div style={{ ...rowWrap }} className="no-print">
+            <div className="kv-row no-print">
               <span style={keyStyle}>Map</span>
               <span style={valStyle}>
                 <a
@@ -509,45 +470,68 @@ export default function AdminSubscriptionDetailPage({
               </span>
             </div>
           ) : null}
+          {/* Send this address in the canonical six-line format. The
+              default scope carries the NEXT delivery's loaves, so the
+              rider gets the drop and what's in the bag together. */}
+          <div className="kv-row no-print">
+            <span style={keyStyle}>Share</span>
+            <span style={valStyle}>
+              <PartnerShareButton
+                message={shareScopes}
+                partners={partners}
+                partnersLoading={partnersLoading}
+                partnersError={partnersError}
+                buttonStyle={chipNeutral}
+                buttonLabel="Share address"
+              />
+            </span>
+          </div>
         </Block>
 
         {/* 5 · DELIVERY SCHEDULE -------------------------------------- */}
         <section style={panel}>
           <h3 style={blockHeading}>Deliveries · {deliveries.length}</h3>
           <div style={tableWrap}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table
+              className="deliveries-table"
+              style={{ width: "100%", borderCollapse: "collapse" }}
+            >
               <thead>
                 <tr style={tableHeadRow}>
                   <th style={{ ...th, width: 56 }}>#</th>
                   <th style={{ ...th, width: 76 }}>Week</th>
                   <th style={th}>Date</th>
-                  <th style={th}>Slot</th>
                   <th style={th}>Status</th>
-                  <th style={th}>Notes</th>
                 </tr>
               </thead>
               <tbody>
                 {deliveries.length === 0 ? (
                   <tr>
-                    <td style={td} colSpan={6}>
+                    <td style={td} colSpan={4}>
                       No deliveries scheduled.
                     </td>
                   </tr>
                 ) : (
                   deliveries.map((d, i) => (
                     <tr key={d.id}>
-                      <td style={td}>{d.sequence ?? i + 1}</td>
-                      <td style={td}>{show(d.week_number)}</td>
-                      <td style={td}>
-                        {formatDate(d.scheduled_date ?? d.delivery_date)}
-                        {d.day_key ? (
-                          <div style={subtleCell}>{dayLabel(d.day_key)}</div>
-                        ) : null}
+                      <td style={td} data-label="#">
+                        {d.sequence ?? i + 1}
                       </td>
-                      <td style={td}>
-                        {show(d.scheduled_time_slot ?? d.slot)}
+                      <td style={td} data-label="Week">
+                        {show(d.week_number)}
                       </td>
-                      <td style={td}>
+                      {/* Date and slot on ONE line — the slot never
+                          deserved a column of its own. */}
+                      <td style={td} data-label="Date">
+                        {[
+                          d.day_key ? dayLabel(d.day_key).slice(0, 3) : null,
+                          formatDate(d.scheduled_date ?? d.delivery_date),
+                          d.scheduled_time_slot ?? d.slot,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </td>
+                      <td style={td} data-label="Status">
                         <div className="no-print">
                           <Select
                             value={d.status ?? ""}
@@ -574,7 +558,6 @@ export default function AdminSubscriptionDetailPage({
                           </div>
                         ) : null}
                       </td>
-                      <td style={td}>{show(d.admin_notes)}</td>
                     </tr>
                   ))
                 )}
@@ -607,32 +590,65 @@ export default function AdminSubscriptionDetailPage({
           {/* Deliberately no derived per-delivery / per-week subtotal:
               total_amount is the stored source of truth and some legacy
               rows don't equal bread_price × qty × days × weeks. */}
-          <div style={{ ...rowWrap, ...grandRow }}>
+          <div className="kv-row" style={grandRow}>
             <span style={keyStyle}>Subscription total</span>
             <span style={valStyle}>{formatINR(num(sub.total_amount))}</span>
           </div>
         </Block>
-
-        {/* 7 · TIMELINE ------------------------------------------------ */}
-        <Block title="Timeline">
-          {timeline.length === 0 ? (
-            <div style={mutedLine}>No timestamps recorded.</div>
-          ) : (
-            timeline.map((e) => (
-              <KeyVal
-                key={e.label}
-                k={e.label}
-                v={formatDateTime(e.at ?? null)}
-              />
-            ))
-          )}
-          <KeyVal k="Subscription id" v={sub.id} />
-        </Block>
       </div>
 
-      {/* Print stylesheet — drop the admin chrome and flip the dark theme
-          to black-on-white. Same rules as the order detail page. */}
+      {/* Layout + print stylesheet.
+          Key/value rows sit on one line while there is room and stack
+          under their label below 560px — at 390px a right-aligned value
+          sharing a line with its key had about eight characters to work
+          with. The deliveries table collapses the same way. */}
       <style jsx global>{`
+        .kv-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          gap: 1.5rem;
+          font-family: var(--font-body);
+          font-size: 1rem;
+        }
+        @media (max-width: 560px) {
+          .kv-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.15rem;
+          }
+          .kv-row > span:last-child {
+            text-align: left !important;
+          }
+          .deliveries-table thead {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            white-space: nowrap;
+          }
+          .deliveries-table tr {
+            display: block;
+            border-bottom: 1px solid rgba(251, 243, 212, 0.18);
+            padding: 0.35rem 0;
+          }
+          .deliveries-table td {
+            display: grid;
+            grid-template-columns: 4.5rem 1fr;
+            gap: 0.75rem;
+            align-items: start;
+            border-bottom: none;
+            padding: 0.35rem 0.9rem;
+          }
+          .deliveries-table td::before {
+            content: attr(data-label);
+            color: rgba(251, 243, 212, 0.7);
+            font-size: 0.875rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+          }
+        }
         .print-only {
           display: none;
         }
@@ -697,7 +713,7 @@ function Block({
 
 function KeyVal({ k, v }: { k: string; v: React.ReactNode }) {
   return (
-    <div style={rowWrap}>
+    <div className="kv-row">
       <span style={keyStyle}>{k}</span>
       <span style={valStyle}>{v}</span>
     </div>
@@ -753,15 +769,6 @@ const mutedLine: React.CSSProperties = {
   fontSize: "1rem",
   color: "rgba(251,243,212,0.55)",
   marginTop: "0.3rem",
-};
-
-const rowWrap: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "baseline",
-  gap: "1.5rem",
-  fontFamily: "var(--font-body)",
-  fontSize: "1rem",
 };
 
 const grandRow: React.CSSProperties = {

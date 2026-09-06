@@ -12,6 +12,12 @@
 // it is sharing — the caller composes the `message` string and passes it
 // in. OrderShareButton (orders) and the subscriptions Share button both
 // wrap this with their own composer so the popover behaves identically.
+//
+// A caller with more than one thing worth sharing (a subscription can send
+// just the next delivery, or the whole standing plan) passes an ARRAY of
+// scopes instead. The first is the default; the popover then shows a small
+// switcher above the partner list. Callers passing a plain string are
+// unaffected.
 
 import { useEffect, useRef, useState } from "react";
 
@@ -25,6 +31,13 @@ export type ShareablePartner = {
   phone: string;
 };
 
+/** One thing the caller can share, e.g. "Next delivery" vs "Whole plan". */
+export type ShareScope = {
+  id: string;
+  label: string;
+  message: string;
+};
+
 export function PartnerShareButton({
   message,
   partners,
@@ -33,8 +46,9 @@ export function PartnerShareButton({
   buttonStyle,
   buttonLabel = "Share",
 }: {
-  /** Fully composed text the wa.me / clipboard actions send verbatim. */
-  message: string;
+  /** Fully composed text the wa.me / clipboard actions send verbatim, or
+   *  several labelled ones to choose between (first = default). */
+  message: string | ShareScope[];
   partners: ShareablePartner[];
   partnersLoading: boolean;
   partnersError: string | null;
@@ -44,6 +58,7 @@ export function PartnerShareButton({
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [scopeIndex, setScopeIndex] = useState(0);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   // Close on outside click / Escape.
@@ -64,12 +79,17 @@ export function PartnerShareButton({
     };
   }, [open]);
 
-  const encoded = encodeURIComponent(message);
+  const scopes: ShareScope[] | null = Array.isArray(message) ? message : null;
+  // Guard the index: a caller can shrink the scope list between renders.
+  const text: string = scopes
+    ? (scopes[scopeIndex] ?? scopes[0])?.message ?? ""
+    : (message as string);
+  const encoded = encodeURIComponent(text);
 
   const handleCopy = async () => {
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(message);
+        await navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }
@@ -100,6 +120,8 @@ export function PartnerShareButton({
             right: 0,
             zIndex: 20,
             minWidth: 240,
+            // Never wider than the phone it opens on.
+            maxWidth: "calc(100vw - 2rem)",
             background: "#1D1D1F",
             border: `1px solid ${BORDER}`,
             padding: 8,
@@ -109,6 +131,47 @@ export function PartnerShareButton({
             boxShadow: "0 8px 24px rgba(29,29,31,0.6)",
           }}
         >
+          {scopes && scopes.length > 1 && (
+            <div style={{ marginBottom: 6 }}>
+              <div
+                style={{
+                  padding: "4px 8px",
+                  color: FADED,
+                  fontSize: "0.875rem",
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Share
+              </div>
+              <div style={{ display: "flex", gap: 6, padding: "0 8px 6px" }}>
+                {scopes.map((s, i) => {
+                  const active = i === scopeIndex;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setScopeIndex(i)}
+                      aria-pressed={active}
+                      style={{
+                        flex: 1,
+                        padding: "6px 8px",
+                        fontFamily: "var(--font-body)",
+                        fontSize: "0.9375rem",
+                        cursor: "pointer",
+                        border: `1px solid ${BORDER}`,
+                        background: active ? CREAM : "transparent",
+                        color: active ? "#1D1D1F" : CREAM,
+                      }}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div
             style={{
               padding: "4px 8px",

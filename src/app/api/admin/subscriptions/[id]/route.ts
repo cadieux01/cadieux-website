@@ -73,6 +73,14 @@ export async function GET(
     (deliveries as DeliveryLite[]) ?? [],
   ).get(sub.id);
 
+  // Per-variant lines — the subscriptions row sums them into one
+  // product_name × quantity, which hides a Multigrain 1 + Plain 1 plan.
+  const { data: items } = await supabaseAdmin
+    .from("subscription_items")
+    .select("product_slug, product_name, quantity_per_delivery")
+    .eq("subscription_id", params.id)
+    .order("created_at", { ascending: true });
+
   // Match GPS coords from the customer's saved addresses (subscriptions
   // carry none). null → the detail page's Maps link uses address text.
   let coords: { latitude: number; longitude: number } | null = null;
@@ -88,7 +96,13 @@ export async function GET(
   }
 
   return NextResponse.json({
-    subscription: { ...sub, customer, ...derived, ...(coords ?? {}) },
+    subscription: {
+      ...sub,
+      customer,
+      ...derived,
+      items: items ?? [],
+      ...(coords ?? {}),
+    },
     deliveries: deliveries ?? [],
   });
 }

@@ -10,6 +10,7 @@ import {
   matchSubscriptionCoordinates,
   type AddressCoordRow,
 } from "@/lib/subscription-coordinates";
+import type { AdminSubscriptionItem } from "@/lib/admin-shared";
 
 const ALLOWED_FILTERS = new Set([
   "all",
@@ -62,6 +63,9 @@ export async function GET(req: NextRequest) {
   const cmap = new Map((customers ?? []).map((c) => [c.id, c]));
 
   let derivedById: Map<string, DerivedSub> | null = null;
+  // subscription_id → per-variant lines. The board shows "Multigrain 1,
+  // Plain 1", which the subscriptions row alone cannot express.
+  const itemsBySub = new Map<string, AdminSubscriptionItem[]>();
   // customer_id → matched non-zero coords (subscriptions have no lat/lng
   // of their own; we pull them from public.addresses). Absent = no usable
   // saved coords → the UI falls back to an address-text Maps search.
@@ -73,8 +77,26 @@ export async function GET(req: NextRequest) {
     const subIds = subs.map((s) => s.id);
     const { data: deliveries } = await supabaseAdmin
       .from("subscription_deliveries")
-      .select("subscription_id, delivery_date, status")
+      .select(
+        "subscription_id, delivery_date, scheduled_date, scheduled_time_slot, slot, sequence, week_number, status",
+      )
       .in("subscription_id", subIds);
+
+    const { data: items } = await supabaseAdmin
+      .from("subscription_items")
+      .select("subscription_id, product_slug, product_name, quantity_per_delivery")
+      .in("subscription_id", subIds)
+      .order("created_at", { ascending: true });
+    for (const it of items ?? []) {
+      const list = itemsBySub.get(it.subscription_id) ?? [];
+      list.push({
+        product_slug: it.product_slug,
+        product_name: it.product_name,
+        quantity_per_delivery: it.quantity_per_delivery,
+      });
+      itemsBySub.set(it.subscription_id, list);
+    }
+
     const subLites: SubLite[] = subs.map((s) => ({
       id: s.id,
       total_weeks: s.total_weeks,
@@ -113,6 +135,7 @@ export async function GET(req: NextRequest) {
       ...s,
       customer: cmap.get(s.customer_id) ?? null,
       ...(derivedById?.get(s.id) ?? {}),
+      ...(enrich ? { items: itemsBySub.get(s.id) ?? [] } : {}),
       ...(coordsBySub.get(s.id) ?? {}),
     })),
   });

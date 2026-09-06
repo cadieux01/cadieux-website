@@ -25,7 +25,19 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import {
   PartnerShareButton,
   type ShareablePartner,
+  type ShareScope,
 } from "@/components/admin/PartnerShareButton";
+import {
+  BORDER,
+  BORDER_SUBTLE,
+  CREAM,
+  DANGER,
+  DANGER_BORDER,
+  INK,
+  TEXT_FADED,
+  TEXT_MUTED,
+  cream,
+} from "@/components/admin/theme";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import {
@@ -41,7 +53,10 @@ import {
   formatAddressFull,
   phonesDiffer,
 } from "@/lib/subscription-display";
-import { composeSubscriptionShareMessage } from "@/lib/subscription-share-message";
+import {
+  composeNextDeliveryShareMessage,
+  composeSubscriptionShareMessage,
+} from "@/lib/subscription-share-message";
 import {
   AdminDeliveryRow,
   AdminSubscriptionRow,
@@ -89,7 +104,7 @@ const SUB_STATUS_OPTION_LABEL: Record<string, string> = {
 function cancelPrompt(s: AdminSubscriptionRow): string {
   const who =
     s.customer?.full_name?.trim() || s.customer_name?.trim() || "this customer";
-  const plan = describeSubscriptionPlan(s, s.total_deliveries);
+  const plan = describeSubscriptionPlan(s);
   const open = s.remaining_deliveries ?? 0;
   const tail =
     open > 0
@@ -100,6 +115,23 @@ function cancelPrompt(s: AdminSubscriptionRow): string {
   return `Cancel ${who}'s subscription?\n\n${
     s.product_name ?? "Subscription"
   }\n${plan}${tail}`;
+}
+
+// Two things are worth sending about a subscription. The rider almost
+// always wants the first, so it leads and is the default.
+function shareScopes(s: AdminSubscriptionRow): ShareScope[] {
+  return [
+    {
+      id: "next",
+      label: "Next delivery",
+      message: composeNextDeliveryShareMessage(s),
+    },
+    {
+      id: "plan",
+      label: "Whole plan",
+      message: composeSubscriptionShareMessage(s),
+    },
+  ];
 }
 
 // Suspense wrapper required by Next.js prerender for any client page
@@ -142,6 +174,8 @@ function SubscriptionsPageInner() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterValue>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Which row's Date cell is showing its subscribed/receives breakdown.
+  const [openDateId, setOpenDateId] = useState<string | null>(null);
   const [range, setRange] = useState<DateRangeValue | null>(() =>
     resolvePreset("this_month"),
   );
@@ -312,7 +346,7 @@ function SubscriptionsPageInner() {
   return (
     <AdminShell
       title="Subscriptions"
-      subtitle="End-date derived from delivery schedule"
+      subtitle="Date = the next delivery you owe"
       actions={
         <>
           <button
@@ -351,9 +385,9 @@ function SubscriptionsPageInner() {
               onClick={() => setFilter(f.value)}
               style={{
                 ...chipBase,
-                color: active ? "#1D1D1F" : "rgba(251,243,212,0.85)",
-                background: active ? "#FBF3D4" : "transparent",
-                borderColor: active ? "#FBF3D4" : "rgba(251,243,212,0.4)",
+                color: active ? INK : cream(0.85),
+                background: active ? CREAM : "transparent",
+                borderColor: active ? CREAM : BORDER,
               }}
             >
               {f.label} · {counts[f.value]}
@@ -365,9 +399,9 @@ function SubscriptionsPageInner() {
       {error ? (
         <div
           style={{
-            border: "1px solid rgba(239,68,68,0.45)",
+            border: `1px solid ${DANGER_BORDER}`,
             padding: "0.8rem 1rem",
-            color: "#EF4444",
+            color: DANGER,
             marginBottom: "1rem",
             fontSize: "1rem",
             fontFamily: "var(--font-body)",
@@ -384,21 +418,21 @@ function SubscriptionsPageInner() {
       ) : (
         <div
           style={{
-            border: "1px solid rgba(251,243,212,0.18)",
+            border: `1px solid ${BORDER_SUBTLE}`,
             borderRadius: 6,
             overflow: "hidden",
           }}
         >
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 880 }}>
+          <table
+            className="subs-table"
+            style={{ width: "100%", borderCollapse: "collapse" }}
+          >
             <thead>
               <tr style={tableHeadRow}>
                 <th style={th}>Customer</th>
                 <th style={th}>Plan</th>
-                <th style={th}>Weeks</th>
-                <th style={th}>Started</th>
-                <th style={th}>Ends</th>
-                <th style={th}>Remaining</th>
+                <th style={th}>Date</th>
                 <th style={th}>Status</th>
                 <th style={th}>Actions</th>
               </tr>
@@ -431,20 +465,17 @@ function SubscriptionsPageInner() {
                     title="Open subscription detail"
                     style={{
                       cursor: "pointer",
-                      background:
-                        i % 2 === 0
-                          ? "rgba(251,243,212,0.025)"
-                          : "transparent",
+                      background: i % 2 === 0 ? cream(0.025) : "transparent",
                     }}
                   >
-                    <td style={td}>
+                    <td style={td} data-label="Customer">
                       <Link
                         href={
                           s.customer_id
                             ? `/admin/customers/${s.customer_id}`
                             : "#"
                         }
-                        style={{ color: "#FBF3D4", textDecoration: "none" }}
+                        style={{ color: CREAM, textDecoration: "none" }}
                       >
                         {s.customer?.full_name ?? "—"}
                       </Link>
@@ -452,7 +483,7 @@ function SubscriptionsPageInner() {
                         <div className="flex flex-wrap items-center gap-2 mt-1">
                           <span
                             style={{
-                              color: "rgba(251,243,212,0.85)",
+                              color: cream(0.85),
                               fontSize: "1rem",
                             }}
                           >
@@ -466,25 +497,19 @@ function SubscriptionsPageInner() {
                         </div>
                       ) : null}
                     </td>
-                    <td style={td}>
-                      <div>{s.product_name}</div>
-                      <div
-                        style={{
-                          color: "rgba(251,243,212,0.7)",
-                          fontSize: "1rem",
-                          marginTop: 2,
-                        }}
-                      >
-                        {describeSubscriptionPlan(s, s.total_deliveries)}
-                      </div>
+                    <td style={td} data-label="Plan">
+                      {/* One line naming the variants and the cadence —
+                          "Multigrain 1, Plain 1 — every week on Sunday". */}
+                      <div>{describeSubscriptionPlan(s)}</div>
                       {rowAddr.hasAny ? (
                         <div
+                          className="sub-addr"
                           title={formatAddressFull(rowAddr)}
                           style={{
-                            color: "rgba(251,243,212,0.55)",
+                            color: TEXT_MUTED,
                             fontSize: "0.875rem",
                             marginTop: 4,
-                            maxWidth: 260,
+                            maxWidth: 280,
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
@@ -492,23 +517,61 @@ function SubscriptionsPageInner() {
                         >
                           {formatAddressShort(rowAddr)}
                           {rowAddr.incomplete ? (
-                            <span style={{ color: "#EF4444" }}>
-                              {" "}
-                              · incomplete
-                            </span>
+                            <span style={{ color: DANGER }}> · incomplete</span>
                           ) : null}
                         </div>
                       ) : null}
                     </td>
-                    <td style={td}>{s.total_weeks}</td>
-                    <td style={td}>{formatDate(s.created_at)}</td>
-                    <td style={td}>
-                      {s.derived_end_date
-                        ? formatDate(s.derived_end_date)
-                        : "—"}
+                    <td style={td} data-label="Date">
+                      {/* The date I owe them, not the day they signed up.
+                          Click to see both. */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenDateId((id) => (id === s.id ? null : s.id))
+                        }
+                        aria-expanded={openDateId === s.id}
+                        style={dateButton}
+                        title="Show subscribed and delivery dates"
+                      >
+                        {s.next_delivery
+                          ? formatDate(s.next_delivery.date)
+                          : "No delivery due"}
+                      </button>
+                      {s.next_delivery?.slot ? (
+                        <div
+                          style={{ color: TEXT_MUTED, fontSize: "0.875rem" }}
+                        >
+                          {s.next_delivery.slot}
+                        </div>
+                      ) : null}
+                      {openDateId === s.id ? (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            paddingTop: 6,
+                            borderTop: `1px solid ${BORDER_SUBTLE}`,
+                            color: TEXT_MUTED,
+                            fontSize: "0.875rem",
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          <div>Subscribed {formatDate(s.created_at)}</div>
+                          <div>
+                            Receives{" "}
+                            {s.next_delivery
+                              ? [
+                                  formatDate(s.next_delivery.date),
+                                  s.next_delivery.slot,
+                                ]
+                                  .filter(Boolean)
+                                  .join(", ")
+                              : "nothing further"}
+                          </div>
+                        </div>
+                      ) : null}
                     </td>
-                    <td style={td}>{s.remaining_deliveries ?? 0}</td>
-                    <td style={td}>
+                    <td style={td} data-label="Status">
                       {/* Inline status control, same shape as the orders
                           board: Select to change, badge underneath so the
                           current state still reads at a glance. */}
@@ -516,6 +579,7 @@ function SubscriptionsPageInner() {
                         value={(s.status ?? "").toLowerCase()}
                         disabled={busy}
                         ariaLabel="Subscription status"
+                        className="sub-status-select"
                         style={statusSelect}
                         onChange={(v) => {
                           if (v === "cancelled" && !confirm(cancelPrompt(s))) {
@@ -542,7 +606,7 @@ function SubscriptionsPageInner() {
                         <StatusBadge status={s.status} />
                       </div>
                     </td>
-                    <td style={td}>
+                    <td style={td} data-label="Actions">
                       <div className="flex flex-wrap gap-2">
                         <Link
                           href={`/admin/subscriptions/${s.id}`}
@@ -558,7 +622,7 @@ function SubscriptionsPageInner() {
                           Open
                         </button>
                         <PartnerShareButton
-                          message={composeSubscriptionShareMessage(s)}
+                          message={shareScopes(s)}
                           partners={partners}
                           partnersLoading={partnersLoading}
                           partnersError={partnersError}
@@ -605,8 +669,8 @@ function SubscriptionsPageInner() {
                             }}
                             style={{
                               ...buttonSm,
-                              color: "#EF4444",
-                              borderColor: "rgba(239,68,68,0.45)",
+                              color: DANGER,
+                              borderColor: DANGER_BORDER,
                               opacity: busy ? 0.5 : 1,
                             }}
                           >
@@ -635,17 +699,71 @@ function SubscriptionsPageInner() {
       <p
         style={{
           marginTop: "1.5rem",
-          color: "rgba(251,243,212,0.5)",
+          color: TEXT_FADED,
           fontSize: "1rem",
           fontFamily: "var(--font-body)",
           maxWidth: 720,
           lineHeight: 1.6,
         }}
       >
-        End date = MAX(delivery_date) across subscription_deliveries, with a
-        fallback to created_at + weeks × 7d (matches the cron reminder rule).
-        Allowed statuses: {SUBSCRIPTION_STATUSES.join(", ")}.
+        Date = the earliest delivery that hasn&rsquo;t happened yet. Click it
+        for the day they subscribed and the day they receive. Allowed
+        statuses: {SUBSCRIPTION_STATUSES.join(", ")}.
       </p>
+
+      {/* One table markup, two shapes. Below 860px the rows stop being a
+          grid and stack into labelled cards — a five-column table cannot
+          be read on a 390px screen, and side-scrolling hides the actions. */}
+      <style jsx global>{`
+        .subs-table {
+          min-width: 880px;
+        }
+        @media (max-width: 860px) {
+          .subs-table {
+            min-width: 0;
+          }
+          .subs-table thead {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            white-space: nowrap;
+          }
+          .subs-table tr {
+            display: block;
+            border-bottom: 1px solid ${BORDER_SUBTLE};
+            padding: 0.35rem 0;
+          }
+          .subs-table td {
+            display: block;
+            min-width: 0;
+            border-bottom: none;
+            padding: 0.4rem 0.9rem;
+            overflow-wrap: anywhere;
+          }
+          .subs-table td::before {
+            content: attr(data-label);
+            display: block;
+            margin-bottom: 0.15rem;
+            color: ${TEXT_MUTED};
+            font-size: 0.875rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+          }
+          /* Inline caps override the ellipsis/max-width tuned for the wide
+             table — on a phone the value simply wraps to the next line. */
+          .subs-table .sub-addr {
+            max-width: none !important;
+            white-space: normal !important;
+            overflow: visible !important;
+          }
+          .subs-table .sub-status-select > button {
+            max-width: none !important;
+            width: 100% !important;
+          }
+        }
+      `}</style>
     </AdminShell>
   );
 }
@@ -942,9 +1060,9 @@ function SubscriptionDrawer({
               fontSize: "1rem",
             }}
           >
-            <span style={{ color: "rgba(251,243,212,0.5)" }}>Plan</span>
+            <span style={{ color: TEXT_FADED }}>Plan</span>
             <span style={{ textAlign: "right", maxWidth: 360 }}>
-              {describeSubscriptionPlan(subscription, deliveries.length)}
+              {describeSubscriptionPlan(subscription)}
             </span>
           </div>
           <div
@@ -1271,7 +1389,7 @@ function Placeholder({ children }: { children: React.ReactNode }) {
 
 const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
-  border: "1px solid rgba(251,243,212,0.4)",
+  border: `1px solid ${BORDER}`,
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -1282,12 +1400,12 @@ const chipBase: React.CSSProperties = {
 
 const chipNeutral: React.CSSProperties = {
   ...chipBase,
-  color: "rgba(251,243,212,0.85)",
+  color: cream(0.85),
 };
 
 const tableHeadRow: React.CSSProperties = {
-  background: "rgba(251,243,212,0.08)",
-  color: "rgba(251,243,212,0.9)",
+  background: cream(0.08),
+  color: cream(0.9),
   textTransform: "uppercase",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",
@@ -1298,16 +1416,32 @@ const th: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
   fontWeight: 400,
-  borderBottom: "1px solid rgba(251,243,212,0.15)",
+  borderBottom: `1px solid ${cream(0.15)}`,
 };
 
 const td: React.CSSProperties = {
   padding: "0.7rem 1rem",
   fontFamily: "var(--font-body)",
-  color: "#FBF3D4",
+  color: CREAM,
   fontSize: "1rem",
   verticalAlign: "top",
-  borderBottom: "1px solid rgba(251,243,212,0.06)",
+  borderBottom: `1px solid ${cream(0.06)}`,
+};
+
+// The Date cell's own trigger. Looks like the text it replaces, but it is
+// a real button so the row-click guard leaves it alone.
+const dateButton: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  padding: 0,
+  color: CREAM,
+  fontFamily: "var(--font-body)",
+  fontSize: "1rem",
+  textAlign: "left",
+  cursor: "pointer",
+  textDecoration: "underline",
+  textUnderlineOffset: "3px",
+  textDecorationColor: BORDER,
 };
 
 // Metrics for the shared ui/Select — same values the orders board uses, so
@@ -1317,8 +1451,8 @@ const td: React.CSSProperties = {
 const statusSelect: React.CSSProperties = {
   padding: "0.3rem 0.5rem",
   background: "transparent",
-  border: "1px solid rgba(251,243,212,0.45)",
-  color: "#FBF3D4",
+  border: `1px solid ${cream(0.45)}`,
+  color: CREAM,
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.1em",
@@ -1335,8 +1469,8 @@ const statusSelect: React.CSSProperties = {
 const buttonSm: React.CSSProperties = {
   padding: "0.3rem 0.7rem",
   background: "transparent",
-  border: "1px solid rgba(251,243,212,0.45)",
-  color: "#FBF3D4",
+  border: `1px solid ${cream(0.45)}`,
+  color: CREAM,
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",

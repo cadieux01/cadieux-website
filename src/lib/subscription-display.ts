@@ -1,12 +1,12 @@
 // Display helpers for the admin Subscriptions surface (list + detail).
 //
 // Two jobs:
-//   1. describeSubscriptionPlan — turn the cryptic column soup
-//      (quantity_per_delivery / days / total_weeks / delivery count) into
-//      ONE sentence where every number carries a unit, so "4" is never
-//      shown bare. The delivery TOTAL always comes from the real
-//      subscription_deliveries count the caller passes in — never
-//      weeks × days, which lies on custom / partial plans.
+//   1. describeSubscriptionPlan — ONE line naming what is in the bag and
+//      when it goes out: "Multigrain 1, Plain 1 — every week on Sunday".
+//      The variants come from subscription_items, because the
+//      subscriptions row sums them into a single product_name and a
+//      quantity_per_delivery of 2 — which reads as two multigrain loaves
+//      and is simply wrong for the very common 1 + 1 plan.
 //   2. resolveSubscriptionAddress — the address is collected at signup
 //      (delivery_address jsonb, or the flat customer_* snapshot on legacy
 //      rows) but never shown. This normalises the two shapes into one and
@@ -17,73 +17,116 @@
 // module is pure string logic.
 
 import { DAY_LABEL } from "@/lib/subscription-ui";
-import type { AdminSubscriptionRow } from "@/lib/admin-shared";
+import { variantLabel } from "@/lib/order-share-message";
+import type {
+  AdminSubscriptionItem,
+  AdminSubscriptionRow,
+} from "@/lib/admin-shared";
 
-// ── Plan sentence ───────────────────────────────────────────────────
+// ── Plan line ───────────────────────────────────────────────────────
 
-function loafClause(qty: number | null | undefined): string | null {
-  if (qty == null || !Number.isFinite(qty) || qty <= 0) return null;
-  return `${qty} ${qty === 1 ? "loaf" : "loaves"} per delivery`;
-}
+/** Everything the plan line reads. Both the list row and the detail page
+ *  pass a whole AdminSubscriptionRow; this keeps the dependency honest. */
+type PlanShape = Pick<
+  AdminSubscriptionRow,
+  "product_name" | "quantity_per_delivery"
+> & {
+  items?: AdminSubscriptionItem[] | null;
+  days?: string[] | null;
+  day_of_week?: string | null;
+  slots_by_day?: Record<string, string> | null;
+  slot?: string | null;
+  time_slot?: string | null;
+};
 
-/** Human day list. Single day → "every Thursday"; multiple → pluralised
- *  and joined ("Tuesdays and Wednesdays", "Mondays, Wednesdays and
- *  Fridays"). Unknown keys fall through as-is. */
-function daysClause(days: string[] | null | undefined): string | null {
-  if (!days || days.length === 0) return null;
-  const labels = days
-    .map((d) => DAY_LABEL[String(d).toLowerCase()] ?? String(d))
-    .filter(Boolean);
-  if (labels.length === 0) return null;
-  if (labels.length === 1) return `every ${labels[0]}`;
-  const plural = labels.map((l) => `${l}s`);
-  const last = plural[plural.length - 1];
-  const head = plural.slice(0, -1);
-  return `${head.join(", ")} and ${last}`;
-}
-
-function weeksClause(weeks: number | null | undefined): string | null {
-  // weeks = 0 exists on custom plans → omit the clause entirely.
-  if (weeks == null || !Number.isFinite(weeks) || weeks <= 0) return null;
-  return `${weeks} ${weeks === 1 ? "week" : "weeks"}`;
-}
-
-function deliveriesClause(count: number | null | undefined): string | null {
-  if (count == null || !Number.isFinite(count) || count <= 0) return null;
-  return `${count} ${count === 1 ? "delivery" : "deliveries"} total`;
-}
+const DAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
 /**
- * One-sentence plan summary. `deliveryCount` MUST be the real
- * subscription_deliveries row count (list: sub.total_deliveries; detail:
- * deliveries.length) — never weeks × days.
- *
- * Examples:
- *   "4 loaves per delivery · every Thursday · 1 week · 1 delivery total"
- *   "2 loaves per delivery · Tuesdays and Wednesdays · 2 deliveries total"
+ * The variants in one delivery. Rows written before subscription_items
+ * existed fall back to the summed product_name × quantity pair on the
+ * subscription itself, which is all they have.
  */
-export function describeSubscriptionPlan(
-  sub: Pick<AdminSubscriptionRow, "quantity_per_delivery" | "total_weeks"> & {
-    days?: string[] | null;
-    day_of_week?: string | null;
-  },
-  deliveryCount: number | null | undefined,
-): string {
-  const days =
+export function subscriptionItems(sub: PlanShape): AdminSubscriptionItem[] {
+  const rows = (sub.items ?? []).filter(
+    (i) => Number(i.quantity_per_delivery) > 0,
+  );
+  if (rows.length > 0) return rows;
+  const qty = Number(sub.quantity_per_delivery ?? 0);
+  if (!Number.isFinite(qty) || qty <= 0) return [];
+  return [
+    {
+      product_slug: "",
+      product_name: sub.product_name,
+      quantity_per_delivery: qty,
+    },
+  ];
+}
+
+/** "Multigrain 1, Plain 1" — names the variants, never a bare total. */
+export function formatSubscriptionItems(sub: PlanShape): string {
+  const parts = subscriptionItems(sub).map(
+    (i) => `${variantLabel(i.product_name)} ${i.quantity_per_delivery}`,
+  );
+  return parts.length > 0 ? parts.join(", ") : "—";
+}
+
+/** The days a plan runs, deduped and in week order — the stored array is
+ *  in pick order, so a Thursday+Friday plan arrives as ["fri","thu"]. */
+export function subscriptionDays(sub: PlanShape): string[] {
+  const raw =
     sub.days && sub.days.length > 0
       ? sub.days
       : sub.day_of_week
         ? [sub.day_of_week]
-        : null;
+        : [];
+  const keys = Array.from(
+    new Set(raw.map((d) => String(d).toLowerCase()).filter(Boolean)),
+  );
+  return keys.sort((a, b) => {
+    const ia = DAY_ORDER.indexOf(a);
+    const ib = DAY_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+}
 
-  const clauses = [
-    loafClause(sub.quantity_per_delivery),
-    daysClause(days),
-    weeksClause(sub.total_weeks),
-    deliveriesClause(deliveryCount),
-  ].filter(Boolean) as string[];
+function joinHuman(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
 
-  return clauses.length > 0 ? clauses.join(" · ") : "—";
+/** "every week on Sunday" / "every week on Thursday and Friday". */
+export function describeSubscriptionCadence(sub: PlanShape): string | null {
+  const labels = subscriptionDays(sub).map((d) => DAY_LABEL[d] ?? d);
+  return labels.length > 0 ? `every week on ${joinHuman(labels)}` : null;
+}
+
+/** The slot for one day, falling back to the plan-wide one. */
+export function slotForDay(sub: PlanShape, day: string): string | null {
+  return sub.slots_by_day?.[day] ?? sub.slot ?? sub.time_slot ?? null;
+}
+
+/**
+ * ONE line for the plan: what is in the bag, and when it goes out.
+ *
+ *   "Multigrain 1, Plain 1 — every week on Sunday"
+ *   "Plain 5 — every week on Thursday and Friday"
+ */
+export function describeSubscriptionPlan(sub: PlanShape): string {
+  const items = formatSubscriptionItems(sub);
+  const cadence = describeSubscriptionCadence(sub);
+  if (items === "—") return cadence ?? "—";
+  return cadence ? `${items} — ${cadence}` : items;
+}
+
+/** Days and times only, on ONE line: "Sunday · 07:30", or
+ *  "Thursday · 20:00 · Friday · 16:30". A day with no slot shows alone. */
+export function describeDeliveryDays(sub: PlanShape): string {
+  const parts = subscriptionDays(sub).map((d) => {
+    const label = DAY_LABEL[d] ?? d;
+    const slot = slotForDay(sub, d);
+    return slot ? `${label} · ${slot}` : label;
+  });
+  return parts.length > 0 ? parts.join(" · ") : "—";
 }
 
 // ── Address ─────────────────────────────────────────────────────────
