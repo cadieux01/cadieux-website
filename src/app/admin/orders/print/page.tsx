@@ -23,6 +23,7 @@ import {
 } from "@/components/admin/DateRangeDropdown";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
+import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import {
   AdminOrderItemSnapshot,
   AdminOrderRow,
@@ -224,7 +225,13 @@ function PrintOrdersPageInner() {
           {group.slots.map(({ slot, rows }) => (
             <div key={slot} style={{ marginBottom: "0.8rem" }}>
               <h3 style={slotHeading}>
-                Slot: {slot === "__no_slot__" ? "Unscheduled" : slot}{" "}
+                {/* Grouping and sorting above stay on the raw key; only
+                    the printed label is humanised, so the packing sheet
+                    reads the same as the screen. */}
+                Slot:{" "}
+                {slot === "__no_slot__"
+                  ? "Unscheduled"
+                  : formatSlotForDisplay(slot)}{" "}
                 <span style={{ fontWeight: 400, color: "rgba(29,29,31,0.7)" }}>
                   · {rows.length} order{rows.length === 1 ? "" : "s"}
                 </span>

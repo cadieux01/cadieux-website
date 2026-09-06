@@ -56,6 +56,7 @@ import Select from "@/components/ui/Select";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isShareable } from "@/lib/order-share-message";
 import { LoafDots } from "@/components/admin/LoafDots";
+import { formatSlotForDisplay } from "@/lib/delivery-slots";
 
 type SortKey = "created_desc" | "delivery_asc";
 
@@ -892,7 +893,11 @@ function OrdersPageInner() {
                             letterSpacing: "0.05em",
                           }}
                         >
-                          {o.delivery_slot}
+                          {/* Same formatter as the detail page and the CSV, so
+                              one order never reads three different ways.
+                              Legacy bare "07:30" rows become "7:30–8:00 AM";
+                              the sort above still compares the raw value. */}
+                          {formatSlotForDisplay(o.delivery_slot)}
                         </div>
                       ) : null}
                       {o.is_preorder ? (
@@ -1572,7 +1577,10 @@ function exportCsv(rows: AdminOrderRow[]): void {
     { header: "Total", value: (o) => o.total_amount ?? 0 },
     { header: "Status", value: (o) => o.status ?? "" },
     { header: "Delivery date", value: (o) => o.delivery_date ?? "" },
-    { header: "Delivery slot", value: (o) => o.delivery_slot ?? "" },
+    {
+      header: "Delivery slot",
+      value: (o) => formatSlotForDisplay(o.delivery_slot),
+    },
     { header: "Delivery address", value: (o) => o.delivery_address ?? "" },
     { header: "Created", value: (o) => o.created_at },
   ]);
