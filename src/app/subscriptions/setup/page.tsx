@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   SETUP_PRODUCTS,
   TIME_SLOTS,
-  MIN_UNITS_PER_DELIVERY,
   fetchSubscriptionPlans,
   formatSlot,
   parseIso,
@@ -107,7 +106,10 @@ export default function SetupPage() {
     // wizard can't advance; server side still refuses on submit.
     if (preorderMode && step === 1) return false;
     switch (step) {
-      case 1: return totalUnitsPerDelivery(state) >= MIN_UNITS_PER_DELIVERY;
+      // One loaf is enough. There is no quantity minimum — the only
+      // subscription minimum is the two distinct weekdays checked in
+      // step 2 below.
+      case 1: return totalUnitsPerDelivery(state) > 0;
       case 2:
         // Subscription rule: ≥2 DISTINCT weekdays across the picked
         // dates. Multiple dates on the same weekday still count as one
@@ -375,13 +377,11 @@ function Step1Product({
   totalUnits: number;
   onAdjustQty: (slug: string, delta: number) => void;
 }) {
-  const short = MIN_UNITS_PER_DELIVERY - totalUnits;
   return (
     <section>
       <StepTitle>Choose your breads</StepTitle>
       <p style={{ color: FADED, fontSize: 16, marginTop: -6, marginBottom: 18 }}>
-        Mix any combination — a subscription needs at least{" "}
-        {MIN_UNITS_PER_DELIVERY} loaves per delivery in total.
+        Mix any combination — one loaf per delivery is enough.
       </p>
       <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
         {plans.map((p) => {
@@ -461,14 +461,14 @@ function Step1Product({
       <div
         style={{
           fontSize: 16,
-          color: short > 0 ? "#991B1B" : "#1D1D1F", fontWeight: 500,
+          color: totalUnits === 0 ? "#991B1B" : "#1D1D1F", fontWeight: 500,
           letterSpacing: "0.02em",
         }}
         role="status"
       >
-        {short > 0
-          ? `Add ${short} more ${short === 1 ? "loaf" : "loaves"} to reach the ${MIN_UNITS_PER_DELIVERY}-loaf minimum.`
-          : `${totalUnits} loaves per delivery.`}
+        {totalUnits === 0
+          ? "Pick at least one loaf."
+          : `${totalUnits} ${totalUnits === 1 ? "loaf" : "loaves"} per delivery.`}
       </div>
     </section>
   );

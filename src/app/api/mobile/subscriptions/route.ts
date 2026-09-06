@@ -754,15 +754,6 @@ async function handleMultiVariant(
     });
   }
 
-  // Multi-variant minimum: ≥ 2 units per delivery across all variants.
-  if (totalUnits < 2) {
-    return fail(
-      400,
-      "A subscription must include at least 2 units per delivery.",
-      "min_units",
-    );
-  }
-
   const serverAmount = amountPerDelivery * deliveries.length;
 
   // Optional client-price cross-check (hint-only; server is authoritative).

@@ -411,16 +411,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  if (totalUnits < 2) {
-    return NextResponse.json(
-      {
-        error: "A subscription must include at least 2 units per delivery.",
-        code: "min_units",
-      },
-      { status: 400 },
-    );
-  }
-
   const serverAmount = amountPerDelivery * deliveryCount;
 
   // 8. Compose insert row via the SHARED helper. Same column shape as

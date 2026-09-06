@@ -143,17 +143,19 @@ const LEGACY_V1_KEY = "cadieux_setup_v1";
 export const ADDRESS_KEY = "cadieux_setup_address_v1";
 
 // V10 multi-variant: quantity is now PER SLUG (independent qty for each
-// bread), and a subscription must total at least 2 units per delivery
-// across all variants. `qtyBySlug` maps a product slug → units per
-// delivery (>0 means selected). The old single-variant shape
-// ({ productSlug, qty }) is migrated transparently on load.
+// bread). `qtyBySlug` maps a product slug → units per delivery (>0 means
+// selected). The old single-variant shape ({ productSlug, qty }) is
+// migrated transparently on load.
+//
+// There is NO minimum on loaves per delivery — one loaf is a valid
+// subscription. The only subscription minimum is TWO DIFFERENT DELIVERY
+// DAYS, which lives in subscription-min-days.ts and is unrelated to
+// quantity.
 export type SetupState = {
   qtyBySlug: Record<string, number>;          // slug -> units per delivery (>0)
   selectedDates: string[];                    // ISO dates, sorted ascending
   slotByDate: Record<string, string>;         // ISO date -> "06:00-07:00"
 };
-
-export const MIN_UNITS_PER_DELIVERY = 2;
 
 export function emptySetupState(): SetupState {
   return {

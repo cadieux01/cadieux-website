@@ -252,8 +252,8 @@ function SubscribePanel() {
         </div>
 
         <p style={{ fontSize: 16, color: "#024628", lineHeight: 1.55, marginBottom: 18, maxWidth: 460 }}>
-          Mix any combination of loaves — a subscription needs at least 2 loaves
-          per delivery in total. Pick your dates and delivery windows in the next step.
+          Mix any combination of loaves — one loaf per delivery is enough.
+          Pick your dates and delivery windows in the next step.
         </p>
 
         <Link

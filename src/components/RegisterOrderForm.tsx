@@ -347,7 +347,7 @@ export function RegisterOrderForm({
     if (deliveryAddress.trim().length === 0) return false;
     if (selectedDates.length === 0) return false;
     if (selectedDates.some((iso) => !slotByDate[iso])) return false;
-    if (totalUnitsPerDelivery < 2) return false;
+    if (totalUnitsPerDelivery < 1) return false;
     return true;
   }, [
     submitBusy,
@@ -849,7 +849,7 @@ export function RegisterOrderForm({
                 <>Subtotal (hint): {formatINR(subtotal)}. Server re-derives from DB.</>
               ) : (
                 <>
-                  Per-delivery units: {totalUnitsPerDelivery} (minimum 2).
+                  Per-delivery units: {totalUnitsPerDelivery}.
                   Estimated total (hint): {formatINR(subtotal)} over{" "}
                   {deliveriesCount} deliveries.
                 </>

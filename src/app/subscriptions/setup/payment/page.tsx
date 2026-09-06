@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   SETUP_PRODUCTS,
-  MIN_UNITS_PER_DELIVERY,
   buildDeliveries,
   clearSetupState,
   fetchSubscriptionPlans,
@@ -51,12 +50,13 @@ export default function PaymentPage() {
     setHydrated(true);
     const s = loadSetupState();
     const a = loadAddress();
-    // Backstop: kick back to the wizard if stale localStorage state
-    // fails the units-per-delivery, dates-picked, OR ≥N-distinct-weekdays
-    // gate. The server rejects the same shape, but redirecting is a
-    // friendlier fail before the network round-trip.
+    // Backstop: kick back to the wizard if stale localStorage state has
+    // no loaves at all, no dates, or fewer than N distinct weekdays. The
+    // server rejects the same shape, but redirecting is a friendlier
+    // fail before the network round-trip. Note there is no minimum on
+    // the number of loaves — one is fine.
     if (
-      totalUnitsPerDelivery(s) < MIN_UNITS_PER_DELIVERY ||
+      totalUnitsPerDelivery(s) === 0 ||
       s.selectedDates.length === 0 ||
       distinctWeekdaysFromDates(s.selectedDates) < MIN_SUBSCRIPTION_DAYS_PER_WEEK
     ) {

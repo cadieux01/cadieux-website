@@ -610,18 +610,6 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Multi-variant minimum: at least 2 units per delivery across all
-      // variants (mirrors the DB trigger enforce_min_two_units).
-      if (totalUnits < 2) {
-        return NextResponse.json(
-          {
-            error: "A subscription must include at least 2 units per delivery.",
-            code: "min_units",
-          },
-          { status: 400 },
-        );
-      }
-
       const serverAmount = amountPerDelivery * deliveryCount;
       const clientAmount = Number(body.clientAmount ?? total);
       if (!Number.isFinite(clientAmount) || Math.abs(clientAmount - serverAmount) > 0.5) {
