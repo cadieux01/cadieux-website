@@ -11,6 +11,7 @@ import {
   type AddressCoordRow,
 } from "@/lib/subscription-coordinates";
 import type { AdminSubscriptionItem } from "@/lib/admin-shared";
+import { UNPAID_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
 const ALLOWED_FILTERS = new Set([
   "all",
@@ -38,6 +39,9 @@ export async function GET(req: NextRequest) {
   let query = supabaseAdmin
     .from("subscriptions")
     .select("*")
+    // Unpaid shells (row written, Razorpay sheet never completed) must not
+    // reach the fulfilment floor — bread gets set aside for them otherwise.
+    .not("payment_status", "in", UNPAID_SUBSCRIPTION_FILTER)
     .order("created_at", { ascending: false });
 
   if (filter !== "all") {

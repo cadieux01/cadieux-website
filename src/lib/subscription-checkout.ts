@@ -27,6 +27,12 @@ import type { DayKey } from "@/lib/subscription-dates";
 
 /** One priced variant on the subscription. Column names match the
  *  subscription_items table exactly. */
+/** Subscriptions are prepaid. `null` = created but not yet paid;
+ *  "razorpay" = paid online; "cash" = admin collected cash UP FRONT.
+ *  "cod" is deliberately absent — pay-on-delivery no longer exists on
+ *  subscriptions and the DB rejects it. */
+export type SubscriptionPaymentMethod = "razorpay" | "cash" | null;
+
 export type SubscriptionSnapItem = {
   product_slug: string;
   product_name: string;
@@ -89,7 +95,17 @@ export type MultiVariantSubscriptionInsertCtx = {
     pincode: string | null;
   };
   subStatus: "active" | "pending_confirmation";
-  paymentMethod: "cod" | null;
+  /** Prepaid only. "cod" is rejected by the subscriptions_no_cod CHECK. */
+  paymentMethod: SubscriptionPaymentMethod;
+  /** Initial payment_status. "created" = Razorpay order raised, awaiting
+   *  a verified signature. "paid" = admin collected cash up front. */
+  paymentStatus: "pending" | "created" | "paid";
+  /** Razorpay order id when the customer is about to pay. */
+  razorpayOrderId?: string | null;
+  /** PER-DELIVERY delivery fee (from the shared computeDeliveryFee). */
+  deliveryFeeInr: number;
+  /** Driving km to the nearest pickup, for auditing the fee band. */
+  distanceKm: number | null;
 };
 
 // ── Insert-row builder ──────────────────────────────────────────────
@@ -124,6 +140,10 @@ export function buildMultiVariantSubscriptionInsert(
     deliveryAddressJson,
     subStatus,
     paymentMethod,
+    paymentStatus,
+    razorpayOrderId,
+    deliveryFeeInr,
+    distanceKm,
   } = ctx;
 
   return {
@@ -154,9 +174,13 @@ export function buildMultiVariantSubscriptionInsert(
       slot_mode === "same" ? slot : (slots_by_day?.[dayKeys[0]] ?? null),
     total_weeks: weeks,
     delivery_address: deliveryAddressJson,
+    // serverAmount is the FULL prepaid total: (loaves + fee) × deliveries.
     total_amount: serverAmount,
-    payment_status: "pending",
+    payment_status: paymentStatus,
     payment_method: paymentMethod,
+    razorpay_order_id: razorpayOrderId ?? null,
+    delivery_fee_inr: deliveryFeeInr,
+    distance_km: distanceKm,
   };
 }
 
@@ -193,6 +217,9 @@ export async function insertMultiVariantSubscription(
   subInsertRow: Record<string, unknown>,
   snapItems: SubscriptionSnapItem[],
   deliveryTemplate: SubscriptionDeliveryRow[],
+  /** Per-delivery fee, stamped on every delivery row so cancelling one
+   *  delivery has an exact refund figure without re-deriving distance. */
+  deliveryFeeInr: number,
 ): Promise<MultiVariantWriteResult> {
   // 1. Parent row.
   const { data: sub, error: subErr } = await supabase
@@ -238,6 +265,7 @@ export async function insertMultiVariantSubscription(
   const deliveryRows = deliveryTemplate.map((d) => ({
     subscription_id: sub.id,
     ...d,
+    delivery_fee_inr: deliveryFeeInr,
   }));
   if (deliveryRows.length > 0) {
     const { error: delErr } = await supabase

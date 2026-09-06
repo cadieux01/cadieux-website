@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { UNPAID_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
 // Analytics overview endpoint. All aggregations happen in this route so
 // the dashboard can render off a single network round-trip.
@@ -120,6 +121,8 @@ export async function GET(req: NextRequest) {
     .select(
       "id, product_name, product_slug, total_amount, status, created_at, updated_at, bread_price, quantity_per_delivery, days, frequency",
     )
+    // Unpaid shells would inflate MRR and revenue with money nobody paid.
+    .not("payment_status", "in", UNPAID_SUBSCRIPTION_FILTER)
     .order("created_at", { ascending: false })
     .limit(5000);
 

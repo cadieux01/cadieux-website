@@ -14,8 +14,11 @@
 // serviceability guard is identical between the two modes: the same
 // endpoints do the actual writes. The team-PIN mode additionally has
 // server-side clamps on /api/admin/orders + /api/admin/subscriptions/create
-// that force payment=cod + status=pending regardless of what the client
-// sends (see those routes).
+// that force an unpaid order (cod for one-time, unpaid for subscriptions)
+// + status=pending regardless of what the client sends (see those routes).
+//
+// Subscriptions are PREPAID: no COD anywhere on that path, and the server
+// applies the per-delivery distance fee + 10 km gate before inserting.
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -202,9 +205,12 @@ export function RegisterOrderForm({
   >("active");
 
   // ── Payment/status/override ────────────────────────────────────────
-  // In team_order mode the server clamps payment→cod + status→pending
+  // In team_order mode the server clamps payment→unpaid + status→pending
   // regardless of what we send, but we still gate the UI here so team
   // members are never presented with options they cannot use.
+  //
+  // COD only exists on the one-time path. Subscriptions are prepaid, so
+  // there the "cod" value is sent as "unpaid" (see the submit handler).
   const isTeam = authMode === "team_order";
   const [payment, setPayment] = useState<"cod" | "paid">("cod");
   const [status, setStatus] = useState<string>("pending");
@@ -475,7 +481,10 @@ export function RegisterOrderForm({
         days: daysUnion,
         weeks: weeksDistinct,
         items: subItems,
-        payment,
+        // Subscriptions are PREPAID — there is no COD. "paid" means the
+        // cash was collected up front (recorded as payment_method 'cash');
+        // anything else leaves the subscription unpaid.
+        payment: payment === "paid" ? "paid" : "unpaid",
         status: subStatus,
       };
 
@@ -1028,7 +1037,7 @@ export function RegisterOrderForm({
           )}
 
           {/* ── Payment + status ── */}
-          {/* In team_order mode payment is always COD and one-time
+          {/* In team_order mode payment is always unpaid and one-time
               orders are always 'pending' — server clamps and the UI
               hides the choice so team members don't accidentally
               record cash as collected. */}
@@ -1042,10 +1051,21 @@ export function RegisterOrderForm({
                   onChange={(e) => setPayment(e.target.value as "cod" | "paid")}
                   style={input}
                 >
-                  <option value="cod">COD — unpaid</option>
+                  <option value="cod">
+                    {orderType === "subscription"
+                      ? "Unpaid — collect the full plan before the first delivery"
+                      : "COD — unpaid"}
+                  </option>
                   <option value="paid">Mark as paid (cash collected)</option>
                 </select>
               </label>
+              {orderType === "subscription" && (
+                <p style={mutedNote}>
+                  Subscriptions are prepaid — there is no cash on delivery. The
+                  full plan (loaves + delivery fee &times; every scheduled
+                  delivery) is charged up front.
+                </p>
+              )}
               {orderType === "one_time" && (
                 <label style={label}>
                   Initial order status
@@ -1063,8 +1083,9 @@ export function RegisterOrderForm({
           )}
           {isTeam && (
             <div style={{ ...mutedNote, textAlign: "center" }}>
-              Team orders are always recorded as COD (unpaid) and pending
-              confirmation — Sunny will review before dispatch.
+              {orderType === "subscription"
+                ? "Team subscriptions are always recorded as unpaid and pending confirmation — subscriptions are prepaid, so Sunny will review and take payment before the first delivery."
+                : "Team orders are always recorded as COD (unpaid) and pending confirmation — Sunny will review before dispatch."}
             </div>
           )}
 

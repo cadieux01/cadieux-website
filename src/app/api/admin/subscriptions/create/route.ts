@@ -29,9 +29,13 @@
 // Admin bypasses:
 //   • OTP / phone-verification cookie (admin is the caller)
 //   • 12h10m first-delivery booking-lead gate (admin may back-date walk-ins)
-//   • Serviceability (subscriptions don't gate on pincode/distance today;
-//     the flag is accepted for parity with the one-time endpoint but has
-//     no serviceability check to skip.)
+//
+// Admin does NOT bypass:
+//   • The delivery fee + 10 km distance gate. It applies on all three
+//     creation paths (website, mobile, admin) — an admin cannot hand-enter
+//     an out-of-range subscription any more than a customer can.
+//   • COD. Subscriptions are PREPAID; payment_method is 'cash' (collected
+//     up front) or null (unpaid). Never 'cod' — the DB rejects it.
 //
 // Server-side pricing (subscriptionUnitPrice), 2-unit minimum, and the
 // price-mismatch guard are all still enforced — admin cannot forge a
@@ -63,6 +67,10 @@ import {
   MIN_DAYS_ERROR_CODE,
   MIN_DAYS_ERROR_MESSAGE,
 } from "@/lib/subscription-min-days";
+import {
+  quoteSubscriptionDeliveryFee,
+  computeSubscriptionTotal,
+} from "@/lib/subscription-delivery-fee";
 
 // Client-supplied delivery row shape — mirrors /api/checkout's
 // ClientDelivery type (see route.ts:317-324). `slot` may be null when a
@@ -89,10 +97,11 @@ export async function POST(req: NextRequest) {
 
   // Team-PIN clamps — no team member can mark a subscription active
   // (Sunny reviews first) or record cash as collected. Applied before
-  // any DB work so a hand-crafted request cannot bypass.
+  // any DB work so a hand-crafted request cannot bypass. "unpaid" (not
+  // "cod") — subscriptions are prepaid and COD no longer exists on them.
   if (isTeam) {
     body.status = "pending_confirmation";
-    body.payment = "cod";
+    body.payment = "unpaid";
   }
 
   // 1. Phone + name. Same 10-digit normalization as the one-time path.
@@ -411,7 +420,27 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const serverAmount = amountPerDelivery * deliveryCount;
+  // 7b. Delivery fee + 10 km gate. Same shared band table one-time orders
+  //     use, charged PER DELIVERY. Admin is not exempt: if we can't
+  //     resolve the distance, or the address is beyond 10 km, we refuse
+  //     rather than guess a fee and bill it × deliveryCount up front.
+  const feeQuote = await quoteSubscriptionDeliveryFee(pincode);
+  if (!feeQuote.ok) {
+    return NextResponse.json(
+      { error: feeQuote.error, code: feeQuote.code },
+      { status: feeQuote.status },
+    );
+  }
+  const feePerDelivery = feeQuote.feeInr;
+  const distanceKm = feeQuote.distanceKm;
+
+  // Counted by DELIVERY DAYS: ((loaves × price) + fee) × deliveries.
+  const breakdown = computeSubscriptionTotal(
+    amountPerDelivery,
+    feePerDelivery,
+    deliveryCount,
+  );
+  const serverAmount = breakdown.grandTotal;
 
   // 8. Compose insert row via the SHARED helper. Same column shape as
   //    the public checkout produces — no drift possible. slot_mode +
@@ -429,10 +458,12 @@ export async function POST(req: NextRequest) {
     typeof body.status === "string" ? body.status.toLowerCase() : "active";
   const subStatus: "active" | "pending_confirmation" =
     rawStatus === "pending_confirmation" ? "pending_confirmation" : "active";
-  const paymentMethod: "cod" | null = body.payment === "paid" ? "cod" : "cod";
-  // payment_status is handled inside buildMultiVariantSubscriptionInsert
-  // (defaults to 'pending'); once inserted we bump it to 'paid' below if
-  // the admin marked cash-collected. Keeps the shared insert path intact.
+  // Prepaid only. Admin either collected the whole plan in cash UP FRONT
+  // ('cash' + paid) or hasn't been paid yet (null + pending). 'cod' is
+  // gone — the subscriptions_no_cod CHECK rejects it outright.
+  const isPaid = body.payment === "paid";
+  const paymentMethod: "cash" | null = isPaid ? "cash" : null;
+  const paymentStatus: "paid" | "pending" = isPaid ? "paid" : "pending";
 
   // For the summary parent-row bundle, build slots_by_day from the
   // resolved template when the admin sent "custom" mode without one.
@@ -470,6 +501,9 @@ export async function POST(req: NextRequest) {
     deliveryAddressJson,
     subStatus,
     paymentMethod,
+    paymentStatus,
+    deliveryFeeInr: feePerDelivery,
+    distanceKm,
   });
 
   const write = await insertMultiVariantSubscription(
@@ -477,26 +511,10 @@ export async function POST(req: NextRequest) {
     subInsertRow,
     snapItems,
     deliveryTemplate,
+    feePerDelivery,
   );
   if (!write.ok) {
     return NextResponse.json(write.error.body, { status: write.error.status });
-  }
-
-  // 9. Optional: mark paid if admin collected cash up-front. Same shape
-  //    the one-time admin path uses (paid_at is set, refund gate can't
-  //    fire because razorpay_payment_id is absent).
-  const isPaid = body.payment === "paid";
-  if (isPaid) {
-    const { error: payErr } = await supabaseAdmin
-      .from("subscriptions")
-      .update({ payment_status: "paid" })
-      .eq("id", write.subscription_id);
-    if (payErr) {
-      console.error(
-        "[admin/subscriptions POST] mark-paid failed:",
-        payErr.message,
-      );
-    }
   }
 
   void recordAuditEvent({
@@ -519,9 +537,11 @@ export async function POST(req: NextRequest) {
         qty: s.quantity_per_delivery,
       })),
       total_amount: serverAmount,
+      delivery_fee_inr: feePerDelivery,
+      distance_km: distanceKm,
       deliveries: write.deliveries,
       source: clientDeliveries && clientDeliveries.length > 0 ? "per_date" : "uniform",
-      payment: isPaid ? "paid" : "cod",
+      payment: isPaid ? "cash_paid" : "unpaid",
       status: subStatus,
       via: isTeam ? "team_order" : "admin",
     },
@@ -534,5 +554,6 @@ export async function POST(req: NextRequest) {
     deliveries: write.deliveries,
     items: write.items,
     total_amount: serverAmount,
+    breakdown,
   });
 }

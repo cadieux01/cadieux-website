@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
+import { isUnpaidSubscription } from "@/lib/subscription-visibility";
 import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
 const supabaseAdmin = createClient(
@@ -49,6 +50,13 @@ export async function GET(
     .maybeSingle();
 
   if (error || !sub) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // A shell whose payment never completed is not a subscription. Same 404 —
+  // a stale tab or a bookmarked deeplink must not render it as if it were
+  // live and scheduled.
+  if (isUnpaidSubscription(sub)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

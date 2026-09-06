@@ -40,6 +40,7 @@ import {
   type DayKey,
 } from "@/lib/subscription-dates";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
+import { UNPAID_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import { getPreorderMode } from "@/lib/preorderMode";
 import {
   isValidSlotValue,
@@ -50,6 +51,11 @@ import {
   MIN_DAYS_ERROR_CODE,
   MIN_DAYS_ERROR_MESSAGE,
 } from "@/lib/subscription-min-days";
+import {
+  quoteSubscriptionDeliveryFee,
+  computeSubscriptionTotal,
+} from "@/lib/subscription-delivery-fee";
+import { createSubscriptionRazorpayOrder } from "@/lib/subscription-payment";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -588,6 +594,7 @@ export async function GET(req: NextRequest) {
       "id, status, bread_name, product_name, bread_price, total_amount, weeks, days, start_date, created_at, customer_name, customer_address",
     )
     .eq("customer_id", customer.id)
+    .not("payment_status", "in", UNPAID_SUBSCRIPTION_FILTER)
     .order("created_at", { ascending: false })
     .limit(50);
   if (subsErr) {
@@ -639,6 +646,9 @@ type DeliveryRow = {
   status: "pending_confirmation";
   scheduled_date: string;
   scheduled_time_slot: string | null;
+  /** Per-delivery fee, stamped so cancelling one delivery has an exact
+   *  refund figure without re-deriving distance. */
+  delivery_fee_inr: number;
 };
 
 /**
@@ -754,7 +764,25 @@ async function handleMultiVariant(
     });
   }
 
-  const serverAmount = amountPerDelivery * deliveries.length;
+  // Delivery fee + 10 km gate. Shared band table, charged PER DELIVERY.
+  // Blocks rather than guessing — a subscription bills the fee up front,
+  // multiplied by the delivery count.
+  const feeQuote = await quoteSubscriptionDeliveryFee(
+    na.delivery_address.pincode,
+  );
+  if (!feeQuote.ok) {
+    return fail(feeQuote.status, feeQuote.error, feeQuote.code);
+  }
+  const feePerDelivery = feeQuote.feeInr;
+  const distanceKm = feeQuote.distanceKm;
+
+  // Counted by DELIVERY DAYS: ((loaves × price) + fee) × deliveries.
+  const breakdown = computeSubscriptionTotal(
+    amountPerDelivery,
+    feePerDelivery,
+    deliveries.length,
+  );
+  const serverAmount = breakdown.grandTotal;
 
   // Optional client-price cross-check (hint-only; server is authoritative).
   // The app sends price_snapshot_inr = per-delivery amount.
@@ -774,7 +802,7 @@ async function handleMultiVariant(
 
   // Delivery rows from the calendar dates (one row per date). `daysSorted`
   // was computed and rule-checked above, before the price reconcile.
-  const deliveryRowsTemplate: Omit<DeliveryRow, "subscription_id">[] =
+  const deliveryRowsTemplate: Omit<DeliveryRow, "subscription_id" | "delivery_fee_inr">[] =
     deliveries.map((item, i) => {
       const dt = parseLocalDate(item.date)!;
       const key = JS_WEEKDAY_TO_KEY[dt.getDay()];
@@ -839,6 +867,12 @@ async function handleMultiVariant(
     pincode: na.delivery_address.pincode,
   };
 
+  // Prepaid: raise the Razorpay order before writing the row.
+  const rzp = await createSubscriptionRazorpayOrder(serverAmount);
+  if (!rzp.ok) {
+    return fail(rzp.status, rzp.error);
+  }
+
   const primary = snapItems[0];
   const { data: sub, error: subErr } = await supabaseAdmin
     .from("subscriptions")
@@ -871,8 +905,12 @@ async function handleMultiVariant(
       total_weeks: 0,
       delivery_address: deliveryAddressJson,
       total_amount: serverAmount,
-      payment_status: "pending",
+      // Prepaid. Never 'cod' — the subscriptions_no_cod CHECK rejects it.
+      payment_status: "created",
       payment_method: null,
+      razorpay_order_id: rzp.order.id,
+      delivery_fee_inr: feePerDelivery,
+      distance_km: distanceKm,
     })
     .select("id")
     .single();
@@ -892,6 +930,7 @@ async function handleMultiVariant(
   const deliveryRows: DeliveryRow[] = deliveryRowsTemplate.map((r) => ({
     subscription_id: sub.id,
     ...r,
+    delivery_fee_inr: feePerDelivery,
   }));
   const { error: delErr } = await supabaseAdmin
     .from("subscription_deliveries")
@@ -952,6 +991,15 @@ async function handleMultiVariant(
     delivery_count: deliveryRows.length,
     first_delivery_date: firstDeliveryDate,
     total_amount_inr: serverAmount,
+    // Everything the app needs to open the Razorpay sheet, plus the exact
+    // breakdown it must show before payment.
+    payment: {
+      razorpay_order_id: rzp.order.id,
+      amount: rzp.order.amount,
+      currency: rzp.order.currency,
+      key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? null,
+    },
+    breakdown,
   });
 }
 
@@ -1101,7 +1149,7 @@ export async function POST(req: NextRequest) {
   //    For calendar mode the rows are derived directly from the picked
   //    dates+times; for pattern mode we delegate to the shared lib so
   //    web and mobile produce byte-identical pattern schedules.
-  let deliveryRowsTemplate: Omit<DeliveryRow, "subscription_id">[];
+  let deliveryRowsTemplate: Omit<DeliveryRow, "subscription_id" | "delivery_fee_inr">[];
   let subRowWeeks: number;
   let subRowDays: DayKey[];
   let subRowStartDate: string;
@@ -1217,8 +1265,27 @@ export async function POST(req: NextRequest) {
     customerId = newCust.id;
   }
 
-  // 8. Compute totals from server-trusted subscription price.
-  const totalAmountInr = subPrice * deliveryRowsTemplate.length;
+  // 8. Delivery fee + 10 km gate, then totals from the server-trusted
+  //    subscription price. Counted by DELIVERY DAYS:
+  //      ((loaves × price) + delivery fee) × number of deliveries
+  const feeQuoteLegacy = await quoteSubscriptionDeliveryFee(
+    body.delivery_address.pincode,
+  );
+  if (!feeQuoteLegacy.ok) {
+    return fail(
+      feeQuoteLegacy.status,
+      feeQuoteLegacy.error,
+      feeQuoteLegacy.code,
+    );
+  }
+  const feePerDelivery = feeQuoteLegacy.feeInr;
+  const distanceKm = feeQuoteLegacy.distanceKm;
+  const breakdown = computeSubscriptionTotal(
+    subPrice,
+    feePerDelivery,
+    deliveryRowsTemplate.length,
+  );
+  const totalAmountInr = breakdown.grandTotal;
 
   // 9. Build the new-tracking-model address blob (jsonb).
   const deliveryAddressJson = {
@@ -1230,7 +1297,12 @@ export async function POST(req: NextRequest) {
     pincode: body.delivery_address.pincode,
   };
 
-  // 10. Insert subscription row.
+  // 10. Prepaid: raise the Razorpay order, then insert the row.
+  const rzpLegacy = await createSubscriptionRazorpayOrder(totalAmountInr);
+  if (!rzpLegacy.ok) {
+    return fail(rzpLegacy.status, rzpLegacy.error);
+  }
+
   const { data: sub, error: subErr } = await supabaseAdmin
     .from("subscriptions")
     .insert({
@@ -1262,8 +1334,12 @@ export async function POST(req: NextRequest) {
       total_weeks: subRowWeeks,
       delivery_address: deliveryAddressJson,
       total_amount: totalAmountInr,
-      payment_status: "pending",
+      // Prepaid. Never 'cod' — the subscriptions_no_cod CHECK rejects it.
+      payment_status: "created",
       payment_method: null,
+      razorpay_order_id: rzpLegacy.order.id,
+      delivery_fee_inr: feePerDelivery,
+      distance_km: distanceKm,
     })
     .select("id")
     .single();
@@ -1277,6 +1353,7 @@ export async function POST(req: NextRequest) {
   const deliveryRows: DeliveryRow[] = deliveryRowsTemplate.map((r) => ({
     subscription_id: sub.id,
     ...r,
+    delivery_fee_inr: feePerDelivery,
   }));
 
   const { error: delErr } = await supabaseAdmin
@@ -1339,6 +1416,13 @@ export async function POST(req: NextRequest) {
     delivery_count: deliveryRows.length,
     first_delivery_date: firstDeliveryDate,
     total_amount_inr: totalAmountInr,
+    payment: {
+      razorpay_order_id: rzpLegacy.order.id,
+      amount: rzpLegacy.order.amount,
+      currency: rzpLegacy.order.currency,
+      key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? null,
+    },
+    breakdown,
   });
 }
 
