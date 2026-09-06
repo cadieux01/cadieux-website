@@ -19,6 +19,7 @@ import {
 } from "@/lib/order-checkout";
 import { getPreorderMode } from "@/lib/preorderMode";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
+import { UNPAID_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import {
   buildMultiVariantSubscriptionInsert,
   insertMultiVariantSubscription,
@@ -28,6 +29,11 @@ import {
   MIN_DAYS_ERROR_CODE,
   MIN_DAYS_ERROR_MESSAGE,
 } from "@/lib/subscription-min-days";
+import {
+  quoteSubscriptionDeliveryFee,
+  computeSubscriptionTotal,
+} from "@/lib/subscription-delivery-fee";
+import { createSubscriptionRazorpayOrder } from "@/lib/subscription-payment";
 
 // Server-only admin client. Uses the service role key, which bypasses RLS
 // entirely — all writes from this route succeed regardless of table policies.
@@ -178,6 +184,7 @@ export async function GET(req: NextRequest) {
         "id, product_name, total_amount, status, created_at, customer_address, customer_city",
       )
       .or(subOr)
+      .not("payment_status", "in", UNPAID_SUBSCRIPTION_FILTER)
       .order("created_at", { ascending: false }),
   ]);
 
@@ -421,7 +428,10 @@ export async function POST(req: NextRequest) {
     // and wants the parent row to start in pending_confirmation; the legacy
     // /subscription wizard does not, so default to "active" for back-compat.
     const subStatus = body.status === "pending_confirmation" ? "pending_confirmation" : "active";
-    const paymentMethod = body.payment_method === "cod" ? "cod" : null;
+    // Subscriptions are PREPAID. No COD, on any path. The row is created
+    // with payment_status='created' + a razorpay_order_id and only becomes
+    // 'paid' after /api/subscriptions/verify-payment checks the signature.
+    // Any `payment_method` the client sends is ignored outright.
 
     // Compute the per-delivery template up front so we can derive an
     // authoritative delivery count for server-side price validation. The
@@ -518,6 +528,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Delivery fee + 10 km gate ───────────────────────────────────────
+    // Subscriptions were never distance-gated before, which is how a live
+    // subscription to Rourkela (~700 km) got accepted. The fee is the
+    // SHARED one-time band table, charged per delivery. On any failure to
+    // resolve distance we BLOCK — we never fall back to a flat fee here,
+    // because a subscription multiplies it by the delivery count and
+    // charges it up front.
+    const feeQuote = await quoteSubscriptionDeliveryFee(customer_pincode);
+    if (!feeQuote.ok) {
+      return NextResponse.json(
+        { error: feeQuote.error, code: feeQuote.code },
+        { status: feeQuote.status },
+      );
+    }
+    const feePerDelivery = feeQuote.feeInr;
+    const distanceKm = feeQuote.distanceKm;
+
     // ── V10 multi-variant branch ────────────────────────────────────────
     // When the client sends an explicit `items: [{product_slug,
     // quantity_per_delivery}]` list (the new wizard), price + persist each
@@ -610,7 +637,14 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const serverAmount = amountPerDelivery * deliveryCount;
+      // Total is counted by DELIVERY DAYS, not loaves:
+      //   ((loaves × price) + delivery fee) × number of deliveries
+      const breakdown = computeSubscriptionTotal(
+        amountPerDelivery,
+        feePerDelivery,
+        deliveryCount,
+      );
+      const serverAmount = breakdown.grandTotal;
       const clientAmount = Number(body.clientAmount ?? total);
       if (!Number.isFinite(clientAmount) || Math.abs(clientAmount - serverAmount) > 0.5) {
         const phoneForLog = verifiedPhone ?? customer_phone ?? null;
@@ -625,6 +659,16 @@ export async function POST(req: NextRequest) {
               "The subscription price has changed. Please refresh the page and try again.",
           },
           { status: 400 },
+        );
+      }
+
+      // Prepaid: raise the Razorpay order BEFORE writing the row so the
+      // subscription is never persisted without something to pay against.
+      const rzp = await createSubscriptionRazorpayOrder(serverAmount);
+      if (!rzp.ok) {
+        return NextResponse.json(
+          { error: rzp.error },
+          { status: rzp.status },
         );
       }
 
@@ -650,13 +694,18 @@ export async function POST(req: NextRequest) {
         customer_pincode,
         deliveryAddressJson,
         subStatus,
-        paymentMethod,
+        paymentMethod: null,
+        paymentStatus: "created",
+        razorpayOrderId: rzp.order.id,
+        deliveryFeeInr: feePerDelivery,
+        distanceKm,
       });
       const write = await insertMultiVariantSubscription(
         supabaseAdmin,
         subInsertRow,
         snapItems,
         deliveryTemplate,
+        feePerDelivery,
       );
       if (!write.ok) {
         return NextResponse.json(write.error.body, { status: write.error.status });
@@ -666,6 +715,15 @@ export async function POST(req: NextRequest) {
         subscription_id: write.subscription_id,
         deliveries: write.deliveries,
         items: write.items,
+        // Everything the client needs to open the Razorpay modal and the
+        // exact breakdown it must show before payment.
+        payment: {
+          razorpay_order_id: rzp.order.id,
+          amount: rzp.order.amount,
+          currency: rzp.order.currency,
+          key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? null,
+        },
+        breakdown,
       });
     }
 
@@ -733,7 +791,14 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const serverAmount = pricePerLoaf * qtyPerDelivery * deliveryCount;
+    // Same delivery-day math as the multi-variant branch:
+    //   ((loaves × price) + delivery fee) × number of deliveries
+    const breakdown = computeSubscriptionTotal(
+      pricePerLoaf * qtyPerDelivery,
+      feePerDelivery,
+      deliveryCount,
+    );
+    const serverAmount = breakdown.grandTotal;
     const plan = { id: planId, name: planRow.name, pricePerLoafInr: pricePerLoaf };
     const clientAmount = Number(body.clientAmount ?? total);
     if (!Number.isFinite(clientAmount) || Math.abs(clientAmount - serverAmount) > 0.5) {
@@ -775,6 +840,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Prepaid: raise the Razorpay order before the row exists so we never
+    // persist a subscription with nothing to pay against.
+    const rzpLegacy = await createSubscriptionRazorpayOrder(serverAmount);
+    if (!rzpLegacy.ok) {
+      return NextResponse.json(
+        { error: rzpLegacy.error },
+        { status: rzpLegacy.status },
+      );
+    }
+
     const { data: sub, error: subErr } = await supabaseAdmin
       .from("subscriptions")
       .insert({
@@ -807,8 +882,12 @@ export async function POST(req: NextRequest) {
         total_weeks: weeks,
         delivery_address: deliveryAddressJson,
         total_amount: serverAmount,
-        payment_status: "pending",
-        payment_method: paymentMethod,
+        // Prepaid. Never 'cod' — the subscriptions_no_cod CHECK rejects it.
+        payment_status: "created",
+        payment_method: null,
+        razorpay_order_id: rzpLegacy.order.id,
+        delivery_fee_inr: feePerDelivery,
+        distance_km: distanceKm,
       })
       .select("id")
       .single();
@@ -826,6 +905,7 @@ export async function POST(req: NextRequest) {
     const deliveryRows = deliveryTemplate.map((d) => ({
       subscription_id: sub.id,
       ...d,
+      delivery_fee_inr: feePerDelivery,
     }));
 
     if (deliveryRows.length > 0) {
@@ -841,7 +921,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ subscription_id: sub.id, deliveries: deliveryRows.length });
+    return NextResponse.json({
+      subscription_id: sub.id,
+      deliveries: deliveryRows.length,
+      payment: {
+        razorpay_order_id: rzpLegacy.order.id,
+        amount: rzpLegacy.order.amount,
+        currency: rzpLegacy.order.currency,
+        key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? null,
+      },
+      breakdown,
+    });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
