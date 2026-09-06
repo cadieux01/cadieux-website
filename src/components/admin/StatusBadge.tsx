@@ -8,6 +8,8 @@
 // `expired` state deliberately dimmer so it reads as inert. Red survives
 // only on cancelled / failed, where colour is a warning, not decoration.
 
+import { formatStatusLabel } from "@/lib/admin-shared";
+
 const COLOR_BY_STATUS: Record<string, { fg: string; border: string }> = {
   // orders — canonical stages
   placed: { fg: "rgba(251,243,212,0.85)", border: "rgba(251,243,212,0.35)" },
@@ -61,7 +63,7 @@ export function StatusBadge({ status }: { status: string | null | undefined }) {
         whiteSpace: "nowrap",
       }}
     >
-      {key || "—"}
+      {formatStatusLabel(key) || "—"}
     </span>
   );
 }

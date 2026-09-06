@@ -64,6 +64,7 @@ import {
   DELIVERY_STATUS_OPTIONS,
   SUBSCRIPTION_PAYMENT_STATUSES,
   SUBSCRIPTION_STATUSES,
+  formatStatusLabel,
   subscriptionStatusRank,
 } from "@/lib/admin-shared";
 
@@ -598,7 +599,12 @@ function SubscriptionsPageInner() {
                           !SUBSCRIPTION_STATUSES.includes(
                             s.status as (typeof SUBSCRIPTION_STATUSES)[number],
                           )
-                            ? [{ value: s.status, label: s.status }]
+                            ? [
+                                {
+                                  value: s.status,
+                                  label: formatStatusLabel(s.status),
+                                },
+                              ]
                             : []),
                         ]}
                       />
@@ -1050,7 +1056,10 @@ function SubscriptionDrawer({
               onChange={(v) => void updatePaymentStatus(v)}
               ariaLabel="Payment status"
               style={drawerSelect}
-              options={SUBSCRIPTION_PAYMENT_STATUSES.map((opt) => ({ value: opt, label: opt }))}
+              options={SUBSCRIPTION_PAYMENT_STATUSES.map((opt) => ({
+                value: opt,
+                label: formatStatusLabel(opt),
+              }))}
             />
           </div>
           <div

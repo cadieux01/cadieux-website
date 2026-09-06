@@ -14,6 +14,18 @@ import type { NextDelivery } from "@/lib/admin-subscription-derive";
 
 export const ADMIN_SESSION_KEY = "cadieux_admin_auth";
 
+/**
+ * Raw enum -> readable label: "out_for_delivery" -> "Out for delivery".
+ *
+ * Single source for status wording so a dropdown option and the badge under
+ * it never read two different ways for the same row. StatusBadge uppercases
+ * via CSS, so it renders "OUT FOR DELIVERY" from the same string.
+ */
+export function formatStatusLabel(status: string): string {
+  const words = status.replace(/_/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "";
+}
+
 export const ORDER_STATUSES = [
   "placed",
   "confirmed",

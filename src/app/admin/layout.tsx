@@ -86,7 +86,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           background: #1D1D1F !important;
           border-color: rgba(251, 243, 212, 0.35) !important;
         }
-        .admin-nunito-scope [role="listbox"] {
+        /* The Select menu renders in a portal on <body> so no ancestor
+           overflow can clip it, which also puts it outside
+           .admin-nunito-scope. This <style> only ships on /admin/*, so an
+           unscoped selector here cannot reach the storefront. */
+        [role="listbox"] {
           background: #1D1D1F !important;
           border-color: rgba(251, 243, 212, 0.35) !important;
         }

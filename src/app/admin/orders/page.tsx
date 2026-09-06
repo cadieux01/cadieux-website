@@ -44,6 +44,7 @@ import {
   ORDER_STATUSES,
   OrderFilterValue,
   OrderStatus,
+  formatStatusLabel,
   orderStatusRank,
 } from "@/lib/admin-shared";
 import {
@@ -63,8 +64,7 @@ type SortKey = "created_desc" | "delivery_asc";
 /** "out_for_delivery" → "Out for delivery"; "all" → "All statuses". */
 function statusFilterLabel(v: OrderFilterValue): string {
   if (v === "all") return "All statuses";
-  const words = v.replace(/_/g, " ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
+  return formatStatusLabel(v);
 }
 
 const NEXT_STATUS_DELIVERY: Record<string, OrderStatus | null> = {
@@ -863,10 +863,18 @@ function OrdersPageInner() {
                           void patchStatus(o, next);
                         }}
                         options={[
-                          ...ORDER_STATUSES.map((s) => ({ value: s, label: s })),
+                          ...ORDER_STATUSES.map((s) => ({
+                            value: s,
+                            label: formatStatusLabel(s),
+                          })),
                           ...(o.status &&
                           !ORDER_STATUSES.includes(o.status as OrderStatus)
-                            ? [{ value: o.status, label: o.status }]
+                            ? [
+                                {
+                                  value: o.status,
+                                  label: formatStatusLabel(o.status),
+                                },
+                              ]
                             : []),
                         ]}
                       />

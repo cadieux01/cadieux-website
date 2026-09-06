@@ -16,6 +16,18 @@
 // Accessibility: ARIA combobox/listbox roles, keyboard nav (Up/Down/Home/End,
 // Enter/Space select, Esc close, type-ahead), click-outside close, focus ring.
 //
+// Portal: the menu is rendered into `document.body` with `position: fixed`,
+// anchored to the trigger's `getBoundingClientRect()`. That puts it outside
+// every ancestor `overflow`/`transform` context — admin tables that scroll
+// horizontally used to clip the status menu at 390px. Position is re-measured
+// on open, on scroll (capture, so ancestor scrollers count) and on resize.
+//
+// Sizing: the menu is measured, not capped at a magic number. It takes its
+// content height, clamped only to the space actually free above/below the
+// trigger, so a new option can't silently push the list behind a scrollbar.
+// Width is the trigger's, floored at MIN_MENU_WIDTH so narrow table triggers
+// stop ellipsizing their own option labels.
+//
 // Lenis: the menu carries `data-lenis-prevent` so its internal scroll works
 // while the page's smooth-scroll is paused over it.
 //
@@ -31,6 +43,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 export interface SelectOption {
   value: string;
@@ -50,8 +63,6 @@ export interface SelectProps {
   className?: string;
   /** Merged into the trigger button — use for width/min-width per call site. */
   style?: React.CSSProperties;
-  /** Max height of the scrollable menu before it scrolls. */
-  menuMaxHeight?: number;
   /** Defaults to true; the trigger fills its container. */
   fullWidth?: boolean;
 }
@@ -59,6 +70,18 @@ export interface SelectProps {
 const GOLD = "#024628";
 const CREAM = "#FBF3D4";
 const MENU_BG = "#024628";
+
+/** Gap between trigger and menu, and the margin the menu keeps off every
+ *  viewport edge. */
+const GAP = 6;
+const MARGIN = 8;
+/** Floor so the menu never collapses to a sliver on a very short viewport —
+ *  below this it scrolls instead. */
+const MIN_MENU_HEIGHT = 120;
+/** The menu no longer inherits the trigger's width when the trigger is narrow.
+ *  Admin table triggers are ~140px, which used to ellipsize "Out for
+ *  delivery"; this is wide enough for the longest status label at 16px. */
+const MIN_MENU_WIDTH = 240;
 
 export default function Select({
   value,
@@ -71,7 +94,6 @@ export default function Select({
   ariaLabel,
   className,
   style,
-  menuMaxHeight = 280,
   fullWidth = true,
 }: SelectProps) {
   const reactId = useId();
@@ -80,7 +102,20 @@ export default function Select({
 
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const [flipUp, setFlipUp] = useState(false);
+  // The menu renders in a portal on <body>, so it needs viewport coordinates
+  // measured from the trigger rather than `position: absolute` inside the
+  // widget. `top`/`bottom` are mutually exclusive (drop-down vs flip-up).
+  const [menuPos, setMenuPos] = useState<{
+    left: number;
+    width: number;
+    maxHeight: number;
+    top: number | null;
+    bottom: number | null;
+    /** Copied off the trigger: on <body> the menu no longer inherits any
+     *  scoped typography (e.g. the admin's Nunito override). */
+    fontFamily: string;
+  } | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -129,26 +164,115 @@ export default function Select({
     [options, onChange, closeMenu],
   );
 
-  // Decide whether to drop the menu above the trigger if it would overflow.
+  // The menu lives in a portal on <body>, which takes it out of every ancestor
+  // `overflow` context (admin tables scroll horizontally; cards clip) — so it
+  // can never be clipped. The cost is that it no longer moves with the trigger
+  // automatically, so re-measure on open, on scroll (capture: true catches
+  // ancestor scroll containers, not just the window) and on resize.
+  useEffect(() => setMounted(true), []);
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    const rect = trigger?.getBoundingClientRect();
+    if (!trigger || !rect) return;
+
+    const below = Math.max(0, window.innerHeight - rect.bottom - GAP - MARGIN);
+    const above = Math.max(0, rect.top - GAP - MARGIN);
+
+    // How tall the menu actually wants to be. `scrollHeight` reports the full
+    // content height even while `max-height` is clipping it, and includes the
+    // list's own padding; add the 1px borders it leaves out. On the very first
+    // pass the menu isn't in the DOM yet, so assume it wants everything — the
+    // second pass (below) re-runs with the real measurement.
+    const menu = menuRef.current;
+    const wanted = menu ? menu.scrollHeight + 2 : Number.POSITIVE_INFINITY;
+
+    // Drop down unless the content genuinely doesn't fit below and there is
+    // more room above. Never flip just because of an arbitrary cap.
+    const flipUp = wanted > below && above > below;
+    const space = flipUp ? above : below;
+
+    const width = Math.min(
+      Math.max(rect.width, MIN_MENU_WIDTH),
+      window.innerWidth - MARGIN * 2,
+    );
+    const left = Math.min(
+      Math.max(MARGIN, rect.left),
+      Math.max(MARGIN, window.innerWidth - width - MARGIN),
+    );
+
+    const next = {
+      left,
+      width,
+      // Size to content; only clamp to what the viewport really offers. The
+      // floor means a cramped viewport scrolls rather than collapsing.
+      maxHeight: Math.max(MIN_MENU_HEIGHT, Math.min(wanted, space)),
+      top: flipUp ? null : rect.bottom + GAP,
+      bottom: flipUp ? window.innerHeight - rect.top + GAP : null,
+      fontFamily: getComputedStyle(trigger).fontFamily,
+    };
+
+    // Bail out when nothing moved. Scroll fires constantly, and the measure
+    // pass below re-enters through `menuPos` — without this it would loop.
+    setMenuPos((prev) =>
+      prev &&
+      prev.left === next.left &&
+      prev.width === next.width &&
+      prev.maxHeight === next.maxHeight &&
+      prev.top === next.top &&
+      prev.bottom === next.bottom &&
+      prev.fontFamily === next.fontFamily
+        ? prev
+        : next,
+    );
+  }, []);
+
   useLayoutEffect(() => {
     if (!open) return;
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const below = window.innerHeight - rect.bottom;
-    setFlipUp(below < menuMaxHeight + 24 && rect.top > below);
-  }, [open, menuMaxHeight]);
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [open, updatePosition]);
 
-  // Keep the active option scrolled into view inside the menu.
+  // Second pass: the first run positions a menu that doesn't exist yet, so
+  // re-run once it's mounted and its content height can be measured. Converges
+  // after one extra pass because `setMenuPos` above returns `prev` unchanged.
+  useLayoutEffect(() => {
+    if (!open || !menuPos) return;
+    updatePosition();
+  }, [open, menuPos, updatePosition]);
+
+  // Keep the active option scrolled into view *inside the menu*.
+  //
+  // Deliberately not `scrollIntoView`: now that the menu sizes to its content
+  // it is usually not scrollable, and `scrollIntoView` would then scroll the
+  // page instead — which moves the trigger, which repositions the menu, which
+  // puts the option out of view again. That loop hung keyboard navigation.
   useEffect(() => {
     if (!open || activeIndex < 0) return;
-    optionRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
+    const menu = menuRef.current;
+    const li = optionRefs.current[activeIndex];
+    if (!menu || !li || menu.scrollHeight <= menu.clientHeight) return;
+    const top = li.offsetTop;
+    const bottom = top + li.offsetHeight;
+    if (top < menu.scrollTop) menu.scrollTop = top;
+    else if (bottom > menu.scrollTop + menu.clientHeight) {
+      menu.scrollTop = bottom - menu.clientHeight;
+    }
   }, [open, activeIndex]);
 
   // Close on outside click / focus leaving the widget.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      // The menu is portalled out of rootRef, so check it separately.
+      if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
     };
     window.addEventListener("pointerdown", onDown);
     return () => window.removeEventListener("pointerdown", onDown);
@@ -311,103 +435,110 @@ export default function Select({
         <input type="hidden" name={name} value={value} />
       )}
 
-      {open && (
-        <ul
-          ref={menuRef}
-          id={listboxId}
-          role="listbox"
-          aria-label={ariaLabel}
-          tabIndex={-1}
-          data-lenis-prevent
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            margin: 0,
-            padding: 4,
-            listStyle: "none",
-            background: MENU_BG,
-            border: `1px solid ${GOLD}`,
-            borderRadius: 8,
-            boxShadow: "0 14px 40px rgba(0,0,0,0.55)",
-            maxHeight: menuMaxHeight,
-            overflowY: "auto",
-            ...(flipUp
-              ? { bottom: "calc(100% + 6px)" }
-              : { top: "calc(100% + 6px)" }),
-          }}
-        >
-          {options.map((opt, i) => {
-            const isSelected = opt.value === value;
-            const isActive = i === activeIndex;
-            return (
-              <li
-                key={opt.value + i}
-                ref={(el) => {
-                  optionRefs.current[i] = el;
-                }}
-                role="option"
-                aria-selected={isSelected}
-                aria-disabled={opt.disabled || undefined}
-                onClick={() => !opt.disabled && pick(i)}
-                onMouseEnter={() => !opt.disabled && setActiveIndex(i)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  padding: "10px 12px",
-                  borderRadius: 6,
-                  fontFamily: "var(--font-body)",
-                  fontSize: 16,
-                  fontWeight: 300,
-                  letterSpacing: "0.03em",
-                  lineHeight: 1.3,
-                  // Cream on Foundation-Green menu = 9.88:1 AAA. Previously
-                  // the selected option flipped to Foundation-Green text on
-                  // the same green menu bg (~1:1, invisible). Keep the label
-                  // cream and signal selection via a stronger cream tint bg
-                  // + a bright checkmark instead.
-                  color: opt.disabled
-                    ? "rgba(251,243,212,0.5)"
-                    : "#FBF3D4",
-                  background: opt.disabled
-                    ? "transparent"
-                    : isActive
-                      ? "rgba(251,243,212,0.14)"
-                      : isSelected
-                        ? "rgba(251,243,212,0.10)"
-                        : "transparent",
-                  transition: "background 0.1s ease",
-                }}
-              >
-                <span
+      {open &&
+        mounted &&
+        menuPos &&
+        createPortal(
+          <ul
+            ref={menuRef}
+            id={listboxId}
+            role="listbox"
+            aria-label={ariaLabel}
+            tabIndex={-1}
+            data-lenis-prevent
+            style={{
+              position: "fixed",
+              left: menuPos.left,
+              width: menuPos.width,
+              ...(menuPos.top !== null
+                ? { top: menuPos.top }
+                : { bottom: menuPos.bottom as number }),
+              zIndex: 1000,
+              margin: 0,
+              padding: 4,
+              boxSizing: "border-box",
+              listStyle: "none",
+              fontFamily: menuPos.fontFamily,
+              background: MENU_BG,
+              border: `1px solid ${GOLD}`,
+              borderRadius: 8,
+              boxShadow: "0 14px 40px rgba(0,0,0,0.55)",
+              maxHeight: menuPos.maxHeight,
+              overflowY: "auto",
+            }}
+          >
+            {options.map((opt, i) => {
+              const isSelected = opt.value === value;
+              const isActive = i === activeIndex;
+              return (
+                <li
+                  key={opt.value + i}
+                  ref={(el) => {
+                    optionRefs.current[i] = el;
+                  }}
+                  role="option"
+                  aria-selected={isSelected}
+                  aria-disabled={opt.disabled || undefined}
+                  onClick={() => !opt.disabled && pick(i)}
+                  onMouseEnter={() => !opt.disabled && setActiveIndex(i)}
                   style={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    padding: "10px 12px",
+                    borderRadius: 6,
+                    // Font inherits from the <ul>, which copies the trigger's
+                    // computed family — the portal has no scoped ancestor.
+                    fontSize: 16,
+                    fontWeight: 300,
+                    letterSpacing: "0.03em",
+                    lineHeight: 1.3,
+                    // Cream on Foundation-Green menu = 9.88:1 AAA. Previously
+                    // the selected option flipped to Foundation-Green text on
+                    // the same green menu bg (~1:1, invisible). Keep the label
+                    // cream and signal selection via a stronger cream tint bg
+                    // + a bright checkmark instead.
+                    color: opt.disabled
+                      ? "rgba(251,243,212,0.5)"
+                      : "#FBF3D4",
+                    background: opt.disabled
+                      ? "transparent"
+                      : isActive
+                        ? "rgba(251,243,212,0.14)"
+                        : isSelected
+                          ? "rgba(251,243,212,0.10)"
+                          : "transparent",
+                    transition: "background 0.1s ease",
                   }}
                 >
-                  {opt.label}
-                </span>
-                {isSelected && (
-                  <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true" style={{ flex: "0 0 auto" }}>
-                    <path
-                      d="M2 7l3 3 6-7"
-                      stroke="#FBF3D4"
-                      strokeWidth="1.6"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {opt.label}
+                  </span>
+                  {isSelected && (
+                    <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true" style={{ flex: "0 0 auto" }}>
+                      <path
+                        d="M2 7l3 3 6-7"
+                        stroke="#FBF3D4"
+                        strokeWidth="1.6"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </li>
+              );
+            })}
+          </ul>,
+          document.body,
+        )}
     </div>
   );
 }
