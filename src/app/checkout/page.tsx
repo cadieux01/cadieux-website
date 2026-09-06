@@ -252,6 +252,10 @@ export default function CheckoutPage() {
   const [fulfillmentType, setFulfillmentType] =
     useState<"delivery" | "pickup">("delivery");
   const isPickup = fulfillmentType === "pickup";
+  // What the pay-later button is actually called, for use inside the payment
+  // error messages. Telling a pickup customer to "use Cash on Delivery" points
+  // them at a button that, to them, describes a service they didn't order.
+  const fallbackLabel = isPickup ? "Pay at Pickup" : "Cash on Delivery";
   const [pickupLocationId, setPickupLocationId] = useState<string | null>(null);
   const [pickupLocations, setPickupLocations] = useState<PickupLoc[]>([]);
   const [pickupLocationsLoading, setPickupLocationsLoading] = useState(false);
@@ -1204,7 +1208,7 @@ export default function CheckoutPage() {
           setFormMode("fresh");
           setStep("address");
         } else {
-          setError("Online payment unavailable. Please use Cash on Delivery.");
+          setError(`Online payment unavailable. Please use ${fallbackLabel}.`);
         }
         return;
       }
@@ -1231,7 +1235,7 @@ export default function CheckoutPage() {
       });
 
       setOrderLoading(false);
-      if (!loaded) { setError("Failed to load payment gateway. Please use Cash on Delivery."); return; }
+      if (!loaded) { setError(`Failed to load payment gateway. Please use ${fallbackLabel}.`); return; }
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
@@ -1286,7 +1290,7 @@ export default function CheckoutPage() {
           // row simply stays unpaid — nothing to clean up client-side.
           ondismiss: () => {
             setOrderLoading(false);
-            setError("Payment cancelled. Your order was not placed. You can try again or use Cash on Delivery.");
+            setError(`Payment cancelled. Your order was not placed. You can try again or use ${fallbackLabel}.`);
           },
         },
         prefill: { name: customerName, contact: "+91" + customerPhone.replace(/\D/g, "") },
@@ -1300,8 +1304,8 @@ export default function CheckoutPage() {
         setOrderLoading(false);
         setError(
           resp?.error?.description
-            ? `Payment failed: ${resp.error.description}. Please try again or use Cash on Delivery.`
-            : "Payment failed. Please try again or use Cash on Delivery.",
+            ? `Payment failed: ${resp.error.description}. Please try again or use ${fallbackLabel}.`
+            : `Payment failed. Please try again or use ${fallbackLabel}.`,
         );
       });
       rzp.open();
@@ -1911,7 +1915,12 @@ export default function CheckoutPage() {
           />
         )}
 
-        {error && (
+        {/* Address/delivery-step errors stay here, next to the field that
+            caused them. Payment-step errors move into the sticky bar beside
+            the button that was pressed — see PaymentButtons. The unserviceable
+            branch renders its own CTA instead of PaymentButtons, so it keeps
+            the in-flow message. */}
+        {error && !(step === "payment" && !unserviceableAtPayment) && (
           <p style={{ margin: "16px 0 0", fontFamily: "var(--font-body)", fontSize: 16, color: "var(--warning-on-light)", letterSpacing: "0.04em" }}>
             {error}
           </p>
@@ -2060,6 +2069,8 @@ export default function CheckoutPage() {
               onCOD={placeOrderCOD}
               onOnline={payOnline}
               loading={orderLoading}
+              isPickup={isPickup}
+              error={error}
             />
           )}
         </div>
@@ -3096,15 +3107,37 @@ function PickupSection(props: {
 }
 
 /* ── Payment CTAs (sticky bar variant: stacked Pay Online + COD) ────── */
+// `error` is rendered HERE, directly above the buttons, not only in the page
+// body. The bar is position:fixed at the bottom, so on a phone the body copy
+// sits above the fold: a customer who tapped Pay Online and had the sheet
+// dismissed saw no explanation at all and simply tapped again. Five orders
+// from one phone on 3 Sep were exactly that.
 function PaymentButtons({
-  onCOD, onOnline, loading,
+  onCOD, onOnline, loading, isPickup, error,
 }: {
   onCOD: () => void;
   onOnline: () => void;
   loading: boolean;
+  /** Pickup has no delivery, so "Cash on Delivery" reads as "not for me" to
+   *  the one customer who most needs the fallback — the one whose online
+   *  payment just failed. Same handler, honest label. */
+  isPickup: boolean;
+  error: string;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {error && (
+        <p
+          role="alert"
+          style={{
+            margin: "0 0 2px", fontFamily: "var(--font-body)", fontSize: 16,
+            lineHeight: 1.4, color: "var(--warning-on-light)",
+            letterSpacing: "0.02em",
+          }}
+        >
+          {error}
+        </p>
+      )}
       <button
         onClick={onOnline}
         disabled={loading}
@@ -3137,7 +3170,7 @@ function PaymentButtons({
           WebkitTapHighlightColor: "transparent",
         }}
       >
-        Cash on Delivery
+        {isPickup ? "Pay at Pickup" : "Cash on Delivery"}
       </button>
     </div>
   );

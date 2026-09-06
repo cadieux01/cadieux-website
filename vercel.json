@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/subscription-reminders",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/abandoned-payments",
+      "schedule": "45 3 * * *"
     }
   ]
 }
