@@ -33,6 +33,8 @@ import { getProductReports } from "@/lib/product-reports";
 import { getPageContent, pickString } from "@/lib/content";
 import { resolveInternalSlug } from "@/lib/product-slugs";
 
+import { getSubscriptionPlans } from "@/lib/subscription-plans";
+
 import ProductDetailClient from "./ProductDetailClient";
 import { PDP_FAQS } from "./faqs";
 
@@ -157,10 +159,17 @@ export default async function ProductDetailPage({
 
   // Live product row + lab reports + content — all keyed on the INTERNAL
   // slug (public.products.slug + content_strings).
-  const [productRow, content] = await Promise.all([
+  const [productRow, content, subscriptionPlans] = await Promise.all([
     getProductBySlug(internalSlug),
     getPageContent({ page: "pdp", productId: internalSlug }),
+    getSubscriptionPlans(),
   ]);
+
+  // Derived subscribe price for THIS product, or null when it isn't a
+  // subscription plan (or the read failed — getSubscriptionPlans returns []).
+  // Same figure the wizard quotes and checkout revalidates.
+  const subscriptionPlan =
+    subscriptionPlans.find((p) => p.slug === internalSlug) ?? null;
 
   // Second gate: availability is best-effort (returns null on Supabase
   // outage → we degrade to "show everything"). If BOTH the DB row and
@@ -225,6 +234,12 @@ export default async function ProductDetailPage({
   if (heroImage && hasRealProductImage(productRow?.image_url)) {
     productSchema.image = [toAbsoluteUrl(heroImage)];
   }
+  // Deliberately the ONE-TIME price, even for products that also sell on
+  // subscription. Google reads Offer.price as the price a visitor can pay for
+  // this URL right now; the subscribe figure is conditional on committing to a
+  // recurring plan through the wizard, so publishing it here would risk a
+  // rich-result mismatch against the visible page. One-time is the genuinely
+  // purchasable price. Do not switch this to the derived subscribe price.
   if (productRow?.price_inr) {
     productSchema.offers = {
       "@type": "Offer",
@@ -290,6 +305,8 @@ export default async function ProductDetailPage({
         outOfStock={outOfStock}
         reports={reports}
         price={productRow?.price_inr ?? null}
+        subscribePrice={subscriptionPlan?.price ?? null}
+        subscribeDiscountPct={subscriptionPlan?.subscription_discount_pct ?? null}
         pdpStrings={pdpStrings}
         statTiles={content.stat_tiles}
         media={media}

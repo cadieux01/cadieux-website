@@ -57,6 +57,13 @@ const pdpQtyBtnStyle: React.CSSProperties = {
   WebkitTapHighlightColor: "transparent",
 };
 
+// Whole rupees stay whole; a derived subscribe price that lands on paise
+// shows both decimals rather than a long float.
+const money = (n: number) =>
+  Number.isInteger(n)
+    ? n.toLocaleString("en-IN")
+    : n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export type PdpStrings = {
   name: string;
   tag: string;
@@ -98,6 +105,8 @@ export default function ProductDetailClient({
   outOfStock = false,
   reports = [],
   price = null,
+  subscribePrice = null,
+  subscribeDiscountPct = null,
   pdpStrings,
   statTiles = [],
   media = [],
@@ -120,6 +129,12 @@ export default function ProductDetailClient({
   // price only when the DB read was empty, so display + cart snapshot stay
   // pinned to the products table — the single source of truth.
   price?: number | null;
+  // DERIVED per-loaf subscribe price (MRP × (1 − discount%)), resolved
+  // server-side via getSubscriptionPlans so it is in first paint. Null when
+  // this product isn't a subscription plan, or the read failed — the subscribe
+  // tab then shows the one-time price, as it always did.
+  subscribePrice?: number | null;
+  subscribeDiscountPct?: number | null;
   // Atomic PDP strings (server-resolved with critical fallbacks).
   pdpStrings?: PdpStrings;
   // Stat tiles, server-resolved from product_stat_tiles with net_weight +
@@ -183,7 +198,23 @@ export default function ProductDetailClient({
   }
 
   const productIndex = PRODUCTS.findIndex((p) => p.slug === typedSlug);
-  const effectivePrice = price ?? product.price;
+  const oneTimePrice = price ?? product.price;
+
+  // The subscribe tab used to render the one-time price under a "per delivery"
+  // label, so it told a subscriber ₹160 when they would be charged ₹144. Only
+  // advertise the subscribe figure when it is real and actually cheaper;
+  // anything else falls back to the one-time price rather than inventing one.
+  const hasSubscribePrice =
+    typeof subscribePrice === "number" &&
+    Number.isFinite(subscribePrice) &&
+    subscribePrice > 0 &&
+    subscribePrice < oneTimePrice;
+  const effectivePrice =
+    orderType === "sub" && hasSubscribePrice ? subscribePrice! : oneTimePrice;
+  const subPct =
+    typeof subscribeDiscountPct === "number" && Number.isFinite(subscribeDiscountPct)
+      ? Math.round(subscribeDiscountPct)
+      : 0;
 
   const handleAdd = () => {
     if (outOfStock) return;
@@ -199,7 +230,9 @@ export default function ProductDetailClient({
     addToCart({
       productIndex,
       name: dispName || product.name,
-      price: effectivePrice,
+      // Always the one-time price. The subscribe path returned above — it
+      // never reaches the cart, it goes through the wizard.
+      price: oneTimePrice,
       qty,
       orderType,
     });
@@ -353,7 +386,7 @@ export default function ProductDetailClient({
                   lineHeight: 1,
                 }}
               >
-                ₹{effectivePrice}
+                ₹{money(effectivePrice)}
               </div>
               <div
                 style={{
@@ -363,7 +396,11 @@ export default function ProductDetailClient({
                   color: "#024628",
                 }}
               >
-                {orderType === "sub" ? "per delivery" : "one-time"}
+                {orderType === "sub"
+                  ? subPct > 0 && hasSubscribePrice
+                    ? `per delivery · ${subPct}% off`
+                    : "per delivery"
+                  : "one-time"}
               </div>
             </div>
 
