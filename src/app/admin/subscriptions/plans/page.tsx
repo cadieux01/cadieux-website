@@ -19,6 +19,10 @@ import { usePinGate } from "@/components/admin/PinGateModal";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatINR } from "@/lib/admin-formatting";
 import { AdminProductRow } from "@/lib/admin-shared";
+import {
+  subscriptionDiscountPct,
+  subscriptionUnitPrice,
+} from "@/lib/subscription-pricing";
 
 const CREAM = "#FBF3D4";
 const FADED = "rgba(251,243,212,0.6)";
@@ -27,7 +31,6 @@ const BORDER = "rgba(251,243,212,0.18)";
 type PlanEdits = {
   subscription_title: string;
   subscription_blurb: string;
-  subscription_per_loaf_inr: string;
 };
 
 export default function AdminSubscriptionPlansPage() {
@@ -95,10 +98,6 @@ export default function AdminSubscriptionPlansPage() {
       [row.id]: {
         subscription_title: row.subscription_title ?? "",
         subscription_blurb: row.subscription_blurb ?? "",
-        subscription_per_loaf_inr:
-          row.subscription_per_loaf_inr === null
-            ? ""
-            : String(row.subscription_per_loaf_inr),
       },
     }));
   }
@@ -151,21 +150,12 @@ export default function AdminSubscriptionPlansPage() {
   async function saveEdits(row: AdminProductRow) {
     const e = edits[row.id];
     if (!e) return;
+    // Copy only. The per-loaf price is derived, not stored — it is edited by
+    // changing the one-time price or the discount % in the product editor.
     const payload: Record<string, unknown> = {
       subscription_title: e.subscription_title.trim() || null,
       subscription_blurb: e.subscription_blurb.trim() || null,
     };
-    const priceStr = e.subscription_per_loaf_inr.trim();
-    if (priceStr === "") {
-      payload.subscription_per_loaf_inr = null;
-    } else {
-      const n = Number(priceStr);
-      if (!Number.isFinite(n) || n < 0) {
-        setError("Per-loaf price must be a non-negative number.");
-        return;
-      }
-      payload.subscription_per_loaf_inr = Math.round(n);
-    }
     await patchProduct(row.id, payload, `Updated "${row.name}" plan details`);
   }
 
@@ -312,7 +302,6 @@ function blankEdits(): PlanEdits {
   return {
     subscription_title: "",
     subscription_blurb: "",
-    subscription_per_loaf_inr: "",
   };
 }
 
@@ -383,7 +372,14 @@ function PlanRow({
   onToggleActive: (next: boolean) => void;
 }) {
   const editing = !!edits;
-  const livePrice = row.subscription_per_loaf_inr ?? row.price_inr;
+  // The figure the customer is actually charged. This page used to render
+  // `subscription_per_loaf_inr ?? price_inr`, which showed ₹135 for multigrain
+  // while checkout charged ₹144 — the stored column is a leftover from the
+  // pre-percentage model and has never been charged to anyone. Derive it the
+  // same way the wizard, checkout and shop tile do, so admin and customer can
+  // never disagree again.
+  const livePrice = subscriptionUnitPrice(row);
+  const discountPct = subscriptionDiscountPct(row);
   return (
     <li
       className="p-4 flex flex-col gap-3"
@@ -458,14 +454,15 @@ function PlanRow({
             placeholder="Multigrain"
             onChange={(v) => onChangeEdit({ subscription_title: v })}
           />
-          <LabeledInput
-            label="Per-loaf ₹"
-            type="number"
-            min={0}
-            step={1}
-            value={edits!.subscription_per_loaf_inr}
-            placeholder={String(row.price_inr)}
-            onChange={(v) => onChangeEdit({ subscription_per_loaf_inr: v })}
+          {/* Read-only on purpose. The input that used to live here wrote
+              subscription_per_loaf_inr, a column nothing prices off — an
+              operator could "set" a price here and the customer would still
+              be charged the derived one. Price is changed via the one-time
+              price / discount % in the product editor. */}
+          <DisplayField
+            label="Per-loaf ₹ (derived)"
+            value={formatINR(livePrice)}
+            hint={`One-time ${formatINR(row.price_inr)} − ${discountPct}% · edit in product editor`}
           />
           <LabeledInput
             label="Wizard blurb"
@@ -482,14 +479,9 @@ function PlanRow({
             muted={!row.subscription_title}
           />
           <DisplayField
-            label="Per-loaf ₹"
+            label="Per-loaf ₹ (derived)"
             value={formatINR(livePrice)}
-            muted={row.subscription_per_loaf_inr === null}
-            hint={
-              row.subscription_per_loaf_inr === null
-                ? "Falling back to one-time price"
-                : undefined
-            }
+            hint={`One-time ${formatINR(row.price_inr)} − ${discountPct}%`}
           />
           <DisplayField
             label="Wizard blurb"

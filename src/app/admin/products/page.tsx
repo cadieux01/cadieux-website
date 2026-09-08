@@ -12,6 +12,7 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { AdminProductRow } from "@/lib/admin-shared";
+import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 
 const CREAM = "#FBF3D4";
 const FADED = "rgba(251,243,212,0.6)";
@@ -202,10 +203,15 @@ export default function AdminProductsPage() {
                     </code>
                   </Td>
                   <Td align="right">{formatINR(r.price_inr)}</Td>
+                  {/* Derived, not stored. The old read of
+                      subscription_per_loaf_inr showed a pre-percentage-model
+                      leftover (₹135 for multigrain) that no customer has ever
+                      been charged. Only meaningful for products flagged as
+                      subscription plans. */}
                   <Td align="right">
-                    {r.subscription_per_loaf_inr === null
-                      ? "—"
-                      : formatINR(r.subscription_per_loaf_inr)}
+                    {r.is_subscription_plan
+                      ? formatINR(subscriptionUnitPrice(r))
+                      : "—"}
                   </Td>
                   <Td>
                     <StatusFlags row={r} />
