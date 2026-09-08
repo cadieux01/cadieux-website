@@ -10,6 +10,7 @@ import {
   totalUnitsPerDelivery,
   type SetupAddress,
 } from "@/lib/subscription-setup";
+import { fetchAddresses, type CustomerAddress } from "@/lib/addresses";
 
 const BG = "#C0C8CE";
 const GOLD = "#024628";
@@ -26,13 +27,63 @@ type SavedCustomer = {
   delivery_address: string | null;
 };
 
+type UnserviceableCtx = {
+  pincode: string;
+  address: string;
+  areaName: string;
+  phone: string;
+  customerId: string | null;
+};
+
+// Pincode fallback for legacy customers.delivery_address free-text strings —
+// only used when the address book is empty. Grabs the LAST 6-digit run in
+// the string (Indian pincodes are exactly 6 digits and land at the tail).
+function extractPincodeFromString(s: string | null | undefined): string {
+  if (!s) return "";
+  const matches = s.match(/\b\d{6}\b/g);
+  return matches && matches.length > 0 ? matches[matches.length - 1] : "";
+}
+
+type QuoteResult =
+  | { ok: true }
+  | { ok: false; reason: "location_required" | "distance_unserviceable" };
+
+// Mirrors the payment page's own quote check so a saved-address customer
+// finds out BEFORE arriving at Razorpay that their pincode is off-map.
+// Pass coords when available; the API prefers them and falls back to pincode.
+async function fetchDeliveryQuote(args: {
+  pincode: string;
+  latitude: number | null;
+  longitude: number | null;
+}): Promise<QuoteResult> {
+  const params = new URLSearchParams();
+  if (args.latitude !== null && args.longitude !== null) {
+    params.set("lat", String(args.latitude));
+    params.set("lng", String(args.longitude));
+  }
+  if (/^\d{6}$/.test(args.pincode)) params.set("pincode", args.pincode);
+  if (params.toString() === "") return { ok: false, reason: "location_required" };
+  try {
+    const r = await fetch(`/api/delivery-quote?${params.toString()}`);
+    const d = await r.json().catch(() => ({}));
+    if (d?.serviceable === true) return { ok: true };
+    if (d?.serviceable === false) return { ok: false, reason: "distance_unserviceable" };
+    return { ok: false, reason: "location_required" };
+  } catch {
+    return { ok: false, reason: "location_required" };
+  }
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const [hasSetup, setHasSetup] = useState(false);
   const [savedCustomer, setSavedCustomer] = useState<SavedCustomer | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
   const [savedLoading, setSavedLoading] = useState(true);
   const [mode, setMode] = useState<"choose" | "new">("choose");
+  const [checking, setChecking] = useState(false);
+  const [unserviceable, setUnserviceable] = useState<UnserviceableCtx | null>(null);
 
   useEffect(() => {
     setHydrated(true);
@@ -50,22 +101,67 @@ export default function CheckoutPage() {
       setSavedLoading(false);
       return;
     }
-    fetch(`/api/checkout?phone=${encodeURIComponent(phone)}`)
-      .then((r) => r.json())
-      .then((d) => setSavedCustomer(d.customer ?? null))
-      .catch(() => setSavedCustomer(null))
+    const digits = phone.replace(/\D/g, "").slice(-10);
+    Promise.all([
+      fetch(`/api/checkout?phone=${encodeURIComponent(phone)}`)
+        .then((r) => r.json())
+        .then((d) => (d.customer ?? null) as SavedCustomer | null)
+        .catch(() => null),
+      digits.length === 10 ? fetchAddresses(digits) : Promise.resolve([]),
+    ])
+      .then(([customer, addresses]) => {
+        setSavedCustomer(customer);
+        setSavedAddresses(addresses);
+      })
       .finally(() => setSavedLoading(false));
   }, [router]);
 
-  function useSaved() {
-    if (!savedCustomer) return;
+  // Pick the address-book default row (or first) when available; otherwise
+  // synthesise from the legacy customers.delivery_address free-text string.
+  const bookRow: CustomerAddress | null =
+    savedAddresses.find((a) => a.is_default) ?? savedAddresses[0] ?? null;
+
+  async function useSaved() {
+    if (!savedCustomer || checking) return;
+    const digits = savedCustomer.phone.replace(/\D/g, "").slice(-10);
+
+    // Address-book row is the source of truth for pincode + coords when
+    // present. Falls back to the trailing-6-digit hit inside the legacy
+    // single-string delivery_address so pre-book customers still work.
+    const pincode = bookRow?.pincode ?? extractPincodeFromString(savedCustomer.delivery_address);
+    const address = bookRow
+      ? [bookRow.line1, bookRow.area].filter(Boolean).join(", ")
+      : (savedCustomer.delivery_address ?? "");
+    const area = bookRow?.area ?? "";
+    const city = bookRow?.city ?? savedCustomer.city ?? "";
+    const label = bookRow?.label ?? "";
+    const latitude = bookRow?.latitude ?? null;
+    const longitude = bookRow?.longitude ?? null;
+
+    setChecking(true);
+    const quote = await fetchDeliveryQuote({ pincode, latitude, longitude });
+    setChecking(false);
+    if (!quote.ok) {
+      setUnserviceable({
+        pincode,
+        address,
+        areaName: area || city,
+        phone: digits,
+        customerId: savedCustomer.id,
+      });
+      return;
+    }
     const addr: SetupAddress = {
       customer_id: savedCustomer.id,
-      full_name: savedCustomer.full_name ?? "",
-      phone: savedCustomer.phone.replace(/\D/g, "").slice(-10),
-      address: savedCustomer.delivery_address ?? "",
-      city: savedCustomer.city ?? "",
-      pincode: "",
+      full_name: savedCustomer.full_name ?? bookRow?.full_name ?? "",
+      phone: digits,
+      address,
+      area,
+      city,
+      pincode,
+      label,
+      latitude,
+      longitude,
       source: "saved",
     };
     saveAddress(addr);
@@ -97,12 +193,24 @@ export default function CheckoutPage() {
           Where should we deliver?
         </p>
 
-        {mode === "choose" && (
+        {unserviceable && (
+          <UnserviceableCard
+            ctx={unserviceable}
+            onChangeAddress={() => {
+              setUnserviceable(null);
+              setMode("new");
+            }}
+          />
+        )}
+
+        {!unserviceable && mode === "choose" && (
           <>
             <div style={{ display: "grid", gap: 14 }}>
               <SavedCard
                 loading={savedLoading}
                 customer={savedCustomer}
+                bookRow={bookRow}
+                checking={checking}
                 onUse={useSaved}
               />
               <NewAddressCard onSelect={() => setMode("new")} />
@@ -110,10 +218,11 @@ export default function CheckoutPage() {
           </>
         )}
 
-        {mode === "new" && (
+        {!unserviceable && mode === "new" && (
           <NewAddressForm
             onCancel={() => setMode("choose")}
             onDone={() => router.replace("/subscriptions/setup/payment")}
+            onUnserviceable={(ctx) => setUnserviceable(ctx)}
           />
         )}
       </div>
@@ -132,10 +241,14 @@ const pageStyle: React.CSSProperties = {
 function SavedCard({
   loading,
   customer,
+  bookRow,
+  checking,
   onUse,
 }: {
   loading: boolean;
   customer: SavedCustomer | null;
+  bookRow: CustomerAddress | null;
+  checking: boolean;
   onUse: () => void;
 }) {
   if (loading) {
@@ -157,26 +270,116 @@ function SavedCard({
       </div>
     );
   }
+  // Prefer the address-book row's structured fields when we have one —
+  // that's where the real pincode + coords live. Fall back to the legacy
+  // free-text customers.delivery_address otherwise.
+  const displayName = customer.full_name || bookRow?.full_name || "—";
+  const displayAddress = bookRow
+    ? [bookRow.line1, bookRow.area, bookRow.city, bookRow.pincode]
+        .filter(Boolean)
+        .join(", ")
+    : customer.delivery_address || "No address on file";
+  const displayCity = bookRow?.city ?? customer.city ?? "";
   return (
-    <button onClick={onUse} style={cardButtonStyle()}>
+    <button
+      onClick={onUse}
+      disabled={checking}
+      style={{ ...cardButtonStyle(), opacity: checking ? 0.6 : 1, cursor: checking ? "wait" : "pointer" }}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
         <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 22 }}>
-          Use saved address
+          {checking ? "Checking delivery area…" : "Use saved address"}
         </div>
         <div style={{ fontSize: 14, color: GOLD, letterSpacing: "0.1em", textTransform: "uppercase" }}>
           Verified
         </div>
       </div>
       <div style={{ marginTop: 10, fontSize: 16, color: TEXT }}>
-        {customer.full_name || "—"}
+        {displayName}
       </div>
       <div style={{ marginTop: 4, fontSize: 16, color: FADED }}>
-        {customer.delivery_address || "No address on file"}
+        {displayAddress}
       </div>
       <div style={{ marginTop: 4, fontSize: 16, color: FADED }}>
-        {customer.city ? `${customer.city} · ` : ""}+91 {customer.phone.replace(/\D/g, "").slice(-10)}
+        {displayCity ? `${displayCity} · ` : ""}+91 {customer.phone.replace(/\D/g, "").slice(-10)}
       </div>
     </button>
+  );
+}
+
+// Dead-end blocker for out-of-range pincodes — mirrors the one-time
+// checkout's "Send Request to Deliver Here" CTA so a subscription customer
+// who is off the map has SOMETHING to press instead of a broken Pay button.
+function UnserviceableCard({
+  ctx,
+  onChangeAddress,
+}: {
+  ctx: UnserviceableCtx;
+  onChangeAddress: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submitRequest() {
+    if (submitting || submitted) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const r = await fetch("/api/delivery-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: ctx.phone,
+          pincode: ctx.pincode,
+          area_name: ctx.areaName || null,
+          address: ctx.address,
+          customer_id: ctx.customerId,
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) {
+        setError(d.error ?? "Could not send request. Please try again.");
+        return;
+      }
+      setSubmitted(true);
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div style={{ ...cardStyle(true), display: "grid", gap: 12 }}>
+      <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 22 }}>
+        {submitted ? "Request received" : "We don't deliver here yet"}
+      </div>
+      <div style={{ fontSize: 16, color: FADED }}>
+        {submitted
+          ? "Thanks — we'll reach out on +91 " + ctx.phone + " once we can deliver to this pincode."
+          : "This pincode is outside our current delivery area, so we can't start a subscription here. Send a request and we'll get in touch when we can serve your area."}
+      </div>
+      <div style={{ fontSize: 16, color: TEXT }}>
+        {ctx.address || "—"}
+        {ctx.pincode ? ` · ${ctx.pincode}` : ""}
+      </div>
+      {error && <div style={{ fontSize: 16, color: RED }}>{error}</div>}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        {!submitted && (
+          <button
+            onClick={submitRequest}
+            disabled={submitting}
+            style={primaryBtnStyle(!submitting)}
+          >
+            {submitting ? "Sending…" : "Send Request to Deliver Here"}
+          </button>
+        )}
+        <button onClick={onChangeAddress} style={ghostBtnStyle}>
+          {submitted ? "Try a different address" : "Change address"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -217,9 +420,11 @@ function cardButtonStyle(): React.CSSProperties {
 function NewAddressForm({
   onCancel,
   onDone,
+  onUnserviceable,
 }: {
   onCancel: () => void;
   onDone: () => void;
+  onUnserviceable: (ctx: UnserviceableCtx) => void;
 }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -299,7 +504,28 @@ function NewAddressForm({
       setError("Please fill all address fields.");
       return;
     }
+    const digits = phone.replace(/\D/g, "");
+    const trimmedPincode = pincode.trim();
     setSaving(true); setError("");
+    // Check serviceability BEFORE saving — so the customer never lands on
+    // the Pay screen with an off-map pincode, and we get a clean chance to
+    // route them to "Send Request to Deliver Here" instead.
+    const quote = await fetchDeliveryQuote({
+      pincode: trimmedPincode,
+      latitude: null,
+      longitude: null,
+    });
+    if (!quote.ok) {
+      setSaving(false);
+      onUnserviceable({
+        pincode: trimmedPincode,
+        address: address.trim(),
+        areaName: city.trim(),
+        phone: digits,
+        customerId: "",
+      });
+      return;
+    }
     try {
       const r = await fetch("/api/checkout", {
         method: "POST",
@@ -307,21 +533,27 @@ function NewAddressForm({
         body: JSON.stringify({
           action: "save_customer",
           full_name: name.trim(),
-          phone: phone.replace(/\D/g, ""),
+          phone: digits,
           delivery_address: address.trim(),
           city: city.trim(),
         }),
       });
       const d = await r.json();
       if (!r.ok) { setError(d.error ?? "Failed to save address."); return; }
-      localStorage.setItem("cadieux_phone", phone.replace(/\D/g, ""));
+      localStorage.setItem("cadieux_phone", digits);
+      // Phase 2 will populate area/label/coords from the shared address
+      // component; today's manual form doesn't collect them.
       saveAddress({
         customer_id: d.customer.id,
         full_name: name.trim(),
-        phone: phone.replace(/\D/g, ""),
+        phone: digits,
         address: address.trim(),
+        area: "",
         city: city.trim(),
-        pincode: pincode.trim(),
+        pincode: trimmedPincode,
+        label: "",
+        latitude: null,
+        longitude: null,
         source: "new",
       });
       onDone();

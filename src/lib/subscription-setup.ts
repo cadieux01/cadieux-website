@@ -292,20 +292,45 @@ export type SetupAddress = {
   full_name: string;
   phone: string;        // 10-digit
   address: string;
+  area: string;         // free-text neighbourhood/area from address-book row
   city: string;
   pincode: string;
+  label: string;        // address-book label (e.g. "Home", "Office")
+  latitude: number | null;
+  longitude: number | null;
   // Whether this address was reused from a previously OTP-verified customer
   // record ("saved") or freshly entered + just-OTP-verified in this session
   // ("new"). Drives which gate the payment page enforces server-side.
   source: "saved" | "new";
 };
 
+/** Backward-compat normalizer — older wizard sessions in flight may have
+ *  written a partial SetupAddress before area/label/coords were added. */
+function normalizeAddress(raw: unknown): SetupAddress | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Partial<SetupAddress> & Record<string, unknown>;
+  if (typeof r.customer_id !== "string" || typeof r.phone !== "string") return null;
+  return {
+    customer_id: r.customer_id,
+    full_name: typeof r.full_name === "string" ? r.full_name : "",
+    phone: r.phone,
+    address: typeof r.address === "string" ? r.address : "",
+    area: typeof r.area === "string" ? r.area : "",
+    city: typeof r.city === "string" ? r.city : "",
+    pincode: typeof r.pincode === "string" ? r.pincode : "",
+    label: typeof r.label === "string" ? r.label : "",
+    latitude: typeof r.latitude === "number" && Number.isFinite(r.latitude) ? r.latitude : null,
+    longitude: typeof r.longitude === "number" && Number.isFinite(r.longitude) ? r.longitude : null,
+    source: r.source === "new" ? "new" : "saved",
+  };
+}
+
 export function loadAddress(): SetupAddress | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(ADDRESS_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as SetupAddress;
+    return normalizeAddress(JSON.parse(raw));
   } catch {
     return null;
   }
