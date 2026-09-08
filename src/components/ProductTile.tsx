@@ -388,41 +388,11 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
         </p>
 
         {stats.length > 0 && (
-        <div
-          style={{
-            display: "flex",
-            gap: 14,
-            paddingTop: 12,
-            borderTop: "1px solid rgba(251,243,212,0.25)",
-            marginBottom: 16,
-          }}
-        >
+        <div className="tile-stats">
           {stats.map((s) => (
-            <div key={s.id} style={{ flex: 1, textAlign: "left" }}>
-              <div
-                style={{
-                  fontFamily: "var(--font-heading)",
-                  fontSize: 20,
-                  fontWeight: 500,
-                  color: "#FBF3D4",
-                  lineHeight: 1,
-                }}
-              >
-                {s.value}
-              </div>
-              <div
-                style={{
-                  marginTop: 4,
-                  fontFamily: "var(--font-body)",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  color: "#C0C8CE",
-                }}
-              >
-                {s.label}
-              </div>
+            <div key={s.id} className="tile-stat">
+              <div className="tile-stat-value">{s.value}</div>
+              <div className="tile-stat-label">{s.label}</div>
             </div>
           ))}
         </div>
@@ -549,6 +519,45 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
         }
         .tile-scroller::-webkit-scrollbar {
           display: none;
+        }
+        /* 2 x 2, never 4 across. Four columns need ~478px of card width and the
+           card is only 411px wide at a 1024px viewport, where "NET WEIGHT"
+           already overflowed the row and wrapped onto its own line. */
+        .tile-stats {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px 14px;
+          padding-top: 12px;
+          border-top: 1px solid rgba(251, 243, 212, 0.25);
+          margin-bottom: 16px;
+        }
+        .tile-stat {
+          min-width: 0;
+          text-align: left;
+        }
+        .tile-stat-value {
+          font-family: var(--font-heading);
+          font-size: 20px;
+          font-weight: 500;
+          color: #fbf3d4;
+          line-height: 1;
+        }
+        .tile-stat-label {
+          margin-top: 4px;
+          font-family: var(--font-body);
+          font-size: 14px;
+          font-weight: 500;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          color: #c0c8ce;
+        }
+        /* At 320px the column is ~119px and PROTEIN/SLICE needs 136px, so it
+           would break at the slash. Tighten the tracking instead. */
+        @media (max-width: 360px) {
+          .tile-stat-label {
+            font-size: 12px;
+            letter-spacing: 0.12em;
+          }
         }
         @media (min-width: 640px) {
           .tile-media {
