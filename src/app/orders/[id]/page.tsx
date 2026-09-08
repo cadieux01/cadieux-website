@@ -12,10 +12,10 @@ import { useParams } from "next/navigation";
 
 import { ShareButton } from "@/components/ShareButton";
 import {
-  ORDER_STAGES,
   STAGE_LABEL,
   isCancelled,
   stageIndex,
+  stagesFor,
   toStage,
 } from "@/lib/order-stages";
 import {
@@ -618,6 +618,7 @@ export default function OrderDetailPage() {
               <StatusTracker
                 status={order.status}
                 statusUpdatedAt={order.status_updated_at ?? null}
+                fulfillmentType={order.fulfillment_type ?? null}
               />
             )}
 
@@ -1030,14 +1031,28 @@ function Section({
 function StatusTracker({
   status,
   statusUpdatedAt,
+  fulfillmentType,
 }: {
   status: string;
   statusUpdatedAt: string | null;
+  fulfillmentType: string | null;
 }) {
-  const stage = toStage(status);
-  // Unknown / non-tracker state (e.g. pending_payment): fall back to
-  // a single status pill so we never render an empty progress bar.
-  if (!stage) {
+  // A pickup order runs on PICKUP_STAGES, not the delivery five. Reading
+  // the progression off fulfillment_type is not cosmetic: `ready_for_pickup`
+  // is absent from ORDER_STAGES, so indexing a pickup order against the
+  // delivery set returned -1 and rendered every dot un-done — a customer
+  // whose bread was waiting for them saw a blank tracker that also
+  // promised "Out for Delivery", a stage pickup never reaches.
+  const stages = stagesFor(fulfillmentType);
+  const stage = toStage(status, fulfillmentType);
+  const currentIdx = stage ? stageIndex(stage, stages) : -1;
+  // Unknown / non-tracker state (e.g. pending_payment), or a status that
+  // maps to a stage this order's progression doesn't contain: fall back to
+  // a single status pill so we never render an empty progress bar. The
+  // second case is what produced the blank pickup tracker — a bar with no
+  // dot lit tells the customer nothing, where the raw status at least
+  // tells them the truth.
+  if (!stage || currentIdx < 0) {
     return (
       <section style={{ marginBottom: 36 }}>
         <h2
@@ -1070,8 +1085,6 @@ function StatusTracker({
     );
   }
 
-  const currentIdx = stageIndex(stage);
-
   return (
     <section style={{ marginBottom: 40 }}>
       <h2
@@ -1091,13 +1104,13 @@ function StatusTracker({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `repeat(${ORDER_STAGES.length}, 1fr)`,
+          gridTemplateColumns: `repeat(${stages.length}, 1fr)`,
           alignItems: "start",
           gap: 0,
           position: "relative",
         }}
       >
-        {ORDER_STAGES.map((s, i) => {
+        {stages.map((s, i) => {
           const done = i < currentIdx;
           const active = i === currentIdx;
           const dotBg = done || active ? "#024628" : "transparent";
