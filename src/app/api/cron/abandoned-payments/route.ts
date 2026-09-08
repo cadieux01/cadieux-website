@@ -4,6 +4,24 @@
 //
 // Auth: Bearer ${CRON_SECRET}, same as the subscription-reminders cron.
 //
+// TWO PHASES, IN THIS ORDER
+//   1. SWEEP  — mark unpaid subscription shells 'abandoned'
+//               (@/lib/sweep-abandoned-subscriptions)
+//   2. DIGEST — email the owner the orders that reached payment and stopped
+//
+// They are unrelated jobs sharing one route for one reason: Vercel Hobby
+// allows two cron entries per project and we already had two. A third would
+// have been silently dropped or failed the deploy — the invisible failure the
+// 500-vs-401 split below exists to prevent. Both are daily cleanup, so the
+// pairing is cheap.
+//
+// The sweep runs FIRST and CANNOT fail the run. It never throws; a failure
+// comes back in `sweep.error`, is logged under its own tag, and the digest
+// sends anyway. A bookkeeping job must never be the reason the owner stops
+// hearing about customers who nearly bought something. Every response body
+// carries both outcomes, so a run that swept nothing and a run whose sweep
+// broke are distinguishable at a glance.
+//
 // Why this exists: /api/create-order writes a permanent orders row with
 // payment_status='created' BEFORE the Razorpay sheet is even opened. If the
 // customer never pays, that row just sits there. Nothing surfaces it — no
@@ -23,6 +41,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { sweepAbandonedSubscriptions } from "@/lib/sweep-abandoned-subscriptions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -125,9 +144,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // ── Phase 1: sweep ────────────────────────────────────────────────────
+  // Deliberately ahead of the RESEND_API_KEY check. The sweep needs nothing
+  // from Resend, so a missing email key must not also silently stop the
+  // bookkeeping — one broken env var should break one phase, not both.
+  const sweep = await sweepAbandonedSubscriptions(supabaseAdmin);
+
+  // ── Phase 2: digest ───────────────────────────────────────────────────
   if (!process.env.RESEND_API_KEY) {
+    console.error(
+      "[cron/abandoned-payments] RESEND_API_KEY is not set — digest cannot send.",
+    );
     return NextResponse.json(
-      { error: "RESEND_API_KEY not configured" },
+      { error: "RESEND_API_KEY not configured", sweep },
       { status: 500 },
     );
   }
@@ -146,7 +175,8 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[cron/abandoned-payments] order fetch failed:", error.message);
+    return NextResponse.json({ error: error.message, sweep }, { status: 500 });
   }
 
   const rows = (data || []) as unknown as OrderRow[];
@@ -173,9 +203,8 @@ export async function GET(req: NextRequest) {
 
   if (lost.length === 0) {
     return NextResponse.json({
-      abandoned: abandoned.length,
-      lost: 0,
-      sent: false,
+      sweep,
+      digest: { abandoned: abandoned.length, lost: 0, sent: false },
     });
   }
 
@@ -256,14 +285,21 @@ export async function GET(req: NextRequest) {
   if (sendErr) {
     console.error("[cron/abandoned-payments] send failed:", sendErr.message);
     return NextResponse.json(
-      { abandoned: abandoned.length, lost: lost.length, sent: false, error: sendErr.message },
+      {
+        sweep,
+        digest: {
+          abandoned: abandoned.length,
+          lost: lost.length,
+          sent: false,
+          error: sendErr.message,
+        },
+      },
       { status: 500 },
     );
   }
 
   return NextResponse.json({
-    abandoned: abandoned.length,
-    lost: lost.length,
-    sent: true,
+    sweep,
+    digest: { abandoned: abandoned.length, lost: lost.length, sent: true },
   });
 }
