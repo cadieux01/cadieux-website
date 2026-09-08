@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/abandoned-payments",
       "schedule": "45 3 * * *"
-    },
-    {
-      "path": "/api/cron/sweep-abandoned-subscriptions",
-      "schedule": "0 4 * * *"
     }
   ]
 }
