@@ -27,6 +27,7 @@ import {
 import { trackPurchase } from "@/lib/analytics";
 import { formatPublicRef } from "@/lib/order-number";
 import BackLink from "@/components/BackLink";
+import { composeCustomerShareMessage } from "@/lib/order-share-customer";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -66,6 +67,24 @@ type Order = {
   computed_state?: "delivered" | "cancelled" | "active" | "pending" | "expired";
   is_preorder?: boolean | null;
   scheduled_delivery_date_at?: string | null;
+  // ── Share-message fields ────────────────────────────────────────────
+  // Coordinates of this order's address, so the shared maps link is a
+  // dropped pin rather than a text search. Null on orders placed before
+  // location capture shipped — mapsLinkFor falls back cleanly.
+  latitude?: number | null;
+  longitude?: number | null;
+  /** 'delivery' | 'pickup'. Legacy rows may be null → treat as delivery. */
+  fulfillment_type?: string | null;
+  pickup_location?: {
+    name?: string | null;
+    area?: string | null;
+    address?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null;
+  /** The verified caller's OWN name and number, echoed back by the API
+   *  after the ownership check. Used only by the share message. */
+  customer?: { full_name?: string | null; phone?: string | null } | null;
 };
 
 type ChangeRequest = {
@@ -572,11 +591,24 @@ export default function OrderDetailPage() {
               >
                 Your Order
               </h1>
-              <ShareButton
-                title="Cadieux"
-                text="Just ordered Cadieux — high-protein bread, baked in Vizag. cadieux.in"
-                size={36}
-              />
+              {/* Two buttons, two different acts. "Share Cadieux" is
+                  telling people about us and carries no order data.
+                  "Share order" is sending your own details to whoever is
+                  collecting the bread. Merging them would mean one of the
+                  two always leaks or always under-delivers. */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <ShareButton
+                  title="Cadieux"
+                  text="Just ordered Cadieux — high-protein bread, baked in Vizag. cadieux.in"
+                  size={36}
+                />
+                <ShareButton
+                  title="Cadieux order"
+                  text={composeCustomerShareMessage(order)}
+                  size={36}
+                  label="Share order"
+                />
+              </div>
             </div>
 
             {/* Status progress tracker. Hidden for cancelled OR expired

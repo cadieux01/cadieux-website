@@ -4,7 +4,7 @@
 //   • Product detail   — public link, brand caption
 //   • Lab reports       — public link, brand caption
 //   • Behind Cadieux    — public link, brand caption
-//   • Order detail      — friendly summary only, NO link / PII
+//   • Order detail      — two distinct buttons, see below
 //   • Subscription page — friendly summary only, NO link / PII
 //
 // Behaviour:
@@ -17,9 +17,22 @@
 //        – Copy link   (when a url is provided)
 //        – Copy text   (when no url; private item)
 //
-// Privacy: callers MUST NOT include phone numbers, addresses, or order
-// IDs in `text` for private items. This component does not strip PII;
-// it trusts the caller.
+// Privacy: this component does not strip PII; it trusts the caller.
+//
+// The rule is about WHOSE data it is, not whether the field looks
+// sensitive. Callers MUST NOT put one person's phone, address or order
+// reference into a message another person is sending — that is a
+// disclosure, and no caption is worth it.
+//
+// The one legitimate exception is self-share: a customer sharing their
+// OWN order with whoever is fetching the bread. Their name, their number
+// and their address are the entire point of that message, and they
+// already know all three. `/orders/[id]` therefore renders TWO buttons —
+// "Share Cadieux" (brand caption, no order data, safe to hand to anyone)
+// and "Share order" (the customer's own details, composed by
+// @/lib/order-share-customer). Note what stays out even there: no OLF
+// number, because a share message gets forwarded and the OLF sequence
+// discloses our order volume. public_ref is used instead.
 
 import { useEffect, useRef, useState } from "react";
 
@@ -39,7 +52,8 @@ export type ShareButtonProps = {
   size?: number;
   /** When inside a card with its own click handler. */
   stopPropagation?: boolean;
-  /** Optional override label rendered next to the icon (e.g. "Share story"). */
+  /** Optional label rendered next to the icon AND used as the accessible
+   *  name verbatim, so pass a full instruction ("Share order"). */
   label?: string;
 };
 
@@ -118,7 +132,9 @@ export function ShareButton({
       <button
         type="button"
         title="Share"
-        aria-label={label ? `Share — ${label}` : `Share ${title}`}
+        // `label` is already a full instruction ("Share order"), so it is
+        // used verbatim — prefixing it produced "Share — Share order".
+        aria-label={label || `Share ${title}`}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onClick={handleClick}
