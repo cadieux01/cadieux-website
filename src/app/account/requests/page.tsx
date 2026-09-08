@@ -14,6 +14,7 @@ import Link from "next/link";
 
 import { formatPublicRef } from "@/lib/order-number";
 import BackLink from "@/components/BackLink";
+import { formatSlotForDisplay } from "@/lib/delivery-slots";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -484,8 +485,8 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
             ],
             cr.requested_delivery_slot != null && [
               "Slot",
-              cr.order?.delivery_slot ?? "—",
-              cr.requested_delivery_slot,
+              formatSlotForDisplay(cr.order?.delivery_slot) || "—",
+              formatSlotForDisplay(cr.requested_delivery_slot),
             ],
             cr.requested_delivery_address != null && [
               "Address",
@@ -607,7 +608,7 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
           cr.requested_time_slot != null && [
             "New slot",
             "—",
-            cr.requested_time_slot,
+            formatSlotForDisplay(cr.requested_time_slot),
           ],
         ].filter(Boolean) as Array<[string, string, string]>}
       />
