@@ -37,8 +37,11 @@ export function variantLabel(name: string | null | undefined): string {
   return tail || full;
 }
 
-/** "Multigrain x2" per line — the whole point of the message. */
-function itemLines(items: AdminOrderItemSnapshot[] | null | undefined): string[] {
+/** "Multigrain x2" per line — the whole point of the message.
+ *  Shared with the customer-facing composer (@/lib/order-share-customer):
+ *  the two messages order their fields differently but a bread line is a
+ *  bread line, and "2 loaves" must never appear in either. */
+export function itemLines(items: AdminOrderItemSnapshot[] | null | undefined): string[] {
   if (!items || items.length === 0) return [];
   return items.map((it) => `${variantLabel(it.name)} x${lineQty(it)}`);
 }

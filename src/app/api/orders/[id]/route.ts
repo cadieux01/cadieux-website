@@ -40,9 +40,14 @@ export async function GET(
     return NextResponse.json({ error: "Phone format" }, { status: 400 });
   }
 
+  // full_name/phone are selected for the customer's own share message.
+  // This is the caller's own name and own number going back to the session
+  // that just proved ownership of that number, so it discloses nothing the
+  // caller didn't already supply — but it is PII, and the ownership check
+  // twenty lines below is the only thing keeping it that way.
   const { data: customer } = await supabaseAdmin
     .from("customers")
-    .select("id")
+    .select("id, full_name, phone")
     .eq("phone", phoneLocal)
     .maybeSingle();
   if (!customer) {
@@ -55,8 +60,16 @@ export async function GET(
       // order_number (OLF<n>) is deliberately NOT selected. The whole row
       // is spread into the response a customer's browser receives, and the
       // OLF number is sequential — it would disclose our order volume.
-      // public_ref is the customer-facing reference.
-      "id, public_ref, total_amount, delivery_fee, status, status_updated_at, delivery_address, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status, payment_method, payment_status, customer_id, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at",
+      // public_ref is the customer-facing reference. That reasoning gets
+      // STRONGER for the share message, not weaker: a share message is
+      // built to be forwarded, so an OLF number in one leaks the count to
+      // everyone downstream of the customer too.
+      //
+      // latitude/longitude ARE selected. They are the coordinates of the
+      // address this customer typed, and without them the share message's
+      // maps link degrades from a dropped pin to a text search — materially
+      // worse for whoever is actually driving there.
+      "id, public_ref, total_amount, delivery_fee, status, status_updated_at, delivery_address, latitude, longitude, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status, payment_method, payment_status, customer_id, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -85,11 +98,21 @@ export async function GET(
 
   // Side-fetch the pickup_location (no FK to embed via PostgREST) if this
   // order is a pickup. Cheap: at most one row.
-  let pickupLocation: { id: string; name: string; area: string; address: string } | null = null;
+  // lat/lng are selected so a shared pickup order links to a pin on the
+  // store rather than a text search for its address — every pickup_locations
+  // row carries coordinates, unlike older orders.
+  let pickupLocation: {
+    id: string;
+    name: string;
+    area: string;
+    address: string;
+    latitude: number | null;
+    longitude: number | null;
+  } | null = null;
   if (order.pickup_location_id) {
     const { data: loc } = await supabaseAdmin
       .from("pickup_locations")
-      .select("id, name, area, address")
+      .select("id, name, area, address, latitude, longitude")
       .eq("id", order.pickup_location_id)
       .maybeSingle();
     if (loc) pickupLocation = loc;
@@ -103,7 +126,17 @@ export async function GET(
   // on stale unpaid orders. See src/lib/order-state.ts.
   const computed_state = computeOrderState(order);
   return NextResponse.json({
-    order: { ...rest, pickup_location: pickupLocation, computed_state },
+    order: {
+      ...rest,
+      pickup_location: pickupLocation,
+      computed_state,
+      // The verified caller's own name and number, echoed back for the
+      // share message. Reached only after the ownership check above.
+      customer: {
+        full_name: customer.full_name ?? null,
+        phone: customer.phone ?? null,
+      },
+    },
     change_request: pendingRequest ?? null,
   });
 }

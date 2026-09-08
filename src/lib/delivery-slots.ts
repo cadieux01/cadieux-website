@@ -343,6 +343,27 @@ export function formatSlotForDisplay(value: string | null | undefined): string {
   return value;
 }
 
+/** The time window ALONE, no period name: "6 - 10 AM", "10 AM - 2 PM",
+ *  "4 - 9 PM".
+ *
+ *  `formatSlotForDisplay` prefixes the period ("Morning · 6 – 10 AM"), which
+ *  is right on a page with a label column beside it and wrong in a message a
+ *  customer pastes into WhatsApp — there the period name is a redundant word
+ *  in front of the hours it already names.
+ *
+ *  Derived from the canonical slot's `rangeLabel` rather than kept as a
+ *  fourth string per slot, so editing the hours in SLOTS can never leave this
+ *  quietly disagreeing with the rest of the app. Non-canonical legacy values
+ *  fall through to `formatSlotForDisplay`, which has no period prefix to
+ *  strip anyway. */
+export function formatSlotWindow(value: string | null | undefined): string {
+  const label = formatSlotForDisplay(value);
+  if (!label) return "";
+  // "Morning · 6 – 10 AM" → "6 – 10 AM"; en-dash → hyphen for plain text.
+  const afterSeparator = label.split("·").pop() ?? label;
+  return afterSeparator.trim().replace(/\s*[–—]\s*/g, " - ");
+}
+
 /** Friendly date label: "Today", "Tomorrow", or "Mon, 23 May". IST-aware. */
 export function dateLabel(dateIso: string, now: Date = new Date()): string {
   const today = todayIst(now);
