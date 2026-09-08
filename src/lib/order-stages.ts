@@ -49,9 +49,23 @@ export function stagesFor(
 
 // Map any raw status string to a canonical stage (or null for
 // non-tracker states like `cancelled` / `pending_payment`).
-export function toStage(status: string | null | undefined): OrderStage | null {
+//
+// `fulfillmentType` resolves the one place the two vocabularies genuinely
+// overlap: the terminal state. Admin writes `delivered` on a completed
+// PICKUP order (12 of the 21 pickup orders in prod) and has written
+// `picked_up` on a DELIVERY order. Both mean "the customer has the bread",
+// so each is normalised into the terminal stage of whichever progression
+// the order is actually running. Callers that don't pass it keep the old
+// delivery-first behaviour exactly.
+export function toStage(
+  status: string | null | undefined,
+  fulfillmentType?: string | null,
+): OrderStage | null {
   if (!status) return null;
   const s = status.toLowerCase();
+  const isPickup = fulfillmentType === "pickup";
+  if (isPickup && (s === "delivered" || s === "completed")) return "picked_up";
+  if (!isPickup && s === "picked_up") return "delivered";
   switch (s) {
     case "placed":
     case "pending":
