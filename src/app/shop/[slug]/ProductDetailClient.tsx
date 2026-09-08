@@ -23,6 +23,7 @@ import {
   nutrientLabel,
   type NutrientValue,
 } from "@/lib/nutrition";
+import { costPerGramProtein } from "@/lib/stat-tiles";
 import ReviewSection from "@/components/ReviewSection";
 import BackLink from "@/components/BackLink";
 import { ShareButton } from "@/components/ShareButton";
@@ -107,6 +108,7 @@ export default function ProductDetailClient({
   price = null,
   subscribePrice = null,
   subscribeDiscountPct = null,
+  proteinPerLoafG = null,
   pdpStrings,
   statTiles = [],
   media = [],
@@ -135,6 +137,10 @@ export default function ProductDetailClient({
   // tab then shows the one-time price, as it always did.
   subscribePrice?: number | null;
   subscribeDiscountPct?: number | null;
+  // Grams of protein in a whole loaf, derived server-side from the products
+  // row. Null when per-slice protein or slice count is missing — the per-gram
+  // line is then omitted rather than guessed.
+  proteinPerLoafG?: number | null;
   // Atomic PDP strings (server-resolved with critical fallbacks).
   pdpStrings?: PdpStrings;
   // Stat tiles, server-resolved from product_stat_tiles with net_weight +
@@ -215,6 +221,10 @@ export default function ProductDetailClient({
     typeof subscribeDiscountPct === "number" && Number.isFinite(subscribeDiscountPct)
       ? Math.round(subscribeDiscountPct)
       : 0;
+
+  // Per-gram-of-protein price for the price ACTUALLY on screen, so it tracks
+  // the tab in the same render as the price itself.
+  const perGramProtein = costPerGramProtein(effectivePrice, proteinPerLoafG);
 
   const handleAdd = () => {
     if (outOfStock) return;
@@ -376,7 +386,16 @@ export default function ProductDetailClient({
               {dispTrialsBanner}
             </p>
 
-            <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 20 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                gap: 12,
+                // The per-gram line below owns the gap when it renders, so
+                // the pair reads as one block rather than two stacked rows.
+                marginBottom: perGramProtein !== null ? 6 : 20,
+              }}
+            >
               <div
                 style={{
                   fontFamily: "var(--font-heading)",
@@ -403,6 +422,23 @@ export default function ProductDetailClient({
                   : "one-time"}
               </div>
             </div>
+
+            {perGramProtein !== null && (
+              /* Sits under the price, not beside it, and recomputes from
+                 whichever price the tab is showing. Two decimals always.
+                 Just the unit — no comparison or claim. */
+              <div
+                style={{
+                  marginBottom: 20,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 14,
+                  fontWeight: 400,
+                  color: "#024628",
+                }}
+              >
+                ₹{perGramProtein.toFixed(2)} per g protein
+              </div>
+            )}
 
             {/* Order type toggle — FIX 4: selected=solid FG+ash label, unselected=transparent+FG+FG border */}
             <div

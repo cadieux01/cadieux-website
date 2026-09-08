@@ -11,6 +11,7 @@ import {
 } from "@/lib/products";
 import { getPageContent, pickString } from "@/lib/content";
 import { getSubscriptionPlans } from "@/lib/subscription-plans";
+import { proteinPerLoafGrams } from "@/lib/stat-tiles";
 import type { ProductMedia } from "@/lib/data";
 
 import ShopListClient, {
@@ -39,9 +40,14 @@ export default async function ShopPage() {
   // back to the bundled editorial media (videos + images) when the admin
   // gallery is empty, so tiles never go blank and today's behaviour is kept.
   const mediaBySlug: Record<string, ProductMedia[]> = {};
+  // Grams of protein per loaf — the denominator for the per-gram price under
+  // each tile. Null for any product whose per-slice protein or slice count
+  // is missing, and that tile then shows no per-gram line at all.
+  const proteinPerLoafBySlug: Record<string, number | null> = {};
   for (const p of products) {
     priceBySlug[p.slug] = p.price_inr;
     mediaBySlug[p.slug] = resolveProductMedia(p.slug, p.image_url, p.gallery_urls);
+    proteinPerLoafBySlug[p.slug] = proteinPerLoafGrams(p);
   }
 
   // Subscribe price per slug, resolved SERVER-side through the same cached
@@ -106,6 +112,7 @@ export default async function ShopPage() {
         mediaBySlug={mediaBySlug}
         contentBySlug={contentBySlug}
         subscribeBySlug={subscribeBySlug}
+        proteinPerLoafBySlug={proteinPerLoafBySlug}
       />
     </>
   );

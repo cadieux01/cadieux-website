@@ -28,7 +28,7 @@ import {
   resolveOgImage,
   resolveProductMedia,
 } from "@/lib/products";
-import { parseWeightGrams } from "@/lib/stat-tiles";
+import { parseWeightGrams, proteinPerLoafGrams } from "@/lib/stat-tiles";
 import { getProductReports } from "@/lib/product-reports";
 import { getPageContent, pickString } from "@/lib/content";
 import { resolveInternalSlug } from "@/lib/product-slugs";
@@ -307,6 +307,7 @@ export default async function ProductDetailPage({
         price={productRow?.price_inr ?? null}
         subscribePrice={subscriptionPlan?.price ?? null}
         subscribeDiscountPct={subscriptionPlan?.subscription_discount_pct ?? null}
+        proteinPerLoafG={productRow ? proteinPerLoafGrams(productRow) : null}
         pdpStrings={pdpStrings}
         statTiles={content.stat_tiles}
         media={media}

@@ -54,6 +54,7 @@ export default function ShopListClient({
   mediaBySlug,
   contentBySlug,
   subscribeBySlug,
+  proteinPerLoafBySlug,
 }: {
   availability: AvailabilityMap | null;
   // Live DB price per slug. Falls back to the bundled PRODUCTS price only
@@ -71,6 +72,10 @@ export default function ShopListClient({
   // Absent entirely when the subscription-plans read failed; tiles then show
   // the one-time price with no subscribe line.
   subscribeBySlug?: ShopSubscribeBySlug;
+  // Grams of protein per loaf, per slug — derived server-side from the same
+  // products fields the protein/slices stat tiles read. Null (or a missing
+  // slug) means the tile prints no per-gram price.
+  proteinPerLoafBySlug?: Record<string, number | null>;
 }) {
   const visibleProducts = availability
     ? PRODUCTS.filter((p) => availability.listed.has(p.slug))
@@ -153,6 +158,7 @@ export default function ShopListClient({
                       outOfStock={availability?.outOfStock.has(p.slug) ?? false}
                       subscribePrice={sub?.price ?? null}
                       subscribeDiscountPct={sub?.discountPct ?? null}
+                      proteinPerLoafG={proteinPerLoafBySlug?.[p.slug] ?? null}
                     />
                   </div>
                 );

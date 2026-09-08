@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import type { ProductMedia } from "@/lib/data";
 import { toUrlSlug } from "@/lib/product-slugs";
+import { costPerGramProtein } from "@/lib/stat-tiles";
 import { useCart } from "@/context/CartContext";
 
 // Task F v2 cleanup: card is a FG-brand surface (#024628). All text must be
@@ -54,9 +55,13 @@ type Props = {
   // one-time price alone.
   subscribePrice?: number | null;
   subscribeDiscountPct?: number | null;
+  // Grams of protein in a whole loaf, derived server-side from the products
+  // row. Null when the product has no usable per-slice protein or slice count
+  // — the per-gram line is then omitted rather than guessed.
+  proteinPerLoafG?: number | null;
 };
 
-export default function ProductTile({ slug, productIndex, name, tag, title, subtitle, price, stats, media, outOfStock = false, subscribePrice = null, subscribeDiscountPct = null }: Props) {
+export default function ProductTile({ slug, productIndex, name, tag, title, subtitle, price, stats, media, outOfStock = false, subscribePrice = null, subscribeDiscountPct = null, proteinPerLoafG = null }: Props) {
   const [hover, setHover] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -84,6 +89,14 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
     typeof subscribeDiscountPct === "number" && Number.isFinite(subscribeDiscountPct)
       ? Math.round(subscribeDiscountPct)
       : 0;
+
+  // Per-gram-of-protein price, computed from the prices actually on screen —
+  // never from an MRP the customer isn't being shown. Mirrors the price line
+  // above it: one figure, or the same "/" pair when a subscribe price shows.
+  const oneTimePerG = costPerGramProtein(price, proteinPerLoafG);
+  const subscribePerG = showSubscribe
+    ? costPerGramProtein(subscribePrice!, proteinPerLoafG)
+    : null;
 
   const stop = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -470,6 +483,34 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                 </span>
               )}
             </div>
+            {oneTimePerG !== null && (
+              /* Mirrors the price line above, "/" pair and all, so the eye
+                 maps each per-gram figure to the price it came from. Ash on
+                 the brand surface at 12px: present for anyone comparing
+                 loaves, quiet enough not to compete with the price. No claim
+                 or comparison next to it — just the unit. */
+              <div
+                style={{
+                  marginTop: 4,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 12,
+                  fontWeight: 400,
+                  color: "#C0C8CE",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {/* Always two decimals, including a whole-rupee figure —
+                    "₹3" beside "₹2.40" would read as a different unit. */}
+                ₹{oneTimePerG.toFixed(2)}
+                {subscribePerG !== null && (
+                  <>
+                    <span aria-hidden="true" style={{ opacity: 0.55 }}> /</span>
+                    ₹{subscribePerG.toFixed(2)}
+                  </>
+                )}
+                {" per g protein"}
+              </div>
+            )}
             {showSubscribe && (
               <div
                 style={{

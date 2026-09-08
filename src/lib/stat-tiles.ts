@@ -155,6 +155,43 @@ export function resolveStatTiles<T extends StatTileLike>(
   return out;
 }
 
+// Total protein in a loaf, in grams — the denominator of the cost-per-gram
+// figure the storefront prints under the price.
+//
+// Read from the SAME two products fields the `protein_per_slice` and `slices`
+// stat tiles derive from, deliberately NOT from the resolved tile strings.
+// Those are display values, rounded for the strip: multigrain's per-slice
+// protein is 8.56 g but the tile prints "8.6", and 8.6 x 7 slices would price
+// the loaf at Rs 2.66/g instead of the true Rs 2.67/g. A figure this small is
+// only worth showing if it is exact, so it comes off the raw row.
+//
+// Null when either field is missing or unusable, so the caller renders nothing
+// rather than a wrong number or a zero. Zero protein also returns null — it
+// would divide to Infinity.
+export function proteinPerLoafGrams(p: StatTileSource): number | null {
+  const raw = p.nutrition_per_slice?.["protein_g"];
+  const perSlice = typeof raw === "number" ? raw : Number.NaN;
+  const slices = p.slices_per_loaf;
+  if (!Number.isFinite(perSlice) || perSlice <= 0) return null;
+  if (typeof slices !== "number" || !Number.isFinite(slices) || slices <= 0) {
+    return null;
+  }
+  return perSlice * slices;
+}
+
+// Rupees per gram of protein for a given displayed price, to the paisa.
+// Callers pass whichever price is on screen — the one-time price on the
+// one-time tab, the derived subscribe price on the subscribe tab — so the
+// figure can never be derived from a price the customer isn't being shown.
+export function costPerGramProtein(
+  displayedPrice: number,
+  proteinGrams: number | null,
+): number | null {
+  if (!Number.isFinite(displayedPrice) || displayedPrice <= 0) return null;
+  if (proteinGrams === null || proteinGrams <= 0) return null;
+  return Math.round((displayedPrice / proteinGrams) * 100) / 100;
+}
+
 // Parse products.weight ("250g", "1.2 kg") into grams for schema.org's
 // QuantitativeValue. Returns null when the free-text weight isn't parseable —
 // callers must OMIT the schema field rather than guess, since Google reads it
