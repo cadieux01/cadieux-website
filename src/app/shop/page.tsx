@@ -10,9 +10,13 @@ import {
   resolveProductMedia,
 } from "@/lib/products";
 import { getPageContent, pickString } from "@/lib/content";
+import { getSubscriptionPlans } from "@/lib/subscription-plans";
 import type { ProductMedia } from "@/lib/data";
 
-import ShopListClient, { type ShopContentBySlug } from "./ShopListClient";
+import ShopListClient, {
+  type ShopContentBySlug,
+  type ShopSubscribeBySlug,
+} from "./ShopListClient";
 
 const SITE_URL = "https://www.cadieux.in";
 
@@ -38,6 +42,23 @@ export default async function ShopPage() {
   for (const p of products) {
     priceBySlug[p.slug] = p.price_inr;
     mediaBySlug[p.slug] = resolveProductMedia(p.slug, p.image_url, p.gallery_urls);
+  }
+
+  // Subscribe price per slug, resolved SERVER-side through the same cached
+  // reader the wizard and /subscribe use, so the tile can never quote a
+  // number the checkout would reject. Read here rather than fetched from
+  // the client so the figure is in the first paint — a late client fetch
+  // would pop the price line in after hydration.
+  //
+  // A slug is absent when it isn't flagged is_subscription_plan, or when the
+  // DB read failed (getSubscriptionPlans returns [] on error). Both cases
+  // land on the same safe outcome: the tile shows the one-time price alone.
+  const subscribeBySlug: ShopSubscribeBySlug = {};
+  for (const plan of await getSubscriptionPlans()) {
+    subscribeBySlug[plan.slug] = {
+      price: plan.price,
+      discountPct: plan.subscription_discount_pct,
+    };
   }
 
   // Content per slug (parallel). pickString applies critical fallbacks
@@ -84,6 +105,7 @@ export default async function ShopPage() {
         priceBySlug={priceBySlug}
         mediaBySlug={mediaBySlug}
         contentBySlug={contentBySlug}
+        subscribeBySlug={subscribeBySlug}
       />
     </>
   );

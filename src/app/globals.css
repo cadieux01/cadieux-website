@@ -412,6 +412,58 @@ select option:disabled {
   animation: immersiveBreathe 1.7s ease-in-out infinite;
 }
 
+/* Shop tile: the "/₹144" subscribe price sitting beside the one-time price.
+   A cream highlight crosses the figure THREE TIMES on mount and then stops —
+   deliberately not a loop. An endless sweep reads as a discount site and
+   keeps the compositor awake on phones for as long as the card is mounted;
+   three passes draw the eye once and then leave the price alone.
+
+   At rest the glyphs are flat cream, and that is load-bearing, not
+   incidental: the tile must not depend on the animation to be legible or to
+   stand out. Emphasis is carried statically by colour and weight (full
+   opacity cream at 600 against the 500-weight one-time price) plus the
+   SUBSCRIBE & SAVE caption — the sweep is decoration on top of a design that
+   already works without it.
+
+   Mechanics: the gradient tile is 3x the element width with the highlight in
+   its middle third, so at background-position 0% (the resting, un-animated
+   value) the visible third is solid cream. animation-fill-mode is left at
+   `none`, so when the third pass ends the element falls back to exactly that
+   flat resting state. This is why the keyframes run 0% -> 100% rather than
+   through negative offsets: no reliance on background tiling, and no
+   possibility of resting mid-highlight.
+
+   The transparent fill is gated behind @supports: without background-clip
+   the text would be invisible rather than merely unanimated, so the base
+   rule keeps a solid cream colour and only browsers that can paint the
+   gradient into the glyphs opt into it. */
+@keyframes cdxSubPriceSweep {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+.cdx-sub-price {
+  color: #fbf3d4;
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .cdx-sub-price {
+    background-image: linear-gradient(
+      100deg,
+      #fbf3d4 0%,
+      #fbf3d4 40%,
+      #ffffff 50%,
+      #fbf3d4 60%,
+      #fbf3d4 100%
+    );
+    background-size: 300% 100%;
+    background-repeat: no-repeat;
+    background-position: 0% 50%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: cdxSubPriceSweep 1.8s ease-in-out 3;
+  }
+}
+
 /* Respect user motion preferences. Strips the heaviest animations and
    forces a default cursor — content remains fully usable. Per-component
    scroll-driven reveals are still allowed (they're tied to scroll, not
@@ -427,6 +479,10 @@ select option:disabled {
   }
   body { cursor: auto; }
   .immersive-breathe { animation: none; }
+  /* No sweep at all. The base rule's resting background-position (0% 50%)
+     already paints flat cream, so cancelling the animation is sufficient —
+     nothing to park. */
+  .cdx-sub-price { animation: none; }
 }
 
 /* ── Animated cursor variants (desktop only) ─────────────────────────────

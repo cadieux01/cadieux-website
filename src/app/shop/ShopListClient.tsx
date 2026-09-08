@@ -39,11 +39,21 @@ export type ShopContentBySlug = Record<
   }
 >;
 
+// Per-slug subscribe pricing for the tile's animated "/₹144" line. Resolved
+// server-side from getSubscriptionPlans (MRP × (1 − discount%)) — the same
+// figure the wizard quotes and the checkout revalidates. A slug is simply
+// missing when the product isn't a subscription plan.
+export type ShopSubscribeBySlug = Record<
+  string,
+  { price: number; discountPct: number }
+>;
+
 export default function ShopListClient({
   availability,
   priceBySlug,
   mediaBySlug,
   contentBySlug,
+  subscribeBySlug,
 }: {
   availability: AvailabilityMap | null;
   // Live DB price per slug. Falls back to the bundled PRODUCTS price only
@@ -58,6 +68,9 @@ export default function ShopListClient({
   // Per-slug content (name/tag/title/subtitle) sourced from
   // content_strings via getPageContent with critical-string fallbacks.
   contentBySlug?: ShopContentBySlug;
+  // Absent entirely when the subscription-plans read failed; tiles then show
+  // the one-time price with no subscribe line.
+  subscribeBySlug?: ShopSubscribeBySlug;
 }) {
   const visibleProducts = availability
     ? PRODUCTS.filter((p) => availability.listed.has(p.slug))
@@ -124,6 +137,7 @@ export default function ShopListClient({
             >
               {visibleProducts.map((p) => {
                 const c = contentBySlug?.[p.slug];
+                const sub = subscribeBySlug?.[p.slug];
                 return (
                   <div data-stagger key={p.slug} style={{ height: "100%" }}>
                     <ProductTile
@@ -137,6 +151,8 @@ export default function ShopListClient({
                       stats={c?.stats ?? []}
                       media={mediaBySlug?.[p.slug] ?? []}
                       outOfStock={availability?.outOfStock.has(p.slug) ?? false}
+                      subscribePrice={sub?.price ?? null}
+                      subscribeDiscountPct={sub?.discountPct ?? null}
                     />
                   </div>
                 );

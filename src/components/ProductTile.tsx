@@ -28,6 +28,14 @@ const qtyBtnStyle: React.CSSProperties = {
 // an empty array renders no strip at all.
 export type TileStat = { id: string; value: string; label: string };
 
+// Whole rupees stay whole; a derived subscribe price that lands on paise
+// (MRP × (1 − pct) rarely does, but can) shows both decimals rather than a
+// long float. Mirrors the formatter the subscribe panel already uses.
+const money = (n: number) =>
+  Number.isInteger(n)
+    ? n.toLocaleString("en-IN")
+    : n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 type Props = {
   slug: string;
   productIndex: number;
@@ -39,9 +47,16 @@ type Props = {
   stats: TileStat[];
   media: ProductMedia[];
   outOfStock?: boolean;
+  // DERIVED per-loaf subscribe price (MRP × (1 − discount%)), resolved
+  // server-side via getSubscriptionPlans — the same figure the wizard quotes
+  // and the checkout revalidates. Absent when the product isn't flagged a
+  // subscription plan, or when the DB read failed; the tile then shows the
+  // one-time price alone.
+  subscribePrice?: number | null;
+  subscribeDiscountPct?: number | null;
 };
 
-export default function ProductTile({ slug, productIndex, name, tag, title, subtitle, price, stats, media, outOfStock = false }: Props) {
+export default function ProductTile({ slug, productIndex, name, tag, title, subtitle, price, stats, media, outOfStock = false, subscribePrice = null, subscribeDiscountPct = null }: Props) {
   const [hover, setHover] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -56,6 +71,19 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
     (c) => c.productIndex === productIndex && c.orderType === "once"
   );
   const inCartQty = cartIndex >= 0 ? cart[cartIndex].qty : 0;
+
+  // Only advertise the subscribe price when it's a real, cheaper number.
+  // A missing / zero / not-actually-lower figure renders nothing rather than
+  // a misleading "save" line.
+  const showSubscribe =
+    typeof subscribePrice === "number" &&
+    Number.isFinite(subscribePrice) &&
+    subscribePrice > 0 &&
+    subscribePrice < price;
+  const subPct =
+    typeof subscribeDiscountPct === "number" && Number.isFinite(subscribeDiscountPct)
+      ? Math.round(subscribeDiscountPct)
+      : 0;
 
   const stop = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -409,16 +437,55 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             marginTop: "auto",
           }}
         >
-          <div
-            style={{
-              fontFamily: "var(--font-heading)",
-              fontSize: 28,
-              fontWeight: 500,
-              color: "#FBF3D4",
-              lineHeight: 1,
-            }}
-          >
-            ₹{price}
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: "var(--font-heading)",
+                fontSize: 28,
+                fontWeight: 500,
+                color: "#FBF3D4",
+                lineHeight: 1,
+                display: "flex",
+                alignItems: "baseline",
+                gap: 6,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span>₹{price}</span>
+              {showSubscribe && (
+                /* The cheaper subscribe figure rides beside the one-time price
+                   rather than under it, so the row keeps its single-line
+                   height and the Add button never shifts. Emphasis is static:
+                   full-opacity cream at 600 against the one-time price's 500.
+                   The .cdx-sub-price sweep is a three-pass flourish on top and
+                   the tile reads correctly with it disabled. */
+                <span
+                  style={{
+                    fontSize: 20,
+                    fontWeight: 600,
+                  }}
+                >
+                  <span aria-hidden="true" style={{ opacity: 0.55 }}>/</span>
+                  <span className="cdx-sub-price">₹{money(subscribePrice!)}</span>
+                </span>
+              )}
+            </div>
+            {showSubscribe && (
+              <div
+                style={{
+                  marginTop: 6,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  color: "#C0C8CE",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {subPct > 0 ? `Subscribe & save ${subPct}%` : "Subscribe & save"}
+              </div>
+            )}
           </div>
 
           {outOfStock ? (
