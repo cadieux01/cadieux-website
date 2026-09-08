@@ -1119,14 +1119,90 @@ function StatusTracker({
         Status
       </h2>
 
+      {/* Layout lives in a scoped stylesheet rather than inline styles
+          because the two arrangements need a real media query: a
+          matchMedia hook would render the wrong one on the server and
+          flash on hydration, and would leave the stepper broken if JS
+          never runs. Everything that varies per stage (colours, the
+          active ring) stays inline; only geometry is class-driven, so
+          the horizontal layout is byte-for-byte the same as before.
+
+          Below 430px the five delivery labels cannot fit side by side —
+          "CONFIRMED" alone needs ~99px of min-content and each of five
+          cells only gets ~65px at 375px — so the row is turned into a
+          vertical timeline instead of being shrunk into unreadable type. */}
+      <style>{`
+        .cdx-otrack {
+          display: grid;
+          grid-template-columns: repeat(var(--cdx-otrack-count), 1fr);
+          align-items: start;
+          gap: 0;
+          position: relative;
+        }
+        .cdx-otrack-stage {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+          position: relative;
+        }
+        .cdx-otrack-line { position: absolute; }
+        .cdx-otrack-line-h { top: 9px; right: 50%; width: 100%; height: 2px; }
+        .cdx-otrack-line-v { display: none; }
+        .cdx-otrack-dot {
+          position: relative;
+          flex: none;
+          width: 20px;
+          height: 20px;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #024628;
+          font-family: var(--font-body);
+          font-size: 16px;
+          font-weight: 500;
+          line-height: 1;
+        }
+        .cdx-otrack-label {
+          font-family: var(--font-body);
+          font-size: 14px;
+          font-weight: 500;
+          letter-spacing: 0.15em;
+          text-transform: uppercase;
+          text-align: center;
+          line-height: 1.3;
+        }
+        @media (max-width: 430px) {
+          .cdx-otrack { grid-template-columns: 1fr; }
+          .cdx-otrack-stage {
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 14px;
+            padding-bottom: 22px;
+          }
+          .cdx-otrack-stage:last-child { padding-bottom: 0; }
+          .cdx-otrack-line-h { display: none; }
+          /* The dot sits 10px below the row's top edge, so a line that
+             starts at the dot's bottom (20px) and runs the remaining
+             height of the padding box lands exactly on the next dot's
+             top edge — no overlap, no gap, whatever the label wraps to. */
+          .cdx-otrack-line-v {
+            display: block;
+            top: 20px;
+            left: 9px;
+            width: 2px;
+            height: calc(100% - 20px);
+          }
+          .cdx-otrack-label { text-align: left; padding-top: 1px; }
+        }
+      `}</style>
+
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${stages.length}, 1fr)`,
-          alignItems: "start",
-          gap: 0,
-          position: "relative",
-        }}
+        className="cdx-otrack"
+        style={
+          { "--cdx-otrack-count": stages.length } as React.CSSProperties
+        }
       >
         {stages.map((s, i) => {
           const done = i < currentIdx;
@@ -1140,53 +1216,40 @@ function StatusTracker({
             : done
             ? "rgba(2,70,40,0.8)"
             : "rgba(2,70,40,0.6)";
+          const doneLine = "#024628";
+          const pendingLine = "rgba(2,70,40,0.2)";
           return (
-            <div
-              key={s}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 8,
-                position: "relative",
-              }}
-            >
-              {/* Connector line to the previous dot. Coloured if the
-                  *previous* stage is done; uses absolute positioning so
-                  the dots stay centred in their grid cell. */}
+            <div key={s} className="cdx-otrack-stage">
+              {/* Two connectors, one per layout, so each can be drawn
+                  from the side the geometry allows: horizontally a line
+                  can reach backwards to the previous dot with a fixed
+                  offset, but vertically the previous row's height is
+                  unknown, so the line has to be drawn forwards from this
+                  dot instead. Only one is ever displayed. */}
               {i > 0 && (
                 <span
                   aria-hidden
+                  className="cdx-otrack-line cdx-otrack-line-h"
                   style={{
-                    position: "absolute",
-                    top: 9,
-                    right: "50%",
-                    width: "100%",
-                    height: 2,
-                    background:
-                      i <= currentIdx
-                        ? "#024628"
-                        : "rgba(2,70,40,0.2)",
+                    background: i <= currentIdx ? doneLine : pendingLine,
+                  }}
+                />
+              )}
+              {i < stages.length - 1 && (
+                <span
+                  aria-hidden
+                  className="cdx-otrack-line cdx-otrack-line-v"
+                  style={{
+                    background: i < currentIdx ? doneLine : pendingLine,
                   }}
                 />
               )}
               <span
                 aria-hidden
+                className="cdx-otrack-dot"
                 style={{
-                  position: "relative",
-                  width: 20,
-                  height: 20,
-                  borderRadius: 999,
                   background: dotBg,
                   border: `1.5px solid ${dotBorder}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#024628",
-                  fontFamily: "var(--font-body)",
-                  fontSize: 16,
-                  fontWeight: 500,
-                  lineHeight: 1,
                   boxShadow: active
                     ? "0 0 0 4px rgba(2,70,40,0.15)"
                     : undefined,
@@ -1194,18 +1257,7 @@ function StatusTracker({
               >
                 {done ? "✓" : active ? "•" : ""}
               </span>
-              <span
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                  color: labelColor,
-                  textAlign: "center",
-                  lineHeight: 1.3,
-                }}
-              >
+              <span className="cdx-otrack-label" style={{ color: labelColor }}>
                 {STAGE_LABEL[s]}
               </span>
             </div>
