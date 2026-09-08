@@ -115,22 +115,12 @@ function formatDeliveryDate(iso: string | null): string {
   });
 }
 
-function formatSlot(slot: string | null): string {
-  if (!slot) return "";
-  // e.g. "07:00-08:00" → "7–8 AM"
-  const m = slot.match(/^(\d{1,2}):\d{2}-(\d{1,2}):\d{2}$/);
-  if (!m) return slot;
-  const fmt = (h: number) => {
-    const ampm = h >= 12 ? "PM" : "AM";
-    const h12 = h % 12 === 0 ? 12 : h % 12;
-    return { h12, ampm };
-  };
-  const a = fmt(Number(m[1]));
-  const b = fmt(Number(m[2]));
-  return a.ampm === b.ampm
-    ? `${a.h12}–${b.h12} ${b.ampm}`
-    : `${a.h12} ${a.ampm} – ${b.h12} ${b.ampm}`;
-}
+// Slot rendering is `formatSlotForDisplay` and nothing else. This page
+// already imported it for the change-request diff below while a local copy
+// rendered the Slot row — and that copy only matched "HH:MM-HH:MM",
+// returning the raw string otherwise. Most orders are stored as a bare
+// "07:30", so the tracking page was showing customers a literal "07:30".
+const formatSlot = formatSlotForDisplay;
 
 function statusColor(status: string): string {
   const s = status.toLowerCase();

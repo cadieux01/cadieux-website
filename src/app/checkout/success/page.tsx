@@ -11,6 +11,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trackPurchase } from "@/lib/analytics";
+import { formatSlotForDisplay } from "@/lib/delivery-slots";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -43,21 +44,11 @@ function formatDeliveryDate(iso: string | null): string {
   });
 }
 
-function formatSlot(slot: string | null): string {
-  if (!slot) return "";
-  const m = slot.match(/^(\d{1,2}):\d{2}-(\d{1,2}):\d{2}$/);
-  if (!m) return slot;
-  const fmt = (h: number) => {
-    const ampm = h >= 12 ? "PM" : "AM";
-    const h12 = h % 12 === 0 ? 12 : h % 12;
-    return { h12, ampm };
-  };
-  const a = fmt(Number(m[1]));
-  const b = fmt(Number(m[2]));
-  return a.ampm === b.ampm
-    ? `${a.h12}–${b.h12} ${b.ampm}`
-    : `${a.h12} ${a.ampm} – ${b.h12} ${b.ampm}`;
-}
+// Slot rendering is `formatSlotForDisplay` and nothing else. A local copy
+// used to live here that only matched "HH:MM-HH:MM" and returned the raw
+// string for anything else — so the 40-of-55 orders stored as a bare
+// "07:30" showed the customer a literal "07:30" on their confirmation.
+const formatSlot = formatSlotForDisplay;
 
 export default function CheckoutSuccessPage() {
   return (
