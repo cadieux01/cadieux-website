@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import ProductTile, { type TileStat } from "@/components/ProductTile";
+import BackLink from "@/components/BackLink";
 import ScrollReveal from "@/components/ScrollReveal";
 import { PRODUCTS, type ProductMedia } from "@/lib/data";
 import type { AvailabilityMap } from "@/lib/products";
@@ -82,16 +83,7 @@ export default function ShopListClient({
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
 
-      {/* Back link */}
-      <Link href="/" style={{
-        position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
-        letterSpacing: "0.35em", textTransform: "uppercase",
-        color: "#4369B2", textDecoration: "none",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span style={{ fontSize: 16 }}>←</span> Cadieux
-      </Link>
+      <BackLink href="/" color="#4369B2">Cadieux</BackLink>
 
       <div style={{ position: "relative", zIndex: 1, padding: "72px clamp(18px,5vw,80px) 80px", maxWidth: 1200, margin: "0 auto" }}>
         <ScrollReveal>

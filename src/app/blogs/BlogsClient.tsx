@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
+import BackLink from "@/components/BackLink";
 import { BLOG_POSTS } from "@/lib/data";
 
 const GRAIN = "url(/grain.svg)";
@@ -11,16 +12,7 @@ export default function BlogsClient() {
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.04, mixBlendMode: "multiply", pointerEvents: "none", zIndex: 0 }} />
 
-      {/* Back link */}
-      <Link href="/" style={{
-        position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
-        letterSpacing: "0.35em", textTransform: "uppercase",
-        color: "#024628", textDecoration: "none",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span style={{ fontSize: 16 }}>←</span> Cadieux
-      </Link>
+      <BackLink href="/">Cadieux</BackLink>
 
       <div style={{ position: "relative", zIndex: 1, padding: "100px clamp(28px,8vw,120px) 120px" }}>
         <ScrollReveal>

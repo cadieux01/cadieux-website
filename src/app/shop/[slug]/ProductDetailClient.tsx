@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
 import { notFound, useRouter } from "next/navigation";
 import { useRef, useState, type CSSProperties } from "react";
@@ -25,6 +24,7 @@ import {
   type NutrientValue,
 } from "@/lib/nutrition";
 import ReviewSection from "@/components/ReviewSection";
+import BackLink from "@/components/BackLink";
 import { ShareButton } from "@/components/ShareButton";
 import {
   PRODUCT_REPORT_CATEGORIES,
@@ -212,27 +212,7 @@ export default function ProductDetailClient({
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
 
-      <Link
-        href="/shop"
-        style={{
-          position: "fixed",
-          top: "calc(24px + env(safe-area-inset-top))",
-          left: "calc(20px + env(safe-area-inset-left))",
-          zIndex: 101,
-          fontFamily: "var(--font-body)",
-          fontSize: 14,
-          fontWeight: 500,
-          letterSpacing: "0.35em",
-          textTransform: "uppercase",
-          color: "#4369B2",
-          textDecoration: "none",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <span style={{ fontSize: 16 }}>←</span> Shop
-      </Link>
+      <BackLink href="/shop" color="#4369B2">Shop</BackLink>
 
       <div
         style={{

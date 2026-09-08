@@ -8,7 +8,7 @@
 // so the answer reflects the same data admin/service-areas writes.
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 
 import {
@@ -213,27 +213,8 @@ export default function FindUsClient({
         }}
       />
 
-      <Link
-        href="/"
-        style={{
-          position: "fixed",
-          top: 24,
-          left: 20,
-          zIndex: 101,
-          fontFamily: "var(--font-body)",
-          fontSize: 14,
-          fontWeight: 500,
-          letterSpacing: "0.35em",
-          textTransform: "uppercase",
-          color: "#024628",
-          textDecoration: "none",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <span style={{ fontSize: 16 }}>←</span> Cadieux
-      </Link>
+      {/* safeArea={false}: this page predates the inset offsets. Preserved. */}
+      <BackLink href="/" safeArea={false}>Cadieux</BackLink>
 
       <div
         style={{

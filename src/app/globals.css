@@ -502,6 +502,45 @@ select option:disabled {
   border: 1px solid var(--surface-border);
 }
 
+/* Fixed "← Cadieux" back link (src/components/BackLink.tsx). Opacity is set
+   inline from scroll direction; only the easing lives here so it can honour
+   prefers-reduced-motion, which an inline style cannot express.
+   180ms: under the ~200ms mark where motion starts reading as lag, long
+   enough that the fade is not a hard cut. */
+.cdx-backlink {
+  transition: opacity 180ms ease-out;
+}
+
+/* Scrolled-state backdrop. Drawn as a ::before inset OUTSIDE the anchor box so
+   the anchor keeps its exact geometry — no padding to add, so no text shift
+   when the pill appears, and at rest (no [data-scrolled]) nothing is painted
+   at all.
+   Deliberately a SOLID fill of the page canvas, not a low-alpha wash and not
+   backdrop-filter: a wash still lets the glyphs underneath read through, and
+   backdrop-filter is unsupported on Chrome <76 and routinely ignored on
+   low-end Android, where it degrades to fully transparent — i.e. the exact
+   overlap bug returns on the cheapest phones. A solid fill cannot fail.
+   z-index -1 keeps it behind the arrow and label; the anchor's own z-index
+   makes a stacking context, so it still paints above page content. */
+.cdx-backlink::before {
+  content: "";
+  position: absolute;
+  inset: -6px -10px;
+  z-index: -1;
+  border-radius: 8px;
+  background: var(--cdx-backlink-backdrop, #c0c8ce);
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+.cdx-backlink[data-scrolled="true"]::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cdx-backlink,
+  .cdx-backlink::before { transition: none; }
+}
+
 /* Primary CTA — Foundation Green surface + Grain Cream label (9.88:1 AAA).
    Only place a cream-bg CTA on a brand surface. Never on ash canvas. */
 .cdx-cta-primary {

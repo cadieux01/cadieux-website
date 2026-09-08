@@ -26,6 +26,7 @@ import {
 } from "@/lib/delivery-slots";
 import { trackPurchase } from "@/lib/analytics";
 import { formatPublicRef } from "@/lib/order-number";
+import BackLink from "@/components/BackLink";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -393,27 +394,8 @@ export default function OrderDetailPage() {
         }}
       />
 
-      <Link
-        href="/orders"
-        style={{
-          position: "fixed",
-          top: 24,
-          left: 20,
-          zIndex: 101,
-          fontFamily: "var(--font-body)",
-          fontSize: 14,
-          fontWeight: 500,
-          letterSpacing: "0.35em",
-          textTransform: "uppercase",
-          color: "#024628",
-          textDecoration: "none",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <span style={{ fontSize: 16 }}>←</span> Orders
-      </Link>
+      {/* safeArea={false}: this page predates the inset offsets. Preserved. */}
+      <BackLink href="/orders" safeArea={false}>Orders</BackLink>
 
       <div
         style={{

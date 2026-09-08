@@ -16,8 +16,8 @@ import path from "node:path";
 
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
+import BackLink from "@/components/BackLink";
 import { ShareButton } from "@/components/ShareButton";
 import { getPageContent, pickString } from "@/lib/content";
 
@@ -187,28 +187,16 @@ export default async function BehindCadieuxPage() {
         }}
       />
 
-      {/* Back link */}
-      <Link
+      {/* safeArea={false}: this page predates the inset offsets. Preserved.
+          backdrop: this page's canvas is Foundation Green, not the ash default. */}
+      <BackLink
         href="/"
-        style={{
-          position: "fixed",
-          top: 24,
-          left: 20,
-          zIndex: 101,
-          fontFamily: "var(--font-body)",
-          fontSize: 14,
-          fontWeight: 500,
-          letterSpacing: "0.35em",
-          textTransform: "uppercase",
-          color: ENDURANCE_BLUE,
-          textDecoration: "none",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
+        color={ENDURANCE_BLUE}
+        safeArea={false}
+        backdrop={FOUNDATION_GREEN}
       >
-        <span style={{ fontSize: 16 }}>←</span> Cadieux
-      </Link>
+        Cadieux
+      </BackLink>
 
       <main
         style={{

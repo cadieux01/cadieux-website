@@ -8,6 +8,7 @@ import {
   type PickupLocationType,
 } from "@/lib/pickup-locations";
 import StoreLocatorSearch from "./StoreLocatorSearch";
+import BackLink from "@/components/BackLink";
 
 // Render at request time so we don't try to prerender against
 // pickup_locations at build (and so the admin-CRUD revalidateTag
@@ -88,16 +89,7 @@ export default async function StoreLocatorPage() {
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.04, mixBlendMode: "multiply", pointerEvents: "none", zIndex: 0 }} />
 
-      {/* Back link */}
-      <Link href="/" style={{
-        position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
-        letterSpacing: "0.35em", textTransform: "uppercase",
-        color: "#024628", textDecoration: "none",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span style={{ fontSize: 16 }}>←</span> Cadieux
-      </Link>
+      <BackLink href="/">Cadieux</BackLink>
 
       <div style={{ position: "relative", zIndex: 1, padding: "100px clamp(24px,6vw,80px) 120px", maxWidth: 720, margin: "0 auto" }}>
         <ScrollReveal>

@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { ShareButton } from "@/components/ShareButton";
+import BackLink from "@/components/BackLink";
 
 const BG = "rgb(6,4,2)";
 const WALNUT = "#024628";
@@ -197,18 +198,8 @@ export default function SubscriptionHubPage() {
     <div style={{ minHeight: "100dvh", background: BG, position: "relative", overflowX: "clip" }}>
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.055, pointerEvents: "none", zIndex: 0 }} />
 
-      <Link
-        href="/"
-        style={{
-          position: "fixed", top: "calc(24px + env(safe-area-inset-top))", left: "calc(20px + env(safe-area-inset-left))", zIndex: 101,
-          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
-          letterSpacing: "0.35em", textTransform: "uppercase",
-          color: "#4369B2", textDecoration: "none",
-          display: "flex", alignItems: "center", gap: 8,
-        }}
-      >
-        <span style={{ fontSize: 16 }}>←</span> Cadieux
-      </Link>
+      {/* backdrop: this page's canvas is BG (near-black), not the ash default. */}
+      <BackLink href="/" color="#4369B2" backdrop={BG}>Cadieux</BackLink>
 
       <div
         style={{

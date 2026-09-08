@@ -32,6 +32,7 @@ import {
   type PickupLocationRow,
 } from "@/lib/pickup-locations";
 import { toUrlSlug } from "@/lib/product-slugs";
+import BackLink from "@/components/BackLink";
 import {
   displayAreaName,
   getServiceAreaBySlug,
@@ -153,27 +154,7 @@ export default async function DeliveryAreaPage({
         }}
       />
 
-      <Link
-        href="/"
-        style={{
-          position: "fixed",
-          top: "calc(24px + env(safe-area-inset-top))",
-          left: "calc(20px + env(safe-area-inset-left))",
-          zIndex: 101,
-          fontFamily: "var(--font-body)",
-          fontSize: 14,
-          fontWeight: 500,
-          letterSpacing: "0.35em",
-          textTransform: "uppercase",
-          color: "#024628",
-          textDecoration: "none",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <span style={{ fontSize: 16 }}>←</span> Cadieux
-      </Link>
+      <BackLink href="/">Cadieux</BackLink>
 
       <div
         style={{

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BLOG_POSTS } from "@/lib/data";
 import ShopCTA from "@/components/ShopCTA";
+import BackLink from "@/components/BackLink";
 
 const SITE_URL = "https://www.cadieux.in";
 
@@ -137,28 +137,7 @@ export default function BlogPostPage({ params }: BlogPostPageProps) {
         }}
       />
 
-      {/* Back link */}
-      <Link
-        href="/blogs"
-        style={{
-          position: "fixed",
-          top: "calc(24px + env(safe-area-inset-top))",
-          left: "calc(20px + env(safe-area-inset-left))",
-          zIndex: 101,
-          fontFamily: "var(--font-body)",
-          fontSize: 14,
-          fontWeight: 500,
-          letterSpacing: "0.35em",
-          textTransform: "uppercase",
-          color: "#024628",
-          textDecoration: "none",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <span style={{ fontSize: 16 }}>←</span> All Stories
-      </Link>
+      <BackLink href="/blogs">All Stories</BackLink>
 
       <main
         style={{
