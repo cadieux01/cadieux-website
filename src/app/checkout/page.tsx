@@ -147,7 +147,7 @@ export default function CheckoutPage() {
 
   // Gates the Your-Order summary (top block + sticky bottom). False
   // until the user has filled in a valid address AND pressed
-  // "Continue to Delivery". Keeps us from showing a misleading ₹50
+  // "Continue to Delivery". Keeps us from showing a misleading fee
   // placeholder while they're still typing.
   const [addressConfirmed, setAddressConfirmed] = useState(false);
 

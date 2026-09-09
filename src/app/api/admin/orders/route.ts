@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
 // PrepareOptions.skipServiceability in src/lib/order-checkout.ts.
 //
 // Back-dating: full-admin callers also get PrepareOptions.allowAnyDeliveryDate,
-// so a delivery date in the past (and a slot inside the 6 h lead) is accepted
+// so a delivery date in the past (and a slot inside the 12 h lead) is accepted
 // — that is how an operator records an order that already happened. Team-PIN
 // callers do NOT get it and keep the public booking rules.
 //
@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
   const prep = await prepareOneTimeOrder(bodyForPrep, req, supabaseAdmin, {
     skipServiceability: serviceabilityOverride,
     // Full admin only: allows recording an order that already happened
-    // (past delivery date, no 6 h lead). Team-PIN callers keep the public
+    // (past delivery date, no 12 h lead). Team-PIN callers keep the public
     // booking rules — same split as serviceability_override above.
     allowAnyDeliveryDate: !isTeam,
   });

@@ -6,15 +6,16 @@
 // holes for all three creation paths (website checkout, mobile, admin).
 //
 // The fee itself comes from the SHARED `computeDeliveryFee` in
-// @/lib/deliveryFee — the exact same band table one-time orders use.
+// @/lib/deliveryFee — the exact same flat fee one-time orders pay.
 // There is deliberately no second fee calculation anywhere in here.
 //
 // DIFFERENCE FROM ONE-TIME ORDERS — deliberate, do not "fix":
-// a one-time order falls back to the flat DELIVERY_FEE_INR (₹50) when the
-// distance can't be resolved. A subscription multiplies the fee by the
-// delivery count and charges it UP FRONT, so that same fallback would bill
-// ₹50 × N on a guess (₹250 on a 5-delivery plan). We block instead and ask
-// the customer for a location. Never add a fallback fee here.
+// a one-time order falls back to DELIVERY_FEE_INR when the distance can't
+// be resolved, because it still has to charge something. A subscription
+// multiplies the fee by the delivery count and charges it UP FRONT, so
+// falling back would bill N deliveries on a guess — and, worse, would let
+// an out-of-area address through unpriced. We block instead and ask the
+// customer for a location. Never add a fallback fee here.
 //
 // Distance input is the pincode centroid only. The wizards don't collect
 // GPS today; subscriptions.latitude/longitude exist so it can be threaded
@@ -30,7 +31,7 @@ export type SubscriptionFeeErrorCode =
   | "distance_unserviceable";
 
 // The range in the copy is interpolated from MAX_DELIVERY_KM rather than
-// typed out, so re-banding deliveryFee.ts can never leave the customer
+// typed out, so re-pricing deliveryFee.ts can never leave the customer
 // reading a number we no longer honour.
 export const SUBSCRIPTION_FEE_ERRORS: Record<
   SubscriptionFeeErrorCode,
@@ -69,7 +70,7 @@ function block(code: SubscriptionFeeErrorCode): SubscriptionFeeQuote {
  *   • the pincode can't be geocoded
  *   • the driving distance can't be resolved
  *   • the address is out of range (computeDeliveryFee → serviceable:false).
- *     The cutoff is whatever the shared band table says (MAX_DELIVERY_KM),
+ *     The cutoff is whatever the shared helper says (MAX_DELIVERY_KM),
  *     so subscriptions and one-time orders gate at the exact same distance.
  */
 export async function quoteSubscriptionDeliveryFee(
@@ -79,7 +80,8 @@ export async function quoteSubscriptionDeliveryFee(
   if (!/^\d{6}$/.test(pin)) return block("location_required");
 
   // No pickups configured means there is no origin to measure from. A
-  // one-time order would quietly fall back to ₹50; a subscription must not.
+  // one-time order would quietly fall back to DELIVERY_FEE_INR; a
+  // subscription must not.
   if (!(await hasActivePickups())) {
     console.error(
       "[subscription-fee] no active pickup_locations — cannot price a subscription",

@@ -2,7 +2,7 @@
 //
 // ONE SOURCE OF TRUTH for:
 //   - the slot universe (3 fixed windows: Morning / Midday / Evening)
-//   - the 6 h BOOKING cutoff (placement), measured to the slot's START
+//   - the 12 h BOOKING cutoff (placement), measured to the slot's START
 //   - the 14 h SELF-EDIT cutoff (customer-driven date/slot change)
 //   - the ADMIN_PHONE message shown to customers within 14 h
 //   - IST (Asia/Kolkata) date math regardless of server clock
@@ -29,14 +29,18 @@
 //     (e.g. "07:30") from the old 30-minute grid, or an old range
 //     like "06:00-07:00". `formatSlotForDisplay` renders both shapes
 //     sensibly so admin views + customer history remain legible.
-//   - The 6 h server gate reads the START in either shape, so
+//   - The 12 h server gate reads the START in either shape, so
 //     legacy values still validate for the (rare) admin re-book path.
 
 // ── Tunables ────────────────────────────────────────────────────────────
 
-/** Booking lead time: 6 hours. New orders/subscriptions can't book a slot
- *  whose START is within this window from "now" (IST). */
-export const BOOKING_LEAD_MINUTES = 360;
+/** Booking lead time: 12 hours. New orders/subscriptions can't book a slot
+ *  whose START is within this window from "now" (IST).
+ *
+ *  This is the ONLY place the lead time is defined. Every gate — the slot
+ *  picker, the date list, the server's validateBookingSlot — derives from
+ *  it, so changing this number moves web, mobile and admin together. */
+export const BOOKING_LEAD_MINUTES = 720;
 
 /** Self-edit cutoff: if the delivery slot starts ≤ 14 h from now, the
  *  customer cannot self-edit and must call ADMIN_PHONE. */
@@ -56,7 +60,7 @@ export type Slot = {
   value: string;
   /** Period name: "Morning" | "Midday" | "Evening". */
   label: string;
-  /** Slot start "HH:MM" (24h). Used for the 6 h / 14 h math. */
+  /** Slot start "HH:MM" (24h). Used for the 12 h / 14 h math. */
   startValue: string;
   /** Slot end "HH:MM" (24h). Same 24h clock as startValue. */
   endValue: string;
@@ -65,7 +69,7 @@ export type Slot = {
 };
 
 export type BookableSlot = Slot & {
-  /** False when the slot start is < 6 h from now; UI greys disabled slots.
+  /** False when the slot start is < 12 h from now; UI greys disabled slots.
    *  Server-side validation re-checks this regardless of client state. */
   disabled: boolean;
 };
@@ -201,7 +205,7 @@ export function slotStartUtcMs(dateIso: string, slotValue: string): number | nul
   return wallUtc - IST_OFFSET_MS;
 }
 
-// ── Booking (6 h) rule ──────────────────────────────────────────────────
+// ── Booking (12 h) rule ─────────────────────────────────────────────────
 
 /** True if `slot` on `date` starts ≥ BOOKING_LEAD_MINUTES from `now`. */
 export function isBookable(
@@ -236,7 +240,7 @@ export function dateHasAnyBookable(
 
 /** Returns the next N candidate delivery dates (IST), starting from
  *  today (so the picker can show "Today" when at least one same-day
- *  slot still satisfies the 6 h rule). Dates with zero bookable
+ *  slot still satisfies the 12 h rule). Dates with zero bookable
  *  slots are EXCLUDED so the UI never shows a dead date pill.
  *  N defaults to 7 — one week of options. */
 export function nextDeliveryDates(
@@ -311,7 +315,7 @@ export function validateBookingSlot(
   if (!isBookable(dateIso, slotValue, now)) {
     return {
       status: 400,
-      error: "That delivery slot is too soon — orders need 6 hours to bake and ship.",
+      error: "That delivery slot is too soon — orders need 12 hours to bake and ship.",
       code: "slot_too_soon",
     };
   }

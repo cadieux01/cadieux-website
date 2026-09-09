@@ -96,7 +96,7 @@ const CAL_DELIVERIES_MAX = 50;
 const CAL_DAYS_AHEAD_MAX = 90;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// Slot values + 6-hour bake/ship lead time are enforced by the shared
+// Slot values + 12-hour bake/ship lead time are enforced by the shared
 // `validateBookingSlot` helper from @/lib/delivery-slots below — do not
 // duplicate the regex or the IST arithmetic here.
 
@@ -481,7 +481,7 @@ function validateCalendarDeliveries(deliveriesRaw: unknown):
       };
     }
 
-    // Slot value + 6-hour placement gap (measured to slot START, IST)
+    // Slot value + 12-hour placement gap (measured to slot START, IST)
     // are enforced by the shared validator — single source of truth.
     const gate = validateBookingSlot(d.date, d.time_slot);
     if (gate) {
@@ -490,7 +490,7 @@ function validateCalendarDeliveries(deliveriesRaw: unknown):
         status: 400,
         error:
           gate.code === "slot_too_soon"
-            ? `deliveries[${i}].time_slot is too soon — orders need 6 hours to bake and ship.`
+            ? `deliveries[${i}].time_slot is too soon — orders need 12 hours to bake and ship.`
             : `deliveries[${i}].time_slot is invalid.`,
         code: gate.code,
       };
@@ -764,7 +764,7 @@ async function handleMultiVariant(
     });
   }
 
-  // Delivery fee + 10 km gate. Shared band table, charged PER DELIVERY.
+  // Delivery fee + distance gate. Shared helper, charged PER DELIVERY.
   // Blocks rather than guessing — a subscription bills the fee up front,
   // multiplied by the delivery count.
   const feeQuote = await quoteSubscriptionDeliveryFee(

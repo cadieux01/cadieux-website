@@ -173,7 +173,7 @@ export function RegisterOrderForm({
   // Full admin can BACK-DATE: an order is often registered here after it
   // has already been delivered, so the operator gets a free date field and
   // every slot enabled. Team-PIN mode keeps the public 7-day list and the
-  // 6 h lead. The server enforces the same split via
+  // 12 h lead. The server enforces the same split via
   // PrepareOptions.allowAnyDeliveryDate — this is UI, not the gate.
   const canBackdate = authMode === "admin";
   const dates = useMemo(() => nextDeliveryDates(7), []);

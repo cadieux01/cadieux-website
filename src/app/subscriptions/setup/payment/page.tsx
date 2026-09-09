@@ -24,7 +24,7 @@ import {
   MIN_SUBSCRIPTION_DAYS_PER_WEEK,
   distinctWeekdaysFromDates,
 } from "@/lib/subscription-min-days";
-// Pure math + the band table only. Importing from
+// Pure math + the distance cutoff only. Importing from
 // @/lib/subscription-delivery-fee here would drag Google + the Supabase
 // service-role client into the browser bundle.
 import { MAX_DELIVERY_KM } from "@/lib/deliveryFee";
@@ -434,7 +434,7 @@ export default function PaymentPage() {
               </div>
             ))}
           </div>
-          {/* Delivery fee — charged on EVERY delivery, same distance bands
+          {/* Delivery fee — charged on EVERY delivery, the same flat fee
               as a one-time order. Shown per-delivery and as a total so the
               customer can see exactly what the up-front figure is made of. */}
           <div

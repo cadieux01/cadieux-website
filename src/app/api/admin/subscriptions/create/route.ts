@@ -420,7 +420,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 7b. Delivery fee + 10 km gate. Same shared band table one-time orders
+  // 7b. Delivery fee + distance gate. Same shared helper one-time orders
   //     use, charged PER DELIVERY. Admin is not exempt: if we can't
   //     resolve the distance, or the address is beyond 10 km, we refuse
   //     rather than guess a fee and bill it × deliveryCount up front.

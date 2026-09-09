@@ -4,7 +4,7 @@
 // routes) compile unchanged while the new rules take effect:
 //
 //   - 3 fixed windows: Morning (6–10 AM), Midday (10 AM–2 PM), Evening (4–9 PM)
-//   - 6 h booking lead (measured to the slot's START), IST-aware
+//   - 12 h booking lead (measured to the slot's START), IST-aware
 //   - "today + future" date list (was tomorrow / day-after only)
 //
 // New code should import from "@/lib/delivery-slots" directly.
@@ -46,7 +46,7 @@ export function getOrderDeliveryDateOptions(): { tomorrow: string; dayAfter: str
 
 /** Returns true if `iso` is a yyyy-mm-dd that has at least one bookable
  *  slot from now (IST). Today is acceptable if a same-day slot still
- *  satisfies the 6 h rule; otherwise only future dates are accepted. */
+ *  satisfies the 12 h rule; otherwise only future dates are accepted. */
 export function isAcceptableDeliveryDate(iso: string): boolean {
   if (!isIsoDate(iso)) return false;
   // Don't accept anything strictly before IST-today.

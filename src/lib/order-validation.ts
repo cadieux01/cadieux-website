@@ -5,12 +5,19 @@
 // client-supplied total_amount). Pure functions, no I/O — the caller
 // is responsible for fetching products and customer rows.
 
-// Flat delivery fee added to every order. No free-delivery threshold.
-// Mirrors the website's "Standard delivery — ₹50" line in the Shipping
-// Policy. Treated as the source of truth for both /api/checkout and
-// /api/mobile/checkout so the stored orders.total_amount and the
-// payment-gateway charge always agree.
-export const DELIVERY_FEE_INR = 50;
+// Delivery fee used when the driving distance cannot be resolved at all
+// (no active pickup origin, or a pincode that won't geocode). Equal to the
+// flat DELIVERY_FEE_FLAT_INR in @/lib/deliveryFee by design: the fee no
+// longer varies with distance, so a customer we failed to measure must pay
+// the same ₹12 as everyone else rather than a punitive guess. Mirrors the
+// "Standard delivery — ₹12" line in the Shipping Policy, and is the source
+// of truth for both /api/checkout and /api/mobile/checkout so the stored
+// orders.total_amount and the payment-gateway charge always agree.
+//
+// Subscriptions deliberately have NO such fallback — an unmeasurable
+// address hard-blocks there, because the fee is multiplied by the delivery
+// count and charged up front. See @/lib/subscription-delivery-fee.
+export const DELIVERY_FEE_INR = 12;
 
 export type ClientOrderItem = {
   product_id: string;

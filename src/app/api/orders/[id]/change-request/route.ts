@@ -176,7 +176,7 @@ export async function POST(
   // alone, do NOT re-validate the stored slot against the current
   // three-window universe — the order may hold a legacy bare "HH:MM"
   // (e.g. "07:30") from before the migration and the customer isn't
-  // touching it. Still enforce the 6h lead against the NEW date using
+  // touching it. Still enforce the 12h lead against the NEW date using
   // that legacy slot's start time (isBookable / extractStartHHMM
   // accepts both range and bare shapes), so no one can slide a
   // legacy-slot order into a start-in-one-hour window.
@@ -202,7 +202,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "That delivery slot is too soon — orders need 6 hours to bake and ship.",
+            "That delivery slot is too soon — orders need 12 hours to bake and ship.",
           code: "slot_too_soon",
         },
         { status: 400 },

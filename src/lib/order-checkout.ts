@@ -23,7 +23,7 @@ import {
 } from "@/lib/order-delivery";
 import { isIsoDate, validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
-import { computeDeliveryFee } from "@/lib/deliveryFee";
+import { computeDeliveryFee, DELIVERY_FEE_FLAT_INR } from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 
@@ -79,12 +79,12 @@ export type PrepareOptions = {
   /** When true, skip BOTH the `pincode_unserviceable` and
    *  `distance_unserviceable` rejections. The fee is still computed from
    *  the real driving distance when it falls within the fee table; when
-   *  the address is beyond the 20 km table, the formula is linearly
-   *  extrapolated (₹92 + (km − 10) × ₹12) so the fee still scales with
-   *  distance. Admin-only. */
+   *  the address is beyond the 20 km limit, the flat ₹12 fee still
+   *  applies — there is no distance ladder to extrapolate any more.
+   *  Admin-only. */
   skipServiceability?: boolean;
   /** When true, accept ANY valid yyyy-mm-dd delivery date — past or
-   *  future — and skip the 6 h booking-lead gate. Set ONLY by the full-admin
+   *  future — and skip the 12 h booking-lead gate. Set ONLY by the full-admin
    *  manual-entry path (POST /api/admin/orders), so an operator can record
    *  an order that already happened. The slot must still be one of the
    *  canonical values, and every other gate (price, item shape, phone,
@@ -228,7 +228,7 @@ export async function prepareOneTimeOrder(
         body: { error: "Please pick a delivery time slot." },
       };
     }
-    // The 6 h bake-and-ship lead is meaningless for an order that has
+    // The 12 h bake-and-ship lead is meaningless for an order that has
     // already been delivered, so admin back-dating skips it. Unchanged for
     // every public caller.
     if (!opts.allowAnyDeliveryDate) {
@@ -336,10 +336,11 @@ export async function prepareOneTimeOrder(
             },
           };
         }
-        // Admin override: extrapolate the same ₹12/km slope used inside
-        // the 10–20 km band so the fee still scales with distance.
-        const c = Math.ceil(distanceKm);
-        deliveryFee = 92 + (c - 10) * 12;
+        // Admin override on an out-of-range address. The fee is flat, so
+        // there is no longer a distance slope to extrapolate — the customer
+        // pays the same ₹12 everyone else pays. Serviceability is still
+        // refused for everybody except this explicit admin path.
+        deliveryFee = DELIVERY_FEE_FLAT_INR;
       } else {
         deliveryFee = feeResult.feeInr;
       }

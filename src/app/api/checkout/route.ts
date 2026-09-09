@@ -498,7 +498,7 @@ export async function POST(req: NextRequest) {
     // canonical windows. slot_mode='custom' with per-day values and the
     // explicit `deliveries` array both make it possible for delivery #2+
     // to carry an unknown value that a first-delivery-only check would
-    // miss. Lead-time (6 h to slot start) is only meaningful for the
+    // miss. Lead-time (12 h to slot start) is only meaningful for the
     // first delivery — subsequent weekly deliveries are far enough out.
     {
       const withSlot = deliveryTemplate
@@ -531,7 +531,7 @@ export async function POST(req: NextRequest) {
     // ── Delivery fee + 10 km gate ───────────────────────────────────────
     // Subscriptions were never distance-gated before, which is how a live
     // subscription to Rourkela (~700 km) got accepted. The fee is the
-    // SHARED one-time band table, charged per delivery. On any failure to
+    // SHARED one-time fee helper, charged per delivery. On any failure to
     // resolve distance we BLOCK — we never fall back to a flat fee here,
     // because a subscription multiplies it by the delivery count and
     // charges it up front.
