@@ -11,9 +11,15 @@ import AndroidInstallPrompt from "@/components/AndroidInstallPrompt";
 import IOSInstallHint from "@/components/IOSInstallHint";
 import FloatingCartButton from "@/components/FloatingCartButton";
 import { CartProvider } from "@/context/CartContext";
+import { getActiveProducts } from "@/lib/products";
 
 // Single source of the GA4 Measurement ID. Referenced only here.
 const GA_ID = "G-HVBGHYD7M7";
+
+// Whole rupees stay whole; a price carrying paise keeps both decimals. No
+// thousands separators — this string is consumed by a parser, not a reader.
+const formatRupees = (n: number) =>
+  Number.isInteger(n) ? String(n) : n.toFixed(2);
 
 // Unified on DM Sans for both headings and body (serif dropped). One family,
 // multiple weights covers every call site — --font-heading and --font-body
@@ -122,11 +128,34 @@ export const viewport: Viewport = {
   themeColor: "#C0C8CE",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // priceRange for the LocalBusiness schema, derived from the live product
+  // rows rather than written by hand. The literal that used to sit here said
+  // "₹120-₹159" while multigrain was ₹160 — structured data Google reads and
+  // may display, so a hardcoded bound goes public and drifts on every price
+  // change. getActiveProducts already filters is_active + !is_archived, so
+  // this is exactly the set of loaves a visitor can buy.
+  //
+  // Omitted entirely when there are no rows (the read failed, or nothing is
+  // listed): priceRange is an optional property, and publishing no range is
+  // honest where publishing "₹0-₹0" would not be.
+  const activeProducts = await getActiveProducts();
+  const activePrices = activeProducts
+    .map((p) => p.price_inr)
+    .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+  const priceRange = activePrices.length
+    ? (() => {
+        const lo = Math.min(...activePrices);
+        const hi = Math.max(...activePrices);
+        // A single listed product is a point, not a range.
+        return lo === hi ? `₹${formatRupees(lo)}` : `₹${formatRupees(lo)}-₹${formatRupees(hi)}`;
+      })()
+    : null;
+
   // Organization schema for homepage
   const organizationSchema = {
     "@context": "https://schema.org",
@@ -160,7 +189,7 @@ export default function RootLayout({
       addressCountry: "IN",
     },
     image: "https://www.cadieux.in/icons/icon-512.png",
-    priceRange: "₹120-₹159",
+    ...(priceRange ? { priceRange } : {}),
     areaServed: "IN",
   };
 
