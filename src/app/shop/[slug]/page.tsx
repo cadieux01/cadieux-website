@@ -86,9 +86,27 @@ export async function generateMetadata({
   // title per slug avoids leaking placeholder values into <title>.
   const content = await getPageContent({ page: "pdp", productId: internalSlug });
   const title = pickString(content, "pdp.seo.title", internalSlug);
-  const description = pickString(content, "pdp.seo.description", internalSlug);
+  const baseDescription = pickString(content, "pdp.seo.description", internalSlug);
   const ogName =
     pickString(content, "pdp.name", internalSlug) || productRow?.name || bundled?.name || internalSlug;
+
+  // Price for the OG description + product:price:* structured tags. Read live
+  // from public.products.price_inr — same source as the on-page display and
+  // the checkout, so a WhatsApp/FB preview can never quote a stale figure.
+  //
+  // NUTRITION FIGURES ARE DELIBERATELY OMITTED. protein per slice lives in
+  // products.nutrition_per_slice.protein_g and is currently being corrected
+  // in another branch; WhatsApp/Facebook cache OG payloads aggressively, so
+  // a wrong number shared today would outlive the DB fix. Reintroduce with
+  // a runtime read of nutrition_per_slice?.protein_g once corrected values
+  // are live and cards are re-scraped.
+  const priceInr =
+    typeof productRow?.price_inr === "number" && Number.isFinite(productRow.price_inr)
+      ? productRow.price_inr
+      : null;
+  const description = priceInr !== null
+    ? `${baseDescription} ₹${priceInr} per loaf.`
+    : baseDescription;
   // OG card only — resolveOgImage is the one path allowed to fall back to the
   // Cadieux logo, so a shared link never previews blank. The on-page gallery
   // and Product JSON-LD use resolveHeroImage/hasRealProductImage and stay null
@@ -108,7 +126,12 @@ export async function generateMetadata({
     description,
     alternates: { canonical: `/shop/${urlSlug}` },
     openGraph: {
-      type: "website",
+      // og:type is deliberately OMITTED here — Next 14's OpenGraph.type
+      // union does not include "product". The correct e-commerce value is
+      // emitted as a raw <meta property="og:type" content="product"> in the
+      // page body (see ProductDetailPage) so Facebook's OGP parser will
+      // actually read the accompanying product:price:{amount,currency} +
+      // product:brand tags, which it only honours under og:type=product.
       url: `${SITE_URL}/shop/${urlSlug}`,
       title,
       description,
@@ -127,6 +150,11 @@ export async function generateMetadata({
       description,
       images: [ogImage],
     },
+    // NB: product:brand + product:price:{amount,currency} are emitted in the
+    // page body as raw <meta property="..."> tags. Next 14's Metadata.other
+    // renders them as <meta name="..."> which Facebook's OGP parser accepts
+    // laxly but is not the OGP-spec attribute; property= is the correct one
+    // for a namespaced OG tag. See ProductDetailPage below.
   };
 }
 
@@ -289,8 +317,31 @@ export default async function ProductDetailPage({
   // between schema.text and visible answers. The visible FAQ section
   // below is kept — it still has UX + on-page-content value.
 
+  // Product-flavoured OpenGraph tags, emitted inline so they render as
+  // <meta property="..."> — the correct OGP attribute for a namespaced tag
+  // (product:*, og:*). Next 14's Metadata.other emits <meta name="...">
+  // which Facebook accepts leniently but is not spec-correct. WhatsApp,
+  // FB, Instagram e-commerce previews key on product:price:{amount,currency}
+  // and product:brand. Emitted only for the product page (not on /shop),
+  // and amount is only added when we actually have a numeric DB price.
+  const priceInrForPage =
+    typeof productRow?.price_inr === "number" && Number.isFinite(productRow.price_inr)
+      ? productRow.price_inr
+      : null;
+
   return (
     <>
+      {/* og:type=product is required for Facebook's OGP parser to honour the
+          product:* namespace tags below. Emitted here (not in Metadata.openGraph)
+          because Next 14's OpenGraph.type union does not include "product". */}
+      <meta property="og:type" content="product" />
+      <meta property="product:brand" content="Cadieux" />
+      {priceInrForPage !== null ? (
+        <>
+          <meta property="product:price:amount" content={String(priceInrForPage)} />
+          <meta property="product:price:currency" content="INR" />
+        </>
+      ) : null}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}

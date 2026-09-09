@@ -14,6 +14,7 @@ import Link from "next/link";
 import ProductTile, { type TileStat } from "@/components/ProductTile";
 import BackLink from "@/components/BackLink";
 import ScrollReveal from "@/components/ScrollReveal";
+import { ShareButton } from "@/components/ShareButton";
 import { PRODUCTS, type ProductMedia } from "@/lib/data";
 import type { AvailabilityMap } from "@/lib/products";
 import {
@@ -105,9 +106,31 @@ export default function ShopListClient({
 
       <div style={{ position: "relative", zIndex: 1, padding: "72px clamp(18px,5vw,80px) 80px", maxWidth: 1200, margin: "0 auto" }}>
         <ScrollReveal>
-          <h1 data-stagger style={{ margin: "0 0 12px", fontFamily: "var(--font-heading)", fontSize: "clamp(34px,8vw,80px)", fontWeight: 300, color: "#024628", letterSpacing: "0.02em", lineHeight: 1 }}>
-            Cadieux Protein Bread
-          </h1>
+          {/* Header row: catalogue title + share affordance. The share uses
+              the same ShareButton the PDP + reports pages use — one component,
+              one behaviour (Web Share API on Android, WhatsApp/copy fallback
+              elsewhere). Absolute cadieux.in URL so the shared link opens
+              outside any embedded webview. */}
+          <div
+            data-stagger
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
+              marginBottom: 12,
+            }}
+          >
+            <h1 style={{ margin: 0, fontFamily: "var(--font-heading)", fontSize: "clamp(34px,8vw,80px)", fontWeight: 300, color: "#024628", letterSpacing: "0.02em", lineHeight: 1 }}>
+              Cadieux Protein Bread
+            </h1>
+            <ShareButton
+              title="Cadieux Protein Bread"
+              text="Cadieux Protein Bread — two clean, high-protein loaves: Multigrain and Plain. Slow-fermented, lab-tested, baked fresh in Vizag."
+              url="https://www.cadieux.in/shop"
+              size={36}
+            />
+          </div>
           <p data-stagger style={{
             margin: "0 0 20px",
             fontFamily: "var(--font-body)",

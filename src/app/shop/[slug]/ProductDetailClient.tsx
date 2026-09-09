@@ -294,7 +294,7 @@ export default function ProductDetailClient({
               </div>
               <ShareButton
                 title={`${dispTitle} — Cadieux`}
-                text={`${dispTitle}. ${dispSubtitle}`}
+                text={`${dispTitle} — high in protein, slow-fermented, lab-tested. NABL lab reports: https://www.cadieux.in/shop/${urlSlug}/reports`}
                 url={`https://www.cadieux.in/shop/${urlSlug}`}
                 size={36}
               />

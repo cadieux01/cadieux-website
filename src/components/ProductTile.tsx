@@ -7,6 +7,7 @@ import type { ProductMedia } from "@/lib/data";
 import { toUrlSlug } from "@/lib/product-slugs";
 import { costPerGramProtein } from "@/lib/stat-tiles";
 import { useCart } from "@/context/CartContext";
+import { ShareButton } from "@/components/ShareButton";
 
 // Task F v2 cleanup: card is a FG-brand surface (#024628). All text must be
 // Cream or Ash (matrix rule). Interactive controls follow FIX 4 pattern:
@@ -389,18 +390,41 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
 
       {/* Info — whole card is the Link, so any tap on this area navigates too */}
       <div className="tile-body">
+        {/* Tag row: eyebrow on left, per-product share on right. Mirrors the
+            PDP header pattern so the affordance sits in the same visual slot
+            wherever the customer meets the product. ShareButton uses
+            stopPropagation to stop the wrapping <Link> from firing when the
+            share sheet / popover is opened. Absolute cadieux.in URL because
+            shared links open outside the app / any embedded webview. Lab
+            reports are LINKED in the caption, not attached. */}
         <div
           style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 14,
-            fontWeight: 500,
-            letterSpacing: "0.3em",
-            textTransform: "uppercase",
-            color: "#FBF3D4",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
             marginBottom: 8,
           }}
         >
-          {tag}
+          <div
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 14,
+              fontWeight: 500,
+              letterSpacing: "0.3em",
+              textTransform: "uppercase",
+              color: "#FBF3D4",
+            }}
+          >
+            {tag}
+          </div>
+          <ShareButton
+            title={title}
+            text={`${title} — high in protein, slow-fermented, lab-tested. NABL lab reports: https://www.cadieux.in/shop/${toUrlSlug(slug)}/reports`}
+            url={`https://www.cadieux.in/shop/${toUrlSlug(slug)}`}
+            size={32}
+            stopPropagation
+          />
         </div>
         <h3
           className="tile-title"
