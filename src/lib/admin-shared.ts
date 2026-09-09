@@ -223,6 +223,10 @@ export type AdminSubscriptionItem = {
 
 export type AdminSubscriptionRow = {
   id: string;
+  /** OLF reference, drawn from the SAME orders_number_seq as orders — one
+   *  continuous series across both. Nullable only so a partial projection
+   *  can't render "undefined"; the DB column is populated on every row. */
+  subscription_number?: string | null;
   customer_id: string;
   product_slug: string;
   product_name: string;

@@ -58,7 +58,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ subscriptions: [] });
   }
 
-  // Resolve customer phone/name for display
+  // Resolve customer phone/name for display.
+  //
+  // NOTE: this is the CURRENT customers row, not the subscription's own
+  // signup snapshot (subscriptions.customer_name / customer_phone). One
+  // phone can accumulate several names over time — a later order placed
+  // for a family member rewrites customers.full_name, and every past
+  // subscription on that customer_id then displays the new name. So the
+  // admin list can legitimately show a name the plan was never booked
+  // under. That is a stale join, NOT data corruption: the name the
+  // customer actually signed up with is still on the subscriptions row.
+  // Read the snapshot instead if you need booking-time truth.
   const customerIds = Array.from(new Set(subs.map((s) => s.customer_id)));
   const { data: customers } = await supabaseAdmin
     .from("customers")

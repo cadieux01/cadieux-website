@@ -14,6 +14,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import Select from "@/components/ui/Select";
+import { formatSubscriptionNumber } from "@/lib/order-number";
 import {
   DateRangeDropdown,
   resolvePreset,
@@ -431,6 +432,7 @@ function SubscriptionsPageInner() {
           >
             <thead>
               <tr style={tableHeadRow}>
+                <th style={th}>Subscription</th>
                 <th style={th}>Customer</th>
                 <th style={th}>Plan</th>
                 <th style={th}>Date</th>
@@ -469,6 +471,18 @@ function SubscriptionsPageInner() {
                       background: i % 2 === 0 ? cream(0.025) : "transparent",
                     }}
                   >
+                    <td style={td} data-label="Subscription">
+                      <span
+                        style={{
+                          fontSize: "0.875rem",
+                          letterSpacing: "0.1em",
+                          color: CREAM,
+                        }}
+                        title={s.id}
+                      >
+                        {formatSubscriptionNumber(s)}
+                      </span>
+                    </td>
                     <td style={td} data-label="Customer">
                       <Link
                         href={
@@ -1362,6 +1376,7 @@ const drawerSelect: React.CSSProperties = {
 
 function exportSubsCsv(rows: AdminSubscriptionRow[]): void {
   const csv = toCsv(rows, [
+    { header: "Subscription", value: (s) => formatSubscriptionNumber(s) },
     { header: "Subscription ID", value: (s) => s.id },
     { header: "Customer", value: (s) => s.customer?.full_name ?? "" },
     { header: "Phone", value: (s) => s.customer?.phone ?? "" },

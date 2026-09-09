@@ -34,6 +34,7 @@ import {
 } from "@/components/admin/PartnerShareButton";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
+import { formatSubscriptionNumber } from "@/lib/order-number";
 import {
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUS_OPTIONS,
@@ -350,7 +351,8 @@ export default function AdminSubscriptionDetailPage({
                   for a Multigrain 1 + Plain 1 plan. */}
               <div style={headingLine}>{planSentence}</div>
               <div style={mutedLine}>
-                Ordered {formatDateTime(sub.created_at)}
+                {formatSubscriptionNumber(sub)} · Ordered{" "}
+                {formatDateTime(sub.created_at)}
               </div>
             </div>
             <div

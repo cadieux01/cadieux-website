@@ -28,6 +28,33 @@ export function formatOrderNumber(row: {
 }
 
 /**
+ * Central formatter for the human-facing SUBSCRIPTION number.
+ *
+ * Subscriptions draw from the SAME `orders_number_seq` as orders, via
+ * `public.tg_subscriptions_assign_number` (BEFORE INSERT). There is one
+ * continuous OLF series interleaved across both tables, so no OLF number
+ * can ever name two different things — an order and a subscription can
+ * never collide.
+ *
+ * Same fallback as `formatOrderNumber`, and for the same reason: it should
+ * never fire (every row was backfilled) but a partial API projection must
+ * not render "undefined" onto a rider's share message.
+ *
+ * Admin / rider surfaces only. Customers keep `public_ref`.
+ */
+export function formatSubscriptionNumber(row: {
+  id: string;
+  subscription_number?: string | null;
+}): string {
+  const n =
+    typeof row.subscription_number === "string"
+      ? row.subscription_number.trim()
+      : "";
+  if (n.length > 0) return n;
+  return "#" + row.id.slice(0, 8).toUpperCase();
+}
+
+/**
  * Central formatter for the CUSTOMER-facing order reference.
  *
  * `public_ref` = 'CX-' + 6 chars drawn from a 30-char alphabet with

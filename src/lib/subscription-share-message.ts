@@ -25,6 +25,7 @@ import {
   describeSubscriptionCadence,
 } from "@/lib/subscription-display";
 import { formatDate } from "@/lib/admin-formatting";
+import { formatSubscriptionNumber } from "@/lib/order-number";
 
 /** "Multigrain x1", "Plain x1" — one line per variant, never a bare total. */
 function itemLinesFor(sub: AdminSubscriptionRow): string[] {
@@ -49,8 +50,6 @@ function commonParts(sub: AdminSubscriptionRow) {
   };
 }
 
-const shortId = (id: string) => String(id).slice(0, 8).toUpperCase();
-
 /**
  * The next delivery only — the default share.
  *
@@ -67,7 +66,7 @@ export function composeNextDeliveryShareMessage(
 
   const when = [formatDate(next.date), next.slot].filter(Boolean).join(", ");
   return composeShareMessageFromParts({
-    reference: `Subscription ${shortId(sub.id)} · next delivery ${when}`,
+    reference: `Subscription ${formatSubscriptionNumber(sub)} · next delivery ${when}`,
     ...commonParts(sub),
     itemLines: itemLinesFor(sub),
   });
@@ -79,7 +78,7 @@ export function composeSubscriptionShareMessage(
 ): string {
   const cadence = describeSubscriptionCadence(sub);
   return composeShareMessageFromParts({
-    reference: `Subscription ${shortId(sub.id)}${cadence ? ` · ${cadence}` : ""}`,
+    reference: `Subscription ${formatSubscriptionNumber(sub)}${cadence ? ` · ${cadence}` : ""}`,
     ...commonParts(sub),
     itemLines: itemLinesFor(sub),
   });
