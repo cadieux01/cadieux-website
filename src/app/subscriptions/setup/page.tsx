@@ -13,6 +13,9 @@ import {
   emptySetupState,
   loadSetupState,
   saveSetupState,
+  clearSetupState,
+  revalidateSetupState,
+  describeRevalidation,
   buildDeliveries,
   listWeekDayRows,
   totalUnitsPerDelivery,
@@ -42,6 +45,9 @@ export default function SetupPage() {
   const [hydrated, setHydrated] = useState(false);
   const [state, setState] = useState<SetupState>(emptySetupState());
   const [step, setStep] = useState(1);
+  // Set when revalidation drops a stale date/slot; cleared once the
+  // customer picks again or starts over.
+  const [staleNotice, setStaleNotice] = useState("");
   // Pre-order mode blocks the wizard at its entry (step 1) — the server
   // also refuses subscription creation (belt-and-braces), but disabling
   // Next early keeps the customer from wasting time on a doomed flow.
@@ -60,26 +66,31 @@ export default function SetupPage() {
     if (hydrated) saveSetupState(state);
   }, [state, hydrated]);
 
-  // Drop any per-date slot that has slipped past the 12h10m booking lead
-  // (e.g. user sat on the page, or returned later). Keeps the wizard from
-  // shipping a server-rejectable slot to checkout.
+  // Drop stored DATES and SLOTS that no longer pass the same availability
+  // rules the picker gates on. Previously this dropped stale slots only,
+  // which left the selected date behind: the calendar renders a selected
+  // date filled even when it is blocked, and blocked cells are `disabled`,
+  // so the customer could neither use it nor click it off — and step 3
+  // demands a slot for every selected date. That combination was a dead
+  // end with no escape but clearing storage.
+  //
+  // Runs on mount and again whenever the dates or the step change, because
+  // the 6-hour lead time can expire while the wizard simply sits open.
   useEffect(() => {
     if (!hydrated) return;
-    const now = new Date();
-    const next: Record<string, string> = {};
-    let changed = false;
-    for (const [iso, slot] of Object.entries(state.slotByDate)) {
-      const ok = bookableSlots(iso, now).some(
-        (s) => s.value === slot && !s.disabled,
-      );
-      if (ok) next[iso] = slot;
-      else changed = true;
-    }
-    if (changed) setState((s) => ({ ...s, slotByDate: next }));
-    // We only need this to run when the set of selected dates changes or
-    // step lands on the slot screen; running on every state churn is fine
-    // because the inner loop short-circuits when nothing is stale.
-  }, [hydrated, state.selectedDates, step]);
+    const result = revalidateSetupState(state);
+    if (!result.changed) return;
+    setState(result.state);
+    // `changed` without `removedAny` is bookkeeping (an orphaned slot key)
+    // — clean it, but don't interrupt someone over it.
+    if (!result.removedAny) return;
+    setStaleNotice(describeRevalidation(result));
+    // Never let a dropped date carry on silently — losing one of two days
+    // puts the customer under the minimum without changing anything they
+    // can see. Send them back to the picker instead of letting them walk
+    // into a server-side `slot_too_soon` rejection at payment.
+    setStep(2);
+  }, [hydrated, state, step]);
 
   function update(patch: Partial<SetupState>) {
     setState((s) => ({ ...s, ...patch }));
@@ -96,6 +107,8 @@ export default function SetupPage() {
   const perDelivery = useMemo(() => amountPerDelivery(state, plans), [state, plans]);
   const totalUnits = totalUnitsPerDelivery(state);
   const totalAmount = perDelivery * deliveries.length;
+  // Only offer "Start again" once there is something to clear.
+  const hasAnyState = totalUnits > 0 || state.selectedDates.length > 0;
 
   // Live total used by the calendar bill bar — uses selectedDates count
   // because the user hasn't picked slots yet at step 2.
@@ -136,7 +149,22 @@ export default function SetupPage() {
     router.replace("/subscriptions/setup/checkout");
   }
 
+  /** Escape hatch for anyone stranded by state they can't see or undo:
+   *  wipes breads, days, slots AND the stored address, then returns to
+   *  step 1. `clearSetupState` covers the legacy keys too. */
+  function startAgain() {
+    const ok = window.confirm(
+      "Clear your breads, delivery days, times and address, and start from the beginning?",
+    );
+    if (!ok) return;
+    clearSetupState();
+    setState(emptySetupState());
+    setStaleNotice("");
+    setStep(1);
+  }
+
   function toggleDate(iso: string) {
+    setStaleNotice("");
     setState((s) => {
       const has = s.selectedDates.includes(iso);
       const nextDates = has
@@ -156,9 +184,38 @@ export default function SetupPage() {
     <main style={pageStyle}>
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <header style={{ marginBottom: 28 }}>
-          <Link href="/subscriptions/track" style={{ fontSize: 16, color: FADED, textDecoration: "none" }}>
-            ← Back to subscriptions
-          </Link>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <Link href="/subscriptions/track" style={{ fontSize: 16, color: FADED, textDecoration: "none" }}>
+              ← Back to subscriptions
+            </Link>
+            {hasAnyState ? (
+              <button
+                onClick={startAgain}
+                style={{
+                  flex: "0 0 auto",
+                  padding: "8px 16px",
+                  background: "transparent",
+                  border: `1px solid ${FAINT}`,
+                  borderRadius: 999,
+                  color: TEXT,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 14,
+                  cursor: "pointer",
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Start again
+              </button>
+            ) : null}
+          </div>
           <h1
             style={{
               marginTop: 16,
@@ -172,6 +229,25 @@ export default function SetupPage() {
           </h1>
           <ProgressDots step={step} total={TOTAL_STEPS} />
         </header>
+
+        {staleNotice ? (
+          <div
+            role="status"
+            style={{
+              background: "#FBF3D4",
+              border: "1px solid rgba(2,70,40,0.25)",
+              padding: "16px 20px",
+              margin: "0 0 24px",
+            }}
+          >
+            <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+              Dates updated
+            </p>
+            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
+              {staleNotice}
+            </p>
+          </div>
+        ) : null}
 
         {preorderMode ? (
           <div

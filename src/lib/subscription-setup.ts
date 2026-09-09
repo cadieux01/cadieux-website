@@ -2,7 +2,14 @@
 // pages. Pure functions + sessionStorage I/O — no React.
 
 import { DAY_KEYS, type DayKey } from "./subscription-dates";
-import { SLOTS, formatSlotForDisplay } from "./delivery-slots";
+import {
+  SLOTS,
+  dateHasAnyBookable,
+  formatSlotForDisplay,
+  isBookable,
+  isIsoDate,
+  todayIst,
+} from "./delivery-slots";
 
 export type ProductSlug = "multigrain" | "high-protein";
 
@@ -283,6 +290,129 @@ export function clearSetupState(): void {
     sessionStorage.removeItem(LEGACY_V1_KEY);
     sessionStorage.removeItem(ADDRESS_KEY);
   } catch { /* ignore */ }
+}
+
+// ── Stale-selection revalidation ─────────────────────────────────────────
+
+/** What a revalidation pass removed, and the cleaned state.
+ *
+ *  `state` is the ORIGINAL object reference when nothing changed, so a
+ *  caller can hand it straight back to `setState` without re-rendering
+ *  forever. */
+export type SetupRevalidation = {
+  state: SetupState;
+  /** Dates dropped entirely, each with the reason to tell the customer. */
+  removedDates: Array<{ date: string; reason: "past" | "too_soon" }>;
+  /** Dates that survived, but whose chosen slot is now inside the lead time. */
+  removedSlotDates: string[];
+  /** The state differs and is worth persisting. Can be true with nothing
+   *  the customer chose being lost — e.g. a slot key orphaned by a date
+   *  that is no longer selected, which is bookkeeping, not news. */
+  changed: boolean;
+  /** Something the customer actually picked was taken away. This — not
+   *  `changed` — is what should raise a message, bounce them back to the
+   *  picker, or block a downstream page. */
+  removedAny: boolean;
+};
+
+/** Re-check stored selections against the clock.
+ *
+ *  A selection is only ever as good as the moment it was made. The booking
+ *  lead time is `BOOKING_LEAD_MINUTES` (6 h), so a picked date can stop
+ *  being bookable while the wizard simply sits open — no tab close, no
+ *  storage expiry and no overnight gap required. sessionStorage also
+ *  outlives what people assume: browsers restore it with a restored
+ *  session, and mobile keeps tabs alive indefinitely. So this runs on
+ *  every wizard mount rather than trusting the store.
+ *
+ *  The predicates are deliberately the SAME ones the picker gates on, so
+ *  what survives here is exactly what the calendar would let you click:
+ *    - a date survives iff `dateHasAnyBookable` — which also subsumes
+ *      "is in the past", because every slot on a past date fails the lead
+ *      check. That is why there is no separate past-date test.
+ *    - a slot survives iff `isBookable` for its own date.
+ *
+ *  Pure: no storage I/O, no clock read beyond the injected `now`. */
+export function revalidateSetupState(
+  state: SetupState,
+  now: Date = new Date(),
+): SetupRevalidation {
+  const today = todayIst(now);
+  const keptDates: string[] = [];
+  const removedDates: Array<{ date: string; reason: "past" | "too_soon" }> = [];
+
+  for (const iso of state.selectedDates) {
+    if (isIsoDate(iso) && dateHasAnyBookable(iso, now)) {
+      keptDates.push(iso);
+      continue;
+    }
+    // A malformed entry can't have a meaningful "too soon" story, so it is
+    // reported as elapsed — the only branch that reads sensibly for junk.
+    const reason = !isIsoDate(iso) || iso < today ? "past" : "too_soon";
+    removedDates.push({ date: iso, reason });
+  }
+
+  const removedSlotDates: string[] = [];
+  const slotByDate: Record<string, string> = {};
+  for (const iso of keptDates) {
+    const slot = state.slotByDate[iso];
+    if (!slot) continue;
+    if (isBookable(iso, slot, now)) slotByDate[iso] = slot;
+    else removedSlotDates.push(iso);
+  }
+
+  const removedAny = removedDates.length > 0 || removedSlotDates.length > 0;
+  const changed =
+    removedAny ||
+    // Slot keys orphaned by a date that is no longer selected at all.
+    Object.keys(slotByDate).length !== Object.keys(state.slotByDate).length;
+
+  return {
+    state: changed ? { ...state, selectedDates: keptDates, slotByDate } : state,
+    removedDates,
+    removedSlotDates,
+    changed,
+    removedAny,
+  };
+}
+
+/** "Wed 10 Sep", "Wed 10 Sep and Thu 11 Sep", "A, B and C". */
+function listDates(isos: string[]): string {
+  const labels = isos.map((iso) =>
+    isIsoDate(iso) ? longDayLabel(parseIso(iso)) : iso,
+  );
+  if (labels.length <= 1) return labels[0] ?? "";
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
+/** Customer-facing explanation of what a revalidation pass just removed.
+ *  Empty string when nothing was removed. Naming the dates matters: a
+ *  customer who picked two days and returns to find one gone would
+ *  otherwise not notice they have dropped below the two-day minimum. */
+export function describeRevalidation(r: SetupRevalidation): string {
+  const past = r.removedDates.filter((d) => d.reason === "past").map((d) => d.date);
+  const soon = r.removedDates.filter((d) => d.reason === "too_soon").map((d) => d.date);
+  const sentences: string[] = [];
+
+  if (past.length > 0) {
+    sentences.push(
+      `${listDates(past)} ${past.length === 1 ? "has" : "have"} passed, so we removed ${past.length === 1 ? "it" : "them"}.`,
+    );
+  }
+  if (soon.length > 0) {
+    sentences.push(
+      `${listDates(soon)} ${soon.length === 1 ? "is" : "are"} now within our 6-hour baking window, so we removed ${soon.length === 1 ? "it" : "them"}.`,
+    );
+  }
+  if (r.removedSlotDates.length > 0) {
+    sentences.push(
+      `The time you chose for ${listDates(r.removedSlotDates)} is now within 6 hours, so we cleared ${r.removedSlotDates.length === 1 ? "it" : "them"}.`,
+    );
+  }
+  if (sentences.length === 0) return "";
+
+  sentences.push("Please choose again below.");
+  return sentences.join(" ");
 }
 
 // ── Address (unchanged) ──────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import {
   loadSetupState,
+  revalidateSetupState,
   saveAddress,
   totalUnitsPerDelivery,
   type SetupAddress,
@@ -88,9 +89,14 @@ export default function CheckoutPage() {
   useEffect(() => {
     setHydrated(true);
     const s = loadSetupState();
-    // Guards against landing here with an empty wizard, nothing more —
-    // any positive number of loaves is a valid subscription.
-    const ok = totalUnitsPerDelivery(s) > 0 && s.selectedDates.length > 0;
+    // Guards against landing here with an empty wizard, or with dates that
+    // have gone stale while the tab sat open — any positive number of
+    // loaves is a valid subscription. The wizard owns the removal and the
+    // explanation, so this only detects and redirects.
+    const ok =
+      totalUnitsPerDelivery(s) > 0 &&
+      s.selectedDates.length > 0 &&
+      !revalidateSetupState(s).removedAny;
     setHasSetup(ok);
     if (!ok) {
       router.replace("/subscriptions/setup");
