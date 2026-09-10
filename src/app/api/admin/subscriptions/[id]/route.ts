@@ -77,7 +77,9 @@ export async function GET(
   // product_name × quantity, which hides a Multigrain 1 + Plain 1 plan.
   const { data: items } = await supabaseAdmin
     .from("subscription_items")
-    .select("product_slug, product_name, quantity_per_delivery")
+    .select(
+      "product_slug, product_name, quantity_per_delivery, price_snapshot_inr",
+    )
     .eq("subscription_id", params.id)
     .order("created_at", { ascending: true });
 

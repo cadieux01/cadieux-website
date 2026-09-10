@@ -219,6 +219,9 @@ export type AdminSubscriptionItem = {
   product_slug: string;
   product_name: string;
   quantity_per_delivery: number;
+  /** Per-loaf price captured at signup, already discounted. The list route
+   *  doesn't project it, hence optional; the detail route always does. */
+  price_snapshot_inr?: number | string | null;
 };
 
 export type AdminSubscriptionRow = {
@@ -287,6 +290,14 @@ export type AdminSubscriptionRow = {
   slot?: string | null;
   /** Per-loaf price captured at signup. */
   bread_price?: number | null;
+  /**
+   * Delivery fee for ONE delivery — the whole-subscription fee is this
+   * × the number of deliveries. Beware: on rows created before the fee
+   * was charged on subscriptions it is a bookkeeping record only and is
+   * NOT part of total_amount. Never assume it is included; check the
+   * arithmetic (see reconcileSubscriptionMoney).
+   */
+  delivery_fee_inr?: number | string | null;
   payment_method?: string | null;
   start_date?: string | null;
   is_preorder?: boolean | null;

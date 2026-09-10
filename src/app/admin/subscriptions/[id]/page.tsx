@@ -27,6 +27,10 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { ContactActions } from "@/components/admin/ContactActions";
+import {
+  MoneyBreakdown,
+  type MoneyBreakdownTotal,
+} from "@/components/admin/MoneyBreakdown";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import {
   PartnerShareButton,
@@ -53,6 +57,10 @@ import {
   composeNextDeliveryShareMessage,
   composeSubscriptionShareMessage,
 } from "@/lib/subscription-share-message";
+import {
+  buildSubscriptionMoney,
+  type SubscriptionMoney,
+} from "@/lib/subscription-money";
 import { DAY_LABEL } from "@/lib/subscription-ui";
 
 type DetailResponse = {
@@ -61,6 +69,62 @@ type DetailResponse = {
 };
 
 const DASH = "—";
+
+/**
+ * The delivery-fee totals row.
+ *
+ * `not_charged` is the interesting one: the fee is real data and the admin
+ * needs to see it, but it was never billed, so it is shown struck through
+ * with the reason spelled out and is NOT added into the total.
+ *
+ * If this breakdown is ever put in front of a customer, that row must be
+ * dropped entirely rather than struck through — a fee they were never
+ * billed reads as either a charge they missed or a mistake on the invoice.
+ */
+function feeRow(money: SubscriptionMoney): MoneyBreakdownTotal {
+  const perDelivery =
+    money.feePerDelivery === null ? DASH : formatINR(money.feePerDelivery);
+  const label = `Delivery fee (${perDelivery} × ${money.deliveryCount})`;
+
+  switch (money.feeStatus) {
+    case "charged":
+      return { key: "fee", label, value: formatINR(money.feeTotal) };
+
+    case "not_charged":
+      return {
+        key: "fee",
+        label,
+        value: (
+          <span style={feeNotCharged}>{formatINR(money.feeTotal)}</span>
+        ),
+        note: "Recorded for reporting only. This plan was quoted and billed as bread alone — the customer was never charged a delivery fee, so it is not in the total below.",
+      };
+
+    case "none":
+      return {
+        key: "fee",
+        label: "Delivery fee",
+        value: money.feePerDelivery === null ? DASH : "Free",
+      };
+
+    case "unreconciled":
+      return {
+        key: "fee",
+        label,
+        value: DASH,
+        note: "Can't tell whether this fee was charged: the total matches neither bread alone nor bread plus fee.",
+      };
+
+    case "unknown":
+    default:
+      return {
+        key: "fee",
+        label,
+        value: DASH,
+        note: "No stored line prices, so this fee can't be reconciled against the total.",
+      };
+  }
+}
 
 /** Every field renders through here, so a null column can never surface
  *  as an empty cell or the literal string "null". */
@@ -269,7 +333,30 @@ export default function AdminSubscriptionDetailPage({
   const city = addr?.city ?? sub.customer_city ?? null;
   const pincode = addr?.pincode ?? sub.customer_pincode ?? null;
 
-  const unitPrice = num(sub.bread_price);
+  // Every delivery row counts, cancelled included — the plan was bought as
+  // a schedule and priced as one, so dropping cancellations here would stop
+  // the breakdown adding up to the total the customer was quoted.
+  const money = buildSubscriptionMoney({
+    items: sub.items,
+    deliveryCount: deliveries.length,
+    storedTotal: sub.total_amount,
+    feePerDelivery: sub.delivery_fee_inr,
+    legacy: {
+      product_name: sub.product_name,
+      product_slug: sub.product_slug,
+      quantity_per_delivery: sub.quantity_per_delivery,
+      bread_price: sub.bread_price,
+    },
+  });
+
+  // Prepaid subscriptions settle the whole plan up front, so "paid" is all
+  // or nothing — there is no partial-payment path to model.
+  const paidAmount =
+    sub.payment_status === "paid" ? (money.storedTotal ?? 0) : 0;
+  const outstanding =
+    money.storedTotal === null
+      ? null
+      : Math.round((money.storedTotal - paidAmount) * 100) / 100;
 
   // Normalised address (jsonb → flat fallback), the plan sentence, and a
   // coord-aware Maps link. Coords come matched from the customer's saved
@@ -574,7 +661,74 @@ export default function AdminSubscriptionDetailPage({
           </p>
         </section>
 
-        {/* 6 · PAYMENT ------------------------------------------------- */}
+        {/* 6 · ITEMS + MONEY ------------------------------------------- */}
+        {/* Same component, same shape as /admin/orders/[id]. The old block
+            here showed only a per-loaf price and a total, with a note
+            saying a subtotal couldn't be derived because legacy rows don't
+            equal bread_price × qty × days × weeks. They still don't — the
+            breakdown is built from subscription_items and the delivery
+            count instead, and reconciled against total_amount, which is
+            never adjusted to make the sum look neat. */}
+        <section style={panel}>
+          <h3 style={blockHeading}>Items</h3>
+          <MoneyBreakdown
+            qtyHeading="Qty / delivery"
+            emptyLabel="No item details recorded."
+            lines={money.lines.map((l) => ({
+              key: l.key,
+              name: show(l.name),
+              qty: l.qtyPerDelivery,
+              unit: l.unitPrice === null ? DASH : formatINR(l.unitPrice),
+              total:
+                l.lineTotalPerDelivery === null
+                  ? DASH
+                  : formatINR(l.lineTotalPerDelivery),
+            }))}
+            totals={[
+              {
+                key: "per-delivery",
+                label: "Bread per delivery",
+                value:
+                  money.breadPerDelivery === null
+                    ? DASH
+                    : formatINR(money.breadPerDelivery),
+              },
+              {
+                key: "deliveries",
+                label: "Deliveries (as purchased)",
+                value: `× ${money.deliveryCount}`,
+              },
+              {
+                key: "bread-total",
+                label: "Bread subtotal",
+                value:
+                  money.breadTotal === null
+                    ? DASH
+                    : formatINR(money.breadTotal),
+              },
+              feeRow(money),
+              {
+                key: "total",
+                label: "Total",
+                value: formatINR(money.storedTotal),
+                grand: true,
+                note:
+                  money.feeStatus === "unreconciled"
+                    ? "The lines above don't add up to this total. It is the stored amount the customer was quoted and is correct as shown — the components need checking, not the total."
+                    : undefined,
+              },
+            ]}
+          />
+          {money.usedLegacyFallback ? (
+            <p style={fallbackNote}>
+              No per-variant rows for this subscription — the line above is
+              rebuilt from the older single-product columns and may not
+              describe a mixed plan correctly.
+            </p>
+          ) : null}
+        </section>
+
+        {/* 7 · PAYMENT ------------------------------------------------- */}
         <Block title="Payment">
           <KeyVal
             k="Method"
@@ -585,16 +739,10 @@ export default function AdminSubscriptionDetailPage({
             }
           />
           <KeyVal k="Status" v={humanise(sub.payment_status)} />
-          <KeyVal
-            k="Price per loaf"
-            v={unitPrice === null ? DASH : formatINR(unitPrice)}
-          />
-          {/* Deliberately no derived per-delivery / per-week subtotal:
-              total_amount is the stored source of truth and some legacy
-              rows don't equal bread_price × qty × days × weeks. */}
+          <KeyVal k="Paid" v={formatINR(paidAmount)} />
           <div className="kv-row" style={grandRow}>
-            <span style={keyStyle}>Subscription total</span>
-            <span style={valStyle}>{formatINR(num(sub.total_amount))}</span>
+            <span style={keyStyle}>Outstanding</span>
+            <span style={valStyle}>{formatINR(outstanding)}</span>
           </div>
         </Block>
       </div>
@@ -771,6 +919,21 @@ const mutedLine: React.CSSProperties = {
   fontSize: "1rem",
   color: "rgba(251,243,212,0.55)",
   marginTop: "0.3rem",
+};
+
+// A delivery fee that exists as data but was never billed. Struck through
+// so it can't be misread as part of the total sitting directly beneath it.
+const feeNotCharged: React.CSSProperties = {
+  textDecoration: "line-through",
+  color: "rgba(251,243,212,0.55)",
+};
+
+const fallbackNote: React.CSSProperties = {
+  fontFamily: "var(--font-body)",
+  fontSize: "0.8125rem",
+  lineHeight: 1.45,
+  color: "rgba(251,243,212,0.6)",
+  margin: "0.75rem 0 0",
 };
 
 const grandRow: React.CSSProperties = {

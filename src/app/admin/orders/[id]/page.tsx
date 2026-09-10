@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { MoneyBreakdown } from "@/components/admin/MoneyBreakdown";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
@@ -377,71 +378,43 @@ export default function AdminOrderDetailPage({
         {/* 4 · ITEMS --------------------------------------------------- */}
         <section style={panel}>
           <h3 style={blockHeading}>Items</h3>
-          <div style={tableWrap}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={tableHeadRow}>
-                  <th style={th}>Product</th>
-                  <th style={{ ...th, width: 80, textAlign: "right" }}>Qty</th>
-                  <th style={{ ...th, width: 120, textAlign: "right" }}>
-                    Unit price
-                  </th>
-                  <th style={{ ...th, width: 130, textAlign: "right" }}>
-                    Line total
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.length === 0 ? (
-                  <tr>
-                    <td style={td} colSpan={4}>
-                      No item details recorded.
-                    </td>
-                  </tr>
-                ) : (
-                  items.map((it, i) => {
-                    const unit = itemUnitPrice(it);
-                    const line = itemLineTotal(it);
-                    return (
-                      <tr key={`${it.slug ?? it.product_id ?? "item"}-${i}`}>
-                        <td style={td}>{show(it.name)}</td>
-                        <td style={{ ...td, textAlign: "right" }}>
-                          {itemQty(it)}
-                        </td>
-                        <td style={{ ...td, textAlign: "right" }}>
-                          {unit === null ? DASH : formatINR(unit)}
-                        </td>
-                        <td style={{ ...td, textAlign: "right" }}>
-                          {line === null ? DASH : formatINR(line)}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div style={totalsBlock}>
-            <div style={totalsRow}>
-              <span>Subtotal</span>
-              <span>{subtotal === null ? DASH : formatINR(subtotal)}</span>
-            </div>
-            <div style={totalsRow}>
-              <span>{isPickup ? "Pickup fee" : "Delivery fee"}</span>
-              <span>
-                {deliveryFee === null
-                  ? DASH
-                  : deliveryFee === 0
-                    ? "Free"
-                    : formatINR(deliveryFee)}
-              </span>
-            </div>
-            <div style={{ ...totalsRow, ...totalsGrand }}>
-              <span>Total</span>
-              <span>{formatINR(order.total_amount)}</span>
-            </div>
-          </div>
+          <MoneyBreakdown
+            emptyLabel="No item details recorded."
+            lines={items.map((it, i) => {
+              const unit = itemUnitPrice(it);
+              const line = itemLineTotal(it);
+              return {
+                key: `${it.slug ?? it.product_id ?? "item"}-${i}`,
+                name: show(it.name),
+                qty: itemQty(it),
+                unit: unit === null ? DASH : formatINR(unit),
+                total: line === null ? DASH : formatINR(line),
+              };
+            })}
+            totals={[
+              {
+                key: "subtotal",
+                label: "Subtotal",
+                value: subtotal === null ? DASH : formatINR(subtotal),
+              },
+              {
+                key: "fee",
+                label: isPickup ? "Pickup fee" : "Delivery fee",
+                value:
+                  deliveryFee === null
+                    ? DASH
+                    : deliveryFee === 0
+                      ? "Free"
+                      : formatINR(deliveryFee),
+              },
+              {
+                key: "total",
+                label: "Total",
+                value: formatINR(order.total_amount),
+                grand: true,
+              },
+            ]}
+          />
         </section>
 
         {/* 5 · PAYMENT ------------------------------------------------- */}
@@ -643,62 +616,8 @@ const valStyle: React.CSSProperties = {
   minWidth: 0,
 };
 
-const tableWrap: React.CSSProperties = {
-  border: "1px solid rgba(251,243,212,0.18)",
-  borderRadius: 6,
-  overflow: "hidden",
-};
-
-const tableHeadRow: React.CSSProperties = {
-  background: "rgba(251,243,212,0.08)",
-  color: "rgba(251,243,212,0.9)",
-  textTransform: "uppercase",
-  fontSize: "0.875rem",
-  letterSpacing: "0.22em",
-};
-
-const th: React.CSSProperties = {
-  textAlign: "left",
-  padding: "0.7rem 1rem",
-  fontFamily: "var(--font-body)",
-  fontWeight: 400,
-  borderBottom: "1px solid rgba(251,243,212,0.15)",
-};
-
-const td: React.CSSProperties = {
-  padding: "0.7rem 1rem",
-  fontFamily: "var(--font-body)",
-  color: "#FBF3D4",
-  fontSize: "1rem",
-  verticalAlign: "top",
-  borderBottom: "1px solid rgba(251,243,212,0.06)",
-};
-
-const totalsBlock: React.CSSProperties = {
-  marginTop: "1rem",
-  marginLeft: "auto",
-  width: "min(340px, 100%)",
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.3rem",
-};
-
-const totalsRow: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  fontFamily: "var(--font-body)",
-  fontSize: "1rem",
-  color: "#FBF3D4",
-  padding: "0.15rem 0",
-};
-
-const totalsGrand: React.CSSProperties = {
-  borderTop: "1px solid rgba(251,243,212,0.35)",
-  marginTop: "0.35rem",
-  paddingTop: "0.5rem",
-  fontSize: "1rem",
-  color: "#FBF3D4",
-};
+// The items-table and totals styles that used to live here moved to
+// @/components/admin/MoneyBreakdown along with the markup they styled.
 
 const chipBase: React.CSSProperties = {
   padding: "0.35rem 0.85rem",
