@@ -178,8 +178,15 @@ function SubscriptionsPageInner() {
   const [busyId, setBusyId] = useState<string | null>(null);
   // Which row's Date cell is showing its subscribed/receives breakdown.
   const [openDateId, setOpenDateId] = useState<string | null>(null);
+  // NOT the shared DEFAULT_PRESET ("This Month"). This board is operational,
+  // and created_at is the wrong axis to hide rows on: OLF72 was created in
+  // July, is still `active`, and was the only active subscription in the
+  // table — the This Month default hid it, along with 4 others. A wide
+  // window is the least-wrong default until this filters by relevance
+  // instead. Keep in sync with the DateRangeDropdown's initialPreset below,
+  // or the label will disagree with what is actually filtered.
   const [range, setRange] = useState<DateRangeValue | null>(() =>
-    resolvePreset("this_month"),
+    resolvePreset("one_year"),
   );
 
   // Delivery partners power the per-row "Share" button. Fetched once on
@@ -375,7 +382,7 @@ function SubscriptionsPageInner() {
       }
     >
       <div className="mb-4">
-        <DateRangeDropdown onChange={setRange} />
+        <DateRangeDropdown onChange={setRange} initialPreset="one_year" />
       </div>
       <div className="flex flex-wrap gap-2 mb-6">
         {FILTERS.map((f) => {
