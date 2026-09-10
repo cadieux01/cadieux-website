@@ -224,12 +224,23 @@ function buildMessage(
   return { subject, html, text };
 }
 
-// ── core ────────────────────────────────────────────────────────────────────
+// ── shared steps ────────────────────────────────────────────────────────────
+// prepareMessage and sendEmail are split out of runNotification so the retry
+// sweeper at the bottom of this file can rebuild and re-send a row that has
+// ALREADY been claimed. It cannot reuse runNotification: that function claims
+// by INSERT, so a retry would take a 23505 against its own row and give up —
+// which is exactly why, before the sweeper existed, a failed send was lost
+// permanently.
 
-async function runNotification(
+type PreparedMessage =
+  | { ok: true; subject: string; html: string; text: string }
+  | { ok: false; reason: string };
+
+/** Re-read the order from committed state and render the email for it. */
+async function prepareMessage(
   orderId: string,
   event: OrderNotificationEvent,
-): Promise<void> {
+): Promise<PreparedMessage> {
   const { data, error: readErr } = await supabaseAdmin
     .from("orders")
     .select(
@@ -239,11 +250,10 @@ async function runNotification(
     .maybeSingle();
 
   if (readErr || !data) {
-    console.error(
-      `[order-notification] ${event} ${orderId}: order re-read failed:`,
-      readErr?.message ?? "not found",
-    );
-    return;
+    return {
+      ok: false,
+      reason: `order re-read failed: ${readErr?.message ?? "not found"}`,
+    };
   }
   const order = data as unknown as OrderRow;
 
@@ -252,15 +262,15 @@ async function runNotification(
   // rolled back, or 'created' on an online order, is a bug we should not turn
   // into an email.
   if (event === "paid" && order.payment_status !== "paid") {
-    console.warn(
-      `[order-notification] paid ${orderId}: order is not paid (${order.payment_status}) — skipping.`,
-    );
-    return;
+    return {
+      ok: false,
+      reason: `order is not paid (payment_status=${order.payment_status ?? "null"})`,
+    };
   }
 
-  // Has this order already produced an email? Decides "New order" vs
-  // "Payment received", and is read before the insert so the losing side of
-  // the verify-payment/webhook race never gets this far.
+  // Has this order already produced an email for the OTHER event? Decides
+  // "New order" vs "Payment received". Only a different event counts, so this
+  // stays correct on a retry, where the row being retried is itself present.
   const { data: priorRows } = await supabaseAdmin
     .from("order_notifications_sent")
     .select("event")
@@ -287,12 +297,79 @@ async function runNotification(
     }
   }
 
-  const { subject, html, text } = buildMessage(
-    order,
-    event,
-    isFirstEmailForOrder,
-    pickupLabel,
-  );
+  return {
+    ok: true,
+    ...buildMessage(order, event, isFirstEmailForOrder, pickupLabel),
+  };
+}
+
+type SendResult =
+  | { ok: true; resendId: string | null }
+  | { ok: false; error: string };
+
+/**
+ * POST the message to Resend. Never throws — every failure comes back as a
+ * string the caller can persist.
+ *
+ * Resend's REST endpoint rather than its SDK: the SDK's send options have no
+ * `signal`, so an SDK call cannot be cancelled and a hung connection would sit
+ * inside waitUntil until the platform killed the invocation — with the row
+ * stuck at 'pending' and no error recorded. fetch + an abort signal gives a
+ * real deadline and a loggable failure. Same endpoint and payload shape as
+ * supabase/functions/_shared/handoff-email.ts.
+ */
+async function sendEmail(msg: {
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<SendResult> {
+  if (!process.env.RESEND_API_KEY) {
+    return { ok: false, error: "RESEND_API_KEY is not configured" };
+  }
+  try {
+    const res = await fetch(RESEND_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: TO_EMAIL,
+        subject: msg.subject,
+        html: msg.html,
+        text: msg.text,
+      }),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { ok: false, error: `HTTP ${res.status} ${detail}`.trim() };
+    }
+    const sendData = (await res.json().catch(() => null)) as { id?: string } | null;
+    return { ok: true, resendId: sendData?.id ?? null };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? `${e.name}: ${e.message}` : "Unknown send error",
+    };
+  }
+}
+
+// ── core ────────────────────────────────────────────────────────────────────
+
+async function runNotification(
+  orderId: string,
+  event: OrderNotificationEvent,
+): Promise<void> {
+  const prepared = await prepareMessage(orderId, event);
+  if (!prepared.ok) {
+    console.warn(
+      `[order-notification] ${event} ${orderId}: skipped — ${prepared.reason}`,
+    );
+    return;
+  }
+  const { subject, html, text } = prepared;
 
   // Claim the (order, event) slot BEFORE sending. Two reasons, in order of
   // importance:
@@ -333,50 +410,25 @@ async function runNotification(
       .eq("id", rowId);
   };
 
-  if (!process.env.RESEND_API_KEY) {
-    await markFailed("RESEND_API_KEY is not configured");
+  const sent = await sendEmail({ subject, html, text });
+  if (!sent.ok) {
+    // Recorded, not lost: sweepOrderNotifications() below picks this row up
+    // and retries it, and the daily cron runs that sweep unattended.
+    await markFailed(sent.error);
     return;
   }
-
-  let resendId: string | null = null;
-  try {
-    // Resend's REST endpoint rather than its SDK: the SDK's send options have
-    // no `signal`, so an SDK call cannot be cancelled and a hung connection
-    // would sit inside waitUntil until the platform killed the invocation —
-    // with the row stuck at 'pending' and no error recorded. fetch + an abort
-    // signal gives a real deadline and a loggable failure. Same endpoint and
-    // payload shape as supabase/functions/_shared/handoff-email.ts.
-    const res = await fetch(RESEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from: FROM_EMAIL, to: TO_EMAIL, subject, html, text }),
-      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      await markFailed(`HTTP ${res.status} ${detail}`.trim());
-      return;
-    }
-    const sendData = (await res.json().catch(() => null)) as { id?: string } | null;
-    resendId = sendData?.id ?? null;
-  } catch (e) {
-    await markFailed(
-      e instanceof Error ? `${e.name}: ${e.message}` : "Unknown send error",
-    );
-    return;
-  }
+  const resendId = sent.resendId;
 
   const { error: updErr } = await supabaseAdmin
     .from("order_notifications_sent")
     .update({ status: "sent", resend_id: resendId, updated_at: new Date().toISOString() })
     .eq("id", rowId);
   if (updErr) {
-    // The email DID go out; only the bookkeeping failed. Leaving the row at
-    // 'pending' is the safe error — it over-reports failure rather than
-    // under-reporting it, and the unique index still blocks a resend.
+    // The email DID go out; only the bookkeeping failed. The row stays at
+    // 'pending', so the sweeper will eventually re-send it and Sunny gets the
+    // alert twice. That is the deliberate trade: this needs BOTH a successful
+    // send and a failed update in the same call, and a duplicate alert costs
+    // far less than a missed order.
     console.error(
       `[order-notification] ${event} ${orderId}: sent (${resendId}) but status update failed:`,
       updErr.message,
@@ -418,4 +470,208 @@ export function queueOrderNotification(
   } catch (e) {
     console.error(`[order-notification] ${event} ${orderId} queue failed:`, e);
   }
+}
+
+// ── retry sweeper ───────────────────────────────────────────────────────────
+//
+// Without this, a transient Resend failure silently eats an order alert: the
+// row sits at 'failed' forever, the unique index blocks any fresh attempt, and
+// the only person who would notice is someone querying a table nobody queries.
+//
+// Runs from two places, both of which call this same function:
+//   • GET /api/admin/order-notifications/retry — admin-session gated, so Sunny
+//     can trigger it from the browser he is already logged into.
+//   • the reports phase of /api/cron/daily-housekeeping — so it self-heals
+//     daily without anyone remembering.
+
+/** Give up after this many attempts. A permanently bad row must not churn. */
+export const MAX_NOTIFICATION_ATTEMPTS = 5;
+
+/** Ceiling on rows touched per run, so one bad day cannot blow the 60s budget. */
+const SWEEP_LIMIT = 25;
+
+/**
+ * Ignore rows touched more recently than this. A row inserted by
+ * runNotification is at 'pending' while its send is still in flight (8s
+ * ceiling); picking it up here would double-send. Five minutes is far past
+ * any legitimate in-flight window.
+ */
+const SWEEP_MIN_AGE_MS = 5 * 60 * 1000;
+
+type SweepRow = {
+  id: string;
+  order_id: string;
+  event: OrderNotificationEvent;
+  status: string;
+  subject: string | null;
+  attempts: number;
+  error: string | null;
+};
+
+/** A row that has exhausted its retries. Reported, never silently dropped. */
+export type CappedNotification = {
+  id: string;
+  order_id: string;
+  event: OrderNotificationEvent;
+  attempts: number;
+  subject: string | null;
+  error: string | null;
+};
+
+export type NotificationSweepResult = {
+  /** Rows found at status <> 'sent' and old enough to touch. */
+  scanned: number;
+  /** Rows that sent successfully this run. */
+  sent: number;
+  /** Rows that failed again this run. */
+  failed: number;
+  /** Rows at or over the attempt cap — reported below, not retried. */
+  capped: number;
+  /** Rows another worker claimed between the read and the write. */
+  raced: number;
+  cappedRows: CappedNotification[];
+  /** Present only if the sweep itself broke; caller records and keeps going. */
+  error?: string;
+};
+
+/**
+ * Rebuild and re-send every unsent order alert. Never throws.
+ *
+ * Uses the partial index on (created_at desc) WHERE status <> 'sent'.
+ *
+ * Concurrency: the daily cron and a manual admin trigger can overlap. Each row
+ * is claimed with a compare-and-swap on `attempts` (plus the same staleness
+ * bound as the read), so exactly one worker can own a row per attempt — the
+ * other sees zero rows updated and skips it. The bump happens BEFORE the send,
+ * so a run that dies mid-send still burns an attempt and cannot loop forever.
+ */
+export async function sweepOrderNotifications(): Promise<NotificationSweepResult> {
+  const result: NotificationSweepResult = {
+    scanned: 0,
+    sent: 0,
+    failed: 0,
+    capped: 0,
+    raced: 0,
+    cappedRows: [],
+  };
+
+  const cutoff = new Date(Date.now() - SWEEP_MIN_AGE_MS).toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from("order_notifications_sent")
+    .select("id, order_id, event, status, subject, attempts, error")
+    .neq("status", "sent")
+    .lt("updated_at", cutoff)
+    .order("created_at", { ascending: true })
+    .limit(SWEEP_LIMIT);
+
+  if (error) {
+    console.error("[order-notification:sweep] read failed:", error.message);
+    return { ...result, error: error.message };
+  }
+
+  const rows = (data ?? []) as SweepRow[];
+  result.scanned = rows.length;
+
+  for (const row of rows) {
+    if (row.attempts >= MAX_NOTIFICATION_ATTEMPTS) {
+      result.capped += 1;
+      result.cappedRows.push({
+        id: row.id,
+        order_id: row.order_id,
+        event: row.event,
+        attempts: row.attempts,
+        subject: row.subject,
+        error: row.error,
+      });
+      continue;
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // Claim: bump attempts only if nobody else has. `.eq("attempts", ...)`
+    // is the version check; `.lt("updated_at", cutoff)` re-asserts the
+    // staleness bound the read used, closing the window where two workers
+    // read the same row before either wrote.
+    const { data: claimed, error: claimErr } = await supabaseAdmin
+      .from("order_notifications_sent")
+      .update({ attempts: row.attempts + 1, updated_at: nowIso })
+      .eq("id", row.id)
+      .eq("attempts", row.attempts)
+      .lt("updated_at", cutoff)
+      .select("id")
+      .maybeSingle();
+
+    if (claimErr) {
+      console.error(
+        `[order-notification:sweep] ${row.id}: claim failed:`,
+        claimErr.message,
+      );
+      result.failed += 1;
+      continue;
+    }
+    if (!claimed) {
+      result.raced += 1;
+      continue;
+    }
+
+    const recordFailure = async (reason: string) => {
+      result.failed += 1;
+      console.error(
+        `[order-notification:sweep] ${row.event} ${row.order_id} retry ${row.attempts + 1} FAILED: ${reason}`,
+      );
+      await supabaseAdmin
+        .from("order_notifications_sent")
+        .update({
+          status: "failed",
+          error: reason.slice(0, 500),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id);
+    };
+
+    // Rebuild from current committed state rather than re-using the stored
+    // subject: the order may have been edited since it failed, and a retry
+    // should describe the order as it is now.
+    const prepared = await prepareMessage(row.order_id, row.event);
+    if (!prepared.ok) {
+      await recordFailure(prepared.reason);
+      continue;
+    }
+
+    const sent = await sendEmail(prepared);
+    if (!sent.ok) {
+      await recordFailure(sent.error);
+      continue;
+    }
+
+    const { error: updErr } = await supabaseAdmin
+      .from("order_notifications_sent")
+      .update({
+        status: "sent",
+        resend_id: sent.resendId,
+        subject: prepared.subject,
+        error: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", row.id);
+    if (updErr) {
+      // Same trade as runNotification: the email went out, the bookkeeping
+      // did not, so this row will be swept again and alert twice.
+      console.error(
+        `[order-notification:sweep] ${row.id}: sent (${sent.resendId}) but status update failed:`,
+        updErr.message,
+      );
+    }
+    result.sent += 1;
+  }
+
+  if (result.capped > 0) {
+    console.error(
+      `[order-notification:sweep] ${result.capped} row(s) at the ${MAX_NOTIFICATION_ATTEMPTS}-attempt cap — these alerts will never send without manual action:`,
+      result.cappedRows.map((r) => `${r.event} ${r.order_id} (${r.error ?? "no error recorded"})`),
+    );
+  }
+
+  return result;
 }

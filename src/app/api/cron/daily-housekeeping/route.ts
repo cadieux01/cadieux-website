@@ -20,12 +20,13 @@
 //   4. STALE    — surface unresolved deliveries >7 days past date (READ-ONLY,
 //                 no auto-resolution; the database can't know whether the
 //                 loaf was actually delivered — Sunny decides)
+//   5. ALERTS   — re-send order alerts whose first send failed
 //
 // One failing phase must NEVER abort the others. The response body reports
 // each phase separately (a top-level `error` on any phase means that phase
-// only) so an operator can look at a single run and tell which of the three
+// only) so an operator can look at a single run and tell which of the five
 // worked. A failed phase does NOT change the HTTP status of the run — the
-// response is 200 even if all three fail; individual `error` fields carry
+// response is 200 even if all five fail; individual `error` fields carry
 // the story. If we returned 500 the moment one phase failed, a badly-timed
 // digest failure would look like the whole cron is down.
 //
@@ -42,6 +43,10 @@ import { sweepAbandonedSubscriptions } from "@/lib/sweep-abandoned-subscriptions
 import { runAbandonedPaymentsDigest } from "@/lib/cron/abandoned-payments-digest";
 import { runSubscriptionReminders } from "@/lib/cron/subscription-reminders-phase";
 import { loadStaleDeliveries } from "@/lib/cron/stale-deliveries";
+// Not under src/lib/cron/ like the other phases: the sweep has to share the
+// order re-read, message builder and Resend call with the live notifier, and
+// those are private to that module. A wrapper here would only re-export it.
+import { sweepOrderNotifications } from "@/lib/order-notification";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -169,5 +174,27 @@ export async function GET(req: NextRequest) {
     stale = { count: 0, rows: [], error: message };
   }
 
-  return NextResponse.json({ sweep, digest, reminders, stale });
+  // ── Phase 5: order-alert retry ─────────────────────────────────────────
+  // Deliberately NOT gated on `resend`: this phase talks to Resend over REST
+  // with its own key check, and it must still run to surface capped rows even
+  // during an email outage. It never throws, but the try/catch matches the
+  // contract of the other phases.
+  let alerts;
+  try {
+    alerts = await sweepOrderNotifications();
+  } catch (e) {
+    const message = errMessage(e);
+    console.error("[cron/daily-housekeeping:alerts] threw:", message);
+    alerts = {
+      scanned: 0,
+      sent: 0,
+      failed: 0,
+      capped: 0,
+      raced: 0,
+      cappedRows: [],
+      error: message,
+    };
+  }
+
+  return NextResponse.json({ sweep, digest, reminders, stale, alerts });
 }
