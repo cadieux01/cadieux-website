@@ -75,7 +75,7 @@ export default function SetupPage() {
   // end with no escape but clearing storage.
   //
   // Runs on mount and again whenever the dates or the step change, because
-  // the 6-hour lead time can expire while the wizard simply sits open.
+  // the 12-hour lead time can expire while the wizard simply sits open.
   useEffect(() => {
     if (!hydrated) return;
     const result = revalidateSetupState(state);

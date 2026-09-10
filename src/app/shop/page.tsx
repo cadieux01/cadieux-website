@@ -26,7 +26,7 @@ const SLUGS = ["multigrain", "high-protein"] as const;
 export const metadata: Metadata = {
   title: "Shop Protein Bread — Multigrain & High Protein | Cadieux",
   description:
-    "Shop Cadieux protein bread online — high protein and multigrain loaves, baked fresh in Visakhapatnam with same-day delivery across Vizag.",
+    "Premium high-protein bread, baked fresh in Visakhapatnam. Choose your delivery day and slot across Vizag.",
   alternates: { canonical: "/shop" },
 };
 

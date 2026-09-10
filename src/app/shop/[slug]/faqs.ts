@@ -24,7 +24,7 @@ export const PDP_FAQS: PdpFaq[] = [
   },
   {
     q: "How is it delivered?",
-    a: "Fresh delivery across Visakhapatnam on the day it is baked. Order by the day's cut-off for same-day or next-day service depending on your area. Delivery windows are shown at checkout.",
+    a: "Orders need at least 12 hours' notice, so most orders arrive the next day. Pick your delivery day and time slot at checkout.",
   },
   {
     q: "How long does the bread stay fresh?",

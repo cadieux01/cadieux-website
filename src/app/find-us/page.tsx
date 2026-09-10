@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Check Bread Delivery to Your Pincode | Cadieux",
   description:
-    "See if Cadieux delivers fresh protein bread to your Visakhapatnam pincode. Same-day delivery across Vizag — enter your PIN to check in one tap.",
+    "See if Cadieux delivers fresh protein bread to your Visakhapatnam pincode. Delivery across Vizag — enter your PIN to check in one tap.",
 };
 
 export default async function FindUsPage() {

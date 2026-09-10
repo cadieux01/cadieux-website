@@ -246,7 +246,7 @@ export default async function SubscribeLandingPage() {
             }}
           >
             {[
-              "Pick your loaves — a minimum of two per delivery, mixed in any ratio between multigrain and plain.",
+              "Pick your loaves — one loaf per delivery is enough, and you can mix multigrain and plain in any ratio.",
               "Pick your dates — no fixed weekly cycle. Choose the days that fit your week.",
               "Pick a window — Morning (6 – 10 AM), Midday (10 AM – 2 PM), or Evening (4 – 9 PM) IST.",
               "We bake to order — every delivery leaves the kitchen the same day it reaches you. Twelve hours' notice keeps the loaf oven-fresh.",

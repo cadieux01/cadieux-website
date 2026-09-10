@@ -401,12 +401,12 @@ export function describeRevalidation(r: SetupRevalidation): string {
   }
   if (soon.length > 0) {
     sentences.push(
-      `${listDates(soon)} ${soon.length === 1 ? "is" : "are"} now within our 6-hour baking window, so we removed ${soon.length === 1 ? "it" : "them"}.`,
+      `${listDates(soon)} ${soon.length === 1 ? "is" : "are"} now within our 12-hour baking window, so we removed ${soon.length === 1 ? "it" : "them"}.`,
     );
   }
   if (r.removedSlotDates.length > 0) {
     sentences.push(
-      `The time you chose for ${listDates(r.removedSlotDates)} is now within 6 hours, so we cleared ${r.removedSlotDates.length === 1 ? "it" : "them"}.`,
+      `The time you chose for ${listDates(r.removedSlotDates)} is now within 12 hours, so we cleared ${r.removedSlotDates.length === 1 ? "it" : "them"}.`,
     );
   }
   if (sentences.length === 0) return "";
