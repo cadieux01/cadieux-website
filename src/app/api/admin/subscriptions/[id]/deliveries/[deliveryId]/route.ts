@@ -143,22 +143,30 @@ export async function PATCH(
     },
   });
 
-  // If all deliveries for this subscription are now delivered/cancelled, mark
-  // the subscription as completed automatically.
+  // Auto-flip parent status when every delivery has reached a terminal state.
+  //   at least one delivered → parent 'completed'
+  //   every delivery cancelled → parent 'cancelled' (an all-cancelled plan
+  //     was never fulfilled; calling it "completed" would be a false record)
+  // Guard the update so we only overwrite still-open parent statuses —
+  // 'active' AND 'pending_confirmation'. The old guard was 'active' only,
+  // which trapped pending_confirmation parents (e.g. a single-week plan
+  // marked delivered before payment ever moved the parent to active).
   const { data: rest } = await supabaseAdmin
     .from("subscription_deliveries")
     .select("status")
     .eq("subscription_id", params.id);
   if (rest && rest.length > 0) {
-    const allDone = rest.every(
+    const allTerminal = rest.every(
       (r) => r.status === "delivered" || r.status === "cancelled"
     );
-    if (allDone) {
+    if (allTerminal) {
+      const anyDelivered = rest.some((r) => r.status === "delivered");
+      const nextStatus = anyDelivered ? "completed" : "cancelled";
       await supabaseAdmin
         .from("subscriptions")
-        .update({ status: "completed", updated_at: new Date().toISOString() })
+        .update({ status: nextStatus, updated_at: new Date().toISOString() })
         .eq("id", params.id)
-        .eq("status", "active");
+        .in("status", ["active", "pending_confirmation"]);
     }
   }
 

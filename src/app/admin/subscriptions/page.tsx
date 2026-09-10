@@ -1153,14 +1153,20 @@ function SubscriptionDrawer({
         ) : null}
         {error ? <p style={{ color: "#EF4444" }}>Error: {error}</p> : null}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {deliveries.map((d) => (
-            <DeliveryCard
-              key={d.id}
-              delivery={d}
-              onStatusChange={(next) => void updateDeliveryStatus(d.id, next)}
-              onNotesSave={(notes) => void updateDeliveryNotes(d.id, notes)}
-            />
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {groupDeliveriesByWeek(deliveries).map((g) => (
+            <AdminWeekGroup key={g.week} group={g}>
+              {g.items.map((d) => (
+                <DeliveryCard
+                  key={d.id}
+                  delivery={d}
+                  onStatusChange={(next) =>
+                    void updateDeliveryStatus(d.id, next)
+                  }
+                  onNotesSave={(notes) => void updateDeliveryNotes(d.id, notes)}
+                />
+              ))}
+            </AdminWeekGroup>
           ))}
           {!loading && deliveries.length === 0 && !error ? (
             <p style={{ color: "rgba(251,243,212,0.45)", fontSize: "1rem" }}>
@@ -1344,6 +1350,124 @@ function DeliveryCard({
           Add notes
         </button>
       )}
+    </div>
+  );
+}
+
+/** ISO date `YYYY-MM-DD` for today in local time. Used only for the "past
+ *  week" collapse heuristic — an exact tz is not load-bearing here (a week
+ *  boundary drifting by a few hours doesn't change the collapse decision). */
+function localTodayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+/** Group deliveries by `week_number`, ordered ascending. week 0 (or
+ *  missing) is legal — the DB uses it as a sentinel. */
+function groupDeliveriesByWeek(
+  items: AdminDeliveryRow[],
+): { week: number; items: AdminDeliveryRow[] }[] {
+  const map = new Map<number, AdminDeliveryRow[]>();
+  for (const it of items) {
+    const w = it.week_number ?? 0;
+    const cur = map.get(w);
+    if (cur) cur.push(it);
+    else map.set(w, [it]);
+  }
+  return Array.from(map.entries())
+    .map(([week, list]) => ({ week, items: list }))
+    .sort((a, b) => a.week - b.week);
+}
+
+/**
+ * Wrap one week's deliveries with a summary header ("Week 3 — 2 of 2
+ * delivered") and collapse the body when the whole week is done and in
+ * the past. Current or open weeks stay expanded. Header is a real button
+ * so keyboard + screen-reader users can toggle.
+ */
+function AdminWeekGroup({
+  group,
+  children,
+}: {
+  group: { week: number; items: AdminDeliveryRow[] };
+  children: React.ReactNode;
+}) {
+  const total = group.items.length;
+  const delivered = group.items.filter((d) => d.status === "delivered").length;
+  const cancelled = group.items.filter((d) => d.status === "cancelled").length;
+  const open = total - delivered - cancelled;
+  const allTerminal = open === 0;
+  const today = localTodayIso();
+  const allPast = group.items.every((d) => d.scheduled_date < today);
+  // Collapse only fully-terminal past weeks — the operator's job is on the
+  // open ones, so those must NEVER hide themselves.
+  const [collapsed, setCollapsed] = useState<boolean>(allTerminal && allPast);
+  const summary = allTerminal
+    ? cancelled === total
+      ? `${total} cancelled`
+      : `${delivered} of ${total} delivered${cancelled ? ` · ${cancelled} cancelled` : ""}`
+    : `${delivered} of ${total} delivered · ${open} open`;
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(251,243,212,0.12)",
+        borderRadius: 4,
+        padding: "10px 12px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
+        style={{
+          appearance: "none",
+          background: "transparent",
+          border: "none",
+          color: "rgba(251,243,212,0.85)",
+          padding: 0,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontFamily: "inherit",
+          fontSize: "0.875rem",
+          letterSpacing: "0.25em",
+          textTransform: "uppercase",
+        }}
+      >
+        <span>
+          Week {group.week} — {summary}
+        </span>
+        <span
+          aria-hidden
+          style={{
+            fontSize: 14,
+            color: "rgba(251,243,212,0.6)",
+            marginLeft: 12,
+            transform: collapsed ? "rotate(0deg)" : "rotate(90deg)",
+            transition: "transform 0.15s ease",
+          }}
+        >
+          ›
+        </span>
+      </button>
+      {!collapsed ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }

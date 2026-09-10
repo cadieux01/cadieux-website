@@ -35,7 +35,9 @@ import { Resend } from "resend";
 import {
   buildBakePlan,
   type BakePlanLine,
+  type StaleDeliveryLine,
 } from "@/lib/email/bake-plan";
+import { loadStaleDeliveries } from "@/lib/cron/stale-deliveries";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -349,7 +351,39 @@ export async function GET(req: NextRequest) {
   }
 
   const lines = [...orderLines, ...subLines];
-  const email = buildBakePlan(targetDate, lines);
+
+  // Third leg: unresolved stale deliveries (>7d past date, still open,
+  // parent not cancelled). Read-only surface — the email lists them so
+  // Sunny sees them once a day. Failure here must not block the send;
+  // a stale-load error just omits the section (same rule as the two
+  // primary legs).
+  let staleLines: StaleDeliveryLine[] = [];
+  let staleError: string | null = null;
+  try {
+    const stale = await loadStaleDeliveries(supabaseAdmin);
+    if (stale.error) {
+      staleError = stale.error;
+    } else {
+      staleLines = stale.rows.map((r) => ({
+        subscriptionNumber:
+          r.subscription_number || `#${r.subscription_id.slice(0, 8).toUpperCase()}`,
+        // Booking-time snapshot only — never the joined customers row.
+        customerName: (r.customer_name || "Unknown").trim(),
+        customerPhone: (r.customer_phone || "").trim(),
+        daysOverdue: r.days_overdue,
+        deliveryStatus: r.delivery_status,
+        parentStatus: r.parent_status,
+      }));
+    }
+  } catch (e) {
+    staleError = errMessage(e);
+    console.error(
+      "[cron/delivery-bake-plan] stale leg failed:",
+      staleError,
+    );
+  }
+
+  const email = buildBakePlan(targetDate, lines, staleLines);
 
   // Idempotency: reserve the day BEFORE sending. A retry same-day fails
   // the primary-key insert and skips the send. `?force=1` bypasses the
@@ -381,7 +415,12 @@ export async function GET(req: NextRequest) {
           subscriptions: subLines.length,
           total: lines.length,
         },
-        errors: { orders: orderError, subscriptions: subError },
+        errors: {
+          orders: orderError,
+          subscriptions: subError,
+          stale: staleError,
+        },
+        stale_count: staleLines.length,
       });
     }
     reserved = true;
@@ -418,7 +457,12 @@ export async function GET(req: NextRequest) {
           subscriptions: subLines.length,
           total: lines.length,
         },
-        errors: { orders: orderError, subscriptions: subError },
+        errors: {
+          orders: orderError,
+          subscriptions: subError,
+          stale: staleError,
+        },
+        stale_count: staleLines.length,
       },
       { status: 500 },
     );

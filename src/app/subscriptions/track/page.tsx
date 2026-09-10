@@ -232,14 +232,18 @@ export default function TrackPage() {
                   </div>
                 </header>
 
-                <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ display: "grid", gap: 12 }}>
                   {deliveries.length === 0 && (
                     <div style={{ fontSize: 16, color: "rgba(2,70,40,0.55)" }}>
                       Loading deliveries…
                     </div>
                   )}
-                  {deliveries.map((d) => (
-                    <WeekCard key={d.id} delivery={d} />
+                  {groupDeliveriesByWeek(deliveries).map((g) => (
+                    <CustomerWeekGroup key={g.week} group={g}>
+                      {g.items.map((d) => (
+                        <WeekCard key={d.id} delivery={d} />
+                      ))}
+                    </CustomerWeekGroup>
                   ))}
                 </div>
 
@@ -343,6 +347,114 @@ function WeekCard({ delivery }: { delivery: Delivery }) {
         ›
       </div>
     </Link>
+  );
+}
+
+/** ISO date `YYYY-MM-DD` for today in local time. */
+function localTodayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+/** Group deliveries by `week_number`, ordered ascending. */
+function groupDeliveriesByWeek(
+  items: Delivery[],
+): { week: number; items: Delivery[] }[] {
+  const map = new Map<number, Delivery[]>();
+  for (const it of items) {
+    const w = it.week_number ?? 0;
+    const cur = map.get(w);
+    if (cur) cur.push(it);
+    else map.set(w, [it]);
+  }
+  return Array.from(map.entries())
+    .map(([week, list]) => ({ week, items: list }))
+    .sort((a, b) => a.week - b.week);
+}
+
+/**
+ * Wrap one week's deliveries with a header ("Week 2 — 1 of 1 delivered")
+ * and collapse fully-delivered/cancelled past weeks by default. Read-only:
+ * this view never edits status, only surfaces where the plan is at.
+ */
+function CustomerWeekGroup({
+  group,
+  children,
+}: {
+  group: { week: number; items: Delivery[] };
+  children: React.ReactNode;
+}) {
+  const total = group.items.length;
+  const delivered = group.items.filter((d) => d.status === "delivered").length;
+  const cancelled = group.items.filter((d) => d.status === "cancelled").length;
+  const open = total - delivered - cancelled;
+  const allTerminal = open === 0;
+  const today = localTodayIso();
+  const allPast = group.items.every((d) => d.scheduled_date < today);
+  // Same rule as admin — only past + fully-terminal groups start collapsed.
+  const [collapsed, setCollapsed] = useState<boolean>(allTerminal && allPast);
+  const summary = allTerminal
+    ? cancelled === total
+      ? `${total} cancelled`
+      : `${delivered} of ${total} delivered${cancelled ? ` · ${cancelled} cancelled` : ""}`
+    : `${delivered} of ${total} delivered · ${open} upcoming`;
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(2,70,40,0.15)",
+        borderRadius: 8,
+        padding: "10px 12px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        background: "rgba(2,70,40,0.02)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
+        style={{
+          appearance: "none",
+          background: "transparent",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          color: "#024628",
+          fontFamily: "inherit",
+          fontSize: 14,
+          fontWeight: 500,
+        }}
+      >
+        <span>
+          Week {group.week}{" "}
+          <span style={{ color: "rgba(2,70,40,0.6)", fontWeight: 400 }}>
+            — {summary}
+          </span>
+        </span>
+        <span
+          aria-hidden
+          style={{
+            fontSize: 16,
+            color: "rgba(2,70,40,0.5)",
+            marginLeft: 12,
+            transform: collapsed ? "rotate(0deg)" : "rotate(90deg)",
+            transition: "transform 0.15s ease",
+          }}
+        >
+          ›
+        </span>
+      </button>
+      {!collapsed ? (
+        <div style={{ display: "grid", gap: 10 }}>{children}</div>
+      ) : null}
+    </div>
   );
 }
 

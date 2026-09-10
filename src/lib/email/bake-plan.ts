@@ -41,6 +41,25 @@ export interface BakePlanEmail {
   text: string;
 }
 
+/** One row in the "unresolved stale deliveries" section — subscription
+ *  deliveries whose date is >7 days past and status is still not terminal
+ *  (parent not cancelled). Surfaced daily; NEVER auto-resolved. The DB
+ *  cannot know whether the loaf actually went out — Sunny does. */
+export interface StaleDeliveryLine {
+  subscriptionNumber: string;
+  /** Booking-time snapshot from `subscriptions.customer_name` — see
+   *  stale-deliveries.ts for why the joined `customers.full_name` is
+   *  unsafe (shared-phone stale-join). */
+  customerName: string;
+  /** Booking-time snapshot from `subscriptions.customer_phone`. Rendered
+   *  as a `tel:` link so Sunny can dial the correct owner directly from
+   *  the email. Empty string is legal — very old rows have no snapshot. */
+  customerPhone: string;
+  daysOverdue: number;
+  deliveryStatus: string;
+  parentStatus: string;
+}
+
 /** Preferred display order for known slots. Unknowns append alphabetically. */
 const SLOT_ORDER = [
   "breakfast",
@@ -142,41 +161,115 @@ export function formatBakeDate(iso: string): string {
  * is STILL returned so the caller can send it. Callers must NOT swallow the
  * empty case; a delivered "nothing" is the daily heartbeat.
  */
+/** Render the "unresolved stale deliveries" HTML + text blocks. Empty
+ *  `stale` returns two empty strings — the caller can concatenate blindly. */
+function renderStaleSection(stale: StaleDeliveryLine[]): {
+  html: string;
+  text: string;
+} {
+  if (stale.length === 0) return { html: "", text: "" };
+  const textParts: string[] = [];
+  textParts.push("UNRESOLVED STALE DELIVERIES");
+  textParts.push(
+    `${stale.length} subscription deliver${stale.length === 1 ? "y is" : "ies are"} more than 7 days past their date and still open.`,
+  );
+  textParts.push("Decide by hand — the DB does not know if bread went out.");
+  for (const s of stale) {
+    const phone = s.customerPhone ? ` — ${s.customerPhone}` : "";
+    textParts.push(
+      `  ${s.subscriptionNumber} — ${s.customerName}${phone} — ${s.daysOverdue}d overdue (delivery: ${s.deliveryStatus}, parent: ${s.parentStatus})`,
+    );
+  }
+  textParts.push("");
+  const rows = stale
+    .map((s) => {
+      const phoneHtml = s.customerPhone
+        ? `<div><a href="tel:${escapeHtml(s.customerPhone)}" style="color:#024628">${escapeHtml(s.customerPhone)}</a></div>`
+        : "";
+      return `
+      <tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600">${escapeHtml(s.subscriptionNumber)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">
+          <div>${escapeHtml(s.customerName)}</div>
+          ${phoneHtml}
+        </td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;color:#991B1B;font-weight:600">${s.daysOverdue}d</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;color:#666">
+          delivery: ${escapeHtml(s.deliveryStatus)}<br/>parent: ${escapeHtml(s.parentStatus)}
+        </td>
+      </tr>`;
+    })
+    .join("");
+  const html = `
+      <h3 style="margin:28px 0 6px;font-size:15px;color:#991B1B">
+        Unresolved stale deliveries
+        <span style="color:#999;font-weight:400;font-size:13px"> · ${stale.length}</span>
+      </h3>
+      <p style="margin:0 0 8px;font-size:13px;color:#666">
+        More than 7 days past their date and still open. Decide by hand — the database can't tell whether the loaf actually went out.
+      </p>
+      <table style="border-collapse:collapse;width:100%;font-size:14px">
+        <tr style="text-align:left;color:#666">
+          <th style="padding:6px 10px;border-bottom:1px solid #ddd">Subscription</th>
+          <th style="padding:6px 10px;border-bottom:1px solid #ddd">Customer</th>
+          <th style="padding:6px 10px;border-bottom:1px solid #ddd">Overdue</th>
+          <th style="padding:6px 10px;border-bottom:1px solid #ddd">Status</th>
+        </tr>
+        ${rows}
+      </table>`;
+  return { html, text: textParts.join("\n") };
+}
+
 export function buildBakePlan(
   deliveryDateIso: string,
   lines: BakePlanLine[],
+  stale: StaleDeliveryLine[] = [],
 ): BakePlanEmail {
   const humanDate = formatBakeDate(deliveryDateIso);
   const orderCount = lines.filter((l) => l.kind === "order").length;
   const subCount = lines.filter((l) => l.kind === "subscription").length;
   const total = lines.length;
 
+  const staleSection = renderStaleSection(stale);
+
+  // Stale count rides in the subject line when there are unresolved rows,
+  // so the summary is visible from the inbox list without opening. Format
+  // examples:
+  //   "Bake plan for Fri, 12 Sep 2026: 6 deliveries"
+  //   "Bake plan for Fri, 12 Sep 2026: 6 deliveries · 4 stale"
+  //   "Bake plan for Fri, 12 Sep 2026: nothing scheduled · 4 stale"
+  const staleSuffix =
+    stale.length > 0 ? ` · ${stale.length} stale` : "";
   const subject =
     total === 0
-      ? `Bake plan for ${humanDate}: nothing scheduled`
-      : `Bake plan for ${humanDate}: ${total} deliver${total === 1 ? "y" : "ies"}`;
+      ? `Bake plan for ${humanDate}: nothing scheduled${staleSuffix}`
+      : `Bake plan for ${humanDate}: ${total} deliver${total === 1 ? "y" : "ies"}${staleSuffix}`;
 
   if (total === 0) {
     const html = `
-      <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1a;max-width:560px">
+      <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1a;max-width:720px">
         <p style="font-size:16px;margin:0 0 12px">
           <strong>${escapeHtml(humanDate)}</strong>
         </p>
         <p style="font-size:15px;margin:0 0 12px">
           Nothing scheduled for tomorrow — no orders, no subscription deliveries.
         </p>
-        <p style="font-size:13px;color:#666;margin:0">
+        <p style="font-size:13px;color:#666;margin:0 0 12px">
           This email is sent every evening so a silent inbox means the cron is down, not a quiet day.
         </p>
+        ${staleSection.html}
       </div>`;
-    const text = [
+    const textLines = [
       humanDate,
       "",
       "Nothing scheduled for tomorrow — no orders, no subscription deliveries.",
       "",
       "This email is sent every evening so a silent inbox means the cron is down, not a quiet day.",
-    ].join("\n");
-    return { subject, html, text };
+    ];
+    if (staleSection.text) {
+      textLines.push("", staleSection.text);
+    }
+    return { subject, html, text: textLines.join("\n") };
   }
 
   const groups = groupBySlot(lines);
@@ -203,6 +296,10 @@ export function buildBakePlan(
       textParts.push(`    ${l.address}`);
       for (const item of l.items) textParts.push(`    · ${item}`);
     }
+    textParts.push("");
+  }
+  if (staleSection.text) {
+    textParts.push(staleSection.text);
     textParts.push("");
   }
   const text = textParts.join("\n");
@@ -276,6 +373,8 @@ export function buildBakePlan(
       </table>
 
       ${groupHtml}
+
+      ${staleSection.html}
     </div>`;
 
   return { subject, html, text };

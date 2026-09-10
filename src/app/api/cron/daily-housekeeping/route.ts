@@ -17,6 +17,9 @@
 //   1. SWEEP    — mark unpaid subscription shells 'abandoned'
 //   2. DIGEST   — email the owner the orders that reached payment and stopped
 //   3. REMINDERS — email customers whose subscription is winding down
+//   4. STALE    — surface unresolved deliveries >7 days past date (READ-ONLY,
+//                 no auto-resolution; the database can't know whether the
+//                 loaf was actually delivered — Sunny decides)
 //
 // One failing phase must NEVER abort the others. The response body reports
 // each phase separately (a top-level `error` on any phase means that phase
@@ -38,6 +41,7 @@ import { Resend } from "resend";
 import { sweepAbandonedSubscriptions } from "@/lib/sweep-abandoned-subscriptions";
 import { runAbandonedPaymentsDigest } from "@/lib/cron/abandoned-payments-digest";
 import { runSubscriptionReminders } from "@/lib/cron/subscription-reminders-phase";
+import { loadStaleDeliveries } from "@/lib/cron/stale-deliveries";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -153,5 +157,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ sweep, digest, reminders });
+  // ── Phase 4: stale deliveries (READ-ONLY surface) ──────────────────────
+  // No auto-resolution. Just a listing in the response so Sunny sees the
+  // unresolved rows once a day (same list the bake-plan email carries).
+  let stale;
+  try {
+    stale = await loadStaleDeliveries(supabaseAdmin);
+  } catch (e) {
+    const message = errMessage(e);
+    console.error("[cron/daily-housekeeping:stale] threw:", message);
+    stale = { count: 0, rows: [], error: message };
+  }
+
+  return NextResponse.json({ sweep, digest, reminders, stale });
 }
