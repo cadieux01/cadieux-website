@@ -10,7 +10,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import Select from "@/components/ui/Select";
@@ -230,7 +237,19 @@ function SubscriptionsPageInner() {
     };
   }, []);
 
+  // Generation counter for `subs`. Every load() stamps its request and
+  // discards its own response if anything has touched `subs` since —
+  // either a newer load, or a local optimistic write.
+  //
+  // Without this the 10-second poll silently reverts status changes: the
+  // poll fires at t=0, Sunny changes a status at t=0.5s, the poll's
+  // response lands at t=1.6s still carrying pre-change data and overwrites
+  // the row, which then stays wrong until the NEXT poll. It looks exactly
+  // like "the status didn't save" even though the PATCH succeeded.
+  const subsGeneration = useRef(0);
+
   const load = useCallback(async () => {
+    const gen = ++subsGeneration.current;
     setError(null);
     try {
       // Always fetch every row (the dataset is small) and filter
@@ -239,12 +258,16 @@ function SubscriptionsPageInner() {
       const res = await adminFetch<{ subscriptions: AdminSubscriptionRow[] }>(
         `/api/admin/subscriptions?enrich=1`,
       );
+      if (gen !== subsGeneration.current) return;
       setSubs(res.subscriptions ?? []);
     } catch (e) {
+      if (gen !== subsGeneration.current) return;
       if (e instanceof AdminFetchError) setError(e.message);
       else if (e instanceof Error) setError(e.message);
       else setError("Could not load subscriptions.");
     } finally {
+      // Unconditional: a superseded response must still clear the initial
+      // spinner, or a load raced on mount would leave it up forever.
       setLoading(false);
     }
   }, []);
@@ -329,6 +352,10 @@ function SubscriptionsPageInner() {
     if (nextStatus === sub.status) return;
     setBusyId(sub.id);
     const prev = subs;
+    // Invalidate any load() already in flight. It was fetched BEFORE this
+    // write, so its response describes the old status and would undo the
+    // optimistic update below.
+    subsGeneration.current += 1;
     setSubs((curr) =>
       curr.map((s) => (s.id === sub.id ? { ...s, status: nextStatus } : s)),
     );
@@ -344,6 +371,8 @@ function SubscriptionsPageInner() {
       });
       void load();
     } catch (e) {
+      // Rollback is also a local write — same invalidation.
+      subsGeneration.current += 1;
       setSubs(prev);
       if (e instanceof AdminFetchError) alert(e.message);
       else alert("Update failed.");
@@ -808,14 +837,22 @@ function SubscriptionDrawer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Same race, same guard as the list above: this drawer runs its own
+  // 10-second poll, and updateDeliveryStatus writes optimistically into the
+  // state that poll overwrites.
+  const deliveriesGeneration = useRef(0);
+
   const fetchDeliveries = useCallback(async () => {
+    const gen = ++deliveriesGeneration.current;
     try {
       const r = await adminFetch<{ deliveries: AdminDeliveryRow[] }>(
         `/api/admin/subscriptions/${subscription.id}/deliveries`,
       );
+      if (gen !== deliveriesGeneration.current) return;
       setDeliveries(r.deliveries ?? []);
       setError(null);
     } catch (e) {
+      if (gen !== deliveriesGeneration.current) return;
       setError(
         e instanceof AdminFetchError ? e.message : "Failed to load deliveries.",
       );
@@ -863,6 +900,7 @@ function SubscriptionDrawer({
   const updateDeliveryStatus = async (deliveryId: string, next: string) => {
     const prev = deliveries;
     const current = prev.find((d) => d.id === deliveryId)?.status ?? null;
+    deliveriesGeneration.current += 1;
     setDeliveries((curr) =>
       curr.map((d) => (d.id === deliveryId ? { ...d, status: next } : d)),
     );
@@ -882,6 +920,7 @@ function SubscriptionDrawer({
       void fetchDeliveries();
       onChanged();
     } catch (e) {
+      deliveriesGeneration.current += 1;
       setDeliveries(prev);
       alert(
         e instanceof AdminFetchError ? e.message : "Delivery update failed.",
