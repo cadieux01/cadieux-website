@@ -620,7 +620,7 @@ export default async function SubscribeLandingPage() {
             lineHeight: 1.5,
           }}
         >
-          Want to try one loaf first? Browse{" "}
+          Prefer a one-off order? Browse{" "}
           <Link
             href={`/shop/${toUrlSlug("multigrain")}`}
             style={{
@@ -784,7 +784,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "What is the minimum?",
-    a: "Two loaves per delivery, in any combination of multigrain and plain. Frequency is up to you — a single-delivery plan is fine.",
+    a: "One loaf per delivery is enough, in any combination of multigrain and plain. Frequency is up to you — a single-delivery plan is fine.",
   },
   {
     q: "Can I edit, pause, or cancel a plan?",
