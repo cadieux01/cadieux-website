@@ -1,12 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/cron/subscription-reminders",
+      "path": "/api/cron/daily-housekeeping",
       "schedule": "30 3 * * *"
     },
     {
-      "path": "/api/cron/abandoned-payments",
-      "schedule": "45 3 * * *"
+      "path": "/api/cron/delivery-bake-plan",
+      "schedule": "30 12 * * *"
     }
   ]
 }

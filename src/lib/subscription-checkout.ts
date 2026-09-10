@@ -222,9 +222,21 @@ export async function insertMultiVariantSubscription(
   deliveryFeeInr: number,
 ): Promise<MultiVariantWriteResult> {
   // 1. Parent row.
+  // start_date is derived from the first template row (the same
+  // subscription_deliveries.delivery_date the writer inserts as sequence 1).
+  // Setting it here — not in buildMultiVariantSubscriptionInsert — keeps the
+  // two writes atomically consistent: the parent's start_date is guaranteed
+  // to equal MIN(delivery_date) of its child deliveries, and callers don't
+  // have to know the template shape to get the field right. A missing/empty
+  // template leaves start_date NULL (matches the pre-existing zero-delivery
+  // path, which is not reachable via the wizard today).
+  const rowWithStartDate = {
+    ...subInsertRow,
+    start_date: deliveryTemplate[0]?.delivery_date ?? null,
+  };
   const { data: sub, error: subErr } = await supabase
     .from("subscriptions")
-    .insert(subInsertRow)
+    .insert(rowWithStartDate)
     .select("id")
     .single();
 
