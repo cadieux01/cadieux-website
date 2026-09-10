@@ -35,6 +35,7 @@ import { geocodePincode } from "@/lib/geocode";
 import { internalJsonHeaders } from "@/lib/internal-secret";
 import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
 import { getPreorderMode } from "@/lib/preorderMode";
+import { queueOrderNotification } from "@/lib/order-notification";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -328,6 +329,10 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+
+  // COD → the order is real the moment it is inserted, so alert now.
+  // Never awaited; see lib/order-notification.ts.
+  queueOrderNotification(order.id, "created");
 
   // Proximity match → log an area suggestion so admin can promote it
   // to a formal Areas We Serve entry. Best-effort.

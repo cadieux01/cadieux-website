@@ -26,6 +26,7 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { getVerifiedPhone, isValidMobileAppKey } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
+import { queueOrderNotification } from "@/lib/order-notification";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -230,6 +231,11 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+
+  // Money has arrived — alert now. Races /api/razorpay-webhook for the same
+  // payment; UNIQUE(order_id, event) on order_notifications_sent decides which
+  // one actually sends.
+  queueOrderNotification(order.id, "paid");
 
   return NextResponse.json({ ok: true, order_id: order.id });
 }

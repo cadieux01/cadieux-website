@@ -14,6 +14,7 @@ import { recordAuditEvent } from "@/lib/audit-log";
 import { internalJsonHeaders } from "@/lib/internal-secret";
 import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
 import { maskPhone } from "@/lib/phone-cookie";
+import { queueOrderNotification } from "@/lib/order-notification";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://www.cadieux.in";
@@ -239,6 +240,11 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+
+  // Admin-registered orders are always payment_method 'cod' (cash-collected
+  // even when marked paid on the spot), so they alert on creation like any
+  // other COD order. Never awaited; see lib/order-notification.ts.
+  queueOrderNotification(order.id, "created");
 
   void recordAuditEvent({
     req,

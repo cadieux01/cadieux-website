@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
+import { queueOrderNotification } from "@/lib/order-notification";
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -130,6 +132,12 @@ export async function POST(req: NextRequest) {
       })
       .eq("id", order.id)
       .neq("payment_status", "paid");
+
+    // Money has arrived — alert now. Races /api/verify-payment for the same
+    // payment; UNIQUE(order_id, event) on order_notifications_sent decides
+    // which one actually sends.
+    queueOrderNotification(order.id, "paid");
+
     return NextResponse.json({ ok: true });
   }
 

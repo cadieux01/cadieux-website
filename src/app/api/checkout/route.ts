@@ -18,6 +18,7 @@ import {
   logProximitySuggestion,
 } from "@/lib/order-checkout";
 import { getPreorderMode } from "@/lib/preorderMode";
+import { queueOrderNotification } from "@/lib/order-notification";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 import { UNPAID_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import {
@@ -296,6 +297,10 @@ export async function POST(req: NextRequest) {
 
     // Proximity match → log an area suggestion (best-effort, non-blocking).
     logProximitySuggestion(supabaseAdmin, prepared);
+
+    // COD → the order is real the moment it is inserted, so alert now.
+    // Never awaited; see lib/order-notification.ts.
+    queueOrderNotification(order.id, "created");
 
     const res = NextResponse.json({
       order_id: order.id,

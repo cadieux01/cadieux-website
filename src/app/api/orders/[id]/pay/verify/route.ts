@@ -28,6 +28,7 @@ import {
   rollPhoneCookieOnWebRequest,
 } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
+import { queueOrderNotification } from "@/lib/order-notification";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -195,6 +196,13 @@ export async function POST(
     console.error("[orders/pay/verify] mark-paid failed:", updErr.message);
     return NextResponse.json({ error: "Failed to mark order paid" }, { status: 500 });
   }
+
+  // "Pay Now": a COD order that has just been paid online. It ALREADY sent a
+  // 'created' alert, and this second one is the point — without it someone
+  // turns up to collect cash for an order that is already settled. The email
+  // reads "Payment received", not "New order", because the instruction to the
+  // reader is different.
+  queueOrderNotification(order.id, "paid");
 
   const res = NextResponse.json({ ok: true, order_id: order.id });
   rollPhoneCookieOnWebRequest(req, res);

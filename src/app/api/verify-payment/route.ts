@@ -20,6 +20,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
+import { queueOrderNotification } from "@/lib/order-notification";
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -159,6 +161,12 @@ export async function POST(req: NextRequest) {
     console.error("[verify-payment] mark-paid failed:", updErr.message);
     return NextResponse.json({ error: "Failed to mark order paid" }, { status: 500 });
   }
+
+  // Money has arrived — alert now, not at insert time. This route races
+  // /api/razorpay-webhook for the same payment and neither checks its UPDATE's
+  // affected-row count, so both get here; UNIQUE(order_id, event) on
+  // order_notifications_sent decides which one actually sends.
+  queueOrderNotification(order.id, "paid");
 
   return NextResponse.json({ ok: true, order_id: order.id });
 }
