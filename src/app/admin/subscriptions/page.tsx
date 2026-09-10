@@ -286,9 +286,24 @@ function SubscriptionsPageInner() {
   }, [load]);
 
   // 10s polling — same cadence as the legacy admin dashboard.
+  //
+  // Skipped while the tab is hidden. A backgrounded board was still firing a
+  // full round trip to Tokyo every 10 seconds forever, and nobody was looking
+  // at the result. Returning to the tab refetches immediately, so pausing
+  // never leaves a human staring at stale data.
   useEffect(() => {
-    const t = setInterval(() => void load(), 10_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void load();
+    }, 10_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   const [drawerId, setDrawerId] = useState<string | null>(null);

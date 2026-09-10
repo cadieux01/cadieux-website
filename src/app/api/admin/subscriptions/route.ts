@@ -70,11 +70,50 @@ export async function GET(req: NextRequest) {
   // customer actually signed up with is still on the subscriptions row.
   // Read the snapshot instead if you need booking-time truth.
   const customerIds = Array.from(new Set(subs.map((s) => s.customer_id)));
-  const { data: customers } = await supabaseAdmin
-    .from("customers")
-    .select("id, full_name, phone, city")
-    .in("id", customerIds);
-  const cmap = new Map((customers ?? []).map((c) => [c.id, c]));
+  const subIds = subs.map((s) => s.id);
+
+  // These four depend only on the subscription list, never on each other, so
+  // they go out together. Awaiting them one at a time cost four sequential
+  // round trips to Supabase (ap-northeast-1) from the function region — about
+  // 0.2s each, repeated by the board's 10-second poll. The queries themselves
+  // execute in well under a millisecond; the wire was the whole cost.
+  //
+  // `null` for the enrich-only queries keeps the tuple shape fixed so the
+  // destructure below stays type-safe.
+  const [customersRes, deliveriesRes, itemsRes, addressesRes] =
+    await Promise.all([
+      supabaseAdmin
+        .from("customers")
+        .select("id, full_name, phone, city")
+        .in("id", customerIds),
+      enrich
+        ? supabaseAdmin
+            .from("subscription_deliveries")
+            .select(
+              "subscription_id, delivery_date, scheduled_date, scheduled_time_slot, slot, sequence, week_number, status",
+            )
+            .in("subscription_id", subIds)
+        : null,
+      enrich
+        ? supabaseAdmin
+            .from("subscription_items")
+            .select(
+              "subscription_id, product_slug, product_name, quantity_per_delivery",
+            )
+            .in("subscription_id", subIds)
+            .order("created_at", { ascending: true })
+        : null,
+      enrich
+        ? supabaseAdmin
+            .from("addresses")
+            .select(
+              "customer_id, line1, pincode, is_default, latitude, longitude",
+            )
+            .in("customer_id", customerIds)
+        : null,
+    ]);
+
+  const cmap = new Map((customersRes.data ?? []).map((c) => [c.id, c]));
 
   let derivedById: Map<string, DerivedSub> | null = null;
   // subscription_id → per-variant lines. The board shows "Multigrain 1,
@@ -88,19 +127,10 @@ export async function GET(req: NextRequest) {
     { latitude: number; longitude: number }
   >();
   if (enrich) {
-    const subIds = subs.map((s) => s.id);
-    const { data: deliveries } = await supabaseAdmin
-      .from("subscription_deliveries")
-      .select(
-        "subscription_id, delivery_date, scheduled_date, scheduled_time_slot, slot, sequence, week_number, status",
-      )
-      .in("subscription_id", subIds);
+    const deliveries = deliveriesRes?.data;
+    const items = itemsRes?.data;
+    const addresses = addressesRes?.data;
 
-    const { data: items } = await supabaseAdmin
-      .from("subscription_items")
-      .select("subscription_id, product_slug, product_name, quantity_per_delivery")
-      .in("subscription_id", subIds)
-      .order("created_at", { ascending: true });
     for (const it of items ?? []) {
       const list = itemsBySub.get(it.subscription_id) ?? [];
       list.push({
@@ -122,10 +152,6 @@ export async function GET(req: NextRequest) {
     );
 
     // Saved addresses for these customers, grouped for coordinate matching.
-    const { data: addresses } = await supabaseAdmin
-      .from("addresses")
-      .select("customer_id, line1, pincode, is_default, latitude, longitude")
-      .in("customer_id", customerIds);
     const addrByCustomer = new Map<string, AddressCoordRow[]>();
     for (const a of addresses ?? []) {
       const list = addrByCustomer.get(a.customer_id) ?? [];
