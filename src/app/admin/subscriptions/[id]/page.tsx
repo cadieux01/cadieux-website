@@ -62,6 +62,7 @@ import {
   type SubscriptionMoney,
 } from "@/lib/subscription-money";
 import { DAY_LABEL } from "@/lib/subscription-ui";
+import { isOrphanedPayment } from "@/lib/subscription-visibility";
 
 type DetailResponse = {
   subscription: AdminSubscriptionRow;
@@ -351,6 +352,20 @@ export default function AdminSubscriptionDetailPage({
 
   // Prepaid subscriptions settle the whole plan up front, so "paid" is all
   // or nothing — there is no partial-payment path to model.
+  //
+  // BUT 'paid_orphaned' IS NEITHER. The money arrived after the subscription
+  // had already been written off, so we are holding the full amount against a
+  // plan nobody will fulfil. Feeding it through the arithmetic below produces
+  // paid ₹0 / outstanding ₹<total> — i.e. the screen says the customer still
+  // owes us money we are in fact sitting on. Do not "fix" that by adding
+  // 'paid_orphaned' to the test on the next line either: that reads as
+  // outstanding ₹0, which claims the plan is settled when nothing is
+  // scheduled. Both numbers are lies because the Paid/Outstanding frame only
+  // describes a subscription being fulfilled.
+  //
+  // So the orphan case does not use these values at all — the payment block
+  // below swaps the whole pair out for a single honest statement. These two
+  // remain correct for every other status.
   const paidAmount =
     sub.payment_status === "paid" ? (money.storedTotal ?? 0) : 0;
   const outstanding =
@@ -739,11 +754,31 @@ export default function AdminSubscriptionDetailPage({
             }
           />
           <KeyVal k="Status" v={humanise(sub.payment_status)} />
-          <KeyVal k="Paid" v={formatINR(paidAmount)} />
-          <div className="kv-row" style={grandRow}>
-            <span style={keyStyle}>Outstanding</span>
-            <span style={valStyle}>{formatINR(outstanding)}</span>
-          </div>
+          {isOrphanedPayment(sub) ? (
+            /* No Paid/Outstanding pair here — see the note above paidAmount.
+               One statement of what is true: we have the money, and nothing
+               is scheduled against it. The sub-line names the only two ways
+               out, because this row sits still until a human picks one. */
+            <div className="kv-row" style={grandRow}>
+              <span style={keyStyle}>Payment held</span>
+              <span style={valStyle}>
+                <span style={{ color: "#F59E0B" }}>
+                  {formatINR(money.storedTotal)} received · nothing scheduled
+                </span>
+                <span style={orphanSubLine}>
+                  Refund, or reinstate with fresh dates.
+                </span>
+              </span>
+            </div>
+          ) : (
+            <>
+              <KeyVal k="Paid" v={formatINR(paidAmount)} />
+              <div className="kv-row" style={grandRow}>
+                <span style={keyStyle}>Outstanding</span>
+                <span style={valStyle}>{formatINR(outstanding)}</span>
+              </div>
+            </>
+          )}
         </Block>
       </div>
 
@@ -934,6 +969,16 @@ const fallbackNote: React.CSSProperties = {
   lineHeight: 1.45,
   color: "rgba(251,243,212,0.6)",
   margin: "0.75rem 0 0",
+};
+
+// Sits under the "Payment held" value. Block so it drops to its own line
+// inside the right-aligned value cell rather than running on from the amount.
+const orphanSubLine: React.CSSProperties = {
+  display: "block",
+  marginTop: "0.25rem",
+  fontSize: "0.8125rem",
+  lineHeight: 1.45,
+  color: "rgba(251,243,212,0.6)",
 };
 
 const grandRow: React.CSSProperties = {
