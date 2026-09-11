@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone, maskPhone } from "@/lib/phone-cookie";
 import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { UNPAID_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
+import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
     .from("subscriptions")
     .select("*")
     .or(orParts.join(","))
-    .not("payment_status", "in", UNPAID_SUBSCRIPTION_FILTER)
+    .not("payment_status", "in", HIDDEN_SUBSCRIPTION_FILTER)
     .order("created_at", { ascending: false });
 
   if (error) {

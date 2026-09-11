@@ -75,6 +75,7 @@ import {
   formatStatusLabel,
   subscriptionStatusRank,
 } from "@/lib/admin-shared";
+import { isOrphanedPayment } from "@/lib/subscription-visibility";
 
 type FilterValue =
   | "all"
@@ -676,6 +677,28 @@ function SubscriptionsPageInner() {
                       <div style={{ marginTop: 4 }}>
                         <StatusBadge status={s.status} />
                       </div>
+                      {/* An orphan's `status` is untouched — it still reads
+                          "Pending confirmation", which is exactly how it
+                          would slip past a skim. The money is only visible
+                          in payment_status, so surface it here explicitly
+                          and say what it needs, not just what it is. */}
+                      {isOrphanedPayment(s) ? (
+                        <div style={{ marginTop: 6 }}>
+                          <StatusBadge status="paid_orphaned" />
+                          <div
+                            style={{
+                              marginTop: 4,
+                              color: "#F59E0B",
+                              fontSize: "0.875rem",
+                              lineHeight: 1.5,
+                              maxWidth: 260,
+                            }}
+                          >
+                            Payment received, nothing scheduled — your
+                            decision: refund, or restart on fresh dates.
+                          </div>
+                        </div>
+                      ) : null}
                     </td>
                     <td style={td} data-label="Actions">
                       <div className="flex flex-wrap gap-2">
@@ -1131,12 +1154,49 @@ function SubscriptionDrawer({
               onChange={(v) => void updatePaymentStatus(v)}
               ariaLabel="Payment status"
               style={drawerSelect}
-              options={SUBSCRIPTION_PAYMENT_STATUSES.map((opt) => ({
-                value: opt,
-                label: formatStatusLabel(opt),
-              }))}
+              options={[
+                ...SUBSCRIPTION_PAYMENT_STATUSES.map((opt) => ({
+                  value: opt,
+                  label: formatStatusLabel(opt),
+                })),
+                // 'paid_orphaned' is written by the verify path, never chosen
+                // here — the PATCH route rejects it — but the row still has to
+                // render its own value or the control would come up blank and
+                // the one state that needs attention would look like no state
+                // at all. Resolving it means picking Refunded or Paid, which
+                // are already in the list above.
+                ...(subscription.payment_status &&
+                !(
+                  SUBSCRIPTION_PAYMENT_STATUSES as readonly string[]
+                ).includes(subscription.payment_status)
+                  ? [
+                      {
+                        value: subscription.payment_status,
+                        label: formatStatusLabel(subscription.payment_status),
+                      },
+                    ]
+                  : []),
+              ]}
             />
           </div>
+          {isOrphanedPayment(subscription) ? (
+            <div
+              style={{
+                border: "1px solid rgba(245,158,11,0.6)",
+                borderRadius: 4,
+                padding: "10px 12px",
+                color: "#F59E0B",
+                fontSize: "0.9375rem",
+                lineHeight: 1.6,
+              }}
+            >
+              Payment received, nothing scheduled — your decision. This money
+              arrived after the subscription had already been written off, so
+              the deliveries are cancelled and no dates are booked. Call the
+              customer, then either refund in full or restart the plan on
+              fresh dates.
+            </div>
+          ) : null}
           <div
             style={{
               display: "flex",

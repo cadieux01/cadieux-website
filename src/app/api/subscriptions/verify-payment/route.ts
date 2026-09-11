@@ -9,6 +9,14 @@
 //
 // The whole verification chain lives in @/lib/subscription-payment so the
 // website and the mobile app cannot drift apart.
+//
+// One failure the caller must branch on specifically:
+//   HTTP 409 { code: "subscription_orphaned", error: <copy>, subscription_id }
+// The money WAS captured, but it arrived after the sweeper had written the
+// subscription off, so nothing is scheduled. It is a failure (not `success`)
+// on purpose — a client branching only on the success flag must land on the
+// fail-safe side. /subscriptions/setup/payment renders `error` verbatim and
+// suppresses the retry path; anything else that calls this must do the same.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -33,7 +41,12 @@ export async function POST(req: NextRequest) {
 
   if (!result.ok) {
     return NextResponse.json(
-      { error: result.error, code: result.code },
+      {
+        error: result.error,
+        code: result.code,
+        // Present only on the orphaned branch, where the row DOES exist.
+        subscription_id: result.subscription_id,
+      },
       { status: result.status },
     );
   }

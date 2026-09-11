@@ -41,6 +41,15 @@ const COLOR_BY_STATUS: Record<string, { fg: string; border: string }> = {
   paid: { fg: "#FBF3D4", border: "rgba(251,243,212,0.5)" },
   failed: { fg: "#EF4444", border: "rgba(239,68,68,0.5)" },
   refunded: { fg: "#FBF3D4", border: "rgba(251,243,212,0.5)" },
+  // Money captured against a subscription the sweeper had already written
+  // off — we are holding cash for bread nobody is scheduled to bake.
+  //
+  // Amber, not red: red on this board means "this went wrong, it is over"
+  // (cancelled / failed). This one is neither wrong nor over — the payment
+  // succeeded and the row is waiting on a human decision (refund, or restart
+  // on fresh dates). It needs to be impossible to skim past, and equally
+  // impossible to mistake for a failure, so it gets its own hue.
+  paid_orphaned: { fg: "#F59E0B", border: "rgba(245,158,11,0.6)" },
 };
 
 export function StatusBadge({ status }: { status: string | null | undefined }) {

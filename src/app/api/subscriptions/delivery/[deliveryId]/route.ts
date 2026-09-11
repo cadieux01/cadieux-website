@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
-import { isUnpaidSubscription } from "@/lib/subscription-visibility";
+import { isHiddenSubscription } from "@/lib/subscription-visibility";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -56,7 +56,7 @@ export async function GET(
     .select("*")
     .eq("id", delivery.subscription_id)
     .maybeSingle();
-  if (!sub || isUnpaidSubscription(sub)) {
+  if (!sub || isHiddenSubscription(sub)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

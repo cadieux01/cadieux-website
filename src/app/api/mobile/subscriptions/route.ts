@@ -40,7 +40,7 @@ import {
   type DayKey,
 } from "@/lib/subscription-dates";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
-import { UNPAID_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
+import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import { getPreorderMode } from "@/lib/preorderMode";
 import {
   isValidSlotValue,
@@ -594,7 +594,7 @@ export async function GET(req: NextRequest) {
       "id, status, bread_name, product_name, bread_price, total_amount, weeks, days, start_date, created_at, customer_name, customer_address",
     )
     .eq("customer_id", customer.id)
-    .not("payment_status", "in", UNPAID_SUBSCRIPTION_FILTER)
+    .not("payment_status", "in", HIDDEN_SUBSCRIPTION_FILTER)
     .order("created_at", { ascending: false })
     .limit(50);
   if (subsErr) {

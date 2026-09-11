@@ -14,6 +14,20 @@
 //
 // The verification chain itself lives in @/lib/subscription-payment so the
 // website and the app cannot drift apart.
+//
+// RESPONSE CONTRACT THE APP MUST HANDLE SPECIFICALLY
+//   { ok: false, code: "subscription_orphaned", error: <copy>, subscription_id }
+// with HTTP 409. The money WAS captured, but it landed after the sweeper had
+// already written the subscription off, so nothing is scheduled.
+//
+// `ok` is false on purpose: any client that branches only on `ok` then gets the
+// fail-safe outcome (an alarmed customer who calls us) rather than the unsafe
+// one (a customer told "confirmed" who waits for bread nobody is baking).
+//
+// The app must NOT show its generic payment-failure copy for this code, and
+// must NOT offer a retry — the customer has already paid. Render `error`
+// verbatim; it is ORPHANED_PAYMENT_MESSAGE and already carries the callback
+// promise, the don't-pay-again instruction and the phone number.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -92,7 +106,14 @@ export async function POST(req: NextRequest) {
 
   if (!result.ok) {
     return NextResponse.json(
-      { ok: false, error: result.error, code: result.code },
+      {
+        ok: false,
+        error: result.error,
+        code: result.code,
+        // Present only on the orphaned branch, where the row DOES exist and
+        // the app may want to deep-link support to it.
+        subscription_id: result.subscription_id,
+      },
       { status: result.status },
     );
   }

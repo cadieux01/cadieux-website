@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
-import { isUnpaidSubscription } from "@/lib/subscription-visibility";
+import { isHiddenSubscription } from "@/lib/subscription-visibility";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,7 +61,7 @@ export async function GET(
   }
   if (!sub) return fail(404, "Not found");
   // Unpaid shell (Razorpay sheet abandoned) — not a subscription yet.
-  if (isUnpaidSubscription(sub)) return fail(404, "Not found");
+  if (isHiddenSubscription(sub)) return fail(404, "Not found");
 
   // Deliveries + change-requests in parallel for minimal latency.
   const [deliveriesRes, changeRequestsRes] = await Promise.all([

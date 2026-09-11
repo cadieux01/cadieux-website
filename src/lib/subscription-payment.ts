@@ -1,8 +1,14 @@
 // Razorpay plumbing for PREPAID subscriptions.
 //
 // Subscriptions are prepaid-only — the whole plan is paid up front before
-// the first delivery. There is no COD path (enforced in code here and by
-// the `subscriptions_no_cod` CHECK constraint in the DB).
+// the first delivery. There is no COD path. Enforced in code here AND in the
+// database by the BEFORE INSERT trigger `tg_subscriptions_assert_not_cod` on
+// public.subscriptions, which raises
+// 'Subscriptions are prepaid; payment_method must not be cod'.
+//
+// Note for anyone verifying that claim: it is a TRIGGER, not a CHECK
+// constraint, so `pg_constraint` comes back empty for it. Query `pg_trigger`
+// as well before concluding the database is unprotected.
 //
 // Mirrors the one-time order pair /api/create-order + /api/verify-payment
 // exactly: the row is inserted with payment_status='created' and the
@@ -14,6 +20,8 @@ import crypto from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { toPaise } from "@/lib/subscription-delivery-fee";
+import { ADMIN_PHONE } from "@/lib/delivery-slots";
+import { queueOrphanedPaymentAlert } from "@/lib/orphaned-payment-alert";
 
 export type RazorpayOrder = {
   id: string;
@@ -100,9 +108,33 @@ export type VerifyInput = {
   razorpay_signature: string;
 };
 
+/**
+ * Customer-facing copy for a payment that landed after the subscription was
+ * already written off. Exported so the website and the app say exactly the
+ * same thing — this is the one message where drift would be expensive.
+ *
+ * It must do five things: confirm the money arrived (it did), state plainly
+ * that nothing is scheduled, commit to a callback, stop them paying twice, and
+ * give them a number so they are never stuck waiting on us to call first.
+ *
+ * ADMIN_PHONE is the single NAP-consistent number used everywhere else on the
+ * site — do not inline a literal here.
+ */
+export const ORPHANED_PAYMENT_MESSAGE =
+  `Your payment went through — thank you. This subscription had already ` +
+  `expired before the payment reached us, so nothing is scheduled yet. ` +
+  `We'll call you within 24 hours to restart it or refund you in full. ` +
+  `Please don't pay again. If you'd rather not wait, call us at ${ADMIN_PHONE}.`;
+
 export type VerifyResult =
   | { ok: true; subscription_id: string; already?: true }
-  | { ok: false; status: number; error: string; code?: string };
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      code?: string;
+      subscription_id?: string;
+    };
 
 /**
  * Verify a subscription payment and mark it paid.
@@ -160,7 +192,12 @@ export async function verifySubscriptionPayment(
   // 2. Bind the razorpay order to OUR row.
   let query = supabase
     .from("subscriptions")
-    .select("id, total_amount, razorpay_order_id, payment_status, customer_id")
+    // subscription_number / customer_name / customer_phone are read only so
+    // the orphan alert below can identify the row and the human to call
+    // without a second round trip on the unhappy path.
+    .select(
+      "id, total_amount, razorpay_order_id, payment_status, customer_id, subscription_number, customer_name, customer_phone",
+    )
     .eq("id", subscription_id);
   if (scope?.customer_id) query = query.eq("customer_id", scope.customer_id);
 
@@ -188,6 +225,29 @@ export async function verifySubscriptionPayment(
 
   if (sub.payment_status === "paid") {
     return { ok: true, subscription_id: sub.id as string, already: true };
+  }
+
+  // Already orphaned — this is a RETRY of a verify we have already recorded.
+  //
+  // This return is load-bearing, not defensive padding. Without it the row is
+  // no longer 'abandoned', so the orphan guard below would not fire, and the
+  // final mark-paid update would: its CAS is only `.neq(payment_status,
+  // 'paid')`, which 'paid_orphaned' satisfies. A single refresh or an app
+  // retry would silently launder an orphan into an ordinary paid subscription
+  // whose deliveries are all cancelled — precisely the failure this guard
+  // exists to prevent, reintroduced through the back door.
+  //
+  // Returns the same 409 as the first attempt so the customer sees the same
+  // copy, but does NOT re-write the row and does NOT re-ring the doorbell:
+  // one orphan is one email, however many times the client retries.
+  if (sub.payment_status === "paid_orphaned") {
+    return {
+      ok: false,
+      status: 409,
+      error: ORPHANED_PAYMENT_MESSAGE,
+      code: "subscription_orphaned",
+      subscription_id: sub.id as string,
+    };
   }
 
   // 3. Independently confirm capture + amount with Razorpay.
@@ -228,6 +288,101 @@ export async function verifySubscriptionPayment(
       status: 400,
       error: "Payment not captured.",
       code: "not_captured",
+    };
+  }
+
+  // ── Orphan guard ────────────────────────────────────────────────────────
+  //
+  // The payment is real and captured — but the sweeper already wrote this row
+  // off as 'abandoned' and CASCADED its deliveries to 'cancelled' (see
+  // @/lib/sweep-abandoned-subscriptions). Marking it plainly 'paid' here would
+  // produce a subscription that looks active and has nothing to deliver:
+  // money taken, bread not baked, and nothing surfacing it.
+  //
+  // We do NOT restore the deliveries. Their dates are very likely in the past
+  // by now, and reinstating them would manufacture bake commitments Sunny
+  // never agreed to. We do NOT auto-refund either — the customer may well
+  // prefer their bread on new dates. That decision is his, not the code's.
+  //
+  // So: record the money against the row in a state that cannot be mistaken
+  // for an activation, tell him, and stop.
+  //
+  // This is the backstop for payments landing AFTER the reconcile window.
+  // Reconcile-before-abandon catches the common case earlier and turns those
+  // into ordinary paid subscriptions; the two cover different time ranges of
+  // the same failure and must not be collapsed into one another.
+  if (sub.payment_status === "abandoned") {
+    // Compare-and-swap on 'abandoned' so a concurrent writer (a reconcile run
+    // rescuing the same row) cannot be clobbered — whoever lands first wins.
+    const { data: orphaned, error: orphanErr } = await supabase
+      .from("subscriptions")
+      .update({
+        payment_status: "paid_orphaned",
+        payment_method: "razorpay",
+        razorpay_payment_id,
+        paid_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        // `status` is deliberately NOT written — it stays pending_confirmation.
+        // `reconciled_at` is deliberately NOT written — that column means
+        // "auto-rescued, now a normal subscription", which is the opposite of
+        // this. Confusing the two would hide an orphan inside the rescue path.
+      })
+      .eq("id", sub.id)
+      .eq("payment_status", "abandoned")
+      .select("id");
+
+    if (orphanErr) {
+      console.error("[subscription verify] orphan record failed:", orphanErr.message);
+      return { ok: false, status: 500, error: "Failed to record payment" };
+    }
+
+    // Zero rows means the CAS lost — something else moved the row between our
+    // read and this write. Re-read rather than guess which state it landed in.
+    if (!orphaned || orphaned.length === 0) {
+      const { data: fresh } = await supabase
+        .from("subscriptions")
+        .select("payment_status")
+        .eq("id", sub.id)
+        .maybeSingle();
+      if (fresh?.payment_status === "paid") {
+        return { ok: true, subscription_id: sub.id as string, already: true };
+      }
+      console.warn("[subscription verify] orphan CAS lost", {
+        subscription_id: sub.id,
+        now: fresh?.payment_status,
+      });
+    } else {
+      console.warn("[subscription verify] ORPHANED PAYMENT", {
+        subscription_id: sub.id,
+        razorpay_payment_id,
+        amount: sub.total_amount,
+      });
+      // Doorbell only. The durable surfaces are the row's own status on the
+      // admin board and the daily orphaned-payments phase.
+      queueOrphanedPaymentAlert({
+        id: sub.id as string,
+        subscription_number: sub.subscription_number as string | null,
+        customer_name: sub.customer_name as string | null,
+        customer_phone: sub.customer_phone as string | null,
+        total_amount: sub.total_amount as number | null,
+        razorpay_payment_id,
+        razorpay_order_id,
+      });
+    }
+
+    // ok:false ON PURPOSE, even though the payment succeeded.
+    //
+    // Any client that checks only `ok` then gets the fail-safe default. With
+    // ok:true a naive caller would tell the customer "confirmed" and they
+    // would wait for bread that is never coming. With ok:false the worst case
+    // is an alarmed customer who phones us — recoverable. Clients that know
+    // this code render ORPHANED_PAYMENT_MESSAGE instead of a generic failure.
+    return {
+      ok: false,
+      status: 409,
+      error: ORPHANED_PAYMENT_MESSAGE,
+      code: "subscription_orphaned",
+      subscription_id: sub.id as string,
     };
   }
 

@@ -11,7 +11,7 @@ import {
   type AddressCoordRow,
 } from "@/lib/subscription-coordinates";
 import type { AdminSubscriptionItem } from "@/lib/admin-shared";
-import { UNPAID_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
+import { ADMIN_HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
 const ALLOWED_FILTERS = new Set([
   "all",
@@ -41,7 +41,12 @@ export async function GET(req: NextRequest) {
     .select("*")
     // Unpaid shells (row written, Razorpay sheet never completed) must not
     // reach the fulfilment floor — bread gets set aside for them otherwise.
-    .not("payment_status", "in", UNPAID_SUBSCRIPTION_FILTER)
+    //
+    // The ADMIN_ set deliberately does NOT hide 'paid_orphaned'. This board is
+    // the durable surface for a payment that landed after the sweep: the alert
+    // email is only a doorbell and can be eaten by a bad Resend day. An orphan
+    // must be sitting here waiting whether or not that email ever arrived.
+    .not("payment_status", "in", ADMIN_HIDDEN_SUBSCRIPTION_FILTER)
     .order("created_at", { ascending: false });
 
   if (filter !== "all") {

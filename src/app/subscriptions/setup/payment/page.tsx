@@ -352,6 +352,25 @@ export default function PaymentPage() {
           }),
         });
         const vd = await vr.json().catch(() => ({}));
+        // The payment landed against a subscription the sweeper had already
+        // written off. The server returns ok:false on purpose — a naive client
+        // must never say "confirmed" here — but this is NOT the generic
+        // "couldn't confirm it" failure, and telling them it will "be
+        // reconciled shortly" would be a lie: nothing is scheduled and only
+        // Sunny can decide refund-vs-restart. Key on the code, show the
+        // server's own copy, and kill the reuse handle so a retry cannot
+        // reopen the sheet and charge them a second time.
+        if (vd.code === "subscription_orphaned") {
+          pendingRef.current = null;
+          clearSetupState();
+          setError(
+            typeof vd.error === "string" && vd.error
+              ? vd.error
+              : "Your payment went through, but this subscription had already expired. We'll call you within 24 hours. Please don't pay again.",
+          );
+          setSubmitting(false);
+          return;
+        }
         if (!vr.ok || !vd.success) {
           setError(
             "We received your payment but couldn't confirm it automatically. " +

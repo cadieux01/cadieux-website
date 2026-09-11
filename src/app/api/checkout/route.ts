@@ -20,7 +20,7 @@ import {
 import { getPreorderMode } from "@/lib/preorderMode";
 import { queueOrderNotification } from "@/lib/order-notification";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
-import { UNPAID_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
+import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import {
   buildMultiVariantSubscriptionInsert,
   insertMultiVariantSubscription,
@@ -185,7 +185,7 @@ export async function GET(req: NextRequest) {
         "id, product_name, total_amount, status, created_at, customer_address, customer_city",
       )
       .or(subOr)
-      .not("payment_status", "in", UNPAID_SUBSCRIPTION_FILTER)
+      .not("payment_status", "in", HIDDEN_SUBSCRIPTION_FILTER)
       .order("created_at", { ascending: false }),
   ]);
 
