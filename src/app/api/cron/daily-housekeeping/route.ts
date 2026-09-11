@@ -95,13 +95,27 @@ export async function GET(req: NextRequest) {
   const resend = resendKey ? new Resend(resendKey) : null;
 
   // ── Phase 1: sweep ─────────────────────────────────────────────────────
+  // Resend is passed in so the sweeper can alert on rows Razorpay confirms
+  // were paid but the app never verified. The sweep itself still runs when
+  // resend is null — the alert just gets logged instead of sent.
   let sweep;
   try {
-    sweep = await sweepAbandonedSubscriptions(supabaseAdmin);
+    sweep = await sweepAbandonedSubscriptions(supabaseAdmin, {
+      resend,
+      fromEmail: FROM_EMAIL,
+      alertEmails: ALERT_EMAILS,
+    });
   } catch (e) {
     const message = errMessage(e);
     console.error("[cron/daily-housekeeping:sweep] threw:", message);
-    sweep = { swept: 0, deliveriesCancelled: 0, cutoff: "", error: message };
+    sweep = {
+      swept: 0,
+      reconciled: 0,
+      deliveriesCancelled: 0,
+      skipped: 0,
+      cutoff: "",
+      error: message,
+    };
   }
 
   // ── Phase 2: abandoned-payments digest ─────────────────────────────────
