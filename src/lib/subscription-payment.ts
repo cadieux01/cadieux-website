@@ -231,11 +231,13 @@ export async function verifySubscriptionPayment(
   //
   // This return is load-bearing, not defensive padding. Without it the row is
   // no longer 'abandoned', so the orphan guard below would not fire, and the
-  // final mark-paid update would: its CAS is only `.neq(payment_status,
-  // 'paid')`, which 'paid_orphaned' satisfies. A single refresh or an app
-  // retry would silently launder an orphan into an ordinary paid subscription
-  // whose deliveries are all cancelled — precisely the failure this guard
-  // exists to prevent, reintroduced through the back door.
+  // final mark-paid update would launder an orphan into an ordinary paid
+  // subscription whose deliveries are all cancelled — precisely the failure
+  // that guard exists to prevent, reintroduced through the back door.
+  //
+  // It also keeps the mark-paid CAS honest: that CAS pins `payment_status` to
+  // the value read above, so without this return it would match on
+  // 'paid_orphaned' and overwrite it.
   //
   // Returns the same 409 as the first attempt so the customer sees the same
   // copy, but does NOT re-write the row and does NOT re-ring the doorbell:
@@ -389,7 +391,20 @@ export async function verifySubscriptionPayment(
   // Verified. Only the payment fields move — `status` stays whatever the
   // creation path set (pending_confirmation) so the existing admin
   // confirm-then-activate workflow is unchanged by prepayment.
-  const { error: updErr } = await supabase
+  //
+  // The CAS is `.eq(payment_status, <what we read>)`, NOT `.neq(…, 'paid')`.
+  // `.neq` only refused to re-pay an already-paid row; it happily wrote 'paid'
+  // over ANY other value, including an 'abandoned' the sweeper set in the
+  // window between our read at the top of this function and this write. That
+  // produced the exact orphan the guard above exists to catch, except invisible
+  // to it — the guard tested a value that was already stale. Pinning the CAS to
+  // the value we actually read means a row that moved underneath us matches
+  // zero rows instead of being overwritten.
+  //
+  // Safe against the idempotent retry: 'paid' and 'paid_orphaned' both return
+  // early above, so `sub.payment_status` here is a pre-payment value and this
+  // update can never re-stamp paid_at on a row that was already settled.
+  const { data: marked, error: updErr } = await supabase
     .from("subscriptions")
     .update({
       payment_status: "paid",
@@ -398,10 +413,78 @@ export async function verifySubscriptionPayment(
       paid_at: new Date().toISOString(),
     })
     .eq("id", sub.id)
-    .neq("payment_status", "paid");
+    .eq("payment_status", sub.payment_status)
+    .select("id");
   if (updErr) {
     console.error("[subscription verify] mark-paid failed:", updErr.message);
     return { ok: false, status: 500, error: "Failed to mark subscription paid" };
+  }
+
+  // Zero rows means the CAS lost. Returning ok:true here would be the worst
+  // outcome in this file: we would tell the customer their subscription is
+  // live while the row says otherwise. Re-read and route on what it became.
+  if (!marked || marked.length === 0) {
+    const { data: fresh } = await supabase
+      .from("subscriptions")
+      .select("payment_status")
+      .eq("id", sub.id)
+      .maybeSingle();
+
+    // Another writer got there first with the same conclusion.
+    if (fresh?.payment_status === "paid") {
+      return { ok: true, subscription_id: sub.id as string, already: true };
+    }
+    if (fresh?.payment_status === "paid_orphaned") {
+      return {
+        ok: false,
+        status: 409,
+        error: ORPHANED_PAYMENT_MESSAGE,
+        code: "subscription_orphaned",
+        subscription_id: sub.id as string,
+      };
+    }
+
+    // Anything else — in practice 'abandoned', the sweeper landing inside our
+    // window. Money is real, deliveries are cancelled: same situation as the
+    // guard above, reached a few milliseconds later. Record it the same way so
+    // it lands on the admin board instead of only in a log line.
+    console.warn("[subscription verify] mark-paid CAS lost", {
+      subscription_id: sub.id,
+      read: sub.payment_status,
+      now: fresh?.payment_status,
+    });
+    const { error: lateErr } = await supabase
+      .from("subscriptions")
+      .update({
+        payment_status: "paid_orphaned",
+        payment_method: "razorpay",
+        razorpay_payment_id,
+        paid_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        // `reconciled_at` stays NULL — see the guard above.
+      })
+      .eq("id", sub.id)
+      .eq("payment_status", fresh?.payment_status ?? "");
+    if (lateErr) {
+      console.error("[subscription verify] late orphan record failed:", lateErr.message);
+      return { ok: false, status: 500, error: "Failed to record payment" };
+    }
+    queueOrphanedPaymentAlert({
+      id: sub.id as string,
+      subscription_number: sub.subscription_number as string | null,
+      customer_name: sub.customer_name as string | null,
+      customer_phone: sub.customer_phone as string | null,
+      total_amount: sub.total_amount as number | null,
+      razorpay_payment_id,
+      razorpay_order_id,
+    });
+    return {
+      ok: false,
+      status: 409,
+      error: ORPHANED_PAYMENT_MESSAGE,
+      code: "subscription_orphaned",
+      subscription_id: sub.id as string,
+    };
   }
 
   return { ok: true, subscription_id: sub.id as string };

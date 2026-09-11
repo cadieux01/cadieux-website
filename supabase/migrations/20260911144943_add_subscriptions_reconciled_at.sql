@@ -11,12 +11,22 @@
 -- Rows written by the sweeper are indistinguishable in `payment_status`
 -- from rows written by the normal verify path. This column IS the
 -- distinction: NOT NULL means "we, the sweeper, found this ourselves".
--- The mobile payment-status endpoint reads it to tell the app whether to
--- show the ordinary "paid, live" state or the special "we have your
--- payment, someone will confirm" state.
+--
+-- IT IS A SUCCESS MARKER, AND NOTHING ELSE READS IT.
+-- A reconciled row is a live subscription with live deliveries. It must never
+-- be used as evidence that a payment is unscheduled or orphaned — that state
+-- has its own payment_status value, 'paid_orphaned'. An earlier draft of the
+-- mobile payment-status endpoint derived "orphaned" from
+-- `payment_status='paid' AND reconciled_at IS NOT NULL`, which inverted the
+-- two and would have told a rescued customer we were holding their money.
 --
 -- Nullable + additive. No backfill needed — every existing row was written
 -- by the verify path.
+--
+-- ALREADY APPLIED to the live database, recorded there as
+-- 20260911144943 add_subscriptions_reconciled_at (applied via MCP, so the
+-- recorded version differs from this filename). `if not exists` keeps this
+-- file a harmless no-op for anyone who runs it.
 
 alter table public.subscriptions
   add column if not exists reconciled_at timestamptz;
