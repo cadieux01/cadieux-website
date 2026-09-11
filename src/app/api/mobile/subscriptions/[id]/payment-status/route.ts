@@ -16,13 +16,23 @@
 // A tiny enum. No delivery list, no address, no total — just enough to
 // decide which UI to show:
 //
-//   paid          — normal paid state (verify path). Show live subscription.
-//   paid_orphaned — Razorpay took the money, the app never called verify,
-//                   the sweeper found it. Show "we have your payment,
-//                   someone from our team will confirm your schedule".
-//                   Distinct copy from `paid` on purpose — no confirmation
-//                   email was sent, the customer has no other signal that
-//                   the money went through.
+//   paid          — paid and scheduled. Show live subscription. This covers
+//                   BOTH the normal verify path and a row the sweeper
+//                   rescued (reconciled_at set) — a rescue is a success, the
+//                   deliveries are intact, so it is plain `paid`.
+//   paid_orphaned — we are holding money and NOTHING is scheduled: the
+//                   payment landed after the sweeper had already written the
+//                   row off and cancelled its deliveries. Show "we have your
+//                   payment, nothing is scheduled, our team will call you".
+//                   Keyed on payment_status = 'paid_orphaned' ONLY.
+//
+//                   NOT keyed on reconciled_at. reconciled_at means the
+//                   sweeper RESCUED this row — a success marker. An earlier
+//                   draft derived this enum from
+//                   `payment_status='paid' AND reconciled_at IS NOT NULL`,
+//                   which inverted the two: it would have told a customer
+//                   whose subscription was successfully rescued that we were
+//                   sitting on their money with nothing scheduled.
 //   created       — still resumable. App re-opens Razorpay checkout with
 //                   the stored razorpay_order_id.
 //   abandoned     — sweeper confirmed with Razorpay that no payment was
@@ -104,9 +114,13 @@ export async function GET(
   }
   if (!customer) return respond("not_found");
 
+  // reconciled_at is deliberately NOT selected. It is a SUCCESS marker (the
+  // sweeper rescued this row) and must never be read as evidence of an
+  // orphan. Selecting it here is how it would get re-wired into the test
+  // below by the next person to touch this file.
   const { data: sub, error: subErr } = await supabaseAdmin
     .from("subscriptions")
-    .select("id, payment_status, reconciled_at")
+    .select("id, payment_status")
     .eq("id", params.id)
     .eq("customer_id", customer.id)
     .maybeSingle();
@@ -120,15 +134,15 @@ export async function GET(
   if (!sub) return respond("not_found");
 
   const paymentStatus = String(sub.payment_status ?? "");
-  const reconciledAt = sub.reconciled_at as string | null;
 
-  if (paymentStatus === "paid") {
-    // reconciled_at IS NOT NULL is the sweeper's fingerprint — Razorpay
-    // took the money but the app never called verify, so the customer
-    // never got the normal confirmation flow. The app shows a distinct
-    // "we have your payment, we'll confirm" message.
-    return respond(reconciledAt ? "paid_orphaned" : "paid");
-  }
+  // 'paid' means paid, whether the app verified it or the sweeper rescued it.
+  // A rescued row IS a live subscription with live deliveries, so it must
+  // report `paid`.
+  if (paymentStatus === "paid") return respond("paid");
+  // The orphan test is the status VALUE and nothing else. 'paid_orphaned' is
+  // written only by the verify path, when money landed on a row the sweeper
+  // had already written off: we hold the money and nothing is scheduled.
+  if (paymentStatus === "paid_orphaned") return respond("paid_orphaned");
   if (paymentStatus === "created") return respond("created");
   if (paymentStatus === "abandoned") return respond("abandoned");
 
