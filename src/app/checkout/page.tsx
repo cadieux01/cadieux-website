@@ -337,6 +337,32 @@ export default function CheckoutPage() {
   // page instead of the order confirmation.
   const orderFinishingRef = useRef(false);
 
+  // Retry cache for online-payment attempts. When a UPI/Razorpay attempt
+  // fails or the customer dismisses the modal, a second click of Pay must
+  // NOT create a second orders row and a second Razorpay order — that's
+  // the OLF-inflation defect that showed up as paired rows in the DB
+  // (stalled `created` + a fresh `paid` sibling 12–80s later, different
+  // OLF numbers, unlinked). Populated after a successful /api/create-order
+  // and reused on the next attempt if the fingerprint of the current
+  // cart/address/date/slot/fulfillment still matches. Any change to any
+  // of those fields flips the fingerprint and forces a new order — the
+  // server remains the amount source of truth, this is purely a client
+  // guard against a same-tab retry storm.
+  // Cleared ONLY when /api/verify-payment confirms the row is paid.
+  // NOT cleared on modal dismiss or payment.failed — those are exactly
+  // the paths that must reuse. In-session only: a hard reload wipes the
+  // ref, and that first post-reload attempt does fall back to a fresh
+  // create-order (which is fine — observed duplicates were all same-tab).
+  const openOnlineOrderRef = useRef<{
+    db_order_id: string;
+    razorpay_order_id: string;
+    amount: number;  // paise, server-confirmed
+    // The OLF number of the reused row. Cached so a retry sends SMS/WhatsApp
+    // quoting the SAME number the customer is paying against, not a new one.
+    order_number: string | null;
+    fingerprint: string;
+  } | null>(null);
+
   // Bounce empty cart back to /cart to avoid placing zero-item orders.
   useEffect(() => {
     if (orderFinishingRef.current) return;
@@ -1164,64 +1190,118 @@ export default function CheckoutPage() {
     setOrderLoading(true); setError("");
     const { fullAddress, customerPhone, customerName } = resolveOrderIdentity();
     try {
-      // Create the Razorpay order AND the pending DB order row in one call.
-      // The server re-derives the authoritative grand total from the cart;
-      // `total` here is only a hint it compares against.
-      const res = await fetch("/api/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer_id: customer?.id,
-          delivery_address: fullAddress,
-          pincode: fullAddress.match(/(\d{6})\s*$/)?.[1] ?? "",
-          delivery_date: deliveryDate,
-          delivery_slot: deliverySlot,
-          total_amount: total,
-          items: orderItems,
-          ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
-          // Pickup fields — server branches on fulfillment_type and uses
-          // pickup_location_id to synthesize the authoritative address +
-          // zero out the delivery fee. Razorpay amount is server-derived
-          // from the pickup subtotal (no delivery fee), so `serverAmount`
-          // returned below already reflects the ₹0 fee.
-          ...(isPickup
-            ? { fulfillment_type: "pickup", pickup_location_id: pickupLocationId }
-            : {}),
-        }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({})) as { error?: string; code?: string };
-        if (errData.code === "distance_unserviceable") {
-          setError(errData.error ?? "We don't deliver beyond 20 km yet.");
-          setStep("address");
-        } else if (errData.code === "pincode_unserviceable") {
-          setUnserviceableAtPayment(true);
-          setError(
-            errData.error ??
-              "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
-          );
-        } else if (errData.code === "price_mismatch") {
-          setError(errData.error ?? "Price mismatch — please refresh and retry.");
-        } else if (errData.code === "address_required") {
-          setError(errData.error ?? "Please add a delivery address to continue.");
-          setFormMode("fresh");
-          setStep("address");
-        } else {
-          setError(`Online payment unavailable. Please use ${fallbackLabel}.`);
+      // Fingerprint of the exact order the customer is about to pay for.
+      // If the previous attempt against the SAME inputs left an unpaid
+      // orders row + Razorpay order, we reopen Checkout against it rather
+      // than minting a second pair. Cart mutations, address edits, or a
+      // re-quoted delivery fee all move the fingerprint, so a legitimate
+      // "different order" always gets a fresh create-order.
+      const itemsForFp = orderItems
+        .map((i) => `${i.slug}:${i.kind}:${i.quantity}:${i.line_total_inr}`)
+        .sort()
+        .join("|");
+      const currentFingerprint = [
+        customer?.id ?? "",
+        fullAddress,
+        deliveryDate,
+        deliverySlot,
+        isPickup ? "pickup" : "delivery",
+        isPickup ? (pickupLocationId ?? "") : "",
+        grandTotal.toFixed(2),
+        itemsForFp,
+      ].join("§");
+      const reusable =
+        openOnlineOrderRef.current &&
+        openOnlineOrderRef.current.fingerprint === currentFingerprint
+          ? openOnlineOrderRef.current
+          : null;
+
+      let db_order_id: string;
+      let order_number: string | null | undefined;
+      let razorpay_order_id: string;
+      let serverAmount: number;
+
+      if (reusable) {
+        // Same cart/address/date/slot as the previous attempt in this
+        // session — reopen Razorpay Checkout against the existing row and
+        // the existing razorpay_order_id. No new orders row, no new OLF
+        // number, no new Razorpay order. This is the whole point of the
+        // ref: prior to this, every click of Pay minted a new pair.
+        db_order_id = reusable.db_order_id;
+        razorpay_order_id = reusable.razorpay_order_id;
+        serverAmount = reusable.amount;
+        order_number = reusable.order_number;
+      } else {
+        // Create the Razorpay order AND the pending DB order row in one call.
+        // The server re-derives the authoritative grand total from the cart;
+        // `total` here is only a hint it compares against.
+        const res = await fetch("/api/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customer_id: customer?.id,
+            delivery_address: fullAddress,
+            pincode: fullAddress.match(/(\d{6})\s*$/)?.[1] ?? "",
+            delivery_date: deliveryDate,
+            delivery_slot: deliverySlot,
+            total_amount: total,
+            items: orderItems,
+            ...(orderLat !== null && orderLng !== null ? { latitude: orderLat, longitude: orderLng } : {}),
+            // Pickup fields — server branches on fulfillment_type and uses
+            // pickup_location_id to synthesize the authoritative address +
+            // zero out the delivery fee. Razorpay amount is server-derived
+            // from the pickup subtotal (no delivery fee), so `serverAmount`
+            // returned below already reflects the ₹0 fee.
+            ...(isPickup
+              ? { fulfillment_type: "pickup", pickup_location_id: pickupLocationId }
+              : {}),
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({})) as { error?: string; code?: string };
+          if (errData.code === "distance_unserviceable") {
+            setError(errData.error ?? "We don't deliver beyond 20 km yet.");
+            setStep("address");
+          } else if (errData.code === "pincode_unserviceable") {
+            setUnserviceableAtPayment(true);
+            setError(
+              errData.error ??
+                "We don't deliver to this pincode yet. Send us a request and we'll get in touch.",
+            );
+          } else if (errData.code === "price_mismatch") {
+            setError(errData.error ?? "Price mismatch — please refresh and retry.");
+          } else if (errData.code === "address_required") {
+            setError(errData.error ?? "Please add a delivery address to continue.");
+            setFormMode("fresh");
+            setStep("address");
+          } else {
+            setError(`Online payment unavailable. Please use ${fallbackLabel}.`);
+          }
+          return;
         }
-        return;
+        const parsed = await res.json() as {
+          db_order_id: string;
+          order_number?: string | null;
+          razorpay_order_id: string;
+          amount: number;
+        };
+        db_order_id = parsed.db_order_id;
+        order_number = parsed.order_number;
+        razorpay_order_id = parsed.razorpay_order_id;
+        serverAmount = parsed.amount;
+        // Stash the pending pair. A same-tab retry against the same
+        // fingerprint (payment.failed / modal dismiss / UPI PSP timeout →
+        // customer clicks Pay again) will now reuse THIS row and avoid a
+        // duplicate. Ref is cleared only when verify-payment confirms
+        // paid (see the handler below).
+        openOnlineOrderRef.current = {
+          db_order_id,
+          razorpay_order_id,
+          amount: serverAmount,
+          order_number: order_number ?? null,
+          fingerprint: currentFingerprint,
+        };
       }
-      const {
-        db_order_id,
-        order_number,
-        razorpay_order_id,
-        amount: serverAmount,
-      } = await res.json() as {
-        db_order_id: string;
-        order_number?: string | null;
-        razorpay_order_id: string;
-        amount: number;
-      };
 
       const loaded = await new Promise<boolean>((resolve) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1261,15 +1341,35 @@ export default function CheckoutPage() {
               razorpay_signature: response.razorpay_signature,
             }),
           });
-          const d = await r.json().catch(() => ({}));
+          const d = await r.json().catch(() => ({})) as { ok?: boolean; code?: string };
           setOrderLoading(false);
           if (!r.ok || !d.ok) {
-            setError(
-              "We received your payment but couldn't confirm it automatically. " +
-              "Don't worry — it'll be reconciled shortly. Contact support if your order doesn't appear.",
-            );
+            // Split by /api/verify-payment's error `code`. The previous
+            // single-branch copy told the customer "we received your
+            // payment" for BOTH the genuine reconcile-me class (network
+            // drop, 500) AND the not_captured class where Razorpay's own
+            // API says the payment did not settle. In that second case
+            // we do not have their money and telling them we do sends
+            // them looking for an order that doesn't exist.
+            if (d?.code === "not_captured") {
+              setError(
+                `Your payment didn't go through. If your bank debited you, it will be reversed automatically — usually within 3-5 working days. Please try again or use ${fallbackLabel}.`,
+              );
+            } else if (d?.code === "signature_invalid" || d?.code === "order_mismatch") {
+              setError(
+                `We couldn't verify this payment. Please try again or use ${fallbackLabel}.`,
+              );
+            } else {
+              setError(
+                "We received your payment but couldn't confirm it automatically. " +
+                "Don't worry — it'll be reconciled shortly. Contact support if your order doesn't appear.",
+              );
+            }
             return;
           }
+          // Verified paid — invalidate the retry cache so no later click
+          // of Pay reopens Checkout against a now-settled row.
+          openOnlineOrderRef.current = null;
           if (db_order_id) {
             sendOrderSMS(db_order_id, fullAddress, customerPhone, customerName, order_number);
             sendOrderWhatsApp(db_order_id, fullAddress, customerPhone, customerName, order_number);
