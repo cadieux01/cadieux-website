@@ -36,6 +36,12 @@ import {
   PHONE_COOKIE_NAME,
   PHONE_COOKIE_TTL_MS,
 } from "@/lib/phone-cookie";
+import {
+  allowedOrFailOpen,
+  getClientIP,
+  orderPhoneRateLimit,
+  orderRateLimit,
+} from "@/lib/ratelimit";
 
 // Server-only admin client (service role, bypasses RLS).
 const supabaseAdmin = createClient(
@@ -46,6 +52,22 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+
+  // Per-IP cap. This route had none, and 29 of the 34 orders the 13 Sep probe
+  // created came through it rather than the COD path.
+  const ipUnderLimit = await allowedOrFailOpen(
+    orderRateLimit,
+    `create-order:${getClientIP(req)}`,
+  );
+  if (!ipUnderLimit) {
+    return NextResponse.json(
+      {
+        error: "Too many attempts. Please wait a few minutes and try again.",
+        code: "rate_limited",
+      },
+      { status: 429 },
+    );
+  }
 
   const key = process.env.RAZORPAY_KEY_ID;
   const secret = process.env.RAZORPAY_KEY_SECRET;
@@ -67,6 +89,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(prep.body, { status: prep.status });
   }
   const prepared = prep.data;
+
+  // Per-phone cap, checked after prepare (read-only) and before we create
+  // anything at Razorpay or in the orders table. Shares the `order:` key with
+  // the COD path so the two together get one 5/hour budget, not two.
+  const phoneUnderLimit = await allowedOrFailOpen(
+    orderPhoneRateLimit,
+    `order:${normalizePhone(prepared.custPhone ?? "unknown")}`,
+  );
+  if (!phoneUnderLimit) {
+    return NextResponse.json(
+      {
+        error: "Too many orders from this number. Please wait and try again.",
+        code: "rate_limited",
+      },
+      { status: 429 },
+    );
+  }
 
   const amount = Math.round(prepared.grandTotal * 100); // paise, integer
 

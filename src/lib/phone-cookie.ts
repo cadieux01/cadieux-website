@@ -124,6 +124,25 @@ export function normalizePhone(raw: string): string {
   return `+${digits}`;
 }
 
+/** True when `raw` is a plausible Indian mobile number.
+ *
+ *  TRAI allocates mobile numbers as exactly ten digits opening 6-9; 0-5 are
+ *  landline trunk prefixes and service codes. Accepts an optional +91 / 91
+ *  country prefix so the same helper works on both the E.164 form the OTP
+ *  cookie carries and the bare ten digits the checkout body sends.
+ *
+ *  This exists because normalizePhone() above only *reformats* — it will
+ *  happily turn "1000000000" into "+911000000000". Every write path that
+ *  accepts a phone from a request body has to validate as well as normalise.
+ */
+export function isValidIndianMobile(raw: string | null | undefined): boolean {
+  if (raw === null || raw === undefined) return false;
+  const digits = String(raw).replace(/\D/g, "");
+  const local =
+    digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
+  return /^[6-9]\d{9}$/.test(local);
+}
+
 /** Mask all but the last 4 digits of a phone for safe logging.
  *  "+919989153747" → "+91*******3747", "9876543210" → "******3210" */
 export function maskPhone(raw: string | null | undefined): string {

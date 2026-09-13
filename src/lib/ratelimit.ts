@@ -22,6 +22,24 @@ export const orderRateLimit = new Ratelimit({
   prefix: "ratelimit:order",
 });
 
+// Orders: 5 per phone per hour, as a second axis on order creation.
+//
+// IP alone is not enough (a script can rotate egress) and phone alone is not
+// enough (a script can rotate numbers), so both are checked and either can
+// reject.
+//
+// Why 5 and not something tighter: a customer whose Razorpay payment fails
+// re-enters /api/create-order on every retry, and each retry spends quota.
+// Three would lock out a real buyer on their fourth attempt. The 13 Sep probe
+// ran ~14 creates/hour, so 5 stops it with room to spare while leaving genuine
+// payment retries alone.
+export const orderPhoneRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, "1 h"),
+  analytics: true,
+  prefix: "ratelimit:order:phone",
+});
+
 // Reviews: 3 per IP per day
 export const reviewRateLimit = new Ratelimit({
   redis,
@@ -140,6 +158,27 @@ export const adminWhatsappSendRateLimit = new Ratelimit({
   analytics: true,
   prefix: "ratelimit:admin:wa-send",
 });
+
+/**
+ * `limit()` that never throws.
+ *
+ * Upstash is a network dependency. On the create paths a thrown error would
+ * become a 500 and take checkout down for everyone, which is a far worse
+ * outcome than letting abuse through for the duration of the outage — so an
+ * unreachable limiter fails OPEN and logs.
+ */
+export async function allowedOrFailOpen(
+  limiter: Ratelimit,
+  key: string
+): Promise<boolean> {
+  try {
+    const { success } = await limiter.limit(key);
+    return success;
+  } catch (err) {
+    console.error("⚠️  rate-limit check failed, allowing request:", key, err);
+    return true;
+  }
+}
 
 // Helper to get IP from request
 export function getClientIP(req: Request): string {

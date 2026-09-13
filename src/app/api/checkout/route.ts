@@ -2,13 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   getVerifiedPhone,
+  isValidIndianMobile,
   normalizePhone,
   maskPhone,
   signPhoneCookie,
   PHONE_COOKIE_NAME,
   PHONE_COOKIE_TTL_MS,
 } from "@/lib/phone-cookie";
-import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import {
+  allowedOrFailOpen,
+  apiRateLimit,
+  getClientIP,
+  orderPhoneRateLimit,
+  orderRateLimit,
+} from "@/lib/ratelimit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
 import { isValidSlotValue, validateBookingSlot } from "@/lib/delivery-slots";
@@ -213,10 +220,44 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
 
+  // Per-IP cap on every mutating action on this route. The GET above has had
+  // an apiRateLimit call since it was written, but POST — the half that
+  // actually creates customers, orders and subscriptions — had none, so the
+  // 13 Sep probe was free to run ~14 creates an hour against it.
+  const ipUnderLimit = await allowedOrFailOpen(
+    orderRateLimit,
+    `checkout:${getClientIP(req)}`
+  );
+  if (!ipUnderLimit) {
+    return NextResponse.json(
+      {
+        error: "Too many attempts. Please wait a few minutes and try again.",
+        code: "rate_limited",
+      },
+      { status: 429 }
+    );
+  }
+
   if (body.action === "save_customer") {
     const { full_name, phone, delivery_address, city } = body;
     if (!phone || !full_name || !delivery_address) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    }
+
+    // This is the ONLY place a phone number enters the system from a request
+    // body — every order and subscription downstream resolves the number from
+    // the customer row rather than the payload. It had no format check at all,
+    // which is how the 13 Sep probe minted customers on "1000000000" and
+    // "5550003760" without ever touching the OTP flow.
+    if (!isValidIndianMobile(phone)) {
+      return NextResponse.json(
+        {
+          error: "Enter a valid 10-digit Indian mobile number.",
+          code: "invalid_phone",
+          field: "phone",
+        },
+        { status: 400 }
+      );
     }
 
     const { data: existing } = await supabaseAdmin
@@ -275,6 +316,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(prep.body, { status: prep.status });
     }
     const prepared = prep.data;
+
+    // Per-phone cap, checked after prepare (which only reads) and before the
+    // insert, so it costs no extra query — prepare has already resolved the
+    // customer's number. The key is deliberately NOT namespaced by payment
+    // method: /api/create-order uses the same one, so COD and Razorpay share a
+    // single 5/hour budget rather than handing a script 10.
+    const phoneUnderLimit = await allowedOrFailOpen(
+      orderPhoneRateLimit,
+      `order:${normalizePhone(prepared.custPhone ?? "unknown")}`
+    );
+    if (!phoneUnderLimit) {
+      return NextResponse.json(
+        {
+          error: "Too many orders from this number. Please wait and try again.",
+          code: "rate_limited",
+        },
+        { status: 429 }
+      );
+    }
 
     const { data: order, error } = await supabaseAdmin
       .from("orders")
@@ -387,6 +447,37 @@ export async function POST(req: NextRequest) {
 
     if (!cust) {
       return NextResponse.json({ error: "Saved address not found." }, { status: 400 });
+    }
+
+    // Same second-layer check as prepareOneTimeOrder: a customer row minted
+    // before save_customer validated phone format must not be able to open a
+    // subscription either.
+    if (!isValidIndianMobile(cust.phone)) {
+      console.warn("⚠️  place_subscription rejected: invalid customer phone", {
+        customer_id,
+        cust_phone: maskPhone(cust.phone),
+      });
+      return NextResponse.json(
+        {
+          error: "This account has an invalid phone number. Please contact us.",
+          code: "invalid_phone",
+        },
+        { status: 400 },
+      );
+    }
+
+    const subPhoneUnderLimit = await allowedOrFailOpen(
+      orderPhoneRateLimit,
+      `sub:${normalizePhone(cust.phone)}`,
+    );
+    if (!subPhoneUnderLimit) {
+      return NextResponse.json(
+        {
+          error: "Too many attempts from this number. Please wait and try again.",
+          code: "rate_limited",
+        },
+        { status: 429 },
+      );
     }
 
     const verifiedPhone = verified?.phone ?? normalizePhone(cust.phone);

@@ -10,7 +10,12 @@
 
 import { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  isValidIndianMobile,
+  maskPhone,
+  normalizePhone,
+} from "@/lib/phone-cookie";
 import {
   DELIVERY_FEE_INR,
   reconcileWebPrices,
@@ -359,6 +364,27 @@ export async function prepareOneTimeOrder(
   if (!cust) {
     return { ok: false, status: 401, body: { error: "Phone verification required." } };
   }
+
+  // Reject an order whose resolved customer phone is not a real Indian
+  // mobile. Validating only at customer-create would not be enough: the
+  // 13 Sep probe kept placing orders against a junk customer row it had
+  // already minted, so the number has to be re-checked at order time for
+  // as long as any such row exists.
+  if (!isValidIndianMobile(cust.phone)) {
+    console.warn("⚠️  place_order rejected: invalid customer phone", {
+      customer_id,
+      cust_phone: maskPhone(cust.phone),
+    });
+    return {
+      ok: false,
+      status: 400,
+      body: {
+        error: "This account has an invalid phone number. Please contact us.",
+        code: "invalid_phone",
+      },
+    };
+  }
+
   const effectiveVerifiedPhone = verified?.phone ?? normalizePhone(cust.phone);
   if (normalizePhone(cust.phone) !== effectiveVerifiedPhone) {
     console.warn("⚠️  place_order phone mismatch", {
