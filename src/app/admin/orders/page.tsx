@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { EditOrderPanel } from "@/components/admin/EditOrderPanel";
 import {
   DateRangeDropdown,
   resolvePreset,
@@ -332,6 +333,7 @@ function OrdersPageInner() {
   }, [load]);
 
   const [editing, setEditing] = useState<AdminOrderRow | null>(null);
+  const [orderEditing, setOrderEditing] = useState<AdminOrderRow | null>(null);
   const [scheduling, setScheduling] = useState<AdminOrderRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const showNotice = useCallback((m: string) => {
@@ -826,6 +828,18 @@ function OrdersPageInner() {
         />
       ) : null}
 
+      {orderEditing ? (
+        <EditOrderPanel
+          order={orderEditing}
+          onCancel={() => setOrderEditing(null)}
+          onSaved={(msg) => {
+            setOrderEditing(null);
+            showNotice(msg);
+            void load();
+          }}
+        />
+      ) : null}
+
       {scheduling ? (
         <SchedulePreorderModal
           order={scheduling}
@@ -1262,8 +1276,18 @@ function OrdersPageInner() {
                           disabled={busy}
                           onClick={() => setEditing(o)}
                           style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
+                          title="Edit customer name/phone/city/address"
                         >
-                          Edit
+                          Customer
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setOrderEditing(o)}
+                          style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
+                          title="Edit delivery date, slot, items, fee, address, location"
+                        >
+                          Order
                         </button>
                         <Link
                           href={`/admin/orders/${o.id}/print`}

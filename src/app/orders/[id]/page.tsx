@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
+import { OrderUpdatesStrip } from "@/components/OrderUpdatesStrip";
 import { ShareButton } from "@/components/ShareButton";
 import {
   STAGE_LABEL,
@@ -705,6 +706,11 @@ export default function OrderDetailPage() {
                 onChanged={fetchOrder}
               />
             </Section>
+
+            {/* Customer-visible edit trail. Renders nothing until an
+                admin has actually made a change on this order — the
+                strip returns null on empty. */}
+            <OrderUpdatesStrip orderId={id} />
 
             {/* Items */}
             <Section title="Items">

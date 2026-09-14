@@ -20,6 +20,7 @@
 import { useState } from "react";
 
 import { formatOrderNumber } from "@/lib/order-number";
+import { mapsLinkFor } from "@/lib/order-share-message";
 
 const CREAM = "#FBF3D4";
 const BORDER = "rgba(251,243,212,0.35)";
@@ -65,7 +66,11 @@ export function OrderLocationActions({
     );
   }
 
-  const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+  // Single URL builder — mapsLinkFor is the canonical helper (see
+  // src/lib/order-share-message.ts). Address is empty here because the
+  // guard above already required numeric coords, so mapsLinkFor takes
+  // the pinned-coords branch.
+  const mapsUrl = mapsLinkFor("", latitude, longitude);
   const shortId = formatOrderNumber({ id: orderId, order_number: orderNumber });
   const waText = `Cadieux delivery location for order ${shortId}: ${mapsUrl}`;
   const waUrl = `https://wa.me/?text=${encodeURIComponent(waText)}`;

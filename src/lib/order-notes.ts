@@ -14,9 +14,12 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type NoteKind = "note" | "call";
+// 'edit' rows are written exclusively by the admin_edit_order RPC and
+// carry customer_visible=true — they are the record the customer sees
+// on their /orders/[id] page. 'note' and 'call' remain internal.
+export type NoteKind = "note" | "call" | "edit";
 
-export const NOTE_KINDS: readonly NoteKind[] = ["note", "call"] as const;
+export const NOTE_KINDS: readonly NoteKind[] = ["note", "call", "edit"] as const;
 
 export const NOTE_BODY_MIN = 1;
 export const NOTE_BODY_MAX = 1000;
@@ -29,6 +32,8 @@ export type OrderNoteRow = {
   body: string;
   author: string | null;
   created_at: string;
+  customer_visible?: boolean;
+  meta?: unknown;
 };
 
 export type OwnerRef =
@@ -68,6 +73,10 @@ export function normalizeAuthor(raw: unknown): string | null {
 }
 
 export function normalizeKind(raw: unknown): NoteKind {
+  // 'edit' is deliberately NOT reachable from the public POST endpoint —
+  // edit rows only originate from the admin_edit_order RPC, which
+  // writes them directly. So the POST body can only produce 'call' or
+  // 'note'; a hostile 'edit' payload silently coerces to 'note'.
   return raw === "call" ? "call" : "note";
 }
 
