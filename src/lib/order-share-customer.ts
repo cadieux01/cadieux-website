@@ -2,7 +2,7 @@
 // THEIR OWN order:
 //
 //   Anuradha Vaddi
-//   OLS412
+//   OLF412
 //   9848489677
 //   Plain x1
 //   7 Sep, 6 - 10 AM
@@ -27,7 +27,7 @@
 // bread line is a bread line in both and "2 loaves" can never appear in
 // either.
 //
-// THE REFERENCE IS order_number (OLS<n>) as of 2026-09-14. It replaced
+// THE REFERENCE IS order_number (OLF<n>) as of 2026-09-14. It replaced
 // public_ref here along with every other customer surface — deliberately,
 // with the volume disclosure understood and accepted. See the decision note
 // in @/lib/order-number for who decided and why.

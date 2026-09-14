@@ -61,7 +61,7 @@ export async function GET(
   if (!customer) return fail(404, "Not found");
 
   // ----- 3. Order (scoped to this customer) -----
-  // `order_number` (OLS<n>) is the customer-facing number the app renders
+  // `order_number` (OLF<n>) is the customer-facing number the app renders
   // as of 2026-09-14 — see src/lib/order-number.ts. `public_ref` stays
   // projected for older installed builds that still read it.
   const { data: order, error: orderErr } = await supabaseAdmin

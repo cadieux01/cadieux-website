@@ -17,7 +17,7 @@
 export type OrderPlacedInput = {
   name: string | null | undefined;
   orderId: string;
-  /** Customer-facing order number (`orders.order_number`, e.g. 'OLS412').
+  /** Customer-facing order number (`orders.order_number`, e.g. 'OLF412').
    *  This was `public_ref` until 2026-09-14 — see the decision note in
    *  @/lib/order-number. Falls back to a UUID slice if somehow absent. */
   orderNumber?: string | null;
@@ -30,7 +30,7 @@ export type OrderPlacedInput = {
 };
 
 /** UUID-based tracker URL. `/orders/[id]` route param is the raw UUID.
- *  DO NOT substitute the OLS number here — the page would not resolve it,
+ *  DO NOT substitute the OLF number here — the page would not resolve it,
  *  and adding a resolver would make the sequence walkable. The number the
  *  customer READS changed on 2026-09-14; the key the URL uses did not. */
 export function orderTrackingUrl(siteUrl: string, orderId: string): string {

@@ -37,9 +37,9 @@ type SmsPayload = {
   name?: string;
   type: "order_placed" | "status_change" | "customer_edit";
   orderId?: string;
-  /** Customer-facing order number (`orders.order_number`, e.g. 'OLS412').
+  /** Customer-facing order number (`orders.order_number`, e.g. 'OLF412').
    *  The field name finally matches what it carries: as of 2026-09-14 this
-   *  is the OLS number, not public_ref. See @/lib/order-number. */
+   *  is the OLF number, not public_ref. See @/lib/order-number. */
   orderNumber?: string;
   total?: number;
   address?: string;

@@ -28,7 +28,7 @@ export type OrderChangeRequestRow = {
   resolved_at: string | null;
   order: {
     id: string;
-    /** OLS number — the customer-facing order number since 2026-09-14.
+    /** OLF number — the customer-facing order number since 2026-09-14.
      *  See the decision note in src/lib/order-number.ts. */
     order_number?: string | null;
     /** Legacy CX- reference. Retained, no longer displayed. */
@@ -60,7 +60,7 @@ export type SubscriptionChangeRequestRow = {
 
 export type PaymentRow = {
   order_id: string;
-  /** OLS number — the customer-facing order number since 2026-09-14.
+  /** OLF number — the customer-facing order number since 2026-09-14.
    *  See the decision note in src/lib/order-number.ts. */
   order_number?: string | null;
   /** Legacy CX- reference. Retained, no longer displayed. */

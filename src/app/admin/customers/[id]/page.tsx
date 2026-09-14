@@ -36,7 +36,7 @@ type CustomerDetail = {
 
 type OrderRow = {
   id: string;
-  /** DB-trigger-assigned OLS number. Null on legacy pre-trigger rows. */
+  /** DB-trigger-assigned OLF number. Null on legacy pre-trigger rows. */
   order_number?: string | null;
   total_amount: number | null;
   status: string | null;

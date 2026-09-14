@@ -17,7 +17,7 @@
 
 /** One deliverable line — same shape for orders and subscription rows. */
 export interface BakePlanLine {
-  /** "OLS56" for an order, "SLF12" for a subscription, etc. — printable ref for the human. */
+  /** "OLF56" for an order, "OLS12" for a subscription, etc. — printable ref for the human. */
   ref: string;
   /** "order" | "subscription" — used for the section label only. */
   kind: "order" | "subscription";

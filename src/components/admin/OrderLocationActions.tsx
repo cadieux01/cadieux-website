@@ -36,7 +36,7 @@ export function OrderLocationActions({
   longitude: number | null | undefined;
   /** Short order id used in the WhatsApp prefill text. */
   orderId: string;
-  /** Human-facing order number (OLS…). Preferred over id-slice fallback. */
+  /** Human-facing order number (OLF…). Preferred over id-slice fallback. */
   orderNumber?: string | null;
   /** When inside a clickable row, swallow the click. Matches ContactActions. */
   stopPropagation?: boolean;

@@ -42,7 +42,7 @@ type OrderItem = {
 
 type Order = {
   id: string;
-  /** OLS number — the customer-facing order number since 2026-09-14.
+  /** OLF number — the customer-facing order number since 2026-09-14.
    *  See the decision note in src/lib/order-number.ts. */
   order_number?: string | null;
   /** Legacy CX- reference. Still sent, no longer displayed; a customer
@@ -380,7 +380,7 @@ export default function OrderDetailPage() {
     0,
   );
 
-  // The OLS number is the customer-facing order number as of 2026-09-14 —
+  // The OLF number is the customer-facing order number as of 2026-09-14 —
   // deliberate, see src/lib/order-number.ts.
   const shortId = order?.id ? formatOrderNumber(order) : "";
 

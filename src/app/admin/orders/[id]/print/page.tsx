@@ -47,7 +47,7 @@ function itemLineTotal(item: AdminOrderItemSnapshot): number | null {
 }
 
 function formatOrderId(order: AdminOrderRow): string {
-  // Prefers the DB-trigger-assigned OLS number; falls back to the
+  // Prefers the DB-trigger-assigned OLF number; falls back to the
   // UUID hex slice on legacy pre-trigger rows. See src/lib/order-number.ts.
   return formatOrderNumber(order);
 }
@@ -195,7 +195,7 @@ export default function PrintOrderReceiptPage({
         </div>
         <div>
           {/* Kept on the slip purely for back-matching. Since 2026-09-14 the
-              customer is shown the OLS number above, so a current enquiry
+              customer is shown the OLF number above, so a current enquiry
               quotes that; this only helps with a caller reading a CX- code
               off an older SMS. See src/lib/order-number.ts. */}
           <div style={metaLabel}>Legacy ref</div>

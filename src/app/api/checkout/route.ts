@@ -182,7 +182,7 @@ export async function GET(req: NextRequest) {
   const [ordersRes, subsRes] = await Promise.all([
     supabaseAdmin
       .from("orders")
-      // OLS number — customer-facing since 2026-09-14, see lib/order-number.ts.
+      // OLF number — customer-facing since 2026-09-14, see lib/order-number.ts.
       .select("id, order_number, public_ref, total_amount, delivery_address, status, created_at, delivery_date, is_preorder, scheduled_delivery_date_at, fulfillment_type")
       .eq("customer_id", customer.id)
       .order("created_at", { ascending: false }),
@@ -370,7 +370,7 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({
       order_id: order.id,
       // The label that goes into the SMS + WhatsApp confirmations and onto
-      // the tracking page. The OLS number as of 2026-09-14 — see
+      // the tracking page. The OLF number as of 2026-09-14 — see
       // lib/order-number.ts for what it discloses and who accepted that.
       order_number: order.order_number,
       // Legacy CX- reference, retained but no longer displayed.
