@@ -38,14 +38,20 @@ export const ORDER_PHONE_LIMIT = 3;
 // ever exceeded it (4 COD orders in 30 minutes on 10 Sep) versus a probe that
 // created thirty-plus. One blocked order in two weeks is the accepted trade.
 //
-// Known cost, accepted deliberately: a customer whose Razorpay payment fails
-// re-enters /api/create-order on every retry (src/app/checkout/page.tsx:1171 —
-// the dismiss and payment.failed handlers both say "try again" and no order id
-// is reused), so three failed card attempts inside 30 minutes exhaust the
-// budget. That is survivable ONLY because the 429 is recoverable: it names the
-// limit and hands the customer a phone number, rather than dead-ending them.
-// If you tighten this further, or drop that copy, read ORDER_PHONE_LIMIT_MESSAGE
-// first.
+// DEPLOY ORDER MATTERS. 3/30m is only safe once checkout stops minting a new
+// order on every payment retry. Before that fix, a customer whose card failed
+// re-entered /api/create-order on each attempt and spent a unit of this budget
+// per try, so three failed attempts locked out a real buyer. The evidence above
+// counts ORDERS CREATED, which cannot see failed payment retries — so it does
+// not measure this. The dependency is `fix(checkout): reuse pending order on
+// same-tab Pay retries` (f96bc8c). Ship that first or in the same deploy; never
+// ship this cap alone.
+//
+// Residual cost even with that fix: reuse is in-session only, so a hard reload
+// between attempts still creates a fresh order and spends a unit. That is
+// survivable ONLY because the 429 is recoverable — it names the limit and hands
+// the customer a phone number rather than dead-ending them. If you tighten this
+// further, or drop that copy, read ORDER_PHONE_LIMIT_MESSAGE first.
 export const orderPhoneRateLimit = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(ORDER_PHONE_LIMIT, "30 m"),
