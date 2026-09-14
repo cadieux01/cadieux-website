@@ -30,6 +30,7 @@ import {
   logProximitySuggestion,
 } from "@/lib/order-checkout";
 import { getPreorderMode } from "@/lib/preorderMode";
+import { queueBurstAlert } from "@/lib/order-burst-alert";
 import {
   normalizePhone,
   signPhoneCookie,
@@ -161,6 +162,11 @@ export async function POST(req: NextRequest) {
   }
 
   logProximitySuggestion(supabaseAdmin, prepared);
+
+  // Burst check on the committed row. This path is the one that matters most:
+  // 29 of the 34 orders the 13 Sep probe created came through it. Never
+  // awaited; see lib/order-burst-alert.ts.
+  queueBurstAlert(prepared.custPhone);
 
   const res = NextResponse.json({
     db_order_id: order.id,

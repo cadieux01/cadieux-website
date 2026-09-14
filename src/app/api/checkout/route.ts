@@ -26,6 +26,7 @@ import {
 } from "@/lib/order-checkout";
 import { getPreorderMode } from "@/lib/preorderMode";
 import { queueOrderNotification } from "@/lib/order-notification";
+import { queueBurstAlert } from "@/lib/order-burst-alert";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import {
@@ -361,6 +362,11 @@ export async function POST(req: NextRequest) {
     // COD → the order is real the moment it is inserted, so alert now.
     // Never awaited; see lib/order-notification.ts.
     queueOrderNotification(order.id, "created");
+
+    // Separate question from "is this a new order": is this number creating
+    // them faster than a person would? Counted after the insert so it counts
+    // orders, not attempts. Never awaited; see lib/order-burst-alert.ts.
+    queueBurstAlert(prepared.custPhone);
 
     const res = NextResponse.json({
       order_id: order.id,
@@ -807,6 +813,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(write.error.body, { status: write.error.status });
       }
 
+      queueBurstAlert(cust.phone);
+
       return NextResponse.json({
         subscription_id: write.subscription_id,
         deliveries: write.deliveries,
@@ -995,6 +1003,8 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    queueBurstAlert(cust.phone);
 
     // Reuse the per-delivery template computed for price validation —
     // attaching subscription_id is the only remaining step.
