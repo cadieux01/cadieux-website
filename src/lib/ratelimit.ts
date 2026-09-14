@@ -24,9 +24,9 @@ export const orderRateLimit = new Ratelimit({
   prefix: "ratelimit:order",
 });
 
-/** Orders allowed per phone per window. The 429 copy no longer quotes this
- *  number — see ORDER_PHONE_LIMIT_MESSAGE for why — so it is now only the
- *  limiter's own setting, shared with the subscription-path copy below. */
+/** Orders allowed per phone per window. No 429 copy quotes this number any
+ *  more — see ORDER_PHONE_LIMIT_MESSAGE for why — so it is now purely the
+ *  limiter's own setting. */
 export const ORDER_PHONE_LIMIT = 3;
 
 // Orders: 3 per phone per 30 minutes, as a second axis on order creation.
@@ -80,13 +80,13 @@ export const ORDER_PHONE_LIMIT_MESSAGE =
   `You've reached the order limit for the last half hour. ` +
   `For a larger order, call us on ${ADMIN_PHONE} and we'll take it directly.`;
 
-/** Same cap, reached on the subscription-creation path. Worded for what that
- *  key actually counts (attempts, not placed orders) — it uses a separate
- *  `sub:` budget. */
+/** Same cap, reached on the subscription-creation path — it uses a separate
+ *  `sub:` budget. States no count, for the same reason as
+ *  ORDER_PHONE_LIMIT_MESSAGE: the sliding window is approximate, so the number
+ *  can be wrong at the exact moment it is used to refuse someone. */
 export const SUBSCRIPTION_PHONE_LIMIT_MESSAGE =
-  `You've made ${ORDER_PHONE_LIMIT} subscription attempts in the last half ` +
-  `hour. To set up a larger plan, call us on ${ADMIN_PHONE} and we'll take it ` +
-  `directly.`;
+  `You've reached the subscription limit for the last half hour. To set up ` +
+  `more, call us on ${ADMIN_PHONE} and we'll do it directly.`;
 
 // Reviews: 3 per IP per day
 export const reviewRateLimit = new Ratelimit({
