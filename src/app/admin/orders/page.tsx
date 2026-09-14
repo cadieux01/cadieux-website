@@ -40,7 +40,6 @@ import {
 } from "@/lib/admin-formatting";
 import {
   AdminOrderRow,
-  ORDER_FILTER_VALUES,
   ORDER_STATUSES,
   OrderFilterValue,
   OrderStatus,
@@ -66,6 +65,45 @@ function statusFilterLabel(v: OrderFilterValue): string {
   if (v === "all") return "All statuses";
   return formatStatusLabel(v);
 }
+
+/**
+ * The Status dropdown, in operator order.
+ *
+ * INVARIANT: the counts on the visible options must sum to the count on
+ * "All statuses". Every entry below is a distinct stored `orders.status`
+ * value, so the buckets partition the rows exactly — no row is counted
+ * twice and none is left without an option. If you add an entry here,
+ * check it still holds.
+ *
+ * It held in neither direction before, and the dropdown was under-reporting
+ * the month by 40 orders (116 listed against 156 in "All statuses"):
+ *
+ *   • `pending` was MISSING. It is what the website writes on COD checkout
+ *     and the biggest live bucket after `delivered` — all 40 of the missing
+ *     rows. Unreachable from this dropdown, so unworkable from this page.
+ *   • `expired` is NOT a stored status. It is computed on read
+ *     (computeOrderState; src/lib/order-state.ts) from rows that are ALSO
+ *     counted under `pending`/`placed`, so it double-counts by construction.
+ *     It happened to read 0 this month only because no pending order was
+ *     older than the 7-day window; over a wider range it would have pushed
+ *     the visible total PAST "All statuses". Do not put a computed state in
+ *     this list.
+ *   • `pending_payment` and `picked_up` are dead — zero rows have ever
+ *     carried either. They are still valid filter values (see
+ *     ORDER_FILTER_VALUES) and the print view still accepts them off a URL;
+ *     they are just not worth a line in the menu.
+ */
+const STATUS_FILTER_OPTIONS: readonly OrderFilterValue[] = [
+  "all",
+  "pending",
+  "placed",
+  "confirmed",
+  "preparing",
+  "out_for_delivery",
+  "delivered",
+  "cancelled",
+  "ready_for_pickup",
+];
 
 const NEXT_STATUS_DELIVERY: Record<string, OrderStatus | null> = {
   pending_payment: "confirmed",
@@ -557,7 +595,17 @@ function OrdersPageInner() {
               setFilter(v as OrderFilterValue);
             }}
             ariaLabel="Filter orders by status"
-            options={ORDER_FILTER_VALUES.map((v) => ({
+            options={STATUS_FILTER_OPTIONS.filter(
+              // Empty buckets are dropped for the selected range — an
+              // operator should not have to read past a column of "(0)"
+              // to find the statuses that actually have work in them.
+              //
+              // The active filter is always kept, even at zero: widening
+              // or moving the date range can empty the bucket you are
+              // standing in, and dropping it would leave the Select with
+              // no option matching its own value (blank control).
+              (v) => v === "all" || v === filter || (counts[v] ?? 0) > 0,
+            ).map((v) => ({
               value: v,
               label: `${statusFilterLabel(v)} (${counts[v] ?? 0})`,
             }))}

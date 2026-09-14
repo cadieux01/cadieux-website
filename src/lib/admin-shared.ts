@@ -52,13 +52,25 @@ export const SUBSCRIPTION_STATUSES = [
 ] as const;
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
+// Every value a page may legally filter orders by — the TYPE, not the menu.
+//
+// This is NOT the /admin/orders dropdown. That page renders its own ordered,
+// count-pruned list (STATUS_FILTER_OPTIONS in src/app/admin/orders/page.tsx),
+// because several entries here must never be offered as options: `expired`
+// double-counts (see below) and `pending_payment` / `picked_up` are dead
+// buckets. They stay in the union so /admin/orders/print, which takes its
+// status straight off a URL query param, still compiles and still honours an
+// old bookmark.
+//
 // `pending_payment` exists at the DB level for the mobile flow but the
 // existing PATCH validator on /api/admin/orders/[id] only accepts the
-// five above. We surface it as a Status-dropdown option on /admin/orders,
-// but row-actions only show the transitions /api/admin/orders/[id] will
-// actually accept.
+// five above; row-actions only show the transitions that route will accept.
 export const ORDER_FILTER_VALUES = [
   "all",
+  // The status the website writes on COD checkout, and the largest live
+  // bucket after `delivered` (40 of 156 orders in Sep 2026). It was absent
+  // here, which is why those rows had no dropdown option.
+  "pending",
   "pending_payment",
   "placed",
   "confirmed",
