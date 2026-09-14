@@ -76,6 +76,34 @@ import {
   subscriptionStatusRank,
 } from "@/lib/admin-shared";
 import { isOrphanedPayment } from "@/lib/subscription-visibility";
+import { NoteIconButton } from "@/components/admin/NoteIconButton";
+import { NotePanel } from "@/components/admin/NotePanel";
+import { ensureAdminFirstName } from "@/lib/admin-first-name";
+
+// Same call-update preset list the orders board uses. Selecting any of
+// these POSTs a note with kind='call'; "Custom" opens the NotePanel.
+const CALL_PRESETS = [
+  "Confirmed on call",
+  "Did not lift the call",
+  "Call back later",
+  "Customer asked to reschedule",
+] as const;
+
+// IST formatter for the inline last-call chip. Fixed to Asia/Kolkata.
+function formatCallChipTime(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
 
 type FilterValue =
   | "all"
@@ -186,6 +214,11 @@ function SubscriptionsPageInner() {
   const [busyId, setBusyId] = useState<string | null>(null);
   // Which row's Date cell is showing its subscribed/receives breakdown.
   const [openDateId, setOpenDateId] = useState<string | null>(null);
+  const [noteOwner, setNoteOwner] = useState<
+    | { kind: "subscription"; id: string; label: string }
+    | null
+  >(null);
+  const [callBusyId, setCallBusyId] = useState<string | null>(null);
   // NOT the shared DEFAULT_PRESET ("This Month"). This board is operational,
   // and created_at is the wrong axis to hide rows on: one subscription was
   // created in July, is still `active`, and was the only active subscription
@@ -396,6 +429,61 @@ function SubscriptionsPageInner() {
       else alert("Update failed.");
     } finally {
       setBusyId(null);
+    }
+  };
+
+  // Append a call-preset note to a subscription. Mirrors the orders
+  // board pattern: optimistically bumps note_count + last_call_note so
+  // the chip flips without waiting on the poll.
+  const postCallNote = async (sub: AdminSubscriptionRow, body: string) => {
+    if (callBusyId) return;
+    setCallBusyId(sub.id);
+    try {
+      const author = ensureAdminFirstName();
+      const payload: Record<string, unknown> = {
+        subscription_id: sub.id,
+        kind: "call",
+        body,
+      };
+      if (author) payload.author = author;
+      const res = await adminFetch<{
+        note: {
+          id: string;
+          kind: string;
+          body: string;
+          author: string | null;
+          created_at: string;
+        };
+      }>("/api/admin/notes", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      subsGeneration.current += 1;
+      setSubs((curr) =>
+        curr.map((s) =>
+          s.id === sub.id
+            ? {
+                ...s,
+                note_count: (s.note_count ?? 0) + 1,
+                last_call_note: {
+                  body: res.note.body,
+                  author: res.note.author,
+                  created_at: res.note.created_at,
+                },
+              }
+            : s,
+        ),
+      );
+    } catch (e) {
+      alert(
+        e instanceof AdminFetchError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Failed to save call update.",
+      );
+    } finally {
+      setCallBusyId(null);
     }
   };
 
@@ -679,6 +767,73 @@ function SubscriptionsPageInner() {
                       <div style={{ marginTop: 4 }}>
                         <StatusBadge status={s.status} />
                       </div>
+                      {/* Call-update dropdown — separate control from the
+                          status Select. Presets append kind='call' notes;
+                          "Custom" opens the NotePanel with kind pre-set. */}
+                      <div style={{ marginTop: 6 }}>
+                        <Select
+                          value=""
+                          disabled={callBusyId === s.id}
+                          ariaLabel="Log a call update"
+                          style={statusSelect}
+                          onChange={(v) => {
+                            if (!v) return;
+                            if (v === "__custom") {
+                              setNoteOwner({
+                                kind: "subscription",
+                                id: s.id,
+                                label: formatSubscriptionNumber(s),
+                              });
+                              return;
+                            }
+                            void postCallNote(s, v);
+                          }}
+                          options={[
+                            { value: "", label: "Call update…" },
+                            ...CALL_PRESETS.map((p) => ({
+                              value: p,
+                              label: p,
+                            })),
+                            { value: "__custom", label: "Custom…" },
+                          ]}
+                        />
+                      </div>
+                      {/* Inline chip for the most recent call note, so the
+                          board still tells the caller's story at a glance. */}
+                      {s.last_call_note ? (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            display: "inline-block",
+                            padding: "3px 6px",
+                            border: "1px solid rgba(245,158,11,0.5)",
+                            color: "#F59E0B",
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.75rem",
+                            lineHeight: 1.3,
+                            borderRadius: 3,
+                            maxWidth: 220,
+                          }}
+                          title={
+                            s.last_call_note.body +
+                            (s.last_call_note.author
+                              ? ` · ${s.last_call_note.author}`
+                              : "")
+                          }
+                        >
+                          {s.last_call_note.body}
+                          <span
+                            style={{
+                              display: "block",
+                              color: TEXT_MUTED,
+                              fontSize: "0.7rem",
+                              marginTop: 1,
+                            }}
+                          >
+                            {formatCallChipTime(s.last_call_note.created_at)}
+                          </span>
+                        </div>
+                      ) : null}
                       {/* An orphan's `status` is untouched — it still reads
                           "Pending confirmation", which is exactly how it
                           would slip past a skim. The money is only visible
@@ -703,7 +858,17 @@ function SubscriptionsPageInner() {
                       ) : null}
                     </td>
                     <td style={td} data-label="Actions">
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <NoteIconButton
+                          count={s.note_count ?? 0}
+                          onClick={() =>
+                            setNoteOwner({
+                              kind: "subscription",
+                              id: s.id,
+                              label: formatSubscriptionNumber(s),
+                            })
+                          }
+                        />
                         <Link
                           href={`/admin/subscriptions/${s.id}`}
                           style={{ ...buttonSm, textDecoration: "none" }}
@@ -789,6 +954,27 @@ function SubscriptionsPageInner() {
           subscription={drawerSub}
           onClose={() => setDrawerId(null)}
           onChanged={() => void load()}
+        />
+      ) : null}
+
+      {noteOwner ? (
+        <NotePanel
+          owner={noteOwner}
+          onCountChange={(next) => {
+            const targetId = noteOwner.id;
+            subsGeneration.current += 1;
+            setSubs((curr) =>
+              curr.map((s) =>
+                s.id === targetId ? { ...s, note_count: next } : s,
+              ),
+            );
+          }}
+          onClose={() => {
+            // Panel edits are append-only. Reload so a custom call note
+            // added inside the panel becomes the row's last_call_note.
+            setNoteOwner(null);
+            void load();
+          }}
         />
       ) : null}
 

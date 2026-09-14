@@ -174,6 +174,18 @@ export type AdminOrderRow = {
   /** Timestamp when admin first set delivery_date on a preorder row. */
   scheduled_delivery_date_at?: string | null;
   customers?: AdminCustomerSummary | null;
+  /** Total order_notes rows attached to this order (both 'note' and
+   *  'call'). Zero when nothing has been logged. Populated by the list
+   *  endpoint; undefined on paths that don't hydrate notes. */
+  note_count?: number;
+  /** Newest-first summary of the last order_notes row with kind='call'.
+   *  Feeds the inline "Confirmed on call · 5:24 PM" chip on the board
+   *  and the derived "Call updates" group in the status filter. */
+  last_call_note?: {
+    body: string;
+    author: string | null;
+    created_at: string;
+  } | null;
 };
 
 export type AdminProductRow = {
@@ -324,6 +336,14 @@ export type AdminSubscriptionRow = {
   customer_address?: string | null;
   customer_city?: string | null;
   customer_pincode?: string | null;
+  /** Same shape/semantics as AdminOrderRow.note_count. */
+  note_count?: number;
+  /** Same shape/semantics as AdminOrderRow.last_call_note. */
+  last_call_note?: {
+    body: string;
+    author: string | null;
+    created_at: string;
+  } | null;
 };
 
 export const DELIVERY_STATUS_OPTIONS = [

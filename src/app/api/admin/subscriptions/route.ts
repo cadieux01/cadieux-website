@@ -11,6 +11,7 @@ import {
   type AddressCoordRow,
 } from "@/lib/subscription-coordinates";
 import type { AdminSubscriptionItem } from "@/lib/admin-shared";
+import { aggregateNotesFor } from "@/lib/order-notes";
 import { ADMIN_HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
 const ALLOWED_FILTERS = new Set([
@@ -175,13 +176,23 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Batch-fetch note aggregates for every subscription in the list. Same
+  // shape the orders route attaches, so the shared NotePanel + inline
+  // chip work off identical fields on both boards.
+  const noteAgg = await aggregateNotesFor(supabaseAdmin, "subscription", subIds);
+
   return NextResponse.json({
-    subscriptions: subs.map((s) => ({
-      ...s,
-      customer: cmap.get(s.customer_id) ?? null,
-      ...(derivedById?.get(s.id) ?? {}),
-      ...(enrich ? { items: itemsBySub.get(s.id) ?? [] } : {}),
-      ...(coordsBySub.get(s.id) ?? {}),
-    })),
+    subscriptions: subs.map((s) => {
+      const agg = noteAgg.get(s.id);
+      return {
+        ...s,
+        customer: cmap.get(s.customer_id) ?? null,
+        ...(derivedById?.get(s.id) ?? {}),
+        ...(enrich ? { items: itemsBySub.get(s.id) ?? [] } : {}),
+        ...(coordsBySub.get(s.id) ?? {}),
+        note_count: agg?.note_count ?? 0,
+        last_call_note: agg?.last_call_note ?? null,
+      };
+    }),
   });
 }

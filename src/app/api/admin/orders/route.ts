@@ -5,6 +5,7 @@ import {
   supabaseAdmin,
   verifyAdminOrTeamOrder,
 } from "@/lib/admin-auth";
+import { aggregateNotesFor } from "@/lib/order-notes";
 import { computeOrderState } from "@/lib/order-state";
 import {
   orderInsertColumns,
@@ -57,20 +58,35 @@ export async function GET(req: NextRequest) {
       pickupById[l.id] = l;
     }
   }
+  // Side-fetch note aggregates in one round trip so the board can render
+  // the note icon (with count) and the last-call chip without a per-row
+  // lookup. Failure is swallowed inside aggregateNotesFor and returns an
+  // empty map, so the list still loads if the notes table is unreachable.
+  const orderIds = rows
+    .map((r: { id?: string | null }) => r.id)
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+  const noteAgg = await aggregateNotesFor(supabaseAdmin, "order", orderIds);
+
   // Attach computed_state on every row so admin filters / badges never need
   // to duplicate the classifier. See src/lib/order-state.ts (mirrors the
   // WhatsApp bot's classifyOrder — the single source of truth for "expired").
   const nowMs = Date.now();
   const enriched = rows.map((r: {
+    id?: string | null;
     pickup_location_id?: string | null;
     status?: string | null;
     payment_status?: string | null;
     created_at?: string | null;
-  }) => ({
-    ...r,
-    pickup_location: r.pickup_location_id ? pickupById[r.pickup_location_id] ?? null : null,
-    computed_state: computeOrderState(r, nowMs),
-  }));
+  }) => {
+    const agg = r.id ? noteAgg.get(r.id) : undefined;
+    return {
+      ...r,
+      pickup_location: r.pickup_location_id ? pickupById[r.pickup_location_id] ?? null : null,
+      computed_state: computeOrderState(r, nowMs),
+      note_count: agg?.note_count ?? 0,
+      last_call_note: agg?.last_call_note ?? null,
+    };
+  });
 
   return NextResponse.json({ orders: enriched });
 }

@@ -57,13 +57,38 @@ import { formatOrderNumber } from "@/lib/order-number";
 import { isShareable } from "@/lib/order-share-message";
 import { LoafDots } from "@/components/admin/LoafDots";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
+import { NoteIconButton } from "@/components/admin/NoteIconButton";
+import { NotePanel } from "@/components/admin/NotePanel";
+import { ensureAdminFirstName } from "@/lib/admin-first-name";
 
 type SortKey = "created_desc" | "delivery_asc";
 
-/** "out_for_delivery" → "Out for delivery"; "all" → "All statuses". */
-function statusFilterLabel(v: OrderFilterValue): string {
-  if (v === "all") return "All statuses";
-  return formatStatusLabel(v);
+// Presets on the Call-update dropdown. Selecting any of these POSTs a
+// note with kind='call' whose body is the preset label. The custom
+// escape hatch opens the NotePanel with kind pre-set to 'call' so the
+// operator types free-form.
+const CALL_PRESETS = [
+  "Confirmed on call",
+  "Did not lift the call",
+  "Call back later",
+  "Customer asked to reschedule",
+] as const;
+
+// IST formatter for the inline last-call chip. Fixed to Asia/Kolkata so
+// every operator sees the same wall-clock, regardless of device tz.
+function formatCallChipTime(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
 }
 
 /**
@@ -189,7 +214,19 @@ function OrdersPageInner() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<OrderFilterValue>("all");
+  // Filter is a plain string so it can hold status keys ("confirmed"),
+  // the "all" alias, the legacy "expired" URL value AND call-update
+  // filters encoded as "call:<body>". See buildFilterOptions below.
+  const [filter, setFilter] = useState<string>("all");
+  // Owner of the currently-open NotePanel (order id + display label).
+  // null = panel closed.
+  const [noteOwner, setNoteOwner] = useState<
+    | { kind: "order"; id: string; label: string }
+    | null
+  >(null);
+  // Row id currently posting a call-preset (dropdown disables while
+  // in-flight so a fast double-click can't stack two rows).
+  const [callBusyId, setCallBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("created_desc");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -316,7 +353,14 @@ function OrdersPageInner() {
           if (filter === "expired") {
             // 'expired' is a computed lifecycle state (not a stored status).
             // Match server-attached computed_state; see src/lib/order-state.ts.
+            // No longer offered in the dropdown but kept for URL back-compat.
             if (o.computed_state !== "expired") return false;
+          } else if (filter.startsWith("call:")) {
+            // "call:<body>" — match rows whose most recent call note's
+            // body equals the exact preset. Body comparison is verbatim;
+            // the option set is derived from the same distinct-body list.
+            const target = filter.slice("call:".length);
+            if ((o.last_call_note?.body ?? "") !== target) return false;
           } else if ((o.status ?? "").toLowerCase() !== filter) {
             return false;
           }
@@ -379,15 +423,55 @@ function OrdersPageInner() {
     for (const o of inRange) {
       const k = (o.status ?? "").toLowerCase();
       c[k] = (c[k] ?? 0) + 1;
-      // 'expired' is a computed lifecycle state (server-attached
-      // computed_state; see src/lib/order-state.ts). Bucket it as an
-      // extra chip count on top of its underlying status ('pending').
-      if (o.computed_state === "expired") {
-        c.expired = (c.expired ?? 0) + 1;
-      }
     }
     return c;
   }, [orders, range]);
+
+  // Distinct call-note bodies + occurrence count across the same
+  // in-range slice. Powers the "Call updates" group in the filter
+  // dropdown; the label the operator sees is the exact note body.
+  const callBodies = useMemo(() => {
+    const inRange = orders.filter((o) => withinDateRange(o.created_at, range));
+    const tally = new Map<string, number>();
+    for (const o of inRange) {
+      const b = o.last_call_note?.body;
+      if (!b) continue;
+      tally.set(b, (tally.get(b) ?? 0) + 1);
+    }
+    return Array.from(tally.entries())
+      .map(([body, count]) => ({ body, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [orders, range]);
+
+  // Data-derived option list for the status filter. Iterates the
+  // preferred ordering in STATUS_FILTER_OPTIONS (which already omits
+  // `pending_payment`, `picked_up` and `expired` per Sunny's call),
+  // then hides zero-count buckets — except the active filter, which is
+  // always kept so widening the date range never leaves the Select
+  // pointing at a value not in its own list. Call-update presets are
+  // appended as their own group under a disabled separator so the
+  // operator can jump straight to rows tagged with a given call outcome.
+  const filterOptions = useMemo(() => {
+    const opts: Array<{ value: string; label: string; disabled?: boolean }> = [];
+    for (const v of STATUS_FILTER_OPTIONS) {
+      if (v === "all" || v === filter || (counts[v] ?? 0) > 0) {
+        const label =
+          v === "all" ? "All statuses" : formatStatusLabel(v);
+        opts.push({ value: v, label: `${label} (${counts[v] ?? 0})` });
+      }
+    }
+    if (callBodies.length > 0) {
+      opts.push({
+        value: "__sep_call",
+        label: "── Call updates ──",
+        disabled: true,
+      });
+      for (const { body, count } of callBodies) {
+        opts.push({ value: `call:${body}`, label: `${body} (${count})` });
+      }
+    }
+    return opts;
+  }, [counts, callBodies, filter]);
 
   const advance = async (order: AdminOrderRow) => {
     const next = nextStatusFor(order);
@@ -517,6 +601,62 @@ function OrdersPageInner() {
     }
   };
 
+  // Append a call-preset note to a row. Purely additive — never edits
+  // an earlier note, so a rapid double-click just stacks two rows in
+  // the log. Optimistically bumps note_count + last_call_note on the
+  // row so the operator sees the chip flip without waiting on the
+  // list-endpoint re-poll.
+  const postCallNote = async (order: AdminOrderRow, body: string) => {
+    if (callBusyId) return;
+    setCallBusyId(order.id);
+    try {
+      const author = ensureAdminFirstName();
+      const payload: Record<string, unknown> = {
+        order_id: order.id,
+        kind: "call",
+        body,
+      };
+      if (author) payload.author = author;
+      const res = await adminFetch<{
+        note: {
+          id: string;
+          kind: string;
+          body: string;
+          author: string | null;
+          created_at: string;
+        };
+      }>("/api/admin/notes", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setOrders((curr) =>
+        curr.map((o) =>
+          o.id === order.id
+            ? {
+                ...o,
+                note_count: (o.note_count ?? 0) + 1,
+                last_call_note: {
+                  body: res.note.body,
+                  author: res.note.author,
+                  created_at: res.note.created_at,
+                },
+              }
+            : o,
+        ),
+      );
+    } catch (e) {
+      alert(
+        e instanceof AdminFetchError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Failed to save call update.",
+      );
+    } finally {
+      setCallBusyId(null);
+    }
+  };
+
   return (
     <AdminShell
       title="Today's Orders"
@@ -591,24 +731,14 @@ function OrdersPageInner() {
           <Select
             value={filter}
             onChange={(v) => {
+              // Guard against picking the disabled separator; if it ever
+              // gets through we no-op rather than jamming the state.
+              if (v === "__sep_call") return;
               clearRankPins();
-              setFilter(v as OrderFilterValue);
+              setFilter(v);
             }}
             ariaLabel="Filter orders by status"
-            options={STATUS_FILTER_OPTIONS.filter(
-              // Empty buckets are dropped for the selected range — an
-              // operator should not have to read past a column of "(0)"
-              // to find the statuses that actually have work in them.
-              //
-              // The active filter is always kept, even at zero: widening
-              // or moving the date range can empty the bucket you are
-              // standing in, and dropping it would leave the Select with
-              // no option matching its own value (blank control).
-              (v) => v === "all" || v === filter || (counts[v] ?? 0) > 0,
-            ).map((v) => ({
-              value: v,
-              label: `${statusFilterLabel(v)} (${counts[v] ?? 0})`,
-            }))}
+            options={filterOptions}
           />
         </div>
         <input
@@ -707,6 +837,28 @@ function OrdersPageInner() {
             );
             showNotice(msg);
             void load();
+          }}
+        />
+      ) : null}
+
+      {noteOwner ? (
+        <NotePanel
+          owner={noteOwner}
+          onCountChange={(next) => {
+            const targetId = noteOwner.id;
+            setOrders((curr) =>
+              curr.map((o) =>
+                o.id === targetId ? { ...o, note_count: next } : o,
+              ),
+            );
+          }}
+          onClose={() => {
+            // Panel edits stack notes append-only; refresh so any new
+            // last_call_note (e.g. a Custom call the operator typed
+            // in the panel) shows in the row chip.
+            const shouldReload = true;
+            setNoteOwner(null);
+            if (shouldReload) void load();
           }}
         />
       ) : null}
@@ -936,6 +1088,74 @@ function OrdersPageInner() {
                           }
                         />
                       </div>
+                      {/* Call-update dropdown — separate control from Status.
+                          Selecting a preset appends a kind='call' note; "Custom"
+                          opens the NotePanel with the panel's Kind pre-set. */}
+                      <div style={{ marginTop: 6 }}>
+                        <Select
+                          value=""
+                          disabled={callBusyId === o.id}
+                          ariaLabel="Log a call update"
+                          style={statusSelect}
+                          onChange={(v) => {
+                            if (!v) return;
+                            if (v === "__custom") {
+                              setNoteOwner({
+                                kind: "order",
+                                id: o.id,
+                                label: formatOrderNumber(o),
+                              });
+                              return;
+                            }
+                            void postCallNote(o, v);
+                          }}
+                          options={[
+                            { value: "", label: "Call update…" },
+                            ...CALL_PRESETS.map((p) => ({
+                              value: p,
+                              label: p,
+                            })),
+                            { value: "__custom", label: "Custom…" },
+                          ]}
+                        />
+                      </div>
+                      {/* Inline chip showing the most recent call note so the
+                          operator can see "already contacted, said reschedule"
+                          without opening the panel. Timestamp is IST. */}
+                      {o.last_call_note ? (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            display: "inline-block",
+                            padding: "3px 6px",
+                            border: "1px solid rgba(245,158,11,0.5)",
+                            color: "#F59E0B",
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.75rem",
+                            lineHeight: 1.3,
+                            borderRadius: 3,
+                            maxWidth: 200,
+                          }}
+                          title={
+                            o.last_call_note.body +
+                            (o.last_call_note.author
+                              ? ` · ${o.last_call_note.author}`
+                              : "")
+                          }
+                        >
+                          {o.last_call_note.body}
+                          <span
+                            style={{
+                              display: "block",
+                              color: "rgba(251,243,212,0.55)",
+                              fontSize: "0.7rem",
+                              marginTop: 1,
+                            }}
+                          >
+                            {formatCallChipTime(o.last_call_note.created_at)}
+                          </span>
+                        </div>
+                      ) : null}
                     </td>
                     <td style={td}>
                       <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
@@ -985,7 +1205,17 @@ function OrdersPageInner() {
                       </span>
                     </td>
                     <td style={td}>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <NoteIconButton
+                          count={o.note_count ?? 0}
+                          onClick={() =>
+                            setNoteOwner({
+                              kind: "order",
+                              id: o.id,
+                              label: formatOrderNumber(o),
+                            })
+                          }
+                        />
                         {next ? (
                           <button
                             type="button"
