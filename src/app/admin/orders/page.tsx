@@ -70,7 +70,7 @@ import {
   type DistanceInfo,
 } from "@/lib/order-distance-sort";
 import { formatOrderNumber } from "@/lib/order-number";
-import { isShareable } from "@/lib/order-share-message";
+import { composeShareMessage, isShareable } from "@/lib/order-share-message";
 import { LoafDots } from "@/components/admin/LoafDots";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { NoteIconButton } from "@/components/admin/NoteIconButton";
@@ -186,7 +186,14 @@ function nextStatusFor(order: AdminOrderRow): OrderStatus | null {
   return map[key] ?? null;
 }
 
-type BulkAction = "confirm" | "prepare" | "dispatch" | "deliver" | "cancel";
+// Bulk actions on /admin/orders. Status transitions were retired at
+// Sunny's request in favour of the two 5am operations that actually
+// benefit from a multi-select: batching one WhatsApp handoff message
+// for a whole delivery run, and copying the same block for a paste
+// elsewhere. The per-row status Select still exists — status changes
+// were never actually batched, just shortcut, and one row at a time
+// is honest.
+type BulkAction = "share" | "copy" | "cancel";
 
 type BulkResult = {
   succeeded: string[];
@@ -659,9 +666,66 @@ function OrdersPageInner() {
     });
   };
 
+  // Selected orders in the ORDER THE TABLE IS CURRENTLY SORTED IN.
+  // Iterating `filtered` and filtering by membership in `selected` is
+  // deliberate: sorting by "nearest from area" makes the concatenated
+  // share message read as a delivery run, and picking up the ids from
+  // the Set would lose that order.
+  const selectedInSortOrder = useCallback(
+    () => filtered.filter((o) => selected.has(o.id)),
+    [filtered, selected],
+  );
+
+  // Build one WhatsApp handoff block for all selected orders, in the
+  // current sort order, using the same composer as the per-row Share
+  // button (see @/lib/order-share-message.ts). Two blank lines between
+  // orders — one \n splits the receipt lines inside an order, so the
+  // separator has to be visibly heavier than that.
+  const buildBulkShareText = useCallback(() => {
+    const rows = selectedInSortOrder();
+    return rows.map((o) => composeShareMessage(o)).join("\n\n");
+  }, [selectedInSortOrder]);
+
   const runBulk = async (action: BulkAction) => {
-    const ids = Array.from(selected);
+    const rows = selectedInSortOrder();
+    const ids = rows.map((o) => o.id);
     if (ids.length === 0) return;
+
+    if (action === "share") {
+      // Fire-and-forget: open wa.me with the pre-composed text in a new
+      // tab and drop the selection. No server call — the operator picks
+      // the WhatsApp contact themselves.
+      const text = buildBulkShareText();
+      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+      setSelected(new Set());
+      setPendingBulk(null);
+      showNotice(
+        `Opening WhatsApp with ${ids.length} order${ids.length === 1 ? "" : "s"}.`,
+      );
+      return;
+    }
+
+    if (action === "copy") {
+      const text = buildBulkShareText();
+      try {
+        await navigator.clipboard.writeText(text);
+        showNotice(
+          `Copied ${ids.length} order${ids.length === 1 ? "" : "s"} to clipboard.`,
+        );
+      } catch {
+        // Some browsers block clipboard writes outside a user gesture.
+        // Fall back to a share-URL so the operator still gets the text.
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(url, "_blank", "noopener,noreferrer");
+        showNotice("Clipboard blocked — opened share sheet instead.");
+      }
+      setPendingBulk(null);
+      return;
+    }
+
+    // action === "cancel". Only status transition still bulkable; the
+    // server route continues to expect this exact action string.
     setBulkRunning(true);
     try {
       const res = await adminFetch<{
@@ -950,7 +1014,13 @@ function OrdersPageInner() {
           count={selected.size}
           running={bulkRunning}
           onClear={() => setSelected(new Set())}
-          onAction={(a) => setPendingBulk(a)}
+          onAction={(a) => {
+            // Only "cancel" gets a confirmation modal — it writes to
+            // the DB and notifies customers. Share / copy are pure
+            // read paths and run immediately.
+            if (a === "cancel") setPendingBulk(a);
+            else void runBulk(a);
+          }}
         />
       ) : null}
 
@@ -1520,18 +1590,16 @@ function OrdersPageInner() {
 }
 
 const ACTION_LABEL: Record<BulkAction, string> = {
-  confirm: "Mark confirmed",
-  prepare: "Mark preparing",
-  dispatch: "Mark out for delivery",
-  deliver: "Mark delivered",
+  share: "Share on WhatsApp",
+  copy: "Copy details",
   cancel: "Cancel",
 };
 
+// Only "cancel" surfaces in the result modal — share/copy don't touch
+// the server. Kept as a Record so a future bulk write stays typed.
 const ACTION_PAST: Record<BulkAction, string> = {
-  confirm: "confirmed",
-  prepare: "preparing",
-  dispatch: "out_for_delivery",
-  deliver: "delivered",
+  share: "shared",
+  copy: "copied",
   cancel: "cancelled",
 };
 
