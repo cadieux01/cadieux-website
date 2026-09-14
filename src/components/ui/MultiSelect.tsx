@@ -39,6 +39,9 @@ export interface MultiSelectOption {
   label: string;
   /** Renders as a non-interactive group heading (e.g. "── Call updates ──"). */
   disabled?: boolean;
+  /** A command, not a member of the set: clickable, but no checkbox and never
+   *  ticked (e.g. "Clear all"). Still calls onToggle with its value. */
+  action?: boolean;
 }
 
 export interface MultiSelectProps {
@@ -425,8 +428,10 @@ export default function MultiSelect({
                 >
                   {/* Checkbox. Purely presentational — the <li> carries the
                       role and the aria-selected state, so a real <input>
-                      here would be a second, conflicting a11y target. */}
-                  {opt.disabled ? (
+                      here would be a second, conflicting a11y target.
+                      Headings and commands get the spacer instead, so every
+                      row's text still lines up. */}
+                  {opt.disabled || opt.action ? (
                     <span style={{ width: 16, flex: "0 0 auto" }} />
                   ) : (
                     <span

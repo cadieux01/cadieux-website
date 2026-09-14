@@ -127,6 +127,9 @@ function formatCallChipTime(iso: string): string {
  *     ORDER_FILTER_VALUES) and the print view still accepts them off a URL;
  *     they are just not worth a line in the menu.
  */
+/** Menu command, not a filter value — never enters the selection. */
+const CLEAR_ALL = "__clear_all";
+
 const STATUS_FILTER_OPTIONS: readonly OrderFilterValue[] = [
   "all",
   "pending",
@@ -459,7 +462,12 @@ function OrdersPageInner() {
   // appended as their own group under a disabled separator so the
   // operator can jump straight to rows tagged with a given call outcome.
   const filterOptions = useMemo(() => {
-    const opts: Array<{ value: string; label: string; disabled?: boolean }> = [];
+    const opts: Array<{
+      value: string;
+      label: string;
+      disabled?: boolean;
+      action?: boolean;
+    }> = [];
     for (const v of STATUS_FILTER_OPTIONS) {
       // A TICKED option always stays listed, even at zero, or narrowing the
       // date range would hide the very filter that is suppressing the rows —
@@ -495,40 +503,50 @@ function OrdersPageInner() {
         });
       }
     }
+    // Escape hatch. "All statuses" deliberately clears only its own group
+    // (see toggleFilter), so with a call update ticked there would otherwise
+    // be no single click that gets back to an unfiltered table. Only shown
+    // when there is something to clear.
+    if (filter.length > 0) {
+      opts.push({ value: CLEAR_ALL, label: "Clear all", action: true });
+    }
     return opts;
-  }, [counts, callBodies, statusSel, callSel]);
+  }, [counts, callBodies, statusSel, callSel, filter.length]);
 
   // Trigger label. One selected → "Pending (27)". Two or more → name the
   // first and count the rest → "Pending +2 (43)".
   //
-  // The bracketed number is the SUM of the selected options' counts, as
-  // specified. For a pure-status selection that equals the row count, because
-  // the status buckets partition the rows (see STATUS_FILTER_OPTIONS). Mixing
-  // in a call update breaks that equality by design — the groups AND, so the
-  // sum becomes an upper bound rather than a total. The label is a summary of
-  // what is ticked, not a promise about the table.
+  // HARD INVARIANT: the bracketed number is the LIVE ROW COUNT — exactly what
+  // the table below is showing, in every combination, no exceptions. It is
+  // NOT the sum of the ticked options' counts. The sum only equals the row
+  // count when the selection is pure-status; tick a call update as well and
+  // the two groups AND, so the sum becomes an upper bound (153 against 16
+  // rows in one run). A number in the filter that disagrees with the list
+  // underneath it is worse than no number at all.
+  //
+  // The per-option counts in the menu are untouched: those are per-bucket
+  // totals and remain honest as bucket totals. Note the row count also
+  // reflects the search box and the date range, which is the point — it is a
+  // count of what is on screen, not of what the filter alone would allow.
   const filterLabel = useMemo(() => {
     const picked = filterOptions.filter(
-      (o) => !o.disabled && filter.includes(o.value),
+      (o) => !o.disabled && !o.action && filter.includes(o.value),
     );
-    if (picked.length === 0) return `All statuses (${counts.all ?? 0})`;
-    const total = picked.reduce((sum, o) => {
-      const m = /\((\d+)\)\s*$/.exec(o.label);
-      return sum + (m ? Number(m[1]) : 0);
-    }, 0);
-    // Strip the option's own "(n)" — the label carries the summed one.
+    const total = filtered.length;
+    if (picked.length === 0) return `All statuses (${total})`;
+    // Strip the option's own "(n)" — the label carries the live one.
     const head = picked[0].label.replace(/\s*\(\d+\)\s*$/, "");
     const rest = picked.length - 1;
-    return rest === 0
-      ? `${head} (${total})`
-      : `${head} +${rest} (${total})`;
-  }, [filterOptions, filter, counts]);
+    return rest === 0 ? `${head} (${total})` : `${head} +${rest} (${total})`;
+  }, [filterOptions, filter, filtered.length]);
 
   // Toggle rules:
   //   • "All statuses" clears the STATUS group only. It is named "All
   //     statuses", it sits above the "Call updates" separator, and the
   //     whole point of the feature is combining the two groups — so
   //     widening the statuses must not silently drop a call filter.
+  //   • "Clear all" resets BOTH groups — the one click back to an
+  //     unfiltered table.
   //   • Unticking the last status leaves the group empty, which already
   //     means "all". No special case needed, and none is wanted: a special
   //     case would give "all" a second encoding.
@@ -536,6 +554,7 @@ function OrdersPageInner() {
     if (value === "__sep_call") return;
     clearRankPins();
     setFilter((curr) => {
+      if (value === CLEAR_ALL) return [];
       if (value === ALL_VALUE) return curr.filter((v) => v.startsWith(CALL_PREFIX));
       return curr.includes(value)
         ? curr.filter((v) => v !== value)
