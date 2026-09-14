@@ -24,8 +24,9 @@ export const orderRateLimit = new Ratelimit({
   prefix: "ratelimit:order",
 });
 
-/** Orders allowed per phone per window. Named so the 429 copy cannot drift
- *  from the limiter it describes. */
+/** Orders allowed per phone per window. The 429 copy no longer quotes this
+ *  number — see ORDER_PHONE_LIMIT_MESSAGE for why — so it is now only the
+ *  limiter's own setting, shared with the subscription-path copy below. */
 export const ORDER_PHONE_LIMIT = 3;
 
 // Orders: 3 per phone per 30 minutes, as a second axis on order creation.
@@ -63,13 +64,20 @@ export const orderPhoneRateLimit = new Ratelimit({
  * 429 copy for the per-phone order cap.
  *
  * A real customer who hits this is someone ordering for several people, so the
- * message must name the limit and offer a way through. The number comes from
- * ADMIN_PHONE, never a literal — the mobile app already carries its own
- * hardcoded copy, and two sources of truth for a phone number is how they
- * drift.
+ * message must offer a way through. The number comes from ADMIN_PHONE, never a
+ * literal — the mobile app already carries its own hardcoded copy, and two
+ * sources of truth for a phone number is how they drift.
+ *
+ * Deliberately states NO count. Upstash's sliding window is approximate: it
+ * carries the previous window in weighted by elapsed time, so a burst that
+ * straddles a window boundary is refused on the Nth attempt rather than the
+ * (N+1)th. Verified in prod 2026-09-14 — the 5/hour IP limiter denied the 5th
+ * request. Copy that asserted "you've placed 3 orders" would therefore tell a
+ * customer who placed 2 that they placed 3, and they would know it was wrong
+ * exactly when we need them to trust the phone number in the next sentence.
  */
 export const ORDER_PHONE_LIMIT_MESSAGE =
-  `You've placed ${ORDER_PHONE_LIMIT} orders in the last half hour. ` +
+  `You've reached the order limit for the last half hour. ` +
   `For a larger order, call us on ${ADMIN_PHONE} and we'll take it directly.`;
 
 /** Same cap, reached on the subscription-creation path. Worded for what that
