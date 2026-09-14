@@ -143,7 +143,7 @@ export const SendSmsSchema = z
     name: boundedText(80).optional(),
     type: z.enum(["order_placed", "status_change", "customer_edit"]),
     orderId: boundedText(64).optional(),
-    // Customer-facing order number (orders.order_number, e.g. 'OLF412').
+    // Customer-facing order number (orders.order_number, e.g. 'OLS412').
     // When supplied it replaces the UUID-slice fallback that used to be
     // embedded in every SMS body. Carried public_ref until 2026-09-14;
     // the wire name never changed, so no caller had to.

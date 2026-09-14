@@ -1,4 +1,4 @@
-// One dot per loaf, under the OLF number on every order row.
+// One dot per loaf, under the OLS number on every order row.
 //
 // Green = Plain, red = Multigrain. Two plain + two multigrain reads as
 // two green dots and two red dots, so the operator sees the bag contents

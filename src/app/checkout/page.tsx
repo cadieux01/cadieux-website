@@ -947,7 +947,7 @@ export default function CheckoutPage() {
           name: customerName || "Customer",
           orderId,
           // Field name and value agree again: the customer-facing number
-          // is the OLF number as of 2026-09-14 (see lib/order-number.ts).
+          // is the OLS number as of 2026-09-14 (see lib/order-number.ts).
           orderNumber: orderNumber ?? undefined,
           total: grandTotal,
           address: deliveryAddress,

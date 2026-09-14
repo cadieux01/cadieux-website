@@ -101,14 +101,15 @@ export type AdminOrderItemSnapshot = {
 
 export type AdminOrderRow = {
   id: string;
-  /** Human-facing order number ('OLF7', 'CDX-00006', …) assigned by the
-   *  DB trigger public.tg_orders_assign_number. Nullable for legacy rows
-   *  created before the trigger existed. Render via formatOrderNumber(). */
+  /** Human-facing order number ('OLS7') assigned by the DB trigger
+   *  public.tg_orders_assign_number. Every row carries one since the
+   *  2026-09-14 renumber — the legacy NULL and 'CDX-#####' rows were
+   *  rewritten. Render via formatOrderNumber(). */
   order_number?: string | null;
   /** Customer-facing reference ('CX-7K4M2P'), assigned by the same
    *  trigger but drawn at random — it encodes no order volume. Admin
    *  shows it ALONGSIDE order_number so a customer who reads out their
-   *  reference can be matched to the OLF number on the bag. */
+   *  reference can be matched to the OLS number on the bag. */
   public_ref?: string | null;
   customer_id: string | null;
   total_amount: number | null;
@@ -226,9 +227,11 @@ export type AdminSubscriptionItem = {
 
 export type AdminSubscriptionRow = {
   id: string;
-  /** OLF reference, drawn from the SAME orders_number_seq as orders — one
-   *  continuous series across both. Nullable only so a partial projection
-   *  can't render "undefined"; the DB column is populated on every row. */
+  /** SLF reference, from public.subscriptions_number_seq. Until 2026-09-14
+   *  subscriptions shared orders_number_seq, so one interleaved series ran
+   *  across both tables; the renumber split them into OLS and SLF with a
+   *  counter each. Nullable only so a partial projection can't render
+   *  "undefined"; the DB column is populated on every row. */
   subscription_number?: string | null;
   customer_id: string;
   product_slug: string;

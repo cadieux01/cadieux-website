@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({
     db_order_id: order.id,
     // The customer-facing order number. Consumed by the client to route
-    // the correct label into SMS + WhatsApp. This is the OLF number as of
+    // the correct label into SMS + WhatsApp. This is the OLS number as of
     // 2026-09-14 — see lib/order-number.ts for why it is now in a browser
     // response, and for what that discloses.
     order_number: order.order_number,

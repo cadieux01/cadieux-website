@@ -37,7 +37,7 @@ type OrderChangeRequest = {
   resolved_at: string | null;
   order: {
     id: string;
-    /** OLF number — the customer-facing order number since 2026-09-14.
+    /** OLS number — the customer-facing order number since 2026-09-14.
      *  See the decision note in src/lib/order-number.ts. */
     order_number: string | null;
     public_ref: string | null;
@@ -67,7 +67,7 @@ type SubscriptionChangeRequest = {
 
 type PaymentRow = {
   order_id: string;
-  /** OLF number — see the decision note in src/lib/order-number.ts. */
+  /** OLS number — see the decision note in src/lib/order-number.ts. */
   order_number: string | null;
   public_ref: string | null;
   status: string;

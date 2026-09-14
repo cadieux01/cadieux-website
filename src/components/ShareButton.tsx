@@ -30,7 +30,7 @@
 // already know all three. `/orders/[id]` therefore renders TWO buttons —
 // "Share Cadieux" (brand caption, no order data, safe to hand to anyone)
 // and "Share order" (the customer's own details, composed by
-// @/lib/order-share-customer). That message carries the OLF number as of
+// @/lib/order-share-customer). That message carries the OLS number as of
 // 2026-09-14 — it is the customer-facing order number now, including on a
 // message built to be forwarded. See @/lib/order-number for the decision.
 

@@ -27,7 +27,7 @@ const WA_TEMPLATE_ENV = "PREORDER_SCHEDULE_WA_TEMPLATE_ID";
 export type PreorderNotifyInput = {
   req?: NextRequest;
   orderId: string;
-  /** OLF number. The admin audit_log label AND, since 2026-09-14, the
+  /** OLS number. The admin audit_log label AND, since 2026-09-14, the
    *  value sent to the customer as ##order_number## / WhatsApp body_1. */
   orderNumber: string | null;
   /** Legacy CX- reference. Accepted but no longer sent to customers;
@@ -44,7 +44,7 @@ export async function notifyPreorderScheduled(
 ): Promise<{ sms: Outcome; whatsapp: Outcome }> {
   // One string for both the admin audit label and the customer message.
   // They used to differ on purpose; since 2026-09-14 the customer sees the
-  // OLF number, so keeping them apart would only invite them to drift.
+  // OLS number, so keeping them apart would only invite them to drift.
   const displayOrderNumber = formatOrderNumber({
     id: input.orderId,
     order_number: input.orderNumber,

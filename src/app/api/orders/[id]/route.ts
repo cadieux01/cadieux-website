@@ -57,8 +57,8 @@ export async function GET(
   const { data: order, error } = await supabaseAdmin
     .from("orders")
     .select(
-      // order_number (OLF<n>) IS selected and IS shown to the customer.
-      // This reverses the previous rule, which held it back because the OLF
+      // order_number (OLS<n>) IS selected and IS shown to the customer.
+      // This reverses the previous rule, which held it back because the OLS
       // series is sequential and discloses order volume. That disclosure is
       // real and was accepted knowingly — see the note in
       // src/lib/order-number.ts for who decided, when, and why.

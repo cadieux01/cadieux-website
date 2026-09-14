@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, orders: [] });
   }
 
-  // Fetch orders. `order_number` (OLF<n>) is the customer-facing number the
+  // Fetch orders. `order_number` (OLS<n>) is the customer-facing number the
   // app renders as of 2026-09-14 — see src/lib/order-number.ts. `public_ref`
   // stays projected for older installed builds that still read it.
   const { data: orders, error: ordersErr } = await supabaseAdmin

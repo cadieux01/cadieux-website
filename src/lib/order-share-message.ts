@@ -3,7 +3,7 @@
 // exact shape, so a rider always reads the same six things in the same
 // order:
 //
-//   OLF71
+//   OLS71
 //   Customer name
 //   Phone number
 //   Address
@@ -69,7 +69,7 @@ export function mapsLinkFor(
 }
 
 export type ShareMessageParts = {
-  /** Top line: "OLF71" for an order, the plan name for a subscription. */
+  /** Top line: "OLS71" for an order, the plan name for a subscription (SLF numbers are not shown in the share message). */
   reference: string;
   customerName: string;
   customerPhone: string;

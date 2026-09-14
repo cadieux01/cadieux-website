@@ -273,7 +273,7 @@ export default function AdminOrderDetailPage({
             }}
           >
             <div style={{ minWidth: 0 }}>
-              {/* The OLF number IS the reference — nothing else goes here. */}
+              {/* The OLS number IS the reference — nothing else goes here. */}
               <div style={orderNumber}>{formatOrderNumber(order)}</div>
               <div style={mutedLine}>
                 Placed {formatDateTime(order.created_at)}

@@ -1,28 +1,39 @@
 /**
- * DECISION — 2026-09-14, Sunny. THE CUSTOMER-FACING NUMBER IS NOW OLF/OLS.
+ * DECISION — 2026-09-14, Sunny. THE CUSTOMER-FACING NUMBER IS NOW OLS/SLF.
  *
- * Until this date customers were shown `public_ref` (CX-7K4M2P) and the OLF
- * number was withheld, because the OLF series is sequential: it discloses
- * cumulative volume, and the difference between two of a customer's own
- * orders discloses the growth rate in between. The series is shared with
- * subscriptions, so what leaks is combined order + subscription throughput.
+ *   orders        → OLS1, OLS2, …   (public.orders_number_seq)
+ *   subscriptions → SLF1, SLF2, …   (public.subscriptions_number_seq)
  *
- * That disclosure is real. It was put to Sunny explicitly, with this example,
- * and he overruled it on operational grounds: he could not hold a conversation
- * with a customer about an order while the two of them were looking at
- * different numbers, and that cost is paid every single day, whereas the
- * volume signal is diffuse and of interest to almost nobody.
+ * Sunny's words: "SLF for the subscription orders, OLS for the normal orders."
+ *
+ * Until this date customers were shown `public_ref` (CX-7K4M2P) and the
+ * sequential number was withheld, because it discloses cumulative volume, and
+ * the difference between two of a customer's own orders discloses the growth
+ * rate in between.
+ *
+ * That disclosure is real, and the renumber on 2026-09-14 made it SHARPER, not
+ * weaker. Before, one counter was shared across both tables, so a number only
+ * ever leaked combined order + subscription throughput. Now the two series are
+ * separate and each was restarted at 1 with no gaps, so OLS<n> states the exact
+ * number of orders ever taken and SLF<n> the exact number of subscriptions.
+ *
+ * It was put to Sunny explicitly, with the example, and he overruled it on
+ * operational grounds: he could not hold a conversation with a customer about
+ * an order while the two of them were looking at different numbers, and that
+ * cost is paid every single day, whereas the volume signal is diffuse and of
+ * interest to almost nobody.
  *
  * So: if you are reading this and about to "restore" the guard — it was not an
  * oversight, and it is not a bug. Take it up with Sunny, not with the code.
  *
  * WHAT DID NOT CHANGE, and must not:
- *   - URLs still key on the order UUID. Nothing resolves an order by its OLF
- *     number, and nothing should. An OLF resolver would be an enumerable
- *     endpoint (OLF200, OLF201, …) over names, phones and addresses — the
+ *   - URLs still key on the order UUID. Nothing resolves an order by its OLS
+ *     number, and nothing should. An OLS resolver would be an enumerable
+ *     endpoint (OLS200, OLS201, …) over names, phones and addresses — the
  *     sequential property that is merely untidy in a display is a real hole in
- *     a lookup key. The phone-verification gate on /api/orders/[id] is what
- *     actually protects the data, but do not hand out a free walk.
+ *     a lookup key, and it is now perfectly dense from 1. The phone-verification
+ *     gate on /api/orders/[id] is what actually protects the data, but do not
+ *     hand out a free walk.
  *   - `public_ref` is still assigned, still stored, still projected. Admin
  *     search resolves both, because customers holding an older SMS will quote
  *     a CX- code for as long as those messages exist.
@@ -32,21 +43,19 @@
  * Central formatter for the human-facing order number.
  *
  * The DB trigger `orders_assign_number` (public.tg_orders_assign_number)
- * assigns `order_number` = 'OLF' || nextval('orders_number_seq') on every
- * BEFORE INSERT — atomic, collision-safe, monotonic, no digit cap, no
- * leading zeros (OLF1, OLF2, … OLF10, … OLF1000).
+ * assigns `order_number` = 'OLS' || nextval('public.orders_number_seq') on
+ * every BEFORE INSERT — atomic, collision-safe, monotonic, no digit cap, no
+ * leading zeros (OLS1, OLS2, … OLS10, … OLS1000).
  *
- * Historical rows (created before the trigger was installed on
- * 2026-07-14) have `order_number = NULL`; a middle batch of 6 rows
- * carries the previous `CDX-#####` format from the initial trigger.
- * Both are preserved verbatim — we NEVER back-fill or reformat.
+ * As of the 2026-09-14 renumber every row carries an OLS number: the table was
+ * rewritten to a gapless 1..N ordered by `created_at`, and the earlier NULL and
+ * `CDX-#####` rows no longer exist. That was a one-off. We do NOT renumber
+ * again — a customer who has been told a number must keep it.
  *
- * All customer + admin display surfaces should call this helper instead
- * of `id.slice(0, 8)` so:
- *   - New rows show `OLF7`, `OLF8`, …
- *   - Legacy CDX rows show `CDX-00001` … `CDX-00006`
- *   - Truly-legacy NULL rows fall back to `#D5ED04D6` (the old UUID slice
- *     format, so existing links / prints stay recognisable)
+ * The helper is prefix-agnostic: it renders whatever is in the column. The
+ * UUID-slice fallback (`#D5ED04D6`) should therefore never fire on a full row;
+ * it exists so a partial API projection cannot render "undefined" at a
+ * customer, and so the mobile app can talk to a server older than itself.
  */
 export function formatOrderNumber(row: {
   id: string;
@@ -60,19 +69,23 @@ export function formatOrderNumber(row: {
 /**
  * Central formatter for the human-facing SUBSCRIPTION number.
  *
- * Subscriptions draw from the SAME `orders_number_seq` as orders, via
- * `public.tg_subscriptions_assign_number` (BEFORE INSERT). There is one
- * continuous OLF series interleaved across both tables, so no OLF number
- * can ever name two different things — an order and a subscription can
- * never collide.
+ * `public.tg_subscriptions_assign_number` (BEFORE INSERT) assigns
+ * `subscription_number` = 'SLF' || nextval('public.subscriptions_number_seq').
+ *
+ * Until 2026-09-14 subscriptions drew from `orders_number_seq`, the SAME
+ * counter as orders, so one interleaved series ran across both tables and a
+ * gap in `orders.order_number` was a subscription, not corruption. The
+ * renumber SPLIT them: two counters, two prefixes, each restarted at 1.
+ * Collision safety no longer comes from sharing a counter — it comes from the
+ * prefixes, which is why SLF and OLS must stay distinct. Do not "tidy" one of
+ * them into the other.
  *
  * Same fallback as `formatOrderNumber`, and for the same reason: it should
- * never fire (every row was backfilled) but a partial API projection must
- * not render "undefined" onto a rider's share message.
+ * never fire on a full row, but a partial API projection must not render
+ * "undefined" onto a rider's share message.
  *
  * Customer-facing as of 2026-09-14 — see the decision note at the top of this
- * file. This helper is prefix-agnostic: it renders whatever is in the column,
- * so the pending OLS renumber needs no change here.
+ * file.
  */
 export function formatSubscriptionNumber(row: {
   id: string;
@@ -100,12 +113,13 @@ export function formatSubscriptionNumber(row: {
  * quote a CX- code for years. Admin search must keep resolving it. Do not use
  * this helper on a new customer surface — use `formatOrderNumber`.
  *
- * The prefix is 'CX-', not 'CDX-', because six legacy `order_number`
- * values are already 'CDX-00001'…'CDX-00006' and two different CDX
- * references would be ambiguous read out over the phone.
+ * The prefix is 'CX-', not 'CDX-', because six legacy `order_number` values
+ * were 'CDX-00001'…'CDX-00006' at the time and two different CDX references
+ * would have been ambiguous read out over the phone. Those rows were
+ * renumbered on 2026-09-14, but the choice stands.
  *
  * Surviving call sites are admin-only: the packing slip prints it beside the
- * OLF number, and admin order search matches against it.
+ * OLS number, and admin order search matches against it.
  *
  * The column is NOT NULL and every historical row was backfilled, so
  * the UUID-slice fallback should never fire — it exists only so a

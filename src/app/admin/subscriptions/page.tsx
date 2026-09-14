@@ -187,9 +187,11 @@ function SubscriptionsPageInner() {
   // Which row's Date cell is showing its subscribed/receives breakdown.
   const [openDateId, setOpenDateId] = useState<string | null>(null);
   // NOT the shared DEFAULT_PRESET ("This Month"). This board is operational,
-  // and created_at is the wrong axis to hide rows on: OLF72 was created in
-  // July, is still `active`, and was the only active subscription in the
-  // table — the This Month default hid it, along with 4 others. A wide
+  // and created_at is the wrong axis to hide rows on: one subscription was
+  // created in July, is still `active`, and was the only active subscription
+  // in the table — the This Month default hid it, along with 4 others. (Its
+  // number is not quoted here: the 2026-09-14 renumber changed every one.)
+  // A wide
   // window is the least-wrong default until this filters by relevance
   // instead. Keep in sync with the DateRangeDropdown's initialPreset below,
   // or the label will disagree with what is actually filtered.

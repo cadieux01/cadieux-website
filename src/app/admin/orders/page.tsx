@@ -289,7 +289,7 @@ function OrdersPageInner() {
         // Match either reference. A customer only ever knows public_ref
         // ("CX-7K4M2P") and will often read it out without the prefix or
         // the hyphen, so compare on a stripped form too. order_number
-        // ("OLF43", or legacy "CDX-00006") is on the bag, so ops search
+        // ("OLS43", or legacy "CDX-00006") is on the bag, so ops search
         // that directly.
         const ref = (o.public_ref ?? "").toLowerCase();
         const olf = (o.order_number ?? "").toLowerCase();
@@ -566,7 +566,7 @@ function OrdersPageInner() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search name, phone, OLF or CX ref"
+          placeholder="Search name, phone, OLS or CX ref"
           className="px-3 py-2 bg-transparent outline-none"
           style={{
             border: "1px solid rgba(251,243,212,0.3)",
