@@ -89,8 +89,9 @@ async function sendSms(
     );
     return { status: "skipped", reason: "template_not_configured" };
   }
-  // DLT template variable is still named ##order_number## (approved on the
-  // DLT side, renaming would need re-approval) — the VALUE is public_ref.
+  // The DLT variable is named ##order_number## and, since 2026-09-14, that is
+  // also what it carries: the OLF number. It held `public_ref` until then, so
+  // the name survived a change of meaning — do not read it as proof either way.
   const result = await sendMsg91FlowTemplate(phone, templateId, {
     order_number: customerRef,
     date,

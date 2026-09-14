@@ -308,10 +308,10 @@ type StoreRow = {
 
 type OrderRow = {
   id: string;
-  // order_number (OLF<n>) is deliberately NOT fetched here. This function
-  // renders straight into a customer's WhatsApp thread, so the sequential
-  // number must never be in reach.
-  public_ref: string | null;
+  // OLF<n> — the number the customer sees everywhere else as of 2026-09-14,
+  // and therefore the only one this bot may quote. `public_ref` is NOT
+  // fetched: see the note above orderRef().
+  order_number: string | null;
   status: string | null;
   payment_status: string | null;
   payment_method: string | null;
@@ -320,6 +320,7 @@ type OrderRow = {
   delivery_date: string | null;
   delivery_slot: string | null;
   delivery_address: string | null;
+  fulfillment_type: string | null;
   created_at: string;
   cancelled_at: string | null;
   status_updated_at: string | null;
@@ -327,6 +328,9 @@ type OrderRow = {
 
 type SubRow = {
   id: string;
+  /** OLS<n>. Different table, different sequence, ONE letter apart from OLF —
+   *  read the third character before assuming which you are holding. */
+  subscription_number: string | null;
   status: string | null;
   product_name: string | null;
   bread_name: string | null;
@@ -379,21 +383,37 @@ function subscriptionUnitPrice(mrp: number, discountPct: number): number {
   return round2(mrp * (1 - clamped / 100));
 }
 
-// This bot talks straight to the customer, so it must quote public_ref
-// ('CX-7K4M2P') and NEVER order_number ('OLF43'). The OLF number is
-// sequential: quoting it discloses cumulative order volume, and two
-// orders weeks apart disclose the growth rate between them. public_ref
-// is random and discloses nothing.
+// This bot talks straight to the customer, so it quotes order_number
+// ('OLF175') — the same number the tracker, the share message, the SMS and
+// admin all use. It must NEVER quote public_ref ('CX-7K4M2P'), which is why
+// that column is no longer even fetched: a value the prompt never sees is a
+// value the model cannot leak.
 //
-// Falls back to a short hex slice of the UUID, which should never fire —
-// public_ref is NOT NULL and every historical row was backfilled — but a
-// partial projection must not print "undefined" at a customer.
+// This reverses the rule that stood here until 2026-09-14, and the reversal
+// was deliberate, so do not reinstate it. The old argument was that OLF<n> is
+// sequential and discloses cumulative volume. That is true, and the 2026-09-14
+// renumber made it sharper rather than weaker. Sunny was shown the example and
+// overruled it: he cannot hold a conversation with a customer about an order
+// while the two of them are looking at different numbers, and this bot is that
+// conversation. The full reasoning lives at the top of src/lib/order-number.ts.
 //
-// Kept inline (not imported from the Next.js src/lib/order-number.ts)
-// because this file is a Deno Edge Function and cannot reach into the
-// app source tree; keep it in step with formatPublicRef() there.
-function shortOrderId(row: { id: string; public_ref?: string | null }): string {
-  const ref = row.public_ref?.trim();
+// Falls back to a short hex slice of the UUID, which should never fire — every
+// row carries an OLF number since the renumber — but a partial projection must
+// not print "undefined" at a customer.
+//
+// Kept inline (not imported from the Next.js src/lib/order-number.ts) because
+// this file is a Deno Edge Function and cannot reach into the app source tree;
+// keep it in step with formatOrderNumber() there.
+function orderRef(row: { id: string; order_number?: string | null }): string {
+  const ref = row.order_number?.trim();
+  if (ref) return ref;
+  return "#" + row.id.slice(0, 6);
+}
+
+/** OLS<n> for a subscription. Same contract as orderRef, different table and
+ *  different sequence — see formatSubscriptionNumber() in the app. */
+function subRef(row: { id: string; subscription_number?: string | null }): string {
+  const ref = row.subscription_number?.trim();
   if (ref) return ref;
   return "#" + row.id.slice(0, 6);
 }
@@ -405,6 +425,134 @@ function isoDate(s: string | null | undefined): string {
   } catch {
     return "unknown";
   }
+}
+
+// ── plain-word renderings ───────────────────────────────────────────────────
+// The block below is read by a model that then speaks to a customer. Handing
+// it `pending` / `cod` / `10:00-14:00` invites it to repeat the database back
+// at them verbatim, so each field is pre-translated here and the raw value is
+// NOT also printed — two spellings of one fact is an invitation to quote the
+// wrong one.
+
+/** Order status in the words the customer's tracker uses. Mirrors
+ *  STAGE_LABEL + toStage in src/lib/order-stages.ts; kept inline because a
+ *  Deno Edge Function cannot import from the Next app. */
+function statusLabel(status: string | null, fulfillmentType?: string | null): string {
+  const s = (status ?? "").trim().toLowerCase();
+  if (!s) return "unknown";
+  const isPickup = (fulfillmentType ?? "").toLowerCase() === "pickup";
+  switch (s) {
+    case "pending":
+    case "placed":
+      return "Placed";
+    case "confirmed":
+      return "Confirmed";
+    case "preparing":
+      return "Preparing";
+    case "out_for_delivery":
+    case "dispatched":
+      return isPickup ? "Ready for Pickup" : "Out for Delivery";
+    case "ready_for_pickup":
+      return "Ready for Pickup";
+    case "picked_up":
+      return "Picked Up";
+    case "delivered":
+      return isPickup ? "Picked Up" : "Delivered";
+    case "cancelled":
+      return "Cancelled";
+    case "pending_payment":
+      return "Awaiting payment";
+    default:
+      return s;
+  }
+}
+
+/** Payment method and status read as a PAIR. Neither says enough alone:
+ *  `pending` is unremarkable on a COD order and means money is owed on an
+ *  online one, and `paid` on a COD order means the rider took cash, not that
+ *  the customer paid online. Telling someone they already paid online when
+ *  they have not is how you get paid twice — or not at all. */
+function paymentLabel(
+  method: string | null,
+  status: string | null,
+  fulfillmentType?: string | null,
+): string {
+  const m = (method ?? "").trim().toLowerCase();
+  const s = (status ?? "").trim().toLowerCase();
+  // Nothing is delivered on a pickup order, so "cash on delivery" there reads
+  // as a promise to come to the door.
+  const place = (fulfillmentType ?? "").toLowerCase() === "pickup" ? "pickup" : "delivery";
+  if (s === "refunded") return "Refunded";
+  if (s === "paid") return m === "cod" ? `Paid, cash on ${place}` : "Paid online";
+  if (s === "failed") return "Payment failed — nothing has been charged";
+  if (m === "cod") return `Cash on ${place} (not yet collected)`;
+  if (m === "razorpay") return "Payment pending";
+  if (!m && !s) return "unknown";
+  return `${m || "unknown method"} / ${s || "unknown status"}`;
+}
+
+/** The delivery window in words. THREE shapes reach this, all of them real:
+ *    1. a canonical range, "10:00-14:00"  → "10 AM - 2 PM"
+ *    2. a legacy bare time, "07:30"       → "7:30 - 8:00 AM" (the old 30-min grid)
+ *    3. NULL                              → "" — and that is not an error.
+ *       OLF172 is a real COD order with no slot on file. The caller must say
+ *       "no time window on file", never invent one. */
+function slotWindowLabel(value: string | null | undefined): string {
+  if (!value) return "";
+  const v = value.trim();
+  const range = /^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/.exec(v);
+  if (range) {
+    return `${clock12(Number(range[1]), Number(range[2]))} - ${clock12(
+      Number(range[3]),
+      Number(range[4]),
+    )}`;
+  }
+  const bare = /^(\d{2}):(\d{2})$/.exec(v);
+  if (bare) {
+    const startMins = Number(bare[1]) * 60 + Number(bare[2]);
+    const endMins = (startMins + 30) % (24 * 60);
+    return `${clock12(Math.floor(startMins / 60), startMins % 60)} - ${clock12(
+      Math.floor(endMins / 60),
+      endMins % 60,
+    )}`;
+  }
+  // Unrecognised shape: hand it over untouched rather than guess at it.
+  return v;
+}
+
+function clock12(hour: number, minute: number): string {
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return "";
+  const ampm = hour < 12 ? "AM" : "PM";
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  const mm = minute === 0 ? "" : `:${minute < 10 ? "0" : ""}${minute}`;
+  return `${h12}${mm} ${ampm}`;
+}
+
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/** "Mon 15 Sep" from a stored yyyy-mm-dd. The weekday is the point: a bare
+ *  date makes the reader count days, and the model will happily do that
+ *  arithmetic wrong.
+ *
+ *  Spelled out from fixed arrays rather than toLocaleDateString — that is
+ *  ICU-dependent ("Sep" vs "Sept" by runtime version) and this string ends up
+ *  quoted to a customer. `delivery_date` is an IST calendar date, not an
+ *  instant, so it is parsed and read back in UTC; putting a timezone in the
+ *  middle is how you land a day early. */
+function deliveryDateLabel(dateIso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((dateIso ?? "").trim());
+  if (!m) return dateIso ?? "";
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return dateIso ?? "";
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(d.getTime())) return dateIso ?? "";
+  return `${WEEKDAY_SHORT[d.getUTCDay()]} ${day} ${MONTH_SHORT[month - 1]}`;
 }
 
 function summariseItems(items: unknown): string {
@@ -604,7 +752,7 @@ async function fetchCustomerContext(
       const { data: ords, error: oErr } = await admin
         .from("orders")
         .select(
-          "id, public_ref, status, payment_status, payment_method, items, total_amount, delivery_date, delivery_slot, delivery_address, created_at, cancelled_at, status_updated_at",
+          "id, order_number, status, payment_status, payment_method, items, total_amount, delivery_date, delivery_slot, delivery_address, fulfillment_type, created_at, cancelled_at, status_updated_at",
         )
         .in("customer_id", customerIds)
         .order("created_at", { ascending: false })
@@ -622,7 +770,7 @@ async function fetchCustomerContext(
         ? await admin
             .from("subscriptions")
             .select(
-              "id, status, product_name, bread_name, frequency, day_of_week, time_slot, start_date, quantity_per_delivery, customer_phone, days, slot, total_amount, created_at",
+              "id, subscription_number, status, product_name, bread_name, frequency, day_of_week, time_slot, start_date, quantity_per_delivery, customer_phone, days, slot, total_amount, created_at",
             )
             .in("customer_id", customerIds)
             .in("status", ["active", "paused"])
@@ -632,7 +780,7 @@ async function fetchCustomerContext(
     const subByPhone = await admin
       .from("subscriptions")
       .select(
-        "id, status, product_name, bread_name, frequency, day_of_week, time_slot, start_date, quantity_per_delivery, customer_phone, days, slot, total_amount, created_at",
+        "id, subscription_number, status, product_name, bread_name, frequency, day_of_week, time_slot, start_date, quantity_per_delivery, customer_phone, days, slot, total_amount, created_at",
       )
       .ilike("customer_phone", like)
       .in("status", ["active", "paused"])
@@ -814,24 +962,42 @@ function renderCustomerBlock(ctx: CustomerContext | null, verifiedPhone: string)
           : klass === "cancelled"
           ? " [CANCELLED]"
           : " [ACTIVE]";
+      const isPickup = (o.fulfillment_type ?? "").toLowerCase() === "pickup";
       const bits: string[] = [];
-      bits.push(`- Order ${shortOrderId(o)} — placed ${isoDate(o.created_at)}${tag}`);
+      bits.push(`- Order ${orderRef(o)} — placed ${isoDate(o.created_at)}${tag}`);
       bits.push(
-        `  status: ${o.status ?? "unknown"}${
+        `  status: ${statusLabel(o.status, o.fulfillment_type)}${
           o.status_updated_at ? ` (updated ${isoDate(o.status_updated_at)})` : ""
         }`,
       );
       bits.push(`  items: ${summariseItems(o.items)}`);
       bits.push(`  total: ₹${o.total_amount ?? "unknown"}`);
       bits.push(
-        `  payment: ${o.payment_method ?? "unknown"} / ${o.payment_status ?? "unknown"}`,
+        `  payment: ${paymentLabel(o.payment_method, o.payment_status, o.fulfillment_type)}`,
       );
+      // Date and time window are separate lines because they fail separately:
+      // an order can have a date and no slot (OLF172 is a real one). Never
+      // paper over a missing window with a plausible one.
       bits.push(
-        `  delivery: ${o.delivery_date ?? "not scheduled"}${
-          o.delivery_slot ? `, ${o.delivery_slot}` : ""
+        `  ${isPickup ? "pickup date" : "delivery date"}: ${
+          o.delivery_date ? deliveryDateLabel(o.delivery_date) : "not scheduled yet"
         }`,
       );
-      bits.push(`  address: ${o.delivery_address ?? "(none on file)"}`);
+      bits.push(
+        `  time window: ${
+          slotWindowLabel(o.delivery_slot) ||
+          "no time window on file — do NOT invent one, say we'll confirm the time"
+        }`,
+      );
+      bits.push(
+        `  ${isPickup ? "pickup from" : "address"}: ${
+          // Addresses are stored with the picker's label inline — "[Home] 4B,
+          // …". That tag is a UI affordance; left in, the bot reads it back at
+          // the customer as if it were part of the street.
+          o.delivery_address?.replace(/^\s*\[[^\]]*\]\s*/, "").trim() ||
+          "(none on file)"
+        }`,
+      );
       if (o.cancelled_at) bits.push(`  cancelled at: ${isoDate(o.cancelled_at)}`);
       if (klass === "pending") {
         bits.push(
@@ -845,7 +1011,7 @@ function renderCustomerBlock(ctx: CustomerContext | null, verifiedPhone: string)
     lines.push("");
     lines.push(
       `STALE / EXPIRED (${expired.length}): ${expired
-        .map((c) => shortOrderId(c.o))
+        .map((c) => orderRef(c.o))
         .join(", ")} — placed more than 7 days ago and NEVER confirmed or paid. These are NOT active orders. Never present them as live: do NOT say "scheduled", "delivering", or give a delivery date. If the customer asks about one, say it's an older unconfirmed request that isn't active, and offer to connect them to the team.`,
     );
   }
@@ -865,15 +1031,21 @@ function renderCustomerBlock(ctx: CustomerContext | null, verifiedPhone: string)
       const slot = s.time_slot ?? s.slot ?? null;
       const next = ctx.nextBySub.get(s.id);
       const bits: string[] = [];
-      bits.push(`- ${name} — status: ${s.status ?? "unknown"}`);
-      bits.push(`  frequency: ${freq}${slot ? `, ${slot}` : ""}`);
+      bits.push(
+        `- Subscription ${subRef(s)} — ${name} — status: ${s.status ?? "unknown"}`,
+      );
+      bits.push(
+        `  frequency: ${freq}${slot ? `, ${slotWindowLabel(slot) || slot}` : ""}`,
+      );
       if (s.quantity_per_delivery)
         bits.push(`  quantity per delivery: ${s.quantity_per_delivery}`);
-      if (s.start_date) bits.push(`  start date: ${s.start_date}`);
+      if (s.start_date) bits.push(`  start date: ${deliveryDateLabel(s.start_date)}`);
       if (next?.scheduled_date) {
         bits.push(
-          `  next scheduled delivery: ${next.scheduled_date}${
-            next.scheduled_time_slot ? `, ${next.scheduled_time_slot}` : ""
+          `  next scheduled delivery: ${deliveryDateLabel(next.scheduled_date)}${
+            next.scheduled_time_slot
+              ? `, ${slotWindowLabel(next.scheduled_time_slot) || next.scheduled_time_slot}`
+              : ""
           }${next.status ? ` (${next.status})` : ""}`,
         );
       } else {
@@ -892,6 +1064,12 @@ function renderCustomerBlock(ctx: CustomerContext | null, verifiedPhone: string)
   );
   lines.push(
     "- If a field says unknown / (none on file) / not scheduled, say so plainly. Never invent a value.",
+  );
+  lines.push(
+    '- Refer to an order ONLY by the OLF number shown above (e.g. "OLF175"), and to a subscription only by its OLS number. Never invent, guess, or alter a number.',
+  );
+  lines.push(
+    "- If the customer quotes a code starting with CX-, that is an older reference from a confirmation message we sent before we switched to OLF numbers. Do not repeat it back and do not treat it as unknown: it belongs to one of the orders listed above. If it is obvious which, answer using that order's OLF number and mention that the number has changed; if more than one could match, ask which delivery date they mean.",
   );
   lines.push(
     "- Refunds, replacements, cancellations, address changes → say the team will help and hand off. Never promise an outcome.",
