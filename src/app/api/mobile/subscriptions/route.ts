@@ -41,6 +41,7 @@ import {
 } from "@/lib/subscription-dates";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
+import { formatSubscriptionNumber } from "@/lib/order-number";
 import { getPreorderMode } from "@/lib/preorderMode";
 import {
   isValidSlotValue,
@@ -588,10 +589,13 @@ export async function GET(req: NextRequest) {
   }
 
   // All subscriptions for this customer, newest first, capped at 50.
+  // `subscription_number` (OLS<n>) is the customer-facing subscription number
+  // as of 2026-09-14 — see src/lib/order-number.ts. Older installed app builds
+  // simply ignore the extra field.
   const { data: subs, error: subsErr } = await supabaseAdmin
     .from("subscriptions")
     .select(
-      "id, status, bread_name, product_name, bread_price, total_amount, weeks, days, start_date, created_at, customer_name, customer_address",
+      "id, subscription_number, status, bread_name, product_name, bread_price, total_amount, weeks, days, start_date, created_at, customer_name, customer_address",
     )
     .eq("customer_id", customer.id)
     .not("payment_status", "in", HIDDEN_SUBSCRIPTION_FILTER)
@@ -912,7 +916,10 @@ async function handleMultiVariant(
       delivery_fee_inr: feePerDelivery,
       distance_km: distanceKm,
     })
-    .select("id")
+    // subscription_number (OLS<n>) is assigned by a BEFORE-INSERT trigger, so
+    // it is already populated on the returned row. The app shows it as the
+    // subscription number on the confirmation screen.
+    .select("id, subscription_number")
     .single();
   if (subErr || !sub) {
     console.error("[mobile/subscriptions] multi subscription insert:", subErr);
@@ -960,10 +967,12 @@ async function handleMultiVariant(
     { phone: phoneLocal },
   );
 
-  const shortId = String(sub.id).slice(0, 8).toUpperCase();
+  // OLS number, not a UUID slice — this is the number the customer will quote
+  // back to us. Falls back to the slice only for a row the trigger missed.
+  const subLabel = formatSubscriptionNumber(sub);
   const waMessage =
     `Hi ${na.full_name || "there"}! 🍞 Your Cadieux subscription has been scheduled.\n\n` +
-    `Subscription ID: ${shortId}\n` +
+    `Subscription ID: ${subLabel}\n` +
     `${deliveryRows.length} deliveries, first on ${firstDeliveryDate}\n` +
     `Total: ₹${serverAmount}\n` +
     `Delivery to: ${na.addressString}\n\n` +
@@ -988,6 +997,7 @@ async function handleMultiVariant(
   return NextResponse.json({
     ok: true,
     subscription_id: sub.id,
+    subscription_number: sub.subscription_number,
     delivery_count: deliveryRows.length,
     first_delivery_date: firstDeliveryDate,
     total_amount_inr: serverAmount,
@@ -1341,7 +1351,9 @@ export async function POST(req: NextRequest) {
       delivery_fee_inr: feePerDelivery,
       distance_km: distanceKm,
     })
-    .select("id")
+    // See the multi-variant path above: OLS<n> is trigger-assigned, so it
+    // comes back on the inserted row with no extra round trip.
+    .select("id, subscription_number")
     .single();
 
   if (subErr || !sub) {
@@ -1385,10 +1397,11 @@ export async function POST(req: NextRequest) {
     { phone: phoneLocal },
   );
 
-  const shortId = String(sub.id).slice(0, 8).toUpperCase();
+  // OLS number, not a UUID slice — same reason as the multi-variant path.
+  const subLabel = formatSubscriptionNumber(sub);
   const waMessage =
     `Hi ${body.full_name || "there"}! 🍞 Your Cadieux subscription has been scheduled.\n\n` +
-    `Subscription ID: ${shortId}\n` +
+    `Subscription ID: ${subLabel}\n` +
     `${deliveryRows.length} deliveries, first on ${firstDeliveryDate}\n` +
     `Total: ₹${totalAmountInr}\n` +
     `Delivery to: ${addressString}\n\n` +
@@ -1413,6 +1426,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     subscription_id: sub.id,
+    subscription_number: sub.subscription_number,
     delivery_count: deliveryRows.length,
     first_delivery_date: firstDeliveryDate,
     total_amount_inr: totalAmountInr,
