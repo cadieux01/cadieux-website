@@ -54,6 +54,14 @@ import {
   toNotifyStatus,
 } from "@/lib/admin-notify";
 import Select from "@/components/ui/Select";
+import MultiSelect from "@/components/ui/MultiSelect";
+import {
+  ALL_VALUE,
+  CALL_PREFIX,
+  encodeStatusParam,
+  matchesOrderFilter,
+  splitFilterValues,
+} from "@/lib/order-filter";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isShareable } from "@/lib/order-share-message";
 import { LoafDots } from "@/components/admin/LoafDots";
@@ -215,10 +223,19 @@ function OrdersPageInner() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Filter is a plain string so it can hold status keys ("confirmed"),
-  // the "all" alias, the legacy "expired" URL value AND call-update
-  // filters encoded as "call:<body>". See buildFilterOptions below.
-  const [filter, setFilter] = useState<string>("all");
+  // Multi-select. Holds status keys ("confirmed"), the legacy "expired"
+  // value and call-update filters encoded as "call:<body>", mixed in one
+  // flat list; splitFilterValues sorts them into their two groups.
+  //
+  // EMPTY MEANS "ALL STATUSES". There is no "all" member — representing it
+  // as a value would create two encodings of the same state ([] and ["all"])
+  // that could disagree. The menu still shows an "All statuses" row; it is
+  // rendered ticked when the status group is empty.
+  const [filter, setFilter] = useState<string[]>([]);
+  const { statuses: statusSel, calls: callSel } = useMemo(
+    () => splitFilterValues(filter),
+    [filter],
+  );
   // Owner of the currently-open NotePanel (order id + display label).
   // null = panel closed.
   const [noteOwner, setNoteOwner] = useState<
@@ -351,22 +368,10 @@ function OrdersPageInner() {
     return orders
       .filter((o) => {
         if (!withinDateRange(o.created_at, range)) return false;
-        if (filter !== "all") {
-          if (filter === "expired") {
-            // 'expired' is a computed lifecycle state (not a stored status).
-            // Match server-attached computed_state; see src/lib/order-state.ts.
-            // No longer offered in the dropdown but kept for URL back-compat.
-            if (o.computed_state !== "expired") return false;
-          } else if (filter.startsWith("call:")) {
-            // "call:<body>" — match rows whose most recent call note's
-            // body equals the exact preset. Body comparison is verbatim;
-            // the option set is derived from the same distinct-body list.
-            const target = filter.slice("call:".length);
-            if ((o.last_call_note?.body ?? "") !== target) return false;
-          } else if ((o.status ?? "").toLowerCase() !== filter) {
-            return false;
-          }
-        }
+        // Statuses OR'd, call updates OR'd, the two groups AND'd. Shared
+        // with the print view so the packing list can't disagree with the
+        // screen it was printed from — see src/lib/order-filter.ts.
+        if (!matchesOrderFilter(o, statusSel, callSel)) return false;
         if (!q) return true;
         const name = (o.customers?.full_name ?? "").toLowerCase();
         const phone = (o.customers?.phone ?? "").toLowerCase();
@@ -415,7 +420,7 @@ function OrdersPageInner() {
         if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [orders, filter, query, sort, range, rankOf]);
+  }, [orders, statusSel, callSel, query, sort, range, rankOf]);
 
   // Counts are scoped to the active date range so the numbers in the
   // Status dropdown match the rows the operator is actually looking at.
@@ -456,24 +461,94 @@ function OrdersPageInner() {
   const filterOptions = useMemo(() => {
     const opts: Array<{ value: string; label: string; disabled?: boolean }> = [];
     for (const v of STATUS_FILTER_OPTIONS) {
-      if (v === "all" || v === filter || (counts[v] ?? 0) > 0) {
-        const label =
-          v === "all" ? "All statuses" : formatStatusLabel(v);
+      // A TICKED option always stays listed, even at zero, or narrowing the
+      // date range would hide the very filter that is suppressing the rows —
+      // the operator would see an empty table and no way to tell why.
+      if (v === ALL_VALUE || statusSel.includes(v) || (counts[v] ?? 0) > 0) {
+        const label = v === ALL_VALUE ? "All statuses" : formatStatusLabel(v);
         opts.push({ value: v, label: `${label} (${counts[v] ?? 0})` });
       }
     }
-    if (callBodies.length > 0) {
+    // Same rule for call updates, but they are data-derived rather than from a
+    // fixed list: a ticked body whose rows have all left the range is absent
+    // from callBodies entirely, so it has to be re-added at zero.
+    const tallied = new Map(callBodies.map((c) => [c.body, c.count]));
+    for (const body of callSel) {
+      if (!tallied.has(body)) tallied.set(body, 0);
+    }
+    if (tallied.size > 0) {
       opts.push({
         value: "__sep_call",
         label: "── Call updates ──",
         disabled: true,
       });
-      for (const { body, count } of callBodies) {
-        opts.push({ value: `call:${body}`, label: `${body} (${count})` });
+      // callBodies is already sorted by count desc; keep that order and put
+      // any re-added zero-count bodies at the end.
+      const ordered = [
+        ...callBodies.map((c) => c.body),
+        ...callSel.filter((b) => !callBodies.some((c) => c.body === b)),
+      ];
+      for (const body of ordered) {
+        opts.push({
+          value: `${CALL_PREFIX}${body}`,
+          label: `${body} (${tallied.get(body) ?? 0})`,
+        });
       }
     }
     return opts;
-  }, [counts, callBodies, filter]);
+  }, [counts, callBodies, statusSel, callSel]);
+
+  // Trigger label. One selected → "Pending (27)". Two or more → name the
+  // first and count the rest → "Pending +2 (43)".
+  //
+  // The bracketed number is the SUM of the selected options' counts, as
+  // specified. For a pure-status selection that equals the row count, because
+  // the status buckets partition the rows (see STATUS_FILTER_OPTIONS). Mixing
+  // in a call update breaks that equality by design — the groups AND, so the
+  // sum becomes an upper bound rather than a total. The label is a summary of
+  // what is ticked, not a promise about the table.
+  const filterLabel = useMemo(() => {
+    const picked = filterOptions.filter(
+      (o) => !o.disabled && filter.includes(o.value),
+    );
+    if (picked.length === 0) return `All statuses (${counts.all ?? 0})`;
+    const total = picked.reduce((sum, o) => {
+      const m = /\((\d+)\)\s*$/.exec(o.label);
+      return sum + (m ? Number(m[1]) : 0);
+    }, 0);
+    // Strip the option's own "(n)" — the label carries the summed one.
+    const head = picked[0].label.replace(/\s*\(\d+\)\s*$/, "");
+    const rest = picked.length - 1;
+    return rest === 0
+      ? `${head} (${total})`
+      : `${head} +${rest} (${total})`;
+  }, [filterOptions, filter, counts]);
+
+  // Toggle rules:
+  //   • "All statuses" clears the STATUS group only. It is named "All
+  //     statuses", it sits above the "Call updates" separator, and the
+  //     whole point of the feature is combining the two groups — so
+  //     widening the statuses must not silently drop a call filter.
+  //   • Unticking the last status leaves the group empty, which already
+  //     means "all". No special case needed, and none is wanted: a special
+  //     case would give "all" a second encoding.
+  const toggleFilter = useCallback((value: string) => {
+    if (value === "__sep_call") return;
+    clearRankPins();
+    setFilter((curr) => {
+      if (value === ALL_VALUE) return curr.filter((v) => v.startsWith(CALL_PREFIX));
+      return curr.includes(value)
+        ? curr.filter((v) => v !== value)
+        : [...curr, value];
+    });
+  }, [clearRankPins]);
+
+  // What the menu shows as ticked: the raw selection, plus "All statuses"
+  // when the status group is empty.
+  const tickedValues = useMemo(
+    () => (statusSel.length === 0 ? [...filter, ALL_VALUE] : filter),
+    [filter, statusSel],
+  );
 
   const advance = async (order: AdminOrderRow) => {
     const next = nextStatusFor(order);
@@ -676,7 +751,11 @@ function OrdersPageInner() {
             href={{
               pathname: "/admin/orders/print",
               query: {
-                status: filter,
+                // `status` stays comma-separated (back-compatible with the
+                // old single-value links); call updates ride a REPEATED
+                // `call` param because note bodies can contain commas.
+                status: encodeStatusParam(statusSel),
+                ...(callSel.length > 0 ? { call: callSel } : {}),
                 q: query,
                 sort,
                 // Carry the currently-selected date range so the print
@@ -728,17 +807,14 @@ function OrdersPageInner() {
       {/* Status filter + search + sort */}
       <div className="flex flex-wrap gap-3 items-center mb-6">
         {/* One dropdown instead of 11 wrapping chips. Same filter values,
-            same live counts (range-scoped) — just folded into the label. */}
+            same live counts (range-scoped) — just folded into the label.
+            Multi-select: the menu stays open so several can be ticked in a
+            row; it closes on outside click or Esc. */}
         <div style={{ minWidth: 230 }}>
-          <Select
-            value={filter}
-            onChange={(v) => {
-              // Guard against picking the disabled separator; if it ever
-              // gets through we no-op rather than jamming the state.
-              if (v === "__sep_call") return;
-              clearRankPins();
-              setFilter(v);
-            }}
+          <MultiSelect
+            values={tickedValues}
+            onToggle={toggleFilter}
+            triggerLabel={filterLabel}
             ariaLabel="Filter orders by status"
             options={filterOptions}
           />

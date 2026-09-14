@@ -1,7 +1,7 @@
 "use client";
 
 // Print-friendly orders sheet. Renders the same filter set as
-// /admin/orders (status, q, sort, from, to — all carried in query
+// /admin/orders (status, call, q, sort, from, to — all carried in query
 // params) and triggers window.print() once loaded.
 //
 // The date range comes from the DateRangeDropdown on the orders page:
@@ -24,11 +24,8 @@ import {
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
-import {
-  AdminOrderItemSnapshot,
-  AdminOrderRow,
-  OrderFilterValue,
-} from "@/lib/admin-shared";
+import { AdminOrderItemSnapshot, AdminOrderRow } from "@/lib/admin-shared";
+import { decodeStatusParam, matchesOrderFilter } from "@/lib/order-filter";
 
 // Parse a YYYY-MM-DD string (from the orders page's toYMD) as a local
 // Date. Invalid / missing → null. Mirrors DateRangeDropdown's own
@@ -72,7 +69,20 @@ export default function PrintOrdersPage() {
 
 function PrintOrdersPageInner() {
   const params = useSearchParams();
-  const status = (params.get("status") ?? "all") as OrderFilterValue;
+  // Both filter groups come from the orders page. `status` is
+  // comma-separated (a lone value still means what it always did);
+  // `call` is REPEATED because note bodies can contain commas. See
+  // src/lib/order-filter.ts — the predicate lives there so this view and
+  // the table it was printed from can never disagree again.
+  const statusRaw = params.get("status");
+  const callRaw = params.getAll("call").join("\u0000");
+  const statuses = useMemo(() => decodeStatusParam(statusRaw), [statusRaw]);
+  const calls = useMemo(
+    () => (callRaw ? callRaw.split("\u0000") : []),
+    [callRaw],
+  );
+  const filterLabel =
+    [...statuses, ...calls].join(", ") || "all";
   const q = params.get("q") ?? "";
   const fromParam = params.get("from");
   const toParam = params.get("to");
@@ -114,21 +124,13 @@ function PrintOrdersPageInner() {
       // missing, range is null and this passes everything (back-compat
       // for older bookmarks / entry points).
       if (!withinDateRange(o.created_at, range)) return false;
-      if (status !== "all") {
-        if (status === "expired") {
-          // Match the /admin/orders page filter — 'expired' is computed,
-          // not a stored status. See src/lib/order-state.ts.
-          if (o.computed_state !== "expired") return false;
-        } else if ((o.status ?? "").toLowerCase() !== status) {
-          return false;
-        }
-      }
+      if (!matchesOrderFilter(o, statuses, calls)) return false;
       if (!search) return true;
       const name = (o.customers?.full_name ?? "").toLowerCase();
       const phone = (o.customers?.phone ?? "").toLowerCase();
       return name.includes(search) || phone.includes(search);
     });
-  }, [orders, status, q, range]);
+  }, [orders, statuses, calls, q, range]);
 
   // Group: delivery_date → delivery_slot → orders[]. Null date/slot
   // bucket sorts last so the dated rows print first.
@@ -192,7 +194,7 @@ function PrintOrdersPageInner() {
             Cadieux — Orders
           </h1>
           <p style={{ margin: "0.3rem 0 0", color: "rgba(29,29,31,0.7)", fontSize: "1rem" }}>
-            {rangeLabel} · Status: {status} · Search: {q || "—"} · Generated{" "}
+            {rangeLabel} · Status: {filterLabel} · Search: {q || "—"} · Generated{" "}
             {new Date().toLocaleString("en-IN")}
           </p>
         </header>
@@ -208,7 +210,7 @@ function PrintOrdersPageInner() {
           Cadieux — Orders
         </h1>
         <p style={{ margin: "0.3rem 0 0", color: "rgba(29,29,31,0.7)", fontSize: "1rem" }}>
-          {rangeLabel} · Status: {status} · Search: {q || "—"} · Generated{" "}
+          {rangeLabel} · Status: {filterLabel} · Search: {q || "—"} · Generated{" "}
           {new Date().toLocaleString("en-IN")}
         </p>
         <p style={{ margin: "0.3rem 0 0", fontSize: "1rem" }}>
