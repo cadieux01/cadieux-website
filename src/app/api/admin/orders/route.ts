@@ -282,8 +282,9 @@ export async function POST(req: NextRequest) {
         phone: phoneLocal,
         name: fullName,
         orderId: order.id,
-        // Customer-facing reference, not the OLF number (see order-number.ts).
-        orderNumber: order.public_ref,
+        // OLF number — the customer-facing one since 2026-09-14
+        // (see lib/order-number.ts).
+        orderNumber: order.order_number,
         total: prepared.grandTotal,
         address: prepared.deliveryAddress,
         preorder: prepared.isPreorder,
@@ -296,7 +297,7 @@ export async function POST(req: NextRequest) {
   const waMessage = buildOrderPlacedWhatsApp({
     name: fullName,
     orderId: order.id,
-    publicRef: order.public_ref,
+    orderNumber: order.order_number,
     total: prepared.grandTotal,
     address: prepared.deliveryAddress,
     preorder: prepared.isPreorder,

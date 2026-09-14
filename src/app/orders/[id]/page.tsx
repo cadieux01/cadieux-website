@@ -25,7 +25,7 @@ import {
   nextDeliveryDates,
 } from "@/lib/delivery-slots";
 import { trackPurchase } from "@/lib/analytics";
-import { formatPublicRef } from "@/lib/order-number";
+import { formatOrderNumber } from "@/lib/order-number";
 import BackLink from "@/components/BackLink";
 import { composeCustomerShareMessage } from "@/lib/order-share-customer";
 
@@ -42,9 +42,11 @@ type OrderItem = {
 
 type Order = {
   id: string;
-  /** Customer-facing reference, 'CX-XXXXXX'. This is what we display.
-   *  There is deliberately no order_number field — the API no longer
-   *  sends the OLF number to a browser. */
+  /** OLF number — the customer-facing order number since 2026-09-14.
+   *  See the decision note in src/lib/order-number.ts. */
+  order_number?: string | null;
+  /** Legacy CX- reference. Still sent, no longer displayed; a customer
+   *  quoting one off an old SMS is matched by admin search. */
   public_ref?: string | null;
   total_amount: number;
   delivery_fee: number | null;
@@ -378,10 +380,9 @@ export default function OrderDetailPage() {
     0,
   );
 
-  // Customer-facing reference (CX-XXXXXX). Deliberately NOT the OLF
-  // number — that is sequential and would disclose our order volume.
-  // See src/lib/order-number.ts.
-  const shortId = order?.id ? formatPublicRef(order) : "";
+  // The OLF number is the customer-facing order number as of 2026-09-14 —
+  // deliberate, see src/lib/order-number.ts.
+  const shortId = order?.id ? formatOrderNumber(order) : "";
 
   return (
     <div

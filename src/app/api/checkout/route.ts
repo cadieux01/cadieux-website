@@ -182,9 +182,8 @@ export async function GET(req: NextRequest) {
   const [ordersRes, subsRes] = await Promise.all([
     supabaseAdmin
       .from("orders")
-      // No order_number: this list is returned straight to the browser.
-      // The OLF number is sequential and would disclose order volume.
-      .select("id, public_ref, total_amount, delivery_address, status, created_at, delivery_date, is_preorder, scheduled_delivery_date_at, fulfillment_type")
+      // OLF number — customer-facing since 2026-09-14, see lib/order-number.ts.
+      .select("id, order_number, public_ref, total_amount, delivery_address, status, created_at, delivery_date, is_preorder, scheduled_delivery_date_at, fulfillment_type")
       .eq("customer_id", customer.id)
       .order("created_at", { ascending: false }),
     supabaseAdmin
@@ -345,7 +344,7 @@ export async function POST(req: NextRequest) {
         payment_method: "cod",
         payment_status: "pending",
       })
-      .select("id, public_ref")
+      .select("id, order_number, public_ref")
       .single();
 
     if (error) {
@@ -370,10 +369,11 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({
       order_id: order.id,
-      // Customer-facing reference (CX-XXXXXX). This is the label that goes
-      // into the SMS + WhatsApp confirmations and onto the tracking page.
-      // The internal OLF number is NOT returned — a browser receives this
-      // response, and OLF<n> is sequential enough to disclose order volume.
+      // The label that goes into the SMS + WhatsApp confirmations and onto
+      // the tracking page. The OLF number as of 2026-09-14 — see
+      // lib/order-number.ts for what it discloses and who accepted that.
+      order_number: order.order_number,
+      // Legacy CX- reference, retained but no longer displayed.
       public_ref: order.public_ref,
       total_amount: prepared.grandTotal,
     });

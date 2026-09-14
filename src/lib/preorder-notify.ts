@@ -19,7 +19,7 @@ import type { NextRequest } from "next/server";
 import { sendMsg91FlowTemplate } from "@/lib/msg91";
 import { sendWhatsAppTemplate } from "@/lib/msg91-whatsapp";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { formatOrderNumber, formatPublicRef } from "@/lib/order-number";
+import { formatOrderNumber } from "@/lib/order-number";
 
 const SMS_TEMPLATE_ENV = "PREORDER_SCHEDULE_SMS_TEMPLATE_ID";
 const WA_TEMPLATE_ENV = "PREORDER_SCHEDULE_WA_TEMPLATE_ID";
@@ -27,11 +27,12 @@ const WA_TEMPLATE_ENV = "PREORDER_SCHEDULE_WA_TEMPLATE_ID";
 export type PreorderNotifyInput = {
   req?: NextRequest;
   orderId: string;
-  /** Internal OLF number. Used ONLY for the admin audit_log label. */
+  /** OLF number. The admin audit_log label AND, since 2026-09-14, the
+   *  value sent to the customer as ##order_number## / WhatsApp body_1. */
   orderNumber: string | null;
-  /** Customer-facing reference — the value sent as ##order_number## and
-   *  as WhatsApp body_1. Never send the OLF number to a customer. */
-  publicRef: string | null;
+  /** Legacy CX- reference. Accepted but no longer sent to customers;
+   *  see the decision note in @/lib/order-number. */
+  publicRef?: string | null;
   customerPhone: string | null; // 10-digit local OR normalised — helper handles both
   deliveryDate: string; // ISO YYYY-MM-DD
 };
@@ -41,16 +42,14 @@ export type PreorderNotifyInput = {
 export async function notifyPreorderScheduled(
   input: PreorderNotifyInput,
 ): Promise<{ sms: Outcome; whatsapp: Outcome }> {
-  // Admin audit label keeps the OLF number; the customer messages get
-  // the public reference. The two are deliberately different strings.
+  // One string for both the admin audit label and the customer message.
+  // They used to differ on purpose; since 2026-09-14 the customer sees the
+  // OLF number, so keeping them apart would only invite them to drift.
   const displayOrderNumber = formatOrderNumber({
     id: input.orderId,
     order_number: input.orderNumber,
   });
-  const customerRef = formatPublicRef({
-    id: input.orderId,
-    public_ref: input.publicRef,
-  });
+  const customerRef = displayOrderNumber;
   const phone = (input.customerPhone ?? "").trim();
 
   if (!phone) {

@@ -364,8 +364,9 @@ export async function POST(req: NextRequest) {
         phone: phoneLocal,
         name: fullName,
         orderId: order.id,
-        // Customer-facing reference, not the OLF number (see order-number.ts).
-        orderNumber: order.public_ref,
+        // OLF number — the customer-facing one since 2026-09-14
+        // (see lib/order-number.ts).
+        orderNumber: order.order_number,
         total: grandTotal,
         address: addressString,
         preorder: preorderMode,
@@ -381,7 +382,7 @@ export async function POST(req: NextRequest) {
   const waMessage = buildOrderPlacedWhatsApp({
     name: fullName,
     orderId: order.id,
-    publicRef: order.public_ref,
+    orderNumber: order.order_number,
     total: grandTotal,
     address: addressString,
     preorder: preorderMode,
@@ -400,13 +401,18 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     order_id: order.id,
-    // TEMPORARY. Every web route has stopped returning order_number, because
-    // OLF<n> is sequential and discloses order volume. This one still does:
-    // the shipped app (v18) renders order_number on its confirmation screen,
-    // so dropping it now would blank that screen on every installed copy.
-    // REMOVE once a release that reads public_ref has shipped.
+    // The customer-facing order number as of 2026-09-14 (see
+    // lib/order-number.ts).
+    //
+    // The app does NOT render this yet. Checked against app main def4386:
+    // every order screen shows `orderId.slice(0, 8).toUpperCase()`, a UUID
+    // slice — it never displayed public_ref either. An older comment here
+    // claimed the shipped app rendered order_number on its confirmation
+    // screen; that was wrong. Web and app will disagree until an app
+    // release reads this field, and that needs an EAS build, not a deploy.
     order_number: order.order_number,
-    // Customer-facing reference — what the app should render.
+    // Legacy CX- reference. Still returned so an older build that reads it
+    // keeps working; not what any current surface displays.
     public_ref: order.public_ref,
     subtotal_inr: subtotal,
     delivery_fee_inr: deliveryFee,

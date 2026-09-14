@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
       payment_status: "created",
       razorpay_order_id: rzp.id,
     })
-    .select("id, public_ref")
+    .select("id, order_number, public_ref")
     .single();
 
   if (error) {
@@ -170,10 +170,12 @@ export async function POST(req: NextRequest) {
 
   const res = NextResponse.json({
     db_order_id: order.id,
-    // Customer-facing reference (CX-XXXXXX). Consumed by the client to
-    // route the correct label into SMS + WhatsApp. The internal OLF number
-    // is NOT returned — this response lands in a browser, and OLF<n> is
-    // sequential enough to disclose order volume.
+    // The customer-facing order number. Consumed by the client to route
+    // the correct label into SMS + WhatsApp. This is the OLF number as of
+    // 2026-09-14 — see lib/order-number.ts for why it is now in a browser
+    // response, and for what that discloses.
+    order_number: order.order_number,
+    // Legacy CX- reference, retained but no longer displayed.
     public_ref: order.public_ref,
     razorpay_order_id: rzp.id,
     amount: rzp.amount, // paise (server-confirmed)

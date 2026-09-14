@@ -194,9 +194,11 @@ export default function PrintOrderReceiptPage({
           <div style={metaValue}>{formatOrderId(order)}</div>
         </div>
         <div>
-          {/* The only reference the customer knows — printed so the slip
-              can be matched to a phoned-in enquiry. */}
-          <div style={metaLabel}>Customer ref</div>
+          {/* Kept on the slip purely for back-matching. Since 2026-09-14 the
+              customer is shown the OLF number above, so a current enquiry
+              quotes that; this only helps with a caller reading a CX- code
+              off an older SMS. See src/lib/order-number.ts. */}
+          <div style={metaLabel}>Legacy ref</div>
           <div style={metaValue}>{formatPublicRef(order)}</div>
         </div>
         <div>

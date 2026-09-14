@@ -12,7 +12,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-import { formatPublicRef } from "@/lib/order-number";
+import {
+  formatOrderNumber,
+  formatSubscriptionNumber,
+} from "@/lib/order-number";
 import BackLink from "@/components/BackLink";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 
@@ -34,8 +37,9 @@ type OrderChangeRequest = {
   resolved_at: string | null;
   order: {
     id: string;
-    /** Customer-facing reference. The internal OLF number is deliberately
-     *  not declared here so it can never be rendered by accident. */
+    /** OLF number — the customer-facing order number since 2026-09-14.
+     *  See the decision note in src/lib/order-number.ts. */
+    order_number: string | null;
     public_ref: string | null;
     status: string;
     total_amount: number;
@@ -48,6 +52,9 @@ type OrderChangeRequest = {
 type SubscriptionChangeRequest = {
   id: string;
   subscription_id: string;
+  /** OLS number — the customer-facing subscription number since
+   *  2026-09-14. See the decision note in src/lib/order-number.ts. */
+  subscription_number?: string | null;
   delivery_id: string;
   requested_date: string | null;
   requested_time_slot: string | null;
@@ -60,6 +67,8 @@ type SubscriptionChangeRequest = {
 
 type PaymentRow = {
   order_id: string;
+  /** OLF number — see the decision note in src/lib/order-number.ts. */
+  order_number: string | null;
   public_ref: string | null;
   status: string;
   total_amount: number;
@@ -466,9 +475,9 @@ function OrderCRCard({ cr }: { cr: OrderChangeRequest }) {
             }}
           >
             Order{" "}
-            {formatPublicRef({
+            {formatOrderNumber({
               id: cr.order_id,
-              public_ref: cr.order?.public_ref ?? null,
+              order_number: cr.order?.order_number ?? null,
             })}
           </Link>
         </div>
@@ -592,7 +601,11 @@ function SubCRCard({ cr }: { cr: SubscriptionChangeRequest }) {
               textDecoration: "none",
             }}
           >
-            Subscription #{cr.subscription_id.slice(0, 8)}
+            Subscription{" "}
+            {formatSubscriptionNumber({
+              id: cr.subscription_id,
+              subscription_number: cr.subscription_number ?? null,
+            })}
           </Link>
         </div>
         <StatusBadge status={cr.status} />
@@ -678,7 +691,7 @@ function PaymentCard({ p }: { p: PaymentRow }) {
             textDecoration: "none",
           }}
         >
-          Order {formatPublicRef({ id: p.order_id, public_ref: p.public_ref })}
+          Order {formatOrderNumber({ id: p.order_id, order_number: p.order_number })}
         </Link>
         <StatusBadge status={label} />
       </div>

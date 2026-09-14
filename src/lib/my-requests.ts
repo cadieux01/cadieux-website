@@ -28,10 +28,10 @@ export type OrderChangeRequestRow = {
   resolved_at: string | null;
   order: {
     id: string;
-    /** Internal OLF number. Present for the mobile app only — the web
-     *  route strips it via stripInternalOrderNumbers(). Never render it. */
+    /** OLF number — the customer-facing order number since 2026-09-14.
+     *  See the decision note in src/lib/order-number.ts. */
     order_number?: string | null;
-    /** Customer-facing reference — render this, not order_number. */
+    /** Legacy CX- reference. Retained, no longer displayed. */
     public_ref: string | null;
     status: string;
     total_amount: number;
@@ -44,6 +44,10 @@ export type OrderChangeRequestRow = {
 export type SubscriptionChangeRequestRow = {
   id: string;
   subscription_id: string;
+  /** OLS number — the customer-facing subscription number since
+   *  2026-09-14. Joined in from the subscriptions row; null only for a
+   *  row predating the numbering trigger. */
+  subscription_number?: string | null;
   delivery_id: string;
   requested_date: string | null;
   requested_time_slot: string | null;
@@ -56,10 +60,10 @@ export type SubscriptionChangeRequestRow = {
 
 export type PaymentRow = {
   order_id: string;
-  /** Internal OLF number. Present for the mobile app only — the web
-   *  route strips it via stripInternalOrderNumbers(). Never render it. */
+  /** OLF number — the customer-facing order number since 2026-09-14.
+   *  See the decision note in src/lib/order-number.ts. */
   order_number?: string | null;
-  /** Customer-facing reference — render this, not order_number. */
+  /** Legacy CX- reference. Retained, no longer displayed. */
   public_ref: string | null;
   status: string;
   total_amount: number;
@@ -94,33 +98,6 @@ export type MyRequestsPayload = {
 };
 
 /**
- * Drop the internal OLF number from a payload bound for a browser.
- *
- * OLF<n> is sequential, so returning it would disclose cumulative order
- * volume to anyone who opens devtools on their own order. The web route
- * calls this; the mobile route does NOT, because the shipped app still
- * renders order_number (see api/mobile/checkout).
- */
-export function stripInternalOrderNumbers(
-  payload: MyRequestsPayload,
-): MyRequestsPayload {
-  return {
-    ...payload,
-    order_change_requests: payload.order_change_requests.map((r) => {
-      if (!r.order) return r;
-      const { order_number: _drop, ...order } = r.order;
-      void _drop;
-      return { ...r, order };
-    }),
-    payments: payload.payments.map((p) => {
-      const { order_number: _drop, ...rest } = p;
-      void _drop;
-      return rest;
-    }),
-  };
-}
-
-/**
  * Load the aggregated "Your Requests" payload for a single verified customer.
  *
  * Caller MUST already have authenticated the customer (cookie / bearer) and
@@ -149,10 +126,19 @@ export async function loadMyRequests(
   // 2) Pull the customer's subscriptions (ids only).
   const { data: subs, error: subsErr } = await supabase
     .from("subscriptions")
-    .select("id")
+    // subscription_number (OLS<n>) is the customer-facing subscription
+    // number since 2026-09-14, same decision as orders — see
+    // src/lib/order-number.ts.
+    .select("id, subscription_number")
     .eq("customer_id", customerId);
   if (subsErr) throw new Error(`subscriptions: ${subsErr.message}`);
   const subIds = (subs ?? []).map((s) => s.id);
+  const subNumberById = new Map<string, string | null>(
+    (subs ?? []).map((s) => [
+      s.id,
+      (s as { subscription_number?: string | null }).subscription_number ?? null,
+    ]),
+  );
 
   // 3) Order change requests, scoped via the customer's order ids.
   let orderCRs: OrderChangeRequestRow[] = [];
@@ -197,7 +183,11 @@ export async function loadMyRequests(
       .in("subscription_id", subIds)
       .order("created_at", { ascending: false });
     if (error) throw new Error(`subscription_change_requests: ${error.message}`);
-    subCRs = (data ?? []) as SubscriptionChangeRequestRow[];
+    subCRs = (data ?? []).map((r) => ({
+      ...(r as SubscriptionChangeRequestRow),
+      subscription_number:
+        subNumberById.get((r as { subscription_id: string }).subscription_id) ?? null,
+    }));
   }
 
   // 5) Payment history is just a projection of orders, newest first, surfacing

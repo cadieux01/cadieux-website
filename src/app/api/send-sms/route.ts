@@ -37,10 +37,9 @@ type SmsPayload = {
   name?: string;
   type: "order_placed" | "status_change" | "customer_edit";
   orderId?: string;
-  /** Customer-facing reference (`orders.public_ref`, e.g. 'CX-7K4M2P').
-   *  Field name is historical — the schema is .strict(), so renaming it
-   *  would 400 older callers. Every in-repo caller now passes public_ref;
-   *  the OLF number must NEVER be routed here, it leaks order volume. */
+  /** Customer-facing order number (`orders.order_number`, e.g. 'OLF412').
+   *  The field name finally matches what it carries: as of 2026-09-14 this
+   *  is the OLF number, not public_ref. See @/lib/order-number. */
   orderNumber?: string;
   total?: number;
   address?: string;
@@ -49,7 +48,7 @@ type SmsPayload = {
   preorder?: boolean;
 };
 
-/** public_ref (preferred) → falls back to a UUID hex slice so old callers
+/** order_number (preferred) → falls back to a UUID hex slice so old callers
  *  that only pass orderId still get a recognisable identifier. */
 function orderLabel(body: SmsPayload): string {
   const n = body.orderNumber?.trim();
@@ -68,7 +67,7 @@ function buildMessage(body: SmsPayload): string | null {
     return buildOrderPlacedSms({
       name: body.name ?? null,
       orderId: String(body.orderId ?? ""),
-      publicRef: body.orderNumber ?? null,
+      orderNumber: body.orderNumber ?? null,
       total: body.total ?? "",
       address: body.address ?? "",
       preorder: !!body.preorder,

@@ -30,9 +30,9 @@
 // already know all three. `/orders/[id]` therefore renders TWO buttons —
 // "Share Cadieux" (brand caption, no order data, safe to hand to anyone)
 // and "Share order" (the customer's own details, composed by
-// @/lib/order-share-customer). Note what stays out even there: no OLF
-// number, because a share message gets forwarded and the OLF sequence
-// discloses our order volume. public_ref is used instead.
+// @/lib/order-share-customer). That message carries the OLF number as of
+// 2026-09-14 — it is the customer-facing order number now, including on a
+// message built to be forwarded. See @/lib/order-number for the decision.
 
 import { useEffect, useRef, useState } from "react";
 

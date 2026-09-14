@@ -17,10 +17,10 @@
 export type OrderPlacedInput = {
   name: string | null | undefined;
   orderId: string;
-  /** Customer-facing reference (`orders.public_ref`, e.g. 'CX-7K4M2P').
-   *  NEVER the OLF number — that is internal and leaks order volume.
-   *  Falls back to a UUID slice for display if somehow absent. */
-  publicRef?: string | null;
+  /** Customer-facing order number (`orders.order_number`, e.g. 'OLF412').
+   *  This was `public_ref` until 2026-09-14 — see the decision note in
+   *  @/lib/order-number. Falls back to a UUID slice if somehow absent. */
+  orderNumber?: string | null;
   total: number | string;
   address: string;
   /** Adds the "date TBD, we'll confirm" closing when true. */
@@ -29,23 +29,25 @@ export type OrderPlacedInput = {
   siteUrl: string;
 };
 
-/** UUID-based tracker URL. `/orders/[id]` route param is the raw UUID —
- *  DO NOT substitute the OLF number here, the page won't resolve it. */
+/** UUID-based tracker URL. `/orders/[id]` route param is the raw UUID.
+ *  DO NOT substitute the OLF number here — the page would not resolve it,
+ *  and adding a resolver would make the sequence walkable. The number the
+ *  customer READS changed on 2026-09-14; the key the URL uses did not. */
 export function orderTrackingUrl(siteUrl: string, orderId: string): string {
   const base = siteUrl.replace(/\/+$/, "");
   return `${base}/orders/${orderId}`;
 }
 
-/** public_ref (preferred) → falls back to a UUID hex slice. */
-function orderLabel(orderId: string, publicRef?: string | null): string {
-  const r = (publicRef ?? "").trim();
+/** order_number (preferred) → falls back to a UUID hex slice. */
+function orderLabel(orderId: string, orderNumber?: string | null): string {
+  const r = (orderNumber ?? "").trim();
   if (r) return r;
   return "#" + orderId.slice(0, 8).toUpperCase();
 }
 
 export function buildOrderPlacedSms(input: OrderPlacedInput): string {
   const name = (input.name ?? "").trim() || "Customer";
-  const label = orderLabel(input.orderId, input.publicRef);
+  const label = orderLabel(input.orderId, input.orderNumber);
   const closing = input.preorder
     ? "This is a pre-order. We will confirm your delivery date by SMS + WhatsApp shortly. Thank you!"
     : "We will confirm shortly. Thank you!";
@@ -61,7 +63,7 @@ export function buildOrderPlacedSms(input: OrderPlacedInput): string {
 
 export function buildOrderPlacedWhatsApp(input: OrderPlacedInput): string {
   const name = (input.name ?? "").trim() || "there";
-  const label = orderLabel(input.orderId, input.publicRef);
+  const label = orderLabel(input.orderId, input.orderNumber);
   const closing = input.preorder
     ? `This is a pre-order — we will confirm your delivery date by SMS + WhatsApp shortly. Thank you for choosing Cadieux!`
     : `We will confirm your order shortly. Thank you for choosing Cadieux!`;

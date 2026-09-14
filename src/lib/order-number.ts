@@ -1,4 +1,34 @@
 /**
+ * DECISION — 2026-09-14, Sunny. THE CUSTOMER-FACING NUMBER IS NOW OLF/OLS.
+ *
+ * Until this date customers were shown `public_ref` (CX-7K4M2P) and the OLF
+ * number was withheld, because the OLF series is sequential: it discloses
+ * cumulative volume, and the difference between two of a customer's own
+ * orders discloses the growth rate in between. The series is shared with
+ * subscriptions, so what leaks is combined order + subscription throughput.
+ *
+ * That disclosure is real. It was put to Sunny explicitly, with this example,
+ * and he overruled it on operational grounds: he could not hold a conversation
+ * with a customer about an order while the two of them were looking at
+ * different numbers, and that cost is paid every single day, whereas the
+ * volume signal is diffuse and of interest to almost nobody.
+ *
+ * So: if you are reading this and about to "restore" the guard — it was not an
+ * oversight, and it is not a bug. Take it up with Sunny, not with the code.
+ *
+ * WHAT DID NOT CHANGE, and must not:
+ *   - URLs still key on the order UUID. Nothing resolves an order by its OLF
+ *     number, and nothing should. An OLF resolver would be an enumerable
+ *     endpoint (OLF200, OLF201, …) over names, phones and addresses — the
+ *     sequential property that is merely untidy in a display is a real hole in
+ *     a lookup key. The phone-verification gate on /api/orders/[id] is what
+ *     actually protects the data, but do not hand out a free walk.
+ *   - `public_ref` is still assigned, still stored, still projected. Admin
+ *     search resolves both, because customers holding an older SMS will quote
+ *     a CX- code for as long as those messages exist.
+ */
+
+/**
  * Central formatter for the human-facing order number.
  *
  * The DB trigger `orders_assign_number` (public.tg_orders_assign_number)
@@ -40,7 +70,9 @@ export function formatOrderNumber(row: {
  * never fire (every row was backfilled) but a partial API projection must
  * not render "undefined" onto a rider's share message.
  *
- * Admin / rider surfaces only. Customers keep `public_ref`.
+ * Customer-facing as of 2026-09-14 — see the decision note at the top of this
+ * file. This helper is prefix-agnostic: it renders whatever is in the column,
+ * so the pending OLS renumber needs no change here.
  */
 export function formatSubscriptionNumber(row: {
   id: string;
@@ -60,16 +92,20 @@ export function formatSubscriptionNumber(row: {
  * `public_ref` = 'CX-' + 6 chars drawn from a 30-char alphabet with
  * 0/O/1/I/L/U removed, so it survives being read out over the phone.
  * Assigned by the same BEFORE INSERT trigger, but drawn at random from
- * pgcrypto — NOT from orders_number_seq. That is the whole point:
- * `order_number` (OLF43) discloses cumulative order volume and the
- * growth rate between any two orders; `public_ref` discloses nothing.
+ * pgcrypto — NOT from orders_number_seq.
+ *
+ * NO LONGER SHOWN TO CUSTOMERS as of 2026-09-14 (see the decision note at the
+ * top of this file). Retained for one reason: older confirmation SMS and
+ * WhatsApp messages are already delivered and unchangeable, so a customer may
+ * quote a CX- code for years. Admin search must keep resolving it. Do not use
+ * this helper on a new customer surface — use `formatOrderNumber`.
  *
  * The prefix is 'CX-', not 'CDX-', because six legacy `order_number`
  * values are already 'CDX-00001'…'CDX-00006' and two different CDX
  * references would be ambiguous read out over the phone.
  *
- * Use this on every surface a customer can see. `formatOrderNumber`
- * (OLF) stays on admin, print, delivery and rider surfaces.
+ * Surviving call sites are admin-only: the packing slip prints it beside the
+ * OLF number, and admin order search matches against it.
  *
  * The column is NOT NULL and every historical row was backfilled, so
  * the UUID-slice fallback should never fire — it exists only so a

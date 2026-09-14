@@ -2,7 +2,7 @@
 // THEIR OWN order:
 //
 //   Anuradha Vaddi
-//   CX-8FNRJ9
+//   OLF412
 //   9848489677
 //   Plain x1
 //   7 Sep, 6 - 10 AM
@@ -27,12 +27,16 @@
 // bread line is a bread line in both and "2 loaves" can never appear in
 // either.
 //
-// THE REFERENCE IS public_ref, NEVER order_number. The OLF number is
-// sequential and is deliberately withheld from the browser (see the select
-// in /api/orders/[id]) because it discloses order volume. A share message
-// is built to be forwarded, so putting one here would leak that count to
-// everyone downstream of the customer as well. `public_ref` is the
-// customer-facing reference by design and admin can search on it.
+// THE REFERENCE IS order_number (OLF<n>) as of 2026-09-14. It replaced
+// public_ref here along with every other customer surface — deliberately,
+// with the volume disclosure understood and accepted. See the decision note
+// in @/lib/order-number for who decided and why.
+//
+// This was the strongest single argument for the old rule: a share message
+// is built to be forwarded, so the number travels past the customer to
+// whoever is fetching the bread. That is exactly why it has to be the same
+// number as everywhere else — the person standing at the door reading this
+// message is the person most likely to ring up and quote it.
 
 import { itemLines, mapsLinkFor } from "@/lib/order-share-message";
 import { formatSlotWindow } from "@/lib/delivery-slots";
@@ -61,6 +65,7 @@ export function shareDateLabel(dateIso: string | null | undefined): string {
 }
 
 export type CustomerShareOrder = {
+  order_number?: string | null;
   public_ref?: string | null;
   delivery_address?: string | null;
   latitude?: number | null;
@@ -126,7 +131,7 @@ export function composeCustomerShareMessage(order: CustomerShareOrder): string {
 
   return [
     order.customer?.full_name?.trim() || "",
-    order.public_ref?.trim() || "",
+    order.order_number?.trim() || "",
     order.customer?.phone?.trim() || "",
     ...itemLines(order.items),
     whenLine(order, isPickup),

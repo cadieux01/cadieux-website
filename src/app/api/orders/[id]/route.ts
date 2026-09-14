@@ -57,19 +57,20 @@ export async function GET(
   const { data: order, error } = await supabaseAdmin
     .from("orders")
     .select(
-      // order_number (OLF<n>) is deliberately NOT selected. The whole row
-      // is spread into the response a customer's browser receives, and the
-      // OLF number is sequential — it would disclose our order volume.
-      // public_ref is the customer-facing reference. That reasoning gets
-      // STRONGER for the share message, not weaker: a share message is
-      // built to be forwarded, so an OLF number in one leaks the count to
-      // everyone downstream of the customer too.
+      // order_number (OLF<n>) IS selected and IS shown to the customer.
+      // This reverses the previous rule, which held it back because the OLF
+      // series is sequential and discloses order volume. That disclosure is
+      // real and was accepted knowingly — see the note in
+      // src/lib/order-number.ts for who decided, when, and why.
+      //
+      // public_ref stays selected: the column is retained so admin search
+      // still resolves the CX- codes quoted from older SMS.
       //
       // latitude/longitude ARE selected. They are the coordinates of the
       // address this customer typed, and without them the share message's
       // maps link degrades from a dropped pin to a text search — materially
       // worse for whoever is actually driving there.
-      "id, public_ref, total_amount, delivery_fee, status, status_updated_at, delivery_address, latitude, longitude, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status, payment_method, payment_status, customer_id, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at",
+      "id, order_number, public_ref, total_amount, delivery_fee, status, status_updated_at, delivery_address, latitude, longitude, items, delivery_date, delivery_slot, created_at, cancelled_at, cancellation_reason, refund_status, payment_method, payment_status, customer_id, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at",
     )
     .eq("id", id)
     .maybeSingle();
