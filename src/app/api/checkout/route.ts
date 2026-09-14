@@ -13,8 +13,10 @@ import {
   allowedOrFailOpen,
   apiRateLimit,
   getClientIP,
+  ORDER_PHONE_LIMIT_MESSAGE,
   orderPhoneRateLimit,
   orderRateLimit,
+  SUBSCRIPTION_PHONE_LIMIT_MESSAGE,
 } from "@/lib/ratelimit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
@@ -321,7 +323,7 @@ export async function POST(req: NextRequest) {
     // insert, so it costs no extra query — prepare has already resolved the
     // customer's number. The key is deliberately NOT namespaced by payment
     // method: /api/create-order uses the same one, so COD and Razorpay share a
-    // single 5/hour budget rather than handing a script 10.
+    // single 3/30min budget rather than handing a script 6.
     const phoneUnderLimit = await allowedOrFailOpen(
       orderPhoneRateLimit,
       `order:${normalizePhone(prepared.custPhone ?? "unknown")}`
@@ -329,7 +331,7 @@ export async function POST(req: NextRequest) {
     if (!phoneUnderLimit) {
       return NextResponse.json(
         {
-          error: "Too many orders from this number. Please wait and try again.",
+          error: ORDER_PHONE_LIMIT_MESSAGE,
           code: "rate_limited",
         },
         { status: 429 }
@@ -479,7 +481,7 @@ export async function POST(req: NextRequest) {
     if (!subPhoneUnderLimit) {
       return NextResponse.json(
         {
-          error: "Too many attempts from this number. Please wait and try again.",
+          error: SUBSCRIPTION_PHONE_LIMIT_MESSAGE,
           code: "rate_limited",
         },
         { status: 429 },

@@ -40,6 +40,7 @@ import {
 import {
   allowedOrFailOpen,
   getClientIP,
+  ORDER_PHONE_LIMIT_MESSAGE,
   orderPhoneRateLimit,
   orderRateLimit,
 } from "@/lib/ratelimit";
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
 
   // Per-phone cap, checked after prepare (read-only) and before we create
   // anything at Razorpay or in the orders table. Shares the `order:` key with
-  // the COD path so the two together get one 5/hour budget, not two.
+  // the COD path so the two together get one 3/30min budget, not two.
   const phoneUnderLimit = await allowedOrFailOpen(
     orderPhoneRateLimit,
     `order:${normalizePhone(prepared.custPhone ?? "unknown")}`,
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest) {
   if (!phoneUnderLimit) {
     return NextResponse.json(
       {
-        error: "Too many orders from this number. Please wait and try again.",
+        error: ORDER_PHONE_LIMIT_MESSAGE,
         code: "rate_limited",
       },
       { status: 429 },

@@ -1,6 +1,8 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
+import { ADMIN_PHONE } from "@/lib/delivery-slots";
+
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
@@ -22,23 +24,55 @@ export const orderRateLimit = new Ratelimit({
   prefix: "ratelimit:order",
 });
 
-// Orders: 5 per phone per hour, as a second axis on order creation.
+/** Orders allowed per phone per window. Named so the 429 copy cannot drift
+ *  from the limiter it describes. */
+export const ORDER_PHONE_LIMIT = 3;
+
+// Orders: 3 per phone per 30 minutes, as a second axis on order creation.
 //
 // IP alone is not enough (a script can rotate egress) and phone alone is not
 // enough (a script can rotate numbers), so both are checked and either can
 // reject.
 //
-// Why 5 and not something tighter: a customer whose Razorpay payment fails
-// re-enters /api/create-order on every retry, and each retry spends quota.
-// Three would lock out a real buyer on their fourth attempt. The 13 Sep probe
-// ran ~14 creates/hour, so 5 stops it with room to spare while leaving genuine
-// payment retries alone.
+// Why 3/30m: measured against real traffic, exactly one genuine customer has
+// ever exceeded it (4 COD orders in 30 minutes on 10 Sep) versus a probe that
+// created thirty-plus. One blocked order in two weeks is the accepted trade.
+//
+// Known cost, accepted deliberately: a customer whose Razorpay payment fails
+// re-enters /api/create-order on every retry (src/app/checkout/page.tsx:1171 —
+// the dismiss and payment.failed handlers both say "try again" and no order id
+// is reused), so three failed card attempts inside 30 minutes exhaust the
+// budget. That is survivable ONLY because the 429 is recoverable: it names the
+// limit and hands the customer a phone number, rather than dead-ending them.
+// If you tighten this further, or drop that copy, read ORDER_PHONE_LIMIT_MESSAGE
+// first.
 export const orderPhoneRateLimit = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(5, "1 h"),
+  limiter: Ratelimit.slidingWindow(ORDER_PHONE_LIMIT, "30 m"),
   analytics: true,
   prefix: "ratelimit:order:phone",
 });
+
+/**
+ * 429 copy for the per-phone order cap.
+ *
+ * A real customer who hits this is someone ordering for several people, so the
+ * message must name the limit and offer a way through. The number comes from
+ * ADMIN_PHONE, never a literal — the mobile app already carries its own
+ * hardcoded copy, and two sources of truth for a phone number is how they
+ * drift.
+ */
+export const ORDER_PHONE_LIMIT_MESSAGE =
+  `You've placed ${ORDER_PHONE_LIMIT} orders in the last half hour. ` +
+  `For a larger order, call us on ${ADMIN_PHONE} and we'll take it directly.`;
+
+/** Same cap, reached on the subscription-creation path. Worded for what that
+ *  key actually counts (attempts, not placed orders) — it uses a separate
+ *  `sub:` budget. */
+export const SUBSCRIPTION_PHONE_LIMIT_MESSAGE =
+  `You've made ${ORDER_PHONE_LIMIT} subscription attempts in the last half ` +
+  `hour. To set up a larger plan, call us on ${ADMIN_PHONE} and we'll take it ` +
+  `directly.`;
 
 // Reviews: 3 per IP per day
 export const reviewRateLimit = new Ratelimit({
