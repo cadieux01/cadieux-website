@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { AreaSortControl, type ResolvedArea } from "@/components/admin/AreaSortControl";
 import { EditOrderPanel } from "@/components/admin/EditOrderPanel";
 import { ProductionCountStrip } from "@/components/admin/ProductionCountStrip";
 import {
@@ -63,6 +64,11 @@ import {
   matchesOrderFilter,
   splitFilterValues,
 } from "@/lib/order-filter";
+import {
+  sortByDistanceFromAnchor,
+  orderDistanceFrom,
+  type DistanceInfo,
+} from "@/lib/order-distance-sort";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isShareable } from "@/lib/order-share-message";
 import { LoafDots } from "@/components/admin/LoafDots";
@@ -71,7 +77,7 @@ import { NoteIconButton } from "@/components/admin/NoteIconButton";
 import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
 
-type SortKey = "created_desc" | "delivery_asc";
+type SortKey = "created_desc" | "delivery_asc" | "nearest_from_area";
 
 // Presets on the Call-update dropdown. Selecting any of these POSTs a
 // note with kind='call' whose body is the preset label. The custom
@@ -260,6 +266,38 @@ function OrdersPageInner() {
     resolvePreset("this_month"),
   );
 
+  // "Nearest from typed area" sort — see AreaSortControl. anchor is null
+  // until the operator matches an area; pincodeCoords hydrates once on
+  // mount (263 rows, ~20 KB) and powers the fallback for orders that
+  // lack GPS but carry a 6-digit pincode in their delivery_address.
+  const [anchor, setAnchor] = useState<ResolvedArea | null>(null);
+  const [pincodeCoords, setPincodeCoords] = useState<
+    Map<string, { latitude: number; longitude: number }>
+  >(() => new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch<{
+          rows: { pincode: string; latitude: number; longitude: number }[];
+        }>("/api/admin/pincode-geocache");
+        if (cancelled) return;
+        const m = new Map<string, { latitude: number; longitude: number }>();
+        for (const r of res.rows ?? []) {
+          m.set(r.pincode, { latitude: r.latitude, longitude: r.longitude });
+        }
+        setPincodeCoords(m);
+      } catch {
+        // Non-fatal: the area sort just loses its pincode fallback and
+        // downgrades to GPS-only precision for orders that have it.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Changing a status must update the row where it sits, not teleport it.
   // Without this, flipping Pending → Preparing moves the row from group 1
   // to group 3 mid-click and the operator loses their place. We freeze the
@@ -369,34 +407,51 @@ function OrdersPageInner() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return orders
-      .filter((o) => {
-        if (!withinDateRange(o.created_at, range)) return false;
-        // Statuses OR'd, call updates OR'd, the two groups AND'd. Shared
-        // with the print view so the packing list can't disagree with the
-        // screen it was printed from — see src/lib/order-filter.ts.
-        if (!matchesOrderFilter(o, statusSel, callSel)) return false;
-        if (!q) return true;
-        const name = (o.customers?.full_name ?? "").toLowerCase();
-        const phone = (o.customers?.phone ?? "").toLowerCase();
-        // Match either reference. A customer only ever knows public_ref
-        // ("CX-7K4M2P") and will often read it out without the prefix or
-        // the hyphen, so compare on a stripped form too. order_number
-        // ("OLF43", or legacy "CDX-00006") is on the bag, so ops search
-        // that directly.
-        const ref = (o.public_ref ?? "").toLowerCase();
-        const olf = (o.order_number ?? "").toLowerCase();
-        const bareRef = ref.replace(/^cx-/, "");
-        const bareQ = q.replace(/^cx-?/, "").replace(/-/g, "");
-        return (
-          name.includes(q) ||
-          phone.includes(q) ||
-          ref.includes(q) ||
-          olf.includes(q) ||
-          (bareQ.length > 0 && bareRef.includes(bareQ))
-        );
-      })
-      .sort((a, b) => {
+    const rows = orders.filter((o) => {
+      if (!withinDateRange(o.created_at, range)) return false;
+      // Statuses OR'd, call updates OR'd, the two groups AND'd. Shared
+      // with the print view so the packing list can't disagree with the
+      // screen it was printed from — see src/lib/order-filter.ts.
+      if (!matchesOrderFilter(o, statusSel, callSel)) return false;
+      if (!q) return true;
+      const name = (o.customers?.full_name ?? "").toLowerCase();
+      const phone = (o.customers?.phone ?? "").toLowerCase();
+      // Match either reference. A customer only ever knows public_ref
+      // ("CX-7K4M2P") and will often read it out without the prefix or
+      // the hyphen, so compare on a stripped form too. order_number
+      // ("OLF43", or legacy "CDX-00006") is on the bag, so ops search
+      // that directly.
+      const ref = (o.public_ref ?? "").toLowerCase();
+      const olf = (o.order_number ?? "").toLowerCase();
+      const bareRef = ref.replace(/^cx-/, "");
+      const bareQ = q.replace(/^cx-?/, "").replace(/-/g, "");
+      return (
+        name.includes(q) ||
+        phone.includes(q) ||
+        ref.includes(q) ||
+        olf.includes(q) ||
+        (bareQ.length > 0 && bareRef.includes(bareQ))
+      );
+    });
+
+    // Distance sort — nearest first, "no location" grouped last. Runs
+    // over the SAME filtered set as the other sorts so the strip totals
+    // never diverge from the table. Anchor coordinates come from the
+    // typed area, distance falls back to pincode centroid when the
+    // order lacks GPS.
+    if (sort === "nearest_from_area" && anchor) {
+      // sortByDistanceFromAnchor attaches a `distance` field. We strip
+      // it so `filtered` stays typed as AdminOrderRow[]; the row-level
+      // badge recomputes it cheaply from the same anchor/coords.
+      const sorted = sortByDistanceFromAnchor(rows, anchor, pincodeCoords);
+      return sorted.map((r) => {
+        const copy: AdminOrderRow & { distance?: DistanceInfo } = { ...r };
+        delete copy.distance;
+        return copy as AdminOrderRow;
+      });
+    }
+
+    return rows.sort((a, b) => {
         if (sort === "delivery_asc") {
           // Packing list — stays in pure delivery order. Status grouping is
           // deliberately NOT applied here; it would break the run order.
@@ -424,7 +479,7 @@ function OrdersPageInner() {
         if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [orders, statusSel, callSel, query, sort, range, rankOf]);
+  }, [orders, statusSel, callSel, query, sort, range, rankOf, anchor, pincodeCoords]);
 
   // Counts are scoped to the active date range so the numbers in the
   // Status dropdown match the rows the operator is actually looking at.
@@ -858,15 +913,36 @@ function OrdersPageInner() {
             value={sort}
             onChange={(v) => {
               clearRankPins();
-              setSort(v as SortKey);
+              const next = v as SortKey;
+              // Picking any non-area sort drops the anchor so the chip
+              // doesn't linger over a table it isn't sorting.
+              if (next !== "nearest_from_area") setAnchor(null);
+              setSort(next);
             }}
             ariaLabel="Sort orders"
             options={[
               { value: "created_desc", label: "Status, newest first" },
               { value: "delivery_asc", label: "Delivery date ↑" },
+              ...(anchor
+                ? [{ value: "nearest_from_area", label: "Nearest from area" }]
+                : []),
             ]}
           />
         </div>
+        <AreaSortControl
+          anchor={anchor}
+          onResolve={(a) => {
+            clearRankPins();
+            setAnchor(a);
+            setSort("nearest_from_area");
+          }}
+          onClear={() => {
+            setAnchor(null);
+            // Flip back to the default sort so the table doesn't sit on
+            // an invalid sort key with a stale row order.
+            if (sort === "nearest_from_area") setSort("created_desc");
+          }}
+        />
       </div>
 
       {selected.size > 0 ? (
@@ -1022,6 +1098,10 @@ function OrdersPageInner() {
               {filtered.map((o, i) => {
                 const next = nextStatusFor(o);
                 const busy = busyId === o.id;
+                const dist =
+                  sort === "nearest_from_area" && anchor
+                    ? orderDistanceFrom(o, anchor, pincodeCoords)
+                    : null;
                 return (
                   <tr
                     key={o.id}
@@ -1153,6 +1233,7 @@ function OrdersPageInner() {
                           orderNumber={o.order_number}
                         />
                       )}
+                      {dist ? <DistanceBadge info={dist} /> : null}
                     </td>
                     <td style={td}>
                       <span style={{ color: "#FBF3D4", fontSize: "1rem" }}>
@@ -1453,6 +1534,65 @@ const ACTION_PAST: Record<BulkAction, string> = {
   deliver: "delivered",
   cancel: "cancelled",
 };
+
+// Small chip under the address showing distance from the sort anchor
+// and which locator we used to compute it. GPS = exact within phone
+// accuracy, ~PIN = pincode-centroid approximation (two orders on the
+// same pincode will tie), no location = neither available.
+function DistanceBadge({ info }: { info: DistanceInfo }) {
+  const base: React.CSSProperties = {
+    display: "inline-block",
+    marginTop: 6,
+    padding: "2px 6px",
+    fontFamily: "var(--font-body)",
+    fontSize: "0.75rem",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    borderRadius: 999,
+    border: "1px solid",
+  };
+  if (info.precision === "none" || info.km === null) {
+    return (
+      <div
+        style={{
+          ...base,
+          color: "rgba(251,243,212,0.55)",
+          borderColor: "rgba(251,243,212,0.25)",
+        }}
+        title="No GPS on the order and no pincode in its address"
+      >
+        No location
+      </div>
+    );
+  }
+  const km = info.km >= 10 ? info.km.toFixed(0) : info.km.toFixed(1);
+  if (info.precision === "gps") {
+    return (
+      <div
+        style={{
+          ...base,
+          color: "#FBF3D4",
+          borderColor: "rgba(251,243,212,0.5)",
+        }}
+        title="Order has GPS from checkout — exact distance"
+      >
+        {km} km · GPS
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        ...base,
+        color: "#F59E0B",
+        borderColor: "rgba(245,158,11,0.55)",
+      }}
+      title="No GPS on the order — distance to the pincode centroid, not the doorstep"
+    >
+      ~{km} km · PIN
+    </div>
+  );
+}
 
 function BulkToolbar({
   count,
