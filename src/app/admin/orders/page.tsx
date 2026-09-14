@@ -18,6 +18,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { EditOrderPanel } from "@/components/admin/EditOrderPanel";
+import { ProductionCountStrip } from "@/components/admin/ProductionCountStrip";
 import {
   DateRangeDropdown,
   resolvePreset,
@@ -973,6 +974,12 @@ function OrdersPageInner() {
       ) : null}
 
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
+      {/* Bake summary — same filtered set as the table below, so the
+          numbers on this strip and on the rows can never disagree.
+          Cancelled orders are excluded inside aggregateProduction. */}
+      {!loading && filtered.length > 0 ? (
+        <ProductionCountStrip orders={filtered} />
+      ) : null}
       {loading ? (
         <Placeholder>Loading orders…</Placeholder>
       ) : filtered.length === 0 ? (
