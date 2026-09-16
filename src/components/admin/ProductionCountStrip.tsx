@@ -25,6 +25,7 @@
 
 import type { AdminOrderRow } from "@/lib/admin-shared";
 import { variantLabel } from "@/lib/order-share-message";
+import { isOrderFulfilled } from "@/lib/order-fulfillment";
 
 type ProductAgg = { name: string; loaves: number; orders: number };
 
@@ -69,7 +70,21 @@ export function aggregateProduction(orders: AdminOrderRow[]): {
 export function ProductionCountStrip({ orders }: { orders: AdminOrderRow[] }) {
   const { rows, totalLoaves } = aggregateProduction(orders);
 
-  if (rows.length === 0) return null;
+  // Fulfilment ratio for the current filter. Counted over the full
+  // filtered set (cancelled and all), NOT over the bake set — the two
+  // answer different questions. "N of M fulfilled" is about the slice
+  // the operator is looking at, so filtering to "cancelled" honestly
+  // shows "0 of N fulfilled", which is the right number.
+  const totalOrders = orders.length;
+  const fulfilledOrders = orders.reduce(
+    (n, o) => (isOrderFulfilled(o) ? n + 1 : n),
+    0,
+  );
+
+  // Nothing to bake AND no rows to summarise → no strip. When there IS
+  // a filtered slice but nothing bakes (e.g. filter = 'cancelled'), the
+  // strip still renders so the ratio is visible.
+  if (rows.length === 0 && totalOrders === 0) return null;
 
   // Display-only compaction: aggregation still groups by full item name
   // (Postgres cares), but the strip renders variantLabel — "Multigrain",
@@ -140,9 +155,15 @@ export function ProductionCountStrip({ orders }: { orders: AdminOrderRow[] }) {
           fontSize: 14,
           fontWeight: 500,
           letterSpacing: "0.05em",
+          display: "inline-flex",
+          alignItems: "baseline",
+          gap: 14,
         }}
       >
-        {totalLoaves} loaves total
+        {rows.length > 0 ? <span>{totalLoaves} loaves total</span> : null}
+        <span style={{ color: "rgba(251,243,212,0.85)" }}>
+          {fulfilledOrders} of {totalOrders} fulfilled
+        </span>
       </span>
     </section>
   );

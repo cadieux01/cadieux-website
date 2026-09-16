@@ -88,6 +88,8 @@ import {
   type DistanceInfo,
 } from "@/lib/order-distance-sort";
 import { formatOrderNumber } from "@/lib/order-number";
+import { isOrderFulfilled } from "@/lib/order-fulfillment";
+import { FulfilledTick } from "@/components/admin/FulfilledTick";
 import { composeShareMessage, isShareable } from "@/lib/order-share-message";
 import { LoafDots } from "@/components/admin/LoafDots";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
@@ -1688,6 +1690,7 @@ function OrdersPageInner() {
                         title={o.id}
                       >
                         {formatOrderNumber(o)}
+                        {isOrderFulfilled(o) ? <FulfilledTick /> : null}
                       </span>
                       <LoafDots items={o.items} />
                     </td>

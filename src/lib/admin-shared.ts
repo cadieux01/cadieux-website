@@ -312,6 +312,12 @@ export type AdminSubscriptionRow = {
   // the plan sentence's "N deliveries total" clause. Only present on the
   // ?enrich=1 list payload and the detail GET.
   total_deliveries?: number;
+  // Count of subscription_deliveries rows with status='delivered'. Same
+  // provenance as total_deliveries — enrich-only. Powers the fulfilled
+  // tick's safety net: a sub with delivery rows and every one delivered
+  // is treated as fulfilled even when the parent status hasn't been
+  // flipped to 'completed' yet.
+  delivered_deliveries?: number;
   // The one delivery still owed — earliest non-terminal row. null once
   // every delivery is delivered or cancelled. Same two payloads as above.
   next_delivery?: NextDelivery | null;

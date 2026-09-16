@@ -22,6 +22,8 @@ import {
 import { AdminShell } from "@/components/admin/AdminShell";
 import Select from "@/components/ui/Select";
 import { formatSubscriptionNumber } from "@/lib/order-number";
+import { isSubscriptionFulfilled } from "@/lib/order-fulfillment";
+import { FulfilledTick } from "@/components/admin/FulfilledTick";
 import {
   DateRangeDropdown,
   resolvePreset,
@@ -555,6 +557,49 @@ function SubscriptionsPageInner() {
         </div>
       ) : null}
 
+      {!loading && filtered.length > 0 ? (
+        // Fulfilment ratio for the current filter. Mirrors the "N of M
+        // fulfilled" span on ProductionCountStrip so the two boards
+        // read the same way. Definition of "fulfilled" is centralised
+        // in lib/order-fulfillment.ts and includes the delivery-rows
+        // safety net (see isSubscriptionFulfilled).
+        <section
+          aria-label="Fulfilment count for current filter"
+          style={{
+            margin: "0 0 12px",
+            padding: "10px 14px",
+            border: "1px solid rgba(251,243,212,0.18)",
+            borderRadius: 6,
+            background: "rgba(251,243,212,0.04)",
+            color: CREAM,
+            display: "flex",
+            alignItems: "center",
+            gap: 20,
+            fontFamily: "var(--font-body)",
+            fontSize: 14,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              letterSpacing: "0.35em",
+              textTransform: "uppercase",
+              color: cream(0.6),
+            }}
+          >
+            Summary
+          </span>
+          <span style={{ marginLeft: "auto", color: cream(0.85) }}>
+            {filtered.reduce(
+              (n, s) => (isSubscriptionFulfilled(s) ? n + 1 : n),
+              0,
+            )}{" "}
+            of {filtered.length} fulfilled
+          </span>
+        </section>
+      ) : null}
+
       {loading ? (
         <Placeholder>Loading subscriptions…</Placeholder>
       ) : filtered.length === 0 ? (
@@ -623,6 +668,7 @@ function SubscriptionsPageInner() {
                         title={s.id}
                       >
                         {formatSubscriptionNumber(s)}
+                        {isSubscriptionFulfilled(s) ? <FulfilledTick /> : null}
                       </span>
                     </td>
                     <td style={td} data-label="Customer">

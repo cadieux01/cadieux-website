@@ -44,6 +44,12 @@ export type DerivedSub = {
   // Count of ALL delivery rows for the sub (any status) — the honest
   // "N deliveries total" the plan sentence needs, never weeks × days.
   total_deliveries: number;
+  // Count of delivery rows whose status is 'delivered'. Kept as its own
+  // field (rather than derived from total minus remaining) because
+  // `remaining` groups cancelled with delivered under "terminal", and a
+  // subscription with 4 delivered + 1 cancelled is NOT the same thing as
+  // one with 5 delivered — the tick + ratio need the second count.
+  delivered_deliveries: number;
   // null once every delivery is delivered or cancelled.
   next_delivery: NextDelivery | null;
 };
@@ -55,12 +61,16 @@ export function buildDerivations(
   const maxByDel = new Map<string, string>();
   const remainingBySub = new Map<string, number>();
   const totalBySub = new Map<string, number>();
+  const deliveredBySub = new Map<string, number>();
   const nextBySub = new Map<string, NextDelivery>();
   for (const row of deliveries) {
     const sid = row.subscription_id;
     const cur = maxByDel.get(sid);
     if (!cur || row.delivery_date > cur) maxByDel.set(sid, row.delivery_date);
     totalBySub.set(sid, (totalBySub.get(sid) ?? 0) + 1);
+    if (row.status === "delivered") {
+      deliveredBySub.set(sid, (deliveredBySub.get(sid) ?? 0) + 1);
+    }
     const isTerminal =
       row.status === "delivered" || row.status === "cancelled";
     if (!isTerminal) {
@@ -89,6 +99,7 @@ export function buildDerivations(
       derived_end_date: endDate,
       remaining_deliveries: remainingBySub.get(sub.id) ?? 0,
       total_deliveries: totalBySub.get(sub.id) ?? 0,
+      delivered_deliveries: deliveredBySub.get(sub.id) ?? 0,
       next_delivery: nextBySub.get(sub.id) ?? null,
     });
   }
