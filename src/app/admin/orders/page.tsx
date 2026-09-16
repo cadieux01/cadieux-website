@@ -678,9 +678,17 @@ function OrdersPageInner() {
 
   // Scroll restoration. Row click stashes the current scrollY in
   // sessionStorage; this effect reads and clears it once the list has
-  // finished loading. The rAF gives layout a frame to settle before we
-  // jump — without it we'd scroll before the table has its final
-  // height and the browser clamps us back to the bottom.
+  // finished loading.
+  //
+  // A TIMER, not requestAnimationFrame: rAF does not fire while the tab is
+  // hidden, and this board is used exactly that way — the order is opened,
+  // the operator switches to WhatsApp or a call, and comes back. Under rAF
+  // the restore simply never ran and they landed at the top of the list.
+  //
+  // One attempt is also not enough. The rows are committed to the DOM but
+  // the document may not be laid out yet, so scrollTo clamps against a
+  // short page and lands short. Retry until it sticks, then give up rather
+  // than fight an operator who has scrolled somewhere themselves.
   useEffect(() => {
     if (loading) return;
     if (typeof window === "undefined") return;
@@ -688,8 +696,15 @@ function OrdersPageInner() {
     if (raw === null) return;
     sessionStorage.removeItem(SCROLL_KEY);
     const y = Number(raw);
-    if (!Number.isFinite(y)) return;
-    requestAnimationFrame(() => window.scrollTo(0, y));
+    if (!Number.isFinite(y) || y <= 0) return;
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = () => {
+      window.scrollTo(0, y);
+      if (window.scrollY < y && tries++ < 10) timer = setTimeout(settle, 32);
+    };
+    settle();
+    return () => clearTimeout(timer);
   }, [loading]);
 
   // Selection restoration. Runs AFTER hydration, never in the useState
