@@ -90,7 +90,11 @@ import {
 import { formatOrderNumber } from "@/lib/order-number";
 import { isOrderFulfilled } from "@/lib/order-fulfillment";
 import { FulfilledTick } from "@/components/admin/FulfilledTick";
-import { composeShareMessage, isShareable } from "@/lib/order-share-message";
+import {
+  composeRun,
+  composeShareStop,
+  isShareable,
+} from "@/lib/order-share-message";
 import { LoafDots } from "@/components/admin/LoafDots";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { NOTE_KIND_STYLE, truncateNoteBody } from "@/lib/order-notes";
@@ -1080,7 +1084,11 @@ function OrdersPageInner() {
   // separator has to be visibly heavier than that.
   const buildBulkShareText = useCallback(() => {
     const rows = selectedInSortOrder();
-    return rows.map((o) => composeShareMessage(o)).join("\n\n");
+    // composeRun, not composeShareMessage per row: the run needs ONE cash
+    // total at the end, and composeShareMessage appends its own (it is a
+    // run of one). Mapping it over the rows would print a running total
+    // after every stop, each one covering a single order.
+    return composeRun(rows.map((o) => composeShareStop(o)));
   }, [selectedInSortOrder]);
 
   const runBulk = async (action: BulkAction) => {
