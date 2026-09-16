@@ -152,7 +152,11 @@ function PrintOrdersPageInner() {
       const phone = (o.customers?.phone ?? "").toLowerCase();
       return name.includes(search) || phone.includes(search);
     });
-  }, [orders, statuses, calls, repeatOnly, q, range]);
+    // `basis` MUST be in this list. It is read from useSearchParams(), so
+    // a link that changes only ?basis re-renders this component WITHOUT
+    // remounting it; omitting it here left the memo serving rows cut on
+    // the previous column while the header above already said the new one.
+  }, [orders, statuses, calls, repeatOnly, q, range, basis]);
 
   // Group: delivery_date → delivery_slot → orders[]. Null date/slot
   // bucket sorts last so the dated rows print first.
