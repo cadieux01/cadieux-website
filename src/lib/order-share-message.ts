@@ -55,6 +55,21 @@ export function itemLines(items: AdminOrderItemSnapshot[] | null | undefined): s
   return items.map((it) => `${variantLabel(it.name)} x${lineQty(it)}`);
 }
 
+/** True when lat/lng are usable. (0,0) is Null Island, not Visakhapatnam —
+ *  it is what a failed geocode leaves behind, so it is treated as absent. */
+function hasCoords(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): boolean {
+  return (
+    typeof lat === "number" &&
+    typeof lng === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    !(lat === 0 && lng === 0)
+  );
+}
+
 /**
  * Coord-aware Maps link:
  *   - lat/lng present → https://www.google.com/maps?q=<lat>,<lng>  (pinned)
@@ -65,16 +80,50 @@ export function mapsLinkFor(
   lat: number | null | undefined,
   lng: number | null | undefined,
 ): string {
-  const hasCoords =
-    typeof lat === "number" &&
-    typeof lng === "number" &&
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    !(lat === 0 && lng === 0);
-
-  return hasCoords
+  return hasCoords(lat, lng)
     ? `https://www.google.com/maps?q=${lat},${lng}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
+/**
+ * One stop as a path segment for a multi-stop route URL. Coords win over
+ * the address string for the same reason they do in mapsLinkFor: a pin is
+ * unambiguous and an address typed by a customer is not.
+ */
+export function routeWaypoint(
+  address: string,
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): string {
+  return hasCoords(lat, lng) ? `${lat},${lng}` : address;
+}
+
+/**
+ * ONE link covering the whole run, instead of one link per stop.
+ *
+ * Why the `/maps/dir/a/b/c` PATH form and not `dir/?api=1&waypoints=`:
+ * the documented api=1 form caps waypoints at 9, and a 14-stop day is
+ * ordinary here — it would silently drop the tail of the run, which is the
+ * exact class of bug this change exists to remove. The path form has no
+ * such cap.
+ *
+ * The FIRST segment is the origin, so Maps routes stop 1 → stop 2 → … in
+ * the order given. That is the order the table was sorted in, which for a
+ * "nearest from area" sort is the intended driving sequence. It does NOT
+ * route from the rider's current position to stop 1; the rider is leaving
+ * from the bakery and already knows how to reach the first door.
+ */
+export function routeLinkFor(waypoints: string[]): string {
+  const segs = waypoints
+    .map((w) => w.trim())
+    .filter((w) => w.length > 0)
+    // Encode, then put the commas back. A comma is a legal sub-delimiter in
+    // a path segment, and "17.74,83.33" reads as a coordinate to anyone
+    // glancing at the link, where "17.74%2C83.33" reads as line noise — and
+    // costs two extra characters per stop in a message that is being
+    // shortened precisely because length is what broke it.
+    .map((w) => encodeURIComponent(w).replace(/%2C/g, ","));
+  return `https://www.google.com/maps/dir/${segs.join("/")}`;
 }
 
 /* ------------------------------------------------------------------ *
@@ -170,8 +219,21 @@ export type ShareMessageParts = {
  * One stop, plus what it owes. Kept together so the run total below can
  * never disagree with the COLLECT lines above it — the sum is derived from
  * the same values that were printed, not recomputed from the rows.
+ *
+ * `parts` and `waypoint` are OPTIONAL and additive. A caller that supplies
+ * them lets composeRun collapse the per-stop map links into one route link
+ * (see below); a caller that does not — subscription-share-message.ts only
+ * ever builds runs of one — keeps today's behaviour exactly.
  */
-export type ShareStop = { text: string; cashDue: number };
+export type ShareStop = {
+  text: string;
+  cashDue: number;
+  /** The same fields `text` was rendered from, so a multi-stop run can
+   *  re-render this stop WITHOUT its map link. */
+  parts?: ShareMessageParts;
+  /** This stop's segment for the run's single route link. */
+  waypoint?: string;
+};
 
 /** The single formatter. Every composer funnels through this. */
 export function composeShareMessageFromParts(parts: ShareMessageParts): string {
@@ -194,12 +256,40 @@ export function composeShareMessageFromParts(parts: ShareMessageParts): string {
  * The total is always printed, including "Rs0". A rider who sees a figure
  * every time knows the line was not simply omitted, and "Rs0" is a positive
  * statement that this run is fully prepaid.
+ *
+ * MULTI-STOP RUNS CARRY ONE ROUTE LINK, NOT ONE LINK PER STOP. A Google
+ * Maps URL is 45–110 characters; on a 14-stop day that was over a kilobyte
+ * of the message spent restating the same journey, and length is not
+ * cosmetic here — it is what was getting the run truncated on the way into
+ * WhatsApp. One `/maps/dir/` link is both shorter and more useful: it is
+ * the actual route rather than 14 unrelated pins.
+ *
+ * A run of ONE keeps its inline link. A single order shared on its own is
+ * not a journey, and every other Share button in admin (order detail,
+ * subscriptions) is a run of one — this rule leaves all of them byte-for-
+ * byte unchanged.
  */
 export function composeRun(stops: ShareStop[]): string {
   const total = stops.reduce((n, s) => n + (Number.isFinite(s.cashDue) ? s.cashDue : 0), 0);
+  const cashLine = `Cash to collect on this run: ${rupees(total)}`;
+
+  // Only collapse when EVERY stop supplied the data to do it. A partial
+  // collapse would drop the map link from some stops and keep it on others,
+  // leaving the rider with no way to reach the ones that lost it.
+  const collapsible =
+    stops.length > 1 && stops.every((s) => s.parts && s.waypoint);
+
+  if (!collapsible) {
+    return [...stops.map((s) => s.text), cashLine].join("\n\n");
+  }
+
+  const bodies = stops.map((s) =>
+    composeShareMessageFromParts({ ...s.parts!, mapsLink: "" }),
+  );
+  const route = routeLinkFor(stops.map((s) => s.waypoint!));
   return [
-    ...stops.map((s) => s.text),
-    `Cash to collect on this run: ${rupees(total)}`,
+    ...bodies,
+    `Route, ${stops.length} stops in this order:\n${route}\n${cashLine}`,
   ].join("\n\n");
 }
 
@@ -218,17 +308,21 @@ export function composeShareStop(order: AdminOrderRow): ShareStop {
     amountDue: typeof order.total_amount === "number" ? order.total_amount : null,
   };
 
+  const parts: ShareMessageParts = {
+    reference: formatOrderNumber(order),
+    payment: paymentLine(facts),
+    customerName: order.customers?.full_name?.trim() || "Customer",
+    customerPhone: order.customers?.phone?.trim() || "—",
+    address,
+    mapsLink: mapsLinkFor(address, order.latitude, order.longitude),
+    itemLines: itemLines(order.items),
+  };
+
   return {
-    text: composeShareMessageFromParts({
-      reference: formatOrderNumber(order),
-      payment: paymentLine(facts),
-      customerName: order.customers?.full_name?.trim() || "Customer",
-      customerPhone: order.customers?.phone?.trim() || "—",
-      address,
-      mapsLink: mapsLinkFor(address, order.latitude, order.longitude),
-      itemLines: itemLines(order.items),
-    }),
+    text: composeShareMessageFromParts(parts),
     cashDue: cashDueFor(facts),
+    parts,
+    waypoint: routeWaypoint(address, order.latitude, order.longitude),
   };
 }
 
