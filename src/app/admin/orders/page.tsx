@@ -14,7 +14,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { AreaSortControl, type ResolvedArea } from "@/components/admin/AreaSortControl";
@@ -285,6 +292,33 @@ function stateToSearch(s: {
 // a detail page, a fresh visit to /admin/orders (or a hard reload) sees
 // no entry and starts at the top — no accidental scroll to a stale row.
 const SCROLL_KEY = "admin:orders:scrollY";
+
+// ── selection restoration ─────────────────────────────────────────────────
+// The tick-box selection, mirrored so it survives a trip to an order
+// detail page and back. Sunny: "when I view it and come back, all the
+// selected items become deselected. Again I'm doing it from the start."
+//
+// sessionStorage and NOT the URL on purpose: a bulk selection is a list of
+// uuids, which would make the address bar unusable and would travel to
+// anyone the link is sent to. Selection is per-session working state, not
+// part of what a /admin/orders link means.
+//
+// Unlike SCROLL_KEY this is a mirror, not a one-shot handoff — it is
+// rewritten on every change, so Clear and the bulk handlers empty it
+// without any extra bookkeeping.
+const SELECTION_KEY = "admin:orders:selection";
+
+function readStoredSelection(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = sessionStorage.getItem(SELECTION_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((v): v is string => typeof v === "string"));
+  } catch {
+    return new Set();
+  }
+}
 
 // Presets on the Call-update dropdown. Selecting any of these POSTs a
 // note with kind='call' whose body is the preset label. The custom
@@ -658,6 +692,36 @@ function OrdersPageInner() {
     requestAnimationFrame(() => window.scrollTo(0, y));
   }, [loading]);
 
+  // Selection restoration. Runs AFTER hydration, never in the useState
+  // initialiser: the server has no sessionStorage, so it always renders
+  // zero selected and therefore no BulkToolbar. Seeding the first client
+  // render from storage would make the client emit a node the server HTML
+  // does not have, which React treats as a hydration mismatch. Restoring
+  // here means both sides agree on the first render and the selection
+  // appears on the commit straight after.
+  const selectionRestored = useRef(false);
+  useEffect(() => {
+    selectionRestored.current = true;
+    const stored = readStoredSelection();
+    if (stored.size > 0) setSelected(stored);
+  }, []);
+
+  // Keep the mirror in step with every selection change, including the
+  // ones that empty it (Clear, and the bulk handlers below). Gated on the
+  // restore having run: this effect is declared second, so on mount it
+  // would otherwise write the empty initial state over the stored ids
+  // before the effect above has read them.
+  useEffect(() => {
+    if (!selectionRestored.current) return;
+    try {
+      sessionStorage.setItem(SELECTION_KEY, JSON.stringify(Array.from(selected)));
+    } catch {
+      // Private-mode / quota failures are not worth surfacing: the
+      // selection still works for this page view, it just won't survive
+      // the round trip.
+    }
+  }, [selected]);
+
   const [editing, setEditing] = useState<AdminOrderRow | null>(null);
   const [orderEditing, setOrderEditing] = useState<AdminOrderRow | null>(null);
   const [scheduling, setScheduling] = useState<AdminOrderRow | null>(null);
@@ -747,6 +811,26 @@ function OrdersPageInner() {
         return b.created_at.localeCompare(a.created_at);
       });
   }, [orders, statusSel, callSel, query, sort, range, rankOf, anchor, pincodeCoords, basis]);
+
+  // A restored id is only meaningful if the row is still there — an order
+  // can have been cancelled, or the filters can have moved on, while the
+  // operator was away. Prune ONCE, against the first loaded list, and
+  // never again: narrowing the filter afterwards must not silently drop
+  // selections made under a different filter, which is the same property
+  // toggleSelectAll already goes out of its way to preserve. Declared
+  // after `filtered` because the dependency array is evaluated during
+  // render, where an earlier reference would hit the TDZ.
+  const selectionPruned = useRef(false);
+  useEffect(() => {
+    if (selectionPruned.current || loading) return;
+    selectionPruned.current = true;
+    setSelected((curr) => {
+      if (curr.size === 0) return curr;
+      const live = new Set(filtered.map((o) => o.id));
+      const next = new Set(Array.from(curr).filter((id) => live.has(id)));
+      return next.size === curr.size ? curr : next;
+    });
+  }, [loading, filtered]);
 
   // Counts are scoped to the active date range so the numbers in the
   // Status dropdown match the rows the operator is actually looking at.
