@@ -17,7 +17,7 @@
 // The print stylesheet at the bottom flips the block to black-on-white and
 // drops the admin chrome, since the dark theme would print as a solid slab.
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
@@ -79,6 +79,7 @@ export default function AdminOrderDetailPage({
 }: {
   params: { id: string };
 }) {
+  const router = useRouter();
   const [order, setOrder] = useState<AdminOrderRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -169,10 +170,32 @@ export default function AdminOrderDetailPage({
     return null;
   }, [items, order, deliveryFee]);
 
+  // router.back() returns to the exact list URL the operator came from —
+  // filter, sort, date range, basis, area anchor and search text are
+  // all persisted on /admin/orders as query params, so back() restores
+  // the full slice. Falls back to a plain link when there's no history
+  // to go back to (deep-link into a single order — direct URL, opened
+  // in a new tab, or a bookmark).
+  //
+  // NOTE: history.length is per-tab and starts at 1 for a fresh tab;
+  // any real navigation to this page from the list bumps it to 2+. The
+  // check is intentionally lenient — a false positive just uses back()
+  // when a bare link would also have worked.
   const backLink = (
-    <Link href="/admin/orders" style={chipNeutral} className="no-print">
+    <button
+      type="button"
+      onClick={() => {
+        if (typeof window !== "undefined" && window.history.length > 1) {
+          router.back();
+        } else {
+          router.push("/admin/orders");
+        }
+      }}
+      style={{ ...chipNeutral, cursor: "pointer" }}
+      className="no-print"
+    >
       ← Back to orders
-    </Link>
+    </button>
   );
 
   if (loading) {

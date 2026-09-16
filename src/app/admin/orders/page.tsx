@@ -13,7 +13,7 @@
 // for the "Delivery" column and a single-line "—" for items.
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
@@ -22,10 +22,12 @@ import { EditOrderPanel } from "@/components/admin/EditOrderPanel";
 import { ProductionCountStrip } from "@/components/admin/ProductionCountStrip";
 import {
   DateRangeDropdown,
+  DEFAULT_PRESET,
   resolvePreset,
   toYMD,
   withinDateRange,
   type DateRangeValue,
+  type PresetKey,
 } from "@/components/admin/DateRangeDropdown";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { OrderLocationActions } from "@/components/admin/OrderLocationActions";
@@ -60,6 +62,7 @@ import MultiSelect from "@/components/ui/MultiSelect";
 import {
   ALL_VALUE,
   CALL_PREFIX,
+  decodeStatusParam,
   encodeStatusParam,
   matchesOrderFilter,
   splitFilterValues,
@@ -78,6 +81,219 @@ import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
 
 type SortKey = "created_desc" | "delivery_asc" | "nearest_from_area";
+
+// Which date-column the range filter binds to.
+//
+// Sunny verified in prod that with the 12h booking lead time these two
+// sets barely intersect: on a typical day 20 orders are PLACED and 27
+// are DELIVERED and the overlap is zero. "Order date" is what the page
+// used to filter on, but it's the wrong axis for every operational
+// decision made on this screen (baking, routing, calling). The default
+// is therefore delivery date; the toggle stays visible so it is never
+// ambiguous which axis is in play.
+type DateBasis = "delivery" | "order";
+const DEFAULT_BASIS: DateBasis = "delivery";
+const DEFAULT_SORT: SortKey = "created_desc";
+
+// Which column the range applies to. Rows with a null value on the
+// chosen column are excluded from the view — a row with no
+// delivery_date has nothing to be delivered on the operator's chosen
+// day, and a row with no created_at is by construction impossible.
+function orderDateForBasis(
+  o: AdminOrderRow,
+  basis: DateBasis,
+): string | null | undefined {
+  return basis === "delivery" ? o.delivery_date : o.created_at;
+}
+
+const SORT_KEYS: readonly SortKey[] = [
+  "created_desc",
+  "delivery_asc",
+  "nearest_from_area",
+];
+const BASIS_VALUES: readonly DateBasis[] = ["delivery", "order"];
+const PRESET_VALUES: readonly PresetKey[] = [
+  "today",
+  "this_week",
+  "last_week",
+  "this_month",
+  "last_month",
+  "last_6_months",
+  "one_year",
+  "custom",
+];
+
+// ── URL state ──────────────────────────────────────────────────────────────
+// Everything the operator can touch on this page rides in the query
+// string. Reason (verified live): opening an order and clicking "Back
+// to orders" was resetting the filter, the sort, the range, and the
+// scroll position — Sunny had to re-narrow to Pending every time. With
+// state in the URL, router.back() from the detail page returns to the
+// exact same slice, and the scroll restoration below returns to the
+// same row.
+//
+// Empty / default values are OMITTED from the URL so a plain
+// /admin/orders link stays clean. The parser is the sole source of
+// truth for defaults, so /admin/orders and /admin/orders?basis=delivery
+// resolve identically.
+
+type UrlInitial = {
+  filter: string[];
+  query: string;
+  sort: SortKey;
+  preset: PresetKey;
+  customFrom: string;
+  customTo: string;
+  basis: DateBasis;
+  range: DateRangeValue;
+  anchor: ResolvedArea | null;
+};
+
+function parseYmdLocal(s: string | null): Date | null {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+function startOfDayLocal(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+function endOfDayLocal(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
+}
+
+function parseUrlInitial(sp: URLSearchParams): UrlInitial {
+  // Statuses ride a comma-separated `status` param (back-compat with
+  // /admin/orders/print's existing link). Call updates ride REPEATED
+  // `call` params because their bodies are operator-typed and could
+  // contain commas.
+  const statuses = decodeStatusParam(sp.get("status"));
+  const calls = sp.getAll("call").filter((c) => c.length > 0);
+  const filter = [
+    ...statuses,
+    ...calls.map((c) => `${CALL_PREFIX}${c}`),
+  ];
+
+  const query = sp.get("q") ?? "";
+
+  const sortRaw = sp.get("sort");
+  const sort: SortKey =
+    sortRaw && (SORT_KEYS as readonly string[]).includes(sortRaw)
+      ? (sortRaw as SortKey)
+      : DEFAULT_SORT;
+
+  const basisRaw = sp.get("basis");
+  const basis: DateBasis =
+    basisRaw && (BASIS_VALUES as readonly string[]).includes(basisRaw)
+      ? (basisRaw as DateBasis)
+      : DEFAULT_BASIS;
+
+  const presetRaw = sp.get("preset");
+  const presetOk =
+    presetRaw && (PRESET_VALUES as readonly string[]).includes(presetRaw);
+  let preset: PresetKey = presetOk ? (presetRaw as PresetKey) : DEFAULT_PRESET;
+
+  const fromYmd = sp.get("from") ?? "";
+  const toYmd = sp.get("to") ?? "";
+  let customFrom = "";
+  let customTo = "";
+  let range: DateRangeValue;
+  if (preset === "custom") {
+    const f = parseYmdLocal(fromYmd);
+    const t = parseYmdLocal(toYmd);
+    if (f && t) {
+      const earlier = f.getTime() <= t.getTime() ? f : t;
+      const later = f.getTime() <= t.getTime() ? t : f;
+      customFrom = toYMD(earlier);
+      customTo = toYMD(later);
+      range = { from: startOfDayLocal(earlier), to: endOfDayLocal(later) };
+    } else {
+      // Bad/incomplete custom URL — fall back to the default preset so
+      // the table still has a range to filter by.
+      preset = DEFAULT_PRESET;
+      range = resolvePreset(DEFAULT_PRESET as Exclude<PresetKey, "custom">);
+    }
+  } else {
+    // preset is narrowed to non-"custom" here in the operator's head,
+    // but TypeScript can't track the branch condition — narrow at the
+    // callsite.
+    range = resolvePreset(preset as Exclude<PresetKey, "custom">);
+  }
+
+  // Area anchor. All four fields are required for a usable anchor —
+  // partial data would produce a sort key with no way to compute
+  // distance.
+  const areaLabel = sp.get("area");
+  const areaLat = Number(sp.get("area_lat"));
+  const areaLng = Number(sp.get("area_lng"));
+  const areaVia = sp.get("area_via");
+  const anchor: ResolvedArea | null =
+    areaLabel &&
+    areaVia &&
+    Number.isFinite(areaLat) &&
+    Number.isFinite(areaLng)
+      ? {
+          label: areaLabel,
+          latitude: areaLat,
+          longitude: areaLng,
+          matched_via: areaVia,
+        }
+      : null;
+
+  return {
+    filter,
+    query,
+    sort,
+    preset,
+    customFrom,
+    customTo,
+    basis,
+    range,
+    anchor,
+  };
+}
+
+function stateToSearch(s: {
+  filter: string[];
+  query: string;
+  sort: SortKey;
+  preset: PresetKey;
+  customFrom: string;
+  customTo: string;
+  basis: DateBasis;
+  anchor: ResolvedArea | null;
+}): string {
+  const params = new URLSearchParams();
+  const { statuses, calls } = splitFilterValues(s.filter);
+  if (statuses.length > 0) params.set("status", encodeStatusParam(statuses));
+  for (const c of calls) params.append("call", c);
+  if (s.query.trim()) params.set("q", s.query);
+  if (s.sort !== DEFAULT_SORT) params.set("sort", s.sort);
+  if (s.basis !== DEFAULT_BASIS) params.set("basis", s.basis);
+  if (s.preset !== DEFAULT_PRESET) params.set("preset", s.preset);
+  if (s.preset === "custom" && s.customFrom && s.customTo) {
+    params.set("from", s.customFrom);
+    params.set("to", s.customTo);
+  }
+  if (s.anchor) {
+    params.set("area", s.anchor.label);
+    params.set("area_lat", String(s.anchor.latitude));
+    params.set("area_lng", String(s.anchor.longitude));
+    params.set("area_via", s.anchor.matched_via);
+  }
+  return params.toString();
+}
+
+// ── scroll restoration ────────────────────────────────────────────────────
+// Simple session-storage handoff. Set on row click, read on mount, then
+// cleared. Because it is only ever set immediately before navigating to
+// a detail page, a fresh visit to /admin/orders (or a hard reload) sees
+// no entry and starts at the top — no accidental scroll to a stale row.
+const SCROLL_KEY = "admin:orders:scrollY";
 
 // Presets on the Call-update dropdown. Selecting any of these POSTs a
 // note with kind='call' whose body is the preset label. The custom
@@ -236,6 +452,16 @@ const ROW_INTERACTIVE_SELECTOR =
 
 function OrdersPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Parse the URL ONCE on first render. useSearchParams() subscribes,
+  // so re-parsing it every render would let our own writeback below
+  // re-seed initial state on the very next tick. useMemo with an empty
+  // dep array pins the initial slice.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const urlInit = useMemo(
+    () => parseUrlInitial(new URLSearchParams(searchParams?.toString() ?? "")),
+    [],
+  );
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -248,7 +474,7 @@ function OrdersPageInner() {
   // as a value would create two encodings of the same state ([] and ["all"])
   // that could disagree. The menu still shows an "All statuses" row; it is
   // rendered ticked when the status group is empty.
-  const [filter, setFilter] = useState<string[]>([]);
+  const [filter, setFilter] = useState<string[]>(urlInit.filter);
   const { statuses: statusSel, calls: callSel } = useMemo(
     () => splitFilterValues(filter),
     [filter],
@@ -262,22 +488,27 @@ function OrdersPageInner() {
   // Row id currently posting a call-preset (dropdown disables while
   // in-flight so a fast double-click can't stack two rows).
   const [callBusyId, setCallBusyId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("created_desc");
+  const [query, setQuery] = useState(urlInit.query);
+  const [sort, setSort] = useState<SortKey>(urlInit.sort);
+  const [basis, setBasis] = useState<DateBasis>(urlInit.basis);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pendingBulk, setPendingBulk] = useState<BulkAction | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
-  const [range, setRange] = useState<DateRangeValue | null>(() =>
-    resolvePreset("this_month"),
-  );
+  const [range, setRange] = useState<DateRangeValue | null>(urlInit.range);
+  // Preset + custom values are lifted into the parent so the URL can
+  // round-trip the exact picker state — a bare { from, to } would
+  // erase the label ("This Week") the operator picked.
+  const [preset, setPreset] = useState<PresetKey>(urlInit.preset);
+  const [customFrom, setCustomFrom] = useState<string>(urlInit.customFrom);
+  const [customTo, setCustomTo] = useState<string>(urlInit.customTo);
 
   // "Nearest from typed area" sort — see AreaSortControl. anchor is null
   // until the operator matches an area; pincodeCoords hydrates once on
   // mount (263 rows, ~20 KB) and powers the fallback for orders that
   // lack GPS but carry a 6-digit pincode in their delivery_address.
-  const [anchor, setAnchor] = useState<ResolvedArea | null>(null);
+  const [anchor, setAnchor] = useState<ResolvedArea | null>(urlInit.anchor);
   const [pincodeCoords, setPincodeCoords] = useState<
     Map<string, { latitude: number; longitude: number }>
   >(() => new Map());
@@ -398,6 +629,44 @@ function OrdersPageInner() {
     return () => clearInterval(t);
   }, [load]);
 
+  // URL writeback. Any filter/sort/range/basis/anchor change is
+  // serialised back onto the query string via router.replace (no
+  // history entry, no scroll jump) so a subsequent router.back() from
+  // the detail page lands on this exact URL. Empty/default values are
+  // omitted by stateToSearch so a plain /admin/orders link stays clean.
+  useEffect(() => {
+    const qs = stateToSearch({
+      filter,
+      query,
+      sort,
+      preset,
+      customFrom,
+      customTo,
+      basis,
+      anchor,
+    });
+    const current = typeof window === "undefined" ? "" : window.location.search.replace(/^\?/, "");
+    if (qs === current) return;
+    const next = qs ? `/admin/orders?${qs}` : "/admin/orders";
+    router.replace(next, { scroll: false });
+  }, [filter, query, sort, preset, customFrom, customTo, basis, anchor, router]);
+
+  // Scroll restoration. Row click stashes the current scrollY in
+  // sessionStorage; this effect reads and clears it once the list has
+  // finished loading. The rAF gives layout a frame to settle before we
+  // jump — without it we'd scroll before the table has its final
+  // height and the browser clamps us back to the bottom.
+  useEffect(() => {
+    if (loading) return;
+    if (typeof window === "undefined") return;
+    const raw = sessionStorage.getItem(SCROLL_KEY);
+    if (raw === null) return;
+    sessionStorage.removeItem(SCROLL_KEY);
+    const y = Number(raw);
+    if (!Number.isFinite(y)) return;
+    requestAnimationFrame(() => window.scrollTo(0, y));
+  }, [loading]);
+
   const [editing, setEditing] = useState<AdminOrderRow | null>(null);
   const [orderEditing, setOrderEditing] = useState<AdminOrderRow | null>(null);
   const [scheduling, setScheduling] = useState<AdminOrderRow | null>(null);
@@ -415,7 +684,7 @@ function OrdersPageInner() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const rows = orders.filter((o) => {
-      if (!withinDateRange(o.created_at, range)) return false;
+      if (!withinDateRange(orderDateForBasis(o, basis), range)) return false;
       // Statuses OR'd, call updates OR'd, the two groups AND'd. Shared
       // with the print view so the packing list can't disagree with the
       // screen it was printed from — see src/lib/order-filter.ts.
@@ -486,25 +755,29 @@ function OrdersPageInner() {
         if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [orders, statusSel, callSel, query, sort, range, rankOf, anchor, pincodeCoords]);
+  }, [orders, statusSel, callSel, query, sort, range, rankOf, anchor, pincodeCoords, basis]);
 
   // Counts are scoped to the active date range so the numbers in the
   // Status dropdown match the rows the operator is actually looking at.
   const counts = useMemo(() => {
-    const inRange = orders.filter((o) => withinDateRange(o.created_at, range));
+    const inRange = orders.filter((o) =>
+      withinDateRange(orderDateForBasis(o, basis), range),
+    );
     const c: Record<string, number> = { all: inRange.length };
     for (const o of inRange) {
       const k = (o.status ?? "").toLowerCase();
       c[k] = (c[k] ?? 0) + 1;
     }
     return c;
-  }, [orders, range]);
+  }, [orders, range, basis]);
 
   // Distinct call-note bodies + occurrence count across the same
   // in-range slice. Powers the "Call updates" group in the filter
   // dropdown; the label the operator sees is the exact note body.
   const callBodies = useMemo(() => {
-    const inRange = orders.filter((o) => withinDateRange(o.created_at, range));
+    const inRange = orders.filter((o) =>
+      withinDateRange(orderDateForBasis(o, basis), range),
+    );
     const tally = new Map<string, number>();
     for (const o of inRange) {
       const b = o.last_call_note?.body;
@@ -514,7 +787,7 @@ function OrdersPageInner() {
     return Array.from(tally.entries())
       .map(([body, count]) => ({ body, count }))
       .sort((a, b) => b.count - a.count);
-  }, [orders, range]);
+  }, [orders, range, basis]);
 
   // Data-derived option list for the status filter. Iterates the
   // preferred ordering in STATUS_FILTER_OPTIONS (which already omits
@@ -934,13 +1207,63 @@ function OrdersPageInner() {
         </>
       }
     >
-      <div className="mb-4">
+      <div
+        className="mb-4"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.75rem",
+          alignItems: "flex-start",
+        }}
+      >
         <DateRangeDropdown
-          onChange={(v) => {
+          initialPreset={urlInit.preset}
+          initialCustomFrom={urlInit.customFrom}
+          initialCustomTo={urlInit.customTo}
+          onChange={(v, meta) => {
             clearRankPins();
             setRange(v);
+            if (meta) {
+              setPreset(meta.preset);
+              setCustomFrom(meta.customFrom);
+              setCustomTo(meta.customTo);
+            }
           }}
         />
+        {/* Which date-column the range applies to. Default is delivery
+            date because the 12h lead time makes the order-date and
+            delivery-date sets barely intersect (verified in prod: 20
+            placed, 27 being delivered, zero overlap on the same day).
+            The label ("Filter by …") stays visible so it is never
+            ambiguous which axis is in play. */}
+        <div style={{ display: "inline-flex", flexDirection: "column", gap: "0.25rem" }}>
+          <label
+            htmlFor="orders-date-basis"
+            style={{
+              color: "rgba(251,243,212,0.7)",
+              fontFamily: "var(--font-body)",
+              fontSize: "0.75rem",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+            }}
+          >
+            Filter by
+          </label>
+          <div style={{ minWidth: 190 }}>
+            <Select
+              value={basis}
+              ariaLabel="Which date the range filters on"
+              onChange={(v) => {
+                clearRankPins();
+                setBasis(v as DateBasis);
+              }}
+              options={[
+                { value: "delivery", label: "Delivery date" },
+                { value: "order", label: "Order date" },
+              ]}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Status filter + search + sort */}
@@ -1186,6 +1509,18 @@ function OrdersPageInner() {
                         return;
                       }
                       if (window.getSelection()?.toString()) return;
+                      // Stash scrollY so Back-to-orders can restore
+                      // exactly this position. Read on mount, then
+                      // cleared — see the scroll-restore effect above.
+                      try {
+                        sessionStorage.setItem(
+                          SCROLL_KEY,
+                          String(window.scrollY),
+                        );
+                      } catch {
+                        // Private-mode / quota — non-fatal, we just
+                        // lose scroll restoration for this navigation.
+                      }
                       router.push(`/admin/orders/${o.id}`);
                     }}
                     title="Open order detail"

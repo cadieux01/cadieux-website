@@ -25,6 +25,18 @@ import { CREAM, INK } from "./theme";
 
 export type DateRangeValue = { from: Date; to: Date };
 
+// Metadata about the interaction that produced the range. Consumers that
+// persist filter state to a URL need this to render the picker back the
+// way the operator left it — a bare { from, to } would erase the
+// "This Week" label the moment the tab is refreshed. Existing callers
+// that only need { from, to } can ignore this arg (parameter is
+// optional on the callback).
+export type DateRangeMeta = {
+  preset: PresetKey;
+  customFrom: string; // "" when the picker is on a preset, YYYY-MM-DD otherwise
+  customTo: string;
+};
+
 export type PresetKey =
   | "today"
   | "this_week"
@@ -147,14 +159,21 @@ export function withinDateRange(
 export function DateRangeDropdown({
   onChange,
   initialPreset = DEFAULT_PRESET,
+  initialCustomFrom = "",
+  initialCustomTo = "",
 }: {
-  onChange: (range: DateRangeValue) => void;
+  onChange: (range: DateRangeValue, meta?: DateRangeMeta) => void;
   initialPreset?: PresetKey;
+  // When the parent hydrates from a URL that carried a custom range,
+  // seed the From/To inputs so the panel opens on the same values it
+  // was persisted with. Empty strings preserve the legacy behaviour.
+  initialCustomFrom?: string;
+  initialCustomTo?: string;
 }) {
   const [preset, setPreset] = useState<PresetKey>(initialPreset);
   const [customMode, setCustomMode] = useState<CustomMode>("range");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  const [customFrom, setCustomFrom] = useState(initialCustomFrom);
+  const [customTo, setCustomTo] = useState(initialCustomTo);
   const [singleDate, setSingleDate] = useState("");
   const [yearValue, setYearValue] = useState<string>(String(new Date().getFullYear()));
   const [customError, setCustomError] = useState<string | null>(null);
@@ -163,7 +182,11 @@ export function DateRangeDropdown({
     setPreset(next);
     setCustomError(null);
     if (next !== "custom") {
-      onChange(resolvePreset(next));
+      onChange(resolvePreset(next), {
+        preset: next,
+        customFrom: "",
+        customTo: "",
+      });
     }
     // When entering "custom", wait for Apply — do NOT emit on select.
   }
@@ -185,7 +208,14 @@ export function DateRangeDropdown({
       // Swap on reversed input so the API always gets from ≤ to.
       const earlier = f.getTime() <= t.getTime() ? f : t;
       const later = f.getTime() <= t.getTime() ? t : f;
-      onChange({ from: startOfDay(earlier), to: endOfDay(later) });
+      onChange(
+        { from: startOfDay(earlier), to: endOfDay(later) },
+        {
+          preset: "custom",
+          customFrom: toYMD(earlier),
+          customTo: toYMD(later),
+        },
+      );
       return;
     }
     if (customMode === "single") {
@@ -194,7 +224,11 @@ export function DateRangeDropdown({
         setCustomError("Pick a date.");
         return;
       }
-      onChange({ from: startOfDay(d), to: endOfDay(d) });
+      const ymd = toYMD(d);
+      onChange(
+        { from: startOfDay(d), to: endOfDay(d) },
+        { preset: "custom", customFrom: ymd, customTo: ymd },
+      );
       return;
     }
     // year
@@ -203,9 +237,12 @@ export function DateRangeDropdown({
       setCustomError("Pick a valid year.");
       return;
     }
-    const from = startOfDay(new Date(y, 0, 1));
-    const to = endOfDay(new Date(y, 11, 31));
-    onChange({ from, to });
+    const fromD = new Date(y, 0, 1);
+    const toD = new Date(y, 11, 31);
+    onChange(
+      { from: startOfDay(fromD), to: endOfDay(toD) },
+      { preset: "custom", customFrom: toYMD(fromD), customTo: toYMD(toD) },
+    );
   }
 
   return (
