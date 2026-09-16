@@ -182,6 +182,7 @@ export function DateRangeDropdown({
   initialPreset = DEFAULT_PRESET,
   initialCustomFrom = "",
   initialCustomTo = "",
+  showCustomPanel = true,
 }: {
   onChange: (range: DateRangeValue, meta?: DateRangeMeta) => void;
   initialPreset?: PresetKey;
@@ -190,6 +191,12 @@ export function DateRangeDropdown({
   // was persisted with. Empty strings preserve the legacy behaviour.
   initialCustomFrom?: string;
   initialCustomTo?: string;
+  // Set false when the parent already renders its own always-visible
+  // From/To pair. Without it the operator gets TWO identical date
+  // editors stacked, both labelled "From date"/"To date", and no way to
+  // tell which one the board is actually reading. The Select keeps
+  // showing "Custom…" either way, so the range is still named.
+  showCustomPanel?: boolean;
 }) {
   const [preset, setPreset] = useState<PresetKey>(initialPreset);
   const [customMode, setCustomMode] = useState<CustomMode>("range");
@@ -281,7 +288,7 @@ export function DateRangeDropdown({
         />
       </div>
 
-      {preset === "custom" ? (
+      {preset === "custom" && showCustomPanel ? (
         <div
           style={{
             display: "flex",

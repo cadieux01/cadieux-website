@@ -1411,6 +1411,7 @@ function OrdersPageInner() {
           initialPreset={preset}
           initialCustomFrom={customFrom}
           initialCustomTo={customTo}
+          showCustomPanel={false}
           onChange={(v, meta) => {
             clearRankPins();
             setRange(v);
@@ -1475,8 +1476,18 @@ function OrdersPageInner() {
           >
             Dates
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <div style={{ minWidth: 160 }}>
+          {/* flexWrap + a flex basis rather than a fixed minWidth: on a
+              phone the pair is wider than the column, and without these
+              the To picker was clipped off the right edge entirely. */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ flex: "1 1 150px", minWidth: 130 }}>
               <DatePicker
                 value={customFrom}
                 ariaLabel="From date"
@@ -1486,7 +1497,7 @@ function OrdersPageInner() {
               />
             </div>
             <span style={{ color: "rgba(251,243,212,0.6)" }}>—</span>
-            <div style={{ minWidth: 160 }}>
+            <div style={{ flex: "1 1 150px", minWidth: 130 }}>
               <DatePicker
                 value={customTo}
                 ariaLabel="To date"
