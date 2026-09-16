@@ -85,6 +85,7 @@ export async function GET(req: NextRequest) {
       computed_state: computeOrderState(r, nowMs),
       note_count: agg?.note_count ?? 0,
       last_call_note: agg?.last_call_note ?? null,
+      last_note: agg?.last_note ?? null,
     };
   });
 

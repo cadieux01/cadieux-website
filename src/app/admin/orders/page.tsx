@@ -87,6 +87,7 @@ import { formatOrderNumber } from "@/lib/order-number";
 import { composeShareMessage, isShareable } from "@/lib/order-share-message";
 import { LoafDots } from "@/components/admin/LoafDots";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
+import { NOTE_KIND_STYLE, truncateNoteBody } from "@/lib/order-notes";
 import { NoteIconButton } from "@/components/admin/NoteIconButton";
 import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
@@ -1219,6 +1220,14 @@ function OrdersPageInner() {
                   author: res.note.author,
                   created_at: res.note.created_at,
                 },
+                // This POST is always kind='call', so it is both the
+                // newest call AND the newest note of any kind.
+                last_note: {
+                  body: res.note.body,
+                  author: res.note.author,
+                  created_at: res.note.created_at,
+                  kind: "call" as const,
+                },
               }
             : o,
         ),
@@ -1814,17 +1823,21 @@ function OrdersPageInner() {
                           ]}
                         />
                       </div>
-                      {/* Inline chip showing the most recent call note so the
-                          operator can see "already contacted, said reschedule"
-                          without opening the panel. Timestamp is IST. */}
-                      {o.last_call_note ? (
+                      {/* Inline chip showing the most recent note of ANY kind
+                          so the operator sees "already contacted, said
+                          reschedule" — or a plain note, or an order edit —
+                          without opening the panel. Colour is per kind
+                          (call amber / note muted / edit teal). Body is
+                          truncated; the full text is the title attr and is
+                          always in the panel. Timestamp is IST. */}
+                      {o.last_note ? (
                         <div
                           style={{
                             marginTop: 6,
                             display: "inline-block",
                             padding: "3px 6px",
-                            border: "1px solid rgba(245,158,11,0.5)",
-                            color: "#F59E0B",
+                            border: `1px solid ${NOTE_KIND_STYLE[o.last_note.kind].border}`,
+                            color: NOTE_KIND_STYLE[o.last_note.kind].color,
                             fontFamily: "var(--font-body)",
                             fontSize: "0.75rem",
                             lineHeight: 1.3,
@@ -1832,13 +1845,12 @@ function OrdersPageInner() {
                             maxWidth: 200,
                           }}
                           title={
-                            o.last_call_note.body +
-                            (o.last_call_note.author
-                              ? ` · ${o.last_call_note.author}`
-                              : "")
+                            `${NOTE_KIND_STYLE[o.last_note.kind].label}: ` +
+                            o.last_note.body +
+                            (o.last_note.author ? ` · ${o.last_note.author}` : "")
                           }
                         >
-                          {o.last_call_note.body}
+                          {truncateNoteBody(o.last_note.body)}
                           <span
                             style={{
                               display: "block",
@@ -1847,7 +1859,7 @@ function OrdersPageInner() {
                               marginTop: 1,
                             }}
                           >
-                            {formatCallChipTime(o.last_call_note.created_at)}
+                            {formatCallChipTime(o.last_note.created_at)}
                           </span>
                         </div>
                       ) : null}

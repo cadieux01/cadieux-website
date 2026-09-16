@@ -47,11 +47,47 @@ export type CallNoteSummary = {
   created_at: string;
 };
 
+/** The newest note of ANY kind. Carries `kind` because the board chip
+ *  colours by it — the operator must be able to tell a phone-call
+ *  outcome from an order edit at a glance. */
+export type LastNoteSummary = CallNoteSummary & { kind: NoteKind };
+
 /** Per-owner note aggregate returned by aggregateNotesFor(). */
 export type NoteAggregate = {
   note_count: number;
   last_call_note: CallNoteSummary | null;
+  last_note: LastNoteSummary | null;
 };
+
+/** Narrow a stored kind string. Anything unrecognised reads as 'note'. */
+export function asNoteKind(raw: unknown): NoteKind {
+  return NOTE_KINDS.includes(raw as NoteKind) ? (raw as NoteKind) : "note";
+}
+
+/** Label + colours per kind. Shared by the board chip and the note panel
+ *  so one kind never reads amber in one place and muted in the other. */
+export const NOTE_KIND_STYLE: Record<
+  NoteKind,
+  { label: string; color: string; border: string }
+> = {
+  call: { label: "Call", color: "#F59E0B", border: "rgba(245,158,11,0.5)" },
+  note: {
+    label: "Note",
+    color: "rgba(251,243,212,0.72)",
+    border: "rgba(251,243,212,0.3)",
+  },
+  edit: { label: "Edit", color: "#7FD4C1", border: "rgba(127,212,193,0.5)" },
+};
+
+/** Chip width budget on the orders board. Longest note in prod is 117
+ *  chars, so the chip truncates and the title attr carries the rest. */
+export const NOTE_CHIP_MAX_CHARS = 45;
+
+export function truncateNoteBody(body: string, max = NOTE_CHIP_MAX_CHARS): string {
+  const oneLine = body.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= max) return oneLine;
+  return `${oneLine.slice(0, max - 1).trimEnd()}…`;
+}
 
 /** Trim + length-check a body. Returns null when valid. */
 export function validateBody(raw: unknown): { body: string } | { error: string } {
@@ -81,7 +117,7 @@ export function normalizeKind(raw: unknown): NoteKind {
 }
 
 /**
- * Batch-hydrate every order id with { note_count, last_call_note }.
+ * Batch-hydrate every order id with { note_count, last_call_note, last_note }.
  * Empty input → empty map. Never throws — a failure logs and returns
  * an empty map so the list endpoint stays online without notes.
  *
@@ -102,7 +138,8 @@ export async function aggregateNotesFor(
     .from("order_notes")
     .select(`id, ${column}, kind, body, author, created_at`)
     .in(column, ids)
-    // Newest first so the first call row we see per owner IS the latest.
+    // Newest first, so the first row we see per owner IS the latest note
+    // (any kind), and the first kind='call' row IS the latest call.
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -124,8 +161,17 @@ export async function aggregateNotesFor(
     const curr = out.get(ownerId) ?? {
       note_count: 0,
       last_call_note: null as CallNoteSummary | null,
+      last_note: null as LastNoteSummary | null,
     };
     curr.note_count += 1;
+    if (curr.last_note === null) {
+      curr.last_note = {
+        body: row.body,
+        author: row.author,
+        created_at: row.created_at,
+        kind: asNoteKind(row.kind),
+      };
+    }
     if (row.kind === "call" && curr.last_call_note === null) {
       curr.last_call_note = {
         body: row.body,

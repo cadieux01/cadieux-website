@@ -11,6 +11,7 @@
 // server-side cookie is the real credential.
 import type { NutrientValue } from "@/lib/nutrition";
 import type { NextDelivery } from "@/lib/admin-subscription-derive";
+import type { NoteKind } from "@/lib/order-notes";
 
 export const ADMIN_SESSION_KEY = "cadieux_admin_auth";
 
@@ -179,12 +180,21 @@ export type AdminOrderRow = {
    *  endpoint; undefined on paths that don't hydrate notes. */
   note_count?: number;
   /** Newest-first summary of the last order_notes row with kind='call'.
-   *  Feeds the inline "Confirmed on call · 5:24 PM" chip on the board
-   *  and the derived "Call updates" group in the status filter. */
+   *  Feeds the derived "Call updates" group in the status filter. */
   last_call_note?: {
     body: string;
     author: string | null;
     created_at: string;
+  } | null;
+  /** Newest order_notes row of ANY kind ('call' | 'note' | 'edit').
+   *  Feeds the inline chip in the board's Status column; `kind` drives
+   *  the chip colour so a phone-call outcome and an order edit never
+   *  look alike. */
+  last_note?: {
+    body: string;
+    author: string | null;
+    created_at: string;
+    kind: NoteKind;
   } | null;
 };
 

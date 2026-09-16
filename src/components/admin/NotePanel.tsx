@@ -16,7 +16,13 @@ import { useCallback, useEffect, useState } from "react";
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
-import { NOTE_BODY_MAX, type NoteKind, type OrderNoteRow } from "@/lib/order-notes";
+import {
+  NOTE_BODY_MAX,
+  NOTE_KIND_STYLE,
+  asNoteKind,
+  type NoteKind,
+  type OrderNoteRow,
+} from "@/lib/order-notes";
 
 import Select from "@/components/ui/Select";
 import { BORDER, BORDER_SUBTLE, CREAM, INK, TEXT_MUTED } from "./theme";
@@ -341,17 +347,15 @@ export function NotePanel({ owner, onCountChange, onClose }: Props) {
                       style={{
                         fontSize: 10,
                         letterSpacing: "0.18em",
-                        color: n.kind === "call" ? "#F59E0B" : TEXT_MUTED,
+                        color: NOTE_KIND_STYLE[asNoteKind(n.kind)].color,
                         border: `1px solid ${
-                          n.kind === "call"
-                            ? "rgba(245,158,11,0.5)"
-                            : BORDER_SUBTLE
+                          NOTE_KIND_STYLE[asNoteKind(n.kind)].border
                         }`,
                         padding: "1px 6px",
                         borderRadius: 3,
                       }}
                     >
-                      {n.kind === "call" ? "Call" : "Note"}
+                      {NOTE_KIND_STYLE[asNoteKind(n.kind)].label}
                     </span>
                     <span
                       style={{
