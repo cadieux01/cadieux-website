@@ -5,9 +5,15 @@
 // params) and triggers window.print() once loaded.
 //
 // The date range comes from the DateRangeDropdown on the orders page:
-// ?from=YYYY-MM-DD&to=YYYY-MM-DD (local dates). Filtered inclusively
-// on created_at so the printed sheet matches the on-screen table
-// exactly.
+// ?from=YYYY-MM-DD&to=YYYY-MM-DD (local dates), applied to the column
+// named by ?basis (delivery|order) so the printed sheet matches the
+// on-screen table exactly. The basis MUST be carried: the orders page
+// defaults to filtering on delivery_date, and the 12h booking lead means
+// placed-today and delivering-today barely intersect — printing a sheet
+// filtered on created_at from a screen filtered on delivery_date hands
+// the kitchen a different set of orders than the one it was printed
+// from. The basis is stated in the header so it is never ambiguous
+// which axis a sheet on the bench was cut on.
 //
 // Rows are grouped first by delivery_date then by delivery_slot so the
 // kitchen can pack each route slot in one pass. Orders missing either
@@ -25,7 +31,13 @@ import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { AdminOrderItemSnapshot, AdminOrderRow } from "@/lib/admin-shared";
-import { decodeStatusParam, matchesOrderFilter } from "@/lib/order-filter";
+import {
+  decodeStatusParam,
+  matchesOrderFilter,
+  orderDateForBasis,
+  parseBasis,
+  type DateBasis,
+} from "@/lib/order-filter";
 
 // Parse a YYYY-MM-DD string (from the orders page's toYMD) as a local
 // Date. Invalid / missing → null. Mirrors DateRangeDropdown's own
@@ -90,8 +102,13 @@ function PrintOrdersPageInner() {
     () => buildRange(fromParam, toParam),
     [fromParam, toParam],
   );
+  // Default MUST match DEFAULT_BASIS on /admin/orders, so an older
+  // bookmark that predates the param still prints what today's screen
+  // would show.
+  const basis: DateBasis = parseBasis(params.get("basis"));
+  const basisLabel = basis === "delivery" ? "by delivery date" : "by order date";
   const rangeLabel = range
-    ? `Range: ${formatDate(fromParam)} → ${formatDate(toParam)}`
+    ? `Range: ${formatDate(fromParam)} → ${formatDate(toParam)} (${basisLabel})`
     : "Range: all dates";
 
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
@@ -119,11 +136,10 @@ function PrintOrdersPageInner() {
   const filtered = useMemo(() => {
     const search = q.trim().toLowerCase();
     return orders.filter((o) => {
-      // Date-range filter — matches the /admin/orders table which
-      // filters on created_at with withinDateRange. When from/to are
-      // missing, range is null and this passes everything (back-compat
-      // for older bookmarks / entry points).
-      if (!withinDateRange(o.created_at, range)) return false;
+      // Date-range filter on the same column the table used. When
+      // from/to are missing, range is null and this passes everything
+      // (back-compat for older bookmarks / entry points).
+      if (!withinDateRange(orderDateForBasis(o, basis), range)) return false;
       if (!matchesOrderFilter(o, statuses, calls)) return false;
       if (!search) return true;
       const name = (o.customers?.full_name ?? "").toLowerCase();

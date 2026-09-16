@@ -62,10 +62,14 @@ import MultiSelect from "@/components/ui/MultiSelect";
 import {
   ALL_VALUE,
   CALL_PREFIX,
+  DEFAULT_BASIS,
   decodeStatusParam,
   encodeStatusParam,
   matchesOrderFilter,
+  orderDateForBasis,
+  parseBasis,
   splitFilterValues,
+  type DateBasis,
 } from "@/lib/order-filter";
 import {
   sortByDistanceFromAnchor,
@@ -91,27 +95,18 @@ type SortKey = "created_desc" | "delivery_asc" | "nearest_from_area";
 // decision made on this screen (baking, routing, calling). The default
 // is therefore delivery date; the toggle stays visible so it is never
 // ambiguous which axis is in play.
-type DateBasis = "delivery" | "order";
-const DEFAULT_BASIS: DateBasis = "delivery";
+//
+// DateBasis, DEFAULT_BASIS and orderDateForBasis are imported from
+// @/lib/order-filter rather than declared here: the packing list at
+// /admin/orders/print applies the same range and must resolve the same
+// column, exactly as it already shares the status predicate.
 const DEFAULT_SORT: SortKey = "created_desc";
-
-// Which column the range applies to. Rows with a null value on the
-// chosen column are excluded from the view — a row with no
-// delivery_date has nothing to be delivered on the operator's chosen
-// day, and a row with no created_at is by construction impossible.
-function orderDateForBasis(
-  o: AdminOrderRow,
-  basis: DateBasis,
-): string | null | undefined {
-  return basis === "delivery" ? o.delivery_date : o.created_at;
-}
 
 const SORT_KEYS: readonly SortKey[] = [
   "created_desc",
   "delivery_asc",
   "nearest_from_area",
 ];
-const BASIS_VALUES: readonly DateBasis[] = ["delivery", "order"];
 const PRESET_VALUES: readonly PresetKey[] = [
   "today",
   "this_week",
@@ -186,11 +181,7 @@ function parseUrlInitial(sp: URLSearchParams): UrlInitial {
       ? (sortRaw as SortKey)
       : DEFAULT_SORT;
 
-  const basisRaw = sp.get("basis");
-  const basis: DateBasis =
-    basisRaw && (BASIS_VALUES as readonly string[]).includes(basisRaw)
-      ? (basisRaw as DateBasis)
-      : DEFAULT_BASIS;
+  const basis: DateBasis = parseBasis(sp.get("basis"));
 
   const presetRaw = sp.get("preset");
   const presetOk =
@@ -1171,7 +1162,10 @@ function OrdersPageInner() {
                 q: query,
                 sort,
                 // Carry the currently-selected date range so the print
-                // view shows exactly the same slice as the on-screen table.
+                // view shows exactly the same slice as the on-screen table
+                // — and the BASIS with it, or the sheet would filter on a
+                // different column than the screen it was printed from.
+                basis,
                 ...(range
                   ? { from: toYMD(range.from), to: toYMD(range.to) }
                   : {}),

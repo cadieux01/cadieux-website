@@ -27,6 +27,45 @@ export type FilterableOrder = {
 /** Marks a filter value as a call-update body rather than a stored status. */
 export const CALL_PREFIX = "call:";
 
+// ---------------------------------------------------------------------------
+// Date basis
+//
+// WHICH column the date range applies to. This belongs here for the same
+// reason the status predicate does: the table and the packing list must
+// agree. They did not — the table filters on delivery_date by default
+// while print filtered on created_at unconditionally, and with a ~12h
+// booking lead those two sets barely intersect, so the sheet carried into
+// the kitchen listed different orders than the screen it was printed from.
+// ---------------------------------------------------------------------------
+
+export type DateBasis = "delivery" | "order";
+
+/** The default for both views. Operational decisions on this board —
+ *  baking, routing, calling — are all about the delivery date. */
+export const DEFAULT_BASIS: DateBasis = "delivery";
+
+/** Narrow an untrusted `?basis=` value, falling back to the default so an
+ *  older link that predates the param prints what today's screen shows. */
+export function parseBasis(raw: string | null | undefined): DateBasis {
+  return raw === "delivery" || raw === "order" ? raw : DEFAULT_BASIS;
+}
+
+/** The fields the basis selector reads. */
+export type DatedOrder = {
+  created_at: string;
+  delivery_date?: string | null;
+};
+
+/** The column the range is applied to. A row with no value on the chosen
+ *  column drops out of the view: a row with no delivery_date has nothing
+ *  to deliver on the operator's chosen day. */
+export function orderDateForBasis(
+  o: DatedOrder,
+  basis: DateBasis,
+): string | null | undefined {
+  return basis === "delivery" ? o.delivery_date : o.created_at;
+}
+
 /** The value that means "no status constraint". Kept as a real option in the
  *  menu (operators expect to see it) but it is never stored in the selection —
  *  an empty status list IS "all", so the two can never disagree. */
