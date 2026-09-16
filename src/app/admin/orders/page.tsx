@@ -33,9 +33,12 @@ import {
   resolvePreset,
   toYMD,
   withinDateRange,
+  ymdToEndOfDay,
+  ymdToStartOfDay,
   type DateRangeValue,
   type PresetKey,
 } from "@/components/admin/DateRangeDropdown";
+import DatePicker from "@/components/ui/DatePicker";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { OrderLocationActions } from "@/components/admin/OrderLocationActions";
 import {
@@ -95,6 +98,7 @@ import {
   composeShareStop,
   isShareable,
 } from "@/lib/order-share-message";
+import { shareRun } from "@/lib/share-delivery";
 import { LoafDots } from "@/components/admin/LoafDots";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { NOTE_KIND_STYLE, truncateNoteBody } from "@/lib/order-notes";
@@ -549,6 +553,31 @@ function OrdersPageInner() {
   const [preset, setPreset] = useState<PresetKey>(urlInit.preset);
   const [customFrom, setCustomFrom] = useState<string>(urlInit.customFrom);
   const [customTo, setCustomTo] = useState<string>(urlInit.customTo);
+
+  // Apply the always-visible From/To inputs.
+  //
+  // Both values are held here, so the preset dropdown and these inputs read
+  // from ONE source and cannot show different dates. A half-filled pair is
+  // recorded but NOT applied: narrowing the range the moment the first date
+  // is picked would yank the table out from under the operator mid-edit,
+  // and an open-ended range is not what "From 14th" means to anyone.
+  const applyExplicitDates = useCallback((from: string, to: string) => {
+    setCustomFrom(from);
+    setCustomTo(to);
+    if (!from || !to) return;
+
+    const f = ymdToStartOfDay(from);
+    const t = ymdToEndOfDay(to);
+    if (!f || !t) return;
+
+    // Tolerate a reversed pair rather than refusing it. Picking To before
+    // From is an ordinary way to use two date inputs.
+    const [lo, hi] = f.getTime() <= t.getTime() ? [f, t] : [ymdToStartOfDay(to)!, ymdToEndOfDay(from)!];
+
+    clearRankPins();
+    setRange({ from: lo, to: hi });
+    setPreset("custom");
+  }, []);
 
   // "Nearest from typed area" sort — see AreaSortControl. anchor is null
   // until the operator matches an area; pincodeCoords hydrates once on
@@ -1097,17 +1126,23 @@ function OrdersPageInner() {
     if (ids.length === 0) return;
 
     if (action === "share") {
-      // Fire-and-forget: open wa.me with the pre-composed text in a new
-      // tab and drop the selection. No server call — the operator picks
-      // the WhatsApp contact themselves.
+      // No server call — the operator picks the WhatsApp contact
+      // themselves. shareRun decides HOW to hand the text over (native
+      // share sheet / wa.me / clipboard) based on how long it is, and
+      // never truncates. See @/lib/share-delivery.
       const text = buildBulkShareText();
-      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(url, "_blank", "noopener,noreferrer");
-      setSelected(new Set());
+      const label = `${ids.length} order${ids.length === 1 ? "" : "s"}`;
+      const outcome = await shareRun(text, label);
+
+      // Keep the selection when the operator backed out of the native
+      // sheet, or when nothing worked. Clearing it on a cancel would mean
+      // re-ticking 14 rows to retry — the exact re-selection grind that
+      // the sessionStorage restore exists to prevent.
+      if (outcome.path !== "cancelled" && outcome.path !== "failed") {
+        setSelected(new Set());
+      }
       setPendingBulk(null);
-      showNotice(
-        `Opening WhatsApp with ${ids.length} order${ids.length === 1 ? "" : "s"}.`,
-      );
+      if (outcome.notice) showNotice(outcome.notice);
       return;
     }
 
@@ -1120,10 +1155,14 @@ function OrdersPageInner() {
         );
       } catch {
         // Some browsers block clipboard writes outside a user gesture.
-        // Fall back to a share-URL so the operator still gets the text.
-        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-        window.open(url, "_blank", "noopener,noreferrer");
-        showNotice("Clipboard blocked — opened share sheet instead.");
+        // Hand off through shareRun rather than a raw wa.me URL: on a long
+        // run that URL is precisely what drops the tail of the list, and a
+        // fallback that loses orders is worse than one that fails loudly.
+        const outcome = await shareRun(
+          text,
+          `${ids.length} order${ids.length === 1 ? "" : "s"}`,
+        );
+        if (outcome.notice) showNotice(`Clipboard blocked. ${outcome.notice}`);
       }
       setPendingBulk(null);
       return;
@@ -1360,10 +1399,18 @@ function OrdersPageInner() {
           alignItems: "flex-start",
         }}
       >
+        {/* Keyed on the range state so that when the From/To inputs below
+            set a range, this dropdown re-seeds and shows "Custom…" instead
+            of still claiming "This Month". The dropdown owns its preset
+            internally and has no controlled prop; remounting is how the two
+            are kept honest without reworking a control four other admin
+            pages depend on. The key only changes when a range is actually
+            applied, never while a date is being typed. */}
         <DateRangeDropdown
-          initialPreset={urlInit.preset}
-          initialCustomFrom={urlInit.customFrom}
-          initialCustomTo={urlInit.customTo}
+          key={`${preset}:${customFrom}:${customTo}`}
+          initialPreset={preset}
+          initialCustomFrom={customFrom}
+          initialCustomTo={customTo}
           onChange={(v, meta) => {
             clearRankPins();
             setRange(v);
@@ -1406,6 +1453,48 @@ function OrdersPageInner() {
                 { value: "order", label: "Order date" },
               ]}
             />
+          </div>
+        </div>
+
+        {/* Explicit From/To, ALWAYS VISIBLE.
+            These same two dates were already reachable, but only by first
+            choosing "Custom…" in the preset dropdown, which is two steps
+            behind a label that does not say "dates". Picking a specific day
+            is the single most common thing done on this board, so it gets
+            to be a control rather than a discovery. The presets stay for
+            quick use; these write the same range and the same ?from/?to. */}
+        <div style={{ display: "inline-flex", flexDirection: "column", gap: "0.25rem" }}>
+          <span
+            style={{
+              color: "rgba(251,243,212,0.7)",
+              fontFamily: "var(--font-body)",
+              fontSize: "0.75rem",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+            }}
+          >
+            Dates
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <div style={{ minWidth: 160 }}>
+              <DatePicker
+                value={customFrom}
+                ariaLabel="From date"
+                placeholder="From…"
+                onChange={(v) => applyExplicitDates(v, customTo)}
+                style={{ minHeight: 0, fontSize: "1rem" }}
+              />
+            </div>
+            <span style={{ color: "rgba(251,243,212,0.6)" }}>—</span>
+            <div style={{ minWidth: 160 }}>
+              <DatePicker
+                value={customTo}
+                ariaLabel="To date"
+                placeholder="To…"
+                onChange={(v) => applyExplicitDates(customFrom, v)}
+                style={{ minHeight: 0, fontSize: "1rem" }}
+              />
+            </div>
           </div>
         </div>
       </div>

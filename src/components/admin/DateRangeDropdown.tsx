@@ -135,6 +135,27 @@ function parseYmd(s: string): Date | null {
 
 // ── exported helpers for consuming pages ─────────────────────────────────
 
+/**
+ * "YYYY-MM-DD" → local start-of-day, or null if it isn't a real date.
+ *
+ * LOCAL, not UTC. `new Date("2026-09-17")` is parsed as UTC midnight, which
+ * in IST (+5:30) lands at 05:30 on the 17th — so a range built that way
+ * quietly drops anything stamped in the first five and a half hours of the
+ * day. Exported so callers that own their own date inputs (the always-
+ * visible From/To on /admin/orders) resolve dates the same way the preset
+ * dropdown does, instead of hand-rolling a second, subtly different parse.
+ */
+export function ymdToStartOfDay(s: string): Date | null {
+  const d = parseYmd(s);
+  return d ? startOfDay(d) : null;
+}
+
+/** "YYYY-MM-DD" → local end-of-day (23:59:59.999), inclusive. */
+export function ymdToEndOfDay(s: string): Date | null {
+  const d = parseYmd(s);
+  return d ? endOfDay(d) : null;
+}
+
 /** YYYY-MM-DD in local time (for API params that expect date-only). */
 export function toYMD(d: Date): string {
   const y = d.getFullYear();
