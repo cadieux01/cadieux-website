@@ -93,8 +93,14 @@ function PrintOrdersPageInner() {
     () => (callRaw ? callRaw.split("\u0000") : []),
     [callRaw],
   );
+  // Third filter group, carried as ?repeat=1. Without it the packing list
+  // would silently ignore "Repeat customers only" and print rows the
+  // screen it was printed from was hiding.
+  const repeatOnly = params.get("repeat") === "1";
   const filterLabel =
-    [...statuses, ...calls].join(", ") || "all";
+    [...statuses, ...calls, ...(repeatOnly ? ["repeat customers"] : [])].join(
+      ", ",
+    ) || "all";
   const q = params.get("q") ?? "";
   const fromParam = params.get("from");
   const toParam = params.get("to");
@@ -140,13 +146,13 @@ function PrintOrdersPageInner() {
       // from/to are missing, range is null and this passes everything
       // (back-compat for older bookmarks / entry points).
       if (!withinDateRange(orderDateForBasis(o, basis), range)) return false;
-      if (!matchesOrderFilter(o, statuses, calls)) return false;
+      if (!matchesOrderFilter(o, statuses, calls, repeatOnly)) return false;
       if (!search) return true;
       const name = (o.customers?.full_name ?? "").toLowerCase();
       const phone = (o.customers?.phone ?? "").toLowerCase();
       return name.includes(search) || phone.includes(search);
     });
-  }, [orders, statuses, calls, q, range]);
+  }, [orders, statuses, calls, repeatOnly, q, range]);
 
   // Group: delivery_date → delivery_slot → orders[]. Null date/slot
   // bucket sorts last so the dated rows print first.

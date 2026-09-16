@@ -196,6 +196,17 @@ export type AdminOrderRow = {
     created_at: string;
     kind: NoteKind;
   } | null;
+
+  // --- repeat-customer facts, computed once per list load (by PHONE,
+  // cancelled orders excluded — see src/lib/customer-history.ts). All
+  // three are null on cancelled rows and on rows without a phone.
+  /** 1-based position of this order among that customer's orders. 2+
+   *  means they had ordered before, which is what the star marks. */
+  repeat_seq?: number | null;
+  /** That customer's total non-cancelled orders, all time. */
+  customer_order_count?: number | null;
+  /** created_at of that customer's first non-cancelled order. */
+  customer_first_order_at?: string | null;
 };
 
 export type AdminProductRow = {

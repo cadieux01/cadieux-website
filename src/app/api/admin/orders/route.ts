@@ -5,6 +5,11 @@ import {
   supabaseAdmin,
   verifyAdminOrTeamOrder,
 } from "@/lib/admin-auth";
+import {
+  buildRepeatIndex,
+  computeRetention,
+  type HistoryOrder,
+} from "@/lib/customer-history";
 import { aggregateNotesFor } from "@/lib/order-notes";
 import { computeOrderState } from "@/lib/order-state";
 import {
@@ -67,6 +72,14 @@ export async function GET(req: NextRequest) {
     .filter((v): v is string => typeof v === "string" && v.length > 0);
   const noteAgg = await aggregateNotesFor(supabaseAdmin, "order", orderIds);
 
+  // Repeat-customer history + the retention panel, folded ONCE over the
+  // rows we already have — keyed on customers.phone, cancelled orders
+  // excluded. This GET returns every order, so the history is complete
+  // without a second query and without one lookup per row.
+  const history = rows as HistoryOrder[];
+  const repeatIndex = buildRepeatIndex(history);
+  const retention = computeRetention(history);
+
   // Attach computed_state on every row so admin filters / badges never need
   // to duplicate the classifier. See src/lib/order-state.ts (mirrors the
   // WhatsApp bot's classifyOrder — the single source of truth for "expired").
@@ -79,6 +92,7 @@ export async function GET(req: NextRequest) {
     created_at?: string | null;
   }) => {
     const agg = r.id ? noteAgg.get(r.id) : undefined;
+    const rep = r.id ? repeatIndex.get(r.id) : undefined;
     return {
       ...r,
       pickup_location: r.pickup_location_id ? pickupById[r.pickup_location_id] ?? null : null,
@@ -86,10 +100,13 @@ export async function GET(req: NextRequest) {
       note_count: agg?.note_count ?? 0,
       last_call_note: agg?.last_call_note ?? null,
       last_note: agg?.last_note ?? null,
+      repeat_seq: rep?.repeat_seq ?? null,
+      customer_order_count: rep?.customer_order_count ?? null,
+      customer_first_order_at: rep?.customer_first_order_at ?? null,
     };
   });
 
-  return NextResponse.json({ orders: enriched });
+  return NextResponse.json({ orders: enriched, retention });
 }
 
 // POST /api/admin/orders — manual order entry ("Register New Order").

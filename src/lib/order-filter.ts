@@ -12,7 +12,8 @@
 // SEMANTICS (this is the part that gets messy — pin it):
 //   • statuses are OR'd together      → Pending OR Confirmed OR Preparing
 //   • call updates are OR'd together  → "Did not lift" OR "Call back later"
-//   • the two groups are AND'd        → Pending AND "Did not lift the call"
+//   • "repeat customers only" is a single flag
+//   • the groups are AND'd            → Pending AND "Did not lift" AND repeat
 // An EMPTY group means "no constraint from this group", which is why
 // "All statuses" is simply the empty status list rather than a magic value.
 
@@ -22,10 +23,18 @@ export type FilterableOrder = {
   status?: string | null;
   computed_state?: string | null;
   last_call_note?: { body?: string | null } | null;
+  /** 1-based ordinal of this order for its customer; see
+   *  src/lib/customer-history.ts. 2+ = they had ordered before. */
+  repeat_seq?: number | null;
 };
 
 /** Marks a filter value as a call-update body rather than a stored status. */
 export const CALL_PREFIX = "call:";
+
+/** The one value in the "repeat customers only" group. Kept in the same
+ *  flat selection as statuses and calls so the dropdown, the URL and the
+ *  print view all stay on one representation. */
+export const REPEAT_ONLY = "repeat:only";
 
 // ---------------------------------------------------------------------------
 // Date basis
@@ -79,15 +88,18 @@ export const ALL_VALUE = "all";
 export function splitFilterValues(values: readonly string[]): {
   statuses: string[];
   calls: string[];
+  repeatOnly: boolean;
 } {
   const statuses: string[] = [];
   const calls: string[] = [];
+  let repeatOnly = false;
   for (const v of values) {
     if (v === ALL_VALUE) continue;
-    if (v.startsWith(CALL_PREFIX)) calls.push(v.slice(CALL_PREFIX.length));
+    if (v === REPEAT_ONLY) repeatOnly = true;
+    else if (v.startsWith(CALL_PREFIX)) calls.push(v.slice(CALL_PREFIX.length));
     else statuses.push(v);
   }
-  return { statuses, calls };
+  return { statuses, calls, repeatOnly };
 }
 
 /**
@@ -102,7 +114,12 @@ export function matchesOrderFilter(
   o: FilterableOrder,
   statuses: readonly string[],
   calls: readonly string[],
+  repeatOnly = false,
 ): boolean {
+  // A repeat order is one where the SAME phone has an earlier
+  // non-cancelled order. Cancelled rows carry no repeat_seq at all, so
+  // they never pass this gate.
+  if (repeatOnly && (o.repeat_seq ?? 0) < 2) return false;
   if (statuses.length > 0) {
     const s = (o.status ?? "").toLowerCase();
     const hit = statuses.some((v) =>

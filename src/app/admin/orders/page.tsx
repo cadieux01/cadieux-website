@@ -70,6 +70,7 @@ import {
   ALL_VALUE,
   CALL_PREFIX,
   DEFAULT_BASIS,
+  REPEAT_ONLY,
   decodeStatusParam,
   encodeStatusParam,
   matchesOrderFilter,
@@ -78,6 +79,9 @@ import {
   splitFilterValues,
   type DateBasis,
 } from "@/lib/order-filter";
+import { repeatTooltip } from "@/lib/customer-history";
+import { RetentionPanel } from "@/components/admin/RetentionPanel";
+import type { RetentionSummary } from "@/lib/customer-history";
 import {
   sortByDistanceFromAnchor,
   orderDistanceFrom,
@@ -176,9 +180,13 @@ function parseUrlInitial(sp: URLSearchParams): UrlInitial {
   // contain commas.
   const statuses = decodeStatusParam(sp.get("status"));
   const calls = sp.getAll("call").filter((c) => c.length > 0);
+  // "Repeat customers only" is a single flag, so it rides its own `repeat=1`
+  // param rather than being smuggled into `status`. Same spelling the print
+  // link uses, so one encoding serves the screen, the URL and the sheet.
   const filter = [
     ...statuses,
     ...calls.map((c) => `${CALL_PREFIX}${c}`),
+    ...(sp.get("repeat") === "1" ? [REPEAT_ONLY] : []),
   ];
 
   const query = sp.get("q") ?? "";
@@ -267,9 +275,10 @@ function stateToSearch(s: {
   anchor: ResolvedArea | null;
 }): string {
   const params = new URLSearchParams();
-  const { statuses, calls } = splitFilterValues(s.filter);
+  const { statuses, calls, repeatOnly } = splitFilterValues(s.filter);
   if (statuses.length > 0) params.set("status", encodeStatusParam(statuses));
   for (const c of calls) params.append("call", c);
+  if (repeatOnly) params.set("repeat", "1");
   if (s.query.trim()) params.set("q", s.query);
   if (s.sort !== DEFAULT_SORT) params.set("sort", s.sort);
   if (s.basis !== DEFAULT_BASIS) params.set("basis", s.basis);
@@ -489,6 +498,10 @@ function OrdersPageInner() {
     [],
   );
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
+  // All-time retention, computed by the list endpoint. Deliberately NOT
+  // scoped to the date range or the filters — "how many customers ever
+  // came back" is a fixed number, not a property of the current view.
+  const [retention, setRetention] = useState<RetentionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -501,10 +514,11 @@ function OrdersPageInner() {
   // that could disagree. The menu still shows an "All statuses" row; it is
   // rendered ticked when the status group is empty.
   const [filter, setFilter] = useState<string[]>(urlInit.filter);
-  const { statuses: statusSel, calls: callSel } = useMemo(
-    () => splitFilterValues(filter),
-    [filter],
-  );
+  const {
+    statuses: statusSel,
+    calls: callSel,
+    repeatOnly,
+  } = useMemo(() => splitFilterValues(filter), [filter]);
   // Owner of the currently-open NotePanel (order id + display label).
   // null = panel closed.
   const [noteOwner, setNoteOwner] = useState<
@@ -619,10 +633,12 @@ function OrdersPageInner() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const res = await adminFetch<{ orders: AdminOrderRow[] }>(
-        "/api/admin/orders",
-      );
+      const res = await adminFetch<{
+        orders: AdminOrderRow[];
+        retention?: RetentionSummary;
+      }>("/api/admin/orders");
       setOrders(res.orders ?? []);
+      setRetention(res.retention ?? null);
     } catch (e) {
       if (e instanceof AdminFetchError) setError(e.message);
       else if (e instanceof Error) setError(e.message);
@@ -759,7 +775,7 @@ function OrdersPageInner() {
       // Statuses OR'd, call updates OR'd, the two groups AND'd. Shared
       // with the print view so the packing list can't disagree with the
       // screen it was printed from — see src/lib/order-filter.ts.
-      if (!matchesOrderFilter(o, statusSel, callSel)) return false;
+      if (!matchesOrderFilter(o, statusSel, callSel, repeatOnly)) return false;
       if (!q) return true;
       const name = (o.customers?.full_name ?? "").toLowerCase();
       const phone = (o.customers?.phone ?? "").toLowerCase();
@@ -826,7 +842,7 @@ function OrdersPageInner() {
         if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [orders, statusSel, callSel, query, sort, range, rankOf, anchor, pincodeCoords, basis]);
+  }, [orders, statusSel, callSel, repeatOnly, query, sort, range, rankOf, anchor, pincodeCoords, basis]);
 
   // A restored id is only meaningful if the row is still there — an order
   // can have been cancelled, or the filters can have moved on, while the
@@ -858,6 +874,7 @@ function OrdersPageInner() {
     for (const o of inRange) {
       const k = (o.status ?? "").toLowerCase();
       c[k] = (c[k] ?? 0) + 1;
+      if ((o.repeat_seq ?? 0) >= 2) c.repeat = (c.repeat ?? 0) + 1;
     }
     return c;
   }, [orders, range, basis]);
@@ -930,6 +947,19 @@ function OrdersPageInner() {
         });
       }
     }
+    // Repeat customers — its own one-entry group, AND'd with the rest.
+    // Always listed (unlike the data-derived call bodies) so "how many of
+    // these are returning customers?" is answerable even when the answer
+    // is zero.
+    opts.push({
+      value: "__sep_repeat",
+      label: "── Customers ──",
+      disabled: true,
+    });
+    opts.push({
+      value: REPEAT_ONLY,
+      label: `Repeat customers only (${counts.repeat ?? 0})`,
+    });
     // Escape hatch. "All statuses" deliberately clears only its own group
     // (see toggleFilter), so with a call update ticked there would otherwise
     // be no single click that gets back to an unfiltered table. Only shown
@@ -978,11 +1008,12 @@ function OrdersPageInner() {
   //     means "all". No special case needed, and none is wanted: a special
   //     case would give "all" a second encoding.
   const toggleFilter = useCallback((value: string) => {
-    if (value === "__sep_call") return;
+    if (value === "__sep_call" || value === "__sep_repeat") return;
     clearRankPins();
     setFilter((curr) => {
       if (value === CLEAR_ALL) return [];
-      if (value === ALL_VALUE) return curr.filter((v) => v.startsWith(CALL_PREFIX));
+      if (value === ALL_VALUE)
+        return curr.filter((v) => v.startsWith(CALL_PREFIX) || v === REPEAT_ONLY);
       return curr.includes(value)
         ? curr.filter((v) => v !== value)
         : [...curr, value];
@@ -1267,6 +1298,7 @@ function OrdersPageInner() {
                 // `call` param because note bodies can contain commas.
                 status: encodeStatusParam(statusSel),
                 ...(callSel.length > 0 ? { call: callSel } : {}),
+                ...(repeatOnly ? { repeat: "1" } : {}),
                 q: query,
                 sort,
                 // Carry the currently-selected date range so the print
@@ -1545,6 +1577,9 @@ function OrdersPageInner() {
       ) : null}
 
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
+      {/* All-time retention. Sits above the table but is deliberately
+          independent of the filters and the date range above it. */}
+      {!loading && retention ? <RetentionPanel data={retention} /> : null}
       {/* Bake summary — same filtered set as the table below, so the
           numbers on this strip and on the rows can never disagree.
           Cancelled orders are excluded inside aggregateProduction. */}
@@ -1659,6 +1694,28 @@ function OrdersPageInner() {
                     <td style={td}>
                       <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
                         {o.customers?.full_name ?? "—"}
+                        {/* Repeat-customer star. Present only when this
+                            phone has an EARLIER non-cancelled order, so a
+                            first order never carries one. */}
+                        {(o.repeat_seq ?? 0) >= 2 ? (
+                          <span
+                            title={repeatTooltip({
+                              repeat_seq: o.repeat_seq ?? 0,
+                              customer_order_count: o.customer_order_count ?? 0,
+                              customer_first_order_at:
+                                o.customer_first_order_at ?? "",
+                            })}
+                            aria-label="Repeat customer"
+                            style={{
+                              marginLeft: 6,
+                              color: "#FBF3D4",
+                              fontSize: "0.9rem",
+                              cursor: "help",
+                            }}
+                          >
+                            ★
+                          </span>
+                        ) : null}
                       </div>
                       {o.customers?.phone ? (
                         <div className="flex flex-wrap items-center gap-2 mt-1">
