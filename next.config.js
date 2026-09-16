@@ -13,11 +13,20 @@
 //
 // 'unsafe-inline' is required for script + style because Next ships
 // inline bootstrap scripts and the codebase uses inline style props
-// extensively. 'unsafe-eval' is intentionally NOT granted. Tightening
-// to nonces is a follow-up task.
+// extensively. 'unsafe-eval' is intentionally NOT granted in production.
+// Tightening to nonces is a follow-up task.
 
 const SUPABASE = "https://uejagupcwevadfhfuadv.supabase.co";
 const SUPABASE_WSS = "wss://uejagupcwevadfhfuadv.supabase.co";
+
+// `next dev` compiles client modules through React Refresh, which evaluates
+// code with eval(). Without this the dev server serves correct SSR HTML and
+// then React NEVER HYDRATES — every page looks fine and nothing is
+// interactive, which has repeatedly been misread as a broken page or a bad
+// commit. A production build contains no eval, so this stays out of the
+// shipped policy.
+const DEV_SCRIPT_SRC =
+  process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
 
 const ContentSecurityPolicy = [
   "default-src 'self'",
@@ -25,7 +34,7 @@ const ContentSecurityPolicy = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://checkout.razorpay.com https://maps.googleapis.com https://vercel.live https://www.googletagmanager.com",
+  `script-src 'self' 'unsafe-inline'${DEV_SCRIPT_SRC} https://challenges.cloudflare.com https://checkout.razorpay.com https://maps.googleapis.com https://vercel.live https://www.googletagmanager.com`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   `img-src 'self' data: blob: ${SUPABASE} https://maps.gstatic.com https://*.googleapis.com https://*.gstatic.com https://www.google-analytics.com`,
