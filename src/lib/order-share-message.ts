@@ -32,6 +32,7 @@ import {
   type PaymentFacts,
 } from "@/lib/payment-label";
 import type { AdminOrderRow, AdminOrderItemSnapshot } from "@/lib/admin-shared";
+import { ZONE_LABELS, resolveZoneWithPickup } from "@/lib/delivery-zones";
 
 export type { PaymentFacts };
 
@@ -180,6 +181,11 @@ export type ShareMessageParts = {
   reference: string;
   /** Line two: "PAID" or "COD Rs340". See @/lib/payment-label. */
   payment: string;
+  /** Line three (optional): the resolved zone, e.g. "Zone 2". Derived at
+   *  read time from delivery-zones.ts; omitted when the caller could not
+   *  resolve one, so the message never carries a fake "Unzoned" label the
+   *  rider then has to interpret. */
+  zone?: string;
   customerName: string;
   customerPhone: string;
   address: string;
@@ -212,6 +218,7 @@ export function composeShareMessageFromParts(parts: ShareMessageParts): string {
   return [
     parts.reference,
     parts.payment,
+    parts.zone,
     parts.customerName,
     parts.customerPhone,
     parts.address,
@@ -272,11 +279,20 @@ function shareStop(order: AdminOrderRow, includePin: boolean): ShareStop {
     // there is nothing to divide.
     amountDue: typeof order.total_amount === "number" ? order.total_amount : null,
   };
+  // Zone comes from the ONE map — see src/lib/delivery-zones.ts. The label
+  // sits between payment and customer name so the rider sees "COD Rs280 /
+  // Zone 2 / Ravi Kumar" — one glance names the run, the money and the
+  // door in that order.
+  const zoneKey = resolveZoneWithPickup({
+    address: order.delivery_address,
+    isPickup: order.fulfillment_type === "pickup",
+  });
 
   return {
     text: composeShareMessageFromParts({
       reference: formatOrderNumber(order),
       payment: paymentLabel(facts),
+      zone: ZONE_LABELS[zoneKey],
       customerName: order.customers?.full_name?.trim() || "Customer",
       customerPhone: order.customers?.phone?.trim() || "—",
       address,

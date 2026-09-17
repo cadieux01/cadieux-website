@@ -35,6 +35,16 @@ import {
 } from "@/lib/day-filter";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { ZoneBadge } from "@/components/admin/ZoneBadge";
+import MultiSelect from "@/components/ui/MultiSelect";
+import {
+  ZONE_KEYS,
+  ZONE_LABELS,
+  resolveZone,
+  flattenSubscriptionAddress,
+  type ZoneKey,
+} from "@/lib/delivery-zones";
+import { decodeZoneParam, encodeZoneParam } from "@/lib/order-filter";
 import {
   PartnerShareButton,
   type ShareablePartner,
@@ -216,6 +226,18 @@ function SubscriptionsPageInner() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterValue>("all");
+  // Zone filter — mirrors the status filter's OR-within-group semantics
+  // from the orders board (see src/lib/order-filter.ts). Zones live on
+  // their own control here because the status filter above is a chip row
+  // with a fixed enum, not a MultiSelect. Selection is a flat ZoneKey[];
+  // empty = no zone constraint.
+  const [zoneSel, setZoneSel] = useState<ZoneKey[]>(() =>
+    decodeZoneParam(
+      typeof window === "undefined"
+        ? null
+        : new URLSearchParams(window.location.search).get("zone"),
+    ),
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
   // Which row's Date cell is showing its subscribed/receives breakdown.
   const [openDateId, setOpenDateId] = useState<string | null>(null);
@@ -250,11 +272,12 @@ function SubscriptionsPageInner() {
     const params = new URLSearchParams();
     if (basis !== DEFAULT_BASIS) params.set("basis", basis);
     if (day) params.set("date", day);
+    if (zoneSel.length > 0) params.set("zone", encodeZoneParam(zoneSel));
     const qs = params.toString();
     router.replace(qs ? `/admin/subscriptions?${qs}` : "/admin/subscriptions", {
       scroll: false,
     });
-  }, [basis, day, router]);
+  }, [basis, day, zoneSel, router]);
 
   // Delivery partners power the per-row "Share" button. Fetched once on
   // mount (never polled) and passed to every PartnerShareButton — same
@@ -384,6 +407,28 @@ function SubscriptionsPageInner() {
     [subs, basis, day],
   );
 
+  // Zone lookup keyed by subscription id. Computed off `subs` so it costs
+  // one pass per fetch, not one per keystroke of the status filter. The
+  // resolver takes strings, so we flatten the row's jsonb + string address
+  // fields into a single input and pass customer_pincode as the explicit
+  // pin (more trustworthy than a stray 6-digit run in a free-text line).
+  // Subscriptions never ship as pickup — the fulfillment branch that adds
+  // the pickup zone lives on the orders board.
+  const zoneOf = useMemo(() => {
+    const map = new Map<string, ZoneKey>();
+    for (const s of subs) {
+      const address = flattenSubscriptionAddress({
+        customer_address: s.customer_address,
+        delivery_address: s.delivery_address,
+      });
+      map.set(
+        s.id,
+        resolveZone({ address, pincode: s.customer_pincode ?? null }),
+      );
+    }
+    return map;
+  }, [subs]);
+
   const isExpiring = useCallback((s: AdminSubscriptionRow): boolean => {
     if (s.status !== "active") return false;
     const end = s.derived_end_date;
@@ -410,13 +455,75 @@ function SubscriptionsPageInner() {
     return c;
   }, [onDay, isExpiring]);
 
+  // Per-zone counts for the current on-day slice, so the MultiSelect can
+  // show live counts next to each zone name. Pickup is included in the
+  // shape for parity with the orders board even though subscriptions
+  // never resolve to it — the count will simply always be zero.
+  const zoneCounts = useMemo(() => {
+    const c: Record<ZoneKey, number> = {
+      zone1: 0,
+      zone2: 0,
+      zone3: 0,
+      zone4: 0,
+      unzoned: 0,
+      pickup: 0,
+    };
+    for (const s of onDay) {
+      const z = zoneOf.get(s.id);
+      if (z) c[z]++;
+    }
+    return c;
+  }, [onDay, zoneOf]);
+
+  // Zone MultiSelect options. Unzoned stays visible even at zero so an
+  // operator can see the bucket exists. Numbered zones hide at zero
+  // unless already ticked — same rule the orders board uses. Pickup is
+  // omitted entirely (subscriptions never resolve to pickup).
+  const zoneOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [];
+    for (const zk of ZONE_KEYS) {
+      if (zk === "pickup") continue;
+      const zc = zoneCounts[zk];
+      const ticked = zoneSel.includes(zk);
+      const alwaysShow = zk === "unzoned";
+      if (!alwaysShow && !ticked && zc === 0) continue;
+      opts.push({ value: zk, label: `${ZONE_LABELS[zk]} (${zc})` });
+    }
+    return opts;
+  }, [zoneCounts, zoneSel]);
+
+  // Dev-only invariant: zone buckets partition the on-day slice. If this
+  // ever fails a subscription's address resolved to something outside the
+  // enum, which means the map has a bug.
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    const sum = ZONE_KEYS.reduce((n, k) => n + zoneCounts[k], 0);
+    if (sum !== onDay.length) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[admin/subscriptions] zone partition mismatch: ${sum} vs ${onDay.length}`,
+      );
+    }
+  }, [zoneCounts, onDay.length]);
+
   const filtered = useMemo(() => {
-    const rows =
+    const statusRows =
       filter === "all"
         ? onDay
         : filter === "expiring_7d"
           ? onDay.filter(isExpiring)
           : onDay.filter((s) => s.status === filter);
+    // Zone filter is AND'd with the status filter above. Empty selection =
+    // no zone constraint. Fail-closed on a missing zoneOf entry so an
+    // enrichment miss is visible as "no rows" instead of silent
+    // over-inclusion — same rule the orders board uses.
+    const rows =
+      zoneSel.length === 0
+        ? statusRows
+        : statusRows.filter((s) => {
+            const z = zoneOf.get(s.id);
+            return !!z && zoneSel.includes(z);
+          });
     // Status group first, newest-first within each group, so completed and
     // cancelled subscriptions stop pushing live ones down the page. The API
     // already returns created_at DESC; this re-sorts a copy. Display only —
@@ -426,7 +533,7 @@ function SubscriptionsPageInner() {
       if (rankCmp !== 0) return rankCmp;
       return b.created_at.localeCompare(a.created_at);
     });
-  }, [onDay, filter, isExpiring]);
+  }, [onDay, filter, isExpiring, zoneSel, zoneOf]);
 
   // Shared by the row's Select and its shortcut buttons, so both writes
   // go through the same optimistic-update + expected_status guard.
@@ -565,6 +672,26 @@ function SubscriptionsPageInner() {
           day={day}
           onDayChange={setDay}
         />
+        <div style={{ minWidth: 240 }}>
+          <MultiSelect
+            ariaLabel="Filter by zone"
+            values={zoneSel}
+            onToggle={(v) => {
+              const zk = v as ZoneKey;
+              setZoneSel((cur) =>
+                cur.includes(zk) ? cur.filter((z) => z !== zk) : [...cur, zk],
+              );
+            }}
+            options={zoneOptions}
+            triggerLabel={
+              zoneSel.length === 0
+                ? "All zones"
+                : zoneSel.length === 1
+                  ? ZONE_LABELS[zoneSel[0]]
+                  : `${ZONE_LABELS[zoneSel[0]]} +${zoneSel.length - 1}`
+            }
+          />
+        </div>
       </div>
       <div className="flex flex-wrap gap-2 mb-6">
         {FILTERS.map((f) => {
@@ -749,6 +876,9 @@ function SubscriptionsPageInner() {
                       {/* One line naming the variants and the cadence —
                           "Multigrain 1, Plain 1 — every week on Sunday". */}
                       <div>{describeSubscriptionPlan(s)}</div>
+                      <div style={{ marginTop: 4 }}>
+                        <ZoneBadge zone={zoneOf.get(s.id)} />
+                      </div>
                       {rowAddr.hasAny ? (
                         <div
                           className="sub-addr"
