@@ -233,7 +233,32 @@ export type ShareStop = {
   parts?: ShareMessageParts;
   /** This stop's segment for the run's single route link. */
   waypoint?: string;
+  /**
+   * True when this stop's waypoint is a lat/lng pair, false when it is an
+   * address string Maps has to geocode for itself.
+   *
+   * Both go in the route link, so the count of stops is NOT the count of
+   * exact pins. An address waypoint can geocode to the wrong door and does
+   * so silently — no error, just a rider somewhere else. Only ~30% of
+   * orders carry coordinates, so on a typical run most of the route is
+   * guessed, and the operator has to be told that before he sends it.
+   */
+  pinned?: boolean;
 };
+
+/** What a run actually contains, for the notice shown after sharing. */
+export type RunSummary = {
+  stops: number;
+  /** Stops routed from stored coordinates. */
+  pinned: number;
+  /** Stops Maps must geocode from the address text. */
+  byAddress: number;
+};
+
+export function summariseRun(stops: ShareStop[]): RunSummary {
+  const pinned = stops.filter((s) => s.pinned).length;
+  return { stops: stops.length, pinned, byAddress: stops.length - pinned };
+}
 
 /** The single formatter. Every composer funnels through this. */
 export function composeShareMessageFromParts(parts: ShareMessageParts): string {
@@ -323,6 +348,7 @@ export function composeShareStop(order: AdminOrderRow): ShareStop {
     cashDue: cashDueFor(facts),
     parts,
     waypoint: routeWaypoint(address, order.latitude, order.longitude),
+    pinned: hasCoords(order.latitude, order.longitude),
   };
 }
 

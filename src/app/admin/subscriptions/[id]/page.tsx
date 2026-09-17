@@ -56,6 +56,7 @@ import {
 import {
   composeNextDeliveryShareMessage,
   composeSubscriptionShareMessage,
+  isSubscriptionShareable,
 } from "@/lib/subscription-share-message";
 import {
   buildSubscriptionMoney,
@@ -394,6 +395,7 @@ export default function AdminSubscriptionDetailPage({
   // The address block and the page header share one Share control. The
   // default carries the NEXT delivery — the loaves that actually go to
   // this address next — with the whole plan as the second option.
+  const canShare = isSubscriptionShareable(sub);
   const shareScopes = [
     {
       id: "next",
@@ -414,15 +416,19 @@ export default function AdminSubscriptionDetailPage({
       title="Subscription"
       actions={
         <>
-          <span className="no-print">
-            <PartnerShareButton
-              message={shareScopes}
-              partners={partners}
-              partnersLoading={partnersLoading}
-              partnersError={partnersError}
-              buttonStyle={chipNeutral}
-            />
-          </span>
+          {/* Hidden while the plan is unpaid — see isSubscriptionShareable.
+              An unconfirmed plan is not a sale, so it is not a stop. */}
+          {canShare ? (
+            <span className="no-print">
+              <PartnerShareButton
+                message={shareScopes}
+                partners={partners}
+                partnersLoading={partnersLoading}
+                partnersError={partnersError}
+                buttonStyle={chipNeutral}
+              />
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={() => window.print()}
@@ -580,14 +586,24 @@ export default function AdminSubscriptionDetailPage({
           <div className="kv-row no-print">
             <span style={keyStyle}>Share</span>
             <span style={valStyle}>
-              <PartnerShareButton
-                message={shareScopes}
-                partners={partners}
-                partnersLoading={partnersLoading}
-                partnersError={partnersError}
-                buttonStyle={chipNeutral}
-                buttonLabel="Share address"
-              />
+              {canShare ? (
+                <PartnerShareButton
+                  message={shareScopes}
+                  partners={partners}
+                  partnersLoading={partnersLoading}
+                  partnersError={partnersError}
+                  buttonStyle={chipNeutral}
+                  buttonLabel="Share address"
+                />
+              ) : (
+                // Say WHY rather than just hiding the control, or the next
+                // person assumes the button is broken and works around it.
+                <span style={{ color: "rgba(251,243,212,0.7)" }}>
+                  Not shareable — payment is {sub.payment_status}, so this plan
+                  was never confirmed. Chase the payment before scheduling a
+                  rider.
+                </span>
+              )}
             </span>
           </div>
         </Block>

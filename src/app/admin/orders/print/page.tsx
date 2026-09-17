@@ -31,6 +31,7 @@ import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { AdminOrderItemSnapshot, AdminOrderRow } from "@/lib/admin-shared";
+import { paymentLine } from "@/lib/order-share-message";
 import {
   decodeStatusParam,
   matchesOrderFilter,
@@ -273,6 +274,7 @@ function PrintOrdersPageInner() {
                     <th style={printTh}>Address</th>
                     <th style={printTh}>Items</th>
                     <th style={printTh}>Total</th>
+                    <th style={printTh}>Payment</th>
                     <th style={printTh}>Status</th>
                     <th style={printTh}>Created</th>
                   </tr>
@@ -288,6 +290,19 @@ function PrintOrdersPageInner() {
                       <td style={printTd}>{o.delivery_address ?? "—"}</td>
                       <td style={printTd}>{formatItems(o.items)}</td>
                       <td style={printTd}>{formatINR(o.total_amount)}</td>
+                      {/* Same four fixed strings as the WhatsApp share, from
+                          the same paymentLine() — a sheet that disagreed with
+                          the message would be worse than no sheet. */}
+                      <td style={printTd}>
+                        {paymentLine({
+                          payment_method: o.payment_method,
+                          payment_status: o.payment_status,
+                          amountDue:
+                            typeof o.total_amount === "number"
+                              ? o.total_amount
+                              : null,
+                        })}
+                      </td>
                       <td style={printTd}>{o.status ?? "—"}</td>
                       <td style={printTd}>{formatDateTime(o.created_at)}</td>
                     </tr>

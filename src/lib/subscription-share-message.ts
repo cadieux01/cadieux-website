@@ -94,6 +94,35 @@ function commonParts(sub: AdminSubscriptionRow) {
   };
 }
 
+/**
+ * Payment states that mean the plan was never actually bought.
+ *
+ *   created   — Razorpay order raised, money never landed
+ *   abandoned — the sweeper gave up on it after 30 minutes
+ *
+ * Unlike an order, a subscription in one of these states is NOT a stop to
+ * be labelled: it is not a confirmed sale at all. Labelling it — even
+ * honestly, as "NOT PAID - do not deliver" — puts a door on the rider's
+ * list that he then has to reason about mid-run, and the correct number of
+ * such doors is zero. So they are removed from the share entirely and
+ * chased on the board instead, which is where an unpaid plan belongs.
+ *
+ * These are subscription-only states. `orders.payment_status` has only ever
+ * held pending / paid / created in production, and no `created` order has
+ * ever reached a run, so the equivalent order-side rule would guard nothing
+ * and is deliberately not added.
+ */
+const UNCONFIRMED_PAYMENT_STATUSES = new Set(["abandoned", "created"]);
+
+/**
+ * False when the plan was never paid for, so the Share buttons are hidden
+ * rather than emitting a stop for a sale that did not happen.
+ */
+export function isSubscriptionShareable(sub: AdminSubscriptionRow): boolean {
+  const status = (sub.payment_status ?? "").trim().toLowerCase();
+  return !UNCONFIRMED_PAYMENT_STATUSES.has(status);
+}
+
 /** One subscription stop. Use this when building a multi-stop run. */
 export function composeNextDeliveryShareStop(
   sub: AdminSubscriptionRow,

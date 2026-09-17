@@ -66,6 +66,7 @@ import {
 import {
   composeNextDeliveryShareMessage,
   composeSubscriptionShareMessage,
+  isSubscriptionShareable,
 } from "@/lib/subscription-share-message";
 import {
   AdminDeliveryRow,
@@ -902,6 +903,25 @@ function SubscriptionsPageInner() {
                           </div>
                         </div>
                       ) : null}
+                      {/* The counterpart to hiding the Share button. A plan
+                          whose payment never landed is now silently absent
+                          from every rider handoff, and silence is how 18
+                          upcoming deliveries across six plans go unnoticed.
+                          The row has to say so out loud instead. */}
+                      {!isSubscriptionShareable(s) ? (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            color: "#F59E0B",
+                            fontSize: "0.875rem",
+                            lineHeight: 1.5,
+                            maxWidth: 260,
+                          }}
+                        >
+                          Never paid ({s.payment_status}) — not shareable, no
+                          rider will be sent. Chase the payment or cancel it.
+                        </div>
+                      ) : null}
                     </td>
                     <td style={td} data-label="Actions">
                       <div className="flex flex-wrap gap-2 items-center">
@@ -928,13 +948,19 @@ function SubscriptionsPageInner() {
                         >
                           Open
                         </button>
-                        <PartnerShareButton
-                          message={shareScopes(s)}
-                          partners={partners}
-                          partnersLoading={partnersLoading}
-                          partnersError={partnersError}
-                          buttonStyle={buttonSm}
-                        />
+                        {/* An unpaid plan is not a stop. See
+                            isSubscriptionShareable — the row still shows
+                            UNPAID below so it gets chased, but it cannot be
+                            sent to a rider. */}
+                        {isSubscriptionShareable(s) ? (
+                          <PartnerShareButton
+                            message={shareScopes(s)}
+                            partners={partners}
+                            partnersLoading={partnersLoading}
+                            partnersError={partnersError}
+                            buttonStyle={buttonSm}
+                          />
+                        ) : null}
                         {canMarkActive ? (
                           <button
                             type="button"

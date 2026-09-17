@@ -97,6 +97,8 @@ import {
   composeRun,
   composeShareStop,
   isShareable,
+  summariseRun,
+  type RunSummary,
 } from "@/lib/order-share-message";
 import { shareRun } from "@/lib/share-delivery";
 import { LoafDots } from "@/components/admin/LoafDots";
@@ -304,6 +306,33 @@ function stateToSearch(s: {
     params.set("area_via", s.anchor.matched_via);
   }
   return params.toString();
+}
+
+// ── what actually went out ────────────────────────────────────────────────
+// Everything the operator needs to know about a run AFTER he has sent it,
+// in one sentence. Two facts, both of which used to be invisible:
+//
+//   1. Pickup orders were dropped. He selected them; they are not in the
+//      message and their money is not in the total.
+//   2. How much of the route is a real pin. A stop with no lat/lng still
+//      goes into the Maps link, as ADDRESS TEXT for Google to geocode —
+//      which usually works and sometimes quietly lands on the wrong road.
+//      Roughly 30% of orders carry coordinates, so on a typical run most
+//      of the route is inferred. Saying "14 stops" without saying that
+//      implies a precision the link does not have.
+function runCaveat(summary: RunSummary, skipped: number): string {
+  const bits: string[] = [];
+  if (skipped > 0) {
+    bits.push(
+      `${skipped} pickup order${skipped === 1 ? "" : "s"} left out — not a stop, and not in the cash total.`,
+    );
+  }
+  if (summary.byAddress > 0) {
+    bits.push(
+      `${summary.pinned} of ${summary.stops} pinned exactly, ${summary.byAddress} by address.`,
+    );
+  }
+  return bits.join(" ");
 }
 
 // ── scroll restoration ────────────────────────────────────────────────────
@@ -1113,11 +1142,27 @@ function OrdersPageInner() {
   // separator has to be visibly heavier than that.
   const buildBulkShareText = useCallback(() => {
     const rows = selectedInSortOrder();
+
+    // PICKUP ORDERS ARE NOT STOPS. The per-row Share button and the order
+    // detail page both gate on isShareable, but this path never did, so a
+    // selected pickup order was handed to the rider as a doorstep stop:
+    // a COLLECT line for its full value, a waypoint in the route, and its
+    // money in the run total. On a 14-order day with 3 pickups that was
+    // Rs2,330 printed against an actual float of Rs1,610 — Rs720 the rider
+    // is told to bring back and nobody will ever hand him.
+    const stops = rows.filter(isShareable);
+
     // composeRun, not composeShareMessage per row: the run needs ONE cash
     // total at the end, and composeShareMessage appends its own (it is a
     // run of one). Mapping it over the rows would print a running total
     // after every stop, each one covering a single order.
-    return composeRun(rows.map((o) => composeShareStop(o)));
+    const composed = stops.map((o) => composeShareStop(o));
+    return {
+      text: composeRun(composed),
+      summary: summariseRun(composed),
+      /** Selected but not sent — pickup orders nobody drives to. */
+      skipped: rows.length - stops.length,
+    };
   }, [selectedInSortOrder]);
 
   const runBulk = async (action: BulkAction) => {
@@ -1130,8 +1175,15 @@ function OrdersPageInner() {
       // themselves. shareRun decides HOW to hand the text over (native
       // share sheet / wa.me / clipboard) based on how long it is, and
       // never truncates. See @/lib/share-delivery.
-      const text = buildBulkShareText();
-      const label = `${ids.length} order${ids.length === 1 ? "" : "s"}`;
+      const { text, summary, skipped } = buildBulkShareText();
+      if (summary.stops === 0) {
+        setPendingBulk(null);
+        showNotice(
+          "Nothing to share — every selected order is a pickup, so there is no run to drive.",
+        );
+        return;
+      }
+      const label = `${summary.stops} stop${summary.stops === 1 ? "" : "s"}`;
       const outcome = await shareRun(text, label);
 
       // Keep the selection when the operator backed out of the native
@@ -1142,16 +1194,25 @@ function OrdersPageInner() {
         setSelected(new Set());
       }
       setPendingBulk(null);
-      if (outcome.notice) showNotice(outcome.notice);
+      if (outcome.notice) {
+        showNotice(`${outcome.notice} ${runCaveat(summary, skipped)}`.trim());
+      }
       return;
     }
 
     if (action === "copy") {
-      const text = buildBulkShareText();
+      const { text, summary, skipped } = buildBulkShareText();
+      if (summary.stops === 0) {
+        setPendingBulk(null);
+        showNotice(
+          "Nothing to copy — every selected order is a pickup, so there is no run to drive.",
+        );
+        return;
+      }
       try {
         await navigator.clipboard.writeText(text);
         showNotice(
-          `Copied ${ids.length} order${ids.length === 1 ? "" : "s"} to clipboard.`,
+          `Copied ${summary.stops} stop${summary.stops === 1 ? "" : "s"}. ${runCaveat(summary, skipped)}`.trim(),
         );
       } catch {
         // Some browsers block clipboard writes outside a user gesture.
@@ -1160,9 +1221,13 @@ function OrdersPageInner() {
         // fallback that loses orders is worse than one that fails loudly.
         const outcome = await shareRun(
           text,
-          `${ids.length} order${ids.length === 1 ? "" : "s"}`,
+          `${summary.stops} stop${summary.stops === 1 ? "" : "s"}`,
         );
-        if (outcome.notice) showNotice(`Clipboard blocked. ${outcome.notice}`);
+        if (outcome.notice) {
+          showNotice(
+            `Clipboard blocked. ${outcome.notice} ${runCaveat(summary, skipped)}`.trim(),
+          );
+        }
       }
       setPendingBulk(null);
       return;
