@@ -24,7 +24,8 @@ import {
 } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
-import { AreaSortControl, type ResolvedArea } from "@/components/admin/AreaSortControl";
+import { AreaSortControl } from "@/components/admin/AreaSortControl";
+import { DistanceBadge } from "@/components/admin/DistanceBadge";
 import { EditOrderPanel } from "@/components/admin/EditOrderPanel";
 import { ProductionCountStrip } from "@/components/admin/ProductionCountStrip";
 import { DayFilter } from "@/components/admin/DayFilter";
@@ -85,10 +86,15 @@ import { useStoredSelection } from "@/lib/admin-selection";
 import { RetentionPanel } from "@/components/admin/RetentionPanel";
 import type { RetentionSummary } from "@/lib/customer-history";
 import {
+  distanceFrom,
+  orderLocation,
+  parseAnchorParams,
   sortByDistanceFromAnchor,
-  orderDistanceFrom,
+  writeAnchorParams,
   type DistanceInfo,
-} from "@/lib/order-distance-sort";
+  type ResolvedArea,
+} from "@/lib/distance-sort";
+import { usePincodeCoords } from "@/lib/use-pincode-coords";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isOrderFulfilled } from "@/lib/order-fulfillment";
 import { FulfilledTick } from "@/components/admin/FulfilledTick";
@@ -175,25 +181,9 @@ function parseUrlInitial(sp: URLSearchParams): UrlInitial {
   // names is the drift this filter exists to end.
   const day = parseDayParam(sp.get("date"));
 
-  // Area anchor. All four fields are required for a usable anchor —
-  // partial data would produce a sort key with no way to compute
-  // distance.
-  const areaLabel = sp.get("area");
-  const areaLat = Number(sp.get("area_lat"));
-  const areaLng = Number(sp.get("area_lng"));
-  const areaVia = sp.get("area_via");
-  const anchor: ResolvedArea | null =
-    areaLabel &&
-    areaVia &&
-    Number.isFinite(areaLat) &&
-    Number.isFinite(areaLng)
-      ? {
-          label: areaLabel,
-          latitude: areaLat,
-          longitude: areaLng,
-          matched_via: areaVia,
-        }
-      : null;
+  // Area anchor — same four params, same all-or-nothing rule, as
+  // /admin/subscriptions. See parseAnchorParams.
+  const anchor = parseAnchorParams(sp);
 
   return {
     filter,
@@ -222,12 +212,7 @@ function stateToSearch(s: {
   if (s.sort !== DEFAULT_SORT) params.set("sort", s.sort);
   if (s.basis !== DEFAULT_BASIS) params.set("basis", s.basis);
   if (s.day) params.set("date", s.day);
-  if (s.anchor) {
-    params.set("area", s.anchor.label);
-    params.set("area_lat", String(s.anchor.latitude));
-    params.set("area_lng", String(s.anchor.longitude));
-    params.set("area_via", s.anchor.matched_via);
-  }
+  writeAnchorParams(params, s.anchor);
   return params.toString();
 }
 
@@ -426,36 +411,10 @@ function OrdersPageInner() {
   const [day, setDay] = useState<string | null>(urlInit.day);
 
   // "Nearest from typed area" sort — see AreaSortControl. anchor is null
-  // until the operator matches an area; pincodeCoords hydrates once on
-  // mount (263 rows, ~20 KB) and powers the fallback for orders that
-  // lack GPS but carry a 6-digit pincode in their delivery_address.
+  // until the operator matches an area; pincodeCoords powers the fallback
+  // for orders that lack GPS but carry a pincode in delivery_address.
   const [anchor, setAnchor] = useState<ResolvedArea | null>(urlInit.anchor);
-  const [pincodeCoords, setPincodeCoords] = useState<
-    Map<string, { latitude: number; longitude: number }>
-  >(() => new Map());
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await adminFetch<{
-          rows: { pincode: string; latitude: number; longitude: number }[];
-        }>("/api/admin/pincode-geocache");
-        if (cancelled) return;
-        const m = new Map<string, { latitude: number; longitude: number }>();
-        for (const r of res.rows ?? []) {
-          m.set(r.pincode, { latitude: r.latitude, longitude: r.longitude });
-        }
-        setPincodeCoords(m);
-      } catch {
-        // Non-fatal: the area sort just loses its pincode fallback and
-        // downgrades to GPS-only precision for orders that have it.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const pincodeCoords = usePincodeCoords();
 
   // Changing a status must update the row where it sits, not teleport it.
   // Without this, flipping Pending → Preparing moves the row from group 1
@@ -615,7 +574,12 @@ function OrdersPageInner() {
       // sortByDistanceFromAnchor attaches a `distance` field. We strip
       // it so `filtered` stays typed as AdminOrderRow[]; the row-level
       // badge recomputes it cheaply from the same anchor/coords.
-      const sorted = sortByDistanceFromAnchor(rows, anchor, pincodeCoords);
+      const sorted = sortByDistanceFromAnchor(
+        rows,
+        anchor,
+        pincodeCoords,
+        orderLocation,
+      );
       return sorted.map((r) => {
         const copy: AdminOrderRow & { distance?: DistanceInfo } = { ...r };
         delete copy.distance;
@@ -1400,7 +1364,7 @@ function OrdersPageInner() {
                 const busy = busyId === o.id;
                 const dist =
                   sort === "nearest_from_area" && anchor
-                    ? orderDistanceFrom(o, anchor, pincodeCoords)
+                    ? distanceFrom(orderLocation(o), anchor, pincodeCoords)
                     : null;
                 return (
                   <tr
@@ -1816,65 +1780,6 @@ const ACTION_PAST: Record<BulkAction, string> = {
   copy: "copied",
   cancel: "cancelled",
 };
-
-// Small chip under the address showing distance from the sort anchor
-// and which locator we used to compute it. GPS = exact within phone
-// accuracy, ~PIN = pincode-centroid approximation (two orders on the
-// same pincode will tie), no location = neither available.
-function DistanceBadge({ info }: { info: DistanceInfo }) {
-  const base: React.CSSProperties = {
-    display: "inline-block",
-    marginTop: 6,
-    padding: "2px 6px",
-    fontFamily: "var(--font-body)",
-    fontSize: "0.75rem",
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    borderRadius: 999,
-    border: "1px solid",
-  };
-  if (info.precision === "none" || info.km === null) {
-    return (
-      <div
-        style={{
-          ...base,
-          color: "rgba(251,243,212,0.55)",
-          borderColor: "rgba(251,243,212,0.25)",
-        }}
-        title="No GPS on the order and no pincode in its address"
-      >
-        No location
-      </div>
-    );
-  }
-  const km = info.km >= 10 ? info.km.toFixed(0) : info.km.toFixed(1);
-  if (info.precision === "gps") {
-    return (
-      <div
-        style={{
-          ...base,
-          color: "#FBF3D4",
-          borderColor: "rgba(251,243,212,0.5)",
-        }}
-        title="Order has GPS from checkout — exact distance"
-      >
-        {km} km · GPS
-      </div>
-    );
-  }
-  return (
-    <div
-      style={{
-        ...base,
-        color: "#F59E0B",
-        borderColor: "rgba(245,158,11,0.55)",
-      }}
-      title="No GPS on the order — distance to the pincode centroid, not the doorstep"
-    >
-      ~{km} km · PIN
-    </div>
-  );
-}
 
 function ConfirmModal({
   action,

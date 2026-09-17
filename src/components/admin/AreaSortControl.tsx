@@ -1,6 +1,7 @@
 "use client";
 
-// Typed-area input for the /admin/orders "nearest from area" sort.
+// Typed-area input for the "nearest from area" sort. Used by both
+// /admin/orders and /admin/subscriptions.
 //
 // Sunny types an area or a 6-digit pincode ("MVP", "Akkayyapalem",
 // "530017") → hits Enter or clicks Match → we resolve it against
@@ -16,13 +17,7 @@
 import { useCallback, useState } from "react";
 
 import { adminAuthHeaders } from "@/lib/admin-client";
-
-export type ResolvedArea = {
-  latitude: number;
-  longitude: number;
-  label: string;
-  matched_via: string;
-};
+import type { ResolvedArea } from "@/lib/distance-sort";
 
 export function AreaSortControl({
   anchor,
