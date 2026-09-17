@@ -3,7 +3,7 @@
 // exact shape, so a rider always reads the same things in the same order:
 //
 //   OLF71
-//   COLLECT Rs280
+//   COLLECT ₹280
 //   Customer name
 //   Phone number
 //   Address
@@ -11,7 +11,7 @@
 //   Multigrain x2
 //   Plain x1
 //
-//   Cash to collect on this run: Rs280
+//   Cash to collect on this run: ₹280
 //
 // PAYMENT WAS DELIBERATELY ABSENT UNTIL 2026-09-16, and the note that used
 // to sit here argued for keeping it that way: a rider holding a bag needs
@@ -160,7 +160,7 @@ export function routeLinksFor(waypoints: readonly string[]): string[] {
  * Rupees expected back from this stop.
  *
  * MUST agree with paymentLabel(): anything it calls COD is money someone
- * hands over, so the same rows that print "COD Rs340" are the rows that
+ * hands over, so the same rows that print "COD ₹340" are the rows that
  * add 340 to the run total. Keying this off payment_method (as it once
  * did) broke that — an `online` + `pending` row printed COD and counted
  * zero.
@@ -178,7 +178,7 @@ export function cashDueFor(p: PaymentFacts): number {
 export type ShareMessageParts = {
   /** Top line: "OLF71" for an order, "Subscription OLS12 · …" for a plan. */
   reference: string;
-  /** Line two: "PAID" or "COD Rs340". See @/lib/payment-label. */
+  /** Line two: "PAID" or "COD ₹340". See @/lib/payment-label. */
   payment: string;
   customerName: string;
   customerPhone: string;
@@ -228,14 +228,14 @@ export function composeShareMessageFromParts(parts: ShareMessageParts): string {
  *
  * The total goes LAST so it is the thing a rider scrolls to and the thing
  * a glance at the bottom of the message lands on. It is always printed,
- * including "Rs0" — a rider who sees a figure every time knows the line
- * was not simply omitted, and "Rs0" is a positive statement that this run
+ * including "₹0" — a rider who sees a figure every time knows the line
+ * was not simply omitted, and "₹0" is a positive statement that this run
  * is fully prepaid.
  *
  * PICKUP CASH IS NOT IN THAT TOTAL. A pickup customer pays at the
  * counter, so counting their COD told the rider to come back with money
  * nobody was ever going to hand him — on a recent 14-stop day that was
- * Rs720 of a Rs2,324 figure, and the gap reads as a rider who is short.
+ * ₹720 of a ₹2,324 figure, and the gap reads as a rider who is short.
  * It gets its own line, and only when there is some, so the common
  * all-delivery run is unchanged.
  */

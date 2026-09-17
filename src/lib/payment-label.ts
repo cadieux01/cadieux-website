@@ -26,11 +26,13 @@
 // second time on an order already settled.
 
 /**
- * "Rs1,440". Deliberately NOT formatINR() — that emits "₹", and the rupee
- * glyph still renders as an empty box on some of the cheap Android
- * handsets our riders carry. An unreadable amount is worse than an ugly
- * one. Printed sheets could afford "₹", but this is one string reaching
- * four surfaces and the handset is the one that breaks.
+ * "₹1,440".
+ *
+ * This briefly emitted "Rs" instead, on the theory that the rupee glyph
+ * boxes on cheap Android handsets. That was true of Android 4.x and is
+ * not true of anything a rider is carrying now, so the reason is retired
+ * and the real symbol is back. Do not reintroduce "Rs" without a handset
+ * that actually fails.
  */
 export function rupees(amount: number): string {
   const safe = Number.isFinite(amount) ? amount : 0;
@@ -38,7 +40,7 @@ export function rupees(amount: number): string {
   const body = new Intl.NumberFormat("en-IN", {
     maximumFractionDigits: 2,
   }).format(whole);
-  return `Rs${body}`;
+  return `₹${body}`;
 }
 
 /**
@@ -74,7 +76,7 @@ export type PaymentFacts = {
  * The only payment string any operator or rider is shown.
  *
  *   paid / paid_orphaned  → "PAID"
- *   anything else, amount known   → "COD Rs340"
+ *   anything else, amount known   → "COD ₹340"
  *   anything else, amount unknown → "COD"
  */
 export function paymentLabel(p: PaymentFacts): string {
