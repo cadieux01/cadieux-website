@@ -61,6 +61,31 @@ const PICKER_HEIGHT = 380;
 /** Gap between the row and the picker, and the minimum margin to the viewport. */
 const GAP = 8;
 
+/**
+ * How long after opening the picker a click on the row is still swallowed.
+ *
+ * A DEADLINE, not a boolean flag. The obvious implementation — set
+ * suppress=true, clear it in the click handler — assumes a click always
+ * arrives to clear it. A right-click never produces one (the browser sends
+ * contextmenu and no click), so the flag stays armed and eats the operator's
+ * NEXT ordinary left-click on that row: they tap the order, nothing happens.
+ * Verified in a browser before this was a deadline. A timestamp cannot get
+ * stuck, because it expires whether or not the click it was waiting for ever
+ * turns up.
+ */
+const SUPPRESS_CLICK_MS = 700;
+
+/**
+ * How long the backdrop ignores clicks after the picker opens.
+ *
+ * On touch the picker opens while the finger is still DOWN. The click the
+ * browser sends on release is hit-tested against the topmost element at those
+ * coordinates, which is now the backdrop covering the screen — so without
+ * this grace period the picker opens at 2s and is dismissed by the operator
+ * lifting their finger, every single time.
+ */
+const BACKDROP_GRACE_MS = 400;
+
 type OwnerKind = "order" | "subscription";
 
 /**
@@ -82,6 +107,8 @@ type OpenState = {
   id: string;
   /** Viewport rect of the row that was held, for anchoring. */
   rect: { top: number; bottom: number; left: number; width: number };
+  /** When it opened, so the backdrop can ignore the finger-release click. */
+  openedAt: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -107,9 +134,11 @@ export function useRowReactions(
   );
   const [error, setError] = useState<string | null>(null);
 
-  // Set while a long-press has just fired, so the click that the browser
-  // sends on release does not also run the row's navigate-to-detail handler.
-  const suppressClick = useRef(false);
+  // Deadline (epoch ms) until which a click on the row is swallowed, so the
+  // click the browser sends on release does not also run the row's
+  // navigate-to-detail handler. See SUPPRESS_CLICK_MS for why this is a
+  // deadline rather than a boolean.
+  const suppressClickUntil = useRef(0);
 
   const talliesFor = useCallback(
     (id: string): ReactionTally[] => overrides.get(id) ?? seed.get(id) ?? [],
@@ -173,6 +202,7 @@ export function useRowReactions(
     setOpen({
       id,
       rect: { top: r.top, bottom: r.bottom, left: r.left, width: r.width },
+      openedAt: Date.now(),
     });
   }, []);
 
@@ -232,7 +262,7 @@ export function useRowReactions(
         timer.current = null;
         // Swallow the click the browser sends when the finger lifts, so the
         // row's onClick does not navigate out from under the picker.
-        suppressClick.current = true;
+        suppressClickUntil.current = Date.now() + SUPPRESS_CLICK_MS;
         openFor(el, id);
         cancelHold();
       }, HOLD_MS);
@@ -265,12 +295,12 @@ export function useRowReactions(
         e.preventDefault();
         if (lastPointerType.current !== "mouse") return;
         cancelHold();
-        suppressClick.current = true;
+        suppressClickUntil.current = Date.now() + SUPPRESS_CLICK_MS;
         openFor(e.currentTarget, id);
       },
       onClickCapture: (e: React.MouseEvent<HTMLElement>) => {
-        if (!suppressClick.current) return;
-        suppressClick.current = false;
+        if (Date.now() >= suppressClickUntil.current) return;
+        suppressClickUntil.current = 0;
         e.preventDefault();
         e.stopPropagation();
       },
@@ -281,6 +311,7 @@ export function useRowReactions(
   const picker = open ? (
     <EmojiPicker
       anchor={open.rect}
+      openedAt={open.openedAt}
       selected={
         talliesFor(open.id).find((t) => t.authors.includes(actor))?.emoji ?? null
       }
@@ -356,11 +387,13 @@ export function ReactionBadges({
 
 function EmojiPicker({
   anchor,
+  openedAt,
   selected,
   onPick,
   onClose,
 }: {
   anchor: OpenState["rect"];
+  openedAt: number;
   selected: string | null;
   onPick: (emoji: string) => void;
   onClose: () => void;
@@ -426,9 +459,18 @@ function EmojiPicker({
     <>
       {/* Backdrop. Transparent, but it must exist: without it the first tap
           outside the picker would land on whatever row is underneath and
-          navigate away instead of dismissing. */}
+          navigate away instead of dismissing.
+
+          It ignores clicks for the first BACKDROP_GRACE_MS. On touch the
+          picker opens while the finger is still down, and the click sent on
+          release hit-tests to whatever is topmost — which is this backdrop.
+          Without the grace period the picker dismissed itself the instant the
+          operator let go, so the gesture could never be completed on a phone. */}
       <div
-        onClick={onClose}
+        onClick={() => {
+          if (Date.now() - openedAt < BACKDROP_GRACE_MS) return;
+          onClose();
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
           onClose();
