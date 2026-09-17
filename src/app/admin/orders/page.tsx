@@ -87,6 +87,7 @@ import { formatOrderNumber } from "@/lib/order-number";
 import { isOrderFulfilled } from "@/lib/order-fulfillment";
 import { FulfilledTick } from "@/components/admin/FulfilledTick";
 import { composeShareRun, isShareable } from "@/lib/order-share-message";
+import { deliverShareText } from "@/lib/share-delivery";
 import { LoafDots } from "@/components/admin/LoafDots";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { NOTE_KIND_STYLE, truncateNoteBody } from "@/lib/order-notes";
@@ -133,87 +134,6 @@ type UrlInitial = {
   day: string | null;
   anchor: ResolvedArea | null;
 };
-
-/* ------------------------------------------------------------------ *
- * SHARE DELIVERY
- *
- * A fourteen-stop run is ~3,000 characters of text and well over that
- * once URL-encoded. `wa.me/?text=` silently CUTS a payload that long —
- * the operator sees WhatsApp open with the first few orders in it and
- * nothing to say the rest were dropped. That is the worst possible
- * failure for this button, because it looks like it worked.
- *
- * So the text is never put in a URL unless we know it survives, and it
- * is never truncated. Three paths, in order of how little the operator
- * has to do:
- *
- *   1. navigator.share — no length limit at all, and on macOS/iOS Safari
- *      the native sheet lists WhatsApp. This is the normal path here.
- *   2. wa.me, but ONLY if the encoded text is under the cap. Below the
- *      cap this is better than a paste: the message arrives prefilled.
- *   3. clipboard + WhatsApp Web, and the notice SAYS to paste. The one
- *      path that costs the operator a keystroke, so it is the last one.
- *
- * If all three fail the notice says so. It never pretends.
- * ------------------------------------------------------------------ */
-
-/** Encoded-length ceiling for a `wa.me/?text=` link. Browsers and
- *  WhatsApp both start cutting well above this; 1800 is the comfortable
- *  side of every limit involved rather than a measured edge. */
-const WA_URL_TEXT_LIMIT = 1800;
-
-type ShareDelivery = {
-  notice: string;
-  /** Whether the selection should be dropped. False when the operator
-   *  still has to paste — they may want to re-share the same rows. */
-  cleared: boolean;
-};
-
-async function deliverShareText(text: string, count: number): Promise<ShareDelivery> {
-  const plural = count === 1 ? "" : "s";
-
-  // 1. Native share sheet. Must be the FIRST await after the click or
-  //    the transient user activation it requires is already spent.
-  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-    try {
-      await navigator.share({ text });
-      return { notice: `Shared ${count} order${plural}.`, cleared: true };
-    } catch (err) {
-      // The operator dismissing the sheet is not a failure and must not
-      // fall through to opening WhatsApp behind their back.
-      if (err instanceof DOMException && err.name === "AbortError") {
-        return { notice: "Share cancelled.", cleared: false };
-      }
-      // Anything else (no matching target, permission) → keep going.
-    }
-  }
-
-  // 2. Prefilled wa.me, but only when the whole message fits.
-  const encoded = encodeURIComponent(text);
-  if (encoded.length <= WA_URL_TEXT_LIMIT) {
-    window.open(`https://wa.me/?text=${encoded}`, "_blank", "noopener,noreferrer");
-    return {
-      notice: `Opening WhatsApp with ${count} order${plural}.`,
-      cleared: true,
-    };
-  }
-
-  // 3. Too long for a link. Copy it whole and say what to do with it.
-  try {
-    await navigator.clipboard.writeText(text);
-    window.open("https://web.whatsapp.com/", "_blank", "noopener,noreferrer");
-    return {
-      notice:
-        "Too long for WhatsApp direct — copied to clipboard instead, paste it into the chat.",
-      cleared: true,
-    };
-  } catch {
-    return {
-      notice: `Too long for WhatsApp direct and the clipboard is blocked. Use Print, or share ${count > 8 ? "fewer orders at a time" : "them one at a time"}.`,
-      cleared: false,
-    };
-  }
-}
 
 function parseUrlInitial(sp: URLSearchParams): UrlInitial {
   // Statuses ride a comma-separated `status` param (back-compat with
