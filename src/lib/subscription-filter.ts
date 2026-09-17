@@ -26,7 +26,8 @@
 //     assertStatusCountsPartition exists to catch. They live below the menu
 //     divider, under a heading that says they are not statuses.
 
-import { ALL_VALUE } from "@/lib/order-filter";
+import { ALL_VALUE, ZONE_PREFIX } from "@/lib/order-filter";
+import type { ZoneKey } from "@/lib/delivery-zones";
 import { isPaidStatus } from "@/lib/payment-label";
 
 /** Marks a filter value as a `payment_status`, not a `status`. */
@@ -82,6 +83,10 @@ export function isPaidUnconfirmed(s: FilterableSubscription): boolean {
 export type SubscriptionSelection = {
   statuses: string[];
   payments: string[];
+  /** Delivery zones, using the SAME `zone:` prefix the orders board uses —
+   *  ZONE_PREFIX is imported, not re-declared, so a link built by one board
+   *  cannot mean something different when the other parses it. */
+  zones: ZoneKey[];
   expiring: boolean;
   paidUnconfirmed: boolean;
 };
@@ -93,6 +98,7 @@ export function splitSubscriptionFilterValues(
 ): SubscriptionSelection {
   const statuses: string[] = [];
   const payments: string[] = [];
+  const zones: ZoneKey[] = [];
   let expiring = false;
   let paidUnconfirmed = false;
   for (const v of values) {
@@ -100,9 +106,11 @@ export function splitSubscriptionFilterValues(
     if (v === EXPIRING_7D) expiring = true;
     else if (v === PAID_UNCONFIRMED) paidUnconfirmed = true;
     else if (v.startsWith(PAY_PREFIX)) payments.push(v.slice(PAY_PREFIX.length));
+    else if (v.startsWith(ZONE_PREFIX))
+      zones.push(v.slice(ZONE_PREFIX.length) as ZoneKey);
     else statuses.push(v);
   }
-  return { statuses, payments, expiring, paidUnconfirmed };
+  return { statuses, payments, zones, expiring, paidUnconfirmed };
 }
 
 /**

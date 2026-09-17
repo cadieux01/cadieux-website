@@ -82,7 +82,11 @@ import {
   flattenSubscriptionAddress,
   type ZoneKey,
 } from "@/lib/delivery-zones";
-import { decodeZoneParam, encodeZoneParam } from "@/lib/order-filter";
+import {
+  ZONE_PREFIX,
+  decodeZoneParam,
+  encodeZoneParam,
+} from "@/lib/order-filter";
 import {
   PartnerShareButton,
   type ShareablePartner,
@@ -307,35 +311,40 @@ function SubscriptionsPageInner() {
   // below for control of the same values.
   const searchParams = useSearchParams();
 
-  // Multi-select, flat: status keys plus `pay:`-prefixed payment states plus
-  // the one computed filter. splitSubscriptionFilterValues sorts them out.
+  // ONE multi-select, flat: status keys, `pay:`-prefixed payment states,
+  // `zone:`-prefixed delivery zones, and the two computed filters.
+  // splitSubscriptionFilterValues sorts them back out into groups.
   //
   // EMPTY MEANS "ALL STATUSES" — there is no "all" member. Representing it as
   // a value would create two encodings of the same state ([] and ["all"]) that
   // could disagree. Same rule as /admin/orders.
   //
-  // The whole flat list rides ONE comma-separated `status` param. Unlike the
-  // orders board there is nothing operator-typed in here — every value is a
-  // fixed key — so no member can ever contain a comma.
-  const [filter, setFilter] = useState<string[]>(() =>
-    decodeStatusParam(searchParams.get("status")),
-  );
+  // ZONES LIVE IN HERE, not in a second dropdown beside it. They arrived as
+  // their own control because at the time this board still had a chip row
+  // with a fixed enum, which could not host them; the orders board has always
+  // carried them as a group inside its one menu. Leaving the split in place
+  // would mean an operator who learned "zones are in the filter menu" on
+  // orders finds no zones in the filter menu here — the precise kind of
+  // divergence this work exists to remove.
+  //
+  // The URL keeps them APART regardless: `status` and `zone` stay separate
+  // params, so every link either board has ever produced still parses, and a
+  // status selection and a zone selection stay orthogonal to read.
+  const [filter, setFilter] = useState<string[]>(() => [
+    ...decodeStatusParam(searchParams.get("status")),
+    ...decodeZoneParam(searchParams.get("zone")).map(
+      (z) => `${ZONE_PREFIX}${z}`,
+    ),
+  ]);
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
-  // Zone filter — OR within the group, AND'd with everything else, exactly
-  // as on /admin/orders (see src/lib/order-filter.ts).
-  //
-  // It rides its OWN `zone` param rather than joining the flat `status`
-  // list above, so a status selection and a zone selection stay orthogonal
-  // in the URL — same split as the orders board. Empty = no constraint.
-  //
-  // Read from `searchParams` like every other control here. It was reading
-  // `window.location.search` directly when this board still had a chip row
-  // and no writeback; doing that now would make it the one control that is
-  // not hydrated from the same source as the rest, and it would be blank on
-  // the server render.
-  const [zoneSel, setZoneSel] = useState<ZoneKey[]>(() =>
-    decodeZoneParam(searchParams.get("zone")),
+  // The flat selection, split back into its groups. Declared here rather
+  // than beside `filtered` because the URL writeback below needs the zones
+  // separated too — splitting twice is how the menu and the URL start
+  // disagreeing about what is selected.
+  const selection = useMemo(
+    () => splitSubscriptionFilterValues(filter),
+    [filter],
   );
   const [busyId, setBusyId] = useState<string | null>(null);
   // Which row's Date cell is showing its subscribed/receives breakdown.
@@ -387,14 +396,19 @@ function SubscriptionsPageInner() {
   // what "unset" means.
   const qs = useMemo(() => {
     const params = new URLSearchParams();
-    if (filter.length > 0) params.set("status", encodeStatusParam(filter));
+    // Zones ride in the same flat `filter` as everything else but are
+    // written to their OWN param, so the URL keeps saying what it always
+    // said and `status` never grows a `zone:`-prefixed member.
+    const nonZone = filter.filter((v) => !v.startsWith(ZONE_PREFIX));
+    if (nonZone.length > 0) params.set("status", encodeStatusParam(nonZone));
     if (query.trim()) params.set("q", query);
     if (basis !== DEFAULT_BASIS) params.set("basis", basis);
     if (day) params.set("date", day);
-    if (zoneSel.length > 0) params.set("zone", encodeZoneParam(zoneSel));
+    if (selection.zones.length > 0)
+      params.set("zone", encodeZoneParam(selection.zones));
     writeAnchorParams(params, anchor);
     return params.toString();
-  }, [filter, query, basis, day, zoneSel, anchor]);
+  }, [filter, selection.zones, query, basis, day, anchor]);
   useUrlWriteback("/admin/subscriptions", qs);
   useScrollRestore(SCROLL_KEY, !loading);
 
@@ -610,11 +624,6 @@ function SubscriptionsPageInner() {
     return c;
   }, [onDay, isExpiring]);
 
-  const selection = useMemo(
-    () => splitSubscriptionFilterValues(filter),
-    [filter],
-  );
-
   // Per-zone counts for the current on-day slice, so the MultiSelect can
   // show live counts next to each zone name. Pickup is included in the
   // shape for parity with the orders board even though subscriptions
@@ -635,22 +644,27 @@ function SubscriptionsPageInner() {
     return c;
   }, [onDay, zoneOf]);
 
-  // Zone MultiSelect options. Unzoned stays visible even at zero so an
-  // operator can see the bucket exists. Numbered zones hide at zero
-  // unless already ticked — same rule the orders board uses. Pickup is
-  // omitted entirely (subscriptions never resolve to pickup).
+  // The Zones group inside the one menu. Unzoned stays visible even at zero
+  // so an operator can see the bucket exists. Numbered zones hide at zero
+  // unless already ticked — same rule the status group uses, and the same
+  // rule the orders board's zone group uses. Pickup is omitted entirely:
+  // a subscription is never a pickup, so listing it would be offering a
+  // filter that is permanently empty rather than an honest bucket.
   const zoneOptions = useMemo(() => {
     const opts: { value: string; label: string }[] = [];
     for (const zk of ZONE_KEYS) {
       if (zk === "pickup") continue;
       const zc = zoneCounts[zk];
-      const ticked = zoneSel.includes(zk);
+      const ticked = selection.zones.includes(zk);
       const alwaysShow = zk === "unzoned";
       if (!alwaysShow && !ticked && zc === 0) continue;
-      opts.push({ value: zk, label: `${ZONE_LABELS[zk]} (${zc})` });
+      opts.push({
+        value: `${ZONE_PREFIX}${zk}`,
+        label: `${ZONE_LABELS[zk]} (${zc})`,
+      });
     }
     return opts;
-  }, [zoneCounts, zoneSel]);
+  }, [zoneCounts, selection.zones]);
 
   // Dev-only invariant: zone buckets partition the on-day slice. If this
   // ever fails a subscription's address resolved to something outside the
@@ -672,9 +686,9 @@ function SubscriptionsPageInner() {
       // Zone is AND'd with every other group. Fail closed on a missing
       // zoneOf entry so an enrichment miss shows up as "no rows" rather
       // than silent over-inclusion — same rule as the orders board.
-      if (zoneSel.length > 0) {
+      if (selection.zones.length > 0) {
         const z = zoneOf.get(s.id);
-        if (!z || !zoneSel.includes(z)) return false;
+        if (!z || !selection.zones.includes(z)) return false;
       }
       // Both spellings of the customer, because a subscription carries
       // two: the joined `customer` row and the flat snapshot taken at
@@ -729,7 +743,6 @@ function SubscriptionsPageInner() {
     selection,
     isExpiring,
     query,
-    zoneSel,
     zoneOf,
     anchor,
     pincodeCoords,
@@ -879,11 +892,20 @@ function SubscriptionsPageInner() {
       label: `Expiring in 7 days (${counts[EXPIRING_7D] ?? 0})`,
     });
 
+    // Zones — in THIS menu, not a second dropdown beside it. They are a
+    // fourth orthogonal group, exactly as on the orders board, and they ride
+    // the same flat selection under ZONE_PREFIX so one control holds the
+    // whole filter state. (`zoneOptions` decides which buckets are listed.)
+    if (zoneOptions.length > 0) {
+      opts.push(separator("__sep_zone", "Zones"));
+      opts.push(...zoneOptions);
+    }
+
     if (filter.length > 0) {
       opts.push({ value: CLEAR_ALL, label: "Clear all", action: true });
     }
     return opts;
-  }, [statusValues, counts, selection, filter.length]);
+  }, [statusValues, counts, selection, zoneOptions, filter.length]);
 
   // The bracketed number is the LIVE ROW COUNT, never the sum of the ticked
   // options — see triggerLabel. Tick a status and a payment state and the two
@@ -908,12 +930,14 @@ function SubscriptionsPageInner() {
     if (value.startsWith("__sep_")) return;
     setFilter((curr) => {
       if (value === CLEAR_ALL) return [];
-      // "All statuses" clears the STATUS group only, leaving payment and
-      // computed filters ticked — it is named "All statuses", not "All rows".
+      // "All statuses" clears the STATUS group only, leaving payment, zone
+      // and computed filters ticked — it is named "All statuses", not "All
+      // rows".
       if (value === ALL_VALUE)
         return curr.filter(
           (v) =>
             v.startsWith(PAY_PREFIX) ||
+            v.startsWith(ZONE_PREFIX) ||
             v === EXPIRING_7D ||
             v === PAID_UNCONFIRMED,
         );
@@ -1072,30 +1096,6 @@ function SubscriptionsPageInner() {
             triggerLabel={filterLabel}
             ariaLabel="Filter subscriptions by status"
             options={filterOptions}
-          />
-        </div>
-        {/* Zone rides its own control rather than joining the menu above.
-            The menu above partitions by STATUS, and its counts are asserted
-            to sum to the row count; folding a second, orthogonal dimension
-            into the same list would break that invariant. */}
-        <div style={{ minWidth: 240 }}>
-          <MultiSelect
-            ariaLabel="Filter by zone"
-            values={zoneSel}
-            onToggle={(v) => {
-              const zk = v as ZoneKey;
-              setZoneSel((cur) =>
-                cur.includes(zk) ? cur.filter((z) => z !== zk) : [...cur, zk],
-              );
-            }}
-            options={zoneOptions}
-            triggerLabel={
-              zoneSel.length === 0
-                ? "All zones"
-                : zoneSel.length === 1
-                  ? ZONE_LABELS[zoneSel[0]]
-                  : `${ZONE_LABELS[zoneSel[0]]} +${zoneSel.length - 1}`
-            }
           />
         </div>
         <input
