@@ -1,4 +1,4 @@
--- NOT APPLIED. Awaiting approval — do not run without it.
+-- APPLIED to prod (uejagupcwevadfhfuadv) on 2026-09-17, by hand, approved.
 --
 -- One emoji reaction per admin per row, on an order or a subscription.
 --
@@ -73,12 +73,11 @@ create unique index if not exists order_reactions_sub_author_key
   on public.order_reactions(subscription_id, author)
   where subscription_id is not null;
 
--- Read path: "every reaction for these N rows", one round trip per board
--- load. Covers the hydration in aggregateReactionsFor().
-create index if not exists order_reactions_order_idx
-  on public.order_reactions(order_id);
-create index if not exists order_reactions_sub_idx
-  on public.order_reactions(subscription_id);
+-- No separate single-column indexes on order_id / subscription_id. The two
+-- partial uniques above already have them leftmost, so they serve the read
+-- path ("every reaction for these N rows" in aggregateReactionsFor) without
+-- a second copy of the same column to write on every insert. order_notes
+-- carries exactly two indexes and no single-column duplicates; this matches.
 
 -- RLS on with zero policies + grants revoked: reachable only by
 -- service_role (BYPASSRLS), i.e. the server-side admin routes. Reactions
