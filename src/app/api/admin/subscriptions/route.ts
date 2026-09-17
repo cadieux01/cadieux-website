@@ -12,7 +12,6 @@ import {
 } from "@/lib/subscription-coordinates";
 import type { AdminSubscriptionItem } from "@/lib/admin-shared";
 import { aggregateNotesFor } from "@/lib/order-notes";
-import { ADMIN_HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
 const ALLOWED_FILTERS = new Set([
   "all",
@@ -37,17 +36,28 @@ export async function GET(req: NextRequest) {
   // and gets the original payload shape unchanged.
   const enrich = req.nextUrl.searchParams.get("enrich") === "1";
 
+  // NO payment_status FILTER. This board returns every subscription row.
+  //
+  // It used to carry `.not("payment_status","in",("created","abandoned"))`.
+  // The stated reason was that unpaid shells must not reach the fulfilment
+  // floor, or bread gets set aside for a plan nobody paid for. That reason
+  // does not survive contact with the data: every hidden row already had its
+  // subscription_deliveries written at checkout (OLS39 had 2, OLS18 had 9).
+  // Hiding them here never kept one loaf off the bake — it only removed the
+  // one surface on which a human could have noticed and rung the customer.
+  //
+  // It cost us OLS39: a completed checkout, due to start the next day, that
+  // nobody called because the only board that could have shown her refused
+  // to. OLS34 was the same shape the day before.
+  //
+  // ADMIN_HIDDEN_SUBSCRIPTION_FILTER still exists and is still correct for
+  // the customer-facing surfaces; it is simply not this board's business.
+  // Note it deliberately never hid 'paid_orphaned' — this board is the
+  // durable surface for a payment that landed after the sweep, because the
+  // alert email is only a doorbell and can be eaten by a bad Resend day.
   let query = supabaseAdmin
     .from("subscriptions")
     .select("*")
-    // Unpaid shells (row written, Razorpay sheet never completed) must not
-    // reach the fulfilment floor — bread gets set aside for them otherwise.
-    //
-    // The ADMIN_ set deliberately does NOT hide 'paid_orphaned'. This board is
-    // the durable surface for a payment that landed after the sweep: the alert
-    // email is only a doorbell and can be eaten by a bad Resend day. An orphan
-    // must be sitting here waiting whether or not that email ever arrived.
-    .not("payment_status", "in", ADMIN_HIDDEN_SUBSCRIPTION_FILTER)
     .order("created_at", { ascending: false });
 
   if (filter !== "all") {

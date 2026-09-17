@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { ADMIN_HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
 // GET — admin detail view. Returns the customer row + every order
 // they've placed + every subscription they hold + push token presence.
@@ -46,7 +45,11 @@ export async function GET(
       "id, product_name, total_weeks, status, payment_status, total_amount, created_at, frequency",
     )
     .eq("customer_id", id)
-    .not("payment_status", "in", ADMIN_HIDDEN_SUBSCRIPTION_FILTER)
+    // No payment_status filter — see /api/admin/subscriptions. "Every
+    // subscription they hold" above was not true while this line was here,
+    // and this is the screen you land on after searching a phone number. A
+    // customer who rings to ask why her plan has not started must not read
+    // as a customer with no plan.
     .order("created_at", { ascending: false });
   // push_tokens may not exist on every environment; on error we
   // degrade silently to an empty list rather than 500 the whole page.
