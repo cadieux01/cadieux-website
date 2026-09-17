@@ -35,6 +35,12 @@ import {
   type ShareablePartner,
 } from "@/components/admin/OrderShareButton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import {
+  ReactionBadges,
+  ROW_GESTURE_STYLE,
+  useRowReactions,
+} from "@/components/admin/RowReactions";
+import type { ReactionTally } from "@/lib/order-reactions";
 import { adminAuthHeaders, adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import {
@@ -1285,6 +1291,16 @@ function OrdersPageInner() {
     }
   };
 
+  // Reactions the list endpoint already hydrated. Keyed off `orders` rather
+  // than `filtered` so a row keeps its badges when a filter change rebuilds
+  // the visible set.
+  const reactionSeed = useMemo(() => {
+    const m = new Map<string, ReactionTally[]>();
+    for (const o of orders) if (o.reactions?.length) m.set(o.id, o.reactions);
+    return m;
+  }, [orders]);
+  const reactions = useRowReactions("order", reactionSeed);
+
   return (
     <AdminShell
       title="Today's Orders"
@@ -1607,6 +1623,11 @@ function OrdersPageInner() {
                 return (
                   <tr
                     key={o.id}
+                    // Long-press (touch) / right-click (mouse) -> reaction
+                    // picker. Supplies onClickCapture, which swallows the
+                    // click that follows a long press so the navigation
+                    // below does not fire out from under the picker.
+                    {...reactions.rowProps(o.id)}
                     onClick={(e) => {
                       // Row-wide navigation, minus the controls that own
                       // their own click (checkbox, status Select, actions).
@@ -1634,6 +1655,7 @@ function OrdersPageInner() {
                     }}
                     title="Open order detail"
                     style={{
+                      ...ROW_GESTURE_STYLE,
                       cursor: "pointer",
                       background:
                         i % 2 === 0
@@ -1663,6 +1685,11 @@ function OrdersPageInner() {
                         {isOrderFulfilled(o) ? <FulfilledTick /> : null}
                       </span>
                       <LoafDots items={o.items} />
+                      <ReactionBadges
+                        tallies={reactions.talliesFor(o.id)}
+                        actor={reactions.actor}
+                        onToggle={(emoji) => reactions.toggle(o.id, emoji)}
+                      />
                     </td>
                     <td style={td}>
                       <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
@@ -2055,6 +2082,28 @@ function OrdersPageInner() {
         </div>
         </div>
       )}
+      {/* Portalled to document.body, so it is rendered here only to keep it
+          mounted — its position comes from the row rect, not this spot. */}
+      {reactions.picker}
+      {reactions.error ? (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            bottom: 16,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            padding: "0.5rem 0.9rem",
+            background: "rgba(239,68,68,0.95)",
+            color: "#FBF3D4",
+            borderRadius: 6,
+            fontSize: "0.875rem",
+          }}
+        >
+          {reactions.error}
+        </div>
+      ) : null}
     </AdminShell>
   );
 }

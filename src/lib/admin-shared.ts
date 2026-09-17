@@ -12,6 +12,7 @@
 import type { NutrientValue } from "@/lib/nutrition";
 import type { NextDelivery } from "@/lib/admin-subscription-derive";
 import type { NoteKind } from "@/lib/order-notes";
+import type { ReactionTally } from "@/lib/order-reactions";
 
 export const ADMIN_SESSION_KEY = "cadieux_admin_auth";
 
@@ -196,6 +197,9 @@ export type AdminOrderRow = {
     created_at: string;
     kind: NoteKind;
   } | null;
+  /** Emoji reactions on this row, oldest emoji first. Populated by the list
+   *  endpoint; undefined on paths that don't hydrate them. */
+  reactions?: ReactionTally[];
 
   // --- repeat-customer facts, computed once per list load (by PHONE,
   // cancelled orders excluded — see src/lib/customer-history.ts). All
@@ -377,6 +381,8 @@ export type AdminSubscriptionRow = {
     author: string | null;
     created_at: string;
   } | null;
+  /** Same shape/semantics as AdminOrderRow.reactions. */
+  reactions?: ReactionTally[];
 };
 
 export const DELIVERY_STATUS_OPTIONS = [

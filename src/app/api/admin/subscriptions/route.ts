@@ -12,6 +12,7 @@ import {
 } from "@/lib/subscription-coordinates";
 import type { AdminSubscriptionItem } from "@/lib/admin-shared";
 import { aggregateNotesFor } from "@/lib/order-notes";
+import { aggregateReactionsFor } from "@/lib/order-reactions";
 
 const ALLOWED_FILTERS = new Set([
   "all",
@@ -189,7 +190,12 @@ export async function GET(req: NextRequest) {
   // Batch-fetch note aggregates for every subscription in the list. Same
   // shape the orders route attaches, so the shared NotePanel + inline
   // chip work off identical fields on both boards.
-  const noteAgg = await aggregateNotesFor(supabaseAdmin, "subscription", subIds);
+  // Reactions ride along in the same wave — independent table, independent
+  // read, so there is no reason to pay for a second sequential round trip.
+  const [noteAgg, reactionAgg] = await Promise.all([
+    aggregateNotesFor(supabaseAdmin, "subscription", subIds),
+    aggregateReactionsFor(supabaseAdmin, "subscription", subIds),
+  ]);
 
   return NextResponse.json({
     subscriptions: subs.map((s) => {
@@ -202,6 +208,7 @@ export async function GET(req: NextRequest) {
         ...(coordsBySub.get(s.id) ?? {}),
         note_count: agg?.note_count ?? 0,
         last_call_note: agg?.last_call_note ?? null,
+        reactions: reactionAgg.get(s.id) ?? [],
       };
     }),
   });

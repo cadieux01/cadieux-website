@@ -11,6 +11,7 @@ import {
   type HistoryOrder,
 } from "@/lib/customer-history";
 import { aggregateNotesFor } from "@/lib/order-notes";
+import { aggregateReactionsFor } from "@/lib/order-reactions";
 import { computeOrderState } from "@/lib/order-state";
 import {
   orderInsertColumns,
@@ -70,7 +71,13 @@ export async function GET(req: NextRequest) {
   const orderIds = rows
     .map((r: { id?: string | null }) => r.id)
     .filter((v): v is string => typeof v === "string" && v.length > 0);
-  const noteAgg = await aggregateNotesFor(supabaseAdmin, "order", orderIds);
+  // Notes and reactions are independent tables and neither read depends on
+  // the other, so they go out together rather than costing two sequential
+  // round trips to ap-northeast-1 on every poll of the board.
+  const [noteAgg, reactionAgg] = await Promise.all([
+    aggregateNotesFor(supabaseAdmin, "order", orderIds),
+    aggregateReactionsFor(supabaseAdmin, "order", orderIds),
+  ]);
 
   // Repeat-customer history + the retention panel, folded ONCE over the
   // rows we already have — keyed on customers.phone, cancelled orders
@@ -100,6 +107,7 @@ export async function GET(req: NextRequest) {
       note_count: agg?.note_count ?? 0,
       last_call_note: agg?.last_call_note ?? null,
       last_note: agg?.last_note ?? null,
+      reactions: (r.id ? reactionAgg.get(r.id) : undefined) ?? [],
       repeat_seq: rep?.repeat_seq ?? null,
       customer_order_count: rep?.customer_order_count ?? null,
       customer_first_order_at: rep?.customer_first_order_at ?? null,

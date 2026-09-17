@@ -84,6 +84,12 @@ import { isOrphanedPayment } from "@/lib/subscription-visibility";
 import { NoteIconButton } from "@/components/admin/NoteIconButton";
 import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
+import {
+  ReactionBadges,
+  ROW_GESTURE_STYLE,
+  useRowReactions,
+} from "@/components/admin/RowReactions";
+import type { ReactionTally } from "@/lib/order-reactions";
 
 // Same call-update preset list the orders board uses. Selecting any of
 // these POSTs a note with kind='call'; "Custom" opens the NotePanel.
@@ -518,6 +524,15 @@ function SubscriptionsPageInner() {
     }
   };
 
+  // Seed the picker with what the list endpoint already sent, so badges
+  // paint on first render instead of after a per-row GET.
+  const reactionSeed = useMemo(() => {
+    const m = new Map<string, ReactionTally[]>();
+    for (const s of subs) if (s.reactions?.length) m.set(s.id, s.reactions);
+    return m;
+  }, [subs]);
+  const reactions = useRowReactions("subscription", reactionSeed);
+
   return (
     <AdminShell
       title="Subscriptions"
@@ -684,6 +699,7 @@ function SubscriptionsPageInner() {
                 return (
                   <tr
                     key={s.id}
+                    {...reactions.rowProps(s.id)}
                     onClick={(e) => {
                       // Row-wide navigation, minus the controls that own
                       // their own click (customer link, action buttons).
@@ -701,6 +717,12 @@ function SubscriptionsPageInner() {
                     style={{
                       cursor: "pointer",
                       background: i % 2 === 0 ? cream(0.025) : "transparent",
+                      // Must be merged here, not returned by rowProps(): this
+                      // style prop is declared AFTER the spread, so a `style`
+                      // key coming out of rowProps would be silently
+                      // overwritten with no compile error — and the iOS
+                      // long-press callout suppression would vanish.
+                      ...ROW_GESTURE_STYLE,
                     }}
                   >
                     <td style={td} data-label="Subscription">
@@ -715,6 +737,11 @@ function SubscriptionsPageInner() {
                         {formatSubscriptionNumber(s)}
                         {isSubscriptionFulfilled(s) ? <FulfilledTick /> : null}
                       </span>
+                      <ReactionBadges
+                        tallies={reactions.talliesFor(s.id)}
+                        actor={reactions.actor}
+                        onToggle={(emoji) => reactions.toggle(s.id, emoji)}
+                      />
                     </td>
                     <td style={td} data-label="Customer">
                       <Link
@@ -1137,6 +1164,28 @@ function SubscriptionsPageInner() {
           }
         }
       `}</style>
+      {/* Portalled to document.body, so it is rendered here only to keep it
+          mounted — its position comes from the row rect, not this spot. */}
+      {reactions.picker}
+      {reactions.error ? (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            bottom: 16,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            padding: "0.5rem 0.9rem",
+            background: "rgba(239,68,68,0.95)",
+            color: "#FBF3D4",
+            borderRadius: 6,
+            fontSize: "0.875rem",
+          }}
+        >
+          {reactions.error}
+        </div>
+      ) : null}
     </AdminShell>
   );
 }
