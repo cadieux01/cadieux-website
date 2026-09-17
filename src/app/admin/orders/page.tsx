@@ -75,7 +75,7 @@ import {
   parseDayParam,
   type DateBasis,
 } from "@/lib/day-filter";
-import { repeatTooltip } from "@/lib/customer-history";
+import { RepeatStar } from "@/components/admin/RepeatStar";
 import { RetentionPanel } from "@/components/admin/RetentionPanel";
 import type { RetentionSummary } from "@/lib/customer-history";
 import {
@@ -1551,28 +1551,11 @@ function OrdersPageInner() {
                     <td style={td}>
                       <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
                         {o.customers?.full_name ?? "—"}
-                        {/* Repeat-customer star. Present only when this
-                            phone has an EARLIER non-cancelled order, so a
-                            first order never carries one. */}
-                        {(o.repeat_seq ?? 0) >= 2 ? (
-                          <span
-                            title={repeatTooltip({
-                              repeat_seq: o.repeat_seq ?? 0,
-                              customer_order_count: o.customer_order_count ?? 0,
-                              customer_first_order_at:
-                                o.customer_first_order_at ?? "",
-                            })}
-                            aria-label="Repeat customer"
-                            style={{
-                              marginLeft: 6,
-                              color: "#FBF3D4",
-                              fontSize: "0.9rem",
-                              cursor: "help",
-                            }}
-                          >
-                            ★
-                          </span>
-                        ) : null}
+                        <RepeatStar
+                          seq={o.repeat_seq}
+                          count={o.customer_order_count}
+                          firstAt={o.customer_first_order_at}
+                        />
                       </div>
                       {o.customers?.phone ? (
                         <div className="flex flex-wrap items-center gap-2 mt-1">

@@ -105,6 +105,8 @@ import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
 import { CALL_PRESETS } from "@/lib/admin-call-updates";
 import { LastNoteChip } from "@/components/admin/LastNoteChip";
+import { RepeatStar } from "@/components/admin/RepeatStar";
+import { buildRepeatIndex } from "@/lib/customer-history";
 import { matchesAdminQuery } from "@/lib/admin-search";
 
 // The status group's PREFERRED ORDER, not the menu itself. The menu is built
@@ -415,6 +417,31 @@ function SubscriptionsPageInner() {
         matchesAnyDay(subscriptionDatesForBasis(s, basis), day),
       ),
     [subs, basis, day],
+  );
+
+  // Repeat-plan index, same pure builder the orders list endpoint uses.
+  //
+  // Built over `subs` and NOT over `inRange`: "has this person subscribed
+  // before" is a fact about the customer, not about the date window the
+  // operator happens to be looking through. Narrowing to a week would
+  // un-star everyone whose first plan predates it, which is the exact
+  // opposite of what the star is for.
+  //
+  // Keyed on phone, so the two spellings of the customer collapse to one
+  // person; cancelled plans are excluded by the builder, so a plan someone
+  // cancelled and never replaced does not star their next one.
+  const repeatIndex = useMemo(
+    () =>
+      buildRepeatIndex(
+        subs.map((s) => ({
+          id: s.id,
+          status: s.status,
+          created_at: s.created_at,
+          total_amount: s.total_amount,
+          customers: { phone: s.customer?.phone ?? s.customer_phone },
+        })),
+      ),
+    [subs],
   );
 
   const isExpiring = useCallback((s: FilterableSubscription): boolean => {
@@ -903,6 +930,15 @@ function SubscriptionsPageInner() {
                       >
                         {s.customer?.full_name ?? "—"}
                       </Link>
+                      {/* "plan", not "order" — this star counts standing
+                          plans on this phone, and a tooltip saying "3rd
+                          order" would be a claim about the orders board. */}
+                      <RepeatStar
+                        seq={repeatIndex.get(s.id)?.repeat_seq}
+                        count={repeatIndex.get(s.id)?.customer_order_count}
+                        firstAt={repeatIndex.get(s.id)?.customer_first_order_at}
+                        noun="plan"
+                      />
                       {s.customer?.phone ? (
                         <div className="flex flex-wrap items-center gap-2 mt-1">
                           <span

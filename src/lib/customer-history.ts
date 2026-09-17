@@ -239,9 +239,15 @@ export function ordinal(n: number): string {
   }
 }
 
-/** "3rd order · first on 5 Sep" — the star's tooltip. */
-export function repeatTooltip(info: RepeatInfo): string {
-  return `${ordinal(info.repeat_seq)} order · first on ${formatShortISTDate(
+/**
+ * "3rd order · first on 5 Sep" — the star's tooltip.
+ *
+ * `noun` exists because the subscriptions board stars plans, not orders,
+ * and "3rd order" on a row that is a standing plan is a claim about
+ * something the operator cannot go and look at.
+ */
+export function repeatTooltip(info: RepeatInfo, noun: string = "order"): string {
+  return `${ordinal(info.repeat_seq)} ${noun} · first on ${formatShortISTDate(
     info.customer_first_order_at,
   )}`;
 }
