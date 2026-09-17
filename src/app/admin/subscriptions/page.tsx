@@ -33,8 +33,10 @@ import {
 } from "@/lib/filter-menu";
 import {
   EXPIRING_7D,
+  PAID_UNCONFIRMED,
   PAYMENT_FILTERS,
   PAY_PREFIX,
+  isPaidUnconfirmed,
   matchesSubscriptionFilter,
   splitSubscriptionFilterValues,
   type FilterableSubscription,
@@ -467,6 +469,8 @@ function SubscriptionsPageInner() {
         c[key] = (c[key] ?? 0) + 1;
       }
       if (isExpiring(s)) c[EXPIRING_7D] = (c[EXPIRING_7D] ?? 0) + 1;
+      if (isPaidUnconfirmed(s))
+        c[PAID_UNCONFIRMED] = (c[PAID_UNCONFIRMED] ?? 0) + 1;
     }
     return c;
   }, [onDay, isExpiring]);
@@ -484,8 +488,16 @@ function SubscriptionsPageInner() {
     // cancelled subscriptions stop pushing live ones down the page. The API
     // already returns created_at DESC; this re-sorts a copy. Display only —
     // no status is written. See subscriptionStatusRank in lib/admin-shared.
+    //
+    // Above all of it: paid but not yet confirmed. pending_confirmation is
+    // already rank 1, but that bucket holds unpaid rows too, and those two
+    // are not the same urgency — one owes us money, the other is owed bread.
+    // Ranking it 0 here rather than in subscriptionStatusRank keeps that
+    // helper a pure function of `status`, which orders shares.
+    const rank = (s: AdminSubscriptionRow) =>
+      isPaidUnconfirmed(s) ? 0 : subscriptionStatusRank(s);
     return [...rows].sort((a, b) => {
-      const rankCmp = subscriptionStatusRank(a) - subscriptionStatusRank(b);
+      const rankCmp = rank(a) - rank(b);
       if (rankCmp !== 0) return rankCmp;
       return b.created_at.localeCompare(a.created_at);
     });
@@ -522,8 +534,12 @@ function SubscriptionsPageInner() {
       }
     }
 
-    // Computed. Labelled as a filter, never as a status.
+    // Computed. Labelled as filters, never as statuses.
     opts.push(separator("__sep_computed", "Filters (not statuses)"));
+    opts.push({
+      value: PAID_UNCONFIRMED,
+      label: `Paid, not confirmed (${counts[PAID_UNCONFIRMED] ?? 0})`,
+    });
     opts.push({
       value: EXPIRING_7D,
       label: `Expiring in 7 days (${counts[EXPIRING_7D] ?? 0})`,
@@ -562,7 +578,10 @@ function SubscriptionsPageInner() {
       // computed filters ticked — it is named "All statuses", not "All rows".
       if (value === ALL_VALUE)
         return curr.filter(
-          (v) => v.startsWith(PAY_PREFIX) || v === EXPIRING_7D,
+          (v) =>
+            v.startsWith(PAY_PREFIX) ||
+            v === EXPIRING_7D ||
+            v === PAID_UNCONFIRMED,
         );
       return curr.includes(value)
         ? curr.filter((v) => v !== value)
@@ -817,6 +836,11 @@ function SubscriptionsPageInner() {
                 const canCancel =
                   s.status !== "cancelled" && s.status !== "completed";
                 const rowAddr = resolveSubscriptionAddress(s);
+                // Money in, plan not confirmed. Derived, never stored — see
+                // isPaidUnconfirmed. Marks the row and nothing else: Share
+                // stays enabled, because the payment is good and the bread
+                // is owed, which is the whole reason it needs chasing.
+                const paidUnconfirmed = isPaidUnconfirmed(s);
                 return (
                   <tr
                     key={s.id}
@@ -837,6 +861,13 @@ function SubscriptionsPageInner() {
                     style={{
                       cursor: "pointer",
                       background: i % 2 === 0 ? cream(0.025) : "transparent",
+                      // A left rule rather than a tinted row: the zebra
+                      // striping already owns the background, and an amber
+                      // wash over alternating greys reads as two different
+                      // ambers.
+                      boxShadow: paidUnconfirmed
+                        ? "inset 3px 0 0 0 #F59E0B"
+                        : undefined,
                     }}
                   >
                     <td style={td} data-label="Subscription">
@@ -994,6 +1025,27 @@ function SubscriptionsPageInner() {
                       <div style={{ marginTop: 4 }}>
                         <StatusBadge status={s.status} />
                       </div>
+                      {/* The left rule says a row is special; this says WHICH
+                          special. "Pending confirmation" alone reads as "no
+                          hurry" and on a paid plan it is the opposite. */}
+                      {paidUnconfirmed && (
+                        <div
+                          style={{
+                            marginTop: 4,
+                            display: "inline-block",
+                            padding: "1px 6px",
+                            border: "1px solid rgba(245,158,11,0.6)",
+                            color: "#F59E0B",
+                            fontSize: "0.75rem",
+                            letterSpacing: "0.1em",
+                            textTransform: "uppercase",
+                            borderRadius: 3,
+                          }}
+                          title="Payment received and the plan is not confirmed yet — bread is owed."
+                        >
+                          Paid · not confirmed
+                        </div>
+                      )}
                       {/* Call-update dropdown — separate control from the
                           status Select. Presets append kind='call' notes;
                           "Custom" opens the NotePanel with kind pre-set. */}
