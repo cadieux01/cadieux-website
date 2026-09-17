@@ -88,9 +88,11 @@ import { isOrderFulfilled } from "@/lib/order-fulfillment";
 import { FulfilledTick } from "@/components/admin/FulfilledTick";
 import { composeShareRun, isShareable } from "@/lib/order-share-message";
 import { deliverShareText } from "@/lib/share-delivery";
+import { CALL_PRESETS } from "@/lib/admin-call-updates";
+import { LastNoteChip } from "@/components/admin/LastNoteChip";
+import { matchesAdminQuery } from "@/lib/admin-search";
 import { LoafDots } from "@/components/admin/LoafDots";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
-import { NOTE_KIND_STYLE, truncateNoteBody } from "@/lib/order-notes";
 import { NoteIconButton } from "@/components/admin/NoteIconButton";
 import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
@@ -254,34 +256,6 @@ function readStoredSelection(): Set<string> {
     return new Set(parsed.filter((v): v is string => typeof v === "string"));
   } catch {
     return new Set();
-  }
-}
-
-// Presets on the Call-update dropdown. Selecting any of these POSTs a
-// note with kind='call' whose body is the preset label. The custom
-// escape hatch opens the NotePanel with kind pre-set to 'call' so the
-// operator types free-form.
-const CALL_PRESETS = [
-  "Confirmed on call",
-  "Did not lift the call",
-  "Call back later",
-  "Customer asked to reschedule",
-] as const;
-
-// IST formatter for the inline last-call chip. Fixed to Asia/Kolkata so
-// every operator sees the same wall-clock, regardless of device tz.
-function formatCallChipTime(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat("en-IN", {
-      timeZone: "Asia/Kolkata",
-      day: "2-digit",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    }).format(new Date(iso));
-  } catch {
-    return iso;
   }
 }
 
@@ -701,32 +675,22 @@ function OrdersPageInner() {
   );
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     const rows = orders.filter((o) => {
       if (!matchesDay(orderDateForBasis(o, basis), day)) return false;
       // Statuses OR'd, call updates OR'd, the two groups AND'd. Shared
       // with the print view so the packing list can't disagree with the
       // screen it was printed from — see src/lib/order-filter.ts.
       if (!matchesOrderFilter(o, statusSel, callSel, repeatOnly)) return false;
-      if (!q) return true;
-      const name = (o.customers?.full_name ?? "").toLowerCase();
-      const phone = (o.customers?.phone ?? "").toLowerCase();
-      // Match either reference. A customer only ever knows public_ref
-      // ("CX-7K4M2P") and will often read it out without the prefix or
-      // the hyphen, so compare on a stripped form too. order_number
-      // ("OLF43", or legacy "CDX-00006") is on the bag, so ops search
-      // that directly.
-      const ref = (o.public_ref ?? "").toLowerCase();
-      const olf = (o.order_number ?? "").toLowerCase();
-      const bareRef = ref.replace(/^cx-/, "");
-      const bareQ = q.replace(/^cx-?/, "").replace(/-/g, "");
-      return (
-        name.includes(q) ||
-        phone.includes(q) ||
-        ref.includes(q) ||
-        olf.includes(q) ||
-        (bareQ.length > 0 && bareRef.includes(bareQ))
-      );
+      // Name, phone and BOTH references. The customer knows public_ref
+      // ("CX-7K4M2P"); order_number ("OLF43", legacy "CDX-00006") is what
+      // is on the bag. Shared with the subscriptions board so one typed
+      // phone number behaves the same on either — see admin-search.ts.
+      return matchesAdminQuery(query, [
+        o.customers?.full_name,
+        o.customers?.phone,
+        o.public_ref,
+        o.order_number,
+      ]);
     });
 
     // Distance sort — nearest first, "no location" grouped last. Runs
@@ -1773,46 +1737,11 @@ function OrdersPageInner() {
                           ]}
                         />
                       </div>
-                      {/* Inline chip showing the most recent note of ANY kind
-                          so the operator sees "already contacted, said
-                          reschedule" — or a plain note, or an order edit —
-                          without opening the panel. Colour is per kind
-                          (call amber / note muted / edit teal). Body is
-                          truncated; the full text is the title attr and is
-                          always in the panel. Timestamp is IST. */}
-                      {o.last_note ? (
-                        <div
-                          style={{
-                            marginTop: 6,
-                            display: "inline-block",
-                            padding: "3px 6px",
-                            border: `1px solid ${NOTE_KIND_STYLE[o.last_note.kind].border}`,
-                            color: NOTE_KIND_STYLE[o.last_note.kind].color,
-                            fontFamily: "var(--font-body)",
-                            fontSize: "0.75rem",
-                            lineHeight: 1.3,
-                            borderRadius: 3,
-                            maxWidth: 200,
-                          }}
-                          title={
-                            `${NOTE_KIND_STYLE[o.last_note.kind].label}: ` +
-                            o.last_note.body +
-                            (o.last_note.author ? ` · ${o.last_note.author}` : "")
-                          }
-                        >
-                          {truncateNoteBody(o.last_note.body)}
-                          <span
-                            style={{
-                              display: "block",
-                              color: "rgba(251,243,212,0.55)",
-                              fontSize: "0.7rem",
-                              marginTop: 1,
-                            }}
-                          >
-                            {formatCallChipTime(o.last_note.created_at)}
-                          </span>
-                        </div>
-                      ) : null}
+                      {/* The most recent note of ANY kind, so the operator
+                          sees "already contacted, said reschedule" without
+                          opening the panel. Shared with the subscriptions
+                          board — see LastNoteChip. */}
+                      <LastNoteChip note={o.last_note} />
                     </td>
                     <td style={td}>
                       <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>

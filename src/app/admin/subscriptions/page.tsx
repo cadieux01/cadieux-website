@@ -103,31 +103,9 @@ import { isOrphanedPayment } from "@/lib/subscription-visibility";
 import { NoteIconButton } from "@/components/admin/NoteIconButton";
 import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
-
-// Same call-update preset list the orders board uses. Selecting any of
-// these POSTs a note with kind='call'; "Custom" opens the NotePanel.
-const CALL_PRESETS = [
-  "Confirmed on call",
-  "Did not lift the call",
-  "Call back later",
-  "Customer asked to reschedule",
-] as const;
-
-// IST formatter for the inline last-call chip. Fixed to Asia/Kolkata.
-function formatCallChipTime(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat("en-IN", {
-      timeZone: "Asia/Kolkata",
-      day: "2-digit",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
+import { CALL_PRESETS } from "@/lib/admin-call-updates";
+import { LastNoteChip } from "@/components/admin/LastNoteChip";
+import { matchesAdminQuery } from "@/lib/admin-search";
 
 // The status group's PREFERRED ORDER, not the menu itself. The menu is built
 // from the statuses actually present (see distinctStatuses below) — this list
@@ -270,6 +248,7 @@ function SubscriptionsPageInner() {
   // a value would create two encodings of the same state ([] and ["all"]) that
   // could disagree. Same rule as /admin/orders.
   const [filter, setFilter] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   // Which row's Date cell is showing its subscribed/receives breakdown.
   const [openDateId, setOpenDateId] = useState<string | null>(null);
@@ -481,9 +460,24 @@ function SubscriptionsPageInner() {
   );
 
   const filtered = useMemo(() => {
-    const rows = onDay.filter((s) =>
-      matchesSubscriptionFilter(s, selection, isExpiring),
-    );
+    const rows = onDay.filter((s) => {
+      if (!matchesSubscriptionFilter(s, selection, isExpiring)) return false;
+      // Both spellings of the customer, because a subscription carries
+      // two: the joined `customer` row and the flat snapshot taken at
+      // signup. They disagree whenever someone renamed themselves or
+      // ordered for a parent, and the operator has no idea which one the
+      // caller is about to read out. `delivery_address.phone` is a third
+      // number — the one the rider actually calls. Matcher is shared with
+      // the orders board; see admin-search.ts.
+      return matchesAdminQuery(query, [
+        s.customer?.full_name,
+        s.customer?.phone,
+        s.customer_name,
+        s.customer_phone,
+        s.delivery_address?.phone,
+        s.subscription_number,
+      ]);
+    });
     // Status group first, newest-first within each group, so completed and
     // cancelled subscriptions stop pushing live ones down the page. The API
     // already returns created_at DESC; this re-sorts a copy. Display only —
@@ -501,7 +495,7 @@ function SubscriptionsPageInner() {
       if (rankCmp !== 0) return rankCmp;
       return b.created_at.localeCompare(a.created_at);
     });
-  }, [onDay, selection, isExpiring]);
+  }, [onDay, selection, isExpiring, query]);
 
   // THE MENU. Three groups, and the divider between them is load-bearing:
   //
@@ -740,6 +734,21 @@ function SubscriptionsPageInner() {
             options={filterOptions}
           />
         </div>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search name, phone or OLS ref"
+          aria-label="Search subscriptions"
+          className="px-3 py-2 bg-transparent outline-none"
+          style={{
+            border: "1px solid rgba(251,243,212,0.3)",
+            color: "#FBF3D4",
+            fontFamily: "var(--font-body)",
+            fontSize: "1rem",
+            letterSpacing: "0.05em",
+            minWidth: 240,
+          }}
+        />
       </div>
 
       {error ? (
@@ -1077,42 +1086,12 @@ function SubscriptionsPageInner() {
                           ]}
                         />
                       </div>
-                      {/* Inline chip for the most recent call note, so the
-                          board still tells the caller's story at a glance. */}
-                      {s.last_call_note ? (
-                        <div
-                          style={{
-                            marginTop: 6,
-                            display: "inline-block",
-                            padding: "3px 6px",
-                            border: "1px solid rgba(245,158,11,0.5)",
-                            color: "#F59E0B",
-                            fontFamily: "var(--font-body)",
-                            fontSize: "0.75rem",
-                            lineHeight: 1.3,
-                            borderRadius: 3,
-                            maxWidth: 220,
-                          }}
-                          title={
-                            s.last_call_note.body +
-                            (s.last_call_note.author
-                              ? ` · ${s.last_call_note.author}`
-                              : "")
-                          }
-                        >
-                          {s.last_call_note.body}
-                          <span
-                            style={{
-                              display: "block",
-                              color: TEXT_MUTED,
-                              fontSize: "0.7rem",
-                              marginTop: 1,
-                            }}
-                          >
-                            {formatCallChipTime(s.last_call_note.created_at)}
-                          </span>
-                        </div>
-                      ) : null}
+                      {/* The newest note of ANY kind, same component and same
+                          colours as the orders board. This board used to read
+                          `last_call_note`, so a plain note or an admin edit
+                          left no trace here at all — the chip was present,
+                          which is what made the gap invisible. */}
+                      <LastNoteChip note={s.last_note} />
                       {/* An orphan's `status` is untouched — it still reads
                           "Pending confirmation", which is exactly how it
                           would slip past a skim. The money is only visible
