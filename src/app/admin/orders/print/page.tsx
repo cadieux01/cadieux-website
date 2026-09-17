@@ -29,6 +29,7 @@ import {
 } from "@/components/admin/DateRangeDropdown";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
+import { paymentLabel } from "@/lib/payment-label";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { AdminOrderItemSnapshot, AdminOrderRow } from "@/lib/admin-shared";
 import {
@@ -273,6 +274,11 @@ function PrintOrdersPageInner() {
                     <th style={printTh}>Address</th>
                     <th style={printTh}>Items</th>
                     <th style={printTh}>Total</th>
+                    {/* Whoever carries this sheet needs to know which
+                        doors take money. It said nothing about payment
+                        before, so the sheet and the rider's WhatsApp
+                        message disagreed about the same run. */}
+                    <th style={printTh}>Payment</th>
                     <th style={printTh}>Status</th>
                     <th style={printTh}>Created</th>
                   </tr>
@@ -288,6 +294,15 @@ function PrintOrdersPageInner() {
                       <td style={printTd}>{o.delivery_address ?? "—"}</td>
                       <td style={printTd}>{formatItems(o.items)}</td>
                       <td style={printTd}>{formatINR(o.total_amount)}</td>
+                      <td style={printTd}>
+                        {paymentLabel({
+                          payment_status: o.payment_status,
+                          amountDue:
+                            typeof o.total_amount === "number"
+                              ? o.total_amount
+                              : null,
+                        })}
+                      </td>
                       <td style={printTd}>{o.status ?? "—"}</td>
                       <td style={printTd}>{formatDateTime(o.created_at)}</td>
                     </tr>

@@ -66,6 +66,7 @@ import {
 } from "@/lib/admin-notify";
 import Select from "@/components/ui/Select";
 import MultiSelect from "@/components/ui/MultiSelect";
+import DatePicker from "@/components/ui/DatePicker";
 import {
   ALL_VALUE,
   CALL_PREFIX,
@@ -90,11 +91,7 @@ import {
 import { formatOrderNumber } from "@/lib/order-number";
 import { isOrderFulfilled } from "@/lib/order-fulfillment";
 import { FulfilledTick } from "@/components/admin/FulfilledTick";
-import {
-  composeRun,
-  composeShareStop,
-  isShareable,
-} from "@/lib/order-share-message";
+import { composeShareRun, isShareable } from "@/lib/order-share-message";
 import { LoafDots } from "@/components/admin/LoafDots";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { NOTE_KIND_STYLE, truncateNoteBody } from "@/lib/order-notes";
@@ -177,6 +174,87 @@ function endOfDayLocal(d: Date): Date {
   const x = new Date(d);
   x.setHours(23, 59, 59, 999);
   return x;
+}
+
+/* ------------------------------------------------------------------ *
+ * SHARE DELIVERY
+ *
+ * A fourteen-stop run is ~3,000 characters of text and well over that
+ * once URL-encoded. `wa.me/?text=` silently CUTS a payload that long —
+ * the operator sees WhatsApp open with the first few orders in it and
+ * nothing to say the rest were dropped. That is the worst possible
+ * failure for this button, because it looks like it worked.
+ *
+ * So the text is never put in a URL unless we know it survives, and it
+ * is never truncated. Three paths, in order of how little the operator
+ * has to do:
+ *
+ *   1. navigator.share — no length limit at all, and on macOS/iOS Safari
+ *      the native sheet lists WhatsApp. This is the normal path here.
+ *   2. wa.me, but ONLY if the encoded text is under the cap. Below the
+ *      cap this is better than a paste: the message arrives prefilled.
+ *   3. clipboard + WhatsApp Web, and the notice SAYS to paste. The one
+ *      path that costs the operator a keystroke, so it is the last one.
+ *
+ * If all three fail the notice says so. It never pretends.
+ * ------------------------------------------------------------------ */
+
+/** Encoded-length ceiling for a `wa.me/?text=` link. Browsers and
+ *  WhatsApp both start cutting well above this; 1800 is the comfortable
+ *  side of every limit involved rather than a measured edge. */
+const WA_URL_TEXT_LIMIT = 1800;
+
+type ShareDelivery = {
+  notice: string;
+  /** Whether the selection should be dropped. False when the operator
+   *  still has to paste — they may want to re-share the same rows. */
+  cleared: boolean;
+};
+
+async function deliverShareText(text: string, count: number): Promise<ShareDelivery> {
+  const plural = count === 1 ? "" : "s";
+
+  // 1. Native share sheet. Must be the FIRST await after the click or
+  //    the transient user activation it requires is already spent.
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    try {
+      await navigator.share({ text });
+      return { notice: `Shared ${count} order${plural}.`, cleared: true };
+    } catch (err) {
+      // The operator dismissing the sheet is not a failure and must not
+      // fall through to opening WhatsApp behind their back.
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return { notice: "Share cancelled.", cleared: false };
+      }
+      // Anything else (no matching target, permission) → keep going.
+    }
+  }
+
+  // 2. Prefilled wa.me, but only when the whole message fits.
+  const encoded = encodeURIComponent(text);
+  if (encoded.length <= WA_URL_TEXT_LIMIT) {
+    window.open(`https://wa.me/?text=${encoded}`, "_blank", "noopener,noreferrer");
+    return {
+      notice: `Opening WhatsApp with ${count} order${plural}.`,
+      cleared: true,
+    };
+  }
+
+  // 3. Too long for a link. Copy it whole and say what to do with it.
+  try {
+    await navigator.clipboard.writeText(text);
+    window.open("https://web.whatsapp.com/", "_blank", "noopener,noreferrer");
+    return {
+      notice:
+        "Too long for WhatsApp direct — copied to clipboard instead, paste it into the chat.",
+      cleared: true,
+    };
+  } catch {
+    return {
+      notice: `Too long for WhatsApp direct and the clipboard is blocked. Use Print, or share ${count > 8 ? "fewer orders at a time" : "them one at a time"}.`,
+      cleared: false,
+    };
+  }
 }
 
 function parseUrlInitial(sp: URLSearchParams): UrlInitial {
@@ -594,6 +672,30 @@ function OrdersPageInner() {
   const clearRankPins = useCallback(() => {
     setRankPins((curr) => (curr.size === 0 ? curr : new Map()));
   }, []);
+
+  // What the always-visible From/To inputs show. `customFrom`/`customTo`
+  // are only populated while the preset IS custom, so fall back to the
+  // resolved range — that way the inputs read out whatever is actually
+  // in force ("This Week" shows that week's two dates) instead of
+  // sitting blank next to a filtered table.
+  const fromInputValue = customFrom || (range ? toYMD(range.from) : "");
+  const toInputValue = customTo || (range ? toYMD(range.to) : "");
+
+  /** Set the range straight from the two inputs and flip the preset to
+   *  Custom, so the dropdown label can never contradict the dates. */
+  const applyExplicitRange = (nextFrom: string, nextTo: string) => {
+    // Reversed dates are swapped rather than rejected — the same thing
+    // the dropdown's own custom panel does, so the two agree.
+    const [a, b] = nextFrom <= nextTo ? [nextFrom, nextTo] : [nextTo, nextFrom];
+    const fromDate = parseYmdLocal(a);
+    const toDate = parseYmdLocal(b);
+    if (!fromDate || !toDate) return;
+    clearRankPins();
+    setRange({ from: startOfDayLocal(fromDate), to: endOfDayLocal(toDate) });
+    setPreset("custom");
+    setCustomFrom(a);
+    setCustomTo(b);
+  };
 
   // Delivery partners power the per-row "Share" button. Fetched once on
   // mount (never polled — the list changes only when the operator edits
@@ -1084,11 +1186,10 @@ function OrdersPageInner() {
   // separator has to be visibly heavier than that.
   const buildBulkShareText = useCallback(() => {
     const rows = selectedInSortOrder();
-    // composeRun, not composeShareMessage per row: the run needs ONE cash
-    // total at the end, and composeShareMessage appends its own (it is a
-    // run of one). Mapping it over the rows would print a running total
-    // after every stop, each one covering a single order.
-    return composeRun(rows.map((o) => composeShareStop(o)));
+    // composeShareRun, not composeShareMessage per row: the run needs ONE
+    // cash total at the end (composeShareMessage appends its own, being a
+    // run of one) and ONE route link instead of a pin per stop.
+    return composeShareRun(rows);
   }, [selectedInSortOrder]);
 
   const runBulk = async (action: BulkAction) => {
@@ -1097,17 +1198,11 @@ function OrdersPageInner() {
     if (ids.length === 0) return;
 
     if (action === "share") {
-      // Fire-and-forget: open wa.me with the pre-composed text in a new
-      // tab and drop the selection. No server call — the operator picks
-      // the WhatsApp contact themselves.
       const text = buildBulkShareText();
-      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(url, "_blank", "noopener,noreferrer");
-      setSelected(new Set());
+      const delivered = await deliverShareText(text, ids.length);
+      if (delivered.cleared) setSelected(new Set());
       setPendingBulk(null);
-      showNotice(
-        `Opening WhatsApp with ${ids.length} order${ids.length === 1 ? "" : "s"}.`,
-      );
+      showNotice(delivered.notice);
       return;
     }
 
@@ -1120,10 +1215,10 @@ function OrdersPageInner() {
         );
       } catch {
         // Some browsers block clipboard writes outside a user gesture.
-        // Fall back to a share-URL so the operator still gets the text.
-        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-        window.open(url, "_blank", "noopener,noreferrer");
-        showNotice("Clipboard blocked — opened share sheet instead.");
+        // Fall back to the same delivery ladder the Share action uses —
+        // it never truncates, which the old bare wa.me link did.
+        const delivered = await deliverShareText(text, ids.length);
+        showNotice(`Clipboard blocked. ${delivered.notice}`);
       }
       setPendingBulk(null);
       return;
@@ -1364,6 +1459,11 @@ function OrdersPageInner() {
           initialPreset={urlInit.preset}
           initialCustomFrom={urlInit.customFrom}
           initialCustomTo={urlInit.customTo}
+          presetValue={preset}
+          // This page has its own From/To below. Letting the dropdown
+          // also unfold its panel would put two "From date" controls on
+          // screen at once — see showCustomPanel.
+          showCustomPanel={false}
           onChange={(v, meta) => {
             clearRankPins();
             setRange(v);
@@ -1408,6 +1508,58 @@ function OrdersPageInner() {
             />
           </div>
         </div>
+        {/* Explicit From/To, always visible. The presets above cover the
+            common cases but every other range used to be two clicks deep
+            behind "Custom…" in a menu, which is not where an operator
+            looks for a date box. These show the range currently in force
+            whatever set it, so they are also a readout, not just input. */}
+        {(
+          [
+            { key: "from" as const, label: "From", value: fromInputValue },
+            { key: "to" as const, label: "To", value: toInputValue },
+          ]
+        ).map((f) => (
+          <div
+            key={f.key}
+            // `flex: 1 1 150px` rather than a fixed width: on a phone
+            // the toolbar is narrower than From + To side by side, and
+            // a rigid pair let the To picker run off the right edge
+            // instead of wrapping under.
+            style={{
+              display: "inline-flex",
+              flexDirection: "column",
+              gap: "0.25rem",
+              flex: "1 1 150px",
+              minWidth: 0,
+            }}
+          >
+            <label
+              htmlFor={`orders-date-${f.key}`}
+              style={{
+                color: "rgba(251,243,212,0.7)",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.75rem",
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+              }}
+            >
+              {f.label}
+            </label>
+            <div style={{ minWidth: 0 }}>
+              <DatePicker
+                id={`orders-date-${f.key}`}
+                value={f.value}
+                ariaLabel={`${f.label} date`}
+                onChange={(v) =>
+                  applyExplicitRange(
+                    f.key === "from" ? v : fromInputValue,
+                    f.key === "to" ? v : toInputValue,
+                  )
+                }
+              />
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Status filter + search + sort */}

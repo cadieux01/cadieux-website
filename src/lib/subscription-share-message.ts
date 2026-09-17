@@ -18,11 +18,10 @@ import {
   composeRun,
   cashDueFor,
   mapsLinkFor,
-  paymentLine,
   variantLabel,
-  type PaymentFacts,
   type ShareStop,
 } from "@/lib/order-share-message";
+import { paymentLabel, type PaymentFacts } from "@/lib/payment-label";
 import {
   resolveSubscriptionAddress,
   formatAddressFull,
@@ -54,7 +53,7 @@ function itemLinesFor(sub: AdminSubscriptionRow): string[] {
  * division reproduces the agreed figure exactly on all 14 live COD plans.
  *
  * Returns null when the count is missing (an un-enriched row), which the
- * payment line renders as "confirm amount with office" rather than a guess.
+ * payment label renders as a bare "COD" rather than as a guessed figure.
  */
 export function perDeliveryAmount(sub: AdminSubscriptionRow): number | null {
   const total = Number(sub.total_amount);
@@ -72,7 +71,6 @@ export function perDeliveryAmount(sub: AdminSubscriptionRow): number | null {
  */
 function paymentFactsFor(sub: AdminSubscriptionRow): PaymentFacts {
   return {
-    payment_method: sub.payment_method,
     payment_status: sub.payment_status,
     amountDue: perDeliveryAmount(sub),
   };
@@ -115,7 +113,7 @@ export function composeNextDeliveryShareStop(
   return {
     text: composeShareMessageFromParts({
       reference,
-      payment: paymentLine(facts),
+      payment: paymentLabel(facts),
       ...commonParts(sub),
       itemLines: itemLinesFor(sub),
     }),
@@ -135,8 +133,8 @@ export function composeSubscriptionShareStop(
       reference: `Subscription ${formatSubscriptionNumber(sub)}${cadence ? ` · ${cadence}` : ""}`,
       // Still the PER-STOP figure, even on the whole-plan share. This scope
       // describes the plan, but the money is always handed over one door at
-      // a time, and a COLLECT line must never state more than is due there.
-      payment: paymentLine(facts),
+      // a time, and a COD line must never state more than is due there.
+      payment: paymentLabel(facts),
       ...commonParts(sub),
       itemLines: itemLinesFor(sub),
     }),

@@ -39,6 +39,7 @@ import {
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { formatSubscriptionNumber } from "@/lib/order-number";
+import { paymentLabel } from "@/lib/payment-label";
 import {
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUS_OPTIONS,
@@ -753,7 +754,16 @@ export default function AdminSubscriptionDetailPage({
                 : humanise(sub.payment_method)
             }
           />
-          <KeyVal k="Status" v={humanise(sub.payment_status)} />
+          {/* The two words, not the column value. This printed
+              humanise(payment_status) — "Pending", "Created", "Paid
+              orphaned" — which is schema vocabulary on a sheet someone
+              prints and acts on. Method stays above it because "COD but
+              PAID" is a real and useful distinction; the WORD is what
+              says whether to take money. Plan-level, so no per-stop
+              figure: the amount owed at one door would sit directly
+              above the plan total and be read as the same thing.
+              See @/lib/payment-label. */}
+          <KeyVal k="Payment" v={paymentLabel({ payment_status: sub.payment_status })} />
           {isOrphanedPayment(sub) ? (
             /* No Paid/Outstanding pair here — see the note above paidAmount.
                One statement of what is true: we have the money, and nothing

@@ -26,6 +26,7 @@ import type {
   AdminOrderRow,
 } from "@/lib/admin-shared";
 import { formatOrderNumber, formatPublicRef } from "@/lib/order-number";
+import { paymentLabel } from "@/lib/payment-label";
 
 type OrderResponse = { order: AdminOrderRow };
 
@@ -52,19 +53,17 @@ function formatOrderId(order: AdminOrderRow): string {
   return formatOrderNumber(order);
 }
 
+// Payment on the receipt is the same two words as everywhere else. This
+// used to build "<Method> · <Status>" — "COD · Pending", but also
+// "Razorpay · Created" and "Razorpay · Abandoned", which are schema
+// words that told whoever held the slip nothing about whether to take
+// money. See @/lib/payment-label.
 function formatPaymentLabel(order: AdminOrderRow): string {
-  const method =
-    order.payment_method === "cod"
-      ? "COD"
-      : order.payment_method
-        ? order.payment_method.charAt(0).toUpperCase() +
-          order.payment_method.slice(1)
-        : "—";
-  const status = order.payment_status
-    ? order.payment_status.charAt(0).toUpperCase() +
-      order.payment_status.slice(1).replace(/_/g, " ")
-    : "—";
-  return `${method} · ${status}`;
+  return paymentLabel({
+    payment_status: order.payment_status,
+    amountDue:
+      typeof order.total_amount === "number" ? order.total_amount : null,
+  });
 }
 
 export default function PrintOrderReceiptPage({

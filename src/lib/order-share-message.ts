@@ -25,7 +25,15 @@
 // Nothing else was added. No slot, no grand total, no plan cadence.
 
 import { formatOrderNumber } from "@/lib/order-number";
+import {
+  isPaidStatus,
+  paymentLabel,
+  rupees,
+  type PaymentFacts,
+} from "@/lib/payment-label";
 import type { AdminOrderRow, AdminOrderItemSnapshot } from "@/lib/admin-shared";
+
+export type { PaymentFacts };
 
 /** Quantity for one line, respecting both `quantity` and legacy `qty`. */
 function lineQty(it: AdminOrderItemSnapshot): number {
@@ -78,75 +86,89 @@ export function mapsLinkFor(
 }
 
 /* ------------------------------------------------------------------ *
- * PAYMENT
+ * MULTI-STOP ROUTE
+ *
+ * A per-stop pin costs ~90 chars each; fourteen of them is ~1,260 chars
+ * of a message WhatsApp was already cutting short. One route link at the
+ * end replaces all of them and is more useful besides — the rider gets
+ * turn-by-turn through the whole run instead of fourteen separate pins
+ * he has to re-open one at a time.
  * ------------------------------------------------------------------ */
 
 /**
- * "Rs1,440". Deliberately NOT formatINR() — that emits "₹", and the rupee
- * glyph still renders as a box on some of the cheap Android handsets our
- * riders carry. An unreadable amount is worse than an ugly one.
+ * Consumer Google Maps refuses a route with more than ten points. A run
+ * longer than that is split into legs that OVERLAP by one stop, so leg 2
+ * starts where leg 1 ended and the rider never has to work out where he
+ * was.
  */
-function rupees(amount: number): string {
-  const safe = Number.isFinite(amount) ? amount : 0;
-  const whole = Math.round(safe * 100) / 100;
-  const body = new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 2,
-  }).format(whole);
-  return `Rs${body}`;
-}
+const MAX_ROUTE_POINTS = 10;
 
-export type PaymentFacts = {
-  payment_method?: string | null;
-  payment_status?: string | null;
-  /**
-   * Cash due AT THIS STOP, in rupees.
-   *
-   * For a subscription this is ONE delivery's share of the plan, never the
-   * plan total — see subscription-share-message.ts. `null` means "we could
-   * not establish the figure", which prints as a instruction to check
-   * rather than as a number. Never pass a guess: a rider reads this at a
-   * door and asks for exactly what it says.
-   */
-  amountDue: number | null;
-};
+/** One stop as a route point: coordinates when we have them, else the
+ *  address text, which Maps geocodes the same way the pin link did.
+ *
+ *  The leading `[Home]` / `[Work]` label is stripped off the address
+ *  form. It is a label the customer picked for their own benefit, it is
+ *  not part of any address, and handing Maps a bracketed word to
+ *  geocode makes the match worse, not better. It stays on the stop's
+ *  own address line, where the rider reads it. */
+export function waypointFor(
+  address: string,
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): string {
+  const hasCoords =
+    typeof lat === "number" &&
+    typeof lng === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    !(lat === 0 && lng === 0);
+  return hasCoords ? `${lat},${lng}` : address.replace(/^\s*\[[^\]]*\]\s*/, "");
+}
 
 /**
- * The payment line. Four states, four fixed strings — riders learn the
- * shapes, so the wording must not drift.
+ * One `/maps/dir/` link per leg. The path form is used rather than
+ * `?api=1&destination=…&waypoints=…` because it is far shorter — a coord
+ * stop costs ~20 chars instead of ~30 — and shortening the message is the
+ * whole point of this function.
  *
- * Status is read BEFORE method, because status is the settled fact and
- * method is only how it was meant to be settled. A row that says
- * `cod` + `paid` has been paid (Pay Now converts COD orders online and
- * leaves payment_method alone), and reading method first would have told
- * the rider to collect a second time.
- *
- * Anything unrecognised falls through to "check" — the only safe default.
- * Claiming PAID risks never collecting; naming a figure risks collecting
- * the wrong one. "Check" costs a phone call.
+ * A single stop gets no route link at all: `composeShareStop` already
+ * carries its pin, and "directions to one place" is just that pin.
  */
-export function paymentLine(p: PaymentFacts): string {
-  const status = (p.payment_status ?? "").trim().toLowerCase();
-  const method = (p.payment_method ?? "").trim().toLowerCase();
+export function routeLinksFor(waypoints: readonly string[]): string[] {
+  const points = waypoints.map((w) => w.trim()).filter(Boolean);
+  if (points.length < 2) return [];
 
-  if (status === "paid") return "PAID - collect nothing";
-  if (status === "abandoned") return "NOT PAID - do not deliver";
-  if (status === "created") return "PAYMENT UNCONFIRMED - check";
-
-  if (method === "cod" && status === "pending") {
-    return p.amountDue === null || !Number.isFinite(p.amountDue)
-      ? "COLLECT - confirm amount with office"
-      : `COLLECT ${rupees(p.amountDue)}`;
+  const links: string[] = [];
+  for (let i = 0; i < points.length - 1; i += MAX_ROUTE_POINTS - 1) {
+    const leg = points.slice(i, i + MAX_ROUTE_POINTS);
+    links.push(
+      `https://www.google.com/maps/dir/${leg.map(encodeURIComponent).join("/")}`,
+    );
   }
-
-  return "PAYMENT UNCONFIRMED - check";
+  return links;
 }
 
-/** Rupees the rider is expected to come back with from this stop. */
+/* ------------------------------------------------------------------ *
+ * PAYMENT
+ *
+ * The word itself lives in @/lib/payment-label so the packing list and
+ * the receipts say it the same way. Only the "what does that cost us"
+ * side is here.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Rupees expected back from this stop.
+ *
+ * MUST agree with paymentLabel(): anything it calls COD is money someone
+ * hands over, so the same rows that print "COD Rs340" are the rows that
+ * add 340 to the run total. Keying this off payment_method (as it once
+ * did) broke that — an `online` + `pending` row printed COD and counted
+ * zero.
+ */
 export function cashDueFor(p: PaymentFacts): number {
-  const status = (p.payment_status ?? "").trim().toLowerCase();
-  const method = (p.payment_method ?? "").trim().toLowerCase();
-  if (method !== "cod" || status !== "pending") return 0;
-  return p.amountDue !== null && Number.isFinite(p.amountDue) ? p.amountDue : 0;
+  if (isPaidStatus(p.payment_status)) return 0;
+  const due = p.amountDue;
+  return typeof due === "number" && Number.isFinite(due) ? due : 0;
 }
 
 /* ------------------------------------------------------------------ *
@@ -156,12 +178,14 @@ export function cashDueFor(p: PaymentFacts): number {
 export type ShareMessageParts = {
   /** Top line: "OLF71" for an order, "Subscription OLS12 · …" for a plan. */
   reference: string;
-  /** Line two. One of the four fixed strings from paymentLine(). */
+  /** Line two: "PAID" or "COD Rs340". See @/lib/payment-label. */
   payment: string;
   customerName: string;
   customerPhone: string;
   address: string;
-  mapsLink: string;
+  /** Omitted on a multi-stop run, where ONE route link at the end of the
+   *  message replaces every per-stop pin. */
+  mapsLink?: string;
   /** Already short-form, e.g. ["Multigrain x2", "Plain x1"]. */
   itemLines: string[];
 };
@@ -171,7 +195,17 @@ export type ShareMessageParts = {
  * never disagree with the COLLECT lines above it — the sum is derived from
  * the same values that were printed, not recomputed from the rows.
  */
-export type ShareStop = { text: string; cashDue: number };
+export type ShareStop = {
+  text: string;
+  cashDue: number;
+  /**
+   * True when the customer collects from the counter themselves. Such a
+   * stop still gets a block — the operator selected it — but its cash is
+   * NOT the rider's, so it is kept out of his total. Optional because
+   * every subscription stop is delivered; omitted means delivered.
+   */
+  pickup?: boolean;
+};
 
 /** The single formatter. Every composer funnels through this. */
 export function composeShareMessageFromParts(parts: ShareMessageParts): string {
@@ -189,17 +223,38 @@ export function composeShareMessageFromParts(parts: ShareMessageParts): string {
 }
 
 /**
- * A run: one or more stops, then the cash total.
+ * A run: one or more stops, then anything that belongs to the run as a
+ * whole (the route links), then the cash total.
  *
- * The total is always printed, including "Rs0". A rider who sees a figure
- * every time knows the line was not simply omitted, and "Rs0" is a positive
- * statement that this run is fully prepaid.
+ * The total goes LAST so it is the thing a rider scrolls to and the thing
+ * a glance at the bottom of the message lands on. It is always printed,
+ * including "Rs0" — a rider who sees a figure every time knows the line
+ * was not simply omitted, and "Rs0" is a positive statement that this run
+ * is fully prepaid.
+ *
+ * PICKUP CASH IS NOT IN THAT TOTAL. A pickup customer pays at the
+ * counter, so counting their COD told the rider to come back with money
+ * nobody was ever going to hand him — on a recent 14-stop day that was
+ * Rs720 of a Rs2,324 figure, and the gap reads as a rider who is short.
+ * It gets its own line, and only when there is some, so the common
+ * all-delivery run is unchanged.
  */
-export function composeRun(stops: ShareStop[]): string {
-  const total = stops.reduce((n, s) => n + (Number.isFinite(s.cashDue) ? s.cashDue : 0), 0);
+export function composeRun(stops: ShareStop[], trailer: readonly string[] = []): string {
+  const sum = (keep: (s: ShareStop) => boolean) =>
+    stops.reduce(
+      (n, s) => n + (keep(s) && Number.isFinite(s.cashDue) ? s.cashDue : 0),
+      0,
+    );
+  const riderCash = sum((s) => !s.pickup);
+  const counterCash = sum((s) => Boolean(s.pickup));
+
   return [
     ...stops.map((s) => s.text),
-    `Cash to collect on this run: ${rupees(total)}`,
+    ...trailer,
+    `Cash to collect: ${rupees(riderCash)}`,
+    ...(counterCash > 0
+      ? [`Pickup, paid at the counter (NOT yours to collect): ${rupees(counterCash)}`]
+      : []),
   ].join("\n\n");
 }
 
@@ -207,11 +262,11 @@ export function composeRun(stops: ShareStop[]): string {
  * ORDERS
  * ------------------------------------------------------------------ */
 
-/** One order as a stop. Use this when building a multi-stop run. */
-export function composeShareStop(order: AdminOrderRow): ShareStop {
+/** One order as a stop. `includePin` is false on a multi-stop run, where
+ *  the route links at the end of the message carry the navigation. */
+function shareStop(order: AdminOrderRow, includePin: boolean): ShareStop {
   const address = order.delivery_address?.trim() || "—";
   const facts: PaymentFacts = {
-    payment_method: order.payment_method,
     payment_status: order.payment_status,
     // An order's total IS its one stop's total, so unlike a subscription
     // there is nothing to divide.
@@ -221,20 +276,68 @@ export function composeShareStop(order: AdminOrderRow): ShareStop {
   return {
     text: composeShareMessageFromParts({
       reference: formatOrderNumber(order),
-      payment: paymentLine(facts),
+      payment: paymentLabel(facts),
       customerName: order.customers?.full_name?.trim() || "Customer",
       customerPhone: order.customers?.phone?.trim() || "—",
       address,
-      mapsLink: mapsLinkFor(address, order.latitude, order.longitude),
+      mapsLink: includePin
+        ? mapsLinkFor(address, order.latitude, order.longitude)
+        : undefined,
       itemLines: itemLines(order.items),
     }),
     cashDue: cashDueFor(facts),
+    pickup: !isShareable(order),
   };
+}
+
+/** One order as a stop, pin included. Used by callers that assemble their
+ *  own runs (subscriptions) and still want a pin on every stop. */
+export function composeShareStop(order: AdminOrderRow): ShareStop {
+  return shareStop(order, true);
 }
 
 /** A single order, shared on its own — a run of one. */
 export function composeShareMessage(order: AdminOrderRow): string {
   return composeRun([composeShareStop(order)]);
+}
+
+/**
+ * Several orders as one rider run, in the order given. Per-stop pins are
+ * dropped in favour of route links at the end — see MAX_ROUTE_POINTS.
+ * A run of one falls through to the single-order message, pin and all.
+ */
+export function composeShareRun(orders: AdminOrderRow[]): string {
+  if (orders.length <= 1) {
+    return orders.length === 1 ? composeShareMessage(orders[0]) : composeRun([]);
+  }
+
+  // Pickup orders still get a block — the operator selected them and the
+  // details may be why — but they are NOT route points. Nobody rides to
+  // a pickup order, so routing the rider through the dark store would
+  // send him somewhere he has no reason to go.
+  const routed = orders.filter(isShareable);
+  const links = routeLinksFor(
+    routed.map((o) =>
+      waypointFor(o.delivery_address?.trim() || "—", o.latitude, o.longitude),
+    ),
+  );
+
+  // THE INVARIANT: every stop is either on the route or carries its own
+  // pin. A pin is only dropped when a route link demonstrably replaces
+  // it. Two stops of which one is a pickup leaves a single route point,
+  // `routeLinksFor` returns nothing, and without this the one real
+  // delivery would have gone out with no map link at all.
+  const onRoute = (o: AdminOrderRow) => links.length > 0 && routed.includes(o);
+  const stops = orders.map((o) => shareStop(o, !onRoute(o)));
+
+  const trailer =
+    links.length === 0
+      ? []
+      : links.length === 1
+        ? [`Route: ${links[0]}`]
+        : links.map((l, i) => `Route ${i + 1} of ${links.length}: ${l}`);
+
+  return composeRun(stops, trailer);
 }
 
 /** Returns true if the Share button should be shown for this order. */

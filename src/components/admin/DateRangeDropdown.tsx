@@ -16,7 +16,7 @@
 //
 // Palette: see components/admin/theme.ts — INK (#1D1D1F) + CREAM (#FBF3D4).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import Select from "@/components/ui/Select";
 import DatePicker from "@/components/ui/DatePicker";
@@ -161,6 +161,8 @@ export function DateRangeDropdown({
   initialPreset = DEFAULT_PRESET,
   initialCustomFrom = "",
   initialCustomTo = "",
+  presetValue,
+  showCustomPanel = true,
 }: {
   onChange: (range: DateRangeValue, meta?: DateRangeMeta) => void;
   initialPreset?: PresetKey;
@@ -169,8 +171,37 @@ export function DateRangeDropdown({
   // was persisted with. Empty strings preserve the legacy behaviour.
   initialCustomFrom?: string;
   initialCustomTo?: string;
+  /**
+   * Optional CONTROLLED preset. The preset otherwise lives in here and
+   * only this dropdown can change it, which stops being right once the
+   * page offers a second way to set a range — /admin/orders now has its
+   * own always-visible From/To inputs, and without this the button would
+   * still read "Today" while the table showed some other week.
+   *
+   * Parents that omit it keep the original self-owned behaviour.
+   */
+  presetValue?: PresetKey;
+  /**
+   * Whether picking "Custom…" reveals the inline From/To panel.
+   *
+   * Pages that offer their OWN always-visible date inputs must pass
+   * false. /admin/orders does: without it, setting a date there flips
+   * the preset to "custom", this panel unfolds, and the operator is
+   * looking at TWO From/To editors — two controls with the accessible
+   * name "From date", one of which is the one they just used and the
+   * other blank and needing an Apply click. The panel is not merely
+   * redundant there, it contradicts the inputs above it.
+   */
+  showCustomPanel?: boolean;
 }) {
-  const [preset, setPreset] = useState<PresetKey>(initialPreset);
+  const [preset, setPreset] = useState<PresetKey>(presetValue ?? initialPreset);
+
+  // Mirror the parent when it owns the preset. Deliberately NOT a fully
+  // controlled component: only the label follows, so a custom range the
+  // operator is midway through typing in the panel is not clobbered.
+  useEffect(() => {
+    if (presetValue !== undefined) setPreset(presetValue);
+  }, [presetValue]);
   const [customMode, setCustomMode] = useState<CustomMode>("range");
   const [customFrom, setCustomFrom] = useState(initialCustomFrom);
   const [customTo, setCustomTo] = useState(initialCustomTo);
@@ -260,7 +291,7 @@ export function DateRangeDropdown({
         />
       </div>
 
-      {preset === "custom" ? (
+      {preset === "custom" && showCustomPanel ? (
         <div
           style={{
             display: "flex",
