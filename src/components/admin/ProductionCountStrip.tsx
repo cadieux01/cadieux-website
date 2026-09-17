@@ -7,13 +7,29 @@
 // recomputes from the SAME filtered array the table renders — so the
 // numbers cannot disagree with what the operator is scrolling.
 //
+// TWO SOURCES, ONE OVEN. A day's bread is one-time orders PLUS the
+// subscription stops due that day. The strip counted only the first, so the
+// number on screen at 5am was an UNDER-count of the number in the 18:00
+// bake-plan email — and under-baking is the expensive direction: the loaf
+// that was never made cannot be handed over at the door. Subscription stops
+// arrive via `subscriptions`, loaded by the same query the email uses
+// (see @/lib/bake-plan-lines) and split out in the label rather than fused
+// into one unattributable total.
+//
 // Rules:
 //   - "loaves" = sum of (items[].qty || items[].quantity) grouped by
 //     item.name. An order for 2 loaves counts 2 loaves.
-//   - "orders" = distinct order ids that contained at least one line of
-//     that product. Two lines of the same product on one order count 1
-//     order.
+//   - "stops" = distinct orders + distinct subscription deliveries that
+//     contained at least one line of that product. Two lines of the same
+//     product on one order count 1 stop.
 //   - Cancelled orders are excluded entirely (they will not be baked).
+//     Cancelled and delivered subscription stops never arrive — the loader
+//     excludes them server-side.
+//   - UNPAID IS COUNTED, NEVER DROPPED, and gets its own line. An unpaid
+//     plan's deliveries are written at checkout and the bread still has to
+//     be decided about; silently excluding them hides a decision, and
+//     silently including them hides a risk. Paid is read from STATUS only,
+//     never method — see payment-label.ts.
 //   - No hardcoded product list — group names are whatever appears in
 //     the filtered items, alphabetically sorted so the row order is
 //     stable frame-to-frame.
@@ -24,11 +40,29 @@
 // stays a leaf.
 
 import type { AdminOrderRow } from "@/lib/admin-shared";
+import type { BakeItem } from "@/lib/bake-plan-lines";
 import { variantLabel } from "@/lib/order-share-message";
 import { isOrderFulfilled } from "@/lib/order-fulfillment";
+import { isPaidStatus } from "@/lib/payment-label";
 import { ZONE_LABELS, type ZoneKey } from "@/lib/delivery-zones";
 
-type ProductAgg = { name: string; loaves: number; orders: number };
+/** One subscription stop due on the day the strip is showing. Shaped by
+ *  GET /api/admin/bake-plan, which is a thin wrapper over the cron's
+ *  loader — `ref` is the identity used to count distinct stops. */
+export type BakeSubscriptionStop = {
+  ref: string;
+  items: BakeItem[];
+  paid: boolean;
+};
+
+type ProductAgg = {
+  name: string;
+  loaves: number;
+  /** Distinct orders carrying this product. */
+  orders: number;
+  /** Distinct subscription stops carrying this product. */
+  subStops: number;
+};
 
 function itemQty(it: { qty?: number | null; quantity?: number | null }): number {
   // Prefer qty (the newer field). Fall back to quantity (legacy).
@@ -39,47 +73,113 @@ function itemQty(it: { qty?: number | null; quantity?: number | null }): number 
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
-export function aggregateProduction(orders: AdminOrderRow[]): {
+export function aggregateProduction(
+  orders: AdminOrderRow[],
+  subscriptions: BakeSubscriptionStop[] = [],
+): {
   rows: ProductAgg[];
   totalLoaves: number;
+  /** The split, kept separate so the total is never unattributable. */
+  orderLoaves: number;
+  subLoaves: number;
+  /** Loaves nobody has paid for yet, and how many stops they sit on.
+   *  Counted across BOTH sources. */
+  unpaidLoaves: number;
+  unpaidStops: number;
 } {
-  const byName = new Map<string, { loaves: number; orderIds: Set<string> }>();
+  const byName = new Map<
+    string,
+    { loaves: number; orderIds: Set<string>; subRefs: Set<string> }
+  >();
+  const entryFor = (name: string) => {
+    const e = byName.get(name) ?? {
+      loaves: 0,
+      orderIds: new Set<string>(),
+      subRefs: new Set<string>(),
+    };
+    byName.set(name, e);
+    return e;
+  };
+
+  let orderLoaves = 0;
+  let subLoaves = 0;
+  let unpaidLoaves = 0;
+  const unpaidStopKeys = new Set<string>();
 
   for (const o of orders) {
     if ((o.status ?? "").toLowerCase() === "cancelled") continue;
-    const items = o.items ?? [];
-    for (const it of items) {
+    const paid = isPaidStatus(o.payment_status);
+    for (const it of o.items ?? []) {
       const name = (it?.name ?? "").trim();
       if (!name) continue;
       const q = itemQty(it);
       if (q === 0) continue;
-      const entry = byName.get(name) ?? { loaves: 0, orderIds: new Set<string>() };
+      const entry = entryFor(name);
       entry.loaves += q;
       entry.orderIds.add(o.id);
-      byName.set(name, entry);
+      orderLoaves += q;
+      if (!paid) {
+        unpaidLoaves += q;
+        unpaidStopKeys.add(`o:${o.id}`);
+      }
+    }
+  }
+
+  for (const s of subscriptions) {
+    for (const it of s.items) {
+      const name = (it?.name ?? "").trim();
+      if (!name) continue;
+      const q = itemQty({ qty: it.qty });
+      if (q === 0) continue;
+      const entry = entryFor(name);
+      entry.loaves += q;
+      entry.subRefs.add(s.ref);
+      subLoaves += q;
+      if (!s.paid) {
+        unpaidLoaves += q;
+        unpaidStopKeys.add(`s:${s.ref}`);
+      }
     }
   }
 
   const rows = Array.from(byName.entries())
-    .map(([name, v]) => ({ name, loaves: v.loaves, orders: v.orderIds.size }))
+    .map(([name, v]) => ({
+      name,
+      loaves: v.loaves,
+      orders: v.orderIds.size,
+      subStops: v.subRefs.size,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const totalLoaves = rows.reduce((s, r) => s + r.loaves, 0);
-  return { rows, totalLoaves };
+  return {
+    rows,
+    totalLoaves: orderLoaves + subLoaves,
+    orderLoaves,
+    subLoaves,
+    unpaidLoaves,
+    unpaidStops: unpaidStopKeys.size,
+  };
 }
 
 export function ProductionCountStrip({
   orders,
+  subscriptions = [],
   zone,
 }: {
   orders: AdminOrderRow[];
+  /** Subscription stops due on the SAME day, from /api/admin/bake-plan.
+   *  Empty when the board is not on a single day — a bake is a day's
+   *  question and there is no honest subscription number for "all dates".
+   *  See the caller in /admin/orders. */
+  subscriptions?: BakeSubscriptionStop[];
   /** When provided, the strip prefixes itself with the zone label. Used
    *  when the caller is rendering one strip per zone under an active zone
    *  filter — each strip aggregates only the rows for that zone, so a
    *  zoned bake plan cannot silently combine two zones' loaves. */
   zone?: ZoneKey;
 }) {
-  const { rows, totalLoaves } = aggregateProduction(orders);
+  const { rows, totalLoaves, orderLoaves, subLoaves, unpaidLoaves, unpaidStops } =
+    aggregateProduction(orders, subscriptions);
 
   // Fulfilment ratio for the current filter. Counted over the full
   // filtered set (cancelled and all), NOT over the bake set — the two
@@ -113,12 +213,16 @@ export function ProductionCountStrip({
         borderRadius: 6,
         background: "rgba(251,243,212,0.04)",
         color: "#FBF3D4",
-        display: "flex",
-        alignItems: "center",
-        flexWrap: "wrap",
-        gap: "8px 20px",
       }}
     >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "8px 20px",
+        }}
+      >
       <span
         style={{
           fontFamily: "var(--font-body)",
@@ -136,7 +240,11 @@ export function ProductionCountStrip({
         return (
           <span
             key={r.name}
-            title={`${r.orders} order${r.orders === 1 ? "" : "s"}`}
+            title={
+              r.subStops > 0
+                ? `${r.orders} order${r.orders === 1 ? "" : "s"} · ${r.subStops} subscription stop${r.subStops === 1 ? "" : "s"}`
+                : `${r.orders} order${r.orders === 1 ? "" : "s"}`
+            }
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 14,
@@ -176,6 +284,47 @@ export function ProductionCountStrip({
           {fulfilledOrders} of {totalOrders} fulfilled
         </span>
       </span>
+      </div>
+
+      {/* SECOND LINE. The split and the unpaid count do not belong beside
+          the per-product numbers: one is what to bake, the other is where
+          it came from and what is at risk. Rendered only when there is
+          something to say, so a plain paid orders-only day keeps the
+          one-line strip it has always had. */}
+      {subLoaves > 0 || unpaidLoaves > 0 ? (
+        <div
+          style={{
+            marginTop: 8,
+            paddingTop: 8,
+            borderTop: "1px solid rgba(251,243,212,0.12)",
+            display: "flex",
+            alignItems: "baseline",
+            flexWrap: "wrap",
+            gap: "4px 18px",
+            fontFamily: "var(--font-body)",
+            fontSize: 13,
+            fontWeight: 300,
+          }}
+        >
+          {subLoaves > 0 ? (
+            <span
+              style={{ color: "rgba(251,243,212,0.75)" }}
+              title="Subscription stops are scoped to the delivery day only — the status filter and the search box above narrow orders, not plans."
+            >
+              {orderLoaves} from orders · {subLoaves} from subscriptions
+            </span>
+          ) : null}
+          {unpaidLoaves > 0 ? (
+            // Amber, not red: this is not an error. It is bread nobody has
+            // paid for yet, on a day it is due, and the decision to bake it
+            // anyway is Sunny's to make with the number in front of him.
+            <span style={{ color: "#E5B85C", fontWeight: 500 }}>
+              {unpaidLoaves} unpaid, across {unpaidStops} stop
+              {unpaidStops === 1 ? "" : "s"}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

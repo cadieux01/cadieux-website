@@ -27,7 +27,10 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { AreaSortControl } from "@/components/admin/AreaSortControl";
 import { DistanceBadge } from "@/components/admin/DistanceBadge";
 import { EditOrderPanel } from "@/components/admin/EditOrderPanel";
-import { ProductionCountStrip } from "@/components/admin/ProductionCountStrip";
+import {
+  ProductionCountStrip,
+  type BakeSubscriptionStop,
+} from "@/components/admin/ProductionCountStrip";
 import { DayFilter } from "@/components/admin/DayFilter";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { OrderLocationActions } from "@/components/admin/OrderLocationActions";
@@ -79,6 +82,7 @@ import {
 import {
   ZONE_KEYS,
   ZONE_LABELS,
+  resolveZone,
   resolveZoneWithPickup,
   type ZoneKey,
 } from "@/lib/delivery-zones";
@@ -120,6 +124,12 @@ import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
 
 type SortKey = "created_desc" | "delivery_asc" | "nearest_from_area";
+
+/** A subscription stop with its zone resolved once, so the per-zone strips
+ *  can be fed the same way the per-zone order slices are. Resolved here and
+ *  not on the server because zone is derived, never stored — the one
+ *  resolver in delivery-zones.ts is the only thing allowed to decide it. */
+type ZonedBakeStop = BakeSubscriptionStop & { zone: ZoneKey };
 
 // The date filter is ONE DAY on ONE COLUMN, and all of its semantics —
 // DateBasis, DEFAULT_BASIS, orderDateForBasis, matchesDay — are imported
@@ -497,6 +507,54 @@ function OrdersPageInner() {
       cancelled = true;
     };
   }, []);
+
+  // Subscription stops due on the selected day — the other half of the
+  // bake. See ProductionCountStrip: the strip counted only one-time orders,
+  // so the number on screen at 5am was below the number in the 18:00
+  // bake-plan email for the same day.
+  //
+  // ONLY ON A SINGLE DELIVERY DAY. With no day chosen there is no honest
+  // subscription figure to show (every future stop of every live plan is
+  // not a bake list), and on the `order` basis the day means "when it was
+  // PLACED", which says nothing about when a plan delivers. In both cases
+  // the list stays empty and the strip silently reverts to its old
+  // orders-only shape rather than printing a number it cannot stand behind.
+  const [subStops, setSubStops] = useState<ZonedBakeStop[]>([]);
+
+  useEffect(() => {
+    if (basis !== "delivery" || !day) {
+      setSubStops([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch<{
+          deliveries: (BakeSubscriptionStop & {
+            address: string;
+            pincode: string | null;
+          })[];
+        }>(`/api/admin/bake-plan?date=${encodeURIComponent(day)}`);
+        if (cancelled) return;
+        setSubStops(
+          (res.deliveries ?? []).map((d) => ({
+            ref: d.ref,
+            items: d.items,
+            paid: d.paid,
+            zone: resolveZone({ address: d.address, pincode: d.pincode }),
+          })),
+        );
+      } catch {
+        // A failed leg must not blank the strip's order counts, which are
+        // correct and locally computed. Drop to empty — the same state as
+        // "no day selected" — rather than showing a partial sum.
+        if (!cancelled) setSubStops([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [basis, day]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -1400,22 +1458,29 @@ function OrdersPageInner() {
       {/* All-time retention. Sits above the table but is deliberately
           independent of the filters and the date range above it. */}
       {!loading && retention ? <RetentionPanel data={retention} /> : null}
-      {/* Bake summary — same filtered set as the table below, so the
-          numbers on this strip and on the rows can never disagree.
+      {/* Bake summary — the same filtered set as the table below, so the
+          ORDER numbers on this strip and on the rows can never disagree,
+          plus the subscription stops due on the selected day (see subStops).
           Cancelled orders are excluded inside aggregateProduction.
           When a zone filter is active, split into one strip per selected
-          zone so a mixed selection can't silently combine loaf counts. */}
-      {!loading && filtered.length > 0 ? (
+          zone so a mixed selection can't silently combine loaf counts.
+
+          The `subStops.length` arm matters: a day can have subscription
+          deliveries and no one-time orders at all, and under the old
+          orders-only guard the whole strip vanished — a blank screen for a
+          day that still owed bread. */}
+      {!loading && (filtered.length > 0 || subStops.length > 0) ? (
         zoneSel.length > 0 ? (
           zoneSel.map((z) => (
             <ProductionCountStrip
               key={z}
               zone={z}
               orders={filtered.filter((o) => zoneOf.get(o.id) === z)}
+              subscriptions={subStops.filter((s) => s.zone === z)}
             />
           ))
         ) : (
-          <ProductionCountStrip orders={filtered} />
+          <ProductionCountStrip orders={filtered} subscriptions={subStops} />
         )
       ) : null}
       {loading ? (

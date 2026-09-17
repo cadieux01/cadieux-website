@@ -30,13 +30,14 @@
 // out and Vercel retries.
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { buildBakePlan, type StaleDeliveryLine } from "@/lib/email/bake-plan";
 import {
-  buildBakePlan,
+  loadOrderLines,
+  loadSubscriptionLines,
   type BakePlanLine,
-  type StaleDeliveryLine,
-} from "@/lib/email/bake-plan";
+} from "@/lib/bake-plan-lines";
 import { loadStaleDeliveries } from "@/lib/cron/stale-deliveries";
 
 export const dynamic = "force-dynamic";
@@ -75,215 +76,14 @@ function istTomorrowISO(): string {
   return `${y}-${m}-${d}`;
 }
 
-// ── Row types ────────────────────────────────────────────────────────────
-
-interface OrderRow {
-  id: string;
-  order_number: string | null;
-  delivery_slot: string | null;
-  delivery_address: string | null;
-  total_amount: number | null;
-  fulfillment_type: string | null;
-  items: unknown;
-  customers: { full_name: string | null; phone: string | null } | null;
-}
-
-interface OrderItem {
-  qty: number;
-  name: string;
-}
-
-interface SubDeliveryRow {
-  id: string;
-  subscription_id: string;
-  slot: string | null;
-  scheduled_time_slot: string | null;
-  items_override: unknown;
-  subscriptions: {
-    id: string;
-    subscription_number: string | null;
-    customer_name: string | null;
-    customer_phone: string | null;
-    delivery_address: unknown;
-  } | null;
-}
-
-interface SubItemRow {
-  subscription_id: string;
-  product_name: string | null;
-  quantity_per_delivery: number | null;
-}
-
-interface OverrideItem {
-  name?: string;
-  product_name?: string;
-  qty?: number;
-  quantity?: number;
-  quantity_per_delivery?: number;
-}
-
-interface SubAddress {
-  name?: string | null;
-  line1?: string | null;
-  line2?: string | null;
-  city?: string | null;
-  pincode?: string | null;
-  phone?: string | null;
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-function orderRef(o: OrderRow): string {
-  return o.order_number || `#${o.id.slice(0, 8).toUpperCase()}`;
-}
-
-function subRef(sub: SubDeliveryRow["subscriptions"]): string {
-  if (!sub) return "SUB —";
-  return sub.subscription_number
-    ? `SUB ${sub.subscription_number}`
-    : `SUB #${sub.id.slice(0, 8).toUpperCase()}`;
-}
-
-function orderItems(items: unknown): string[] {
-  if (!Array.isArray(items)) return [];
-  const out: string[] = [];
-  for (const raw of items as OrderItem[]) {
-    const name = String(raw?.name ?? "").trim();
-    const qty = Number(raw?.qty ?? 0);
-    if (!name || !isFinite(qty) || qty <= 0) continue;
-    out.push(`${qty} × ${name}`);
-  }
-  return out;
-}
-
-function flattenSubAddress(addr: unknown): string {
-  if (!addr || typeof addr !== "object") return "";
-  const a = addr as SubAddress;
-  const parts = [a.line1, a.line2, a.city, a.pincode]
-    .map((p) => (typeof p === "string" ? p.trim() : ""))
-    .filter(Boolean);
-  return parts.join(", ");
-}
+// Row types, item parsing and the two data legs used to live here. They
+// moved to @/lib/bake-plan-lines when the production strip above
+// /admin/orders needed the same subscription leg: one query, two readers,
+// so the screen and the 18:00 email cannot count different loaves for the
+// same day.
 
 function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
-}
-
-// ── Data legs ────────────────────────────────────────────────────────────
-
-async function loadOrderLines(
-  supabase: SupabaseClient,
-  dateIso: string,
-): Promise<BakePlanLine[]> {
-  const { data, error } = await supabase
-    .from("orders")
-    .select(
-      "id, order_number, delivery_slot, delivery_address, total_amount, fulfillment_type, items, customers(full_name, phone)",
-    )
-    .eq("delivery_date", dateIso)
-    .not("status", "in", "(delivered,cancelled)");
-
-  if (error) throw new Error(`orders leg: ${error.message}`);
-
-  const rows = (data || []) as unknown as OrderRow[];
-  return rows.map((o) => ({
-    ref: orderRef(o),
-    kind: "order" as const,
-    slot: o.delivery_slot,
-    customerName: (o.customers?.full_name || "Unknown").trim(),
-    customerPhone: o.customers?.phone || "no phone",
-    address:
-      (o.delivery_address || "").trim() ||
-      (o.fulfillment_type === "pickup" ? "PICKUP" : ""),
-    items: orderItems(o.items),
-    amountInr:
-      typeof o.total_amount === "number" ? Math.round(o.total_amount) : 0,
-  }));
-}
-
-async function loadSubscriptionLines(
-  supabase: SupabaseClient,
-  dateIso: string,
-): Promise<BakePlanLine[]> {
-  const { data: dels, error } = await supabase
-    .from("subscription_deliveries")
-    .select(
-      "id, subscription_id, slot, scheduled_time_slot, items_override, subscriptions(id, subscription_number, customer_name, customer_phone, delivery_address)",
-    )
-    .eq("delivery_date", dateIso)
-    .not("status", "in", "(delivered,cancelled)");
-
-  if (error) throw new Error(`subscription_deliveries leg: ${error.message}`);
-
-  const deliveries = (dels || []) as unknown as SubDeliveryRow[];
-  if (deliveries.length === 0) return [];
-
-  // Bulk-fetch item defaults for every subscription in one query so we
-  // don't fan out one lookup per delivery.
-  const subIds = Array.from(
-    new Set(deliveries.map((d) => d.subscription_id).filter(Boolean)),
-  );
-  const itemsBySub = new Map<string, string[]>();
-  if (subIds.length > 0) {
-    const { data: items, error: iErr } = await supabase
-      .from("subscription_items")
-      .select("subscription_id, product_name, quantity_per_delivery")
-      .in("subscription_id", subIds);
-    if (iErr) throw new Error(`subscription_items lookup: ${iErr.message}`);
-    for (const row of (items || []) as SubItemRow[]) {
-      const name = (row.product_name || "").trim();
-      const qty = Number(row.quantity_per_delivery ?? 0);
-      if (!name || qty <= 0) continue;
-      const list = itemsBySub.get(row.subscription_id) || [];
-      list.push(`${qty} × ${name}`);
-      itemsBySub.set(row.subscription_id, list);
-    }
-  }
-
-  return deliveries.map((d) => {
-    // Per-delivery override wins if present, else fall back to the
-    // subscription's default item list (subscription_items).
-    let itemLines: string[] = [];
-    const ov = d.items_override;
-    if (Array.isArray(ov) && ov.length > 0) {
-      for (const raw of ov as OverrideItem[]) {
-        const name = String(raw?.name ?? raw?.product_name ?? "").trim();
-        const qty = Number(
-          raw?.qty ?? raw?.quantity ?? raw?.quantity_per_delivery ?? 0,
-        );
-        if (!name || qty <= 0) continue;
-        itemLines.push(`${qty} × ${name}`);
-      }
-    }
-    if (itemLines.length === 0) {
-      itemLines = itemsBySub.get(d.subscription_id) || [];
-    }
-
-    const sub = d.subscriptions;
-    const addr = flattenSubAddress(sub?.delivery_address);
-    // Prefer the address's name/phone (edited per delivery) with a
-    // subscription-level fallback (denormalised copy).
-    const parsedAddr =
-      sub?.delivery_address && typeof sub.delivery_address === "object"
-        ? (sub.delivery_address as SubAddress)
-        : {};
-
-    return {
-      ref: subRef(sub),
-      kind: "subscription" as const,
-      slot: d.slot || d.scheduled_time_slot,
-      customerName: (
-        parsedAddr.name ||
-        sub?.customer_name ||
-        "Unknown"
-      ).trim(),
-      customerPhone:
-        parsedAddr.phone || sub?.customer_phone || "no phone",
-      address: addr,
-      items: itemLines,
-      amountInr: 0,
-    };
-  });
 }
 
 // ── Route ────────────────────────────────────────────────────────────────

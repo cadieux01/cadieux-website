@@ -15,24 +15,18 @@
 // saying so — silence would look like the cron broke. The distinction
 // between "nothing tomorrow" and "cron down" is load-bearing.
 
-/** One deliverable line — same shape for orders and subscription rows. */
-export interface BakePlanLine {
-  /** "OLF56" for an order, "OLS12" for a subscription, etc. — printable ref for the human. */
-  ref: string;
-  /** "order" | "subscription" — used for the section label only. */
-  kind: "order" | "subscription";
-  /** Delivery slot as stored ("morning", "afternoon", null, …). */
-  slot: string | null;
-  /** Customer's display name (best effort). */
-  customerName: string;
-  /** Customer phone as stored (10 or +91 form; not normalised). */
-  customerPhone: string;
-  /** Flattened address for the driver — line1 / city / pincode. */
-  address: string;
-  /** Item lines to bake: "2 × Protein Bread — Plain", … */
-  items: string[];
-  /** Rupees, integer. Used for the running total, not per-line display. */
-  amountInr: number;
+// The line shape is DEFINED in @/lib/bake-plan-lines, beside the two queries
+// that build it, and re-exported here so existing importers of this module
+// keep working. The production strip above /admin/orders reads the same
+// loaders — the email the baker opens at six and the strip he reads at five
+// must be counting the same loaves.
+export type { BakeItem, BakePlanLine } from "@/lib/bake-plan-lines";
+
+import type { BakeItem, BakePlanLine } from "@/lib/bake-plan-lines";
+
+/** "2 × Protein Bread — Plain". The one place this string is built. */
+function itemLine(i: BakeItem): string {
+  return `${i.qty} × ${i.name}`;
 }
 
 export interface BakePlanEmail {
@@ -108,21 +102,17 @@ function groupBySlot(
   }));
 }
 
-/** Sum every "N × Product" line across every deliverable → totals per product. */
+/** Sum every item line across every deliverable → totals per product.
+ *
+ *  This used to build "<qty> × <name>" strings upstream and then parse them
+ *  back out with a regex. Items are structured now, so the round trip — and
+ *  its failure mode, a product name containing "×" splitting into a wrong
+ *  quantity — is gone. */
 function rollupProducts(lines: BakePlanLine[]): { name: string; qty: number }[] {
   const totals = new Map<string, number>();
   for (const l of lines) {
-    for (const raw of l.items) {
-      // Item strings are pre-built as "<qty> × <name>". Parse defensively —
-      // if the format ever changes, the raw string is treated as a single unit.
-      const m = raw.match(/^\s*(\d+)\s*[×x]\s*(.+?)\s*$/);
-      if (m) {
-        const q = parseInt(m[1], 10);
-        const name = m[2].trim();
-        totals.set(name, (totals.get(name) || 0) + (isFinite(q) ? q : 1));
-      } else {
-        totals.set(raw, (totals.get(raw) || 0) + 1);
-      }
+    for (const it of l.items) {
+      totals.set(it.name, (totals.get(it.name) || 0) + it.qty);
     }
   }
   return Array.from(totals.entries())
@@ -294,7 +284,7 @@ export function buildBakePlan(
         `  [${l.kind === "order" ? "ORD" : "SUB"}] ${l.ref} — ${l.customerName} — ${l.customerPhone}`,
       );
       textParts.push(`    ${l.address}`);
-      for (const item of l.items) textParts.push(`    · ${item}`);
+      for (const item of l.items) textParts.push(`    · ${itemLine(item)}`);
     }
     textParts.push("");
   }
@@ -324,7 +314,9 @@ export function buildBakePlan(
               ? `<span style="display:inline-block;padding:1px 6px;font-size:11px;background:#024628;color:#FBF3D4;border-radius:3px;letter-spacing:0.4px">ORDER</span>`
               : `<span style="display:inline-block;padding:1px 6px;font-size:11px;background:#436CB4;color:#FBF3D4;border-radius:3px;letter-spacing:0.4px">SUB</span>`;
           const itemLis = l.items
-            .map((i) => `<li style="margin:2px 0">${escapeHtml(i)}</li>`)
+            .map(
+              (i) => `<li style="margin:2px 0">${escapeHtml(itemLine(i))}</li>`,
+            )
             .join("");
           return `
             <tr>
