@@ -62,11 +62,15 @@ import {
   ALL_VALUE,
   CALL_PREFIX,
   REPEAT_ONLY,
-  decodeStatusParam,
-  encodeStatusParam,
   matchesOrderFilter,
   splitFilterValues,
 } from "@/lib/order-filter";
+import { decodeStatusParam, encodeStatusParam } from "@/lib/filter-menu";
+import {
+  useScrollRestore,
+  useUrlWriteback,
+  stashScrollY,
+} from "@/lib/admin-url-state";
 import {
   DEFAULT_BASIS,
   matchesDay,
@@ -559,56 +563,15 @@ function OrdersPageInner() {
     return () => clearInterval(t);
   }, [load]);
 
-  // URL writeback. Any filter/sort/range/basis/anchor change is
-  // serialised back onto the query string via router.replace (no
-  // history entry, no scroll jump) so a subsequent router.back() from
-  // the detail page lands on this exact URL. Empty/default values are
-  // omitted by stateToSearch so a plain /admin/orders link stays clean.
-  useEffect(() => {
-    const qs = stateToSearch({
-      filter,
-      query,
-      sort,
-      basis,
-      day,
-      anchor,
-    });
-    const current = typeof window === "undefined" ? "" : window.location.search.replace(/^\?/, "");
-    if (qs === current) return;
-    const next = qs ? `/admin/orders?${qs}` : "/admin/orders";
-    router.replace(next, { scroll: false });
-  }, [filter, query, sort, basis, day, anchor, router]);
-
-  // Scroll restoration. Row click stashes the current scrollY in
-  // sessionStorage; this effect reads and clears it once the list has
-  // finished loading.
-  //
-  // A TIMER, not requestAnimationFrame: rAF does not fire while the tab is
-  // hidden, and this board is used exactly that way — the order is opened,
-  // the operator switches to WhatsApp or a call, and comes back. Under rAF
-  // the restore simply never ran and they landed at the top of the list.
-  //
-  // One attempt is also not enough. The rows are committed to the DOM but
-  // the document may not be laid out yet, so scrollTo clamps against a
-  // short page and lands short. Retry until it sticks, then give up rather
-  // than fight an operator who has scrolled somewhere themselves.
-  useEffect(() => {
-    if (loading) return;
-    if (typeof window === "undefined") return;
-    const raw = sessionStorage.getItem(SCROLL_KEY);
-    if (raw === null) return;
-    sessionStorage.removeItem(SCROLL_KEY);
-    const y = Number(raw);
-    if (!Number.isFinite(y) || y <= 0) return;
-    let tries = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const settle = () => {
-      window.scrollTo(0, y);
-      if (window.scrollY < y && tries++ < 10) timer = setTimeout(settle, 32);
-    };
-    settle();
-    return () => clearTimeout(timer);
-  }, [loading]);
+  // URL writeback + scroll restoration, both shared with
+  // /admin/subscriptions. stateToSearch stays here because the params are
+  // this board's own; everything downstream of the string is identical on
+  // both boards and lives in admin-url-state.
+  useUrlWriteback(
+    "/admin/orders",
+    stateToSearch({ filter, query, sort, basis, day, anchor }),
+  );
+  useScrollRestore(SCROLL_KEY, !loading);
 
   const [editing, setEditing] = useState<AdminOrderRow | null>(null);
   const [orderEditing, setOrderEditing] = useState<AdminOrderRow | null>(null);
@@ -1455,16 +1418,8 @@ function OrdersPageInner() {
                       if (window.getSelection()?.toString()) return;
                       // Stash scrollY so Back-to-orders can restore
                       // exactly this position. Read on mount, then
-                      // cleared — see the scroll-restore effect above.
-                      try {
-                        sessionStorage.setItem(
-                          SCROLL_KEY,
-                          String(window.scrollY),
-                        );
-                      } catch {
-                        // Private-mode / quota — non-fatal, we just
-                        // lose scroll restoration for this navigation.
-                      }
+                      // cleared — see useScrollRestore above.
+                      stashScrollY(SCROLL_KEY);
                       router.push(`/admin/orders/${o.id}`);
                     }}
                     title="Open order detail"

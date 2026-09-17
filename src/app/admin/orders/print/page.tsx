@@ -28,7 +28,8 @@ import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { paymentLabel } from "@/lib/payment-label";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { AdminOrderItemSnapshot, AdminOrderRow } from "@/lib/admin-shared";
-import { decodeStatusParam, matchesOrderFilter } from "@/lib/order-filter";
+import { matchesOrderFilter } from "@/lib/order-filter";
+import { decodeStatusParam } from "@/lib/filter-menu";
 import {
   matchesDay,
   orderDateForBasis,

@@ -26,11 +26,18 @@ import { ALL_VALUE } from "@/lib/order-filter";
 import {
   CLEAR_ALL,
   assertStatusCountsPartition,
+  decodeStatusParam,
   distinctStatuses,
+  encodeStatusParam,
   separator,
   statusGroupOptions,
   triggerLabel,
 } from "@/lib/filter-menu";
+import {
+  useScrollRestore,
+  useUrlWriteback,
+  stashScrollY,
+} from "@/lib/admin-url-state";
 import {
   EXPIRING_7D,
   PAID_UNCONFIRMED,
@@ -247,6 +254,10 @@ const ROW_INTERACTIVE_SELECTOR =
 // toolbar would report a selection the operator cannot see.
 const SELECTION_KEY = "admin:subscriptions:selection";
 
+// Its own scroll bucket for the same reason — /admin/orders must not restore
+// to an offset measured on a list of a different length.
+const SCROLL_KEY = "admin:subscriptions:scrollY";
+
 type SubBulkAction = "share" | "copy";
 
 // No bulk Cancel. Cancelling a plan cancels every delivery hanging off it
@@ -263,14 +274,31 @@ function SubscriptionsPageInner() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Every control on this board hydrates from the query string on first
+  // render and mirrors back to it on change, so opening a plan and pressing
+  // Back returns the operator to the same slice rather than to an unfiltered
+  // board they have to re-narrow. Same contract as /admin/orders.
+  //
+  // Read ONCE, in a lazy initialiser: useSearchParams() subscribes, and
+  // re-deriving state from it on every render would fight the writeback
+  // below for control of the same values.
+  const searchParams = useSearchParams();
+
   // Multi-select, flat: status keys plus `pay:`-prefixed payment states plus
   // the one computed filter. splitSubscriptionFilterValues sorts them out.
   //
   // EMPTY MEANS "ALL STATUSES" — there is no "all" member. Representing it as
   // a value would create two encodings of the same state ([] and ["all"]) that
   // could disagree. Same rule as /admin/orders.
-  const [filter, setFilter] = useState<string[]>([]);
-  const [query, setQuery] = useState("");
+  //
+  // The whole flat list rides ONE comma-separated `status` param. Unlike the
+  // orders board there is nothing operator-typed in here — every value is a
+  // fixed key — so no member can ever contain a comma.
+  const [filter, setFilter] = useState<string[]>(() =>
+    decodeStatusParam(searchParams.get("status")),
+  );
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [busyId, setBusyId] = useState<string | null>(null);
   // Which row's Date cell is showing its subscribed/receives breakdown.
   const [openDateId, setOpenDateId] = useState<string | null>(null);
@@ -289,7 +317,6 @@ function SubscriptionsPageInner() {
   // including the only active one, because they were signed up in July.
   // A window wide enough to be harmless was never answering a question;
   // showing everything until an operator picks a day is.
-  const searchParams = useSearchParams();
   const [basis, setBasis] = useState<DateBasis>(() =>
     parseBasis(searchParams.get("basis")),
   );
@@ -297,19 +324,19 @@ function SubscriptionsPageInner() {
     parseDayParam(searchParams.get("date")),
   );
 
-  // URL writeback, so a picked day survives reload and Back from a
-  // detail page. `replace` rather than `push`: a filter change is not a
-  // navigation, and pushing would make Back step through every keystroke
-  // of date-picking instead of leaving the board.
-  useEffect(() => {
+  // Defaults are OMITTED, not encoded, so a plain /admin/subscriptions link
+  // stays clean and the parsers above remain the single source of truth for
+  // what "unset" means.
+  const qs = useMemo(() => {
     const params = new URLSearchParams();
+    if (filter.length > 0) params.set("status", encodeStatusParam(filter));
+    if (query.trim()) params.set("q", query);
     if (basis !== DEFAULT_BASIS) params.set("basis", basis);
     if (day) params.set("date", day);
-    const qs = params.toString();
-    router.replace(qs ? `/admin/subscriptions?${qs}` : "/admin/subscriptions", {
-      scroll: false,
-    });
-  }, [basis, day, router]);
+    return params.toString();
+  }, [filter, query, basis, day]);
+  useUrlWriteback("/admin/subscriptions", qs);
+  useScrollRestore(SCROLL_KEY, !loading);
 
   // Delivery partners power the per-row "Share" button. Fetched once on
   // mount (never polled) and passed to every PartnerShareButton — same
@@ -1073,6 +1100,10 @@ function SubscriptionsPageInner() {
                         return;
                       }
                       if (window.getSelection()?.toString()) return;
+                      // Stash scrollY so Back from the plan detail lands on
+                      // this row, not the top of the board. Read and cleared
+                      // by useScrollRestore above.
+                      stashScrollY(SCROLL_KEY);
                       router.push(`/admin/subscriptions/${s.id}`);
                     }}
                     title="Open subscription detail"

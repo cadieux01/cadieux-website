@@ -108,27 +108,17 @@ export function matchesOrderFilter(
 // ---------------------------------------------------------------------------
 // URL encoding
 //
-// `status` stays COMMA-SEPARATED, so a pre-existing single-value link
-// (`?status=confirmed`) still means exactly what it always did. That is safe
-// for this group and only this group: every status value is a fixed enum key
-// from ORDER_FILTER_VALUES, none of which contains a comma.
+// The `status` codec itself is table-agnostic and lives in filter-menu.ts —
+// the subscriptions board encodes its own values with the same pair.
+//
+// What is specific to THIS board is which groups may ride it. `status` stays
+// COMMA-SEPARATED, so a pre-existing single-value link (`?status=confirmed`)
+// still means exactly what it always did. That is safe for this group and only
+// this group: every status value is a fixed enum key from ORDER_FILTER_VALUES,
+// none of which contains a comma.
 //
 // Call updates get their own REPEATED `call` param instead. Their values are
 // note bodies — free text, typed by an operator through the custom call-note
 // escape hatch — so one comma in a body would silently split a filter into two
 // filters that match nothing. Repeated params have no such failure mode.
 // ---------------------------------------------------------------------------
-
-/** `["pending","confirmed"]` → `"pending,confirmed"`; empty → `"all"`. */
-export function encodeStatusParam(statuses: readonly string[]): string {
-  return statuses.length === 0 ? ALL_VALUE : statuses.join(",");
-}
-
-/** Inverse of encodeStatusParam. `null`/`"all"`/`""` → `[]` (unconstrained). */
-export function decodeStatusParam(raw: string | null): string[] {
-  if (!raw) return [];
-  return raw
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter((s) => s.length > 0 && s !== ALL_VALUE);
-}

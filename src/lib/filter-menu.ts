@@ -40,6 +40,29 @@ export function separator(value: string, heading: string): FilterMenuOption {
   return { value, label: `── ${heading} ──`, disabled: true };
 }
 
+// ── the `status` query param ───────────────────────────────────────────────
+// Comma-separated, and shared by both boards because both are encoding the
+// same shape: a set of short, lowercase, operator-unwritable keys. Colons are
+// fine (`pay:created`); a comma would not be, which is why the orders board
+// keeps its operator-typed call notes on a separate repeated param.
+//
+// Empty encodes as "all" rather than being dropped so that an explicitly
+// cleared filter and an absent param read identically on the way back in.
+
+/** `["pending","confirmed"]` → `"pending,confirmed"`; empty → `"all"`. */
+export function encodeStatusParam(statuses: readonly string[]): string {
+  return statuses.length === 0 ? ALL_VALUE : statuses.join(",");
+}
+
+/** Inverse of encodeStatusParam. `null`/`"all"`/`""` → `[]` (unconstrained). */
+export function decodeStatusParam(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.length > 0 && s !== ALL_VALUE);
+}
+
 /**
  * The status group.
  *
