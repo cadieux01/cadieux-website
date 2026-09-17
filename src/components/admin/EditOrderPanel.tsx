@@ -28,6 +28,7 @@ import { ensureAdminFirstName } from "@/lib/admin-first-name";
 import { formatINR } from "@/lib/admin-formatting";
 import type { AdminOrderRow, AdminOrderItemSnapshot } from "@/lib/admin-shared";
 import { formatOrderNumber } from "@/lib/order-number";
+import { isPaidStatus } from "@/lib/payment-label";
 
 // The three canonical delivery windows. Kept literal so this component
 // doesn't need to depend on the delivery-slots server helper (which is
@@ -115,7 +116,18 @@ export function EditOrderPanel({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const isPaid = order.payment_status === "paid";
+  // Read through the shared predicate, not `=== "paid"`. It matches by
+  // prefix, which is what makes `paid_orphaned` — money captured, nothing
+  // scheduled — count as paid here too. That row is the WORST one to let
+  // an operator re-price: the customer has already been charged and the
+  // sweeper is still trying to reconcile it.
+  const isPaid = isPaidStatus(order.payment_status);
+
+  // Items are the thing that was charged for. Once the money is in, they
+  // stop being editable — see the route comment in
+  // /api/admin/orders/[id]/edit. The date stays editable at every status:
+  // moving a delivery costs nobody anything.
+  const itemsLocked = isPaid;
 
   // Derived totals. `derivedItemsSubtotal` is the sum of qty × unit_price
   // across all lines; `derivedTotal` adds the delivery fee. Both track
@@ -228,7 +240,11 @@ export function EditOrderPanel({
             c.unit_price !== it.unit_price
           );
         });
-      if (itemsChanged) {
+      // `itemsLocked` re-checked here, not just on the inputs. The panel
+      // holds a draft taken when it opened; if the row was paid in another
+      // tab since, the disabled inputs alone would not stop a stale draft
+      // being posted.
+      if (itemsChanged && !itemsLocked) {
         body.items = items.map((it) => ({
           product_id: it.product_id,
           slug: it.slug,
@@ -437,6 +453,24 @@ export function EditOrderPanel({
           {/* Items */}
           <section style={{ marginBottom: "1.25rem" }}>
             <SectionLabel>Items</SectionLabel>
+            {/* The reason, not just the disabled state. An operator who
+                finds a greyed-out field with no explanation assumes a bug
+                and goes looking for a way round it. */}
+            {itemsLocked ? (
+              <p
+                style={{
+                  margin: "0 0 0.6rem",
+                  color: "#E5B85C",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                }}
+              >
+                Locked — this order is paid. Editing what was bought after
+                the money has landed leaves the receipt and the payment
+                disagreeing with no refund recorded. Change the total below
+                (that writes a refund/collect note), or cancel and re-issue.
+              </p>
+            ) : null}
             {items.length === 0 ? (
               <p style={{ color: TEXT_MUTED, margin: 0 }}>No items.</p>
             ) : (
@@ -463,7 +497,7 @@ export function EditOrderPanel({
                         <input
                           value={it.name}
                           onChange={(e) => updateItem(i, { name: e.target.value })}
-                          disabled={saving}
+                          disabled={saving || itemsLocked}
                           style={{ ...inputStyle, padding: "0.35rem 0.5rem" }}
                         />
                       </td>
@@ -478,7 +512,7 @@ export function EditOrderPanel({
                               quantity: Math.max(1, Math.min(99, Number(e.target.value) || 1)),
                             })
                           }
-                          disabled={saving}
+                          disabled={saving || itemsLocked}
                           style={{
                             ...inputStyle,
                             padding: "0.35rem 0.5rem",
@@ -498,7 +532,7 @@ export function EditOrderPanel({
                               unit_price: Math.max(0, Number(e.target.value) || 0),
                             })
                           }
-                          disabled={saving}
+                          disabled={saving || itemsLocked}
                           style={{
                             ...inputStyle,
                             padding: "0.35rem 0.5rem",
@@ -520,10 +554,14 @@ export function EditOrderPanel({
                         <button
                           type="button"
                           onClick={() => removeItem(i)}
-                          disabled={saving}
+                          disabled={saving || itemsLocked}
                           aria-label={`Remove ${it.name}`}
                           style={miniButton}
-                          title="Remove this line"
+                          title={
+                            itemsLocked
+                              ? "Locked — the order is paid"
+                              : "Remove this line"
+                          }
                         >
                           ×
                         </button>

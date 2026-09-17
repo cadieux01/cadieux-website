@@ -30,10 +30,26 @@
 //   - lat + lng must be sent together (or both omitted). The server
 //     recomputes distance_km via getDrivingDistanceKm — client value
 //     is never trusted.
+//
+// ITEMS ARE LOCKED ONCE THE ORDER IS PAID. The date is always editable —
+// a delivery can be moved and nobody is out of pocket. The items are the
+// thing the customer was CHARGED for, and editing them after the money
+// has landed silently desyncs what was paid from what is owed: the
+// receipt, the Razorpay capture and the row stop agreeing, and no refund
+// or collection is recorded anywhere. The money-delta note only fires on
+// total_amount, so an items edit could move the figure with no trail.
+//
+// The lock is stated in THREE places on purpose — the panel disables the
+// inputs and says why, this route rejects the field, and `admin_edit_order`
+// raises. The RPC check is the one that counts: it reads payment_status
+// itself, so a caller that bypasses this route (psql, another service, a
+// future endpoint) still cannot get through. The first two exist so the
+// operator learns the rule at the keyboard rather than from a 500.
 
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
+import { isPaidStatus } from "@/lib/payment-label";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/delivery-slots";
 import { getDrivingDistanceKm } from "@/lib/distanceMatrix";
@@ -256,6 +272,20 @@ export async function POST(
   // -- items --------------------------------------------------------
   let normalisedItems: NormalisedItem[] | null = null;
   if (Object.prototype.hasOwnProperty.call(body, "items")) {
+    // Refused BEFORE the diff, not after: a paid order must not be able to
+    // reach the RPC with an items key even when the payload happens to be
+    // identical to what is stored. Rejecting a no-op edit is the honest
+    // answer — the field is not editable, whatever its value.
+    if (isPaidStatus(before.payment_status)) {
+      return NextResponse.json(
+        {
+          error:
+            "Items are locked once an order is paid. Cancel and re-issue, or adjust the total and record the refund.",
+          field: "items",
+        },
+        { status: 409 },
+      );
+    }
     const result = normaliseItems(body.items);
     if (!Array.isArray(result)) {
       return NextResponse.json({ error: result.error }, { status: 400 });
