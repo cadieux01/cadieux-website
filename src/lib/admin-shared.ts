@@ -377,6 +377,14 @@ export type AdminSubscriptionRow = {
     author: string | null;
     created_at: string;
   } | null;
+  /** Same shape/semantics as AdminOrderRow.last_note — the newest note of
+   *  ANY kind, which is what the Status column renders. */
+  last_note?: {
+    body: string;
+    author: string | null;
+    created_at: string;
+    kind: NoteKind;
+  } | null;
 };
 
 export const DELIVERY_STATUS_OPTIONS = [

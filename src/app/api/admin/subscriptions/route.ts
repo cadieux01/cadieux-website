@@ -13,13 +13,20 @@ import {
 import type { AdminSubscriptionItem } from "@/lib/admin-shared";
 import { aggregateNotesFor } from "@/lib/order-notes";
 
+// Server-side allowlist for the optional `?status=` param. This is INPUT
+// VALIDATION, not a menu — the board itself fetches everything and filters
+// client-side so the dropdown can show live per-status counts.
+//
+// 'paused' was removed: there is no such value in public.subscriptions and
+// there never has been. It was also hardcoded into the old chip row, where it
+// rendered a permanent "PAUSED · 0". Nothing can have bookmarked it, because
+// it could never have matched a row.
 const ALLOWED_FILTERS = new Set([
   "all",
   "pending_confirmation",
   "active",
   "completed",
   "cancelled",
-  "paused",
 ]);
 
 export async function GET(req: NextRequest) {
@@ -55,6 +62,13 @@ export async function GET(req: NextRequest) {
   // Note it deliberately never hid 'paid_orphaned' — this board is the
   // durable surface for a payment that landed after the sweep, because the
   // alert email is only a doorbell and can be eaten by a bad Resend day.
+  //
+  // "Must not be baked" and "must not be seen" are different requirements.
+  // The bake question is answered where it belongs — the production strip
+  // counts unpaid rows on their OWN line rather than silently including or
+  // excluding them (see ProductionCountStrip) — and the board offers
+  // "Payment not completed" / "Checkout in progress" as explicit, countable
+  // filter groups instead of a filter nobody could see.
   let query = supabaseAdmin
     .from("subscriptions")
     .select("*")
@@ -202,6 +216,10 @@ export async function GET(req: NextRequest) {
         ...(coordsBySub.get(s.id) ?? {}),
         note_count: agg?.note_count ?? 0,
         last_call_note: agg?.last_call_note ?? null,
+        // The orders board shows the latest note's text under the status.
+        // `aggregateNotesFor` already computes it; the route simply was not
+        // forwarding it, so the subscriptions board could not show the same.
+        last_note: agg?.last_note ?? null,
       };
     }),
   });
