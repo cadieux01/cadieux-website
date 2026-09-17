@@ -19,7 +19,12 @@
 // switcher above the partner list. Callers passing a plain string are
 // unaffected.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  canNativeShare,
+  splitShareMessage,
+} from "@/lib/share-chunks";
 
 const CREAM = "#FBF3D4";
 const FADED = "rgba(251,243,212,0.6)";
@@ -45,6 +50,7 @@ export function PartnerShareButton({
   partnersError,
   buttonStyle,
   buttonLabel = "Share",
+  blockedReason,
 }: {
   /** Fully composed text the wa.me / clipboard actions send verbatim, or
    *  several labelled ones to choose between (first = default). */
@@ -55,11 +61,27 @@ export function PartnerShareButton({
   /** Reuse the row's `buttonSm` style so this button matches the others. */
   buttonStyle: React.CSSProperties;
   buttonLabel?: string;
+  /**
+   * Set when this row must not be dispatched to a rider at all. The
+   * button STAYS and still opens; it shows this sentence instead of the
+   * partner list, and offers nothing that sends.
+   *
+   * Deliberately not `disabled`. A greyed button with a `title` tooltip
+   * is invisible on the touchscreen this board is driven from, and reads
+   * as a rendering fault rather than a refusal. A refusal has to be a
+   * sentence someone can open and disagree with.
+   */
+  blockedReason?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [scopeIndex, setScopeIndex] = useState(0);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  // Resolved after mount, never during render: `navigator` does not exist
+  // on the server and these pages are prerendered, so reading it inline
+  // would mismatch the hydrated markup.
+  const [nativeShare, setNativeShare] = useState(false);
+  useEffect(() => setNativeShare(canNativeShare()), []);
 
   // Close on outside click / Escape.
   useEffect(() => {
@@ -84,17 +106,36 @@ export function PartnerShareButton({
   const text: string = scopes
     ? (scopes[scopeIndex] ?? scopes[0])?.message ?? ""
     : (message as string);
-  const encoded = encodeURIComponent(text);
+  // A wa.me URL silently truncates past a few thousand ENCODED characters,
+  // so the message is cut into whole-stop parts before it reaches an href.
+  // One part means it fitted and this is the message verbatim.
+  const parts = useMemo(() => splitShareMessage(text), [text]);
+  const chunked = parts.length > 1;
 
   const handleCopy = async () => {
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard) {
+        // Always the WHOLE message, never the parts. The clipboard has no
+        // length ceiling, so chunking it would be damage for its own sake.
         await navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }
     } catch {
       // Silent — the wa.me links still work if clipboard is denied.
+    }
+  };
+
+  // No URL in the middle → no ceiling → the whole run goes in one go.
+  // Cannot name a recipient, which is why the partner rows below still use
+  // wa.me/<phone> and still chunk.
+  const handleNativeShare = async () => {
+    try {
+      await navigator.share({ text });
+      setOpen(false);
+    } catch {
+      // User dismissed the sheet, or the OS refused. Leave the popover
+      // open so the wa.me fallbacks are still one tap away.
     }
   };
 
@@ -131,6 +172,24 @@ export function PartnerShareButton({
             boxShadow: "0 8px 24px rgba(29,29,31,0.6)",
           }}
         >
+          {/* BLOCKED ROWS SHOW A REASON AND NOTHING ELSE. Returning early
+              is what makes that safe: no partner rows, no "Share (other)",
+              no "Copy message". The message for this row is still composed
+              upstream and still correct — it simply must not leave the
+              office, and half a popover would eventually get tapped. */}
+          {blockedReason ? (
+            <div
+              style={{
+                padding: "8px 10px",
+                color: CREAM,
+                fontSize: "0.9375rem",
+                lineHeight: 1.45,
+              }}
+            >
+              {blockedReason}
+            </div>
+          ) : (
+            <>
           {scopes && scopes.length > 1 && (
             <div style={{ marginBottom: 6 }}>
               <div
@@ -184,6 +243,25 @@ export function PartnerShareButton({
             Send to partner
           </div>
 
+          {/* IF IT CHUNKS, SAY SO. The whole point of the split is that the
+              old behaviour was silent: WhatsApp dropped the tail and the
+              board looked like it had sent everything. */}
+          {chunked && (
+            <div
+              style={{
+                margin: "0 8px 6px",
+                padding: "6px 8px",
+                border: `1px solid ${BORDER}`,
+                color: CREAM,
+                fontSize: "0.875rem",
+                lineHeight: 1.4,
+              }}
+            >
+              Too long for one WhatsApp message — split into {parts.length}{" "}
+              parts. Send every one, in order.
+            </div>
+          )}
+
           {partnersLoading && (
             <div style={{ padding: "6px 8px", color: FADED }}>Loading…</div>
           )}
@@ -198,24 +276,32 @@ export function PartnerShareButton({
             </div>
           )}
 
-          {partners.map((p) => {
-            const waUrl = `https://wa.me/${p.phone}?text=${encoded}`;
-            return (
+          {partners.map((p) =>
+            // One row per partner when the message fits; one row per PART
+            // when it does not. The popover deliberately stays open in the
+            // chunked case — closing it after part 1 is how the remaining
+            // parts would go unsent.
+            parts.map((part, i) => (
               <a
-                key={p.id}
-                href={waUrl}
+                key={`${p.id}:${i}`}
+                href={`https://wa.me/${p.phone}?text=${encodeURIComponent(part)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  if (!chunked) setOpen(false);
+                }}
                 style={menuItemStyle}
               >
-                <span>{p.name}</span>
+                <span>
+                  {p.name}
+                  {chunked ? ` — part ${i + 1} of ${parts.length}` : ""}
+                </span>
                 <span style={{ color: FADED, fontSize: "1rem" }}>
                   WhatsApp
                 </span>
               </a>
-            );
-          })}
+            )),
+          )}
 
           <div
             style={{
@@ -231,17 +317,45 @@ export function PartnerShareButton({
               <span>{copied ? "Copied!" : "Copy message"}</span>
               <span style={{ color: FADED, fontSize: "1rem" }}>Clipboard</span>
             </button>
-            <a
-              href={`https://wa.me/?text=${encoded}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setOpen(false)}
-              style={menuItemStyle}
-            >
-              <span>Share (other)</span>
-              <span style={{ color: FADED, fontSize: "1rem" }}>Pick contact</span>
-            </a>
+            {/* Preferred when the OS offers it: the text is handed over
+                directly, so there is no URL and no ceiling — the run goes
+                whole even when the wa.me rows above had to be split. */}
+            {nativeShare ? (
+              <button
+                type="button"
+                onClick={handleNativeShare}
+                style={menuItemStyle}
+              >
+                <span>Share (other)</span>
+                <span style={{ color: FADED, fontSize: "1rem" }}>
+                  {chunked ? "Whole run, 1 send" : "Pick contact"}
+                </span>
+              </button>
+            ) : (
+              parts.map((part, i) => (
+                <a
+                  key={`other:${i}`}
+                  href={`https://wa.me/?text=${encodeURIComponent(part)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => {
+                    if (!chunked) setOpen(false);
+                  }}
+                  style={menuItemStyle}
+                >
+                  <span>
+                    Share (other)
+                    {chunked ? ` — part ${i + 1} of ${parts.length}` : ""}
+                  </span>
+                  <span style={{ color: FADED, fontSize: "1rem" }}>
+                    Pick contact
+                  </span>
+                </a>
+              ))
+            )}
           </div>
+            </>
+          )}
         </div>
       )}
     </div>

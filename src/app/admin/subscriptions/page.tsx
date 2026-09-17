@@ -21,6 +21,24 @@ import {
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import Select from "@/components/ui/Select";
+import MultiSelect from "@/components/ui/MultiSelect";
+import { ALL_VALUE } from "@/lib/order-filter";
+import {
+  CLEAR_ALL,
+  assertStatusCountsPartition,
+  distinctStatuses,
+  separator,
+  statusGroupOptions,
+  triggerLabel,
+} from "@/lib/filter-menu";
+import {
+  EXPIRING_7D,
+  PAYMENT_FILTERS,
+  PAY_PREFIX,
+  matchesSubscriptionFilter,
+  splitSubscriptionFilterValues,
+  type FilterableSubscription,
+} from "@/lib/subscription-filter";
 import { formatSubscriptionNumber } from "@/lib/order-number";
 import { isSubscriptionFulfilled } from "@/lib/order-fulfillment";
 import { FulfilledTick } from "@/components/admin/FulfilledTick";
@@ -46,7 +64,6 @@ import {
   CREAM,
   DANGER,
   DANGER_BORDER,
-  INK,
   TEXT_FADED,
   TEXT_MUTED,
   cream,
@@ -110,23 +127,21 @@ function formatCallChipTime(iso: string): string {
   }
 }
 
-type FilterValue =
-  | "all"
-  | "pending_confirmation"
-  | "active"
-  | "paused"
-  | "completed"
-  | "cancelled"
-  | "expiring_7d";
-
-const FILTERS: { value: FilterValue; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "pending_confirmation", label: "Pending" },
-  { value: "active", label: "Active" },
-  { value: "paused", label: "Paused" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "expiring_7d", label: "Expiring in 7 days" },
+// The status group's PREFERRED ORDER, not the menu itself. The menu is built
+// from the statuses actually present (see distinctStatuses below) — this list
+// only decides what comes first. That distinction is the whole fix: the old
+// hardcoded chip row listed `paused`, which is not a value public.subscriptions
+// has ever held, so the board permanently advertised "PAUSED · 0".
+//
+// SUBSCRIPTION_STATUSES itself is NOT reused here: it is the set of statuses an
+// operator may WRITE from the drawer, which legitimately includes `paused`.
+// What you can set and what exists in the data are different questions.
+const STATUS_ORDER: readonly string[] = [
+  ALL_VALUE,
+  "pending_confirmation",
+  "active",
+  "completed",
+  "cancelled",
 ];
 
 // Friendly labels for the drawer's overall-status Select (the raw column
@@ -158,6 +173,37 @@ function cancelPrompt(s: AdminSubscriptionRow): string {
   return `Cancel ${who}'s subscription?\n\n${
     s.product_name ?? "Subscription"
   }\n${plan}${tail}`;
+}
+
+/**
+ * Why this row must not be handed to a rider, or null if it may be.
+ *
+ * `abandoned` is a plan whose payment attempt died and which the sweeper
+ * has already cancelled every delivery row of. It has no next delivery,
+ * nobody is baking for it and nobody is owed anything.
+ *
+ * It was unreachable until now only because /api/admin/subscriptions was
+ * silently filtering these rows off the board. That filter is gone — it
+ * was hiding OLS34 from Sunny while it went created → abandoned and
+ * nobody rang Padmavathi. But "must be SEEN" and "may be DISPATCHED" are
+ * different questions, and un-hiding the row answered only the first.
+ *
+ * Without this, the Share button on a swept plan composes cleanly and
+ * cheerfully — composeNextDeliveryShareStop falls back to naming the
+ * plan when next_delivery is null, "so the button is never dead" — and
+ * sends a rider to a door with "COD ₹288" against money nobody owes.
+ * Labelling it differently would not help; the row must not go out.
+ */
+function shareBlockedReason(s: AdminSubscriptionRow): string | null {
+  const status = (s.payment_status ?? "").trim().toLowerCase();
+  if (status === "abandoned") {
+    return (
+      "Not shareable — payment was never completed, so every delivery on " +
+      "this plan is already cancelled. There is nothing for a rider to " +
+      "deliver and no money to collect. Call the customer instead."
+    );
+  }
+  return null;
 }
 
 // Two things are worth sending about a subscription. The rider almost
@@ -215,7 +261,13 @@ function SubscriptionsPageInner() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterValue>("all");
+  // Multi-select, flat: status keys plus `pay:`-prefixed payment states plus
+  // the one computed filter. splitSubscriptionFilterValues sorts them out.
+  //
+  // EMPTY MEANS "ALL STATUSES" — there is no "all" member. Representing it as
+  // a value would create two encodings of the same state ([] and ["all"]) that
+  // could disagree. Same rule as /admin/orders.
+  const [filter, setFilter] = useState<string[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   // Which row's Date cell is showing its subscribed/receives breakdown.
   const [openDateId, setOpenDateId] = useState<string | null>(null);
@@ -384,7 +436,7 @@ function SubscriptionsPageInner() {
     [subs, basis, day],
   );
 
-  const isExpiring = useCallback((s: AdminSubscriptionRow): boolean => {
+  const isExpiring = useCallback((s: FilterableSubscription): boolean => {
     if (s.status !== "active") return false;
     const end = s.derived_end_date;
     if (!end) return false;
@@ -393,30 +445,41 @@ function SubscriptionsPageInner() {
     return end >= today && end <= horizon;
   }, []);
 
+  // The statuses the chosen DAY actually contains, preferred order first and
+  // anything unrecognised appended. Never a hardcoded array — that is what
+  // hid 46 pending orders on the orders board and invented PAUSED · 0 here.
+  const statusValues = useMemo(
+    () => [ALL_VALUE, ...distinctStatuses(onDay, STATUS_ORDER)],
+    [onDay],
+  );
+
+  // One pass, three tallies. Status counts PARTITION the rows (every row has
+  // exactly one status); payment and expiry counts OVERLAP them, which is
+  // precisely why they are grouped separately in the menu below.
   const counts = useMemo(() => {
-    const c: Record<FilterValue, number> = {
-      all: onDay.length,
-      pending_confirmation: 0,
-      active: 0,
-      paused: 0,
-      completed: 0,
-      cancelled: 0,
-      expiring_7d: 0,
-    };
+    const c: Record<string, number> = { [ALL_VALUE]: onDay.length };
     for (const s of onDay) {
-      if (s.status in c) c[s.status as FilterValue]++;
-      if (isExpiring(s)) c.expiring_7d++;
+      const st = (s.status ?? "").trim().toLowerCase();
+      if (st) c[st] = (c[st] ?? 0) + 1;
+      const pay = (s.payment_status ?? "").trim().toLowerCase();
+      if (pay) {
+        const key = `${PAY_PREFIX}${pay}`;
+        c[key] = (c[key] ?? 0) + 1;
+      }
+      if (isExpiring(s)) c[EXPIRING_7D] = (c[EXPIRING_7D] ?? 0) + 1;
     }
     return c;
   }, [onDay, isExpiring]);
 
+  const selection = useMemo(
+    () => splitSubscriptionFilterValues(filter),
+    [filter],
+  );
+
   const filtered = useMemo(() => {
-    const rows =
-      filter === "all"
-        ? onDay
-        : filter === "expiring_7d"
-          ? onDay.filter(isExpiring)
-          : onDay.filter((s) => s.status === filter);
+    const rows = onDay.filter((s) =>
+      matchesSubscriptionFilter(s, selection, isExpiring),
+    );
     // Status group first, newest-first within each group, so completed and
     // cancelled subscriptions stop pushing live ones down the page. The API
     // already returns created_at DESC; this re-sorts a copy. Display only —
@@ -426,7 +489,92 @@ function SubscriptionsPageInner() {
       if (rankCmp !== 0) return rankCmp;
       return b.created_at.localeCompare(a.created_at);
     });
-  }, [onDay, filter, isExpiring]);
+  }, [onDay, selection, isExpiring]);
+
+  // THE MENU. Three groups, and the divider between them is load-bearing:
+  //
+  //   statuses   — partition the rows, counts sum to the header count
+  //   payment    — a DIFFERENT column, so it overlaps every status above
+  //   filters    — computed from derived_end_date, overlaps everything
+  //
+  // "Expiring in 7 days" used to sit in the status row as a seventh chip.
+  // Its 7 rows are 3 pending_confirmation + 2 active + 2 completed, each of
+  // which was ALSO counted in its own chip, so the chips added up to more
+  // than the table held.
+  const filterOptions = useMemo(() => {
+    const opts = statusGroupOptions(
+      statusValues,
+      counts,
+      selection.statuses,
+      formatStatusLabel,
+    );
+
+    // Payment. Only listed when the range contains rows in that state (or the
+    // operator has it ticked) — same zero-count rule as the statuses.
+    const payTicked = selection.payments.map((p) => `${PAY_PREFIX}${p}`);
+    const payShown = PAYMENT_FILTERS.filter(
+      (p) => (counts[p.value] ?? 0) > 0 || payTicked.includes(p.value),
+    );
+    if (payShown.length > 0) {
+      opts.push(separator("__sep_pay", "Payment"));
+      for (const p of payShown) {
+        opts.push({ value: p.value, label: `${p.label} (${counts[p.value] ?? 0})` });
+      }
+    }
+
+    // Computed. Labelled as a filter, never as a status.
+    opts.push(separator("__sep_computed", "Filters (not statuses)"));
+    opts.push({
+      value: EXPIRING_7D,
+      label: `Expiring in 7 days (${counts[EXPIRING_7D] ?? 0})`,
+    });
+
+    if (filter.length > 0) {
+      opts.push({ value: CLEAR_ALL, label: "Clear all", action: true });
+    }
+    return opts;
+  }, [statusValues, counts, selection, filter.length]);
+
+  // The bracketed number is the LIVE ROW COUNT, never the sum of the ticked
+  // options — see triggerLabel. Tick a status and a payment state and the two
+  // groups AND, so the sum becomes an upper bound.
+  const filterLabel = useMemo(
+    () => triggerLabel(filterOptions, filter, filtered.length),
+    [filterOptions, filter, filtered.length],
+  );
+
+  // Dev-only breadcrumb: real-status counts must sum to the unfiltered row
+  // count. Asserts the RELATIONSHIP — the number moves daily.
+  useEffect(() => {
+    assertStatusCountsPartition(
+      "admin/subscriptions",
+      counts,
+      statusValues.filter((v) => v !== ALL_VALUE),
+      onDay.length,
+    );
+  }, [counts, statusValues, onDay.length]);
+
+  const toggleFilter = useCallback((value: string) => {
+    if (value.startsWith("__sep_")) return;
+    setFilter((curr) => {
+      if (value === CLEAR_ALL) return [];
+      // "All statuses" clears the STATUS group only, leaving payment and
+      // computed filters ticked — it is named "All statuses", not "All rows".
+      if (value === ALL_VALUE)
+        return curr.filter(
+          (v) => v.startsWith(PAY_PREFIX) || v === EXPIRING_7D,
+        );
+      return curr.includes(value)
+        ? curr.filter((v) => v !== value)
+        : [...curr, value];
+    });
+  }, []);
+
+  // "All statuses" ticks when no status is chosen, mirroring the orders menu.
+  const tickedValues = useMemo(
+    () => (selection.statuses.length === 0 ? [...filter, ALL_VALUE] : filter),
+    [filter, selection.statuses.length],
+  );
 
   // Shared by the row's Select and its shortcut buttons, so both writes
   // go through the same optimistic-update + expected_status guard.
@@ -547,17 +695,12 @@ function SubscriptionsPageInner() {
         </>
       }
     >
-      {/* The same control the orders board uses, from the same module,
-          so the two boards cannot ask the same question two ways. */}
-      <div
-        className="mb-4"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.75rem",
-          alignItems: "flex-start",
-        }}
-      >
+      {/* Both controls come from the same modules the orders board uses, so
+          the two boards cannot ask the same question two ways. DayFilter
+          replaced the old From/To pair and its "last one year" preset — that
+          preset only ever existed to undo a default which had itself hidden
+          five live plans. */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
         <DayFilter
           idPrefix="subs-date"
           basis={basis}
@@ -565,26 +708,19 @@ function SubscriptionsPageInner() {
           day={day}
           onDayChange={setDay}
         />
-      </div>
-      <div className="flex flex-wrap gap-2 mb-6">
-        {FILTERS.map((f) => {
-          const active = f.value === filter;
-          return (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => setFilter(f.value)}
-              style={{
-                ...chipBase,
-                color: active ? INK : cream(0.85),
-                background: active ? CREAM : "transparent",
-                borderColor: active ? CREAM : BORDER,
-              }}
-            >
-              {f.label} · {counts[f.value]}
-            </button>
-          );
-        })}
+        {/* Same MultiSelect the orders board uses. The menu stays open so
+            several can be ticked in a row; it closes on outside click or Esc. */}
+        {/* Wider than the orders board's 230: "Payment not completed (5)" is
+            the longest label either menu carries and it ellipsised at 260. */}
+        <div style={{ minWidth: 300 }}>
+          <MultiSelect
+            values={tickedValues}
+            onToggle={toggleFilter}
+            triggerLabel={filterLabel}
+            ariaLabel="Filter subscriptions by status"
+            options={filterOptions}
+          />
+        </div>
       </div>
 
       {error ? (
@@ -979,6 +1115,7 @@ function SubscriptionsPageInner() {
                           partnersLoading={partnersLoading}
                           partnersError={partnersError}
                           buttonStyle={buttonSm}
+                          blockedReason={shareBlockedReason(s)}
                         />
                         {canMarkActive ? (
                           <button
