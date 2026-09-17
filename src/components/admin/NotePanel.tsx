@@ -16,6 +16,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
+import { istDateParts } from "@/lib/admin-formatting";
+import { MONTH_SHORT } from "@/lib/date-names";
 import {
   NOTE_BODY_MAX,
   NOTE_KIND_STYLE,
@@ -51,15 +53,17 @@ const KIND_OPTIONS: { value: NoteKind; label: string }[] = [
  */
 function formatIST(iso: string): string {
   try {
-    return new Intl.DateTimeFormat("en-IN", {
+    const d = new Date(iso);
+    const { day, month, year } = istDateParts(d);
+    const time = new Intl.DateTimeFormat("en-IN", {
       timeZone: "Asia/Kolkata",
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-    }).format(new Date(iso));
+    }).format(d);
+    // Month spelled from MONTH_SHORT, not Intl month:"short", which renders
+    // September as "Sept" on current ICU.
+    return `${String(day).padStart(2, "0")} ${MONTH_SHORT[month - 1]} ${year}, ${time}`;
   } catch {
     return iso;
   }

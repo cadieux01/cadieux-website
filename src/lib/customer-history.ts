@@ -13,6 +13,8 @@
 // Everything here is pure and computed in ONE pass over the rows the
 // list endpoint already fetched — there is no per-row query.
 
+import { MONTH_SHORT } from "@/lib/date-names";
+
 export type HistoryOrder = {
   id?: string | null;
   status?: string | null;
@@ -199,11 +201,6 @@ export function computeRetention(
 
 // --- display helpers (used by the star tooltip) ----------------------------
 
-const MONTHS_SHORT = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-] as const;
-
 /** "5 Sep", in IST. Deliberately NOT Intl month:"short" — current ICU
  *  renders September as "Sept" for en-IN, which reads as a typo. */
 export function formatShortISTDate(iso: string): string {
@@ -219,7 +216,7 @@ export function formatShortISTDate(iso: string): string {
   // "05 Sep".
   const day = String(Number(parts.find((p) => p.type === "day")?.value ?? "0"));
   const monthNum = Number(parts.find((p) => p.type === "month")?.value ?? "0");
-  const month = MONTHS_SHORT[monthNum - 1] ?? "";
+  const month = MONTH_SHORT[monthNum - 1] ?? "";
   return month ? `${day} ${month}` : day;
 }
 

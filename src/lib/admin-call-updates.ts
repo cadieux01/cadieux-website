@@ -12,6 +12,9 @@
 // one does not migrate the notes already written with the old wording; add a
 // new preset instead of rewording an existing one.
 
+import { istDateParts } from "@/lib/admin-formatting";
+import { MONTH_SHORT } from "@/lib/date-names";
+
 /** Presets on the Call-update dropdown, in menu order. The custom escape
  *  hatch is not listed here — it opens the NotePanel with kind pre-set to
  *  'call' so the operator types free-form. */
@@ -37,14 +40,17 @@ export type CallPreset = (typeof CALL_PRESETS)[number];
  */
 export function formatCallChipTime(iso: string): string {
   try {
-    return new Intl.DateTimeFormat("en-IN", {
+    const d = new Date(iso);
+    const { day, month } = istDateParts(d);
+    const time = new Intl.DateTimeFormat("en-IN", {
       timeZone: "Asia/Kolkata",
-      day: "2-digit",
-      month: "short",
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-    }).format(new Date(iso));
+    }).format(d);
+    // Month spelled from MONTH_SHORT, not Intl month:"short", which renders
+    // September as "Sept" on current ICU.
+    return `${String(day).padStart(2, "0")} ${MONTH_SHORT[month - 1]}, ${time}`;
   } catch {
     return iso;
   }

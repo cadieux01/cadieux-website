@@ -8,6 +8,7 @@
 import { useMemo, useState } from "react";
 import { isoDate } from "@/lib/subscription-setup";
 import { dateHasAnyBookable } from "@/lib/delivery-slots";
+import { MONTH_LONG, MONTH_SHORT, WEEKDAY_SHORT } from "@/lib/date-names";
 
 const GOLD = "#024628";
 const TEXT = "#024628";
@@ -61,15 +62,6 @@ function buildMonthCells(y: number, m: number, today: Date, now: Date): Cell[][]
   return rows;
 }
 
-const MONTH_LABELS = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December",
-];
-const MONTH_SHORT = [
-  "Jan","Feb","Mar","Apr","May","Jun",
-  "Jul","Aug","Sep","Oct","Nov","Dec",
-];
-const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function DateCalendar({
   selectedDates,
@@ -149,7 +141,7 @@ export function DateCalendar({
             key={`${viewY}-${viewM}-label`}
             style={{ animation: "cdx-fade-in 0.22s ease" }}
           >
-            {MONTH_LABELS[viewM]} {viewY}
+            {MONTH_LONG[viewM]} {viewY}
           </span>
           <span aria-hidden style={{ fontSize: 16, color: GOLD, transform: pickerOpen ? "rotate(180deg)" : "none", transition: "transform 0.18s ease" }}>▾</span>
         </button>
@@ -168,7 +160,7 @@ export function DateCalendar({
           marginBottom: 6,
         }}
       >
-        {DOW_LABELS.map((d) => (
+        {WEEKDAY_SHORT.map((d) => (
           <div
             key={d}
             style={{

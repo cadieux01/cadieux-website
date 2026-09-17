@@ -2,6 +2,8 @@
 // date-fns or dayjs — the surface area we need is tiny, and the
 // existing admin code already formats dates with toLocaleDateString.
 
+import { MONTH_SHORT } from "@/lib/date-names";
+
 export function formatINR(amount: number | null | undefined): string {
   if (amount === null || amount === undefined || !Number.isFinite(amount)) {
     return "—";
@@ -13,28 +15,68 @@ export function formatINR(amount: number | null | undefined): string {
   }).format(amount);
 }
 
-export function formatDate(iso: string | Date | null | undefined): string {
-  if (!iso) return "—";
-  const d = typeof iso === "string" ? new Date(iso) : iso;
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-IN", {
+const IST = "Asia/Kolkata";
+const CALENDAR_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** Y/M/D as they land in IST, as numbers rather than a formatted string —
+ *  the month comes back as a number so the caller can name it from
+ *  MONTH_SHORT instead of letting ICU render September as "Sept". */
+export function istDateParts(d: Date): {
+  day: number;
+  month: number;
+  year: number;
+} {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: IST,
     day: "numeric",
-    month: "short",
+    month: "numeric",
     year: "numeric",
-  });
+  }).formatToParts(d);
+  const get = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value ?? "0");
+  return { day: get("day"), month: get("month"), year: get("year") };
 }
 
+/** "17 Sep 2026".
+ *
+ *  Two shapes arrive here and they are not the same kind of thing:
+ *
+ *  - `delivery_date` / `scheduled_date` are IST CALENDAR DATES ("2026-09-17"),
+ *    not instants. They are rendered digit-for-digit. Putting them through a
+ *    timezone is how a delivery lands on the board a day early.
+ *  - `created_at` and friends are real timestamps, rendered in IST so the
+ *    board reads the same from a laptop in another zone.
+ *
+ *  The month is spelled from MONTH_SHORT, not Intl month:"short", which
+ *  renders September as "Sept" on current ICU. */
+export function formatDate(iso: string | Date | null | undefined): string {
+  if (!iso) return "—";
+  if (typeof iso === "string") {
+    const m = CALENDAR_DATE_RE.exec(iso.trim());
+    if (m) {
+      const month = Number(m[2]);
+      if (month < 1 || month > 12) return "—";
+      return `${Number(m[3])} ${MONTH_SHORT[month - 1]} ${m[1]}`;
+    }
+  }
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(d.getTime())) return "—";
+  const { day, month, year } = istDateParts(d);
+  return `${day} ${MONTH_SHORT[month - 1]} ${year}`;
+}
+
+/** "17 Sep 2026, 10:30 am", in IST. Only ever called with real timestamps. */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
+  const { day, month, year } = istDateParts(d);
+  const time = new Intl.DateTimeFormat("en-IN", {
+    timeZone: IST,
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }).format(d);
+  return `${day} ${MONTH_SHORT[month - 1]} ${year}, ${time}`;
 }
 
 /**

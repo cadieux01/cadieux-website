@@ -48,6 +48,7 @@ import {
   writeAnchorParams,
   type ResolvedArea,
 } from "@/lib/distance-sort";
+import { MONTH_SHORT, WEEKDAY_SHORT } from "@/lib/date-names";
 import { usePincodeCoords } from "@/lib/use-pincode-coords";
 import {
   EXPIRING_7D,
@@ -95,6 +96,7 @@ import {
   formatDate,
   formatINR,
   isoLocalDate,
+  istDateParts,
 } from "@/lib/admin-formatting";
 import {
   describeSubscriptionPlan,
@@ -2135,13 +2137,7 @@ function DeliveryCard({
             color: "rgba(251,243,212,0.35)",
           }}
         >
-          Updated ·{" "}
-          {new Date(delivery.status_updated_at).toLocaleString("en-IN", {
-            day: "numeric",
-            month: "short",
-            hour: "numeric",
-            minute: "2-digit",
-          })}
+          Updated · {formatUpdatedAt(delivery.status_updated_at)}
         </div>
       ) : null}
       {userEdited ? (
@@ -2359,15 +2355,27 @@ function AdminWeekGroup({
   );
 }
 
+/** "17 Sep, 10:30 am", in IST. A real timestamp, unlike scheduled_date. */
+function formatUpdatedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const { day, month } = istDateParts(d);
+  const time = new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(d);
+  return `${day} ${MONTH_SHORT[month - 1]}, ${time}`;
+}
+
+/** "Thu, 17 Sep 2026". `scheduled_date` is an IST calendar date, so the
+ *  weekday is taken from a UTC-constructed date and the month is spelled
+ *  from MONTH_SHORT — Intl month:"short" renders September as "Sept". */
 function formatScheduledDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return iso;
-  return new Date(y, m - 1, d).toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  if (!y || !m || !d || m < 1 || m > 12) return iso;
+  const weekday = WEEKDAY_SHORT[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${weekday}, ${d} ${MONTH_SHORT[m - 1]} ${y}`;
 }
 
 const drawerSelect: React.CSSProperties = {

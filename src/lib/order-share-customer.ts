@@ -46,6 +46,7 @@
 
 import { itemLines, mapsLinkFor } from "@/lib/order-share-message";
 import { formatSlotWindow } from "@/lib/delivery-slots";
+import { MONTH_SHORT, WEEKDAY_SHORT } from "@/lib/date-names";
 import { STAGE_LABEL, toStage } from "@/lib/order-stages";
 import type { AdminOrderItemSnapshot } from "@/lib/admin-shared";
 
@@ -57,21 +58,15 @@ export function stripAddressLabel(address: string): string {
   return address.replace(/^\s*\[[^\]]*\]\s*/, "").trim();
 }
 
-const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTH_SHORT = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
 /** "Mon 15 Sep". The weekday is the point: the message is read within days of
  *  being sent, and "Mon" answers "which day is that?" without the reader
  *  counting dates. No year, for the same reason — nobody shares an order
  *  eleven months out.
  *
- *  Spelled out from fixed arrays rather than `toLocaleDateString`, which is
- *  ICU-dependent: en-IN renders September as "Sept" on current Node and
- *  Chrome and "Sep" on older ones, so the same order would read differently
- *  depending on the phone it was shared from.
+ *  Spelled out from the fixed arrays in date-names rather than
+ *  `toLocaleDateString`, which is ICU-dependent: en-IN renders September as
+ *  "Sept" on current Node and Chrome and "Sep" on older ones, so the same
+ *  order would read differently depending on the phone it was shared from.
  *
  *  `delivery_date` is stored as an IST calendar date ("2026-09-15"), not an
  *  instant, so it is parsed as UTC and read back in UTC. Going through a
