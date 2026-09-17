@@ -1,19 +1,19 @@
 "use client";
 
 // Print-friendly orders sheet. Renders the same filter set as
-// /admin/orders (status, call, q, sort, from, to — all carried in query
+// /admin/orders (status, call, q, sort, date — all carried in query
 // params) and triggers window.print() once loaded.
 //
-// The date range comes from the DateRangeDropdown on the orders page:
-// ?from=YYYY-MM-DD&to=YYYY-MM-DD (local dates), applied to the column
-// named by ?basis (delivery|order) so the printed sheet matches the
-// on-screen table exactly. The basis MUST be carried: the orders page
-// defaults to filtering on delivery_date, and the 12h booking lead means
-// placed-today and delivering-today barely intersect — printing a sheet
-// filtered on created_at from a screen filtered on delivery_date hands
-// the kitchen a different set of orders than the one it was printed
-// from. The basis is stated in the header so it is never ambiguous
-// which axis a sheet on the bench was cut on.
+// The day comes from the DayFilter on the orders page: ?date=YYYY-MM-DD,
+// one IST calendar day, applied to the column named by ?basis
+// (delivery|order) via @/lib/day-filter — the SAME module the screen
+// uses, so the sheet and the table cannot disagree. The basis MUST be
+// carried: the orders page defaults to filtering on delivery_date, and
+// the 12h booking lead means placed-today and delivering-today barely
+// intersect — printing a sheet filtered on created_at from a screen
+// filtered on delivery_date hands the kitchen a different set of orders
+// than the one it was printed from. The basis is stated in the header so
+// it is never ambiguous which axis a sheet on the bench was cut on.
 //
 // Rows are grouped first by delivery_date then by delivery_slot so the
 // kitchen can pack each route slot in one pass. Orders missing either
@@ -23,46 +23,25 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import {
-  withinDateRange,
-  type DateRangeValue,
-} from "@/components/admin/DateRangeDropdown";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { paymentLabel } from "@/lib/payment-label";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { AdminOrderItemSnapshot, AdminOrderRow } from "@/lib/admin-shared";
+import { decodeStatusParam, matchesOrderFilter } from "@/lib/order-filter";
 import {
-  decodeStatusParam,
-  matchesOrderFilter,
+  matchesDay,
   orderDateForBasis,
   parseBasis,
+  parseDayParam,
   type DateBasis,
-} from "@/lib/order-filter";
+} from "@/lib/day-filter";
 
-// Parse a YYYY-MM-DD string (from the orders page's toYMD) as a local
-// Date. Invalid / missing → null. Mirrors DateRangeDropdown's own
-// parser — kept private here to avoid enlarging its exported API.
-function parseYmdLocal(s: string | null): Date | null {
-  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const [y, m, d] = s.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return Number.isNaN(dt.getTime()) ? null : dt;
-}
-
-function buildRange(
-  fromParam: string | null,
-  toParam: string | null,
-): DateRangeValue | null {
-  const f = parseYmdLocal(fromParam);
-  const t = parseYmdLocal(toParam);
-  if (!f || !t) return null;
-  const from = new Date(f);
-  from.setHours(0, 0, 0, 0);
-  const to = new Date(t);
-  to.setHours(23, 59, 59, 999);
-  return { from, to };
-}
+// The private parseYmdLocal + buildRange that used to sit here are GONE.
+// They built a local-midnight..local-23:59 window out of ?from/?to, which
+// is both a range this board no longer has and a comparison in the
+// browser's timezone rather than IST. The day is now matched as a string
+// by @/lib/day-filter, the one module the screen also uses.
 
 // Suspense wrapper required by Next.js prerender for any client page
 // that reads useSearchParams() directly.
@@ -103,20 +82,18 @@ function PrintOrdersPageInner() {
       ", ",
     ) || "all";
   const q = params.get("q") ?? "";
-  const fromParam = params.get("from");
-  const toParam = params.get("to");
-  const range = useMemo(
-    () => buildRange(fromParam, toParam),
-    [fromParam, toParam],
-  );
+  // ONE day, ?date=YYYY-MM-DD, narrowed by the same parser the screen
+  // uses. Absent or malformed → null → every row, which is exactly what
+  // the screen shows in that state.
+  const day = parseDayParam(params.get("date"));
   // Default MUST match DEFAULT_BASIS on /admin/orders, so an older
   // bookmark that predates the param still prints what today's screen
   // would show.
   const basis: DateBasis = parseBasis(params.get("basis"));
   const basisLabel = basis === "delivery" ? "by delivery date" : "by order date";
-  const rangeLabel = range
-    ? `Range: ${formatDate(fromParam)} → ${formatDate(toParam)} (${basisLabel})`
-    : "Range: all dates";
+  const dayLabel = day
+    ? `Date: ${formatDate(day)} (${basisLabel})`
+    : "Date: all dates";
 
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,10 +120,10 @@ function PrintOrdersPageInner() {
   const filtered = useMemo(() => {
     const search = q.trim().toLowerCase();
     return orders.filter((o) => {
-      // Date-range filter on the same column the table used. When
-      // from/to are missing, range is null and this passes everything
-      // (back-compat for older bookmarks / entry points).
-      if (!withinDateRange(orderDateForBasis(o, basis), range)) return false;
+      // Day filter on the same column the table used, through the same
+      // module. When ?date is missing, day is null and this passes
+      // everything (back-compat for older bookmarks / entry points).
+      if (!matchesDay(orderDateForBasis(o, basis), day)) return false;
       if (!matchesOrderFilter(o, statuses, calls, repeatOnly)) return false;
       if (!search) return true;
       const name = (o.customers?.full_name ?? "").toLowerCase();
@@ -157,7 +134,7 @@ function PrintOrdersPageInner() {
     // a link that changes only ?basis re-renders this component WITHOUT
     // remounting it; omitting it here left the memo serving rows cut on
     // the previous column while the header above already said the new one.
-  }, [orders, statuses, calls, repeatOnly, q, range, basis]);
+  }, [orders, statuses, calls, repeatOnly, q, day, basis]);
 
   // Group: delivery_date → delivery_slot → orders[]. Null date/slot
   // bucket sorts last so the dated rows print first.
@@ -221,11 +198,11 @@ function PrintOrdersPageInner() {
             Cadieux — Orders
           </h1>
           <p style={{ margin: "0.3rem 0 0", color: "rgba(29,29,31,0.7)", fontSize: "1rem" }}>
-            {rangeLabel} · Status: {filterLabel} · Search: {q || "—"} · Generated{" "}
+            {dayLabel} · Status: {filterLabel} · Search: {q || "—"} · Generated{" "}
             {new Date().toLocaleString("en-IN")}
           </p>
         </header>
-        <p>No orders in the selected range.</p>
+        <p>No orders on the selected date.</p>
       </main>
     );
   }
@@ -237,7 +214,7 @@ function PrintOrdersPageInner() {
           Cadieux — Orders
         </h1>
         <p style={{ margin: "0.3rem 0 0", color: "rgba(29,29,31,0.7)", fontSize: "1rem" }}>
-          {rangeLabel} · Status: {filterLabel} · Search: {q || "—"} · Generated{" "}
+          {dayLabel} · Status: {filterLabel} · Search: {q || "—"} · Generated{" "}
           {new Date().toLocaleString("en-IN")}
         </p>
         <p style={{ margin: "0.3rem 0 0", fontSize: "1rem" }}>

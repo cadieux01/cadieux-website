@@ -52,6 +52,16 @@ export type DerivedSub = {
   delivered_deliveries: number;
   // null once every delivery is delivered or cancelled.
   next_delivery: NextDelivery | null;
+  // EVERY still-meaningful delivery date on the plan (cancelled rows
+  // excluded), as IST calendar dates, ascending and de-duplicated.
+  //
+  // This is what the subscriptions board's day filter matches against.
+  // It cannot be `next_delivery` alone: a plan delivering on the 18th and
+  // the 20th has a next_delivery of the 18th, and matching on that would
+  // make it vanish from a board showing the 20th — the plan would be
+  // baked for, but not listed. Delivered rows STAY in the set so an
+  // operator looking back at yesterday still sees who was served.
+  delivery_dates: string[];
 };
 
 export function buildDerivations(
@@ -63,11 +73,24 @@ export function buildDerivations(
   const totalBySub = new Map<string, number>();
   const deliveredBySub = new Map<string, number>();
   const nextBySub = new Map<string, NextDelivery>();
+  const datesBySub = new Map<string, Set<string>>();
   for (const row of deliveries) {
     const sid = row.subscription_id;
     const cur = maxByDel.get(sid);
     if (!cur || row.delivery_date > cur) maxByDel.set(sid, row.delivery_date);
     totalBySub.set(sid, (totalBySub.get(sid) ?? 0) + 1);
+    if (row.status !== "cancelled") {
+      // Same `scheduled_date ?? delivery_date` precedence the next-delivery
+      // pick below uses, and the same one the UI displays. Reading the raw
+      // column instead would put a rescheduled stop on the board under its
+      // ORIGINAL date while the row itself shows the new one.
+      const date = row.scheduled_date ?? row.delivery_date;
+      if (date) {
+        let set = datesBySub.get(sid);
+        if (!set) datesBySub.set(sid, (set = new Set()));
+        set.add(date);
+      }
+    }
     if (row.status === "delivered") {
       deliveredBySub.set(sid, (deliveredBySub.get(sid) ?? 0) + 1);
     }
@@ -101,6 +124,7 @@ export function buildDerivations(
       total_deliveries: totalBySub.get(sub.id) ?? 0,
       delivered_deliveries: deliveredBySub.get(sub.id) ?? 0,
       next_delivery: nextBySub.get(sub.id) ?? null,
+      delivery_dates: Array.from(datesBySub.get(sub.id) ?? []).sort(),
     });
   }
   return out;

@@ -9,7 +9,7 @@
 // logic here.
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Suspense,
   useCallback,
@@ -24,12 +24,15 @@ import Select from "@/components/ui/Select";
 import { formatSubscriptionNumber } from "@/lib/order-number";
 import { isSubscriptionFulfilled } from "@/lib/order-fulfillment";
 import { FulfilledTick } from "@/components/admin/FulfilledTick";
+import { DayFilter } from "@/components/admin/DayFilter";
 import {
-  DateRangeDropdown,
-  resolvePreset,
-  withinDateRange,
-  type DateRangeValue,
-} from "@/components/admin/DateRangeDropdown";
+  DEFAULT_BASIS,
+  matchesAnyDay,
+  parseBasis,
+  parseDayParam,
+  subscriptionDatesForBasis,
+  type DateBasis,
+} from "@/lib/day-filter";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import {
@@ -175,7 +178,7 @@ function shareScopes(s: AdminSubscriptionRow): ShareScope[] {
 }
 
 // Suspense wrapper required by Next.js prerender for any client page
-// that reads useSearchParams() — useDateRangeFromQuery does.
+// that reads useSearchParams() — the ?basis/?date hydration does.
 export default function SubscriptionsPage() {
   return (
     <Suspense fallback={<AdminLoading />}>
@@ -221,18 +224,37 @@ function SubscriptionsPageInner() {
     | null
   >(null);
   const [callBusyId, setCallBusyId] = useState<string | null>(null);
-  // NOT the shared DEFAULT_PRESET ("This Month"). This board is operational,
-  // and created_at is the wrong axis to hide rows on: one subscription was
-  // created in July, is still `active`, and was the only active subscription
-  // in the table — the This Month default hid it, along with 4 others. (Its
-  // number is not quoted here: the 2026-09-14 renumber changed every one.)
-  // A wide
-  // window is the least-wrong default until this filters by relevance
-  // instead. Keep in sync with the DateRangeDropdown's initialPreset below,
-  // or the label will disagree with what is actually filtered.
-  const [range, setRange] = useState<DateRangeValue | null>(() =>
-    resolvePreset("one_year"),
+
+  // The date filter: the same control, the same module and the same two
+  // params as /admin/orders.
+  //
+  // The default is NO DAY — every row. It replaces a "last one year"
+  // preset that existed only to undo the old shared default of "This
+  // Month", which on created_at had hidden five live subscriptions,
+  // including the only active one, because they were signed up in July.
+  // A window wide enough to be harmless was never answering a question;
+  // showing everything until an operator picks a day is.
+  const searchParams = useSearchParams();
+  const [basis, setBasis] = useState<DateBasis>(() =>
+    parseBasis(searchParams.get("basis")),
   );
+  const [day, setDay] = useState<string | null>(() =>
+    parseDayParam(searchParams.get("date")),
+  );
+
+  // URL writeback, so a picked day survives reload and Back from a
+  // detail page. `replace` rather than `push`: a filter change is not a
+  // navigation, and pushing would make Back step through every keystroke
+  // of date-picking instead of leaving the board.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (basis !== DEFAULT_BASIS) params.set("basis", basis);
+    if (day) params.set("date", day);
+    const qs = params.toString();
+    router.replace(qs ? `/admin/subscriptions?${qs}` : "/admin/subscriptions", {
+      scroll: false,
+    });
+  }, [basis, day, router]);
 
   // Delivery partners power the per-row "Share" button. Fetched once on
   // mount (never polled) and passed to every PartnerShareButton — same
@@ -350,9 +372,16 @@ function SubscriptionsPageInner() {
     [drawerId, subs],
   );
 
-  const inRange = useMemo(
-    () => subs.filter((s) => withinDateRange(s.created_at, range)),
-    [subs, range],
+  // A subscription is not one delivery, so on the delivery basis it
+  // matches the day if ANY of its remaining/served stops lands on it —
+  // see subscriptionDatesForBasis. Matching next_delivery alone would
+  // drop a plan that runs on the 18th and the 20th from the 20th.
+  const onDay = useMemo(
+    () =>
+      subs.filter((s) =>
+        matchesAnyDay(subscriptionDatesForBasis(s, basis), day),
+      ),
+    [subs, basis, day],
   );
 
   const isExpiring = useCallback((s: AdminSubscriptionRow): boolean => {
@@ -366,7 +395,7 @@ function SubscriptionsPageInner() {
 
   const counts = useMemo(() => {
     const c: Record<FilterValue, number> = {
-      all: inRange.length,
+      all: onDay.length,
       pending_confirmation: 0,
       active: 0,
       paused: 0,
@@ -374,20 +403,20 @@ function SubscriptionsPageInner() {
       cancelled: 0,
       expiring_7d: 0,
     };
-    for (const s of inRange) {
+    for (const s of onDay) {
       if (s.status in c) c[s.status as FilterValue]++;
       if (isExpiring(s)) c.expiring_7d++;
     }
     return c;
-  }, [inRange, isExpiring]);
+  }, [onDay, isExpiring]);
 
   const filtered = useMemo(() => {
     const rows =
       filter === "all"
-        ? inRange
+        ? onDay
         : filter === "expiring_7d"
-          ? inRange.filter(isExpiring)
-          : inRange.filter((s) => s.status === filter);
+          ? onDay.filter(isExpiring)
+          : onDay.filter((s) => s.status === filter);
     // Status group first, newest-first within each group, so completed and
     // cancelled subscriptions stop pushing live ones down the page. The API
     // already returns created_at DESC; this re-sorts a copy. Display only —
@@ -397,7 +426,7 @@ function SubscriptionsPageInner() {
       if (rankCmp !== 0) return rankCmp;
       return b.created_at.localeCompare(a.created_at);
     });
-  }, [inRange, filter, isExpiring]);
+  }, [onDay, filter, isExpiring]);
 
   // Shared by the row's Select and its shortcut buttons, so both writes
   // go through the same optimistic-update + expected_status guard.
@@ -518,8 +547,24 @@ function SubscriptionsPageInner() {
         </>
       }
     >
-      <div className="mb-4">
-        <DateRangeDropdown onChange={setRange} initialPreset="one_year" />
+      {/* The same control the orders board uses, from the same module,
+          so the two boards cannot ask the same question two ways. */}
+      <div
+        className="mb-4"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.75rem",
+          alignItems: "flex-start",
+        }}
+      >
+        <DayFilter
+          idPrefix="subs-date"
+          basis={basis}
+          onBasisChange={setBasis}
+          day={day}
+          onDayChange={setDay}
+        />
       </div>
       <div className="flex flex-wrap gap-2 mb-6">
         {FILTERS.map((f) => {

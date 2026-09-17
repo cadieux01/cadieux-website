@@ -16,7 +16,7 @@
 //
 // Palette: see components/admin/theme.ts — INK (#1D1D1F) + CREAM (#FBF3D4).
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import Select from "@/components/ui/Select";
 import DatePicker from "@/components/ui/DatePicker";
@@ -156,55 +156,27 @@ export function withinDateRange(
 }
 
 // ── component ─────────────────────────────────────────────────────────────
+// `presetValue`, `showCustomPanel`, `initialCustomFrom` and
+// `initialCustomTo` used to be props here. They existed ONLY for
+// /admin/orders, which offered its own always-visible From/To pair next
+// to this dropdown and needed the two controls kept from contradicting
+// each other. That page now has a single date and does not use this
+// component at all, so the props had no caller left. Deleted rather than
+// defaulted: a prop nothing passes is a second way to configure a
+// control, which is how the two surfaces disagreed in the first place.
+// The four remaining consumers (overview, customers, audit, audit-log)
+// all render <DateRangeDropdown onChange={…} /> and are untouched.
 export function DateRangeDropdown({
   onChange,
   initialPreset = DEFAULT_PRESET,
-  initialCustomFrom = "",
-  initialCustomTo = "",
-  presetValue,
-  showCustomPanel = true,
 }: {
   onChange: (range: DateRangeValue, meta?: DateRangeMeta) => void;
   initialPreset?: PresetKey;
-  // When the parent hydrates from a URL that carried a custom range,
-  // seed the From/To inputs so the panel opens on the same values it
-  // was persisted with. Empty strings preserve the legacy behaviour.
-  initialCustomFrom?: string;
-  initialCustomTo?: string;
-  /**
-   * Optional CONTROLLED preset. The preset otherwise lives in here and
-   * only this dropdown can change it, which stops being right once the
-   * page offers a second way to set a range — /admin/orders now has its
-   * own always-visible From/To inputs, and without this the button would
-   * still read "Today" while the table showed some other week.
-   *
-   * Parents that omit it keep the original self-owned behaviour.
-   */
-  presetValue?: PresetKey;
-  /**
-   * Whether picking "Custom…" reveals the inline From/To panel.
-   *
-   * Pages that offer their OWN always-visible date inputs must pass
-   * false. /admin/orders does: without it, setting a date there flips
-   * the preset to "custom", this panel unfolds, and the operator is
-   * looking at TWO From/To editors — two controls with the accessible
-   * name "From date", one of which is the one they just used and the
-   * other blank and needing an Apply click. The panel is not merely
-   * redundant there, it contradicts the inputs above it.
-   */
-  showCustomPanel?: boolean;
 }) {
-  const [preset, setPreset] = useState<PresetKey>(presetValue ?? initialPreset);
-
-  // Mirror the parent when it owns the preset. Deliberately NOT a fully
-  // controlled component: only the label follows, so a custom range the
-  // operator is midway through typing in the panel is not clobbered.
-  useEffect(() => {
-    if (presetValue !== undefined) setPreset(presetValue);
-  }, [presetValue]);
+  const [preset, setPreset] = useState<PresetKey>(initialPreset);
   const [customMode, setCustomMode] = useState<CustomMode>("range");
-  const [customFrom, setCustomFrom] = useState(initialCustomFrom);
-  const [customTo, setCustomTo] = useState(initialCustomTo);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [singleDate, setSingleDate] = useState("");
   const [yearValue, setYearValue] = useState<string>(String(new Date().getFullYear()));
   const [customError, setCustomError] = useState<string | null>(null);
@@ -291,7 +263,7 @@ export function DateRangeDropdown({
         />
       </div>
 
-      {preset === "custom" && showCustomPanel ? (
+      {preset === "custom" ? (
         <div
           style={{
             display: "flex",

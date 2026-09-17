@@ -321,6 +321,11 @@ export type AdminSubscriptionRow = {
   // The one delivery still owed — earliest non-terminal row. null once
   // every delivery is delivered or cancelled. Same two payloads as above.
   next_delivery?: NextDelivery | null;
+  // Every still-meaningful delivery date on the plan (cancelled rows
+  // excluded), ascending IST calendar dates. Same two payloads as above.
+  // The board's day filter matches against this WHOLE SET, not against
+  // next_delivery — see subscriptionDatesForBasis in @/lib/day-filter.
+  delivery_dates?: string[] | null;
   // Per-variant breakdown. Empty/absent on rows written before
   // subscription_items existed — call sites fall back to product_name ×
   // quantity_per_delivery.

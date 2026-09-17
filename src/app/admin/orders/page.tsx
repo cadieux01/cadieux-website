@@ -27,15 +27,7 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { AreaSortControl, type ResolvedArea } from "@/components/admin/AreaSortControl";
 import { EditOrderPanel } from "@/components/admin/EditOrderPanel";
 import { ProductionCountStrip } from "@/components/admin/ProductionCountStrip";
-import {
-  DateRangeDropdown,
-  DEFAULT_PRESET,
-  resolvePreset,
-  toYMD,
-  withinDateRange,
-  type DateRangeValue,
-  type PresetKey,
-} from "@/components/admin/DateRangeDropdown";
+import { DayFilter } from "@/components/admin/DayFilter";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { OrderLocationActions } from "@/components/admin/OrderLocationActions";
 import {
@@ -66,20 +58,23 @@ import {
 } from "@/lib/admin-notify";
 import Select from "@/components/ui/Select";
 import MultiSelect from "@/components/ui/MultiSelect";
-import DatePicker from "@/components/ui/DatePicker";
 import {
   ALL_VALUE,
   CALL_PREFIX,
-  DEFAULT_BASIS,
   REPEAT_ONLY,
   decodeStatusParam,
   encodeStatusParam,
   matchesOrderFilter,
+  splitFilterValues,
+} from "@/lib/order-filter";
+import {
+  DEFAULT_BASIS,
+  matchesDay,
   orderDateForBasis,
   parseBasis,
-  splitFilterValues,
+  parseDayParam,
   type DateBasis,
-} from "@/lib/order-filter";
+} from "@/lib/day-filter";
 import { repeatTooltip } from "@/lib/customer-history";
 import { RetentionPanel } from "@/components/admin/RetentionPanel";
 import type { RetentionSummary } from "@/lib/customer-history";
@@ -101,36 +96,18 @@ import { ensureAdminFirstName } from "@/lib/admin-first-name";
 
 type SortKey = "created_desc" | "delivery_asc" | "nearest_from_area";
 
-// Which date-column the range filter binds to.
-//
-// Sunny verified in prod that with the 12h booking lead time these two
-// sets barely intersect: on a typical day 20 orders are PLACED and 27
-// are DELIVERED and the overlap is zero. "Order date" is what the page
-// used to filter on, but it's the wrong axis for every operational
-// decision made on this screen (baking, routing, calling). The default
-// is therefore delivery date; the toggle stays visible so it is never
-// ambiguous which axis is in play.
-//
-// DateBasis, DEFAULT_BASIS and orderDateForBasis are imported from
-// @/lib/order-filter rather than declared here: the packing list at
-// /admin/orders/print applies the same range and must resolve the same
-// column, exactly as it already shares the status predicate.
+// The date filter is ONE DAY on ONE COLUMN, and all of its semantics —
+// DateBasis, DEFAULT_BASIS, orderDateForBasis, matchesDay — are imported
+// from @/lib/day-filter rather than declared here. The packing list at
+// /admin/orders/print and the subscriptions board import the same module,
+// so a sheet that walks into the kitchen cannot be cut on a different
+// axis or a different day than the screen it was printed from.
 const DEFAULT_SORT: SortKey = "created_desc";
 
 const SORT_KEYS: readonly SortKey[] = [
   "created_desc",
   "delivery_asc",
   "nearest_from_area",
-];
-const PRESET_VALUES: readonly PresetKey[] = [
-  "today",
-  "this_week",
-  "last_week",
-  "this_month",
-  "last_month",
-  "last_6_months",
-  "one_year",
-  "custom",
 ];
 
 // ── URL state ──────────────────────────────────────────────────────────────
@@ -151,30 +128,11 @@ type UrlInitial = {
   filter: string[];
   query: string;
   sort: SortKey;
-  preset: PresetKey;
-  customFrom: string;
-  customTo: string;
   basis: DateBasis;
-  range: DateRangeValue;
+  /** The selected day, or null for "all dates". */
+  day: string | null;
   anchor: ResolvedArea | null;
 };
-
-function parseYmdLocal(s: string | null): Date | null {
-  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const [y, m, d] = s.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return Number.isNaN(dt.getTime()) ? null : dt;
-}
-function startOfDayLocal(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-function endOfDayLocal(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
-}
 
 /* ------------------------------------------------------------------ *
  * SHARE DELIVERY
@@ -283,37 +241,11 @@ function parseUrlInitial(sp: URLSearchParams): UrlInitial {
 
   const basis: DateBasis = parseBasis(sp.get("basis"));
 
-  const presetRaw = sp.get("preset");
-  const presetOk =
-    presetRaw && (PRESET_VALUES as readonly string[]).includes(presetRaw);
-  let preset: PresetKey = presetOk ? (presetRaw as PresetKey) : DEFAULT_PRESET;
-
-  const fromYmd = sp.get("from") ?? "";
-  const toYmd = sp.get("to") ?? "";
-  let customFrom = "";
-  let customTo = "";
-  let range: DateRangeValue;
-  if (preset === "custom") {
-    const f = parseYmdLocal(fromYmd);
-    const t = parseYmdLocal(toYmd);
-    if (f && t) {
-      const earlier = f.getTime() <= t.getTime() ? f : t;
-      const later = f.getTime() <= t.getTime() ? t : f;
-      customFrom = toYMD(earlier);
-      customTo = toYMD(later);
-      range = { from: startOfDayLocal(earlier), to: endOfDayLocal(later) };
-    } else {
-      // Bad/incomplete custom URL — fall back to the default preset so
-      // the table still has a range to filter by.
-      preset = DEFAULT_PRESET;
-      range = resolvePreset(DEFAULT_PRESET as Exclude<PresetKey, "custom">);
-    }
-  } else {
-    // preset is narrowed to non-"custom" here in the operator's head,
-    // but TypeScript can't track the branch condition — narrow at the
-    // callsite.
-    range = resolvePreset(preset as Exclude<PresetKey, "custom">);
-  }
+  // One param, one day. A malformed or absent `date` means no day filter
+  // at all — every row. It deliberately does NOT fall back to "today":
+  // a link that quietly re-aims itself at a different day than the one it
+  // names is the drift this filter exists to end.
+  const day = parseDayParam(sp.get("date"));
 
   // Area anchor. All four fields are required for a usable anchor —
   // partial data would produce a sort key with no way to compute
@@ -339,11 +271,8 @@ function parseUrlInitial(sp: URLSearchParams): UrlInitial {
     filter,
     query,
     sort,
-    preset,
-    customFrom,
-    customTo,
     basis,
-    range,
+    day,
     anchor,
   };
 }
@@ -352,10 +281,8 @@ function stateToSearch(s: {
   filter: string[];
   query: string;
   sort: SortKey;
-  preset: PresetKey;
-  customFrom: string;
-  customTo: string;
   basis: DateBasis;
+  day: string | null;
   anchor: ResolvedArea | null;
 }): string {
   const params = new URLSearchParams();
@@ -366,11 +293,7 @@ function stateToSearch(s: {
   if (s.query.trim()) params.set("q", s.query);
   if (s.sort !== DEFAULT_SORT) params.set("sort", s.sort);
   if (s.basis !== DEFAULT_BASIS) params.set("basis", s.basis);
-  if (s.preset !== DEFAULT_PRESET) params.set("preset", s.preset);
-  if (s.preset === "custom" && s.customFrom && s.customTo) {
-    params.set("from", s.customFrom);
-    params.set("to", s.customTo);
-  }
+  if (s.day) params.set("date", s.day);
   if (s.anchor) {
     params.set("area", s.anchor.label);
     params.set("area_lat", String(s.anchor.latitude));
@@ -537,8 +460,8 @@ type BulkResult = {
 };
 
 // Suspense wrapper required by Next.js prerender for any client page
-// that reads useSearchParams() — useDateRangeFromQuery does, so the
-// boundary lives at the page export.
+// that reads useSearchParams() — parseUrlInitial does, so the boundary
+// lives at the page export.
 export default function OrdersPage() {
   return (
     <Suspense fallback={<AdminLoading />}>
@@ -620,13 +543,9 @@ function OrdersPageInner() {
   const [pendingBulk, setPendingBulk] = useState<BulkAction | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
-  const [range, setRange] = useState<DateRangeValue | null>(urlInit.range);
-  // Preset + custom values are lifted into the parent so the URL can
-  // round-trip the exact picker state — a bare { from, to } would
-  // erase the label ("This Week") the operator picked.
-  const [preset, setPreset] = useState<PresetKey>(urlInit.preset);
-  const [customFrom, setCustomFrom] = useState<string>(urlInit.customFrom);
-  const [customTo, setCustomTo] = useState<string>(urlInit.customTo);
+  // The whole of the date filter: one day, or null for every row. There is
+  // no second representation of it to keep in sync — that is the point.
+  const [day, setDay] = useState<string | null>(urlInit.day);
 
   // "Nearest from typed area" sort — see AreaSortControl. anchor is null
   // until the operator matches an area; pincodeCoords hydrates once on
@@ -673,29 +592,16 @@ function OrdersPageInner() {
     setRankPins((curr) => (curr.size === 0 ? curr : new Map()));
   }, []);
 
-  // What the always-visible From/To inputs show. `customFrom`/`customTo`
-  // are only populated while the preset IS custom, so fall back to the
-  // resolved range — that way the inputs read out whatever is actually
-  // in force ("This Week" shows that week's two dates) instead of
-  // sitting blank next to a filtered table.
-  const fromInputValue = customFrom || (range ? toYMD(range.from) : "");
-  const toInputValue = customTo || (range ? toYMD(range.to) : "");
-
-  /** Set the range straight from the two inputs and flip the preset to
-   *  Custom, so the dropdown label can never contradict the dates. */
-  const applyExplicitRange = (nextFrom: string, nextTo: string) => {
-    // Reversed dates are swapped rather than rejected — the same thing
-    // the dropdown's own custom panel does, so the two agree.
-    const [a, b] = nextFrom <= nextTo ? [nextFrom, nextTo] : [nextTo, nextFrom];
-    const fromDate = parseYmdLocal(a);
-    const toDate = parseYmdLocal(b);
-    if (!fromDate || !toDate) return;
-    clearRankPins();
-    setRange({ from: startOfDayLocal(fromDate), to: endOfDayLocal(toDate) });
-    setPreset("custom");
-    setCustomFrom(a);
-    setCustomTo(b);
-  };
+  /** Selecting or clearing the day. Pins are dropped for the same reason
+   *  a filter or sort change drops them: the rows underneath are about to
+   *  be a different set, so a frozen rank has nothing left to freeze. */
+  const applyDay = useCallback(
+    (next: string | null) => {
+      clearRankPins();
+      setDay(next);
+    },
+    [clearRankPins],
+  );
 
   // Delivery partners power the per-row "Share" button. Fetched once on
   // mount (never polled — the list changes only when the operator edits
@@ -789,17 +695,15 @@ function OrdersPageInner() {
       filter,
       query,
       sort,
-      preset,
-      customFrom,
-      customTo,
       basis,
+      day,
       anchor,
     });
     const current = typeof window === "undefined" ? "" : window.location.search.replace(/^\?/, "");
     if (qs === current) return;
     const next = qs ? `/admin/orders?${qs}` : "/admin/orders";
     router.replace(next, { scroll: false });
-  }, [filter, query, sort, preset, customFrom, customTo, basis, anchor, router]);
+  }, [filter, query, sort, basis, day, anchor, router]);
 
   // Scroll restoration. Row click stashes the current scrollY in
   // sessionStorage; this effect reads and clears it once the list has
@@ -879,7 +783,7 @@ function OrdersPageInner() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const rows = orders.filter((o) => {
-      if (!withinDateRange(orderDateForBasis(o, basis), range)) return false;
+      if (!matchesDay(orderDateForBasis(o, basis), day)) return false;
       // Statuses OR'd, call updates OR'd, the two groups AND'd. Shared
       // with the print view so the packing list can't disagree with the
       // screen it was printed from — see src/lib/order-filter.ts.
@@ -950,7 +854,7 @@ function OrdersPageInner() {
         if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [orders, statusSel, callSel, repeatOnly, query, sort, range, rankOf, anchor, pincodeCoords, basis]);
+  }, [orders, statusSel, callSel, repeatOnly, query, sort, day, rankOf, anchor, pincodeCoords, basis]);
 
   // A restored id is only meaningful if the row is still there — an order
   // can have been cancelled, or the filters can have moved on, while the
@@ -972,30 +876,30 @@ function OrdersPageInner() {
     });
   }, [loading, filtered]);
 
-  // Counts are scoped to the active date range so the numbers in the
+  // Counts are scoped to the selected day so the numbers in the
   // Status dropdown match the rows the operator is actually looking at.
   const counts = useMemo(() => {
-    const inRange = orders.filter((o) =>
-      withinDateRange(orderDateForBasis(o, basis), range),
+    const onDay = orders.filter((o) =>
+      matchesDay(orderDateForBasis(o, basis), day),
     );
-    const c: Record<string, number> = { all: inRange.length };
-    for (const o of inRange) {
+    const c: Record<string, number> = { all: onDay.length };
+    for (const o of onDay) {
       const k = (o.status ?? "").toLowerCase();
       c[k] = (c[k] ?? 0) + 1;
       if ((o.repeat_seq ?? 0) >= 2) c.repeat = (c.repeat ?? 0) + 1;
     }
     return c;
-  }, [orders, range, basis]);
+  }, [orders, day, basis]);
 
   // Distinct call-note bodies + occurrence count across the same
-  // in-range slice. Powers the "Call updates" group in the filter
+  // day-scoped slice. Powers the "Call updates" group in the filter
   // dropdown; the label the operator sees is the exact note body.
   const callBodies = useMemo(() => {
-    const inRange = orders.filter((o) =>
-      withinDateRange(orderDateForBasis(o, basis), range),
+    const onDay = orders.filter((o) =>
+      matchesDay(orderDateForBasis(o, basis), day),
     );
     const tally = new Map<string, number>();
-    for (const o of inRange) {
+    for (const o of onDay) {
       const b = o.last_call_note?.body;
       if (!b) continue;
       tally.set(b, (tally.get(b) ?? 0) + 1);
@@ -1003,7 +907,7 @@ function OrdersPageInner() {
     return Array.from(tally.entries())
       .map(([body, count]) => ({ body, count }))
       .sort((a, b) => b.count - a.count);
-  }, [orders, range, basis]);
+  }, [orders, day, basis]);
 
   // Data-derived option list for the status filter. Iterates the
   // preferred ordering in STATUS_FILTER_OPTIONS (which already omits
@@ -1406,14 +1310,12 @@ function OrdersPageInner() {
                 ...(repeatOnly ? { repeat: "1" } : {}),
                 q: query,
                 sort,
-                // Carry the currently-selected date range so the print
-                // view shows exactly the same slice as the on-screen table
-                // — and the BASIS with it, or the sheet would filter on a
-                // different column than the screen it was printed from.
+                // Carry the selected day so the print view shows exactly
+                // the same slice as the on-screen table — and the BASIS
+                // with it, or the sheet would filter on a different column
+                // than the screen it was printed from.
                 basis,
-                ...(range
-                  ? { from: toYMD(range.from), to: toYMD(range.to) }
-                  : {}),
+                ...(day ? { date: day } : {}),
               },
             }}
             className="uppercase"
@@ -1455,111 +1357,19 @@ function OrdersPageInner() {
           alignItems: "flex-start",
         }}
       >
-        <DateRangeDropdown
-          initialPreset={urlInit.preset}
-          initialCustomFrom={urlInit.customFrom}
-          initialCustomTo={urlInit.customTo}
-          presetValue={preset}
-          // This page has its own From/To below. Letting the dropdown
-          // also unfold its panel would put two "From date" controls on
-          // screen at once — see showCustomPanel.
-          showCustomPanel={false}
-          onChange={(v, meta) => {
+        {/* ONE control: which date-column, and which day. Shared with
+            /admin/subscriptions so the two boards cannot ask the same
+            question two different ways. */}
+        <DayFilter
+          idPrefix="orders-date"
+          basis={basis}
+          onBasisChange={(next) => {
             clearRankPins();
-            setRange(v);
-            if (meta) {
-              setPreset(meta.preset);
-              setCustomFrom(meta.customFrom);
-              setCustomTo(meta.customTo);
-            }
+            setBasis(next);
           }}
+          day={day}
+          onDayChange={applyDay}
         />
-        {/* Which date-column the range applies to. Default is delivery
-            date because the 12h lead time makes the order-date and
-            delivery-date sets barely intersect (verified in prod: 20
-            placed, 27 being delivered, zero overlap on the same day).
-            The label ("Filter by …") stays visible so it is never
-            ambiguous which axis is in play. */}
-        <div style={{ display: "inline-flex", flexDirection: "column", gap: "0.25rem" }}>
-          <label
-            htmlFor="orders-date-basis"
-            style={{
-              color: "rgba(251,243,212,0.7)",
-              fontFamily: "var(--font-body)",
-              fontSize: "0.75rem",
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-            }}
-          >
-            Filter by
-          </label>
-          <div style={{ minWidth: 190 }}>
-            <Select
-              value={basis}
-              ariaLabel="Which date the range filters on"
-              onChange={(v) => {
-                clearRankPins();
-                setBasis(v as DateBasis);
-              }}
-              options={[
-                { value: "delivery", label: "Delivery date" },
-                { value: "order", label: "Order date" },
-              ]}
-            />
-          </div>
-        </div>
-        {/* Explicit From/To, always visible. The presets above cover the
-            common cases but every other range used to be two clicks deep
-            behind "Custom…" in a menu, which is not where an operator
-            looks for a date box. These show the range currently in force
-            whatever set it, so they are also a readout, not just input. */}
-        {(
-          [
-            { key: "from" as const, label: "From", value: fromInputValue },
-            { key: "to" as const, label: "To", value: toInputValue },
-          ]
-        ).map((f) => (
-          <div
-            key={f.key}
-            // `flex: 1 1 150px` rather than a fixed width: on a phone
-            // the toolbar is narrower than From + To side by side, and
-            // a rigid pair let the To picker run off the right edge
-            // instead of wrapping under.
-            style={{
-              display: "inline-flex",
-              flexDirection: "column",
-              gap: "0.25rem",
-              flex: "1 1 150px",
-              minWidth: 0,
-            }}
-          >
-            <label
-              htmlFor={`orders-date-${f.key}`}
-              style={{
-                color: "rgba(251,243,212,0.7)",
-                fontFamily: "var(--font-body)",
-                fontSize: "0.75rem",
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-              }}
-            >
-              {f.label}
-            </label>
-            <div style={{ minWidth: 0 }}>
-              <DatePicker
-                id={`orders-date-${f.key}`}
-                value={f.value}
-                ariaLabel={`${f.label} date`}
-                onChange={(v) =>
-                  applyExplicitRange(
-                    f.key === "from" ? v : fromInputValue,
-                    f.key === "to" ? v : toInputValue,
-                  )
-                }
-              />
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Status filter + search + sort */}
