@@ -28,7 +28,7 @@ import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { paymentLabel } from "@/lib/payment-label";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { AdminOrderItemSnapshot, AdminOrderRow } from "@/lib/admin-shared";
-import { matchesOrderFilter } from "@/lib/order-filter";
+import { decodeZoneParam, matchesOrderFilter } from "@/lib/order-filter";
 import { decodeStatusParam } from "@/lib/filter-menu";
 import {
   matchesDay,
@@ -37,6 +37,12 @@ import {
   parseDayParam,
   type DateBasis,
 } from "@/lib/day-filter";
+import {
+  ZONE_KEYS,
+  ZONE_LABELS,
+  resolveZoneWithPickup,
+  type ZoneKey,
+} from "@/lib/delivery-zones";
 
 // The private parseYmdLocal + buildRange that used to sit here are GONE.
 // They built a local-midnight..local-23:59 window out of ?from/?to, which
@@ -78,10 +84,19 @@ function PrintOrdersPageInner() {
   // would silently ignore "Repeat customers only" and print rows the
   // screen it was printed from was hiding.
   const repeatOnly = params.get("repeat") === "1";
+  // Fourth filter group, carried as ?zone=zone1,zone3 (comma-separated
+  // ZoneKey values). Zones are derived at read time from delivery-zones.ts,
+  // so this filter can NEVER disagree with the screen it was printed from —
+  // same map, same resolver.
+  const zoneRaw = params.get("zone");
+  const zones = useMemo(() => decodeZoneParam(zoneRaw), [zoneRaw]);
   const filterLabel =
-    [...statuses, ...calls, ...(repeatOnly ? ["repeat customers"] : [])].join(
-      ", ",
-    ) || "all";
+    [
+      ...statuses,
+      ...calls,
+      ...zones.map((z) => ZONE_LABELS[z]),
+      ...(repeatOnly ? ["repeat customers"] : []),
+    ].join(", ") || "all";
   const q = params.get("q") ?? "";
   // ONE day, ?date=YYYY-MM-DD, narrowed by the same parser the screen
   // uses. Absent or malformed → null → every row, which is exactly what
@@ -118,6 +133,22 @@ function PrintOrdersPageInner() {
     void load();
   }, [load]);
 
+  // Zone lookup for every order. Same resolver the screen and the share
+  // message use — one map, one answer.
+  const zoneOf = useMemo(() => {
+    const m = new Map<string, ZoneKey>();
+    for (const o of orders) {
+      m.set(
+        o.id,
+        resolveZoneWithPickup({
+          address: o.delivery_address,
+          isPickup: o.fulfillment_type === "pickup",
+        }),
+      );
+    }
+    return m;
+  }, [orders]);
+
   const filtered = useMemo(() => {
     const search = q.trim().toLowerCase();
     return orders.filter((o) => {
@@ -125,7 +156,9 @@ function PrintOrdersPageInner() {
       // module. When ?date is missing, day is null and this passes
       // everything (back-compat for older bookmarks / entry points).
       if (!matchesDay(orderDateForBasis(o, basis), day)) return false;
-      if (!matchesOrderFilter(o, statuses, calls, repeatOnly)) return false;
+      const withZone = { ...o, zone: zoneOf.get(o.id) };
+      if (!matchesOrderFilter(withZone, statuses, calls, repeatOnly, zones))
+        return false;
       if (!search) return true;
       const name = (o.customers?.full_name ?? "").toLowerCase();
       const phone = (o.customers?.phone ?? "").toLowerCase();
@@ -135,15 +168,27 @@ function PrintOrdersPageInner() {
     // a link that changes only ?basis re-renders this component WITHOUT
     // remounting it; omitting it here left the memo serving rows cut on
     // the previous column while the header above already said the new one.
-  }, [orders, statuses, calls, repeatOnly, q, day, basis]);
+  }, [orders, statuses, calls, repeatOnly, zones, q, day, basis, zoneOf]);
 
-  // Group: delivery_date → delivery_slot → orders[]. Null date/slot
-  // bucket sorts last so the dated rows print first.
+  // Group: zone → delivery_date → delivery_slot → orders[]. Zone is the
+  // OUTERMOST grouping so each rider carries a run in one section and the
+  // per-zone loaf subtotal answers "how many loaves does zone 2 take?"
+  // without the operator adding up slot totals. Zone order is fixed
+  // (ZONE_KEYS) — same order everywhere.
   const grouped = useMemo(() => {
-    const dateMap = new Map<string, Map<string, AdminOrderRow[]>>();
+    const zoneMap = new Map<
+      ZoneKey,
+      Map<string, Map<string, AdminOrderRow[]>>
+    >();
     for (const o of filtered) {
+      const z = zoneOf.get(o.id) ?? "unzoned";
       const dateKey = o.delivery_date ?? "__no_date__";
       const slotKey = o.delivery_slot ?? "__no_slot__";
+      let dateMap = zoneMap.get(z);
+      if (!dateMap) {
+        dateMap = new Map();
+        zoneMap.set(z, dateMap);
+      }
       let slotMap = dateMap.get(dateKey);
       if (!slotMap) {
         slotMap = new Map();
@@ -154,15 +199,40 @@ function PrintOrdersPageInner() {
       slotMap.set(slotKey, list);
     }
     const sortKey = (k: string) => (k === "__no_date__" ? "\uFFFF" : k);
-    return Array.from(dateMap.entries())
-      .sort(([a], [b]) => sortKey(a).localeCompare(sortKey(b)))
-      .map(([date, slotMap]) => ({
-        date,
-        slots: Array.from(slotMap.entries())
-          .sort(([a], [b]) => sortKey(a).localeCompare(sortKey(b)))
-          .map(([slot, rows]) => ({ slot, rows })),
-      }));
-  }, [filtered]);
+    // Fixed zone order + only zones present in the filtered slice.
+    return ZONE_KEYS.filter((z) => zoneMap.has(z)).map((zone) => {
+      const dateMap = zoneMap.get(zone)!;
+      const dates = Array.from(dateMap.entries())
+        .sort(([a], [b]) => sortKey(a).localeCompare(sortKey(b)))
+        .map(([date, slotMap]) => ({
+          date,
+          slots: Array.from(slotMap.entries())
+            .sort(([a], [b]) => sortKey(a).localeCompare(sortKey(b)))
+            .map(([slot, rows]) => ({ slot, rows })),
+        }));
+      // Zone subtotal: loaves (sum of item qty across every row in the
+      // zone, cancelled EXCLUDED so it agrees with the bake strip) and
+      // orders (total rows in the zone, cancelled included so it agrees
+      // with the badge count and the zone filter in the dropdown — the
+      // two numbers answer different questions).
+      let loaves = 0;
+      let ordersCount = 0;
+      for (const dg of dates) {
+        for (const sg of dg.slots) {
+          for (const o of sg.rows) {
+            ordersCount += 1;
+            if ((o.status ?? "").toLowerCase() === "cancelled") continue;
+            for (const it of o.items ?? []) {
+              const raw = it?.qty ?? it?.quantity ?? 0;
+              const n = typeof raw === "number" ? raw : Number(raw);
+              if (Number.isFinite(n) && n > 0) loaves += Math.floor(n);
+            }
+          }
+        }
+      }
+      return { zone, dates, loaves, orders: ordersCount };
+    });
+  }, [filtered, zoneOf]);
 
   // Trigger print once we've got data. A single setTimeout gives
   // the browser a paint to render the rows before the dialog opens.
@@ -222,72 +292,98 @@ function PrintOrdersPageInner() {
           {filtered.length} order{filtered.length === 1 ? "" : "s"}
         </p>
       </header>
-      {grouped.map((group) => (
-        <section key={group.date} style={{ marginBottom: "1.4rem" }}>
-          <h2 style={groupHeading}>
-            {group.date === "__no_date__"
-              ? "Undated"
-              : formatDate(group.date)}
+      {grouped.map((zoneGroup) => (
+        <section key={zoneGroup.zone} style={{ marginBottom: "1.8rem" }}>
+          <h2 style={zoneHeading}>
+            {ZONE_LABELS[zoneGroup.zone]}
+            <span style={{ fontWeight: 400, color: "rgba(29,29,31,0.7)" }}>
+              {" · "}
+              {zoneGroup.orders} order{zoneGroup.orders === 1 ? "" : "s"}
+              {" · "}
+              {zoneGroup.loaves} loaf{zoneGroup.loaves === 1 ? "" : "s"}
+            </span>
           </h2>
-          {group.slots.map(({ slot, rows }) => (
-            <div key={slot} style={{ marginBottom: "0.8rem" }}>
-              <h3 style={slotHeading}>
-                {/* Grouping and sorting above stay on the raw key; only
-                    the printed label is humanised, so the packing sheet
-                    reads the same as the screen. */}
-                Slot:{" "}
-                {slot === "__no_slot__"
-                  ? "Unscheduled"
-                  : formatSlotForDisplay(slot)}{" "}
-                <span style={{ fontWeight: 400, color: "rgba(29,29,31,0.7)" }}>
-                  · {rows.length} order{rows.length === 1 ? "" : "s"}
-                </span>
+          {zoneGroup.dates.map((group) => (
+            <section
+              key={`${zoneGroup.zone}:${group.date}`}
+              style={{ marginBottom: "1.2rem" }}
+            >
+              <h3 style={groupHeading}>
+                {group.date === "__no_date__"
+                  ? "Undated"
+                  : formatDate(group.date)}
               </h3>
-              <table style={printTable}>
-                <thead>
-                  <tr>
-                    <th style={printTh}>#</th>
-                    <th style={printTh}>Customer</th>
-                    <th style={printTh}>Phone</th>
-                    <th style={printTh}>Address</th>
-                    <th style={printTh}>Items</th>
-                    <th style={printTh}>Total</th>
-                    {/* Whoever carries this sheet needs to know which
-                        doors take money. It said nothing about payment
-                        before, so the sheet and the rider's WhatsApp
-                        message disagreed about the same run. */}
-                    <th style={printTh}>Payment</th>
-                    <th style={printTh}>Status</th>
-                    <th style={printTh}>Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((o, i) => (
-                    <tr key={o.id}>
-                      <td style={printTd}>{i + 1}</td>
-                      <td style={printTd}>
-                        {o.customers?.full_name ?? "—"}
-                      </td>
-                      <td style={printTd}>{o.customers?.phone ?? "—"}</td>
-                      <td style={printTd}>{o.delivery_address ?? "—"}</td>
-                      <td style={printTd}>{formatItems(o.items)}</td>
-                      <td style={printTd}>{formatINR(o.total_amount)}</td>
-                      <td style={printTd}>
-                        {paymentLabel({
-                          payment_status: o.payment_status,
-                          amountDue:
-                            typeof o.total_amount === "number"
-                              ? o.total_amount
-                              : null,
-                        })}
-                      </td>
-                      <td style={printTd}>{o.status ?? "—"}</td>
-                      <td style={printTd}>{formatDateTime(o.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              {group.slots.map(({ slot, rows }) => (
+                <div
+                  key={`${zoneGroup.zone}:${group.date}:${slot}`}
+                  style={{ marginBottom: "0.8rem" }}
+                >
+                  <h4 style={slotHeading}>
+                    {/* Grouping and sorting above stay on the raw key; only
+                        the printed label is humanised, so the packing sheet
+                        reads the same as the screen. */}
+                    Slot:{" "}
+                    {slot === "__no_slot__"
+                      ? "Unscheduled"
+                      : formatSlotForDisplay(slot)}{" "}
+                    <span
+                      style={{
+                        fontWeight: 400,
+                        color: "rgba(29,29,31,0.7)",
+                      }}
+                    >
+                      · {rows.length} order{rows.length === 1 ? "" : "s"}
+                    </span>
+                  </h4>
+                  <table style={printTable}>
+                    <thead>
+                      <tr>
+                        <th style={printTh}>#</th>
+                        <th style={printTh}>Customer</th>
+                        <th style={printTh}>Phone</th>
+                        <th style={printTh}>Address</th>
+                        <th style={printTh}>Items</th>
+                        <th style={printTh}>Total</th>
+                        {/* Whoever carries this sheet needs to know which
+                            doors take money. It said nothing about payment
+                            before, so the sheet and the rider's WhatsApp
+                            message disagreed about the same run. */}
+                        <th style={printTh}>Payment</th>
+                        <th style={printTh}>Status</th>
+                        <th style={printTh}>Created</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((o, i) => (
+                        <tr key={o.id}>
+                          <td style={printTd}>{i + 1}</td>
+                          <td style={printTd}>
+                            {o.customers?.full_name ?? "—"}
+                          </td>
+                          <td style={printTd}>{o.customers?.phone ?? "—"}</td>
+                          <td style={printTd}>{o.delivery_address ?? "—"}</td>
+                          <td style={printTd}>{formatItems(o.items)}</td>
+                          <td style={printTd}>{formatINR(o.total_amount)}</td>
+                          <td style={printTd}>
+                            {paymentLabel({
+                              payment_status: o.payment_status,
+                              amountDue:
+                                typeof o.total_amount === "number"
+                                  ? o.total_amount
+                                  : null,
+                            })}
+                          </td>
+                          <td style={printTd}>{o.status ?? "—"}</td>
+                          <td style={printTd}>
+                            {formatDateTime(o.created_at)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </section>
           ))}
         </section>
       ))}
@@ -333,6 +429,15 @@ const printTd: React.CSSProperties = {
   padding: "6px 8px",
   fontSize: "1rem",
   verticalAlign: "top",
+};
+
+const zoneHeading: React.CSSProperties = {
+  fontSize: "1.1rem",
+  margin: "0 0 0.5rem",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  borderBottom: "3px solid #1D1D1F",
+  paddingBottom: "0.25rem",
 };
 
 const groupHeading: React.CSSProperties = {

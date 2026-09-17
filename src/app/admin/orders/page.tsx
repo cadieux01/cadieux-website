@@ -36,6 +36,7 @@ import {
   type ShareablePartner,
 } from "@/components/admin/OrderShareButton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { ZoneBadge } from "@/components/admin/ZoneBadge";
 import { adminAuthHeaders, adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import {
@@ -63,6 +64,9 @@ import {
   ALL_VALUE,
   CALL_PREFIX,
   REPEAT_ONLY,
+  ZONE_PREFIX,
+  decodeZoneParam,
+  encodeZoneParam,
   matchesOrderFilter,
   splitFilterValues,
 } from "@/lib/order-filter";
@@ -72,6 +76,12 @@ import {
   useUrlWriteback,
   stashScrollY,
 } from "@/lib/admin-url-state";
+import {
+  ZONE_KEYS,
+  ZONE_LABELS,
+  resolveZoneWithPickup,
+  type ZoneKey,
+} from "@/lib/delivery-zones";
 import {
   DEFAULT_BASIS,
   matchesDay,
@@ -156,12 +166,17 @@ function parseUrlInitial(sp: URLSearchParams): UrlInitial {
   // contain commas.
   const statuses = decodeStatusParam(sp.get("status"));
   const calls = sp.getAll("call").filter((c) => c.length > 0);
+  // Zones live on their own `zone` param, comma-separated. Kept off the
+  // `status` param so a link that scopes to a zone reads plainly and one
+  // group can be changed without touching the other.
+  const zones = decodeZoneParam(sp.get("zone"));
   // "Repeat customers only" is a single flag, so it rides its own `repeat=1`
   // param rather than being smuggled into `status`. Same spelling the print
   // link uses, so one encoding serves the screen, the URL and the sheet.
   const filter = [
     ...statuses,
     ...calls.map((c) => `${CALL_PREFIX}${c}`),
+    ...zones.map((z) => `${ZONE_PREFIX}${z}`),
     ...(sp.get("repeat") === "1" ? [REPEAT_ONLY] : []),
   ];
 
@@ -204,9 +219,10 @@ function stateToSearch(s: {
   anchor: ResolvedArea | null;
 }): string {
   const params = new URLSearchParams();
-  const { statuses, calls, repeatOnly } = splitFilterValues(s.filter);
+  const { statuses, calls, zones, repeatOnly } = splitFilterValues(s.filter);
   if (statuses.length > 0) params.set("status", encodeStatusParam(statuses));
   for (const c of calls) params.append("call", c);
+  if (zones.length > 0) params.set("zone", encodeZoneParam(zones));
   if (repeatOnly) params.set("repeat", "1");
   if (s.query.trim()) params.set("q", s.query);
   if (s.sort !== DEFAULT_SORT) params.set("sort", s.sort);
@@ -387,6 +403,7 @@ function OrdersPageInner() {
   const {
     statuses: statusSel,
     calls: callSel,
+    zones: zoneSel,
     repeatOnly,
   } = useMemo(() => splitFilterValues(filter), [filter]);
   // Owner of the currently-open NotePanel (order id + display label).
@@ -546,13 +563,33 @@ function OrdersPageInner() {
     [rankPins],
   );
 
+  // Resolve zone once per row. Zone is derived from the address at read
+  // time — no column, no migration (see src/lib/delivery-zones.ts). The
+  // map keys on order id so the same lookup serves the filter, the counts,
+  // the badge on the row and the bake-strip split.
+  const zoneOf = useMemo(() => {
+    const m = new Map<string, ZoneKey>();
+    for (const o of orders) {
+      m.set(
+        o.id,
+        resolveZoneWithPickup({
+          address: o.delivery_address,
+          isPickup: o.fulfillment_type === "pickup",
+        }),
+      );
+    }
+    return m;
+  }, [orders]);
+
   const filtered = useMemo(() => {
     const rows = orders.filter((o) => {
       if (!matchesDay(orderDateForBasis(o, basis), day)) return false;
-      // Statuses OR'd, call updates OR'd, the two groups AND'd. Shared
-      // with the print view so the packing list can't disagree with the
-      // screen it was printed from — see src/lib/order-filter.ts.
-      if (!matchesOrderFilter(o, statusSel, callSel, repeatOnly)) return false;
+      // Statuses OR'd, call updates OR'd, zones OR'd, the groups AND'd.
+      // Shared with the print view so the packing list can't disagree with
+      // the screen it was printed from — see src/lib/order-filter.ts.
+      const withZone = { ...o, zone: zoneOf.get(o.id) };
+      if (!matchesOrderFilter(withZone, statusSel, callSel, repeatOnly, zoneSel))
+        return false;
       // Name, phone and BOTH references. The customer knows public_ref
       // ("CX-7K4M2P"); order_number ("OLF43", legacy "CDX-00006") is what
       // is on the bag. Shared with the subscriptions board so one typed
@@ -615,7 +652,7 @@ function OrdersPageInner() {
         if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [orders, statusSel, callSel, repeatOnly, query, sort, day, rankOf, anchor, pincodeCoords, basis]);
+  }, [orders, statusSel, callSel, zoneSel, repeatOnly, query, sort, day, rankOf, anchor, pincodeCoords, basis, zoneOf]);
 
   // A restored id is only meaningful if the row is still there — an order
   // can have been cancelled, or the filters can have moved on, while the
@@ -648,9 +685,31 @@ function OrdersPageInner() {
       const k = (o.status ?? "").toLowerCase();
       c[k] = (c[k] ?? 0) + 1;
       if ((o.repeat_seq ?? 0) >= 2) c.repeat = (c.repeat ?? 0) + 1;
+      const z = zoneOf.get(o.id);
+      if (z) c[`zone_${z}`] = (c[`zone_${z}`] ?? 0) + 1;
     }
     return c;
-  }, [orders, day, basis]);
+  }, [orders, day, basis, zoneOf]);
+
+  // Invariant we assert only in dev: the six zone bucket counts must sum
+  // to the total on-day rows. If a zone gets added or a resolver bug
+  // over- or under-counts, this fires in local dev while it is cheap to
+  // fix, and stays out of the way in production. Do NOT throw here — an
+  // admin board that crashes because ONE row went unzoned is much worse
+  // than a badge that says "Unzoned".
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    const sum = ZONE_KEYS.reduce(
+      (n, k) => n + (counts[`zone_${k}`] ?? 0),
+      0,
+    );
+    if (sum !== (counts.all ?? 0)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[zones] invariant broken: zone sum ${sum} !== on-day ${counts.all}`,
+      );
+    }
+  }, [counts]);
 
   // Distinct call-note bodies + occurrence count across the same
   // day-scoped slice. Powers the "Call updates" group in the filter
@@ -720,6 +779,28 @@ function OrdersPageInner() {
         });
       }
     }
+    // Zones — its own group, AND'd with the rest. Fixed order (Zone 1..4,
+    // Unzoned, Pickup). "Unzoned" and "Pickup" ARE ALWAYS LISTED, even at
+    // zero, because they are honest buckets — an unzoned row must be
+    // findable, and pickup must not disappear from the menu on a day with
+    // only deliveries. The four numbered zones hide at zero UNLESS they are
+    // ticked (same rule the status group uses), so a wide day-range does
+    // not print every zone the customer base has ever visited.
+    opts.push({
+      value: "__sep_zone",
+      label: "── Zones ──",
+      disabled: true,
+    });
+    for (const zk of ZONE_KEYS) {
+      const zc = counts[`zone_${zk}`] ?? 0;
+      const alwaysShow = zk === "unzoned" || zk === "pickup";
+      const ticked = zoneSel.includes(zk);
+      if (!alwaysShow && !ticked && zc === 0) continue;
+      opts.push({
+        value: `${ZONE_PREFIX}${zk}`,
+        label: `${ZONE_LABELS[zk]} (${zc})`,
+      });
+    }
     // Repeat customers — its own one-entry group, AND'd with the rest.
     // Always listed (unlike the data-derived call bodies) so "how many of
     // these are returning customers?" is answerable even when the answer
@@ -741,7 +822,7 @@ function OrdersPageInner() {
       opts.push({ value: CLEAR_ALL, label: "Clear all", action: true });
     }
     return opts;
-  }, [counts, callBodies, statusSel, callSel, filter.length]);
+  }, [counts, callBodies, statusSel, callSel, zoneSel, filter.length]);
 
   // Trigger label. One selected → "Pending (27)". Two or more → name the
   // first and count the rest → "Pending +2 (43)".
@@ -781,7 +862,12 @@ function OrdersPageInner() {
   //     means "all". No special case needed, and none is wanted: a special
   //     case would give "all" a second encoding.
   const toggleFilter = useCallback((value: string) => {
-    if (value === "__sep_call" || value === "__sep_repeat") return;
+    if (
+      value === "__sep_call" ||
+      value === "__sep_repeat" ||
+      value === "__sep_zone"
+    )
+      return;
     clearRankPins();
     setFilter((curr) => {
       if (value === CLEAR_ALL) return [];
@@ -1316,9 +1402,21 @@ function OrdersPageInner() {
       {!loading && retention ? <RetentionPanel data={retention} /> : null}
       {/* Bake summary — same filtered set as the table below, so the
           numbers on this strip and on the rows can never disagree.
-          Cancelled orders are excluded inside aggregateProduction. */}
+          Cancelled orders are excluded inside aggregateProduction.
+          When a zone filter is active, split into one strip per selected
+          zone so a mixed selection can't silently combine loaf counts. */}
       {!loading && filtered.length > 0 ? (
-        <ProductionCountStrip orders={filtered} />
+        zoneSel.length > 0 ? (
+          zoneSel.map((z) => (
+            <ProductionCountStrip
+              key={z}
+              zone={z}
+              orders={filtered.filter((o) => zoneOf.get(o.id) === z)}
+            />
+          ))
+        ) : (
+          <ProductionCountStrip orders={filtered} />
+        )
       ) : null}
       {loading ? (
         <Placeholder>Loading orders…</Placeholder>
@@ -1447,23 +1545,13 @@ function OrdersPageInner() {
                       ) : null}
                     </td>
                     <td style={{ ...td, maxWidth: 240 }}>
-                      {o.fulfillment_type === "pickup" ? (
-                        <div
-                          className="inline-flex items-center uppercase"
-                          style={{
-                            fontFamily: "var(--font-body)",
-                            fontSize: "0.875rem",
-                            letterSpacing: "0.2em",
-                            color: "#FBF3D4",
-                            border: "1px solid rgba(251,243,212,0.5)",
-                            padding: "0.15rem 0.5rem",
-                            borderRadius: "999px",
-                            marginBottom: 4,
-                          }}
-                        >
-                          Pickup
-                        </div>
-                      ) : null}
+                      {/* Zone pill (also shows "Pickup" for pickup rows, so the
+                          old bespoke pickup badge is subsumed here). Zone is
+                          resolved from the address at read time via
+                          src/lib/delivery-zones.ts — no column, no migration. */}
+                      <div style={{ marginBottom: 4 }}>
+                        <ZoneBadge zone={zoneOf.get(o.id)} />
+                      </div>
                       <div
                         style={{
                           color: "#FBF3D4",

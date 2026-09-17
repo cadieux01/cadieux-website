@@ -26,6 +26,7 @@
 import type { AdminOrderRow } from "@/lib/admin-shared";
 import { variantLabel } from "@/lib/order-share-message";
 import { isOrderFulfilled } from "@/lib/order-fulfillment";
+import { ZONE_LABELS, type ZoneKey } from "@/lib/delivery-zones";
 
 type ProductAgg = { name: string; loaves: number; orders: number };
 
@@ -67,7 +68,17 @@ export function aggregateProduction(orders: AdminOrderRow[]): {
   return { rows, totalLoaves };
 }
 
-export function ProductionCountStrip({ orders }: { orders: AdminOrderRow[] }) {
+export function ProductionCountStrip({
+  orders,
+  zone,
+}: {
+  orders: AdminOrderRow[];
+  /** When provided, the strip prefixes itself with the zone label. Used
+   *  when the caller is rendering one strip per zone under an active zone
+   *  filter — each strip aggregates only the rows for that zone, so a
+   *  zoned bake plan cannot silently combine two zones' loaves. */
+  zone?: ZoneKey;
+}) {
   const { rows, totalLoaves } = aggregateProduction(orders);
 
   // Fulfilment ratio for the current filter. Counted over the full
@@ -118,7 +129,7 @@ export function ProductionCountStrip({ orders }: { orders: AdminOrderRow[] }) {
           color: "rgba(251,243,212,0.6)",
         }}
       >
-        Bake
+        Bake{zone ? ` · ${ZONE_LABELS[zone]}` : ""}
       </span>
       {rows.map((r, i) => {
         const label = variantLabel(r.name);
