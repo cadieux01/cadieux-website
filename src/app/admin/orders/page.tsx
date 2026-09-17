@@ -76,6 +76,8 @@ import {
   type DateBasis,
 } from "@/lib/day-filter";
 import { RepeatStar } from "@/components/admin/RepeatStar";
+import { BulkToolbar, type BulkActionSpec } from "@/components/admin/BulkToolbar";
+import { useStoredSelection } from "@/lib/admin-selection";
 import { RetentionPanel } from "@/components/admin/RetentionPanel";
 import type { RetentionSummary } from "@/lib/customer-history";
 import {
@@ -232,32 +234,10 @@ function stateToSearch(s: {
 // no entry and starts at the top — no accidental scroll to a stale row.
 const SCROLL_KEY = "admin:orders:scrollY";
 
-// ── selection restoration ─────────────────────────────────────────────────
-// The tick-box selection, mirrored so it survives a trip to an order
-// detail page and back. Sunny: "when I view it and come back, all the
-// selected items become deselected. Again I'm doing it from the start."
-//
-// sessionStorage and NOT the URL on purpose: a bulk selection is a list of
-// uuids, which would make the address bar unusable and would travel to
-// anyone the link is sent to. Selection is per-session working state, not
-// part of what a /admin/orders link means.
-//
-// Unlike SCROLL_KEY this is a mirror, not a one-shot handoff — it is
-// rewritten on every change, so Clear and the bulk handlers empty it
-// without any extra bookkeeping.
+// Unlike SCROLL_KEY, the selection bucket is a mirror rather than a one-shot
+// handoff — it is rewritten on every change, so Clear and the bulk handlers
+// empty it without any extra bookkeeping. See @/lib/admin-selection.
 const SELECTION_KEY = "admin:orders:selection";
-
-function readStoredSelection(): Set<string> {
-  if (typeof window === "undefined") return new Set();
-  try {
-    const raw = sessionStorage.getItem(SELECTION_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((v): v is string => typeof v === "string"));
-  } catch {
-    return new Set();
-  }
-}
 
 /**
  * The Status dropdown, in operator order.
@@ -433,7 +413,7 @@ function OrdersPageInner() {
   const [sort, setSort] = useState<SortKey>(urlInit.sort);
   const [basis, setBasis] = useState<DateBasis>(urlInit.basis);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useStoredSelection(SELECTION_KEY);
   const [pendingBulk, setPendingBulk] = useState<BulkAction | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
@@ -629,36 +609,6 @@ function OrdersPageInner() {
     settle();
     return () => clearTimeout(timer);
   }, [loading]);
-
-  // Selection restoration. Runs AFTER hydration, never in the useState
-  // initialiser: the server has no sessionStorage, so it always renders
-  // zero selected and therefore no BulkToolbar. Seeding the first client
-  // render from storage would make the client emit a node the server HTML
-  // does not have, which React treats as a hydration mismatch. Restoring
-  // here means both sides agree on the first render and the selection
-  // appears on the commit straight after.
-  const selectionRestored = useRef(false);
-  useEffect(() => {
-    selectionRestored.current = true;
-    const stored = readStoredSelection();
-    if (stored.size > 0) setSelected(stored);
-  }, []);
-
-  // Keep the mirror in step with every selection change, including the
-  // ones that empty it (Clear, and the bulk handlers below). Gated on the
-  // restore having run: this effect is declared second, so on mount it
-  // would otherwise write the empty initial state over the stored ids
-  // before the effect above has read them.
-  useEffect(() => {
-    if (!selectionRestored.current) return;
-    try {
-      sessionStorage.setItem(SELECTION_KEY, JSON.stringify(Array.from(selected)));
-    } catch {
-      // Private-mode / quota failures are not worth surfacing: the
-      // selection still works for this page view, it just won't survive
-      // the round trip.
-    }
-  }, [selected]);
 
   const [editing, setEditing] = useState<AdminOrderRow | null>(null);
   const [orderEditing, setOrderEditing] = useState<AdminOrderRow | null>(null);
@@ -1325,6 +1275,7 @@ function OrdersPageInner() {
       {selected.size > 0 ? (
         <BulkToolbar
           count={selected.size}
+          actions={BULK_ACTIONS}
           running={bulkRunning}
           onClear={() => setSelected(new Set())}
           onAction={(a) => {
@@ -1891,11 +1842,17 @@ function OrdersPageInner() {
   );
 }
 
-const ACTION_LABEL: Record<BulkAction, string> = {
-  share: "Share on WhatsApp",
-  copy: "Copy details",
-  cancel: "Cancel",
-};
+const BULK_ACTIONS: readonly BulkActionSpec<BulkAction>[] = [
+  { id: "share", label: "Share on WhatsApp" },
+  { id: "copy", label: "Copy details" },
+  { id: "cancel", label: "Cancel", danger: true },
+];
+
+// Derived, not written twice: the confirm modal's heading must say the same
+// word the button the operator just pressed said.
+const ACTION_LABEL = Object.fromEntries(
+  BULK_ACTIONS.map((a) => [a.id, a.label]),
+) as Record<BulkAction, string>;
 
 // Only "cancel" surfaces in the result modal — share/copy don't touch
 // the server. Kept as a Record so a future bulk write stays typed.
@@ -1960,79 +1917,6 @@ function DistanceBadge({ info }: { info: DistanceInfo }) {
       title="No GPS on the order — distance to the pincode centroid, not the doorstep"
     >
       ~{km} km · PIN
-    </div>
-  );
-}
-
-function BulkToolbar({
-  count,
-  running,
-  onClear,
-  onAction,
-}: {
-  count: number;
-  running: boolean;
-  onClear: () => void;
-  onAction: (a: BulkAction) => void;
-}) {
-  return (
-    <div
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 5,
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "0.6rem",
-        alignItems: "center",
-        background: "rgba(251,243,212,0.1)",
-        border: "1px solid rgba(251,243,212,0.4)",
-        padding: "0.6rem 0.9rem",
-        marginBottom: "1rem",
-      }}
-    >
-      <span
-        style={{
-          color: "#FBF3D4",
-          fontFamily: "var(--font-body)",
-          fontSize: "1rem",
-          letterSpacing: "0.05em",
-        }}
-      >
-        {count} selected
-      </span>
-      <span style={{ flex: 1 }} />
-      {(Object.keys(ACTION_LABEL) as BulkAction[]).map((a) => (
-        <button
-          key={a}
-          type="button"
-          onClick={() => onAction(a)}
-          disabled={running}
-          style={{
-            ...bulkButton,
-            color: a === "cancel" ? "#EF4444" : "#FBF3D4",
-            borderColor:
-              a === "cancel"
-                ? "rgba(239,68,68,0.45)"
-                : "rgba(251,243,212,0.45)",
-            opacity: running ? 0.5 : 1,
-          }}
-        >
-          {ACTION_LABEL[a]}
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={onClear}
-        disabled={running}
-        style={{
-          ...bulkButton,
-          color: "rgba(251,243,212,0.65)",
-          borderColor: "rgba(251,243,212,0.3)",
-        }}
-      >
-        Clear
-      </button>
     </div>
   );
 }
@@ -2682,17 +2566,6 @@ const buttonSm: React.CSSProperties = {
   background: "transparent",
   border: "1px solid rgba(251,243,212,0.45)",
   color: "#FBF3D4",
-  fontFamily: "var(--font-body)",
-  fontSize: "0.875rem",
-  letterSpacing: "0.22em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
-
-const bulkButton: React.CSSProperties = {
-  padding: "0.4rem 0.85rem",
-  background: "transparent",
-  border: "1px solid rgba(251,243,212,0.45)",
   fontFamily: "var(--font-body)",
   fontSize: "0.875rem",
   letterSpacing: "0.22em",

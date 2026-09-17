@@ -87,6 +87,7 @@ import {
 } from "@/lib/subscription-display";
 import {
   composeNextDeliveryShareMessage,
+  composeNextDeliveryShareStop,
   composeSubscriptionShareMessage,
 } from "@/lib/subscription-share-message";
 import {
@@ -108,6 +109,10 @@ import { LastNoteChip } from "@/components/admin/LastNoteChip";
 import { RepeatStar } from "@/components/admin/RepeatStar";
 import { buildRepeatIndex } from "@/lib/customer-history";
 import { matchesAdminQuery } from "@/lib/admin-search";
+import { BulkToolbar, type BulkActionSpec } from "@/components/admin/BulkToolbar";
+import { useStoredSelection } from "@/lib/admin-selection";
+import { deliverShareText } from "@/lib/share-delivery";
+import { composeRun } from "@/lib/order-share-message";
 
 // The status group's PREFERRED ORDER, not the menu itself. The menu is built
 // from the statuses actually present (see distinctStatuses below) — this list
@@ -236,6 +241,21 @@ function AdminLoading() {
 // Mirrors the same guard on /admin/orders.
 const ROW_INTERACTIVE_SELECTOR =
   'a, button, input, select, textarea, label, [role="button"], [role="combobox"], [role="listbox"], [role="option"]';
+
+// Its own bucket, so ticking six plans here does not resurrect as six
+// orders on the other board — the ids would not match anything and the
+// toolbar would report a selection the operator cannot see.
+const SELECTION_KEY = "admin:subscriptions:selection";
+
+type SubBulkAction = "share" | "copy";
+
+// No bulk Cancel. Cancelling a plan cancels every delivery hanging off it
+// and is a per-plan decision with a refund question attached; there is no
+// version of that which should be one click away from six ticked rows.
+const BULK_ACTIONS: readonly BulkActionSpec<SubBulkAction>[] = [
+  { id: "share", label: "Share on WhatsApp" },
+  { id: "copy", label: "Copy details" },
+];
 
 function SubscriptionsPageInner() {
   const router = useRouter();
@@ -524,6 +544,108 @@ function SubscriptionsPageInner() {
     });
   }, [onDay, selection, isExpiring, query]);
 
+  // ── bulk selection ──────────────────────────────────────────────────────
+  const [selected, setSelected] = useStoredSelection(SELECTION_KEY);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const toggleSelect = (id: string) => {
+    setSelected((curr) => {
+      const next = new Set(curr);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const masterChecked =
+    filtered.length > 0 && filtered.every((s) => selected.has(s.id));
+  const someSelected = filtered.some((s) => selected.has(s.id));
+
+  const toggleSelectAll = () => {
+    setSelected((curr) => {
+      const next = new Set(curr);
+      // Add or clear only the currently-VISIBLE ids, so a selection made
+      // under another filter is not silently thrown away by a toggle.
+      for (const s of filtered) {
+        if (masterChecked) next.delete(s.id);
+        else next.add(s.id);
+      }
+      return next;
+    });
+  };
+
+  /**
+   * The ticked rows, in the order the table is currently sorted in, split
+   * by whether they may leave the building at all.
+   *
+   * `blocked` is not a filtering nicety. A swept plan composes cleanly and
+   * cheerfully — see shareBlockedReason — and would send a rider to a door
+   * with a COD figure against money nobody owes. The per-row Share button
+   * already refuses those; the bulk path has to refuse the same rows or the
+   * guard is one checkbox away from being bypassed.
+   */
+  const partitionSelected = useCallback(() => {
+    const rows = filtered.filter((s) => selected.has(s.id));
+    return {
+      shareable: rows.filter((s) => shareBlockedReason(s) === null),
+      blocked: rows.filter((s) => shareBlockedReason(s) !== null),
+    };
+  }, [filtered, selected]);
+
+  const runBulk = async (action: SubBulkAction) => {
+    const { shareable, blocked } = partitionSelected();
+
+    // Say WHICH plans were held back rather than just how many — the
+    // operator has to know who still needs a phone call.
+    const heldBack = blocked.length
+      ? ` Left out ${blocked
+          .map((s) => formatSubscriptionNumber(s))
+          .join(", ")} — payment was never completed.`
+      : "";
+
+    if (shareable.length === 0) {
+      setNotice(
+        blocked.length
+          ? `Nothing to share.${heldBack}`
+          : "Nothing to share.",
+      );
+      return;
+    }
+
+    // ONE run, not N messages: the run carries a single cash total at the
+    // end and one route link, which is what makes it read as a delivery
+    // round instead of a stack of receipts. Next delivery, not whole plan —
+    // a rider is being sent to a door on a day, and the plan's cadence is
+    // not information they can act on.
+    const text = composeRun(shareable.map(composeNextDeliveryShareStop));
+
+    setBulkRunning(true);
+    try {
+      if (action === "share") {
+        const delivered = await deliverShareText(text, shareable.length, "plan");
+        if (delivered.cleared) setSelected(new Set());
+        setNotice(delivered.notice + heldBack);
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(text);
+        setNotice(
+          `Copied ${shareable.length} plan${shareable.length === 1 ? "" : "s"} to clipboard.${heldBack}`,
+        );
+      } catch {
+        // Some browsers block clipboard writes outside a user gesture.
+        // Fall back to the same delivery ladder Share uses — it never
+        // truncates, which a bare wa.me link does.
+        const delivered = await deliverShareText(text, shareable.length, "plan");
+        setNotice(`Clipboard blocked. ${delivered.notice}${heldBack}`);
+      }
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
   // THE MENU. Three groups, and the divider between them is load-bearing:
   //
   //   statuses   — partition the rows, counts sum to the header count
@@ -778,6 +900,55 @@ function SubscriptionsPageInner() {
         />
       </div>
 
+      {selected.size > 0 ? (
+        <BulkToolbar
+          count={selected.size}
+          actions={BULK_ACTIONS}
+          running={bulkRunning}
+          onClear={() => setSelected(new Set())}
+          onAction={(a) => void runBulk(a)}
+        />
+      ) : null}
+
+      {notice ? (
+        <div
+          role="status"
+          style={{
+            border: "1px solid rgba(251,243,212,0.45)",
+            background: "rgba(251,243,212,0.07)",
+            color: CREAM,
+            padding: "0.7rem 1rem",
+            marginBottom: "1rem",
+            fontFamily: "var(--font-body)",
+            fontSize: "1rem",
+            letterSpacing: "0.03em",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+          }}
+        >
+          <span style={{ flex: 1 }}>{notice}</span>
+          {/* Dismissed by hand, not on a timer. It can name plans that were
+              held back, and that is the one sentence the operator must not
+              miss because they looked away. */}
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: cream(0.7),
+              cursor: "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: "1rem",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
+
       {error ? (
         <div
           style={{
@@ -855,6 +1026,17 @@ function SubscriptionsPageInner() {
           >
             <thead>
               <tr style={tableHeadRow}>
+                <th style={{ ...th, width: 36 }}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all visible subscriptions"
+                    checked={masterChecked}
+                    ref={(el) => {
+                      if (el) el.indeterminate = !masterChecked && someSelected;
+                    }}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
                 <th style={th}>Subscription</th>
                 <th style={th}>Customer</th>
                 <th style={th}>Plan</th>
@@ -906,6 +1088,14 @@ function SubscriptionsPageInner() {
                         : undefined,
                     }}
                   >
+                    <td style={td} data-label="Select">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select subscription ${formatSubscriptionNumber(s)}`}
+                        checked={selected.has(s.id)}
+                        onChange={() => toggleSelect(s.id)}
+                      />
+                    </td>
                     <td style={td} data-label="Subscription">
                       <span
                         style={{
