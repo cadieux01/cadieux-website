@@ -184,7 +184,14 @@ export async function loadOrderLines(
   }));
 }
 
-/** Subscription stops due on `dateIso`, excluding delivered and cancelled.
+/** Subscription stops due on `dateIso`, excluding cancelled only.
+ *
+ *  DELIVERED IS INCLUDED — the orders leg also keeps delivered, and asymmetry
+ *  between the two legs is what caused the strip and the DB to disagree
+ *  ("18 orders vs 3 subs" when the DB held 18 and 6). Whatever "how many
+ *  loaves did this date carry" means, both legs must answer it the same way.
+ *  For a past date, delivered IS the fulfilled count. For a future date,
+ *  nothing is delivered yet, so the filter is a no-op there.
  *
  *  Deliberately does NOT filter on the parent plan's payment_status. An
  *  unpaid plan's deliveries are already written at checkout and the bread
@@ -201,7 +208,7 @@ export async function loadSubscriptionLines(
       "id, subscription_id, slot, scheduled_time_slot, items_override, subscriptions(id, subscription_number, customer_name, customer_phone, customer_pincode, payment_status, delivery_address)",
     )
     .eq("delivery_date", dateIso)
-    .not("status", "in", "(delivered,cancelled)");
+    .neq("status", "cancelled");
 
   if (error) throw new Error(`subscription_deliveries leg: ${error.message}`);
 

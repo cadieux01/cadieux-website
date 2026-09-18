@@ -220,6 +220,12 @@ export function buildBakePlan(
   const subCount = lines.filter((l) => l.kind === "subscription").length;
   const total = lines.length;
 
+  // Cutoff notice. Never print an exact time — the schedule may drift by up
+  // to an hour on Hobby's random-jitter behaviour, and a printed clock time
+  // that disagrees with the "Received:" header is worse than no time at all.
+  // The live board link is the source of truth for "as of right now".
+  const liveHref = `https://www.cadieux.in/admin/orders?basis=delivery&date=${encodeURIComponent(deliveryDateIso)}`;
+
   const staleSection = renderStaleSection(stale);
 
   // Stale count rides in the subject line when there are unresolved rows,
@@ -270,6 +276,9 @@ export function buildBakePlan(
   textParts.push(humanDate);
   textParts.push(
     `${total} deliver${total === 1 ? "y" : "ies"} — ${orderCount} order${orderCount === 1 ? "" : "s"}, ${subCount} subscription${subCount === 1 ? "" : "s"}`,
+  );
+  textParts.push(
+    `Orders placed after this email are not counted. Live figure: ${liveHref}`,
   );
   textParts.push("");
   textParts.push("BAKE TOTALS");
@@ -351,8 +360,12 @@ export function buildBakePlan(
       <p style="font-size:16px;margin:0 0 4px">
         <strong>${escapeHtml(humanDate)}</strong>
       </p>
-      <p style="font-size:14px;color:#666;margin:0 0 20px">
+      <p style="font-size:14px;color:#666;margin:0 0 4px">
         ${total} deliver${total === 1 ? "y" : "ies"} · ${orderCount} order${orderCount === 1 ? "" : "s"} · ${subCount} subscription${subCount === 1 ? "" : "s"}
+      </p>
+      <p style="font-size:12px;color:#888;margin:0 0 20px">
+        Orders placed after this email are not counted.
+        <a href="${liveHref}" style="color:#024628">Live figure &rarr;</a>
       </p>
 
       <h3 style="margin:0 0 6px;font-size:15px;color:#024628">Bake totals</h3>
