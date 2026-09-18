@@ -32,7 +32,12 @@ import {
   type PaymentFacts,
 } from "@/lib/payment-label";
 import type { AdminOrderRow, AdminOrderItemSnapshot } from "@/lib/admin-shared";
-import { ZONE_LABELS, resolveZoneWithPickup } from "@/lib/delivery-zones";
+import {
+  EMPTY_RULE_SET,
+  ZONE_LABELS,
+  resolveZoneWithSource,
+  type ZoneRuleSet,
+} from "@/lib/delivery-zones";
 
 export type { PaymentFacts };
 
@@ -271,7 +276,11 @@ export function composeRun(stops: ShareStop[], trailer: readonly string[] = []):
 
 /** One order as a stop. `includePin` is false on a multi-stop run, where
  *  the route links at the end of the message carry the navigation. */
-function shareStop(order: AdminOrderRow, includePin: boolean): ShareStop {
+function shareStop(
+  order: AdminOrderRow,
+  includePin: boolean,
+  rules: ZoneRuleSet = EMPTY_RULE_SET,
+): ShareStop {
   const address = order.delivery_address?.trim() || "—";
   const facts: PaymentFacts = {
     payment_status: order.payment_status,
@@ -282,11 +291,18 @@ function shareStop(order: AdminOrderRow, includePin: boolean): ShareStop {
   // Zone comes from the ONE map — see src/lib/delivery-zones.ts. The label
   // sits between payment and customer name so the rider sees "COD Rs280 /
   // Zone 2 / Ravi Kumar" — one glance names the run, the money and the
-  // door in that order.
-  const zoneKey = resolveZoneWithPickup({
-    address: order.delivery_address,
-    isPickup: order.fulfillment_type === "pickup",
-  });
+  // door in that order. `rules` is the learned override bundle the board
+  // fetched; when the caller passed no rules, EMPTY_RULE_SET falls the
+  // resolver back to the built-in map (identical to the pre-rules
+  // behaviour, so old call sites keep working).
+  const zoneKey = resolveZoneWithSource(
+    {
+      address: order.delivery_address,
+      isPickup: order.fulfillment_type === "pickup",
+      orderId: order.id,
+    },
+    rules,
+  ).zone;
 
   return {
     text: composeShareMessageFromParts({
@@ -307,14 +323,22 @@ function shareStop(order: AdminOrderRow, includePin: boolean): ShareStop {
 }
 
 /** One order as a stop, pin included. Used by callers that assemble their
- *  own runs (subscriptions) and still want a pin on every stop. */
-export function composeShareStop(order: AdminOrderRow): ShareStop {
-  return shareStop(order, true);
+ *  own runs (subscriptions) and still want a pin on every stop. `rules` is
+ *  the learned-override bundle the board fetched; omit to fall back to the
+ *  built-in map. */
+export function composeShareStop(
+  order: AdminOrderRow,
+  rules: ZoneRuleSet = EMPTY_RULE_SET,
+): ShareStop {
+  return shareStop(order, true, rules);
 }
 
 /** A single order, shared on its own — a run of one. */
-export function composeShareMessage(order: AdminOrderRow): string {
-  return composeRun([composeShareStop(order)]);
+export function composeShareMessage(
+  order: AdminOrderRow,
+  rules: ZoneRuleSet = EMPTY_RULE_SET,
+): string {
+  return composeRun([composeShareStop(order, rules)]);
 }
 
 /**
@@ -322,9 +346,14 @@ export function composeShareMessage(order: AdminOrderRow): string {
  * dropped in favour of route links at the end — see MAX_ROUTE_POINTS.
  * A run of one falls through to the single-order message, pin and all.
  */
-export function composeShareRun(orders: AdminOrderRow[]): string {
+export function composeShareRun(
+  orders: AdminOrderRow[],
+  rules: ZoneRuleSet = EMPTY_RULE_SET,
+): string {
   if (orders.length <= 1) {
-    return orders.length === 1 ? composeShareMessage(orders[0]) : composeRun([]);
+    return orders.length === 1
+      ? composeShareMessage(orders[0], rules)
+      : composeRun([]);
   }
 
   // Pickup orders still get a block — the operator selected them and the
@@ -344,7 +373,7 @@ export function composeShareRun(orders: AdminOrderRow[]): string {
   // `routeLinksFor` returns nothing, and without this the one real
   // delivery would have gone out with no map link at all.
   const onRoute = (o: AdminOrderRow) => links.length > 0 && routed.includes(o);
-  const stops = orders.map((o) => shareStop(o, !onRoute(o)));
+  const stops = orders.map((o) => shareStop(o, !onRoute(o), rules));
 
   const trailer =
     links.length === 0

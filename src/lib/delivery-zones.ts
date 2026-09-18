@@ -282,3 +282,279 @@ export function flattenSubscriptionAddress(input: {
     .filter(Boolean);
   return parts.join(", ");
 }
+
+// ---------------------------------------------------------------------------
+// Learned rules — DB-backed overrides.
+//
+// The rules table is the map Sunny edits from the board. The resolver reads
+// it at priority 3 (pincode) and 4 (locality), OVERRIDING the built-in maps
+// at 5 and 6. Row-overrides (a pin on a specific order/subscription row) sit
+// at priority 2, above every rule and every built-in.
+//
+// This module never queries the database — the caller fetches the ruleset
+// once per render and hands it in. That keeps the resolver a pure function
+// callable from the share message, print sheet and bake strip without
+// threading a Supabase client through every one of them.
+// ---------------------------------------------------------------------------
+
+export type NumberedZone = Exclude<ZoneKey, "unzoned" | "pickup">;
+
+export type ZoneRuleSet = {
+  /** normalised pincode -> zone */
+  pincode: Map<string, NumberedZone>;
+  /** normalised locality token -> zone */
+  locality: Map<string, NumberedZone>;
+  /** order id -> zone */
+  rowByOrder: Map<string, NumberedZone>;
+  /** subscription id -> zone */
+  rowBySubscription: Map<string, NumberedZone>;
+};
+
+export const EMPTY_RULE_SET: ZoneRuleSet = {
+  pincode: new Map(),
+  locality: new Map(),
+  rowByOrder: new Map(),
+  rowBySubscription: new Map(),
+};
+
+/** Provenance — which of the seven ladder steps produced the zone. Rendered
+ *  in the ZoneBadge tooltip and used by the provenance dot: any `rule_*`
+ *  or `row_override` source gets the dot, everything else is plain. */
+export type ZoneSource =
+  | "pickup"
+  | "row_override"
+  | "rule_pincode"
+  | "rule_locality"
+  | "builtin_pincode"
+  | "builtin_locality"
+  | "unzoned";
+
+export type ZoneResolution = {
+  zone: ZoneKey;
+  source: ZoneSource;
+  /** The key that matched, when a rule or built-in map hit. Populated for
+   *  `rule_pincode` / `rule_locality` / `builtin_pincode` / `builtin_locality`
+   *  and undefined for `pickup` / `row_override` / `unzoned`. Used by the
+   *  popover to decide which key to write when the operator picks a zone. */
+  matchedKey?: { type: "pincode" | "locality"; value: string };
+};
+
+// ---- normalisers ---------------------------------------------------------
+// Same functions the writer uses to produce key_value and the reader uses to
+// look up. Never call them from anywhere else — the shared implementation is
+// the whole point.
+
+/** Digits-only, exactly six. Anything else → empty string (no match). */
+export function normalisePincodeKey(raw: string | null | undefined): string {
+  const digits = (raw ?? "").replace(/\D+/g, "");
+  return /^\d{6}$/.test(digits) ? digits : "";
+}
+
+/** Lowercase, trim, collapse internal whitespace, drop punctuation that
+ *  would break the whole-word match ("M.V.P." and "MVP" must normalise the
+ *  same, so periods go). Aliases are applied FIRST so the stored key sits
+ *  on the canonical spelling — a rule on "Kommadi" and a rule on "Kommadhi"
+ *  otherwise collide when checkout autocomplete drifts. */
+export function normaliseLocalityKey(raw: string | null | undefined): string {
+  const base = (raw ?? "")
+    .toLowerCase()
+    .replace(/[.\-_/]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!base) return "";
+  const alias = LOCALITY_ALIASES[base];
+  const canonical = (alias ?? base).toLowerCase();
+  return canonical.replace(/\s+/g, " ").trim();
+}
+
+// ---- resolver with rules -------------------------------------------------
+
+export type ZoneInputsWithParent = ZoneInputs & {
+  isPickup?: boolean;
+  /** Parent id for row-override lookup. Exactly one of these must be set
+   *  for a row-override to be honoured — a rule that pins an order id will
+   *  not match a subscription and vice versa. */
+  orderId?: string | null;
+  subscriptionId?: string | null;
+};
+
+/**
+ * Full seven-step resolver. Prefer this over {@link resolveZone} on any
+ * surface that shows a badge or reads rules — the board, the print sheet,
+ * the share composer, the rules panel preview. Callers that only need the
+ * string-driven built-in map (bake strip fallback in unit tests, offline
+ * scripts) can still call {@link resolveZone}.
+ */
+export function resolveZoneWithSource(
+  inputs: ZoneInputsWithParent,
+  rules: ZoneRuleSet = EMPTY_RULE_SET,
+): ZoneResolution {
+  // 1. Pickup — either explicit or textual.
+  if (inputs.isPickup) return { zone: "pickup", source: "pickup" };
+  const address = (inputs.address ?? "").trim();
+  if (address && PICKUP_HINTS.test(address)) {
+    return { zone: "pickup", source: "pickup" };
+  }
+
+  // 2. Row override.
+  if (inputs.orderId) {
+    const z = rules.rowByOrder.get(inputs.orderId);
+    if (z) return { zone: z, source: "row_override" };
+  }
+  if (inputs.subscriptionId) {
+    const z = rules.rowBySubscription.get(inputs.subscriptionId);
+    if (z) return { zone: z, source: "row_override" };
+  }
+
+  // Candidate pincodes: explicit column first, then any 6-digit runs in
+  // the address text (multiple, source order — see extractPincodes).
+  const explicitPin = normalisePincodeKey(inputs.pincode);
+  const addressPins = extractPincodes(address);
+  const pinCandidates = explicitPin
+    ? [explicitPin, ...addressPins.filter((p) => p !== explicitPin)]
+    : addressPins;
+
+  // 3. Rule by pincode.
+  for (const pin of pinCandidates) {
+    const z = rules.pincode.get(pin);
+    if (z) {
+      return {
+        zone: z,
+        source: "rule_pincode",
+        matchedKey: { type: "pincode", value: pin },
+      };
+    }
+  }
+
+  // 4. Rule by locality. Iterate the built-in matchers (same tokenisation
+  // as the built-in map) and, for each hit, check whether a rule has been
+  // learned for that locality name. First hit wins.
+  if (address) {
+    for (const { name } of LOCALITY_TOKENS) {
+      if (name.re.test(address)) {
+        const key = normaliseLocalityKey(name.canonical);
+        const z = rules.locality.get(key);
+        if (z) {
+          return {
+            zone: z,
+            source: "rule_locality",
+            matchedKey: { type: "locality", value: key },
+          };
+        }
+      }
+    }
+  }
+
+  // 5. Built-in pincode map.
+  for (const pin of pinCandidates) {
+    const z = PINCODE_TO_ZONE[pin];
+    if (z && z !== "unzoned" && z !== "pickup") {
+      return {
+        zone: z,
+        source: "builtin_pincode",
+        matchedKey: { type: "pincode", value: pin },
+      };
+    }
+  }
+
+  // 6. Built-in locality list.
+  if (address) {
+    for (const { key, re } of LOCALITY_MATCHERS) {
+      if (re.test(address)) {
+        return {
+          zone: key,
+          source: "builtin_locality",
+          matchedKey: { type: "locality", value: normaliseLocalityKey(re.source) },
+        };
+      }
+    }
+  }
+
+  // 7. Unzoned.
+  return { zone: "unzoned", source: "unzoned" };
+}
+
+// A parallel list of matchers whose `.name` we can hand back to a rule key.
+// The existing LOCALITY_MATCHERS discards the source name inside the regex,
+// so the resolver would have no way to compute normaliseLocalityKey() on a
+// match. This list keeps the canonical name alongside the regex.
+type LocalityToken = {
+  key: NumberedZone;
+  name: { canonical: string; re: RegExp };
+};
+const LOCALITY_TOKENS: LocalityToken[] = (() => {
+  const out: LocalityToken[] = [];
+  for (const def of ZONE_DEFS) {
+    for (const name of def.localities) {
+      out.push({
+        key: def.key,
+        name: {
+          canonical: name,
+          re: new RegExp(
+            `(?:^|[^a-z0-9])${escapeRegex(name.toLowerCase())}(?=[^a-z0-9]|$)`,
+            "i",
+          ),
+        },
+      });
+    }
+  }
+  for (const [alias, canonical] of Object.entries(LOCALITY_ALIASES)) {
+    const owner = ZONE_DEFS.find((d) =>
+      d.localities.some((l) => l.toLowerCase() === canonical.toLowerCase()),
+    );
+    if (!owner) continue; // already validated in LOCALITY_MATCHERS builder
+    out.push({
+      key: owner.key,
+      name: {
+        canonical,
+        re: new RegExp(
+          `(?:^|[^a-z0-9])${escapeRegex(alias.toLowerCase())}(?=[^a-z0-9]|$)`,
+          "i",
+        ),
+      },
+    });
+  }
+  return out;
+})();
+
+// ---- rule-key chooser ----------------------------------------------------
+
+/** Given an address, decide what (key_type, key_value, key_input) a rule
+ *  would be written on if the operator picks a zone right now.
+ *
+ *  Preference order matches the resolver's read order: pincode first
+ *  (deterministic, cheap, unambiguous), then locality (the first token the
+ *  built-in matchers would have matched), then null when the address has
+ *  neither — that null is the signal to switch the UI into row-override
+ *  mode. */
+export function pickRuleKey(inputs: {
+  address?: string | null;
+  pincode?: string | null;
+}): { key_type: "pincode" | "locality"; key_value: string; key_input: string } | null {
+  const address = (inputs.address ?? "").trim();
+  const explicit = normalisePincodeKey(inputs.pincode);
+  if (explicit) {
+    return {
+      key_type: "pincode",
+      key_value: explicit,
+      key_input: (inputs.pincode ?? "").trim() || explicit,
+    };
+  }
+  for (const pin of extractPincodes(address)) {
+    return { key_type: "pincode", key_value: pin, key_input: pin };
+  }
+  if (address) {
+    for (const { name } of LOCALITY_TOKENS) {
+      const m = address.match(name.re);
+      if (m) {
+        const raw = name.canonical;
+        return {
+          key_type: "locality",
+          key_value: normaliseLocalityKey(raw),
+          key_input: raw,
+        };
+      }
+    }
+  }
+  return null;
+}

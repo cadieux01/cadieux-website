@@ -29,9 +29,12 @@ import type {
   AdminOrderItemSnapshot,
   AdminOrderRow,
 } from "@/lib/admin-shared";
+import { EMPTY_RULE_SET, type ZoneRuleSet } from "@/lib/delivery-zones";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isShareable } from "@/lib/order-share-message";
+import { buildRuleSet } from "@/lib/zone-rules";
+import { fetchAllRules } from "@/lib/zone-rules-client";
 import { OrderShareButton } from "@/components/admin/OrderShareButton";
 import type { ShareablePartner } from "@/components/admin/PartnerShareButton";
 
@@ -132,6 +135,30 @@ export default function AdminOrderDetailPage({
         );
       } finally {
         if (!cancelled) setPartnersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Zone rules + row overrides — mirrored from /admin/orders so the Share
+  // button on THIS page quotes the same effective zone the list did.
+  // Falls back to EMPTY_RULE_SET on any error: a share message with the
+  // built-in zone is better than one that fails to render.
+  const [zoneRules, setZoneRules] = useState<ZoneRuleSet>(EMPTY_RULE_SET);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchAllRules();
+        if (cancelled) return;
+        setZoneRules(buildRuleSet(res.rules ?? [], res.overrides ?? []));
+      } catch {
+        // silent — the badge on this page renders zones off the resolver
+        // AND we don't render a zone badge on the detail page anyway;
+        // the only consumer here is the OrderShareButton, which reads
+        // from `zoneRules` and degrades to EMPTY on failure.
       }
     })();
     return () => {
@@ -268,6 +295,7 @@ export default function AdminOrderDetailPage({
                 partnersLoading={partnersLoading}
                 partnersError={partnersError}
                 buttonStyle={chipPrimary}
+                rules={zoneRules}
               />
             </span>
           ) : null}
@@ -334,6 +362,7 @@ export default function AdminOrderDetailPage({
                   partnersLoading={partnersLoading}
                   partnersError={partnersError}
                   buttonStyle={chipSmall}
+                  rules={zoneRules}
                 />
               </span>
             ) : null
