@@ -498,7 +498,11 @@ export function EditOrderPanel({
                           value={it.name}
                           onChange={(e) => updateItem(i, { name: e.target.value })}
                           disabled={saving || itemsLocked}
-                          style={{ ...inputStyle, padding: "0.35rem 0.5rem" }}
+                          style={{
+                            ...inputStyle,
+                            padding: "0.35rem 0.5rem",
+                            ...(itemsLocked ? lockedField : null),
+                          }}
                         />
                       </td>
                       <td style={{ ...tdStyle, textAlign: "right" }}>
@@ -517,6 +521,7 @@ export function EditOrderPanel({
                             ...inputStyle,
                             padding: "0.35rem 0.5rem",
                             textAlign: "right",
+                            ...(itemsLocked ? lockedField : null),
                           }}
                         />
                       </td>
@@ -537,6 +542,7 @@ export function EditOrderPanel({
                             ...inputStyle,
                             padding: "0.35rem 0.5rem",
                             textAlign: "right",
+                            ...(itemsLocked ? lockedField : null),
                           }}
                         />
                       </td>
@@ -556,7 +562,11 @@ export function EditOrderPanel({
                           onClick={() => removeItem(i)}
                           disabled={saving || itemsLocked}
                           aria-label={`Remove ${it.name}`}
-                          style={miniButton}
+                          style={
+                            itemsLocked
+                              ? { ...miniButton, ...lockedField }
+                              : miniButton
+                          }
                           title={
                             itemsLocked
                               ? "Locked — the order is paid"
@@ -814,6 +824,16 @@ const buttonStyle: React.CSSProperties = {
   padding: "0.55rem 1rem",
   textTransform: "uppercase",
   cursor: "pointer",
+};
+
+// A disabled control that still LOOKS editable is a lie the operator has
+// to discover by typing into it. These inputs are painted by the admin
+// stylesheet, so the browser's own disabled shading never shows — the
+// locked item fields rendered pixel-identical to the live ones. Dim them
+// explicitly instead.
+const lockedField: React.CSSProperties = {
+  opacity: 0.45,
+  cursor: "not-allowed",
 };
 
 const miniButton: React.CSSProperties = {
