@@ -72,11 +72,22 @@ import {
   splitFilterValues,
 } from "@/lib/order-filter";
 import {
+  EMPTY_RULE_SET,
   ZONE_KEYS,
   ZONE_LABELS,
-  resolveZoneWithPickup,
+  pickRuleKey,
+  resolveZoneWithSource,
   type ZoneKey,
+  type ZoneResolution,
+  type ZoneRuleSet,
 } from "@/lib/delivery-zones";
+import {
+  buildRuleSet,
+  type ZoneRowOverrideRow,
+  type ZoneRuleRow,
+} from "@/lib/zone-rules";
+import { fetchAllRules } from "@/lib/zone-rules-client";
+import { ZoneAssignPopover } from "@/components/admin/ZoneAssignPopover";
 import {
   DEFAULT_BASIS,
   matchesDay,
@@ -661,6 +672,41 @@ function OrdersPageInner() {
     };
   }, []);
 
+  // Popover state — the ZoneAssignPopover that opens on a badge click.
+  // Null when closed. `anchorRect` is captured at click time so the popover
+  // can position itself even after the row scrolls; on re-open we recompute.
+  const [assignTarget, setAssignTarget] = useState<{
+    orderId: string;
+    anchorRect: DOMRect;
+  } | null>(null);
+
+  // Zone rules — the learned overrides Sunny writes from the badge. Fetched
+  // once on mount and reloaded whenever the popover writes. NOT polled: rule
+  // changes are operator-driven and single-writer, so polling every 10s
+  // would be pure noise.
+  const [ruleRows, setRuleRows] = useState<ZoneRuleRow[]>([]);
+  const [overrideRows, setOverrideRows] = useState<ZoneRowOverrideRow[]>([]);
+  const zoneRules: ZoneRuleSet = useMemo(
+    () => (ruleRows.length + overrideRows.length === 0
+      ? EMPTY_RULE_SET
+      : buildRuleSet(ruleRows, overrideRows)),
+    [ruleRows, overrideRows],
+  );
+  const loadRules = useCallback(async () => {
+    try {
+      const res = await fetchAllRules();
+      setRuleRows(res.rules);
+      setOverrideRows(res.overrides);
+    } catch {
+      // A rules-load failure must not blank the board — the resolver falls
+      // back to the built-in map, same as if no rules existed. The next
+      // successful fetch heals it.
+    }
+  }, []);
+  useEffect(() => {
+    void loadRules();
+  }, [loadRules]);
+
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -801,19 +847,32 @@ function OrdersPageInner() {
   // time — no column, no migration (see src/lib/delivery-zones.ts). The
   // map keys on order id so the same lookup serves the filter, the counts,
   // the badge on the row and the bake-strip split.
-  const zoneOf = useMemo(() => {
-    const m = new Map<string, ZoneKey>();
+  // Full resolution per row — the zone AND the ladder step that produced
+  // it. Kept in a parallel map so the ZoneBadge can render a provenance dot
+  // for row-overrides and learned rules, and the popover can decide RULE
+  // mode vs ROW-PIN mode from the same resolution.
+  const zoneResOf = useMemo(() => {
+    const m = new Map<string, ZoneResolution>();
     for (const o of orders) {
       m.set(
         o.id,
-        resolveZoneWithPickup({
-          address: o.delivery_address,
-          isPickup: o.fulfillment_type === "pickup",
-        }),
+        resolveZoneWithSource(
+          {
+            address: o.delivery_address,
+            isPickup: o.fulfillment_type === "pickup",
+            orderId: o.id,
+          },
+          zoneRules,
+        ),
       );
     }
     return m;
-  }, [orders]);
+  }, [orders, zoneRules]);
+  const zoneOf = useMemo(() => {
+    const m = new Map<string, ZoneKey>();
+    zoneResOf.forEach((r, id) => m.set(id, r.zone));
+    return m;
+  }, [zoneResOf]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -1178,8 +1237,8 @@ function OrdersPageInner() {
     // composeShareRun, not composeShareMessage per row: the run needs ONE
     // cash total at the end (composeShareMessage appends its own, being a
     // run of one) and ONE route link instead of a pin per stop.
-    return composeShareRun(rows);
-  }, [selectedInSortOrder]);
+    return composeShareRun(rows, zoneRules);
+  }, [selectedInSortOrder, zoneRules]);
 
   const runBulk = async (action: BulkAction) => {
     const rows = selectedInSortOrder();
@@ -1812,7 +1871,17 @@ function OrdersPageInner() {
                           resolved from the address at read time via
                           src/lib/delivery-zones.ts — no column, no migration. */}
                       <div style={{ marginBottom: 4 }}>
-                        <ZoneBadge zone={zoneOf.get(o.id)} />
+                        <ZoneBadge
+                          zone={zoneOf.get(o.id)}
+                          source={zoneResOf.get(o.id)?.source}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = (
+                              e.currentTarget as HTMLElement
+                            ).getBoundingClientRect();
+                            setAssignTarget({ orderId: o.id, anchorRect: rect });
+                          }}
+                        />
                       </div>
                       <div
                         style={{
@@ -2063,6 +2132,7 @@ function OrdersPageInner() {
                               ...buttonSm,
                               opacity: busy ? 0.5 : 1,
                             }}
+                            rules={zoneRules}
                           />
                         ) : null}
                         {o.is_preorder && !o.delivery_date ? (
@@ -2142,6 +2212,44 @@ function OrdersPageInner() {
         </div>
         </div>
       )}
+      {assignTarget
+        ? (() => {
+            const o = orders.find((x) => x.id === assignTarget.orderId);
+            const res = zoneResOf.get(assignTarget.orderId);
+            if (!o || !res) return null;
+            const ruleKey =
+              res.zone === "pickup"
+                ? null
+                : pickRuleKey({ address: o.delivery_address });
+            const existingRule =
+              ruleKey &&
+              (res.source === "rule_pincode" || res.source === "rule_locality")
+                ? ruleRows.find(
+                    (r) =>
+                      r.key_type === ruleKey.key_type &&
+                      r.key_value === ruleKey.key_value,
+                  ) ?? null
+                : null;
+            const existingOverride =
+              res.source === "row_override"
+                ? overrideRows.find((x) => x.order_id === o.id) ?? null
+                : null;
+            return (
+              <ZoneAssignPopover
+                open
+                onClose={() => setAssignTarget(null)}
+                currentZone={res.zone}
+                resolution={res}
+                target={{ kind: "order", id: o.id }}
+                ruleKey={ruleKey}
+                existingRuleId={existingRule?.id ?? null}
+                existingOverrideId={existingOverride?.id ?? null}
+                onChanged={loadRules}
+                anchorRect={assignTarget.anchorRect}
+              />
+            );
+          })()
+        : null}
     </AdminShell>
   );
 }

@@ -38,12 +38,23 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ZoneBadge } from "@/components/admin/ZoneBadge";
 import MultiSelect from "@/components/ui/MultiSelect";
 import {
+  EMPTY_RULE_SET,
   ZONE_KEYS,
   ZONE_LABELS,
-  resolveZone,
   flattenSubscriptionAddress,
+  pickRuleKey,
+  resolveZoneWithSource,
   type ZoneKey,
+  type ZoneResolution,
+  type ZoneRuleSet,
 } from "@/lib/delivery-zones";
+import {
+  buildRuleSet,
+  type ZoneRowOverrideRow,
+  type ZoneRuleRow,
+} from "@/lib/zone-rules";
+import { fetchAllRules } from "@/lib/zone-rules-client";
+import { ZoneAssignPopover } from "@/components/admin/ZoneAssignPopover";
 import { decodeZoneParam, encodeZoneParam } from "@/lib/order-filter";
 import {
   PartnerShareButton,
@@ -407,6 +418,35 @@ function SubscriptionsPageInner() {
     [subs, basis, day],
   );
 
+  // Learned rules. Same shape and lifecycle as the orders board: fetched
+  // once on mount, reloaded on write, NOT polled. A failed fetch leaves the
+  // rule set empty and the resolver falls back to the built-in map.
+  const [ruleRows, setRuleRows] = useState<ZoneRuleRow[]>([]);
+  const [overrideRows, setOverrideRows] = useState<ZoneRowOverrideRow[]>([]);
+  const zoneRules: ZoneRuleSet = useMemo(
+    () => (ruleRows.length + overrideRows.length === 0
+      ? EMPTY_RULE_SET
+      : buildRuleSet(ruleRows, overrideRows)),
+    [ruleRows, overrideRows],
+  );
+  const loadRules = useCallback(async () => {
+    try {
+      const res = await fetchAllRules();
+      setRuleRows(res.rules);
+      setOverrideRows(res.overrides);
+    } catch {
+      /* built-in map fallback — see orders board */
+    }
+  }, []);
+  useEffect(() => {
+    void loadRules();
+  }, [loadRules]);
+
+  const [assignTarget, setAssignTarget] = useState<{
+    subscriptionId: string;
+    anchorRect: DOMRect;
+  } | null>(null);
+
   // Zone lookup keyed by subscription id. Computed off `subs` so it costs
   // one pass per fetch, not one per keystroke of the status filter. The
   // resolver takes strings, so we flatten the row's jsonb + string address
@@ -414,8 +454,8 @@ function SubscriptionsPageInner() {
   // pin (more trustworthy than a stray 6-digit run in a free-text line).
   // Subscriptions never ship as pickup — the fulfillment branch that adds
   // the pickup zone lives on the orders board.
-  const zoneOf = useMemo(() => {
-    const map = new Map<string, ZoneKey>();
+  const zoneResOf = useMemo(() => {
+    const map = new Map<string, ZoneResolution>();
     for (const s of subs) {
       const address = flattenSubscriptionAddress({
         customer_address: s.customer_address,
@@ -423,11 +463,19 @@ function SubscriptionsPageInner() {
       });
       map.set(
         s.id,
-        resolveZone({ address, pincode: s.customer_pincode ?? null }),
+        resolveZoneWithSource(
+          { address, pincode: s.customer_pincode ?? null, subscriptionId: s.id },
+          zoneRules,
+        ),
       );
     }
     return map;
-  }, [subs]);
+  }, [subs, zoneRules]);
+  const zoneOf = useMemo(() => {
+    const map = new Map<string, ZoneKey>();
+    zoneResOf.forEach((r, id) => map.set(id, r.zone));
+    return map;
+  }, [zoneResOf]);
 
   const isExpiring = useCallback((s: AdminSubscriptionRow): boolean => {
     if (s.status !== "active") return false;
@@ -877,7 +925,20 @@ function SubscriptionsPageInner() {
                           "Multigrain 1, Plain 1 — every week on Sunday". */}
                       <div>{describeSubscriptionPlan(s)}</div>
                       <div style={{ marginTop: 4 }}>
-                        <ZoneBadge zone={zoneOf.get(s.id)} />
+                        <ZoneBadge
+                          zone={zoneOf.get(s.id)}
+                          source={zoneResOf.get(s.id)?.source}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = (
+                              e.currentTarget as HTMLElement
+                            ).getBoundingClientRect();
+                            setAssignTarget({
+                              subscriptionId: s.id,
+                              anchorRect: rect,
+                            });
+                          }}
+                        />
                       </div>
                       {rowAddr.hasAny ? (
                         <div
@@ -1267,6 +1328,48 @@ function SubscriptionsPageInner() {
           }
         }
       `}</style>
+      {assignTarget
+        ? (() => {
+            const s = subs.find((x) => x.id === assignTarget.subscriptionId);
+            const res = zoneResOf.get(assignTarget.subscriptionId);
+            if (!s || !res) return null;
+            const address = flattenSubscriptionAddress({
+              customer_address: s.customer_address,
+              delivery_address: s.delivery_address,
+            });
+            const ruleKey = pickRuleKey({
+              address,
+              pincode: s.customer_pincode ?? null,
+            });
+            const existingRule =
+              ruleKey &&
+              (res.source === "rule_pincode" || res.source === "rule_locality")
+                ? ruleRows.find(
+                    (r) =>
+                      r.key_type === ruleKey.key_type &&
+                      r.key_value === ruleKey.key_value,
+                  ) ?? null
+                : null;
+            const existingOverride =
+              res.source === "row_override"
+                ? overrideRows.find((x) => x.subscription_id === s.id) ?? null
+                : null;
+            return (
+              <ZoneAssignPopover
+                open
+                onClose={() => setAssignTarget(null)}
+                currentZone={res.zone}
+                resolution={res}
+                target={{ kind: "subscription", id: s.id }}
+                ruleKey={ruleKey}
+                existingRuleId={existingRule?.id ?? null}
+                existingOverrideId={existingOverride?.id ?? null}
+                onChanged={loadRules}
+                anchorRect={assignTarget.anchorRect}
+              />
+            );
+          })()
+        : null}
     </AdminShell>
   );
 }

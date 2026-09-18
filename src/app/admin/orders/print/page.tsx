@@ -41,11 +41,15 @@ import {
   type DateBasis,
 } from "@/lib/day-filter";
 import {
+  EMPTY_RULE_SET,
   ZONE_KEYS,
   ZONE_LABELS,
-  resolveZoneWithPickup,
+  resolveZoneWithSource,
   type ZoneKey,
+  type ZoneRuleSet,
 } from "@/lib/delivery-zones";
+import { buildRuleSet } from "@/lib/zone-rules";
+import { fetchAllRules } from "@/lib/zone-rules-client";
 
 // The private parseYmdLocal + buildRange that used to sit here are GONE.
 // They built a local-midnight..local-23:59 window out of ?from/?to, which
@@ -136,6 +140,25 @@ function PrintOrdersPageInner() {
     void load();
   }, [load]);
 
+  // Learned rules — same fetch as the board so a rule that moves a row
+  // between zones on screen moves it in the printout too.
+  const [zoneRules, setZoneRules] = useState<ZoneRuleSet>(EMPTY_RULE_SET);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchAllRules();
+        if (cancelled) return;
+        setZoneRules(buildRuleSet(res.rules, res.overrides));
+      } catch {
+        /* fall back to the built-in map */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Zone lookup for every order. Same resolver the screen and the share
   // message use — one map, one answer.
   const zoneOf = useMemo(() => {
@@ -143,14 +166,18 @@ function PrintOrdersPageInner() {
     for (const o of orders) {
       m.set(
         o.id,
-        resolveZoneWithPickup({
-          address: o.delivery_address,
-          isPickup: o.fulfillment_type === "pickup",
-        }),
+        resolveZoneWithSource(
+          {
+            address: o.delivery_address,
+            isPickup: o.fulfillment_type === "pickup",
+            orderId: o.id,
+          },
+          zoneRules,
+        ).zone,
       );
     }
     return m;
-  }, [orders]);
+  }, [orders, zoneRules]);
 
   const filtered = useMemo(() => {
     const search = q.trim().toLowerCase();
