@@ -18,6 +18,7 @@ import {
 } from "@/lib/phone-cookie";
 import {
   DELIVERY_FEE_INR,
+  enforceDeliveryFloor,
   reconcileWebPrices,
   validateWebOrderItemsShape,
   type WebProductRow,
@@ -287,7 +288,9 @@ export async function prepareOneTimeOrder(
   const slugs = Array.from(new Set(itemsShape.items.map((i) => i.slug)));
   const { data: productRows, error: productsErr } = await supabaseAdmin
     .from("products")
-    .select("slug, name, price_inr, is_active, is_archived, in_stock")
+    .select(
+      "slug, name, price_inr, is_active, is_archived, in_stock, available_from, stock_message",
+    )
     .in("slug", slugs);
   if (productsErr) {
     console.error("[checkout] products fetch failed:", productsErr);
@@ -300,6 +303,23 @@ export async function prepareOneTimeOrder(
   );
   if (!reconciled.ok) {
     return { ok: false, status: reconciled.status, body: { error: reconciled.error, code: reconciled.code } };
+  }
+
+  // Pre-order delivery floor: MAX(available_from) across the cart's lines.
+  // Skipped under site-wide pre-order mode, which strips the date entirely
+  // and leaves an admin to schedule — nothing has been promised there yet.
+  if (!opts.preorderMode) {
+    const floorFailure = enforceDeliveryFloor(
+      (productRows ?? []) as WebProductRow[],
+      deliveryDate,
+    );
+    if (floorFailure) {
+      return {
+        ok: false,
+        status: floorFailure.status,
+        body: { error: floorFailure.error, code: floorFailure.code },
+      };
+    }
   }
 
   // Compare the client's idea of the subtotal — never trust it.

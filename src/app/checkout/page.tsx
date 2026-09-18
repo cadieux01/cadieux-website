@@ -39,6 +39,11 @@ import {
 import { haversineKm } from "@/lib/haversine";
 import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
 import { usePreorderMode } from "@/hooks/usePreorderMode";
+import { useCartFloor } from "@/hooks/useProductFloors";
+import {
+  cartFloorEscapeHint,
+  cartFloorMessage,
+} from "@/lib/product-availability";
 
 // Site origin for tracking links embedded in confirmation messages.
 // NEXT_PUBLIC_ prefix so it's inlined into the client bundle at build.
@@ -210,6 +215,19 @@ export default function CheckoutPage() {
   );
   const [deliveryDate, setDeliveryDate] = useState<string>(tomorrowIso);
   const [deliverySlot, setDeliverySlot] = useState<string>("");
+
+  // Pre-order floor for this cart: MAX(products.available_from) across its
+  // lines. When one exists there is exactly one deliverable date, so the
+  // picker collapses to a single fixed pill and the date state follows it —
+  // the customer is told, in the banner above the pill, rather than having
+  // their choice quietly overwritten. The server enforces the same floor
+  // independently (code "preorder_floor"), so this is convenience, not
+  // protection.
+  const cartFloorInfo = useCartFloor(cart);
+  const floorDate = cartFloorInfo.date;
+  useEffect(() => {
+    if (floorDate && deliveryDate !== floorDate) setDeliveryDate(floorDate);
+  }, [floorDate, deliveryDate]);
 
   // If the currently-picked slot is no longer bookable (e.g. date changed,
   // or time has crept past the 12h10m lead window for a same-day pick),
@@ -2001,6 +2019,9 @@ export default function CheckoutPage() {
             onPickDate={(d) => { setDeliveryDate(d); setError(""); }}
             onPickSlot={(s) => { setDeliverySlot(s); setError(""); }}
             preorderMode={!!preorderMode}
+            floorDate={floorDate}
+            floorMessage={cartFloorMessage(cartFloorInfo)}
+            floorHint={cartFloorEscapeHint(cartFloorInfo)}
           />
         )}
 
@@ -3344,6 +3365,9 @@ function DeliveryScheduleSection({
   onPickDate,
   onPickSlot,
   preorderMode,
+  floorDate,
+  floorMessage,
+  floorHint,
 }: {
   tomorrowIso: string;
   dayAfterIso: string;
@@ -3352,11 +3376,20 @@ function DeliveryScheduleSection({
   onPickDate: (d: string) => void;
   onPickSlot: (s: string) => void;
   preorderMode: boolean;
+  // Pre-order floor for the whole cart (MAX across its lines), or null.
+  // Tomorrow / day-after are both below it by definition, so rendering them
+  // disabled would leave nothing selectable — the picker collapses to the one
+  // date that IS deliverable instead.
+  floorDate: string | null;
+  floorMessage: string | null;
+  floorHint: string | null;
 }) {
-  const dates: { iso: string; tag: string }[] = [
-    { iso: tomorrowIso, tag: "Tomorrow" },
-    { iso: dayAfterIso, tag: "Day after" },
-  ];
+  const dates: { iso: string; tag: string }[] = floorDate
+    ? [{ iso: floorDate, tag: "Earliest delivery" }]
+    : [
+        { iso: tomorrowIso, tag: "Tomorrow" },
+        { iso: dayAfterIso, tag: "Day after" },
+      ];
   return (
     <section style={{ marginBottom: 24 }}>
       {preorderMode ? (
@@ -3374,6 +3407,34 @@ function DeliveryScheduleSection({
           <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
             First deliveries begin soon. Delivery date + time will be scheduled shortly — we&apos;ll confirm by SMS + WhatsApp.
           </p>
+        </div>
+      ) : null}
+
+      {/* The floor is explained BEFORE the pill, so the single fixed date
+          reads as a consequence the customer understands rather than a
+          choice that was taken away. Suppressed under site-wide pre-order
+          mode, which already says no date is being promised. */}
+      {floorMessage && !preorderMode ? (
+        <div
+          role="status"
+          style={{
+            background: "#FBF3D4",
+            border: "1px solid rgba(2,70,40,0.25)",
+            padding: "16px 20px",
+            marginBottom: 22,
+          }}
+        >
+          <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
+            Pre-order
+          </p>
+          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
+            {floorMessage}
+          </p>
+          {floorHint ? (
+            <p style={{ margin: "6px 0 0", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 400, lineHeight: 1.55, color: "rgba(2,70,40,0.75)" }}>
+              {floorHint}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

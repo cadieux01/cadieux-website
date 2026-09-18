@@ -24,6 +24,7 @@ import {
   type NutrientValue,
 } from "@/lib/nutrition";
 import { costPerGramProtein } from "@/lib/stat-tiles";
+import type { PreorderInfo } from "@/lib/product-availability";
 import ReviewSection from "@/components/ReviewSection";
 import BackLink from "@/components/BackLink";
 import { ShareButton } from "@/components/ShareButton";
@@ -104,6 +105,7 @@ export default function ProductDetailClient({
   slug,
   urlSlug,
   outOfStock = false,
+  preorder = null,
   reports = [],
   price = null,
   subscribePrice = null,
@@ -126,6 +128,12 @@ export default function ProductDetailClient({
   // the DB / review scope.
   urlSlug: string;
   outOfStock?: boolean;
+  // Pre-order state, resolved server-side from products.available_from.
+  // Orthogonal to outOfStock (products.in_stock): the product is still
+  // sellable, it just cannot be delivered before `date`. The date pickers
+  // floor to it and the server rejects anything earlier with
+  // code "preorder_floor" — this prop is presentation only.
+  preorder?: PreorderInfo | null;
   reports?: ProductReport[];
   // Live DB price (products.price_inr). Falls back to the bundled PRODUCTS
   // price only when the DB read was empty, so display + cart snapshot stay
@@ -495,6 +503,48 @@ export default function ProductDetailClient({
                 {dispOutOfStock}
               </div>
             )}
+
+            {/* Pre-order: the same OUT OF STOCK badge — from the customer's
+                side it is out of stock — with the return date under it, and
+                the order still takeable. Suppressed when in_stock is false,
+                since that banner already says the stronger thing. */}
+            {preorder && !outOfStock && (
+              <div
+                role="status"
+                style={{
+                  marginBottom: 14,
+                  padding: "10px 14px",
+                  background: "rgba(239,68,68,0.08)",
+                  border: "1px solid rgba(239,68,68,0.45)",
+                  borderRadius: 4,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    letterSpacing: "0.25em",
+                    textTransform: "uppercase",
+                    color: "#991B1B",
+                  }}
+                >
+                  {dispOutOfStock}
+                </div>
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 15,
+                    lineHeight: 1.45,
+                    fontWeight: 400,
+                    color: "#024628",
+                  }}
+                >
+                  {preorder.line}
+                </div>
+              </div>
+            )}
             {/* Quantity — one-time orders only (subscriptions set their
                 quantity inside the setup wizard). */}
             {orderType === "once" && !outOfStock && (
@@ -582,9 +632,29 @@ export default function ProductDetailClient({
                   ? "Added ✓"
                   : orderType === "sub"
                   ? "Set Up Subscription"
+                  : preorder
+                  ? "Pre-order"
                   : "Add to Cart"}
               </button>
             </div>
+
+            {/* "Pre-order now — delivery from <date>." Under the button, so
+                the promise is attached to the action the customer is about
+                to take. */}
+            {preorder && !outOfStock && (
+              <div
+                style={{
+                  marginTop: 10,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                  fontWeight: 400,
+                  color: "#024628",
+                }}
+              >
+                {preorder.buttonNote}
+              </div>
+            )}
 
             <div style={{ marginTop: 32 }}>
               {(dispDescription

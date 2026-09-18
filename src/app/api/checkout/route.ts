@@ -27,6 +27,7 @@ import {
   logProximitySuggestion,
 } from "@/lib/order-checkout";
 import { getPreorderMode } from "@/lib/preorderMode";
+import { enforceDeliveryFloor } from "@/lib/order-validation";
 import { queueOrderNotification } from "@/lib/order-notification";
 import { queueBurstAlert } from "@/lib/order-burst-alert";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
@@ -683,7 +684,7 @@ export async function POST(req: NextRequest) {
       const { data: rows, error: rowsErr } = await supabaseAdmin
         .from("products")
         .select(
-          "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived",
+          "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message",
         )
         .in("slug", slugs);
       if (rowsErr) {
@@ -739,6 +740,34 @@ export async function POST(req: NextRequest) {
           quantity_per_delivery: it.qty,
           price_snapshot_inr: unit,
         });
+      }
+
+      // Pre-order floor. A NEW subscription must not schedule a delivery of
+      // a pre-order loaf before its date. Checked against the EARLIEST
+      // delivery in the template — if the first one clears the floor, every
+      // later one does. Existing subscriptions are untouched by design.
+      const earliestDelivery = deliveryTemplate
+        .map((d) => d.delivery_date)
+        .sort()[0];
+      const subFloorFailure = enforceDeliveryFloor(
+        snapItems.map((s) => ({
+          name: s.product_name,
+          available_from: bySlug.get(s.product_slug)?.available_from as
+            | string
+            | null
+            | undefined,
+          stock_message: bySlug.get(s.product_slug)?.stock_message as
+            | string
+            | null
+            | undefined,
+        })),
+        earliestDelivery,
+      );
+      if (subFloorFailure) {
+        return NextResponse.json(
+          { error: subFloorFailure.error, code: subFloorFailure.code },
+          { status: subFloorFailure.status },
+        );
       }
 
       // Total is counted by DELIVERY DAYS, not loaves:
@@ -851,7 +880,7 @@ export async function POST(req: NextRequest) {
     const { data: planRow, error: planErr } = await supabaseAdmin
       .from("products")
       .select(
-        "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived",
+        "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message",
       )
       .eq("slug", planId)
       .maybeSingle();
@@ -879,6 +908,28 @@ export async function POST(req: NextRequest) {
         { error: "This bread is currently out of stock." },
         { status: 400 }
       );
+    }
+    // Pre-order floor — same rule as the multi-variant branch above.
+    {
+      const earliestDelivery = deliveryTemplate
+        .map((d) => d.delivery_date)
+        .sort()[0];
+      const planFloorFailure = enforceDeliveryFloor(
+        [
+          {
+            name: planRow.name as string,
+            available_from: planRow.available_from as string | null | undefined,
+            stock_message: planRow.stock_message as string | null | undefined,
+          },
+        ],
+        earliestDelivery,
+      );
+      if (planFloorFailure) {
+        return NextResponse.json(
+          { error: planFloorFailure.error, code: planFloorFailure.code },
+          { status: planFloorFailure.status },
+        );
+      }
     }
     // V10: derive the per-loaf subscription price from MRP × (1 − disc%)
     // via the single-source helper so this matches the wizard preview and

@@ -27,6 +27,12 @@ import { bookableSlots } from "@/lib/delivery-slots";
 import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 import Select from "@/components/ui/Select";
 import { usePreorderMode } from "@/hooks/usePreorderMode";
+import { useProductFloors } from "@/hooks/useProductFloors";
+import {
+  cartFloor,
+  cartFloorEscapeHint,
+  cartFloorMessage,
+} from "@/lib/product-availability";
 import {
   MIN_SUBSCRIPTION_DAYS_PER_WEEK,
   distinctWeekdaysFromDates,
@@ -91,6 +97,41 @@ export default function SetupPage() {
     // into a server-side `slot_too_soon` rejection at payment.
     setStep(2);
   }, [hydrated, state, step]);
+
+  // Pre-order floor for the loaves chosen in step 1. A NEW subscription must
+  // not schedule a delivery before the latest available_from across its
+  // items; the calendar disables everything earlier so the customer sees the
+  // constraint rather than meeting it as a rejection at payment. Existing
+  // subscriptions are untouched — those are being handled by phone.
+  const { floors } = useProductFloors();
+  const subFloor = useMemo(
+    () =>
+      cartFloor(
+        Object.keys(state.qtyBySlug).map((slug) => ({
+          name: plans.find((p) => p.slug === slug)?.title ?? slug,
+          available_from: floors[slug]?.date,
+        })),
+      ),
+    [state.qtyBySlug, plans, floors],
+  );
+
+  // A floor can appear AFTER dates were picked — the customer can walk back
+  // to step 1 and add a pre-order loaf, and the floors map arrives async on
+  // first load. Drop the now-undeliverable dates rather than leaving them
+  // selected-but-disabled, which is the dead end revalidateSetupState exists
+  // to avoid.
+  const floorDate = subFloor.date;
+  useEffect(() => {
+    if (!hydrated || !floorDate) return;
+    if (!state.selectedDates.some((d) => d < floorDate)) return;
+    setState((s) => {
+      const keep = s.selectedDates.filter((d) => d >= floorDate);
+      const slotByDate = { ...s.slotByDate };
+      for (const d of s.selectedDates) if (d < floorDate) delete slotByDate[d];
+      return { ...s, selectedDates: keep, slotByDate };
+    });
+    setStep(2);
+  }, [hydrated, floorDate, state.selectedDates]);
 
   function update(patch: Partial<SetupState>) {
     setState((s) => ({ ...s, ...patch }));
@@ -290,6 +331,9 @@ export default function SetupPage() {
             onToggleDate={toggleDate}
             deliveriesCount={state.selectedDates.length}
             totalAmount={liveTotal}
+            floorDate={floorDate}
+            floorMessage={cartFloorMessage(subFloor, "subscription")}
+            floorHint={cartFloorEscapeHint(subFloor, "subscription")}
           />
         )}
         {step === 3 && (
@@ -579,11 +623,20 @@ function Step2Dates({
   onToggleDate,
   deliveriesCount,
   totalAmount,
+  floorDate,
+  floorMessage,
+  floorHint,
 }: {
   selectedDates: string[];
   onToggleDate: (iso: string) => void;
   deliveriesCount: number;
   totalAmount: number;
+  // Pre-order floor across the chosen loaves (MAX of their available_from),
+  // or null. Everything before it is disabled in the grid, not merely
+  // rejected on submit.
+  floorDate: string | null;
+  floorMessage: string | null;
+  floorHint: string | null;
 }) {
   // Live count of DISTINCT weekdays so we can render a helper line under
   // the copy explaining why "Next" stays disabled with only one weekday
@@ -625,11 +678,34 @@ function Step2Dates({
           {distinctWeekdays} of {MIN_SUBSCRIPTION_DAYS_PER_WEEK} required.
         </p>
       ) : null}
+      {floorMessage ? (
+        <div
+          role="status"
+          style={{
+            marginTop: 0,
+            marginBottom: 18,
+            padding: "14px 18px",
+            border: `1px solid ${FAINT}`,
+            borderRadius: 12,
+            background: "rgba(2,70,40,0.05)",
+          }}
+        >
+          <p style={{ margin: 0, color: TEXT, fontSize: 16, lineHeight: 1.55 }}>
+            {floorMessage}
+          </p>
+          {floorHint ? (
+            <p style={{ margin: "6px 0 0", color: FADED, fontSize: 16, lineHeight: 1.55 }}>
+              {floorHint}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <DateCalendar
         selectedDates={selectedDates}
         onToggleDate={onToggleDate}
         deliveriesCount={deliveriesCount}
         totalAmount={totalAmount}
+        minDate={floorDate}
       />
     </section>
   );

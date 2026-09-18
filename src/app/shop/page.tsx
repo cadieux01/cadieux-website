@@ -79,7 +79,13 @@ export default async function ShopPage() {
       name: pickString(c, "pdp.name", slug),
       tag: pickString(c, "pdp.tag", slug),
       title: pickString(c, "pdp.title", slug),
-      subtitle: pickString(c, "pdp.subtitle", slug),
+      // Same suppression as the PDP: `shop` pulls the `pdp` prefix, and the
+      // pdp.subtitle row for a pre-order product carries app-only copy (the
+      // app has no OTA — see migration 20260918090000). The tile renders the
+      // pre-order line itself, from available_from.
+      subtitle: availability?.preorder.has(slug)
+        ? ""
+        : pickString(c, "pdp.subtitle", slug),
       // Same DB tiles the PDP renders (net weight + slices already read
       // through to the products row by getPageContent), so the grid can
       // never disagree with the product page.

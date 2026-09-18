@@ -184,6 +184,7 @@ export default async function ProductDetailPage({
   }
 
   const outOfStock = availability?.outOfStock.has(internalSlug) ?? false;
+  const preorder = availability?.preorder.get(internalSlug) ?? null;
 
   // Live product row + lab reports + content — all keyed on the INTERNAL
   // slug (public.products.slug + content_strings).
@@ -215,7 +216,14 @@ export default async function ProductDetailPage({
     name: pickString(content, "pdp.name", internalSlug),
     tag: pickString(content, "pdp.tag", internalSlug),
     title: pickString(content, "pdp.title", internalSlug),
-    subtitle: pickString(content, "pdp.subtitle", internalSlug),
+    // A pre-order product ignores pdp.subtitle and falls back to the bundled
+    // editorial line. The Android app has no OTA, so its PDP subtitle is the
+    // only place we can put the pre-order sentence in front of an installed
+    // build — the content_strings row exists FOR the app (see migration
+    // 20260918090000). The website renders the same sentence properly, from
+    // available_from, in the banner and under the button, so honouring the
+    // row here would print it a third time in the product's voice slot.
+    subtitle: preorder ? "" : pickString(content, "pdp.subtitle", internalSlug),
     description: pickString(content, "pdp.description", internalSlug),
     reportsEyebrow: pickString(content, "pdp.section.reports.eyebrow"),
     reportsTitle: pickString(content, "pdp.section.reports.title"),
@@ -277,10 +285,19 @@ export default async function ProductDetailPage({
       // Search Console flags Offers without priceValidUntil. Rolling
       // annual expiry — bump when repricing or on next SEO sweep.
       priceValidUntil: "2027-03-31",
+      // in_stock=false is a hard OutOfStock. A delivery floor is PreOrder:
+      // Google keeps the offer eligible for rich results and shows the
+      // availability date, which is exactly what the page says.
       availability: outOfStock
         ? "https://schema.org/OutOfStock"
+        : preorder
+        ? "https://schema.org/PreOrder"
         : "https://schema.org/InStock",
     };
+    if (!outOfStock && preorder) {
+      (productSchema.offers as Record<string, unknown>).availabilityStarts =
+        preorder.date;
+    }
   }
   // Physical loaf weight, read live from products.weight. Google treats
   // this as a food label, so it must match the row that feeds the on-page
@@ -354,6 +371,7 @@ export default async function ProductDetailPage({
         slug={internalSlug}
         urlSlug={urlSlug}
         outOfStock={outOfStock}
+        preorder={preorder}
         reports={reports}
         price={productRow?.price_inr ?? null}
         subscribePrice={subscriptionPlan?.price ?? null}

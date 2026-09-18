@@ -5,7 +5,7 @@
 // that opens a 3-month picker overlay (current month + next two).
 // A bill bar at the bottom shows the live N × price × qty total.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { isoDate } from "@/lib/subscription-setup";
 import { dateHasAnyBookable } from "@/lib/delivery-slots";
 import { MONTH_LONG, MONTH_SHORT, WEEKDAY_SHORT } from "@/lib/date-names";
@@ -68,22 +68,51 @@ export function DateCalendar({
   onToggleDate,
   deliveriesCount,
   totalAmount,
+  minDate = null,
 }: {
   selectedDates: string[];
   onToggleDate: (iso: string) => void;
   deliveriesCount: number;
   totalAmount: number;
+  // Pre-order floor (products.available_from) for whatever is being bought.
+  // Earlier dates render disabled, exactly like a past date — the brief is
+  // explicit that they must not be merely rejected on submit.
+  minDate?: string | null;
 }) {
   const now = useMemo(() => new Date(), []);
   const today = useMemo(() => atMidnight(now), [now]);
   const baseY = today.getFullYear();
   const baseM = today.getMonth();
-  const [offset, setOffset] = useState(0);
+  // Open on the floor's month when there is one, so the customer doesn't land
+  // on a grid where every cell is greyed out. Clamped to the 3-month window
+  // the arrows allow.
+  const [offset, setOffset] = useState(() => {
+    if (!minDate) return 0;
+    const [y, m] = minDate.split("-").map((s) => parseInt(s, 10));
+    if (!y || !m) return 0;
+    return Math.min(2, Math.max(0, (y - baseY) * 12 + (m - 1 - baseM)));
+  });
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const viewDate = new Date(baseY, baseM + offset, 1);
   const viewY = viewDate.getFullYear();
   const viewM = viewDate.getMonth();
+
+  // The floor arrives async (the floors map is fetched), so the initial
+  // offset above can be computed before it exists. Jump forward only when
+  // the month on screen is ENTIRELY before the floor — i.e. nothing in it is
+  // selectable. Any other navigation the customer makes is left alone.
+  const floorMonthOffset = useMemo(() => {
+    if (!minDate) return null;
+    const [y, m] = minDate.split("-").map((s) => parseInt(s, 10));
+    if (!y || !m) return null;
+    return (y - baseY) * 12 + (m - 1 - baseM);
+  }, [minDate, baseY, baseM]);
+  useEffect(() => {
+    if (floorMonthOffset === null) return;
+    if (offset >= floorMonthOffset) return;
+    setOffset(Math.min(2, Math.max(0, floorMonthOffset)));
+  }, [floorMonthOffset, offset]);
 
   const rows = useMemo(
     () => buildMonthCells(viewY, viewM, today, now),
@@ -191,7 +220,8 @@ export function DateCalendar({
       >
         {rows.flat().map((cell) => {
           const selected = selectedSet.has(cell.iso);
-          const blocked = cell.isPast || cell.noSlots;
+          const belowFloor = minDate !== null && cell.iso < minDate;
+          const blocked = cell.isPast || cell.noSlots || belowFloor;
           const fg = selected
             ? CHARCOAL
             : blocked
@@ -206,10 +236,14 @@ export function DateCalendar({
               disabled={blocked}
               aria-pressed={selected}
               aria-label={`${cell.date.toDateString()}${
+                belowFloor ? " (before the earliest delivery date for your loaves)" : ""
+              }${
                 cell.noSlots ? " (no delivery slots left today — please pick another date)" : ""
               }${selected ? " (selected)" : ""}`}
               title={
-                cell.noSlots
+                belowFloor
+                  ? "Earlier than the first delivery date for the loaves you picked."
+                  : cell.noSlots
                   ? "We bake fresh — pick a date at least 12 hours from now."
                   : undefined
               }

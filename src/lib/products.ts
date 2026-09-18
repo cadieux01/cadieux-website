@@ -15,6 +15,14 @@ import {
   type ProductSlug,
 } from "@/lib/data";
 import type { NutrientValue } from "@/lib/nutrition";
+import {
+  availabilityLine,
+  preorderButtonNote,
+  productFloor,
+  type PreorderInfo,
+} from "@/lib/product-availability";
+
+export type { PreorderInfo };
 
 export type ProductRow = {
   id: string;
@@ -32,6 +40,12 @@ export type ProductRow = {
   gallery_urls: string[];
   is_active: boolean;
   in_stock: boolean;
+  // Per-product delivery floor. NULL = no restriction. Distinct from
+  // in_stock, which means "never sell" — a product with a floor is still
+  // visible, browsable and sellable, it just cannot be DELIVERED before this
+  // date. See lib/product-availability.ts.
+  available_from: string | null;
+  stock_message: string | null;
   sort_order: number;
   updated_at: string;
   // Regulatory label fields — free-form multiline. Rendered on the PDP
@@ -60,7 +74,7 @@ export const getActiveProducts = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, sort_order, updated_at, ingredients, allergens, nutrition_per_slice, slices_per_loaf",
+        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, available_from, stock_message, sort_order, updated_at, ingredients, allergens, nutrition_per_slice, slices_per_loaf",
       )
       .eq("is_active", true)
       .eq("is_archived", false)
@@ -187,6 +201,10 @@ export function resolveProductMedia(
 export type AvailabilityMap = {
   listed: Set<string>;
   outOfStock: Set<string>;
+  /** Slug → pre-order info, for products with a live delivery floor. A slug
+   *  here is NOT out of stock: it is sellable, and the customer pre-orders
+   *  it. Absent for everything unrestricted. */
+  preorder: Map<string, PreorderInfo>;
 };
 
 export async function getProductAvailability(): Promise<AvailabilityMap | null> {
@@ -194,9 +212,19 @@ export async function getProductAvailability(): Promise<AvailabilityMap | null> 
   if (products.length === 0) return null;
   const listed = new Set<string>();
   const outOfStock = new Set<string>();
+  const preorder = new Map<string, PreorderInfo>();
+  const now = new Date();
   for (const p of products) {
     listed.add(p.slug);
     if (!p.in_stock) outOfStock.add(p.slug);
+    const floor = productFloor(p, now);
+    if (floor) {
+      preorder.set(p.slug, {
+        date: floor,
+        line: availabilityLine(p, now) ?? "",
+        buttonNote: preorderButtonNote(p, now) ?? "",
+      });
+    }
   }
-  return { listed, outOfStock };
+  return { listed, outOfStock, preorder };
 }

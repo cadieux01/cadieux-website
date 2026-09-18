@@ -179,6 +179,7 @@ export default function ShopListClient({
                       stats={c?.stats ?? []}
                       media={mediaBySlug?.[p.slug] ?? []}
                       outOfStock={availability?.outOfStock.has(p.slug) ?? false}
+                      preorder={availability?.preorder.get(p.slug) ?? null}
                       subscribePrice={sub?.price ?? null}
                       subscribeDiscountPct={sub?.discountPct ?? null}
                       proteinPerLoafG={proteinPerLoafBySlug?.[p.slug] ?? null}

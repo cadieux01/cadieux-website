@@ -8,6 +8,7 @@ import { toUrlSlug } from "@/lib/product-slugs";
 import { costPerGramProtein } from "@/lib/stat-tiles";
 import { useCart } from "@/context/CartContext";
 import { ShareButton } from "@/components/ShareButton";
+import type { PreorderInfo } from "@/lib/product-availability";
 
 // Task F v2 cleanup: card is a FG-brand surface (#024628). All text must be
 // Cream or Ash (matrix rule). Interactive controls follow FIX 4 pattern:
@@ -49,6 +50,11 @@ type Props = {
   stats: TileStat[];
   media: ProductMedia[];
   outOfStock?: boolean;
+  // Pre-order state, resolved server-side from products.available_from.
+  // Independent of `outOfStock` (products.in_stock): a pre-order product is
+  // still SELLABLE — it just cannot be delivered before `date`. Null = no
+  // restriction. Never construct this client-side; the date is data.
+  preorder?: PreorderInfo | null;
   // DERIVED per-loaf subscribe price (MRP × (1 − discount%)), resolved
   // server-side via getSubscriptionPlans — the same figure the wizard quotes
   // and the checkout revalidates. Absent when the product isn't flagged a
@@ -62,7 +68,7 @@ type Props = {
   proteinPerLoafG?: number | null;
 };
 
-export default function ProductTile({ slug, productIndex, name, tag, title, subtitle, price, stats, media, outOfStock = false, subscribePrice = null, subscribeDiscountPct = null, proteinPerLoafG = null }: Props) {
+export default function ProductTile({ slug, productIndex, name, tag, title, subtitle, price, stats, media, outOfStock = false, preorder = null, subscribePrice = null, subscribeDiscountPct = null, proteinPerLoafG = null }: Props) {
   const [hover, setHover] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -307,8 +313,11 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>✓</span>
         </div>
 
-        {/* Out-of-stock pill — warning-on-brand red-300 for AAA on FG. */}
-        {outOfStock && (
+        {/* Out-of-stock pill — warning-on-brand red-300 for AAA on FG. A
+            pre-order product shows the same badge: from the customer's side
+            it IS out of stock, the difference is that we'll still take the
+            order. `outOfStock` (in_stock=false) wins when both are set. */}
+        {(outOfStock || preorder) && (
           <div
             style={{
               position: "absolute",
@@ -452,6 +461,23 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           {subtitle}
         </p>
 
+        {/* "Back in stock <date>." — the badge's explanatory line. Same
+            warning colour as the pill so the two read as one statement. */}
+        {preorder && !outOfStock && (
+          <p
+            style={{
+              margin: "-6px 0 14px",
+              fontFamily: "var(--font-body)",
+              fontSize: 15,
+              lineHeight: 1.45,
+              fontWeight: 500,
+              color: "var(--warning-on-brand)",
+            }}
+          >
+            {preorder.line}
+          </p>
+        )}
+
         {stats.length > 0 && (
         <div className="tile-stats">
           {stats.map((s) => (
@@ -588,7 +614,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   whiteSpace: "nowrap",
                 }}
               >
-                Add
+                {preorder ? "Pre-order" : "Add"}
               </button>
             ) : (
               /* In cart — stepper reflects the live cart qty; − at 1 removes. */
@@ -634,6 +660,23 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             )
           )}
         </div>
+
+        {/* "Pre-order now — delivery from <date>." Sits under the button so
+            the promise is attached to the action, not to the badge. */}
+        {preorder && !outOfStock && (
+          <div
+            style={{
+              marginTop: 10,
+              fontFamily: "var(--font-body)",
+              fontSize: 13,
+              lineHeight: 1.45,
+              fontWeight: 400,
+              color: "#C0C8CE",
+            }}
+          >
+            {preorder.buttonNote}
+          </div>
+        )}
       </div>
 
       <style jsx>{`

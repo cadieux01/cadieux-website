@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import ScrollReveal from "@/components/ScrollReveal";
 import { useCart } from "@/context/CartContext";
 import { usePreorderMode } from "@/hooks/usePreorderMode";
+import { useCartFloor } from "@/hooks/useProductFloors";
+import {
+  cartFloorEscapeHint,
+  cartFloorMessage,
+} from "@/lib/product-availability";
 import BackLink from "@/components/BackLink";
 
 const GRAIN = "url(/grain.svg)";
@@ -25,6 +30,13 @@ export default function CartPage() {
   const { cart, cartTotal, updateQty, removeFromCart } = useCart();
   const router = useRouter();
   const { enabled: preorderMode } = usePreorderMode();
+
+  // Pre-order floor for this cart: MAX(available_from) across its lines.
+  // Shown here, BEFORE checkout, so the customer meets the constraint while
+  // they can still act on it — the delivery date is never moved silently.
+  const floor = useCartFloor(cart);
+  const floorMessage = cartFloorMessage(floor);
+  const floorHint = cartFloorEscapeHint(floor);
 
   return (
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
@@ -82,6 +94,68 @@ export default function CartPage() {
             >
               First deliveries begin soon. Reserve your loaves now — we&apos;ll confirm your delivery date by SMS + WhatsApp as soon as the schedule opens.
             </p>
+          </div>
+        ) : null}
+
+        {/* Suppressed under site-wide pre-order mode: that banner already
+            says no date is being promised at all, and two "pre-order"
+            panels stacked would contradict each other. */}
+        {floorMessage && !preorderMode ? (
+          <div
+            role="status"
+            style={{
+              background: "#FBF3D4",
+              border: "1px solid rgba(2,70,40,0.25)",
+              padding: "18px 22px",
+              margin: "0 0 32px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+                fontWeight: 500,
+                letterSpacing: "0.35em",
+                textTransform: "uppercase",
+                color: "#024628",
+              }}
+            >
+              Pre-order
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body)",
+                fontSize: 16,
+                fontWeight: 300,
+                lineHeight: 1.55,
+                color: "#024628",
+              }}
+            >
+              {floorMessage}
+            </p>
+            {/* Mixed cart only. A customer forced six days out for a loaf of
+                Plain they wanted tomorrow is a lost sale this sentence saves;
+                on an all-pre-order cart it would be a dead end, so
+                cartFloorEscapeHint returns null there. */}
+            {floorHint ? (
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 16,
+                  fontWeight: 400,
+                  lineHeight: 1.55,
+                  color: "rgba(2,70,40,0.75)",
+                }}
+              >
+                {floorHint}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

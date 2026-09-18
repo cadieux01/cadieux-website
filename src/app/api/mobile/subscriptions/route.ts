@@ -43,6 +43,7 @@ import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import { formatSubscriptionNumber } from "@/lib/order-number";
 import { getPreorderMode } from "@/lib/preorderMode";
+import { enforceDeliveryFloor } from "@/lib/order-validation";
 import {
   isValidSlotValue,
   validateBookingSlot,
@@ -721,7 +722,7 @@ async function handleMultiVariant(
   const { data: rows, error: rowsErr } = await supabaseAdmin
     .from("products")
     .select(
-      "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived",
+      "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message",
     )
     .in("slug", slugs);
   if (rowsErr) {
@@ -766,6 +767,30 @@ async function handleMultiVariant(
       quantity_per_delivery: it.qty,
       price_snapshot_inr: unit,
     });
+  }
+
+  // Pre-order floor. A NEW subscription must not schedule a pre-order loaf
+  // before its date. `deliveries` is already sorted ascending, so the first
+  // entry is the only one that can breach the floor. Existing subscriptions
+  // are deliberately untouched — those are handled by phone.
+  {
+    const floorFailure = enforceDeliveryFloor(
+      snapItems.map((s) => ({
+        name: s.product_name,
+        available_from: bySlug.get(s.product_slug)?.available_from as
+          | string
+          | null
+          | undefined,
+        stock_message: bySlug.get(s.product_slug)?.stock_message as
+          | string
+          | null
+          | undefined,
+      })),
+      deliveries[0]?.date,
+    );
+    if (floorFailure) {
+      return fail(floorFailure.status, floorFailure.error, floorFailure.code);
+    }
   }
 
   // Delivery fee + distance gate. Shared helper, charged PER DELIVERY.
@@ -1101,7 +1126,7 @@ export async function POST(req: NextRequest) {
   const { data: product, error: productErr } = await supabaseAdmin
     .from("products")
     .select(
-      "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock",
+      "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock, available_from, stock_message",
     )
     .eq("id", body.product_id)
     .maybeSingle();
@@ -1234,6 +1259,29 @@ export async function POST(req: NextRequest) {
     subRowStartDate = body.deliveries[0].date; // already sorted ascending
     subRowFirstDayKey = daysSorted[0] ?? "mon";
     subRowFrequency = "custom";
+  }
+
+  // 6b. Pre-order floor. Placed AFTER the template is built so it covers both
+  // pattern and calendar modes from one check — a pattern schedule generates
+  // its own dates and would otherwise slip through. Existing subscriptions
+  // are deliberately untouched.
+  {
+    const earliest = deliveryRowsTemplate
+      .map((d) => d.delivery_date)
+      .sort()[0];
+    const floorFailure = enforceDeliveryFloor(
+      [
+        {
+          name: product.name as string,
+          available_from: product.available_from as string | null | undefined,
+          stock_message: product.stock_message as string | null | undefined,
+        },
+      ],
+      earliest,
+    );
+    if (floorFailure) {
+      return fail(floorFailure.status, floorFailure.error, floorFailure.code);
+    }
   }
 
   // 7. Customer upsert by phone (mirrors /api/mobile/checkout).

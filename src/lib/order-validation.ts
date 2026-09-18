@@ -17,6 +17,13 @@
 // Subscriptions deliberately have NO such fallback — an unmeasurable
 // address hard-blocks there, because the fee is multiplied by the delivery
 // count and charged up front. See @/lib/subscription-delivery-fee.
+import {
+  cartFloor,
+  preorderFloorError,
+  PREORDER_FLOOR_CODE,
+  type AvailabilityRow,
+} from "@/lib/product-availability";
+
 export const DELIVERY_FEE_INR = 12;
 
 export type ClientOrderItem = {
@@ -48,6 +55,12 @@ export type ProductRow = {
   // undefined → in-stock / not-archived to preserve back-compat.
   is_archived?: boolean | null;
   in_stock?: boolean | null;
+  // Per-product delivery floor. Optional for the same back-compat reason as
+  // the two above. Enforced by enforceDeliveryFloor(), NOT by
+  // reconcilePrices — the floor needs the delivery date, which price
+  // reconciliation has no business knowing.
+  available_from?: string | null;
+  stock_message?: string | null;
 };
 
 export type ItemSnapshot = {
@@ -401,6 +414,8 @@ export type WebProductRow = {
   is_active: boolean;
   is_archived?: boolean | null;
   in_stock?: boolean | null;
+  available_from?: string | null;
+  stock_message?: string | null;
 };
 
 export type WebItemSnapshot = {
@@ -479,4 +494,37 @@ export function reconcileWebPrices(
     }
   }
   return { ok: true, subtotal, items: snapshot };
+}
+
+/**
+ * Rejects a delivery date that falls before the cart's pre-order floor.
+ *
+ * The floor is MAX(available_from) across the ordered lines: an order carries
+ * one `delivery_date` and the schema has no split-fulfilment concept, so the
+ * latest loaf sets the date for the whole box.
+ *
+ * Call this AFTER price reconciliation, with the product rows for the lines
+ * actually ordered. Returns null when the order is fine.
+ *
+ * Two deliberate non-rejections:
+ *   - No date at all → allowed. Site-wide pre-order mode strips date + slot
+ *     and an admin schedules later, so nothing has been promised to anyone
+ *     yet. The floor is re-checked when the admin sets the date.
+ *   - A floor in the past → not a floor. Stock landed and nobody cleared the
+ *     column; blocking on it would take the product offline indefinitely.
+ *
+ * This is the ONLY thing stopping an already-installed Android build from
+ * booking a pre-order loaf for tomorrow: the app computes its own date list
+ * locally (lib/deliverySlots.ts), has no way to see `available_from`, and
+ * cannot be fixed without a Play release. Do not move this check client-side.
+ */
+export function enforceDeliveryFloor(
+  orderedProducts: AvailabilityRow[],
+  deliveryDate: string | null | undefined,
+  now: Date = new Date(),
+): ValidationFailure | null {
+  if (!deliveryDate) return null;
+  const floor = cartFloor(orderedProducts, now);
+  if (!floor.date || deliveryDate >= floor.date) return null;
+  return fail(400, preorderFloorError(floor), PREORDER_FLOOR_CODE);
 }

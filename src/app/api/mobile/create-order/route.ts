@@ -31,6 +31,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey } from "@/lib/phone-cookie";
 import {
   DELIVERY_FEE_INR,
+  enforceDeliveryFloor,
   reconcilePrices,
   toLocal10,
   validateOrderBodyShape,
@@ -191,7 +192,9 @@ export async function POST(req: NextRequest) {
   const productIds = Array.from(new Set(body.items.map((i) => i.product_id)));
   const { data: productRows, error: productsErr } = await supabaseAdmin
     .from("products")
-    .select("id, name, price_inr, is_active, is_archived, in_stock")
+    .select(
+      "id, name, price_inr, is_active, is_archived, in_stock, available_from, stock_message",
+    )
     .in("id", productIds);
 
   if (productsErr) {
@@ -210,6 +213,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { ok: false, error: reconciled.error, code: reconciled.code },
       { status: reconciled.status },
+    );
+  }
+
+  // 5b. Pre-order delivery floor. The app cannot see `available_from` (its
+  // Supabase column list is baked into the shipped binary) and computes its
+  // own date list locally, so an installed build will happily offer tomorrow
+  // for a loaf that does not exist yet. This is the only thing that stops it.
+  const floorFailure = enforceDeliveryFloor(
+    (productRows ?? []) as ProductRow[],
+    deliveryDate,
+  );
+  if (floorFailure) {
+    return NextResponse.json(
+      { ok: false, error: floorFailure.error, code: floorFailure.code },
+      { status: floorFailure.status },
     );
   }
 
