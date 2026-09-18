@@ -5,8 +5,16 @@
       "schedule": "30 3 * * *"
     },
     {
-      "path": "/api/cron/delivery-bake-plan",
+      "path": "/api/cron/delivery-bake-plan?slot=d1_1800",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/delivery-bake-plan?slot=d1_2215",
+      "schedule": "45 16 * * *"
+    },
+    {
+      "path": "/api/cron/delivery-bake-plan?slot=d0_0445",
+      "schedule": "15 23 * * *"
     }
   ]
 }

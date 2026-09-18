@@ -54,52 +54,165 @@ export interface StaleDeliveryLine {
   parentStatus: string;
 }
 
-/** Preferred display order for known slots. Unknowns append alphabetically. */
-const SLOT_ORDER = [
-  "breakfast",
-  "morning",
-  "afternoon",
-  "evening",
-  "night",
+/**
+ * The three canonical delivery windows the site actually books today. Any
+ * order stored with a bare "HH:MM" or NULL is legacy or pickup and lands
+ * in one of the other sections — never wedged into a canonical bucket by
+ * a best-guess mapping. See @/lib/delivery-slots for the authoritative
+ * definition of the same three windows on the customer side.
+ */
+const DELIVERY_SLOTS: {
+  value: string;
+  label: string;
+  windowLabel: string;
+}[] = [
+  { value: "06:00-10:00", label: "Morning", windowLabel: "6 – 10 AM" },
+  { value: "10:00-14:00", label: "Midday", windowLabel: "10 AM – 2 PM" },
+  { value: "16:00-21:00", label: "Evening", windowLabel: "4 – 9 PM" },
 ];
 
-function slotLabel(s: string | null): string {
-  if (!s) return "Unspecified slot";
-  const t = s.trim();
-  if (!t) return "Unspecified slot";
-  return t.charAt(0).toUpperCase() + t.slice(1);
+/**
+ * One rendered section of the email. `groupSlotValue` is the canonical
+ * slot string when the section is a canonical delivery bucket (used to
+ * suppress the "(recorded as \"…\")" hint on lines that match); null
+ * otherwise — including the always-rendered "Slot not set" section and
+ * every pickup section.
+ */
+interface Section {
+  key: string;
+  headerLabel: string;
+  groupSlotValue: string | null;
+  lines: BakePlanLine[];
+  loaves: number;
 }
 
-function slotRank(s: string | null): number {
-  if (!s) return 999;
-  const idx = SLOT_ORDER.indexOf(s.trim().toLowerCase());
-  return idx < 0 ? 500 : idx;
-}
-
-/** Group lines by slot, ordered by SLOT_ORDER then alpha. */
-function groupBySlot(
-  lines: BakePlanLine[],
-): { slot: string | null; lines: BakePlanLine[] }[] {
-  const buckets = new Map<string, BakePlanLine[]>();
+/** Total loaves across every item on every line. Items are structured
+ *  ({name, qty}), so no regex reparse — see BakeItem for why. */
+function loafCount(lines: BakePlanLine[]): number {
+  let n = 0;
   for (const l of lines) {
-    const key = l.slot ?? "__none__";
-    const cur = buckets.get(key);
-    if (cur) cur.push(l);
-    else buckets.set(key, [l]);
+    for (const it of l.items) n += it.qty;
   }
-  const keys = Array.from(buckets.keys());
-  keys.sort((a, b) => {
-    const av = a === "__none__" ? null : a;
-    const bv = b === "__none__" ? null : b;
-    const ra = slotRank(av);
-    const rb = slotRank(bv);
-    if (ra !== rb) return ra - rb;
-    return (av ?? "").localeCompare(bv ?? "");
+  return n;
+}
+
+function pluralize(n: number, one: string, many: string): string {
+  return n === 1 ? one : many;
+}
+
+/** "N orders · M loaves". Loaves are the ACTIONABLE number — bread to move
+ *  is what a baker at 4am needs, and Dark store 3 (14 orders / 29 loaves)
+ *  vs dark store 01 (17 orders / 20 loaves) proves order count alone would
+ *  send the wrong quantity to the wrong counter. */
+function sectionCountsLabel(s: Section): string {
+  const n = s.lines.length;
+  const l = s.loaves;
+  return `${n} ${pluralize(n, "order", "orders")} · ${l} ${pluralize(l, "loaf", "loaves")}`;
+}
+
+/**
+ * Per-line hint, e.g. ` (recorded as "07:30")`. Shown whenever the line
+ * has a slot value that isn't the section's canonical string — so:
+ *   • legacy times in a canonical section ("07:30" inside Morning)
+ *   • any slot value in Slot not set (all deliveries with non-canonical times)
+ *   • any slot value in a pickup section (pickups aren't slot-driven, but
+ *     if the field was set anyway, the operator sees it)
+ * Empty when the line matches the header, or when there is no value —
+ * repeating the header on every line would be noise.
+ */
+function slotHint(
+  line: BakePlanLine,
+  groupSlotValue: string | null,
+): string {
+  const raw = (line.slot || "").trim();
+  if (!raw) return "";
+  if (raw === groupSlotValue) return "";
+  return ` (recorded as "${raw}")`;
+}
+
+/**
+ * Build every section for the email, always in the same order:
+ *   1. Morning (canonical) — even at 0
+ *   2. Midday (canonical) — even at 0
+ *   3. Evening (canonical) — even at 0
+ *   4. Slot not set — even at 0 (a missing header is a bug, never a zero)
+ *   5. Pickup — <point name> (verbatim, sorted); rendered only when non-empty
+ *
+ * Grouping is by fulfillment_type FIRST, then slot. Two pickup orders on
+ * record (OLF81, OLF259) carry a canonical delivery-slot string; slot-first
+ * grouping would land them in a delivery section and someone would load
+ * them onto a van for a store address.
+ */
+function buildSections(lines: BakePlanLine[]): Section[] {
+  const deliveries = lines.filter((l) => l.fulfillment === "delivery");
+  const pickups = lines.filter((l) => l.fulfillment === "pickup");
+
+  const canonicalBuckets = new Map<string, BakePlanLine[]>();
+  for (const s of DELIVERY_SLOTS) canonicalBuckets.set(s.value, []);
+  const unset: BakePlanLine[] = [];
+  for (const d of deliveries) {
+    const slot = (d.slot || "").trim();
+    if (slot && canonicalBuckets.has(slot)) {
+      canonicalBuckets.get(slot)!.push(d);
+    } else {
+      unset.push(d);
+    }
+  }
+
+  const pickupBuckets = new Map<string, BakePlanLine[]>();
+  for (const p of pickups) {
+    const key = (p.pickupPointName || "").trim() || "__unspecified__";
+    const cur = pickupBuckets.get(key);
+    if (cur) cur.push(p);
+    else pickupBuckets.set(key, [p]);
+  }
+
+  const sections: Section[] = [];
+
+  for (const s of DELIVERY_SLOTS) {
+    const lns = canonicalBuckets.get(s.value)!;
+    sections.push({
+      key: `slot:${s.value}`,
+      headerLabel: `${s.label} · ${s.windowLabel}`,
+      groupSlotValue: s.value,
+      lines: lns,
+      loaves: loafCount(lns),
+    });
+  }
+
+  // ALWAYS rendered, even at zero — a legacy delivery-time value or an
+  // otherwise unroutable delivery going non-zero on a future send is a
+  // "something new broke" signal, and the header must be there for the
+  // reader to notice its own value.
+  sections.push({
+    key: "slot:unset",
+    headerLabel: "Slot not set",
+    groupSlotValue: null,
+    lines: unset,
+    loaves: loafCount(unset),
   });
-  return keys.map((k) => ({
-    slot: k === "__none__" ? null : k,
-    lines: buckets.get(k)!,
-  }));
+
+  // Verbatim pickup point names — see BakePlanLine.pickupPointName for
+  // why we do NOT normalise the casing. Sorted case-insensitively so the
+  // ordering does not depend on the exact spellings stored today.
+  const pickupKeys = Array.from(pickupBuckets.keys()).sort((a, b) => {
+    if (a === "__unspecified__") return 1;
+    if (b === "__unspecified__") return -1;
+    return a.localeCompare(b, "en", { sensitivity: "base" });
+  });
+  for (const k of pickupKeys) {
+    const lns = pickupBuckets.get(k)!;
+    const displayName = k === "__unspecified__" ? "(unspecified point)" : k;
+    sections.push({
+      key: `pickup:${k}`,
+      headerLabel: `Pickup · ${displayName}`,
+      groupSlotValue: null,
+      lines: lns,
+      loaves: loafCount(lns),
+    });
+  }
+
+  return sections;
 }
 
 /** Sum every item line across every deliverable → totals per product.
@@ -210,15 +323,49 @@ function renderStaleSection(stale: StaleDeliveryLine[]): {
   return { html, text: textParts.join("\n") };
 }
 
+/**
+ * Which of the three cron sends this email represents. Controls the subject
+ * line (planning vs instruction) and the empty-body wording ("nothing
+ * scheduled for tomorrow" vs "nothing to bake today"). Default is d1_1800
+ * so pre-existing callers and the manual `?date=` re-run path continue to
+ * read as the evening plan.
+ *
+ *   d1_1800  — evening send for tomorrow's delivery (existing 18:45 IST)
+ *   d1_2215  — late send for tomorrow, after Midday cutoff
+ *   d0_0445  — final tally for TODAY's delivery, after Evening cutoff
+ *              (an instruction, not a report — Sunny's rule)
+ */
+export type SendSlot = "d1_1800" | "d1_2215" | "d0_0445";
+
+function subjectPrefix(sendSlot: SendSlot): string {
+  switch (sendSlot) {
+    case "d0_0445":
+      return "Bake today";
+    case "d1_2215":
+      return "Bake plan update";
+    case "d1_1800":
+    default:
+      return "Bake plan";
+  }
+}
+
+function emptyBodySentence(sendSlot: SendSlot): string {
+  return sendSlot === "d0_0445"
+    ? "Nothing to bake today — no orders, no subscription deliveries."
+    : "Nothing scheduled for tomorrow — no orders, no subscription deliveries.";
+}
+
 export function buildBakePlan(
   deliveryDateIso: string,
   lines: BakePlanLine[],
   stale: StaleDeliveryLine[] = [],
+  sendSlot: SendSlot = "d1_1800",
 ): BakePlanEmail {
   const humanDate = formatBakeDate(deliveryDateIso);
   const orderCount = lines.filter((l) => l.kind === "order").length;
   const subCount = lines.filter((l) => l.kind === "subscription").length;
   const total = lines.length;
+  const totalLoaves = loafCount(lines);
 
   // Cutoff notice. Never print an exact time — the schedule may drift by up
   // to an hour on Hobby's random-jitter behaviour, and a printed clock time
@@ -227,40 +374,42 @@ export function buildBakePlan(
   const liveHref = `https://www.cadieux.in/admin/orders?basis=delivery&date=${encodeURIComponent(deliveryDateIso)}`;
 
   const staleSection = renderStaleSection(stale);
+  const prefix = subjectPrefix(sendSlot);
 
   // Stale count rides in the subject line when there are unresolved rows,
   // so the summary is visible from the inbox list without opening. Format
   // examples:
-  //   "Bake plan for Fri, 12 Sep 2026: 6 deliveries"
-  //   "Bake plan for Fri, 12 Sep 2026: 6 deliveries · 4 stale"
+  //   "Bake plan for Fri, 12 Sep 2026: 6 deliveries · 14 loaves"
   //   "Bake plan for Fri, 12 Sep 2026: nothing scheduled · 4 stale"
+  //   "Bake today Sat, 20 Sep 2026: 4 deliveries · 8 loaves"
   const staleSuffix =
     stale.length > 0 ? ` · ${stale.length} stale` : "";
   const subject =
     total === 0
-      ? `Bake plan for ${humanDate}: nothing scheduled${staleSuffix}`
-      : `Bake plan for ${humanDate}: ${total} deliver${total === 1 ? "y" : "ies"}${staleSuffix}`;
+      ? `${prefix} ${humanDate}: nothing scheduled${staleSuffix}`
+      : `${prefix} ${humanDate}: ${total} deliver${total === 1 ? "y" : "ies"} · ${totalLoaves} ${pluralize(totalLoaves, "loaf", "loaves")}${staleSuffix}`;
 
   if (total === 0) {
+    const emptyBody = emptyBodySentence(sendSlot);
     const html = `
       <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1a;max-width:720px">
         <p style="font-size:16px;margin:0 0 12px">
           <strong>${escapeHtml(humanDate)}</strong>
         </p>
         <p style="font-size:15px;margin:0 0 12px">
-          Nothing scheduled for tomorrow — no orders, no subscription deliveries.
+          ${escapeHtml(emptyBody)}
         </p>
         <p style="font-size:13px;color:#666;margin:0 0 12px">
-          This email is sent every evening so a silent inbox means the cron is down, not a quiet day.
+          This email is sent on schedule so a silent inbox means the cron is down, not a quiet day.
         </p>
         ${staleSection.html}
       </div>`;
     const textLines = [
       humanDate,
       "",
-      "Nothing scheduled for tomorrow — no orders, no subscription deliveries.",
+      emptyBody,
       "",
-      "This email is sent every evening so a silent inbox means the cron is down, not a quiet day.",
+      "This email is sent on schedule so a silent inbox means the cron is down, not a quiet day.",
     ];
     if (staleSection.text) {
       textLines.push("", staleSection.text);
@@ -268,14 +417,14 @@ export function buildBakePlan(
     return { subject, html, text: textLines.join("\n") };
   }
 
-  const groups = groupBySlot(lines);
+  const sections = buildSections(lines);
   const rollup = rollupProducts(lines);
 
   // ── Text ───────────────────────────────────────────────────────────────
   const textParts: string[] = [];
   textParts.push(humanDate);
   textParts.push(
-    `${total} deliver${total === 1 ? "y" : "ies"} — ${orderCount} order${orderCount === 1 ? "" : "s"}, ${subCount} subscription${subCount === 1 ? "" : "s"}`,
+    `${total} deliver${total === 1 ? "y" : "ies"} · ${totalLoaves} ${pluralize(totalLoaves, "loaf", "loaves")} — ${orderCount} order${orderCount === 1 ? "" : "s"}, ${subCount} subscription${subCount === 1 ? "" : "s"}`,
   );
   textParts.push(
     `Orders placed after this email are not counted. Live figure: ${liveHref}`,
@@ -286,11 +435,16 @@ export function buildBakePlan(
     textParts.push(`  ${r.qty} × ${r.name}`);
   }
   textParts.push("");
-  for (const g of groups) {
-    textParts.push(`— ${slotLabel(g.slot)} (${g.lines.length}) —`);
-    for (const l of g.lines) {
+  for (const sec of sections) {
+    textParts.push(`— ${sec.headerLabel} (${sectionCountsLabel(sec)}) —`);
+    if (sec.lines.length === 0) {
+      textParts.push("");
+      continue;
+    }
+    for (const l of sec.lines) {
+      const hint = slotHint(l, sec.groupSlotValue);
       textParts.push(
-        `  [${l.kind === "order" ? "ORD" : "SUB"}] ${l.ref} — ${l.customerName} — ${l.customerPhone}`,
+        `  [${l.kind === "order" ? "ORD" : "SUB"}] ${l.ref}${hint} — ${l.customerName} — ${l.customerPhone}`,
       );
       textParts.push(`    ${l.address}`);
       for (const item of l.items) textParts.push(`    · ${itemLine(item)}`);
@@ -314,14 +468,23 @@ export function buildBakePlan(
     )
     .join("");
 
-  const groupHtml = groups
-    .map((g) => {
-      const rows = g.lines
+  const groupHtml = sections
+    .map((sec) => {
+      const headerColor = sec.key.startsWith("pickup:") ? "#436CB4" : "#024628";
+      const emptyBodyRow =
+        sec.lines.length === 0
+          ? `<p style="margin:0 0 0 4px;font-size:13px;color:#999">(nothing here — the section is rendered anyway so a missing header would read as a bug, not a zero)</p>`
+          : "";
+      const rows = sec.lines
         .map((l) => {
           const badge =
             l.kind === "order"
               ? `<span style="display:inline-block;padding:1px 6px;font-size:11px;background:#024628;color:#FBF3D4;border-radius:3px;letter-spacing:0.4px">ORDER</span>`
               : `<span style="display:inline-block;padding:1px 6px;font-size:11px;background:#436CB4;color:#FBF3D4;border-radius:3px;letter-spacing:0.4px">SUB</span>`;
+          const hint = slotHint(l, sec.groupSlotValue);
+          const hintHtml = hint
+            ? `<span style="color:#B45309;font-weight:400;font-size:12px">${escapeHtml(hint.trim())}</span>`
+            : "";
           const itemLis = l.items
             .map(
               (i) => `<li style="margin:2px 0">${escapeHtml(itemLine(i))}</li>`,
@@ -331,7 +494,7 @@ export function buildBakePlan(
             <tr>
               <td style="padding:10px 8px;border-bottom:1px solid #eee;vertical-align:top">
                 ${badge}
-                <div style="margin-top:4px;font-weight:600">${escapeHtml(l.ref)}</div>
+                <div style="margin-top:4px;font-weight:600">${escapeHtml(l.ref)} ${hintHtml}</div>
               </td>
               <td style="padding:10px 8px;border-bottom:1px solid #eee;vertical-align:top">
                 <div><strong>${escapeHtml(l.customerName)}</strong></div>
@@ -344,14 +507,16 @@ export function buildBakePlan(
             </tr>`;
         })
         .join("");
+      const tableHtml =
+        sec.lines.length === 0
+          ? emptyBodyRow
+          : `<table style="border-collapse:collapse;width:100%;font-size:14px">${rows}</table>`;
       return `
-        <h3 style="margin:24px 0 6px;font-size:15px;color:#024628">
-          ${escapeHtml(slotLabel(g.slot))}
-          <span style="color:#999;font-weight:400;font-size:13px"> · ${g.lines.length}</span>
+        <h3 style="margin:24px 0 6px;font-size:15px;color:${headerColor}">
+          ${escapeHtml(sec.headerLabel)}
+          <span style="color:#999;font-weight:400;font-size:13px"> · ${escapeHtml(sectionCountsLabel(sec))}</span>
         </h3>
-        <table style="border-collapse:collapse;width:100%;font-size:14px">
-          ${rows}
-        </table>`;
+        ${tableHtml}`;
     })
     .join("");
 

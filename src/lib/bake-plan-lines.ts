@@ -35,6 +35,22 @@ export interface BakePlanLine {
   ref: string;
   /** Used for the section label and for the orders/subscriptions split. */
   kind: "order" | "subscription";
+  /**
+   * Delivery vs pickup. The bake-plan email GROUPS by this first, then by
+   * slot — never the other way round. Two pickup orders on record carry a
+   * canonical delivery-slot string (OLF81, OLF259); slot-first grouping
+   * would route them onto a van for a store address. Trust fulfillment
+   * over slot for the runsheet's shape.
+   */
+  fulfillment: "delivery" | "pickup";
+  /**
+   * Verbatim name of the pickup point (`pickup_locations.name`) when
+   * `fulfillment === 'pickup'`; null otherwise. Never normalised — the
+   * baker learns the shelves by the names in the DB. If the names are
+   * inconsistent ("dark store 01" vs "Dark store 3" vs "Dark Store -2"),
+   * that is a data fix on `pickup_locations`, not a template fix here.
+   */
+  pickupPointName: string | null;
   /** Delivery slot as stored ("morning", "afternoon", null, …). */
   slot: string | null;
   customerName: string;
@@ -73,6 +89,7 @@ interface OrderRow {
   payment_status: string | null;
   items: unknown;
   customers: { full_name: string | null; phone: string | null } | null;
+  pickup_locations: { name: string | null } | null;
 }
 
 interface SubDeliveryRow {
@@ -159,7 +176,7 @@ export async function loadOrderLines(
   const { data, error } = await supabase
     .from("orders")
     .select(
-      "id, order_number, delivery_slot, delivery_address, total_amount, fulfillment_type, payment_status, items, customers(full_name, phone)",
+      "id, order_number, delivery_slot, delivery_address, total_amount, fulfillment_type, payment_status, items, customers(full_name, phone), pickup_locations(name)",
     )
     .eq("delivery_date", dateIso)
     .not("status", "in", "(delivered,cancelled)");
@@ -167,21 +184,31 @@ export async function loadOrderLines(
   if (error) throw new Error(`orders leg: ${error.message}`);
 
   const rows = (data || []) as unknown as OrderRow[];
-  return rows.map((o) => ({
-    ref: o.order_number || `#${o.id.slice(0, 8).toUpperCase()}`,
-    kind: "order" as const,
-    slot: o.delivery_slot,
-    customerName: (o.customers?.full_name || "Unknown").trim(),
-    customerPhone: o.customers?.phone || "no phone",
-    address:
-      (o.delivery_address || "").trim() ||
-      (o.fulfillment_type === "pickup" ? "PICKUP" : ""),
-    pincode: null,
-    items: readItems(o.items),
-    amountInr:
-      typeof o.total_amount === "number" ? Math.round(o.total_amount) : 0,
-    paid: isPaidStatus(o.payment_status),
-  }));
+  return rows.map((o) => {
+    const isPickup = o.fulfillment_type === "pickup";
+    return {
+      ref: o.order_number || `#${o.id.slice(0, 8).toUpperCase()}`,
+      kind: "order" as const,
+      // Trust fulfillment_type over delivery_slot. Two pickup orders on
+      // record (OLF81, OLF259) carry a canonical slot string; if the
+      // template grouped by slot first, one of them ends up on a van.
+      fulfillment: isPickup ? ("pickup" as const) : ("delivery" as const),
+      // Verbatim `pickup_locations.name`. Null when not a pickup or when
+      // pickup_location_id was never set. Names are not normalised here —
+      // see the `pickupPointName` docstring.
+      pickupPointName: isPickup ? o.pickup_locations?.name ?? null : null,
+      slot: o.delivery_slot,
+      customerName: (o.customers?.full_name || "Unknown").trim(),
+      customerPhone: o.customers?.phone || "no phone",
+      address:
+        (o.delivery_address || "").trim() || (isPickup ? "PICKUP" : ""),
+      pincode: null,
+      items: readItems(o.items),
+      amountInr:
+        typeof o.total_amount === "number" ? Math.round(o.total_amount) : 0,
+      paid: isPaidStatus(o.payment_status),
+    };
+  });
 }
 
 /** Subscription stops due on `dateIso`, excluding cancelled only.
@@ -257,6 +284,10 @@ export async function loadSubscriptionLines(
     return {
       ref,
       kind: "subscription" as const,
+      // Subscriptions are always delivered — there is no pickup path for
+      // a subscription, and no schema for a per-delivery pickup point.
+      fulfillment: "delivery" as const,
+      pickupPointName: null,
       slot: d.slot || d.scheduled_time_slot,
       // Prefer the address's name/phone (edited per delivery) over the
       // subscription-level denormalised copy.

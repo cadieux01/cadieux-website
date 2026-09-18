@@ -32,7 +32,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
-import { buildBakePlan, type StaleDeliveryLine } from "@/lib/email/bake-plan";
+import {
+  buildBakePlan,
+  type SendSlot,
+  type StaleDeliveryLine,
+} from "@/lib/email/bake-plan";
 import {
   loadOrderLines,
   loadSubscriptionLines,
@@ -61,19 +65,38 @@ const BAKE_PLAN_EMAIL =
 
 // ── IST helpers ──────────────────────────────────────────────────────────
 
-/** Tomorrow's date in IST as YYYY-MM-DD. Cron fires at 12:30 UTC = 18:00
- *  IST, so "now + 24h" and "today+1 IST" both resolve to the same next
- *  calendar day. We compute in UTC after shifting +5:30 to be timezone-
- *  neutral without a tz lib. */
-function istTomorrowISO(): string {
+/** IST calendar date shifted by `dayOffset` from "now", as YYYY-MM-DD.
+ *  We compute in UTC after shifting +5:30 to be timezone-neutral without
+ *  a tz lib. Two callers today:
+ *   • istTomorrowISO() for the two SENDS FOR TOMORROW (d1_1800, d1_2215)
+ *   • istTodayISO() for the pre-dawn TODAY send (d0_0445 — after the
+ *     Evening-slot cutoff, the day it fires IS the delivery day). */
+function istDateISO(dayOffset: number): string {
   const now = new Date();
   const istMs = now.getTime() + 5.5 * 60 * 60 * 1000;
   const ist = new Date(istMs);
-  ist.setUTCDate(ist.getUTCDate() + 1);
+  ist.setUTCDate(ist.getUTCDate() + dayOffset);
   const y = ist.getUTCFullYear();
   const m = String(ist.getUTCMonth() + 1).padStart(2, "0");
   const d = String(ist.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+function istTomorrowISO(): string {
+  return istDateISO(1);
+}
+
+function istTodayISO(): string {
+  return istDateISO(0);
+}
+
+// The three known sends. Anything else in `?slot=` is a typo and gets a
+// 400, not a silent fallback — a mistyped slot writing a `d1_1800` row
+// on a `d0_0445` schedule would fool the idempotency table.
+const SEND_SLOTS: readonly SendSlot[] = ["d1_1800", "d1_2215", "d0_0445"] as const;
+
+function isSendSlot(v: string): v is SendSlot {
+  return (SEND_SLOTS as readonly string[]).includes(v);
 }
 
 // Row types, item parsing and the two data legs used to live here. They
@@ -120,12 +143,37 @@ export async function GET(req: NextRequest) {
   // A `?date=YYYY-MM-DD` override is accepted so an operator can re-run
   // the plan for a specific day (past testing, forgotten cron, etc.) —
   // still governed by the same auth header + idempotency table.
+  //
+  // `?slot=` selects which of the three daily sends this call represents:
+  //   d1_1800  — 18:00 IST send for TOMORROW  (default; original behaviour)
+  //   d1_2215  — 22:15 IST send for TOMORROW  (after Midday-slot cutoff)
+  //   d0_0445  — 04:45 IST send for TODAY     (after Evening-slot cutoff)
+  //
+  // The three-row composite PK on bake_plan_sent (delivery_date, send_slot)
+  // is why an unknown slot MUST 400 rather than default silently — a typo
+  // that wrote d1_1800 on a d0_0445 run would swallow one of the day's
+  // three emails and there would be no trace.
   const url = new URL(req.url);
   const overrideDate = url.searchParams.get("date");
+  const rawSlot = url.searchParams.get("slot");
+  let sendSlot: SendSlot = "d1_1800";
+  if (rawSlot !== null) {
+    if (!isSendSlot(rawSlot)) {
+      return NextResponse.json(
+        {
+          error: "unknown slot",
+          hint: `slot must be one of ${SEND_SLOTS.join(", ")}`,
+        },
+        { status: 400 },
+      );
+    }
+    sendSlot = rawSlot;
+  }
+  const defaultDate = sendSlot === "d0_0445" ? istTodayISO() : istTomorrowISO();
   const targetDate =
     overrideDate && /^\d{4}-\d{2}-\d{2}$/.test(overrideDate)
       ? overrideDate
-      : istTomorrowISO();
+      : defaultDate;
 
   // Two legs, independent try/catch. A failing leg contributes its error
   // to the response body but must never abort the other or block the send.
@@ -183,7 +231,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const email = buildBakePlan(targetDate, lines, staleLines);
+  const email = buildBakePlan(targetDate, lines, staleLines, sendSlot);
 
   // Idempotency: reserve the day BEFORE sending. A retry same-day fails
   // the primary-key insert and skips the send. `?force=1` bypasses the
@@ -195,6 +243,7 @@ export async function GET(req: NextRequest) {
       .from("bake_plan_sent")
       .insert({
         delivery_date: targetDate,
+        send_slot: sendSlot,
         email_to: BAKE_PLAN_EMAIL,
         order_count: orderLines.length,
         subscription_count: subLines.length,
@@ -207,6 +256,7 @@ export async function GET(req: NextRequest) {
         /duplicate|already exists/i.test(insErr.message);
       return NextResponse.json({
         targetDate,
+        sendSlot,
         skipped: true,
         reason: alreadySent ? "already_sent_today" : "reservation_failed",
         details: alreadySent ? undefined : insErr.message,
@@ -241,7 +291,8 @@ export async function GET(req: NextRequest) {
       await supabaseAdmin
         .from("bake_plan_sent")
         .delete()
-        .eq("delivery_date", targetDate);
+        .eq("delivery_date", targetDate)
+        .eq("send_slot", sendSlot);
     }
     console.error(
       "[cron/delivery-bake-plan] send failed:",
@@ -250,6 +301,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         targetDate,
+        sendSlot,
         sent: false,
         error: sendErr.message,
         counts: {
@@ -270,6 +322,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     targetDate,
+    sendSlot,
     sent: true,
     empty: lines.length === 0,
     to: BAKE_PLAN_EMAIL,
