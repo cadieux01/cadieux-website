@@ -231,6 +231,41 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // A FAILED LEG MUST NEVER BE SENT AS A ZERO.
+  //
+  // `orderLines` initialises to [] and the catch above only records the
+  // message, so a leg that threw reaches the reservation as `length === 0`
+  // and writes order_count = 0 — byte-identical to a day with genuinely no
+  // orders. On 2026-09-18 the 22:15 send recorded 0 against 15 real orders
+  // and nothing in the email or the table said anything was wrong.
+  //
+  // A missing email is recoverable; an authoritative "0 orders" at 04:45 is
+  // not. So bail BEFORE reserving: no row is burned, the cron shows red in
+  // Vercel, and the next scheduled run can still deliver the real plan.
+  // The stale leg is excluded deliberately — it is a read-only appendix and
+  // its absence cannot mis-state what to bake.
+  if (orderError || subError) {
+    console.error(
+      "[cron/delivery-bake-plan] refusing to send: a data leg failed",
+      { targetDate, sendSlot, orderError, subError },
+    );
+    return NextResponse.json(
+      {
+        targetDate,
+        sendSlot,
+        sent: false,
+        reason: "leg_failed_refusing_to_send_zero",
+        errors: { orders: orderError, subscriptions: subError },
+        counts: {
+          orders: orderLines.length,
+          subscriptions: subLines.length,
+          total: lines.length,
+        },
+      },
+      { status: 500 },
+    );
+  }
+
   const email = buildBakePlan(targetDate, lines, staleLines, sendSlot);
 
   // Idempotency: reserve the day BEFORE sending. A retry same-day fails

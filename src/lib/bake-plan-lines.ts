@@ -88,8 +88,8 @@ interface OrderRow {
   fulfillment_type: string | null;
   payment_status: string | null;
   items: unknown;
+  pickup_location_id: string | null;
   customers: { full_name: string | null; phone: string | null } | null;
-  pickup_locations: { name: string | null } | null;
 }
 
 interface SubDeliveryRow {
@@ -176,7 +176,7 @@ export async function loadOrderLines(
   const { data, error } = await supabase
     .from("orders")
     .select(
-      "id, order_number, delivery_slot, delivery_address, total_amount, fulfillment_type, payment_status, items, customers(full_name, phone), pickup_locations(name)",
+      "id, order_number, delivery_slot, delivery_address, total_amount, fulfillment_type, payment_status, items, pickup_location_id, customers(full_name, phone)",
     )
     .eq("delivery_date", dateIso)
     .not("status", "in", "(delivered,cancelled)");
@@ -184,6 +184,39 @@ export async function loadOrderLines(
   if (error) throw new Error(`orders leg: ${error.message}`);
 
   const rows = (data || []) as unknown as OrderRow[];
+
+  // Pickup point names come from a SECOND QUERY, not a PostgREST embed.
+  //
+  // `pickup_locations(name)` cannot be resolved: `orders` carries exactly
+  // one foreign key (orders_customer_id_fkey -> customers) and there is
+  // none from pickup_location_id to pickup_locations.id. PostgREST builds
+  // embeds from FK constraints, so that select 400s with PGRST200, this
+  // whole leg throws, and the caller's catch records order_count = 0.
+  // That is what put "0 orders" on the 22:15 send of 2026-09-18 while the
+  // database held 15. `customers(full_name, phone)` keeps its embed
+  // because that FK does exist.
+  //
+  // Do not "fix" this by adding the FK instead — the embed would start
+  // working, but every reader of this table would then be one migration
+  // away from the same silent zero. An explicit lookup cannot regress.
+  const pickupIds = Array.from(
+    new Set(
+      rows
+        .map((r) => r.pickup_location_id)
+        .filter((v): v is string => typeof v === "string" && v.length > 0),
+    ),
+  );
+  const pickupNames = new Map<string, string>();
+  if (pickupIds.length > 0) {
+    const { data: locs, error: locErr } = await supabase
+      .from("pickup_locations")
+      .select("id, name")
+      .in("id", pickupIds);
+    if (locErr) throw new Error(`pickup_locations lookup: ${locErr.message}`);
+    for (const l of (locs || []) as { id: string; name: string | null }[]) {
+      if (l.name) pickupNames.set(l.id, l.name);
+    }
+  }
   return rows.map((o) => {
     const isPickup = o.fulfillment_type === "pickup";
     return {
@@ -196,7 +229,9 @@ export async function loadOrderLines(
       // Verbatim `pickup_locations.name`. Null when not a pickup or when
       // pickup_location_id was never set. Names are not normalised here —
       // see the `pickupPointName` docstring.
-      pickupPointName: isPickup ? o.pickup_locations?.name ?? null : null,
+      pickupPointName: isPickup
+        ? pickupNames.get(o.pickup_location_id ?? "") ?? null
+        : null,
       slot: o.delivery_slot,
       customerName: (o.customers?.full_name || "Unknown").trim(),
       customerPhone: o.customers?.phone || "no phone",
