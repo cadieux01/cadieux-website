@@ -195,6 +195,51 @@ export function resolveProductMedia(
   ];
 }
 
+// PDP-ONLY gallery list. Deliberately separate from resolveProductMedia:
+// the shop LIST tiles keep their existing one-photo-per-card behaviour, and
+// folding image_url into the shared helper would silently turn every tile
+// into a two-photo carousel.
+//
+// The PDP shows the FULL set the admin has uploaded, main photo first:
+// [image_url, ...gallery_urls]. These are two independent admin fields with
+// no constraint keeping them disjoint — image_url is routinely also pasted
+// into gallery_urls — so the list is de-duplicated by URL or the same photo
+// renders twice and the dots claim an image that isn't there.
+//
+// Dedup is on the trimmed URL string. Storage keys are unique per upload, so
+// two different keys are two different files even if the bytes are identical;
+// re-uploading the same photo yields a new key and legitimately shows twice.
+// That is an upload-hygiene problem, not something to paper over here.
+//
+// alt text comes from the caller's live DB product name, not the bundled
+// PRODUCTS table, so a product that exists only in the DB still gets a real
+// alt instead of "Product image".
+export function resolvePdpGallery(
+  productName: string | null | undefined,
+  imageUrl: string | null | undefined,
+  galleryUrls: string[] | null | undefined,
+): ProductMedia[] {
+  const urls = [imageUrl, ...(galleryUrls ?? [])]
+    .map((u) => (typeof u === "string" ? u.trim() : ""))
+    .filter((u) => u.length > 0);
+
+  const seen = new Set<string>();
+  const unique = urls.filter((u) => (seen.has(u) ? false : (seen.add(u), true)));
+
+  const name = (productName ?? "").trim();
+  return unique.map((src, i) => ({
+    type: "image",
+    src,
+    // Single-photo products get a plain product-name alt; numbering a list of
+    // one reads as broken to a screen reader.
+    alt: name
+      ? unique.length > 1
+        ? `${name} — photo ${i + 1} of ${unique.length}`
+        : name
+      : "Product image",
+  }));
+}
+
 // Lightweight availability map for the public shop. Returns null when
 // the upstream fetch failed entirely so callers can degrade gracefully
 // (show everything as live) instead of hiding the catalogue.

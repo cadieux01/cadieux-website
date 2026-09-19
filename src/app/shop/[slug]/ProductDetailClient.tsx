@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { notFound, useRouter } from "next/navigation";
-import { useRef, useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import {
   PRODUCTS,
   PRODUCT_DETAILS,
@@ -869,6 +869,20 @@ function Gallery({
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
+  // Exactly one photo is the common case today, and it must not look like a
+  // carousel that failed to load. No scroller, no dots, no arrows, no swipe
+  // hint and no thumbnail strip — a lone thumbnail under a single photo, or a
+  // pair of permanently-disabled arrows, reads as broken rather than as a
+  // product that simply has one picture.
+  const isSingle = media.length === 1;
+
+  // Display width of the gallery column, used for `sizes`. The shell is
+  // maxWidth 1200 with clamp(18px,5vw,64px) padding; from 900px up .pdp-top
+  // is a 1.1fr / 1fr grid with a 56px gap, so the image column tops out at
+  // (1200 - 128 - 56) * 1.1/2.1 ≈ 532px — NOT the 800px this used to claim.
+  // Overstating it makes next/image pick a needlessly large source.
+  const sizes = "(max-width: 899px) 92vw, (max-width: 1327px) 45vw, 532px";
+
   const handleScroll = () => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -877,12 +891,32 @@ function Gallery({
   };
 
   const goTo = (i: number) => {
+    const next = Math.max(0, Math.min(media.length - 1, i));
     const el = scrollerRef.current;
     if (!el) {
-      onSelect(i);
+      onSelect(next);
       return;
     }
-    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+    el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
+  };
+
+  // Arrow keys move between photos once the viewport has focus. Home/End jump
+  // to the ends. onScroll syncs `active`, so these do not need to call
+  // onSelect themselves.
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      goTo(active + 1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      goTo(active - 1);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      goTo(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      goTo(media.length - 1);
+    }
   };
 
   // No admin-uploaded photo for this product yet. Hold the layout with a
@@ -941,6 +975,17 @@ function Gallery({
           ref={scrollerRef}
           onScroll={handleScroll}
           className="pdp-scroller"
+          // Only a multi-photo gallery is an interactive widget. A single
+          // photo stays a plain image: not focusable, no carousel semantics.
+          {...(isSingle
+            ? {}
+            : {
+                tabIndex: 0,
+                role: "group",
+                "aria-roledescription": "carousel",
+                "aria-label": `Product photos, ${media.length} images. Use the left and right arrow keys to browse.`,
+                onKeyDown: handleKeyDown,
+              })}
           style={{
             position: "absolute",
             inset: 0,
@@ -955,6 +1000,16 @@ function Gallery({
           {media.map((m, i) => (
             <div
               key={i}
+              // Each slide is announced as "3 of 5" rather than as a bare
+              // image with no position in the set.
+              {...(isSingle
+                ? {}
+                : {
+                    role: "group",
+                    "aria-roledescription": "slide",
+                    "aria-label": `${i + 1} of ${media.length}`,
+                    "aria-hidden": i !== active,
+                  })}
               style={{
                 flex: "0 0 100%",
                 width: "100%",
@@ -989,8 +1044,12 @@ function Gallery({
                   alt={m.alt || "Product image"}
                   fill
                   draggable={false}
-                  sizes="(max-width: 768px) 100vw, 800px"
+                  sizes={sizes}
+                  // First photo is the LCP element — fetch it eagerly. Every
+                  // later photo is off-screen until swiped to, so it stays
+                  // lazy and costs nothing on first paint.
                   priority={i === 0}
+                  loading={i === 0 ? "eager" : "lazy"}
                   style={{
                     objectFit: "cover",
                     pointerEvents: "none",
@@ -1029,9 +1088,39 @@ function Gallery({
           </div>
         )}
 
-        {/* Dot indicators */}
+        {/* Desktop arrows. Hidden on touch via CSS (hover/pointer media
+            query) because the swipe is the better gesture there and the
+            arrows would sit on top of the photo for no reason. Disabled at
+            the ends rather than wrapping, so the control always agrees with
+            the dots about where you are. */}
+        {media.length > 1 && (
+          <>
+            <button
+              type="button"
+              className="pdp-arrow pdp-arrow--prev"
+              onClick={() => goTo(active - 1)}
+              disabled={active === 0}
+              aria-label="Previous photo"
+            >
+              <span aria-hidden="true">←</span>
+            </button>
+            <button
+              type="button"
+              className="pdp-arrow pdp-arrow--next"
+              onClick={() => goTo(active + 1)}
+              disabled={active === media.length - 1}
+              aria-label="Next photo"
+            >
+              <span aria-hidden="true">→</span>
+            </button>
+          </>
+        )}
+
+        {/* Dot indicators. Purely decorative: position is already announced
+            by each slide's "n of m" label, so they are hidden from AT. */}
         {media.length > 1 && (
           <div
+            aria-hidden="true"
             style={{
               position: "absolute",
               bottom: 12,
@@ -1059,6 +1148,10 @@ function Gallery({
         )}
       </div>
 
+      {/* Thumbnail strip — multi-photo only. A single thumbnail under a
+          single photo is the "empty carousel chrome" that makes a
+          one-image product look like a broken gallery. */}
+      {!isSingle && (
       <div
         style={{
           display: "flex",
@@ -1071,7 +1164,9 @@ function Gallery({
         {media.map((m, i) => (
           <button
             key={i}
+            type="button"
             onClick={() => goTo(i)}
+            aria-current={i === active}
             style={{
               flex: "0 0 auto",
               width: 74,
@@ -1110,10 +1205,58 @@ function Gallery({
           </button>
         ))}
       </div>
+      )}
 
       <style jsx>{`
         .pdp-scroller::-webkit-scrollbar {
           display: none;
+        }
+        /* Keyboard focus must be visible on the scroller, but only when
+           reached by keyboard — a mouse click on the photo should not draw a
+           ring around it. */
+        .pdp-scroller:focus-visible {
+          outline: 2px solid #024628;
+          outline-offset: -2px;
+        }
+        /* Arrows are a POINTER affordance. Touch devices get the swipe, which
+           is better, so they never render the overlay at all. */
+        :global(.pdp-arrow) {
+          display: none;
+        }
+        @media (hover: hover) and (pointer: fine) {
+          :global(.pdp-arrow) {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 999px;
+            border: 1px solid #024628;
+            background: #fbf3d4;
+            color: #024628;
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0;
+            opacity: 0.92;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+          }
+          :global(.pdp-arrow:hover:not(:disabled)) {
+            opacity: 1;
+          }
+          :global(.pdp-arrow:disabled) {
+            opacity: 0.35;
+            cursor: default;
+          }
+          :global(.pdp-arrow--prev) {
+            left: 12px;
+          }
+          :global(.pdp-arrow--next) {
+            right: 12px;
+          }
         }
       `}</style>
     </div>

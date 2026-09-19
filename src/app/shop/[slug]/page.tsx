@@ -26,7 +26,7 @@ import {
   hasRealProductImage,
   resolveHeroImage,
   resolveOgImage,
-  resolveProductMedia,
+  resolvePdpGallery,
 } from "@/lib/products";
 import { parseWeightGrams, proteinPerLoafGrams } from "@/lib/stat-tiles";
 import { getProductReports } from "@/lib/product-reports";
@@ -232,8 +232,10 @@ export default async function ProductDetailPage({
   };
 
   const heroImage = resolveHeroImage(productRow?.image_url, internalSlug);
-  const media = resolveProductMedia(
-    internalSlug,
+  // PDP shows main photo + gallery, de-duplicated. The shop LIST tiles keep
+  // using resolveProductMedia and are unchanged.
+  const media = resolvePdpGallery(
+    productRow?.name,
     productRow?.image_url,
     productRow?.gallery_urls,
   );
