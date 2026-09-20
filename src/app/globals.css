@@ -104,7 +104,6 @@ body {
   padding: 0;
   /* clip does NOT create a scroll container, so position:sticky still works */
   overflow-x: clip;
-  cursor: none;
   /* Inverse rebrand pass: Clean Ash canvas + Foundation Green on-surface text.
      Ambient radial gradients recast in FG tints so the ash surface has depth
      without going washed-out. */
@@ -146,14 +145,6 @@ select {
    specificity, and inline sizes beat it outright. */
 button {
   font-size: max(14px, 1em);
-}
-
-/* Admin pages: restore native cursor. ClientLayoutChrome returns null on
-   /admin so no custom cursor component mounts, but `body { cursor: none }`
-   above is still active. AdminShell adds `admin-page` to <html> so this
-   rule wins and the operator sees their OS pointer. */
-html.admin-page body {
-  cursor: auto !important;
 }
 
 /* Design system utility classes */
@@ -464,10 +455,10 @@ select option:disabled {
   }
 }
 
-/* Respect user motion preferences. Strips the heaviest animations and
-   forces a default cursor — content remains fully usable. Per-component
-   scroll-driven reveals are still allowed (they're tied to scroll, not
-   time) but ambient looping animations are stilled. */
+/* Respect user motion preferences. Strips the heaviest animations —
+   content remains fully usable. Per-component scroll-driven reveals are
+   still allowed (they're tied to scroll, not time) but ambient looping
+   animations are stilled. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -477,44 +468,11 @@ select option:disabled {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
-  body { cursor: auto; }
   .immersive-breathe { animation: none; }
   /* No sweep at all. The base rule's resting background-position (0% 50%)
      already paints flat cream, so cancelling the animation is sufficient —
      nothing to park. */
   .cdx-sub-price { animation: none; }
-}
-
-/* ── Animated cursor variants (desktop only) ─────────────────────────────
-   The dough / flour / ribbon / knead / steam / magnetic / glow / spotlight
-   effects are drawn on a fixed overlay; the native pointer must be hidden
-   EVERYWHERE so the OS hand/arrow never shows through. `body{cursor:none}`
-   alone isn't enough: `cursor` is inherited, but links/buttons (UA
-   `cursor:pointer`) and the Tailwind `.cursor-pointer` utility override the
-   inherited none, leaking the native hand. The universal rule below forces it
-   off on every element — `html.anim-cursor *` has specificity (0,1,1), beating
-   `.cursor-pointer` (0,1,0) and UA rules, and `!important` guards against
-   inline/utility `cursor` declarations.
-
-   Gated to fine-pointer + no-reduced-motion so touch devices and reduced-motion
-   users keep their native cursor (under reduced-motion the cursor components
-   never add the `anim-cursor` class anyway, and the block above restores
-   `body{cursor:auto}`). AnimatedCursor/BakeryCursor add `anim-cursor` to <html>. */
-@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-  html.anim-cursor,
-  html.anim-cursor * {
-    cursor: none !important;
-  }
-
-  /* Keep the I-beam on real text entry ONLY, so typing still works. These
-     selectors are more specific than the universal rule, so they win even
-     against its !important. */
-  html.anim-cursor input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
-  html.anim-cursor textarea,
-  html.anim-cursor [contenteditable="true"],
-  html.anim-cursor [contenteditable=""] {
-    cursor: text !important;
-  }
 }
 
 /* ── Task F v2 design-system utilities ───────────────────────────────

@@ -31,9 +31,9 @@
 // Lenis: the menu carries `data-lenis-prevent` so its internal scroll works
 // while the page's smooth-scroll is paused over it.
 //
-// Cursor: under the animated ("dough") cursor every element gets
-// `cursor: none`, so clickability is signalled purely by the gold hover /
-// active highlight rather than a pointer — handled by the styles below.
+// Cursor: the trigger and every enabled option carry `cursor: pointer` (the
+// menu rows are <li>, which get no UA pointer of their own); disabled rows
+// show `not-allowed`.
 
 import {
   useCallback,
@@ -377,6 +377,7 @@ export default function Select({
     color: selectedLabel ? "#FBF3D4" : "rgba(251,243,212,0.7)",
     boxShadow: open ? `0 0 0 2px rgba(251,243,212,0.35)` : "none",
     opacity: disabled ? 0.5 : 1,
+    cursor: disabled ? "not-allowed" : "pointer",
     transition: "border-color 0.15s ease, box-shadow 0.15s ease",
     ...style,
   };
@@ -509,6 +510,7 @@ export default function Select({
                         : isSelected
                           ? "rgba(251,243,212,0.10)"
                           : "transparent",
+                    cursor: opt.disabled ? "not-allowed" : "pointer",
                     transition: "background 0.1s ease",
                   }}
                 >

@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
-import ClientLayoutChrome from "@/components/ClientLayoutChrome";
 import NavGate from "@/components/NavGate";
 import SiteMusic from "@/components/SiteMusic";
 import EdgeSwipeNav from "@/components/EdgeSwipeNav";
@@ -206,9 +205,6 @@ export default async function RootLayout({
       </head>
       <body className="font-body" suppressHydrationWarning>
         <CartProvider>
-          {/* SmoothScroll + CustomCursor are loaded only on fine-pointer
-              devices via dynamic import, so phones/tablets skip the bundle. */}
-          <ClientLayoutChrome />
           <NavGate />
           <SiteMusic />
           <EdgeSwipeNav />
