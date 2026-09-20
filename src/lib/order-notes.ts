@@ -14,6 +14,9 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { formatSlotForDisplay } from "@/lib/delivery-slots";
+import { shareDateLabel } from "@/lib/order-share-customer";
+
 // 'edit' rows are written exclusively by the admin_edit_order RPC and
 // carry customer_visible=true — they are the record the customer sees
 // on their /orders/[id] page. 'note' and 'call' remain internal.
@@ -116,14 +119,38 @@ export function normalizeKind(raw: unknown): NoteKind {
   return raw === "call" ? "call" : "note";
 }
 
+/** "Midday (10 AM – 2 PM)" from a stored slot value.
+ *
+ *  `formatSlotForDisplay` renders the canonical windows as
+ *  "Midday · 10 AM – 2 PM". The middot reads fine in a table cell with a
+ *  label column beside it and badly inside a sentence, so the period name
+ *  is bracketed here instead. Legacy values (a bare "07:30" from the old
+ *  30-minute grid) come back from `formatSlotForDisplay` with no middot at
+ *  all and are passed through untouched — there is no period name to
+ *  bracket, and inventing one would be a lie about what was booked. */
+function noteSlotLabel(slot: string | null): string | null {
+  if (!slot || slot.length === 0) return null;
+  const display = formatSlotForDisplay(slot);
+  if (!display) return null;
+  const parts = display.split(" · ");
+  return parts.length === 2 ? `${parts[0]} (${parts[1]})` : display;
+}
+
 /**
  * Wording for a customer-visible delivery-schedule edit note.
  *
- * Kept in one place so the orders-side (admin_edit_order RPC) and the
- * subscriptions-side (per-delivery PATCH route) both read identical on
- * a customer's timeline. The RPC composes its own copy in plpgsql; this
- * helper is the JS-side source of truth for the subscription-delivery
- * route.
+ *   "Delivery moved from Sun 14 Sep, Morning (6 – 10 AM)
+ *    to Mon 21 Sep, Midday (10 AM – 2 PM)."
+ *
+ * Takes RAW stored values — an ISO date and a slot value — and does every
+ * bit of formatting itself. It used to take pre-formatted strings, which
+ * is how a raw "2026-09-21" reached a customer's timeline: the one caller
+ * formatted the slot and forgot the date, and nothing in the signature
+ * said it had to. Raw in, sentence out, one place to change the wording.
+ *
+ * Dates go through `shareDateLabel`, which parses an IST calendar date as
+ * UTC deliberately — see the note on that function. Running this through a
+ * timezone is the one way to land a day early.
  *
  * Signature intentionally accepts nulls — a subscription delivery can
  * carry `scheduled_date` without a slot on legacy rows.
@@ -135,11 +162,15 @@ export function formatDeliveryEditNote(before: {
   date: string | null;
   slot: string | null;
 }): string {
-  const dashDate = (d: string | null) => (d && d.length > 0 ? d : "—");
-  const dashSlot = (s: string | null) => (s && s.length > 0 ? s : "—");
-  const b = `${dashDate(before.date)} ${dashSlot(before.slot)}`.trim();
-  const a = `${dashDate(after.date)} ${dashSlot(after.slot)}`.trim();
-  return `Delivery moved from ${b} to ${a}.`;
+  const side = (part: { date: string | null; slot: string | null }) => {
+    const date = part.date ? shareDateLabel(part.date) : "";
+    const slot = noteSlotLabel(part.slot);
+    const bits = [date.length > 0 ? date : "—", slot].filter(
+      (x): x is string => Boolean(x),
+    );
+    return bits.join(", ");
+  };
+  return `Delivery moved from ${side(before)} to ${side(after)}.`;
 }
 
 /**

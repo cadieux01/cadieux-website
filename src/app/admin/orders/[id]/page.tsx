@@ -35,6 +35,7 @@ import { formatOrderNumber } from "@/lib/order-number";
 import { isShareable } from "@/lib/order-share-message";
 import { buildRuleSet } from "@/lib/zone-rules";
 import { fetchAllRules } from "@/lib/zone-rules-client";
+import { EditOrderPanel } from "@/components/admin/EditOrderPanel";
 import { OrderShareButton } from "@/components/admin/OrderShareButton";
 import type { ShareablePartner } from "@/components/admin/PartnerShareButton";
 
@@ -87,6 +88,9 @@ export default function AdminOrderDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
+  // Holds the order while the shared edit panel is open. Null = closed.
+  const [editingOrder, setEditingOrder] = useState<AdminOrderRow | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -312,6 +316,14 @@ export default function AdminOrderDetailPage({
       }
     >
       <div id="order-detail" style={{ display: "grid", gap: "1.25rem" }}>
+        {/* Save confirmation from the edit panel. Sits above the blocks so
+            the reload that follows does not look like nothing happened. */}
+        {notice ? (
+          <div role="status" style={noticeStyle} className="no-print">
+            {notice}
+          </div>
+        ) : null}
+
         {/* 1 · HEADER ------------------------------------------------- */}
         <section style={panel}>
           <div
@@ -381,7 +393,32 @@ export default function AdminOrderDetailPage({
         </Block>
 
         {/* 3 · FULFILLMENT -------------------------------------------- */}
-        <Block title={isPickup ? "Fulfillment — Pickup" : "Fulfillment — Delivery"}>
+        {/* This page was read-only by design and the date could only be
+            changed from the list. That held until someone arrived here by
+            clicking a row, found the wrong date staring back, and had no
+            way to act on it — the nearest control was a back-navigation
+            and a scan of the board. The edit opens the SAME panel the list
+            uses, so there is still exactly one editor; this is a second
+            door to it, not a second implementation. Terminal orders are
+            excluded: moving a delivered or cancelled order is not a thing
+            to do, and offering it invites a misclick. */}
+        <Block
+          title={isPickup ? "Fulfillment — Pickup" : "Fulfillment — Delivery"}
+          action={
+            order.status === "delivered" || order.status === "cancelled" ? null : (
+              <span className="no-print">
+                <button
+                  type="button"
+                  onClick={() => setEditingOrder(order)}
+                  style={chipSmall}
+                  title="Edit delivery date, slot, items, fee, address, location"
+                >
+                  Edit date &amp; time
+                </button>
+              </span>
+            )
+          }
+        >
           {isPickup ? (
             <>
               <KeyVal k="Pickup location" v={show(order.pickup_location?.name)} />
@@ -553,6 +590,23 @@ export default function AdminOrderDetailPage({
           }
         }
       `}</style>
+
+      {/* The shared edit panel, same component the orders list mounts.
+          On save we re-fetch rather than patch local state: the panel can
+          change the fee and the items, and this page shows a money
+          breakdown derived from both, so a partial merge would leave the
+          totals disagreeing with the lines above them. */}
+      {editingOrder ? (
+        <EditOrderPanel
+          order={editingOrder}
+          onCancel={() => setEditingOrder(null)}
+          onSaved={(msg) => {
+            setEditingOrder(null);
+            setNotice(msg);
+            void load();
+          }}
+        />
+      ) : null}
     </AdminShell>
   );
 }
@@ -701,6 +755,14 @@ const chipSmall: React.CSSProperties = {
   padding: "0.25rem 0.6rem",
   letterSpacing: "0.18em",
   color: "#FBF3D4",
+};
+
+const noticeStyle: React.CSSProperties = {
+  border: "1px solid rgba(127,212,193,0.5)",
+  color: "#7FD4C1",
+  borderRadius: 8,
+  padding: "0.6rem 0.9rem",
+  fontSize: "0.95rem",
 };
 
 const preorderChip: React.CSSProperties = {

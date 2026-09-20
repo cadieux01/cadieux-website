@@ -1936,6 +1936,15 @@ function OrdersPageInner() {
                         >
                           Customer
                         </button>
+                        {/* Labelled for the job it is actually opened for.
+                            It read "Order", sat next to "Customer", and
+                            nothing on the face of it said "date" — that
+                            word appeared only in the title attr, which
+                            never renders on the touch devices this board
+                            is worked from, so the control was invisible in
+                            practice. The panel still edits items, fee,
+                            address and location; the tooltip carries those,
+                            the label carries the common case. */}
                         <button
                           type="button"
                           disabled={busy}
@@ -1943,7 +1952,7 @@ function OrdersPageInner() {
                           style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
                           title="Edit delivery date, slot, items, fee, address, location"
                         >
-                          Order
+                          Edit date &amp; time
                         </button>
                         <Link
                           href={`/admin/orders/${o.id}/print`}

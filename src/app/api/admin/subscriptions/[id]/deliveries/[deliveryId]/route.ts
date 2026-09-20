@@ -35,6 +35,7 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { formatSlotForDisplay, isValidSlotValue } from "@/lib/delivery-slots";
 import { formatDeliveryEditNote } from "@/lib/order-notes";
+import { dayKeyForIsoDate } from "@/lib/subscription-dates";
 
 const ALLOWED_STATUSES = new Set([
   "pending_confirmation",
@@ -86,6 +87,15 @@ export async function PATCH(
     update.scheduled_date = body.scheduled_date;
     // Mirror onto the planned column so the bake plan agrees.
     update.delivery_date = body.scheduled_date;
+    // Re-derive day_key from the NEW date. It was written once at
+    // creation and never again, so every moved delivery carried the day
+    // of the date it used to be on — OLS33 seq 3/4/5 sat on a Monday
+    // reading "fri". Every screen now works the day out from the date
+    // rather than trusting this column, but it is still stored (the
+    // creation paths all write it and the admin list groups by it), so
+    // leaving it stale would just relocate the lie rather than end it.
+    const derived = dayKeyForIsoDate(body.scheduled_date);
+    if (derived) update.day_key = derived;
   }
   if (typeof body.admin_notes === "string") {
     update.admin_notes = body.admin_notes;
@@ -254,9 +264,14 @@ export async function PATCH(
     const author = authorRaw && authorRaw.trim().length > 0
       ? authorRaw.trim().slice(0, 60)
       : null;
+    // RAW values in — formatDeliveryEditNote formats both halves itself.
+    // Pre-formatting the slot here is exactly how the date reached a
+    // customer's timeline raw ("2026-09-21"): the caller remembered one
+    // half and not the other, and the signature did not care. The helper
+    // owns the whole sentence now, so the two cannot drift again.
     const noteBody = formatDeliveryEditNote(
-      { date: beforeDateForNote, slot: beforeSlotForNote ? formatSlotForDisplay(beforeSlotForNote) : null },
-      { date: afterDate, slot: afterSlot ? formatSlotForDisplay(afterSlot) : null },
+      { date: beforeDateForNote, slot: beforeSlotForNote },
+      { date: afterDate, slot: afterSlot },
     );
     const { error: noteErr } = await supabaseAdmin.from("order_notes").insert({
       subscription_id: params.id,

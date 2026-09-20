@@ -6,6 +6,37 @@ function mondayIndex(d: Date): number {
   return (d.getDay() + 6) % 7;
 }
 
+/**
+ * The day key ("mon".."sun") for a stored IST calendar date "yyyy-mm-dd".
+ *
+ * Parsed as UTC and read back as UTC on purpose. A delivery date is a
+ * calendar date, not an instant — running it through a local timezone is
+ * the one way to land a day early, which on a bake plan means bread on the
+ * wrong doorstep. Same reasoning, same technique as `shareDateLabel`.
+ *
+ * Returns null for anything that is not a well-formed date, so callers can
+ * decide between leaving a column alone and showing nothing. It never
+ * guesses.
+ */
+export function dayKeyForIsoDate(iso: string | null | undefined): DayKey | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso ?? "").trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(d.getTime())) return null;
+  // Round-trip guard: Date.UTC rolls 2026-02-31 forward into March rather
+  // than rejecting it, and a rolled date would yield a confidently wrong
+  // weekday. Comparing the parts back catches that.
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
+    return null;
+  }
+  // JS getUTCDay is Sun=0..Sat=6; DAY_KEYS is Mon-first.
+  return DAY_KEYS[(d.getUTCDay() + 6) % 7];
+}
+
 export type GeneratedDelivery = {
   sequence: number;
   week_number: number;

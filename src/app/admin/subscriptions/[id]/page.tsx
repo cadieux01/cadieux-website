@@ -63,6 +63,7 @@ import {
   buildSubscriptionMoney,
   type SubscriptionMoney,
 } from "@/lib/subscription-money";
+import { dayKeyForIsoDate } from "@/lib/subscription-dates";
 import { DAY_LABEL } from "@/lib/subscription-ui";
 import { isOrphanedPayment } from "@/lib/subscription-visibility";
 
@@ -155,6 +156,28 @@ function num(v: unknown): number | null {
 /** "mon" → "Monday"; unknown keys pass through capitalised. */
 function dayLabel(key: string): string {
   return DAY_LABEL[key.toLowerCase()] ?? humanise(key);
+}
+
+/** "Mon" for the date this delivery actually lands on.
+ *
+ *  Worked out from the date rather than read from the stored `day_key`.
+ *  That column is written at creation and was never updated on a move, so
+ *  a delivery shifted from Friday to Monday kept saying "fri" beside a
+ *  Monday date — two facts on one line disagreeing with each other, with
+ *  the wrong one first. The date is the thing the customer was told and
+ *  the thing the baker works from, so the date wins.
+ *
+ *  Falls back to the stored key when the date is missing or malformed:
+ *  a legacy row with no date is better served by a stale day than a
+ *  blank. */
+function dayLabelForDelivery(d: {
+  scheduled_date?: string | null;
+  delivery_date?: string | null;
+  day_key?: string | null;
+}): string | null {
+  const derived = dayKeyForIsoDate(d.scheduled_date ?? d.delivery_date ?? null);
+  const key = derived ?? d.day_key ?? null;
+  return key ? dayLabel(key).slice(0, 3) : null;
 }
 
 export default function AdminSubscriptionDetailPage({
@@ -637,7 +660,7 @@ export default function AdminSubscriptionDetailPage({
                           deserved a column of its own. */}
                       <td style={td} data-label="Date">
                         {[
-                          d.day_key ? dayLabel(d.day_key).slice(0, 3) : null,
+                          dayLabelForDelivery(d),
                           formatDate(d.scheduled_date ?? d.delivery_date),
                           d.scheduled_time_slot ?? d.slot,
                         ]
