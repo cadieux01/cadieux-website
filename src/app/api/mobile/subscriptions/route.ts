@@ -491,10 +491,19 @@ function validateCalendarDeliveries(deliveriesRaw: unknown):
       return {
         ok: false,
         status: 400,
+        // A paused slot returns the validator's sentence VERBATIM. Every
+        // other branch here rewrites the message with the array index,
+        // which is a developer diagnostic — fine for a malformed payload,
+        // wrong for the one rejection a customer is meant to read. The
+        // Android app renders an unrecognised code's `error` string as-is
+        // and cannot be changed without a Play release, so this string is
+        // literally what the customer sees.
         error:
-          gate.code === "slot_too_soon"
-            ? `deliveries[${i}].time_slot is too soon — orders need 12 hours to bake and ship.`
-            : `deliveries[${i}].time_slot is invalid.`,
+          gate.code === "slot_paused"
+            ? gate.error
+            : gate.code === "slot_too_soon"
+              ? `deliveries[${i}].time_slot is too soon — orders need 12 hours to bake and ship.`
+              : `deliveries[${i}].time_slot is invalid.`,
         code: gate.code,
       };
     }

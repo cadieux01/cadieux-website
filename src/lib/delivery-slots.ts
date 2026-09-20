@@ -239,6 +239,29 @@ export function slotStartUtcMs(dateIso: string, slotValue: string): number | nul
 
 // ── Booking (12 h) rule ─────────────────────────────────────────────────
 
+/** True if `slot` on `date` starts ≥ BOOKING_LEAD_MINUTES from `now`.
+ *  Says NOTHING about whether the slot is paused.
+ *
+ *  Split out of `isBookable` so a caller that has already handled the pause
+ *  — and wants to report it in its own words — can still ask the lead-time
+ *  question on its own. Folding the two together is right for a picker,
+ *  where the only question is "can I offer this?", and wrong wherever the
+ *  two failures need different sentences: answering "too soon" to a paused
+ *  slot sends the customer looking for a later date that will never exist.
+ *
+ *  Accepts both the canonical "HH:MM-HH:MM" ranges and the legacy bare
+ *  "HH:MM" shape, via slotStartUtcMs. */
+export function meetsLeadTime(
+  dateIso: string,
+  slotValue: string,
+  now: Date = new Date(),
+): boolean {
+  const startMs = slotStartUtcMs(dateIso, slotValue);
+  if (startMs == null) return false;
+  const leadMs = BOOKING_LEAD_MINUTES * 60 * 1000;
+  return startMs - now.getTime() >= leadMs;
+}
+
 /** True if `slot` on `date` starts ≥ BOOKING_LEAD_MINUTES from `now` AND
  *  the slot is not paused.
  *
@@ -251,10 +274,7 @@ export function isBookable(
   now: Date = new Date(),
 ): boolean {
   if (isSlotPaused(slotValue)) return false;
-  const startMs = slotStartUtcMs(dateIso, slotValue);
-  if (startMs == null) return false;
-  const leadMs = BOOKING_LEAD_MINUTES * 60 * 1000;
-  return startMs - now.getTime() >= leadMs;
+  return meetsLeadTime(dateIso, slotValue, now);
 }
 
 /** All slots for `date` annotated with `disabled` per the booking rule. */

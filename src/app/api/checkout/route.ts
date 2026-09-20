@@ -20,7 +20,12 @@ import {
 } from "@/lib/ratelimit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
-import { isValidSlotValue, validateBookingSlot } from "@/lib/delivery-slots";
+import {
+  isSlotPaused,
+  isValidSlotValue,
+  validateBookingSlot,
+  PAUSED_SLOT_MESSAGE,
+} from "@/lib/delivery-slots";
 import {
   prepareOneTimeOrder,
   orderInsertColumns,
@@ -619,12 +624,22 @@ export async function POST(req: NextRequest) {
         // bad_slot + slot_too_soon). Later deliveries are checked for
         // slot-value validity only — a stale lead-time failure on week 4
         // would be nonsense.
+        //
+        // The PAUSE, however, applies to every delivery. It is not a
+        // lead-time rule that later dates outgrow; it is "we have nobody to
+        // drive it", which is just as true in week 4. And it cannot ride on
+        // isValidSlotValue, which still accepts a paused value on purpose so
+        // an admin can re-book one by hand. Without this branch a
+        // slot_mode='custom' plan — or any explicit `deliveries` array —
+        // books Morning on every day except the first.
         const gate =
           i === 0
             ? validateBookingSlot(d.date, d.slot)
-            : isValidSlotValue(d.slot)
-              ? null
-              : { status: 400, code: "bad_slot", error: "Invalid delivery slot." };
+            : isSlotPaused(d.slot)
+              ? { status: 400, code: "slot_paused", error: PAUSED_SLOT_MESSAGE }
+              : isValidSlotValue(d.slot)
+                ? null
+                : { status: 400, code: "bad_slot", error: "Invalid delivery slot." };
         if (gate) {
           return NextResponse.json(
             { error: gate.error ?? "Invalid delivery slot.", code: gate.code },
