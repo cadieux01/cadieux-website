@@ -25,10 +25,27 @@ import type {
   AdminOrderItemSnapshot,
   AdminOrderRow,
 } from "@/lib/admin-shared";
+import type { OrderNoteRow } from "@/lib/order-notes";
 import { formatOrderNumber, formatPublicRef } from "@/lib/order-number";
 import { paymentLabel } from "@/lib/payment-label";
 
 type OrderResponse = { order: AdminOrderRow };
+type NotesResponse = { notes: OrderNoteRow[] };
+
+// Notes date, printed against every 'note' body and the "Last call"
+// line. Short form (no time-of-day) so a row of five reads compactly on
+// the driver's slip; the timestamp is preserved in the DB row for the
+// notes panel where the operator needs the minute.
+function formatNoteDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+    });
+  } catch {
+    return "";
+  }
+}
 
 function itemQty(item: AdminOrderItemSnapshot): number {
   return item.qty ?? item.quantity ?? 1;
@@ -72,6 +89,7 @@ export default function PrintOrderReceiptPage({
   params: { id: string };
 }) {
   const [order, setOrder] = useState<AdminOrderRow | null>(null);
+  const [notes, setNotes] = useState<OrderNoteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -82,6 +100,18 @@ export default function PrintOrderReceiptPage({
         `/api/admin/orders/${encodeURIComponent(params.id)}`,
       );
       setOrder(res.order ?? null);
+      // Notes are loaded in parallel with the order body — a slip that
+      // failed to fetch notes must still print, otherwise a notes API
+      // hiccup would silently block every receipt. The notes list is
+      // additive; on failure we just render without it.
+      try {
+        const notesRes = await adminFetch<NotesResponse>(
+          `/api/admin/notes?order_id=${encodeURIComponent(params.id)}`,
+        );
+        setNotes(Array.isArray(notesRes.notes) ? notesRes.notes : []);
+      } catch {
+        // Silently omit the notes block. The order body still prints.
+      }
     } catch (e) {
       if (e instanceof AdminFetchError) {
         if (e.status === 404) {
@@ -111,6 +141,24 @@ export default function PrintOrderReceiptPage({
       return () => clearTimeout(t);
     }
   }, [loading, order]);
+
+  // Notes split for the receipt. The public.order_notes endpoint returns
+  // newest-first; the "note" block on the printout reads oldest-first
+  // (as the operator recorded them), and only the LATEST call row shows
+  // as a single "Last call" line above the block — every earlier "Did
+  // not lift the call" is clutter on a driver's slip.
+  const noteRows = useMemo(
+    () =>
+      notes
+        .filter((n) => n.kind === "note")
+        .slice()
+        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    [notes],
+  );
+  const lastCall = useMemo(
+    () => notes.find((n) => n.kind === "call") ?? null,
+    [notes],
+  );
 
   const items = useMemo(
     () => (order && Array.isArray(order.items) ? order.items : []),
@@ -177,29 +225,19 @@ export default function PrintOrderReceiptPage({
 
   return (
     <main style={page}>
-      {/* Brand header */}
+      {/* Brand header. Order number promoted out of the meta grid so it
+          reads at a glance on the slip — this is the string the driver
+          calls out and the string the customer quotes back. */}
       <header style={brandHeader}>
         <div>
           <div style={brandName}>CADIEUX</div>
           <div style={brandTagline}>Fresh protein bread · Visakhapatnam</div>
         </div>
-        <div style={docType}>Order Receipt</div>
+        <div style={orderIdBadge}>{formatOrderId(order)}</div>
       </header>
 
-      {/* Meta grid: order id, dates, payment */}
+      {/* Meta grid: dates, payment, legacy ref for back-matching only. */}
       <section style={metaGrid}>
-        <div>
-          <div style={metaLabel}>Order</div>
-          <div style={metaValue}>{formatOrderId(order)}</div>
-        </div>
-        <div>
-          {/* Kept on the slip purely for back-matching. Since 2026-09-14 the
-              customer is shown the OLF number above, so a current enquiry
-              quotes that; this only helps with a caller reading a CX- code
-              off an older SMS. See src/lib/order-number.ts. */}
-          <div style={metaLabel}>Legacy ref</div>
-          <div style={metaValue}>{formatPublicRef(order)}</div>
-        </div>
         <div>
           <div style={metaLabel}>Placed</div>
           <div style={metaValue}>{formatDateTime(order.created_at)}</div>
@@ -211,6 +249,14 @@ export default function PrintOrderReceiptPage({
         <div>
           <div style={metaLabel}>Status</div>
           <div style={metaValue}>{order.status ?? "—"}</div>
+        </div>
+        <div>
+          {/* Kept on the slip purely for back-matching. Since 2026-09-14 the
+              customer is shown the OLF number above, so a current enquiry
+              quotes that; this only helps with a caller reading a CX- code
+              off an older SMS. See src/lib/order-number.ts. */}
+          <div style={metaLabel}>Legacy ref</div>
+          <div style={metaValue}>{formatPublicRef(order)}</div>
         </div>
       </section>
 
@@ -327,6 +373,38 @@ export default function PrintOrderReceiptPage({
         </div>
       </section>
 
+      {/* Admin notes block. Only prints when at least one 'note' row or
+          a latest 'call' row exists — an order with a clean history
+          renders identically to before. The block always sits under the
+          totals so a driver's eye lands on it after the money-side of
+          the slip, not before. */}
+      {noteRows.length > 0 || lastCall ? (
+        <section style={notesBlock}>
+          <div style={sectionHeading}>Notes</div>
+          {lastCall ? (
+            <p style={lastCallLine}>
+              <strong>Last call:</strong> {lastCall.body}
+              {lastCall.created_at
+                ? ` · ${formatNoteDate(lastCall.created_at)}`
+                : ""}
+            </p>
+          ) : null}
+          {noteRows.length > 0 ? (
+            <ol style={notesList}>
+              {noteRows.map((n) => (
+                <li key={n.id} style={noteItem}>
+                  <div style={noteBody}>{n.body}</div>
+                  <div style={noteMeta}>
+                    {n.author ? `${n.author} · ` : ""}
+                    {formatNoteDate(n.created_at)}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </section>
+      ) : null}
+
       <footer style={footer}>
         Thank you for choosing Cadieux · cadieux.in
       </footer>
@@ -396,6 +474,21 @@ const docType: React.CSSProperties = {
   textTransform: "uppercase",
   border: "1px solid #1D1D1F",
   padding: "0.3rem 0.7rem",
+};
+
+// The OLF badge sits where docType used to and does the job docType did
+// (says what the slip is) — but by carrying the actual order number
+// instead of the words "Order Receipt", so the number is the largest
+// thing on the header. A driver reading the slip in one hand needs to
+// see this without hunting.
+const orderIdBadge: React.CSSProperties = {
+  fontSize: "1.5rem",
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  border: "2px solid #1D1D1F",
+  padding: "0.35rem 0.85rem",
+  fontFamily:
+    "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
 };
 
 const metaGrid: React.CSSProperties = {
@@ -504,6 +597,55 @@ const footer: React.CSSProperties = {
   color: "rgba(29,29,31,0.7)",
   textAlign: "center",
   letterSpacing: "0.05em",
+};
+
+const notesBlock: React.CSSProperties = {
+  marginTop: "1.1rem",
+  padding: "0.75rem 0.85rem",
+  border: "1px solid rgba(29,29,31,0.25)",
+  borderRadius: 4,
+  // Print engines vary on how they honour these — belt and braces so a
+  // long note wraps in either direction instead of clipping off the
+  // right edge of the sheet.
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
+};
+
+const lastCallLine: React.CSSProperties = {
+  margin: "0.15rem 0 0.6rem",
+  fontSize: "1rem",
+  color: "#1D1D1F",
+  lineHeight: 1.4,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
+};
+
+const notesList: React.CSSProperties = {
+  margin: 0,
+  paddingLeft: "1.25rem",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.45rem",
+};
+
+const noteItem: React.CSSProperties = {
+  fontSize: "1rem",
+  color: "#1D1D1F",
+  lineHeight: 1.45,
+};
+
+const noteBody: React.CSSProperties = {
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
+};
+
+const noteMeta: React.CSSProperties = {
+  marginTop: "0.15rem",
+  fontSize: "0.85rem",
+  color: "rgba(29,29,31,0.65)",
 };
 
 const printBtn: React.CSSProperties = {

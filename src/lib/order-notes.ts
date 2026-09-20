@@ -117,6 +117,32 @@ export function normalizeKind(raw: unknown): NoteKind {
 }
 
 /**
+ * Wording for a customer-visible delivery-schedule edit note.
+ *
+ * Kept in one place so the orders-side (admin_edit_order RPC) and the
+ * subscriptions-side (per-delivery PATCH route) both read identical on
+ * a customer's timeline. The RPC composes its own copy in plpgsql; this
+ * helper is the JS-side source of truth for the subscription-delivery
+ * route.
+ *
+ * Signature intentionally accepts nulls — a subscription delivery can
+ * carry `scheduled_date` without a slot on legacy rows.
+ */
+export function formatDeliveryEditNote(before: {
+  date: string | null;
+  slot: string | null;
+}, after: {
+  date: string | null;
+  slot: string | null;
+}): string {
+  const dashDate = (d: string | null) => (d && d.length > 0 ? d : "—");
+  const dashSlot = (s: string | null) => (s && s.length > 0 ? s : "—");
+  const b = `${dashDate(before.date)} ${dashSlot(before.slot)}`.trim();
+  const a = `${dashDate(after.date)} ${dashSlot(after.slot)}`.trim();
+  return `Delivery moved from ${b} to ${a}.`;
+}
+
+/**
  * Batch-hydrate every order id with { note_count, last_call_note, last_note }.
  * Empty input → empty map. Never throws — a failure logs and returns
  * an empty map so the list endpoint stays online without notes.

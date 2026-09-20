@@ -30,17 +30,35 @@ import type { AdminOrderRow, AdminOrderItemSnapshot } from "@/lib/admin-shared";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isPaidStatus } from "@/lib/payment-label";
 
-// The three canonical delivery windows. Kept literal so this component
-// doesn't need to depend on the delivery-slots server helper (which is
-// imported by the API layer, not the client bundle). Legacy bare-time
-// slots ("07:30" etc.) are preserved by pass-through on the server —
-// this list is only for NEW selections.
-const CANONICAL_SLOTS = [
-  { value: "", label: "— none —" },
-  { value: "06:00-07:00", label: "6:00–7:00 AM" },
-  { value: "07:00-08:00", label: "7:00–8:00 AM" },
-  { value: "08:00-09:00", label: "8:00–9:00 AM" },
+// The three canonical delivery windows — MUST match what the app + web
+// checkout offer (`isAcceptableDeliverySlot` on the server). Any bare-time
+// slot picked here would 400 on the delivery-checkout endpoint if the
+// customer ever tried to re-book from it, and it would confuse the bake
+// plan (which groups by these three windows). Kept literal so this
+// component doesn't need to depend on the delivery-slots server helper
+// (imported by the API layer, not the client bundle). Legacy narrow slots
+// ("06:00-07:00", "07:30" etc.) on existing rows are preserved by
+// pass-through — see the option-injection block below.
+//
+// Delivery orders must always carry a slot; leaving the picker on "— none
+// —" would silently break the bake plan for that row. Pickup orders can
+// carry a null slot and are handled by their own flow; this panel is
+// scoped to the delivery-editing case.
+// Morning is paused: shown for clarity (existing rows still display it)
+// but disabled at the picker level so an operator can't move a delivery
+// INTO the Morning window. Legacy Morning rows read fine; on edit the
+// operator must choose Midday or Evening.
+const CANONICAL_SLOTS: Array<{ value: string; label: string; disabled?: boolean }> = [
+  { value: "06:00-10:00", label: "Morning (6–10 AM) — paused", disabled: true },
+  { value: "10:00-14:00", label: "10:00–14:00 · Midday" },
+  { value: "16:00-21:00", label: "16:00–21:00 · Evening" },
 ];
+
+// Multigrain floor: read from `products.available_from` at panel-open
+// time. Live-read (never hard-coded) because a scheduled task clears it
+// at 06:00 IST on the release date, and a hard-coded floor would keep
+// warning after clearance. See /api/admin/products/availability.
+type AvailabilityEntry = { id: string; name: string; available_from: string | null };
 
 const CREAM = "#FBF3D4";
 const INK = "#024628";
@@ -115,6 +133,54 @@ export function EditOrderPanel({
 
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Live product availability. Fetched once when the panel opens; the
+  // route is a straight SELECT so caching further up would be overkill.
+  // Silent failure — the warning is a courtesy, not a gate.
+  const [availability, setAvailability] = useState<AvailabilityEntry[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch<{ products: AvailabilityEntry[] }>(
+          "/api/admin/products/availability",
+        );
+        if (!cancelled) setAvailability(res.products ?? []);
+      } catch {
+        // silent — no warning is safer than a broken warning
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Second-click override: once the operator has confirmed a warned
+  // date is intentional, don't keep re-flagging it. Keyed by the date
+  // string so switching dates re-arms the warning.
+  const [ackFloor, setAckFloor] = useState<string | null>(null);
+
+  // Compare in plain ISO date terms; both sides are YYYY-MM-DD.
+  // Match on EITHER product_id OR slug — prod order.items snapshots
+  // carry `slug` (e.g. "high-protein", "multigrain") and legacy rows
+  // may carry `product_id`. products.id happens to be the slug string,
+  // so both keys resolve against the same column.
+  const flooredItems = useMemo(() => {
+    if (!deliveryDate) return [] as AvailabilityEntry[];
+    return items
+      .map((it) =>
+        availability.find(
+          (p) => p.id === it.product_id || p.id === it.slug,
+        ),
+      )
+      .filter(
+        (p): p is AvailabilityEntry =>
+          !!p && !!p.available_from && p.available_from > deliveryDate,
+      );
+  }, [availability, items, deliveryDate]);
+
+  const showFloorWarning =
+    flooredItems.length > 0 && ackFloor !== deliveryDate;
 
   // Read through the shared predicate, not `=== "paid"`. It matches by
   // prefix, which is what makes `paid_orphaned` — money captured, nothing
@@ -201,6 +267,33 @@ export function EditOrderPanel({
 
   const save = useCallback(async () => {
     setErr(null);
+
+    // Delivery orders must carry a canonical slot after any edit.
+    // Legacy rows sit here on save with the disabled legacy value
+    // still selected, and the bake plan needs one of the three
+    // windows to group by. Pickup rows are handled in a different
+    // flow and reach this panel with fulfillment_type='pickup'.
+    const isDelivery =
+      (order.fulfillment_type ?? "delivery") !== "pickup";
+    const slotIsCanonical = CANONICAL_SLOTS.some(
+      (s) => s.value === deliverySlot,
+    );
+    if (isDelivery && !slotIsCanonical) {
+      setErr(
+        "Pick a delivery window (Morning / Midday / Evening) before saving.",
+      );
+      return;
+    }
+
+    // Multigrain floor: second-click override. Ack must match the
+    // current date to count (switching dates re-arms).
+    if (flooredItems.length > 0 && ackFloor !== deliveryDate) {
+      setErr(
+        `${flooredItems.map((p) => p.name).join(", ")} isn't available yet — click Acknowledge above, then Save.`,
+      );
+      return;
+    }
+
     setSaving(true);
     try {
       // Build the sparse body — only include keys that actually
@@ -322,12 +415,15 @@ export function EditOrderPanel({
     deliverySlot,
     address,
     items,
+    itemsLocked,
     parsedFee,
     effectiveTotal,
     oldTotal,
     coordsDirty,
     coords,
     onSaved,
+    flooredItems,
+    ackFloor,
   ]);
 
   // Esc to close.
@@ -432,22 +528,64 @@ export function EditOrderPanel({
                   disabled={saving}
                   style={inputStyle}
                 >
-                  {/* Preserve the current legacy slot as an option so
-                      picking a different slot and picking it back is a
-                      no-op rather than being forced onto the canonical
-                      list. */}
-                  {deliverySlot &&
-                  !CANONICAL_SLOTS.some((s) => s.value === deliverySlot) ? (
-                    <option value={deliverySlot}>{deliverySlot}</option>
+                  {/* Preserve the current legacy slot as a DISABLED
+                      option — visible so the operator can see what the
+                      row is currently on, but not re-selectable (any
+                      new save must move onto one of the three windows).
+                      Also covers the null case for legacy rows: shown
+                      greyed as "— none —" so the picker never opens
+                      blank. */}
+                  {!CANONICAL_SLOTS.some((s) => s.value === deliverySlot) ? (
+                    <option value={deliverySlot} disabled>
+                      {deliverySlot
+                        ? `${deliverySlot} (legacy — pick a new window)`
+                        : "— none — (pick a window)"}
+                    </option>
                   ) : null}
                   {CANONICAL_SLOTS.map((s) => (
-                    <option key={s.value} value={s.value}>
+                    <option key={s.value} value={s.value} disabled={s.disabled}>
                       {s.label}
                     </option>
                   ))}
                 </select>
               </Field>
             </div>
+            {showFloorWarning ? (
+              <div
+                role="alert"
+                style={{
+                  marginTop: "0.75rem",
+                  padding: "0.65rem 0.9rem",
+                  border: `1px solid #E5B85C`,
+                  background: "rgba(229,184,92,0.1)",
+                  color: CREAM,
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.9rem",
+                }}
+              >
+                <strong>Heads up:</strong>{" "}
+                {flooredItems.map((p) => p.name).join(", ")}{" "}
+                {flooredItems.length === 1 ? "is" : "are"} only available from{" "}
+                {flooredItems
+                  .map((p) => p.available_from)
+                  .filter(Boolean)
+                  .join(" / ")}
+                . Save again to confirm this delivery date anyway.
+                <div style={{ marginTop: "0.4rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setAckFloor(deliveryDate)}
+                    style={{
+                      ...buttonStyle,
+                      padding: "0.35rem 0.7rem",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    Acknowledge
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </section>
 
           {/* Items */}

@@ -1,8 +1,10 @@
 // /api/admin/notes — internal-note timeline for an order or subscription.
 //
-// GET  /api/admin/notes?order_id=<uuid>          — list, newest-first
-// GET  /api/admin/notes?subscription_id=<uuid>   — list, newest-first
-// POST /api/admin/notes                          — append one row
+// GET  /api/admin/notes?order_id=<uuid>              — one owner, newest-first
+// GET  /api/admin/notes?subscription_id=<uuid>       — one owner, newest-first
+// GET  /api/admin/notes?order_ids=<uuid,uuid,…>      — batch, oldest-first per owner
+// GET  /api/admin/notes?subscription_ids=<uuid,…>    — batch, oldest-first per owner
+// POST /api/admin/notes                              — append one row
 //     body: { order_id? | subscription_id?, kind?: 'note'|'call', body, author? }
 //
 // Append-only. There is NO PATCH and NO DELETE — the admin surface never
@@ -12,8 +14,15 @@
 // table. Every call is gated by the same isAdmin() bearer/cookie the rest
 // of /api/admin/* uses.
 //
-// Exactly one of order_id / subscription_id is accepted per request;
-// supplying both, or neither, is a 400.
+// Exactly one of order_id / subscription_id / order_ids / subscription_ids
+// is accepted per GET; supplying more than one, or none, is a 400.
+//
+// The batch variant is what feeds the packing-list print page — one
+// round trip for N orders instead of N. Response shape differs from the
+// single-owner variant on purpose: consumers of the batch always want
+// the rows grouped by owner and rendered oldest-first (a driver's slip
+// reads top→bottom in time order), so the endpoint does the grouping
+// and the sort so no two callers do it two different ways.
 
 import { NextRequest, NextResponse } from "next/server";
 
@@ -55,11 +64,92 @@ function readOwner(
   return { error: "order_id or subscription_id is required." };
 }
 
+// Batch variant: accepts ?order_ids=<comma> or ?subscription_ids=<comma>.
+// Returns exactly one kind — mixed passes 400 so the caller never has to
+// deal with two column layouts in one response. Cap at 250 ids so a
+// runaway URL cannot pull the whole table by accident.
+const BATCH_ID_CAP = 250;
+
+function readOwnerBatch(
+  params: URLSearchParams,
+):
+  | { kind: "order"; ids: string[] }
+  | { kind: "subscription"; ids: string[] }
+  | { error: string }
+  | null {
+  const orderIdsRaw = params.get("order_ids");
+  const subIdsRaw = params.get("subscription_ids");
+  if (!orderIdsRaw && !subIdsRaw) return null;
+  if (orderIdsRaw && subIdsRaw) {
+    return { error: "Pass exactly one of order_ids / subscription_ids." };
+  }
+  const raw = (orderIdsRaw ?? subIdsRaw)!.trim();
+  if (raw.length === 0) return { error: "Batch id list is empty." };
+  const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return { error: "Batch id list is empty." };
+  if (parts.length > BATCH_ID_CAP) {
+    return { error: `Batch is capped at ${BATCH_ID_CAP} ids.` };
+  }
+  for (const p of parts) {
+    if (!UUID_RE.test(p)) return { error: `Invalid id in batch: ${p}` };
+  }
+  // De-dupe — harmless to the query but keeps the response map tidy.
+  const seen = new Set<string>();
+  const ids = parts.filter((p) => (seen.has(p) ? false : (seen.add(p), true)));
+  return orderIdsRaw
+    ? { kind: "order", ids }
+    : { kind: "subscription", ids };
+}
+
 export async function GET(req: NextRequest) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const owner = readOwner(req.nextUrl.searchParams);
+
+  const searchParams = req.nextUrl.searchParams;
+
+  // Batch mode wins when either *_ids param is present. Falls through
+  // to the single-owner path when neither is set, so the pre-existing
+  // ?order_id=<uuid> callers see identical behaviour.
+  const batch = readOwnerBatch(searchParams);
+  if (batch !== null) {
+    if ("error" in batch) {
+      return NextResponse.json({ error: batch.error }, { status: 400 });
+    }
+    const column = batch.kind === "order" ? "order_id" : "subscription_id";
+    const { data, error } = await supabaseAdmin
+      .from("order_notes")
+      .select("id, order_id, subscription_id, kind, body, author, created_at")
+      .in(column, batch.ids)
+      // Oldest first so the caller reading top→bottom sees the note
+      // trail in the order it was written. The single-owner variant
+      // stays newest-first for the notes panel; batch consumers (the
+      // packing-list print page) render oldest-first, so the sort lives
+      // where the render style lives.
+      .order("created_at", { ascending: true });
+    if (error) {
+      console.error("[admin/notes GET batch]", error.message);
+      return NextResponse.json(
+        { error: "Failed to load notes." },
+        { status: 500 },
+      );
+    }
+    // Group by owner id. Missing owners get an empty array so the caller
+    // does not have to `?? []` at every render site.
+    const notesByOwnerId: Record<string, OrderNoteRow[]> = {};
+    for (const id of batch.ids) notesByOwnerId[id] = [];
+    for (const row of (data ?? []) as OrderNoteRow[]) {
+      const ownerId =
+        batch.kind === "order"
+          ? row.order_id ?? null
+          : row.subscription_id ?? null;
+      if (!ownerId || !(ownerId in notesByOwnerId)) continue;
+      notesByOwnerId[ownerId].push(row);
+    }
+    return NextResponse.json({ notesByOwnerId });
+  }
+
+  const owner = readOwner(searchParams);
   if ("error" in owner) {
     return NextResponse.json({ error: owner.error }, { status: 400 });
   }

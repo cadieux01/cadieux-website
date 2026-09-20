@@ -20,7 +20,14 @@
 // field (web checkout flow, legacy rows) fall into the "Undated" /
 // "No slot" buckets at the end.
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
@@ -28,6 +35,8 @@ import { formatDate, formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { paymentLabel } from "@/lib/payment-label";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { AdminOrderItemSnapshot, AdminOrderRow } from "@/lib/admin-shared";
+import type { OrderNoteRow } from "@/lib/order-notes";
+import { formatOrderNumber } from "@/lib/order-number";
 import { decodeZoneParam, matchesOrderFilter } from "@/lib/order-filter";
 import { decodeStatusParam } from "@/lib/filter-menu";
 import {
@@ -118,6 +127,13 @@ function PrintOrdersPageInner() {
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Batched note rows keyed by order id, oldest-first per owner. Missing
+  // ids read as empty via `?? []`. Loaded AFTER the orders so a notes
+  // hiccup can never block the packing list; a failed load leaves the
+  // map empty and the sheet prints without the notes strip.
+  const [notesByOrderId, setNotesByOrderId] = useState<
+    Record<string, OrderNoteRow[]>
+  >({});
 
   const load = useCallback(async () => {
     try {
@@ -136,6 +152,38 @@ function PrintOrdersPageInner() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Batched notes fetch. One round-trip for every printed order; the
+  // response is a map that the render loop looks each order up in with
+  // `?? []`. The endpoint caps ids at 250 (see /api/admin/notes) which
+  // is well past any packing-list sized print run — if that ever bites
+  // the sheet still prints, just without the notes strip.
+  useEffect(() => {
+    if (orders.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ids = orders.map((o) => o.id);
+        // Batch endpoint caps at 250; chunk defensively so a bigger run
+        // never fails outright.
+        const chunkSize = 200;
+        const acc: Record<string, OrderNoteRow[]> = {};
+        for (let i = 0; i < ids.length; i += chunkSize) {
+          const slice = ids.slice(i, i + chunkSize);
+          const res = await adminFetch<{
+            notesByOwnerId: Record<string, OrderNoteRow[]>;
+          }>(`/api/admin/notes?order_ids=${slice.map(encodeURIComponent).join(",")}`);
+          Object.assign(acc, res.notesByOwnerId ?? {});
+        }
+        if (!cancelled) setNotesByOrderId(acc);
+      } catch {
+        // Silent — the sheet still prints without the notes strip.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orders]);
 
   // Learned rules — same fetch as the board so a rule that moves a row
   // between zones on screen moves it in the printout too.
@@ -365,7 +413,12 @@ function PrintOrdersPageInner() {
                   <table style={printTable}>
                     <thead>
                       <tr>
-                        <th style={printTh}>#</th>
+                        {/* First column now carries the OLF number, not a
+                            running index — the driver's slip and the WhatsApp
+                            message quote the same string, so listing "1..5"
+                            under a header labelled "#" invited the operator
+                            to read out a row index as an order number. */}
+                        <th style={printTh}>Order</th>
                         <th style={printTh}>Customer</th>
                         <th style={printTh}>Phone</th>
                         <th style={printTh}>Address</th>
@@ -381,31 +434,89 @@ function PrintOrdersPageInner() {
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((o, i) => (
-                        <tr key={o.id}>
-                          <td style={printTd}>{i + 1}</td>
-                          <td style={printTd}>
-                            {o.customers?.full_name ?? "—"}
-                          </td>
-                          <td style={printTd}>{o.customers?.phone ?? "—"}</td>
-                          <td style={printTd}>{o.delivery_address ?? "—"}</td>
-                          <td style={printTd}>{formatItems(o.items)}</td>
-                          <td style={printTd}>{formatINR(o.total_amount)}</td>
-                          <td style={printTd}>
-                            {paymentLabel({
-                              payment_status: o.payment_status,
-                              amountDue:
-                                typeof o.total_amount === "number"
-                                  ? o.total_amount
-                                  : null,
-                            })}
-                          </td>
-                          <td style={printTd}>{o.status ?? "—"}</td>
-                          <td style={printTd}>
-                            {formatDateTime(o.created_at)}
-                          </td>
-                        </tr>
-                      ))}
+                      {rows.map((o) => {
+                        const rowNotes = notesByOrderId[o.id] ?? [];
+                        // Latest-call rendering matches the per-order slip:
+                        // one line above the notes block, only the newest
+                        // 'call' row, dated. Earlier "did not lift the call"
+                        // rows stay in the notes panel, off the driver's
+                        // sheet.
+                        const noteRows = rowNotes.filter(
+                          (n) => n.kind === "note",
+                        );
+                        const callRows = rowNotes.filter(
+                          (n) => n.kind === "call",
+                        );
+                        const lastCall =
+                          callRows.length > 0
+                            ? callRows[callRows.length - 1]
+                            : null;
+                        const hasNotes =
+                          noteRows.length > 0 || lastCall !== null;
+                        return (
+                          <Fragment key={o.id}>
+                            <tr>
+                              <td style={{ ...printTd, ...orderIdCell }}>
+                                {formatOrderNumber(o)}
+                              </td>
+                              <td style={printTd}>
+                                {o.customers?.full_name ?? "—"}
+                              </td>
+                              <td style={printTd}>
+                                {o.customers?.phone ?? "—"}
+                              </td>
+                              <td style={printTd}>
+                                {o.delivery_address ?? "—"}
+                              </td>
+                              <td style={printTd}>{formatItems(o.items)}</td>
+                              <td style={printTd}>
+                                {formatINR(o.total_amount)}
+                              </td>
+                              <td style={printTd}>
+                                {paymentLabel({
+                                  payment_status: o.payment_status,
+                                  amountDue:
+                                    typeof o.total_amount === "number"
+                                      ? o.total_amount
+                                      : null,
+                                })}
+                              </td>
+                              <td style={printTd}>{o.status ?? "—"}</td>
+                              <td style={printTd}>
+                                {formatDateTime(o.created_at)}
+                              </td>
+                            </tr>
+                            {hasNotes ? (
+                              <tr>
+                                <td
+                                  colSpan={9}
+                                  style={{ ...printTd, ...notesCell }}
+                                >
+                                  {lastCall ? (
+                                    <div style={lastCallLine}>
+                                      <strong>Last call:</strong>{" "}
+                                      {lastCall.body}
+                                      {lastCall.created_at
+                                        ? ` · ${formatShortDate(lastCall.created_at)}`
+                                        : ""}
+                                    </div>
+                                  ) : null}
+                                  {noteRows.map((n) => (
+                                    <div key={n.id} style={noteLine}>
+                                      <span style={noteBodyText}>{n.body}</span>
+                                      <span style={noteMetaText}>
+                                        {" · "}
+                                        {n.author ? `${n.author} · ` : ""}
+                                        {formatShortDate(n.created_at)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -491,3 +602,53 @@ function formatItems(items: AdminOrderItemSnapshot[] | null): string {
     })
     .join(", ");
 }
+
+// Short date used inside the notes strip. Full timestamp lives in the
+// order-notes panel; on the packing sheet the driver only cares which
+// day the note landed. Falls back to a slice of the ISO on parse
+// failure so a bad timestamp cannot break the row.
+function formatShortDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+    });
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
+const orderIdCell: React.CSSProperties = {
+  fontWeight: 700,
+  fontFamily:
+    "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
+  whiteSpace: "nowrap",
+};
+
+const notesCell: React.CSSProperties = {
+  background: "rgba(29,29,31,0.04)",
+  padding: "6px 10px",
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
+  fontSize: "0.92rem",
+  color: "rgba(29,29,31,0.85)",
+};
+
+const lastCallLine: React.CSSProperties = {
+  marginBottom: "3px",
+  color: "#1D1D1F",
+};
+
+const noteLine: React.CSSProperties = {
+  lineHeight: 1.4,
+};
+
+const noteBodyText: React.CSSProperties = {
+  color: "#1D1D1F",
+};
+
+const noteMetaText: React.CSSProperties = {
+  color: "rgba(29,29,31,0.6)",
+  fontSize: "0.85rem",
+};

@@ -27,6 +27,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { ContactActions } from "@/components/admin/ContactActions";
+import { EditDeliveryModal } from "@/components/admin/EditDeliveryModal";
 import {
   MoneyBreakdown,
   type MoneyBreakdownTotal,
@@ -242,6 +243,12 @@ export default function AdminSubscriptionDetailPage({
   // subscription to `completed`. That's why we reload the whole detail
   // payload afterwards rather than only patching local state.
   const [deliveryBusyId, setDeliveryBusyId] = useState<string | null>(null);
+
+  // Per-delivery date/slot edit. Only one modal at a time; the row's
+  // status <Select> stays untouched and continues to write status
+  // independently through updateDeliveryStatus.
+  const [editingDelivery, setEditingDelivery] =
+    useState<AdminDeliveryRow | null>(null);
 
   const updateDeliveryStatus = async (
     delivery: AdminDeliveryRow,
@@ -607,12 +614,13 @@ export default function AdminSubscriptionDetailPage({
                   <th style={{ ...th, width: 76 }}>Week</th>
                   <th style={th}>Date</th>
                   <th style={th}>Status</th>
+                  <th style={{ ...th, width: 90 }} className="no-print" />
                 </tr>
               </thead>
               <tbody>
                 {deliveries.length === 0 ? (
                   <tr>
-                    <td style={td} colSpan={4}>
+                    <td style={td} colSpan={5}>
                       No deliveries scheduled.
                     </td>
                   </tr>
@@ -662,6 +670,22 @@ export default function AdminSubscriptionDetailPage({
                             {formatDateTime(d.status_updated_at)}
                           </div>
                         ) : null}
+                      </td>
+                      {/* Edit action. Hidden on terminal rows — moving a
+                          delivered or cancelled row does not make sense
+                          (the customer has either received it or been
+                          told it will not happen). */}
+                      <td style={td} className="no-print">
+                        {d.status === "delivered" || d.status === "cancelled" ? null : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingDelivery(d)}
+                            style={editButton}
+                            aria-label={`Edit delivery ${d.sequence ?? i + 1}`}
+                          >
+                            Edit
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -885,6 +909,18 @@ export default function AdminSubscriptionDetailPage({
           }
         }
       `}</style>
+      {editingDelivery ? (
+        <EditDeliveryModal
+          subscriptionId={sub.id}
+          delivery={editingDelivery}
+          items={sub.items ?? []}
+          onCancel={() => setEditingDelivery(null)}
+          onSaved={() => {
+            setEditingDelivery(null);
+            void load();
+          }}
+        />
+      ) : null}
     </AdminShell>
   );
 }
@@ -1069,6 +1105,19 @@ const deliverySelect: React.CSSProperties = {
   minHeight: 0,
   borderRadius: 6,
   minWidth: 170,
+};
+
+const editButton: React.CSSProperties = {
+  background: "transparent",
+  color: "rgba(251,243,212,0.85)",
+  border: "1px solid rgba(251,243,212,0.4)",
+  padding: "4px 10px",
+  fontFamily: "var(--font-body)",
+  fontSize: "0.75rem",
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+  borderRadius: 4,
 };
 
 const scheduleNote: React.CSSProperties = {
