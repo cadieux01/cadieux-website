@@ -25,6 +25,8 @@ import {
   isValidSlotValue,
   validateBookingSlot,
 } from "@/lib/delivery-slots";
+import { dayKeyForIsoDate } from "@/lib/subscription-dates";
+import { enforceDeliveryFloor } from "@/lib/order-validation";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -184,6 +186,44 @@ export async function PATCH(
     }
   }
 
+  // 9b. Product-availability floor. A self-edit can't move a delivery
+  //     to before any of the subscription's products lands back in
+  //     stock. `enforceDeliveryFloor` returns the same "back in stock
+  //     Thursday 24 September" sentence the app renders verbatim.
+  {
+    const { data: subItems } = await supabaseAdmin
+      .from("subscription_items")
+      .select("product_slug")
+      .eq("subscription_id", params.id);
+    const slugs = Array.from(
+      new Set(
+        (subItems ?? [])
+          .map((r) => (r as { product_slug: string | null }).product_slug)
+          .filter((s): s is string => typeof s === "string" && s.length > 0),
+      ),
+    );
+    if (slugs.length > 0) {
+      const { data: productRows } = await supabaseAdmin
+        .from("products")
+        .select("name, available_from, stock_message")
+        .in("slug", slugs);
+      const floorFailure = enforceDeliveryFloor(
+        (productRows ?? []) as Array<{
+          name: string;
+          available_from: string | null;
+          stock_message: string | null;
+        }>,
+        finalDate,
+      );
+      if (floorFailure) {
+        return NextResponse.json(
+          { error: floorFailure.error, code: floorFailure.code },
+          { status: floorFailure.status },
+        );
+      }
+    }
+  }
+
   // 10. Apply update + audit-trail line on admin_notes.
 
   const stamp = new Date().toLocaleString("en-IN", {
@@ -198,12 +238,24 @@ export async function PATCH(
     ? `${delivery.admin_notes}\n${editLine}`
     : editLine;
 
+  // Write every column that names the date or the slot on this row.
+  // The bake plan reads `slot || scheduled_time_slot` and groups by
+  // `day_key`, so a stale sibling column bakes the wrong time on the
+  // wrong day even when the customer's edit was correct — prod proof
+  // is OLS36 seq 2 (slot 16:00-21:00, scheduled_time_slot 06:00-10:00).
+  // Mirroring on every edit means the pair cannot drift again, and
+  // re-derives `day_key` from the final date so the admin fix's
+  // guarantee holds on the customer path too.
+  const derivedDayKey = dayKeyForIsoDate(finalDate);
   const update: Record<string, unknown> = {
     status_updated_at: new Date().toISOString(),
     admin_notes: nextNotes,
+    scheduled_date: finalDate,
+    delivery_date: finalDate,
+    scheduled_time_slot: finalSlot,
+    slot: finalSlot,
   };
-  if (newDate) update.scheduled_date = newDate;
-  if (newSlot) update.scheduled_time_slot = newSlot;
+  if (derivedDayKey) update.day_key = derivedDayKey;
 
   const { data: updated, error: uErr } = await supabaseAdmin
     .from("subscription_deliveries")

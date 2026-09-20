@@ -29,6 +29,9 @@ import {
   isValidSlotValue,
   validateBookingSlot,
 } from "@/lib/delivery-slots";
+import { dayKeyForIsoDate } from "@/lib/subscription-dates";
+import { enforceDeliveryFloor } from "@/lib/order-validation";
+import { formatDeliveryEditNote } from "@/lib/order-notes";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -203,6 +206,41 @@ export async function POST(
     if (gate) return fail(gate.status, gate.error, gate.code);
   }
 
+  // Product-availability floor. A self-edit can't move a delivery to
+  // before any of the subscription's products lands back in stock.
+  // `enforceDeliveryFloor` produces the same customer-facing sentence
+  // the app already renders verbatim on the create paths.
+  {
+    const { data: subItems } = await supabaseAdmin
+      .from("subscription_items")
+      .select("product_slug")
+      .eq("subscription_id", params.id);
+    const slugs = Array.from(
+      new Set(
+        (subItems ?? [])
+          .map((r) => (r as { product_slug: string | null }).product_slug)
+          .filter((s): s is string => typeof s === "string" && s.length > 0),
+      ),
+    );
+    if (slugs.length > 0) {
+      const { data: productRows } = await supabaseAdmin
+        .from("products")
+        .select("name, available_from, stock_message")
+        .in("slug", slugs);
+      const floorFailure = enforceDeliveryFloor(
+        (productRows ?? []) as Array<{
+          name: string;
+          available_from: string | null;
+          stock_message: string | null;
+        }>,
+        finalDate,
+      );
+      if (floorFailure) {
+        return fail(floorFailure.status, floorFailure.error, floorFailure.code);
+      }
+    }
+  }
+
   const stamp = new Date().toLocaleString("en-IN", {
     day: "numeric",
     month: "short",
@@ -215,12 +253,24 @@ export async function POST(
     ? `${delivery.admin_notes as string}\n${editLine}`
     : editLine;
 
+  // Write every column that names the date or the slot on this row.
+  // The bake plan reads `slot || scheduled_time_slot` and groups by
+  // `day_key`, so a stale sibling column bakes the wrong time on the
+  // wrong day even when the customer's edit was correct — prod proof
+  // is OLS36 seq 2 (slot 16:00-21:00, scheduled_time_slot 06:00-10:00).
+  // Mirroring on every edit means the pair cannot drift again, and
+  // re-derives `day_key` from the final date so the admin fix's
+  // guarantee holds on the mobile path too.
+  const derivedDayKey = dayKeyForIsoDate(finalDate);
   const update: Record<string, unknown> = {
     status_updated_at: new Date().toISOString(),
     admin_notes: nextNotes,
+    scheduled_date: finalDate,
+    delivery_date: finalDate,
+    scheduled_time_slot: finalSlot,
+    slot: finalSlot,
   };
-  if (scheduledDate) update.scheduled_date = scheduledDate;
-  if (scheduledSlot) update.scheduled_time_slot = scheduledSlot;
+  if (derivedDayKey) update.day_key = derivedDayKey;
 
   const { data: updated, error: uErr } = await supabaseAdmin
     .from("subscription_deliveries")
@@ -234,12 +284,21 @@ export async function POST(
   }
 
   // Fire-and-forget WhatsApp notification.
+  //
+  // The move line is the same sentence a customer sees on the admin
+  // side — `formatDeliveryEditNote` owns weekday + short-month + slot
+  // period so a raw ISO date ("2026-09-21") or a bare slot ("06:00-10:00")
+  // can never land in a customer's phone. Raw values in, one sentence
+  // out, same wording as the order timeline.
   const productName = sub.product_name || sub.bread_name || "subscription";
+  const moveLine = formatDeliveryEditNote(
+    { date: oldDate, slot: oldSlot },
+    { date: finalDate, slot: finalSlot },
+  );
   const waMessage =
     `Hi ${customer.full_name || "there"}! Your Cadieux ${productName} delivery has been updated.\n\n` +
-    `New date: ${finalDate}\n` +
-    (finalSlot ? `New time: ${finalSlot}\n` : "") +
-    `\nQuestions? Contact support@cadieux.in.`;
+    `${moveLine}\n\n` +
+    `Questions? Contact support@cadieux.in.`;
   fireAndForget(
     fetch(`${SITE_URL}/api/send-whatsapp`, {
       method: "POST",
