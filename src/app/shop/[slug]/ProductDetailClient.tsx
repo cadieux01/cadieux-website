@@ -1113,8 +1113,16 @@ function Gallery({
         {/* Swipe hint — first photo only, and only below 900px. From 900px up
             the desktop arrows are on the photo and telling a mouse user to
             swipe is wrong advice on top of a control that already says it
-            better. `display` lives in the stylesheet, not here, because an
-            inline display would outrank the media query. */}
+            better.
+
+            `display: inline-flex` stays INLINE and the media query overrides
+            it with !important, rather than the tidier arrangement of putting
+            both in the stylesheet. styled-jsx here is injected on hydration —
+            none of these .pdp-* rules exist in the SSR HTML or the CSS bundle
+            (verified against production) — so a stylesheet-only `display`
+            would leave the pill rendering as a full-width block div until the
+            JS lands. Inline keeps the server paint correct; !important is what
+            lets the query win afterwards. */}
         {media.length > 1 && active === 0 && (
           <div
             className="pdp-swipe-hint"
@@ -1132,6 +1140,7 @@ function Gallery({
               background: "#FBF3D4",
               border: "1px solid #024628",
               borderRadius: 4,
+              display: "inline-flex",
               alignItems: "center",
               gap: 8,
               pointerEvents: "none",
@@ -1274,12 +1283,10 @@ function Gallery({
         /* Swipe hint belongs to the narrow layout only. 900px is the same
            breakpoint .pdp-top uses to go two-column, so the hint disappears
            exactly as the gallery becomes the desktop arrangement. */
-        :global(.pdp-swipe-hint) {
-          display: inline-flex;
-        }
         @media (min-width: 900px) {
           :global(.pdp-swipe-hint) {
-            display: none;
+            /* Beats the element's own inline display — see the JSX comment. */
+            display: none !important;
           }
         }
         /* Arrows are a POINTER affordance. Touch devices get the swipe, which
