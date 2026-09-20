@@ -869,6 +869,21 @@ function Gallery({
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
+  // The index every RELATIVE move computes from. Auto-repeat on a held arrow
+  // key fires keydown far faster than React re-renders, so consecutive presses
+  // reading the `active` prop would all start from the same stale number —
+  // three presses could land one photo along instead of three. This ref is
+  // written synchronously by goTo, so N moves always travel N photos.
+  const activeRef = useRef(active);
+
+  // Index a programmatic move is scrolling TOWARDS. Smooth scrolling fires
+  // onScroll repeatedly on the way, and for the first half of the animation
+  // Math.round still reports the OLD index — which would undo the selection we
+  // just made and flash the dots backwards. While a move is in flight only the
+  // arrival counts; a real pointer gesture clears it, so interrupting a scroll
+  // mid-animation can never leave the gallery stuck ignoring its own scroller.
+  const pendingRef = useRef<number | null>(null);
+
   // Exactly one photo is the common case today, and it must not look like a
   // carousel that failed to load. No scroller, no dots, no arrows, no swipe
   // hint and no thumbnail strip — a lone thumbnail under a single photo, or a
@@ -885,31 +900,64 @@ function Gallery({
 
   const handleScroll = () => {
     const el = scrollerRef.current;
-    if (!el) return;
-    const idx = Math.round(el.scrollLeft / el.clientWidth);
-    if (idx !== active) onSelect(idx);
+    // A zero-width scroller divides to Infinity/NaN. That happens in practice
+    // before layout settles, and NaN would select nothing while poisoning the
+    // ref for every later comparison.
+    if (!el || el.clientWidth === 0) return;
+    const idx = Math.max(
+      0,
+      Math.min(media.length - 1, Math.round(el.scrollLeft / el.clientWidth)),
+    );
+    if (pendingRef.current !== null) {
+      if (idx !== pendingRef.current) return; // still mid-flight
+      pendingRef.current = null;
+    }
+    if (idx === activeRef.current) return;
+    activeRef.current = idx;
+    onSelect(idx);
   };
 
   const goTo = (i: number) => {
     const next = Math.max(0, Math.min(media.length - 1, i));
+    // Select FIRST, then scroll. The dots, the thumbnail highlight, the
+    // arrows' disabled state and each slide's aria-hidden all key off `active`
+    // — leaving them to be driven by onScroll makes every one of them lag the
+    // whole smooth-scroll animation, and if the scroll never happens (reduced
+    // motion, a detached or zero-width scroller) they never update at all.
+    activeRef.current = next;
+    onSelect(next);
+
     const el = scrollerRef.current;
-    if (!el) {
-      onSelect(next);
+    if (!el || el.clientWidth === 0) return;
+    const left = next * el.clientWidth;
+    // Already there: no scroll event is coming, so arming `pending` would
+    // block the next genuine swipe forever.
+    if (Math.abs(el.scrollLeft - left) < 1) {
+      pendingRef.current = null;
       return;
     }
-    el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
+    pendingRef.current = next;
+    el.scrollTo({ left, behavior: "smooth" });
   };
 
-  // Arrow keys move between photos once the viewport has focus. Home/End jump
-  // to the ends. onScroll syncs `active`, so these do not need to call
-  // onSelect themselves.
+  // Relative moves read the ref rather than the `active` prop — see activeRef.
+  const step = (delta: number) => goTo(activeRef.current + delta);
+
+  // A touch or mouse press on the photo means the user is taking over from an
+  // animation we started; from here their scroll position is the truth.
+  const handlePointerDown = () => {
+    pendingRef.current = null;
+  };
+
+  // Arrow keys move between photos once the scroller has focus. Home/End jump
+  // to the ends.
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "ArrowRight") {
       e.preventDefault();
-      goTo(active + 1);
+      step(1);
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
-      goTo(active - 1);
+      step(-1);
     } else if (e.key === "Home") {
       e.preventDefault();
       goTo(0);
@@ -985,6 +1033,7 @@ function Gallery({
                 "aria-roledescription": "carousel",
                 "aria-label": `Product photos, ${media.length} images. Use the left and right arrow keys to browse.`,
                 onKeyDown: handleKeyDown,
+                onPointerDown: handlePointerDown,
               })}
           style={{
             position: "absolute",
@@ -1061,9 +1110,14 @@ function Gallery({
           ))}
         </div>
 
-        {/* Swipe hint — only on first item. FIX 4: solid cream pill + FG label + FG border (readable on any photo). */}
+        {/* Swipe hint — first photo only, and only below 900px. From 900px up
+            the desktop arrows are on the photo and telling a mouse user to
+            swipe is wrong advice on top of a control that already says it
+            better. `display` lives in the stylesheet, not here, because an
+            inline display would outrank the media query. */}
         {media.length > 1 && active === 0 && (
           <div
+            className="pdp-swipe-hint"
             style={{
               position: "absolute",
               top: 14,
@@ -1078,7 +1132,6 @@ function Gallery({
               background: "#FBF3D4",
               border: "1px solid #024628",
               borderRadius: 4,
-              display: "inline-flex",
               alignItems: "center",
               gap: 8,
               pointerEvents: "none",
@@ -1098,7 +1151,7 @@ function Gallery({
             <button
               type="button"
               className="pdp-arrow pdp-arrow--prev"
-              onClick={() => goTo(active - 1)}
+              onClick={() => step(-1)}
               disabled={active === 0}
               aria-label="Previous photo"
             >
@@ -1107,7 +1160,7 @@ function Gallery({
             <button
               type="button"
               className="pdp-arrow pdp-arrow--next"
-              onClick={() => goTo(active + 1)}
+              onClick={() => step(1)}
               disabled={active === media.length - 1}
               aria-label="Next photo"
             >
@@ -1217,6 +1270,17 @@ function Gallery({
         .pdp-scroller:focus-visible {
           outline: 2px solid #024628;
           outline-offset: -2px;
+        }
+        /* Swipe hint belongs to the narrow layout only. 900px is the same
+           breakpoint .pdp-top uses to go two-column, so the hint disappears
+           exactly as the gallery becomes the desktop arrangement. */
+        :global(.pdp-swipe-hint) {
+          display: inline-flex;
+        }
+        @media (min-width: 900px) {
+          :global(.pdp-swipe-hint) {
+            display: none;
+          }
         }
         /* Arrows are a POINTER affordance. Touch devices get the swipe, which
            is better, so they never render the overlay at all. */
