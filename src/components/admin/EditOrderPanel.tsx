@@ -27,6 +27,7 @@ import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
 import { formatINR } from "@/lib/admin-formatting";
 import type { AdminOrderRow, AdminOrderItemSnapshot } from "@/lib/admin-shared";
+import { isSlotPaused, SLOTS } from "@/lib/delivery-slots";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isPaidStatus } from "@/lib/payment-label";
 
@@ -44,15 +45,22 @@ import { isPaidStatus } from "@/lib/payment-label";
 // —" would silently break the bake plan for that row. Pickup orders can
 // carry a null slot and are handled by their own flow; this panel is
 // scoped to the delivery-editing case.
-// Morning is paused: shown for clarity (existing rows still display it)
+// Paused windows are shown for clarity (existing rows still display them)
 // but disabled at the picker level so an operator can't move a delivery
-// INTO the Morning window. Legacy Morning rows read fine; on edit the
-// operator must choose Midday or Evening.
-const CANONICAL_SLOTS: Array<{ value: string; label: string; disabled?: boolean }> = [
-  { value: "06:00-10:00", label: "Morning (6–10 AM) — paused", disabled: true },
-  { value: "10:00-14:00", label: "10:00–14:00 · Midday" },
-  { value: "16:00-21:00", label: "16:00–21:00 · Evening" },
-];
+// INTO one. Legacy Morning rows read fine; on edit the operator must
+// choose Midday or Evening.
+//
+// Derived from SLOTS + PAUSED_SLOTS in @/lib/delivery-slots — the SAME
+// list the customer pickers and the server gate read, so un-pausing is one
+// edit there rather than three hand-kept copies here.
+const CANONICAL_SLOTS: Array<{ value: string; label: string; disabled?: boolean }> =
+  SLOTS.map((s) => ({
+    value: s.value,
+    label: `${s.startValue}–${s.endValue} · ${s.label}${
+      isSlotPaused(s.value) ? " — paused" : ""
+    }`,
+    disabled: isSlotPaused(s.value),
+  }));
 
 // Multigrain floor: read from `products.available_from` at panel-open
 // time. Live-read (never hard-coded) because a scheduled task clears it

@@ -20,7 +20,7 @@ import {
   formatDeliveryDate,
   getOrderDeliveryDateOptions,
 } from "@/lib/order-delivery";
-import { bookableSlots } from "@/lib/delivery-slots";
+import { bookableSlots, PAUSED_SLOT_MESSAGE } from "@/lib/delivery-slots";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import { GOOGLE_MAPS_LOADER_ID, GOOGLE_MAPS_LIBRARIES } from "@/lib/google-maps-loader";
 import { geocodePincodeClient, reverseGeocodeClient } from "@/lib/clientGeocode";
@@ -3555,10 +3555,27 @@ function SlotPicker({
         placeholder="Select a delivery time…"
         options={slots.map((s) => ({
           value: s.value,
-          label: `${formatSlot12(s.value)}${s.disabled ? " — too soon" : ""}`,
+          label: `${formatSlot12(s.value)}${
+            s.paused ? " — paused" : s.disabled ? " — too soon" : ""
+          }`,
           disabled: s.disabled,
         }))}
       />
+      {slots.some((s) => s.paused) ? (
+        <span
+          style={{
+            display: "block",
+            marginTop: 8,
+            fontSize: 14,
+            lineHeight: 1.5,
+            color: "#024628",
+            letterSpacing: "0.02em",
+          }}
+          role="status"
+        >
+          {PAUSED_SLOT_MESSAGE}
+        </span>
+      ) : null}
     </label>
   );
 }

@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
+import { isSlotPaused, SLOTS } from "@/lib/delivery-slots";
 import type {
   AdminDeliveryRow,
   AdminSubscriptionItem,
@@ -28,15 +29,21 @@ const INK = "#024628";
 const BORDER = "rgba(251,243,212,0.25)";
 const TEXT_MUTED = "rgba(251,243,212,0.65)";
 
-// Morning is paused: shown for clarity (existing rows still display it)
+// Paused windows are shown for clarity (existing rows still display them)
 // but disabled at the picker level so an operator can't move a delivery
-// INTO the Morning window. Legacy Morning rows read fine; on edit the
-// operator must choose Midday or Evening.
-const CANONICAL_SLOTS: Array<{ value: string; label: string; disabled?: boolean }> = [
-  { value: "06:00-10:00", label: "Morning (6–10 AM) — paused", disabled: true },
-  { value: "10:00-14:00", label: "10:00–14:00 · Midday" },
-  { value: "16:00-21:00", label: "16:00–21:00 · Evening" },
-];
+// INTO one. Legacy Morning rows read fine; on edit the operator must
+// choose Midday or Evening.
+//
+// Derived from SLOTS + PAUSED_SLOTS in @/lib/delivery-slots — the SAME
+// list the customer pickers and the server gate read.
+const CANONICAL_SLOTS: Array<{ value: string; label: string; disabled?: boolean }> =
+  SLOTS.map((s) => ({
+    value: s.value,
+    label: `${s.startValue}–${s.endValue} · ${s.label}${
+      isSlotPaused(s.value) ? " — paused" : ""
+    }`,
+    disabled: isSlotPaused(s.value),
+  }));
 
 type AvailabilityEntry = {
   id: string;

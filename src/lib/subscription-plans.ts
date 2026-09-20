@@ -41,6 +41,14 @@ export type SubscriptionPlanDTO = {
   mrp_inr: number;
   subscription_discount_pct: number;
   subscription_savings_inr: number;
+  /** Raw `products.available_from` (yyyy-mm-dd) or null.
+   *
+   *  Passed through RAW rather than resolved to a boolean here: this list
+   *  is cached for 60 s, and a resolved flag computed at 23:59:30 on the
+   *  23rd would still be claiming "out of stock" half a minute into the
+   *  24th. The consumer calls productFloor() at render time, so the plan
+   *  re-opens by itself on the date with no cache bust and no deploy. */
+  available_from: string | null;
 };
 
 const supabaseAnon = createClient(
@@ -67,7 +75,7 @@ const getSubscriptionPlansCached = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock, sort_order, is_subscription_plan, subscription_title, subscription_blurb",
+        "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock, available_from, sort_order, is_subscription_plan, subscription_title, subscription_blurb",
       )
       .eq("is_active", true)
       .eq("is_archived", false)
@@ -106,6 +114,8 @@ const getSubscriptionPlansCached = unstable_cache(
         mrp_inr: mrp,
         subscription_discount_pct: subscriptionDiscountPct(row),
         subscription_savings_inr: subscriptionSavingsInr(row),
+        available_from:
+          typeof row.available_from === "string" ? row.available_from : null,
       });
     }
     return out;

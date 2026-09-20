@@ -69,9 +69,14 @@ export type Slot = {
 };
 
 export type BookableSlot = Slot & {
-  /** False when the slot start is < 12 h from now; UI greys disabled slots.
-   *  Server-side validation re-checks this regardless of client state. */
+  /** False when the slot start is < 12 h from now, OR the slot is paused;
+   *  UI greys disabled slots. Server-side validation re-checks this
+   *  regardless of client state. */
   disabled: boolean;
+  /** True when the slot is in PAUSED_SLOTS. Distinct from `disabled`,
+   *  which also covers the 12 h rule — a picker that wants to explain WHY
+   *  reads this and shows PAUSED_SLOT_MESSAGE instead of "too soon". */
+  paused: boolean;
 };
 
 // ── Internal helpers ────────────────────────────────────────────────────
@@ -170,6 +175,33 @@ export function generateSlots(): Slot[] {
   return SLOTS;
 }
 
+// ── Paused slots ────────────────────────────────────────────────────────
+// A slot we can still STORE and still DISPLAY, but will not take new
+// bookings for. Deliberately NOT a deletion from SLOTS: orders and
+// subscription deliveries already sitting on "06:00-10:00" must keep
+// rendering "Morning · 6 – 10 AM", and `isValidSlotValue` must keep
+// accepting the value so an admin can re-book one by hand.
+//
+// ONE list, read by the customer pickers, the server gate and the admin
+// slot dropdowns. Un-pausing is deleting one string from this array.
+
+/** Slot values closed to new customer bookings. */
+export const PAUSED_SLOTS: readonly string[] = ["06:00-10:00"];
+
+/** Shown in the picker and returned verbatim by the server gate.
+ *
+ *  The Android app cannot be changed without a Play release, and its
+ *  error handler renders an unrecognised `code` by printing the server's
+ *  `error` string — so this sentence is what an app customer actually
+ *  reads. It must be finished copy, not a diagnostic. */
+export const PAUSED_SLOT_MESSAGE =
+  "Morning delivery is paused — we're short of delivery partners.";
+
+/** True iff this slot value is currently closed to new bookings. */
+export function isSlotPaused(slotValue: string | null | undefined): boolean {
+  return typeof slotValue === "string" && PAUSED_SLOTS.includes(slotValue);
+}
+
 // ── IST date primitives ─────────────────────────────────────────────────
 
 /** "yyyy-mm-dd" in IST regardless of host TZ. */
@@ -207,12 +239,18 @@ export function slotStartUtcMs(dateIso: string, slotValue: string): number | nul
 
 // ── Booking (12 h) rule ─────────────────────────────────────────────────
 
-/** True if `slot` on `date` starts ≥ BOOKING_LEAD_MINUTES from `now`. */
+/** True if `slot` on `date` starts ≥ BOOKING_LEAD_MINUTES from `now` AND
+ *  the slot is not paused.
+ *
+ *  The pause is folded in here rather than bolted onto each caller so that
+ *  `dateHasAnyBookable`, `nextDeliveryDates` and `firstBookableSlot` can
+ *  never offer a paused window. */
 export function isBookable(
   dateIso: string,
   slotValue: string,
   now: Date = new Date(),
 ): boolean {
+  if (isSlotPaused(slotValue)) return false;
   const startMs = slotStartUtcMs(dateIso, slotValue);
   if (startMs == null) return false;
   const leadMs = BOOKING_LEAD_MINUTES * 60 * 1000;
@@ -227,6 +265,7 @@ export function bookableSlots(
   return SLOTS.map((s) => ({
     ...s,
     disabled: !isBookable(dateIso, s.value, now),
+    paused: isSlotPaused(s.value),
   }));
 }
 
@@ -311,6 +350,12 @@ export function validateBookingSlot(
   }
   if (!isValidSlotValue(slotValue)) {
     return { status: 400, error: "Invalid delivery slot.", code: "bad_slot" };
+  }
+  // Before the 12 h check: a paused slot is not "too soon", and telling a
+  // customer to pick a later day would send them round a loop that never
+  // ends.
+  if (isSlotPaused(slotValue)) {
+    return { status: 400, error: PAUSED_SLOT_MESSAGE, code: "slot_paused" };
   }
   if (!isBookable(dateIso, slotValue, now)) {
     return {

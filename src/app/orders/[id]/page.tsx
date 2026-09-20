@@ -24,6 +24,7 @@ import {
   dateLabel,
   formatSlotForDisplay,
   nextDeliveryDates,
+  PAUSED_SLOT_MESSAGE,
 } from "@/lib/delivery-slots";
 import { trackPurchase } from "@/lib/analytics";
 import { formatOrderNumber } from "@/lib/order-number";
@@ -1690,6 +1691,19 @@ function DeliveryEditor({
         {date && slots.length === 0 && (
           <span style={{ fontFamily: "var(--font-body)", fontSize: 16, color: "rgba(2,70,40,0.6)" }}>
             No slots available for this date.
+          </span>
+        )}
+        {slots.some((s) => s.paused) && (
+          <span
+            style={{
+              width: "100%",
+              fontFamily: "var(--font-body)",
+              fontSize: 14,
+              color: "rgba(2,70,40,0.7)",
+            }}
+            role="status"
+          >
+            {PAUSED_SLOT_MESSAGE}
           </span>
         )}
       </div>

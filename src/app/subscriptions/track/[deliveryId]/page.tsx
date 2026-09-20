@@ -419,7 +419,7 @@ function DirectEditPanel({
     const forDate = date || currentDate;
     return bookableSlots(forDate, now).map((s) => ({
       value: s.value,
-      label: formatSlot(s.value),
+      label: `${formatSlot(s.value)}${s.paused ? " — paused" : ""}`,
       disabled: s.disabled,
     }));
   }, [date, currentDate, now]);

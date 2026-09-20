@@ -23,7 +23,12 @@ import {
   type SetupState,
   type WizardProduct,
 } from "@/lib/subscription-setup";
-import { bookableSlots } from "@/lib/delivery-slots";
+import {
+  bookableSlots,
+  isSlotPaused,
+  PAUSED_SLOTS,
+  PAUSED_SLOT_MESSAGE,
+} from "@/lib/delivery-slots";
 import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 import Select from "@/components/ui/Select";
 import { usePreorderMode } from "@/hooks/usePreorderMode";
@@ -32,6 +37,8 @@ import {
   cartFloor,
   cartFloorEscapeHint,
   cartFloorMessage,
+  isPreorder,
+  subscriptionBlockLine,
 } from "@/lib/product-availability";
 import {
   MIN_SUBSCRIPTION_DAYS_PER_WEEK,
@@ -71,6 +78,30 @@ export default function SetupPage() {
   useEffect(() => {
     if (hydrated) saveSetupState(state);
   }, [state, hydrated]);
+
+  // A wizard session started before a loaf went pre-order (or restored from
+  // sessionStorage days later) can still be holding that loaf. Drop it as
+  // soon as the live catalogue says so, otherwise step 1 looks fine and the
+  // server refuses at payment.
+  useEffect(() => {
+    if (!hydrated) return;
+    const blocked = new Set(
+      plans.filter((p) => isPreorder(p)).map((p) => p.slug as string),
+    );
+    if (blocked.size === 0) return;
+    setState((s) => {
+      const next: Record<string, number> = {};
+      let dropped = false;
+      for (const [slug, qty] of Object.entries(s.qtyBySlug)) {
+        if (blocked.has(slug)) {
+          dropped = true;
+          continue;
+        }
+        next[slug] = qty;
+      }
+      return dropped ? { ...s, qtyBySlug: next } : s;
+    });
+  }, [hydrated, plans]);
 
   // Drop stored DATES and SLOTS that no longer pass the same availability
   // rules the picker gates on. Previously this dropped stale slots only,
@@ -505,6 +536,9 @@ function Step1Product({
       </p>
       <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
         {plans.map((p) => {
+          // Resolved at RENDER time, not at fetch time — the plan list is
+          // cached 60 s and this must flip by itself on the release date.
+          const blockedLine = subscriptionBlockLine(p);
           const qty = qtyBySlug[p.slug] ?? 0;
           const selected = qty > 0;
           const mrp = typeof p.mrp_inr === "number" ? p.mrp_inr : null;
@@ -551,28 +585,42 @@ function Step1Product({
                   You save ₹{fmtMoney(savings)}{pct > 0 ? ` (${pct}%)` : ""} per loaf
                 </div>
               )}
-              <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14 }}>
-                <button
-                  onClick={() => onAdjustQty(p.slug, -1)}
-                  disabled={qty <= 0}
-                  aria-label={`Decrease ${p.title}`}
-                  style={qtyBtnStyle(qty <= 0)}
+              {blockedLine ? (
+                <div
+                  style={{
+                    marginTop: 14,
+                    fontSize: 16,
+                    color: "#991B1B",
+                    letterSpacing: "0.02em",
+                  }}
+                  role="status"
                 >
-                  −
-                </button>
-                <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 28, minWidth: 34, textAlign: "center" }}>
-                  {qty}
+                  {blockedLine}
                 </div>
-                <button
-                  onClick={() => onAdjustQty(p.slug, 1)}
-                  disabled={qty >= 5}
-                  aria-label={`Increase ${p.title}`}
-                  style={qtyBtnStyle(qty >= 5)}
-                >
-                  +
-                </button>
-                <div style={{ fontSize: 16, color: FADED, marginLeft: 4 }}>per delivery</div>
-              </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14 }}>
+                  <button
+                    onClick={() => onAdjustQty(p.slug, -1)}
+                    disabled={qty <= 0}
+                    aria-label={`Decrease ${p.title}`}
+                    style={qtyBtnStyle(qty <= 0)}
+                  >
+                    −
+                  </button>
+                  <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 28, minWidth: 34, textAlign: "center" }}>
+                    {qty}
+                  </div>
+                  <button
+                    onClick={() => onAdjustQty(p.slug, 1)}
+                    disabled={qty >= 5}
+                    aria-label={`Increase ${p.title}`}
+                    style={qtyBtnStyle(qty >= 5)}
+                  >
+                    +
+                  </button>
+                  <div style={{ fontSize: 16, color: FADED, marginLeft: 4 }}>per delivery</div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -755,6 +803,14 @@ function Step3Slots({
         We bake fresh for you — please pick a delivery time at least 12 hours
         from now so your loaf comes straight from the oven.
       </p>
+      {PAUSED_SLOTS.length > 0 ? (
+        <p
+          style={{ color: "#024628", fontSize: 16, marginTop: -8, marginBottom: 18 }}
+          role="status"
+        >
+          {PAUSED_SLOT_MESSAGE}
+        </p>
+      ) : null}
 
       <div
         style={{
@@ -776,7 +832,11 @@ function Step3Slots({
             onChange={setBulkSlot}
             ariaLabel="Set same slot for all deliveries"
             placeholder="— pick a slot —"
-            options={TIME_SLOTS.map((s) => ({ value: s, label: formatSlot(s) }))}
+            options={TIME_SLOTS.map((s) => ({
+              value: s,
+              label: `${formatSlot(s)}${isSlotPaused(s) ? " — paused" : ""}`,
+              disabled: isSlotPaused(s),
+            }))}
           />
         </div>
         <button
@@ -845,7 +905,9 @@ function Step3Slots({
                     placeholder="— pick a slot —"
                     options={daySlots.map((s) => ({
                       value: s.value,
-                      label: `${formatSlot(s.value)}${s.disabled ? " — too soon" : ""}`,
+                      label: `${formatSlot(s.value)}${
+                        s.paused ? " — paused" : s.disabled ? " — too soon" : ""
+                      }`,
                       disabled: s.disabled,
                     }))}
                   />

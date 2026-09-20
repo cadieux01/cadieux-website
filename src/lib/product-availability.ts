@@ -168,6 +168,71 @@ export function formatFloorLong(iso: string): string {
   return `${WEEKDAYS[dt.getUTCDay()]} ${dt.getUTCDate()} ${MONTHS[dt.getUTCMonth()]}`;
 }
 
+/** "24 September" — day + month, no weekday.
+ *
+ *  The long form names the weekday, which is the right thing for a
+ *  ONE-OFF delivery promise ("delivery from Thursday 24 September") and the
+ *  wrong thing on a subscription plan tile, where the weekday reads like the
+ *  delivery day of the plan rather than the restock date. Same hand-spelled
+ *  MONTHS table, same UTC parse, so the two forms can never name different
+ *  days. */
+export function formatFloorShort(iso: string): string {
+  const dt = parseIso(iso);
+  if (!dt) return iso;
+  return `${dt.getUTCDate()} ${MONTHS[dt.getUTCMonth()]}`;
+}
+
+// ── Subscriptions: a pre-order loaf cannot start a NEW plan ─────────────
+//
+// Stricter than the one-off rule on purpose. A one-off can simply be
+// delivered on or after the floor — the customer waits once. A SUBSCRIPTION
+// is a standing commitment whose whole schedule would have to be pushed,
+// and the customer has already paid for every stop up front, so the honest
+// answer is "not yet" rather than a rescheduled plan.
+//
+// EXISTING subscriptions are untouched. This gates creation only.
+
+/** Response `code` for a new subscription containing a pre-order loaf.
+ *
+ *  Unknown to the Android app by design — its `handleOrderApiError` falls
+ *  through to rendering the server's `error` string verbatim, which is the
+ *  only way to put an accurate sentence in front of an app customer without
+ *  a Play release. */
+export const PREORDER_SUBSCRIPTION_CODE = "preorder_subscription";
+
+/** The plan-tile line: "Out of stock — back 24 September", or null when the
+ *  product can be subscribed to today. */
+export function subscriptionBlockLine(
+  row: AvailabilityRow,
+  now: Date = new Date(),
+): string | null {
+  const floor = productFloor(row, now);
+  if (!floor) return null;
+  return `Out of stock — back ${formatFloorShort(floor)}.`;
+}
+
+/** Server gate for subscription CREATE. Returns null when every line can be
+ *  subscribed to, else a ready-to-send rejection. */
+export function subscriptionFloorError(
+  rows: AvailabilityRow[],
+  now: Date = new Date(),
+): { status: number; error: string; code: string } | null {
+  const blocked: string[] = [];
+  let date: string | null = null;
+  for (const row of rows) {
+    const floor = productFloor(row, now);
+    if (!floor) continue;
+    if (!blocked.includes(row.name)) blocked.push(row.name);
+    if (date === null || floor > date) date = floor;
+  }
+  if (!date) return null;
+  return {
+    status: 400,
+    error: `${joinNames(blocked)} is out of stock — back ${formatFloorShort(date)}. Please subscribe to it after that date.`,
+    code: PREORDER_SUBSCRIPTION_CODE,
+  };
+}
+
 /** The line shown under the OUT OF STOCK badge.
  *
  *  `stock_message` is a tone override only. When it is null the sentence is

@@ -25,6 +25,12 @@ export type WizardProduct = {
   mrp_inr?: number;
   subscription_discount_pct?: number;
   subscription_savings_inr?: number;
+  /** Raw `products.available_from`. A future date means the loaf cannot
+   *  start a NEW plan — the picker disables it and the server refuses.
+   *  Left raw (not a resolved boolean) so the comparison happens at render
+   *  time and the plan re-opens on the date without a cache bust. Absent on
+   *  the hardcoded fallback below, which is a network-failure shape only. */
+  available_from?: string | null;
 };
 
 /** Hardcoded wizard catalogue used as a NETWORK-FAILURE FALLBACK.

@@ -28,6 +28,7 @@ import {
 } from "@/lib/order-checkout";
 import { getPreorderMode } from "@/lib/preorderMode";
 import { enforceDeliveryFloor } from "@/lib/order-validation";
+import { subscriptionFloorError } from "@/lib/product-availability";
 import { queueOrderNotification } from "@/lib/order-notification";
 import { queueBurstAlert } from "@/lib/order-burst-alert";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
@@ -742,6 +743,25 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // A pre-order loaf cannot START a new plan at all — see
+      // subscriptionFloorError. Checked before the delivery floor below,
+      // which is the weaker "pick a later date" rule.
+      const subBlocked = subscriptionFloorError(
+        snapItems.map((s) => ({
+          name: s.product_name,
+          available_from: bySlug.get(s.product_slug)?.available_from as
+            | string
+            | null
+            | undefined,
+        })),
+      );
+      if (subBlocked) {
+        return NextResponse.json(
+          { error: subBlocked.error, code: subBlocked.code },
+          { status: subBlocked.status },
+        );
+      }
+
       // Pre-order floor. A NEW subscription must not schedule a delivery of
       // a pre-order loaf before its date. Checked against the EARLIEST
       // delivery in the template — if the first one clears the floor, every
@@ -908,6 +928,22 @@ export async function POST(req: NextRequest) {
         { error: "This bread is currently out of stock." },
         { status: 400 }
       );
+    }
+    // A pre-order loaf cannot START a new plan — same rule as the
+    // multi-variant branch above, checked before the delivery floor.
+    {
+      const planBlocked = subscriptionFloorError([
+        {
+          name: planRow.name as string,
+          available_from: planRow.available_from as string | null | undefined,
+        },
+      ]);
+      if (planBlocked) {
+        return NextResponse.json(
+          { error: planBlocked.error, code: planBlocked.code },
+          { status: planBlocked.status },
+        );
+      }
     }
     // Pre-order floor — same rule as the multi-variant branch above.
     {
