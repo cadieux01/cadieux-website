@@ -39,8 +39,9 @@ export function useProductFloors(): { floors: FloorsBySlug; loading: boolean } {
 
   useEffect(() => {
     void load();
-    // Same refresh policy as usePreorderMode: a stale floor is worse than one
-    // extra request per focus, and stock can land while a tab sits open.
+    // Unlike usePreorderMode (fetched once per page load), floors DO refresh
+    // on focus: stock can land while a tab sits open, and a stale floor shows
+    // a loaf as unorderable that we could have sold.
     const onFocus = () => void load();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);

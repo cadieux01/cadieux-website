@@ -177,11 +177,17 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               // and hands off cleanly to the QA section that follows.
             }}>
               {/*
-                Mobile-first source order (perf pass): phones ≤720px CSS px
-                get the 480x854 variants (~370-430 KB) instead of the 720p
-                desktop ones (~650-660 KB). AV1-first inside each viewport
-                bucket keeps the existing ordering convention; H.264 fallback
-                for Safari and older Chromium.
+                Source order is load-bearing: the browser takes the FIRST
+                entry whose media query matches and whose codec it can play,
+                so whichever encode is listed first in a pair is the one that
+                ships. These pairs used to list H.264 first, which meant the
+                AV1 files existed but were never served to anyone.
+
+                Mobile (≤720px CSS px) gets the 720x1280 pair, desktop the
+                1080x1920 pair. AV1 leads each pair; H.264 is the fallback
+                Safari and older Chromium fall through to.
+                  mobile  av1 1,814,271 B  vs  h264 2,399,317 B  (−24%)
+                  desktop av1 3,727,185 B  vs  h264 5,237,139 B  (−29%)
               */}
               <video
                 ref={videoRef}
@@ -202,10 +208,10 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   backgroundColor: "#024628",
                 }}
               >
-                <source src="/bread-intro.mobile.mp4" type="video/mp4" media="(max-width: 720px)" />
                 <source src="/bread-intro.mobile.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' media="(max-width: 720px)" />
-                <source src="/bread-intro.mp4" type="video/mp4" />
+                <source src="/bread-intro.mobile.mp4" type="video/mp4" media="(max-width: 720px)" />
                 <source src="/bread-intro.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
+                <source src="/bread-intro.mp4" type="video/mp4" />
               </video>
               <div style={{
                 position: "absolute", inset: 0, zIndex: 2,

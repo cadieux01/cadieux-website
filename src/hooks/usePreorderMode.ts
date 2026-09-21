@@ -2,11 +2,12 @@
 
 // Client-side hook that mirrors app_config.preorder_mode.
 //
-// Fetches on mount and on window focus, so a stale toggle never persists
-// after an admin flip. No indefinite caching — a redundant network call
-// (once per focus) is cheaper than showing a lying UI. Returns `null` while
-// the first read is in flight so callers can render a neutral state instead
-// of guessing normal-mode.
+// Fetches once per page load. It used to refetch on every window focus,
+// which meant an alt-tab mid-checkout re-ran an uncached server round-trip
+// for a value that changes maybe twice a year. A navigation already remounts
+// the hook, and `refresh()` is exported for the one caller that needs to
+// re-read on demand. Returns `null` while the first read is in flight so
+// callers can render a neutral state instead of guessing normal-mode.
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -35,11 +36,6 @@ export function usePreorderMode(): {
 
   useEffect(() => {
     void load();
-    const onFocus = () => {
-      void load();
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
   }, [load]);
 
   return { enabled: state.enabled, loading: state.loading, refresh: () => void load() };

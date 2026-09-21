@@ -55,6 +55,39 @@ const SITE_URL =
 
 const GRAIN = "url(/grain.svg)";
 
+const RAZORPAY_ORIGIN = "https://checkout.razorpay.com";
+
+// checkout.js used to be injected inside the Pay handler, AFTER
+// /api/create-order had already resolved. That put a DNS lookup, a TLS
+// handshake and a ~59 KB download on the critical path of a tap the customer
+// experiences as "nothing is happening" — two cold legs back to back.
+//
+// The promise is memoised at module scope so the effect that warms it when
+// the customer reaches the payment step and the Pay handler that needs it
+// are the same load: whichever runs second joins the in-flight promise
+// instead of appending a second <script>. Resolves false on error so the
+// existing "use COD instead" fallback still fires.
+let razorpayScript: Promise<boolean> | null = null;
+function loadRazorpayScript(): Promise<boolean> {
+  if (razorpayScript) return razorpayScript;
+  razorpayScript = new Promise<boolean>((resolve) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).Razorpay) { resolve(true); return; }
+    const s = document.createElement("script");
+    s.src = `${RAZORPAY_ORIGIN}/v1/checkout.js`;
+    s.async = true;
+    s.onload = () => resolve(true);
+    s.onerror = () => {
+      // Let a later attempt retry rather than caching the failure forever —
+      // the customer may simply have lost signal for a moment.
+      razorpayScript = null;
+      resolve(false);
+    };
+    document.body.appendChild(s);
+  });
+  return razorpayScript;
+}
+
 type Step = "address" | "delivery" | "payment";
 type FormMode = "returning" | "edit" | "fresh";
 
@@ -171,6 +204,15 @@ export default function CheckoutPage() {
 
   const [step, setStep] = useState<Step>("address");
   const [formMode, setFormMode] = useState<FormMode>("fresh");
+
+  // Warm the Razorpay SDK the moment the customer reaches the payment step.
+  // By then they have filled in an address and a slot, so the download
+  // overlaps with them reading the order summary and choosing a method
+  // instead of stacking on top of /api/create-order after the Pay tap.
+  // No-ops for a COD customer beyond one cached script fetch.
+  useEffect(() => {
+    if (step === "payment") void loadRazorpayScript();
+  }, [step]);
 
   // Gates the Your-Order summary (top block + sticky bottom). False
   // until the user has filled in a valid address AND pressed
@@ -1349,15 +1391,9 @@ export default function CheckoutPage() {
         };
       }
 
-      const loaded = await new Promise<boolean>((resolve) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if ((window as any).Razorpay) { resolve(true); return; }
-        const s = document.createElement("script");
-        s.src = "https://checkout.razorpay.com/v1/checkout.js";
-        s.onload = () => resolve(true);
-        s.onerror = () => resolve(false);
-        document.body.appendChild(s);
-      });
+      // Usually already resolved — the payment step warmed it (see the
+      // effect near the top of this component).
+      const loaded = await loadRazorpayScript();
 
       setOrderLoading(false);
       if (!loaded) { setError(`Failed to load payment gateway. Please use ${fallbackLabel}.`); return; }
@@ -1581,6 +1617,10 @@ export default function CheckoutPage() {
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--surface-canvas)", position: "relative", overflowX: "clip" }}>
+      {/* React hoists this into <head>. Anyone on /checkout is a plausible
+          Razorpay customer, so pay the DNS + TLS cost here rather than
+          inside the Pay tap. */}
+      <link rel="preconnect" href={RAZORPAY_ORIGIN} crossOrigin="anonymous" />
       <style>{`
         input::placeholder { color: rgba(2,70,40,0.6); }
         select::-ms-expand { display: none; }

@@ -28,7 +28,6 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { unstable_noStore as noStore } from "next/cache";
 
 import { ADMIN_PHONE } from "@/lib/delivery-slots";
 import { toUrlSlug } from "@/lib/product-slugs";
@@ -37,8 +36,8 @@ import {
   getSubscriptionPlans,
   type SubscriptionPlanDTO,
 } from "@/lib/subscription-plans";
-import { getPreorderMode } from "@/lib/preorderMode";
 import BackLink from "@/components/BackLink";
+import { PreorderNotice, SubscribeCta } from "./PreorderGate";
 
 const SITE_URL = "https://www.cadieux.in";
 const GRAIN = "url(/grain.svg)";
@@ -104,18 +103,14 @@ export const metadata: Metadata = {
 };
 
 export default async function SubscribeLandingPage() {
-  // Opt this render out of the ISR cache when preorder_mode is on, so an
-  // admin flip of the toggle isn't stale for up to `revalidate` seconds.
-  // noStore() marks the entire page dynamic — the CTA-disabled state must
-  // never lag behind the DB truth. See src/lib/preorderMode.ts.
-  noStore();
-  // Fire both DB reads in parallel — each is independently cached with
-  // its own tag so a miss on one doesn't block the other. preorderMode
-  // read is intentionally uncached (see helper).
-  const [plans, areaGroups, preorderMode] = await Promise.all([
+  // Both reads are independently cached with their own tag, so this render
+  // stays inside the `revalidate` window above. The pre-order toggle is
+  // deliberately NOT read here — it is fetched client-side by ./PreorderGate,
+  // because reading it on the server required noStore(), and noStore() made
+  // the entire page dynamic for the sake of two fragments.
+  const [plans, areaGroups] = await Promise.all([
     getSubscriptionPlans(),
     getServiceAreaGroups(),
-    getPreorderMode(),
   ]);
 
   const hasPlans = plans.length > 0;
@@ -183,23 +178,7 @@ export default async function SubscribeLandingPage() {
           Cadieux protein bread subscription in Visakhapatnam
         </h1>
 
-        {preorderMode ? (
-          <div
-            style={{
-              background: "#FBF3D4",
-              border: "1px solid rgba(2,70,40,0.25)",
-              padding: "16px 20px",
-              margin: "0 0 24px",
-            }}
-          >
-            <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
-              Pre-order
-            </p>
-            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
-              Subscriptions open once daily deliveries begin. In the meantime, reserve a single loaf now — we&apos;ll confirm your first delivery date by SMS + WhatsApp.
-            </p>
-          </div>
-        ) : null}
+        <PreorderNotice />
 
         {/* Trust paragraph — leads with the real, verifiable 10% number
             (Raja standing rule: no nutrition macros in copy until lab
@@ -523,62 +502,7 @@ export default async function SubscribeLandingPage() {
               marginTop: 6,
             }}
           >
-            {preorderMode ? (
-              <span
-                aria-disabled="true"
-                title="Subscriptions open once daily deliveries begin. Reserve a single loaf now to be first in line."
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  background: "#FBF3D4",
-                  color: "#024628",
-                  border: "1px solid #FBF3D4",
-                  borderRadius: 999,
-                  padding: "12px 22px",
-                  fontFamily: "var(--font-body)",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  letterSpacing: "0.25em",
-                  textTransform: "uppercase",
-                  opacity: 0.55,
-                  cursor: "not-allowed",
-                  userSelect: "none",
-                }}
-              >
-                Start your subscription
-                <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
-                  →
-                </span>
-              </span>
-            ) : (
-              <Link
-                href="/subscriptions/setup"
-                className="cdx-subscribe-primary"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  background: "#FBF3D4",
-                  color: "#024628",
-                  border: "1px solid #FBF3D4",
-                  borderRadius: 999,
-                  padding: "12px 22px",
-                  fontFamily: "var(--font-body)",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  letterSpacing: "0.25em",
-                  textTransform: "uppercase",
-                  textDecoration: "none",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                Start your subscription
-                <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
-                  →
-                </span>
-              </Link>
-            )}
+            <SubscribeCta />
             <Link
               href="/subscription"
               className="cdx-subscribe-secondary"
