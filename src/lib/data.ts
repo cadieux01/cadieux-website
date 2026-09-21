@@ -186,9 +186,10 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
     // products.image_url / gallery_urls. No photo has been uploaded yet, so
     // the PDP renders its empty state rather than a stand-in.
     media: [],
-    // Left empty until the ingredient declaration for this bake is signed
-    // off. An ingredient list is a regulated statement — a plausible one
-    // copied from the loaves would be a false label.
+    // The signed-off declaration (same recipe as the Plain loaf) lives on the
+    // products row, in the free-text ingredients/allergens columns the PDP
+    // label panel prints. This bundled array is the structured grid, which is
+    // sourced from product_ingredients and is empty for this product.
     ingredients: [],
     testReports: [],
   },

@@ -1,6 +1,14 @@
 -- Protein Burger Bun — a new one-time-only product.
 --
--- NOT APPLIED. Reported for review first.
+-- APPLIED TO PRODUCTION BY HAND 2026-09-21. This file is the record of what
+-- ran; it is not re-run by anything.
+--
+-- Inserted with `is_active = false` ON PURPOSE. The Android app reads the
+-- products table DIRECTLY (anon key, no code deploy in between), so an active
+-- row would have surfaced the bun in the app the moment it was written —
+-- before the website code that gives it a shop tile and a PDP existed. The
+-- flag is flipped to true by hand once the deploy is live. Any future product
+-- lands the same way: write the row dark, flip after deploy.
 --
 -- Sold exactly like a loaf on the one-time path (`/api/checkout` and
 -- `/api/create-order` both resolve a cart line by `products.slug`, so a row
@@ -75,7 +83,8 @@ insert into public.products (
   -- from /admin.
   null,
   '{}',
-  true,
+  -- is_active: dark until the website deploy lands (see header).
+  false,
   true,
   false,
   null,
@@ -84,8 +93,12 @@ insert into public.products (
   false,
   null,
   0,
-  null,
-  null,
+  -- Same recipe as the Plain loaf, so the declaration is copied verbatim from
+  -- that row rather than re-typed. These are the free-text `products`
+  -- columns the PDP label panel prints; the structured `product_ingredients`
+  -- grid is a separate table and stays empty for this product.
+  'wheat protein, soya protein, pea protein, rice protein, milk protein, atta, wheat gluten, yeast, sugar, salt, malt, olive oil.',
+  'Contains wheat, gluten, soya and milk.',
   -- PER BUN (90 g), because that is the unit `nutrition_per_slice` describes
   -- and the only unit the PDP nutrition table prints. The per-pack column
   -- from the lab sheet is NOT stored: nothing renders a pack total, and
@@ -117,21 +130,36 @@ insert into public.products (
 )
 on conflict (id) do nothing;
 
--- Stat strip. EVERY tile here is a derived key — `resolveStatTiles` ignores
--- the stored `value` for these four and reads through to the products row
--- above, so the strip cannot drift from the nutrition table or the net
--- weight. The values below are written anyway because the column is NOT
--- NULL and the admin editor shows them; they are never rendered.
+-- Stat strip. THREE tiles, matching the Plain loaf's strip exactly
+-- (protein_per_slice / net_weight / slices) so the two products' cards read
+-- the same shape. `fiber_per_slice` is deliberately absent: Plain does not
+-- carry it either, and a tile the sibling product lacks is a layout
+-- difference nobody asked for. It IS a derived key
+-- (DERIVED_TILE_SOURCES.fiber_per_slice → nutrition_per_slice.fibre_g, note
+-- the deliberate en-US/en-GB spelling split), so it can be added later from
+-- /admin with no migration and no risk of a hand-typed figure going stale.
+--
+-- EVERY tile here is a derived key — `resolveStatTiles` ignores the stored
+-- `value` and reads through to the products row above, so the strip cannot
+-- drift from the nutrition table or the net weight. Plain proves it in
+-- production: its protein tile stores "6.86" while its row says 5.93, and
+-- 5.93 is what renders. The values below are written anyway because the
+-- column is NOT NULL and the admin editor shows them; they are never
+-- rendered.
 --
 -- No free-text tile carries a food-label figure. "90 g each" is deliberately
 -- absent as a tile: it is 180g / 2, both of which ARE on the strip, and a
 -- hand-typed third figure would be the one that goes stale.
 --
 -- Labels are the only free text, which is where "bun" replaces "slice".
+--
+-- The conflict target is named explicitly. A bare `on conflict` can only
+-- infer a constraint from the columns supplied, and this statement supplies
+-- no primary key — so it would never fire, and a re-run would DUPLICATE every
+-- tile rather than skip it.
 insert into public.product_stat_tiles (product_id, locale, tile_key, value, label, sort_order, is_visible)
 values
-  ('burger-bun', 'en', 'protein_per_slice', '14.93', 'Protein/bun',    1, true),
-  ('burger-bun', 'en', 'fiber_per_slice',    '5.28', 'Fibre/bun',      2, true),
-  ('burger-bun', 'en', 'slices',                '2', 'Buns per pack',  3, true),
-  ('burger-bun', 'en', 'net_weight',        '180g',  'Net weight',     4, true)
-on conflict do nothing;
+  ('burger-bun', 'en', 'protein_per_slice', '14.93', 'Protein/bun',   1, true),
+  ('burger-bun', 'en', 'net_weight',        '180g',  'Net weight',    2, true),
+  ('burger-bun', 'en', 'slices',                '2', 'Buns per pack', 3, true)
+on conflict (product_id, locale, tile_key) do nothing;
