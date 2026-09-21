@@ -3,10 +3,11 @@
 // Admin sandwich catalogue. Backend-only (no customer surface yet); this
 // page is the ONLY writer into public.sandwiches / sandwich_variants.
 //
-// The prices grid uses TWO fixed bread columns: 'plain' and 'multigrain'.
-// An empty cell = the sandwich is not offered on that bread (matches the
-// seed migration's "—" contract — a MISSING row, not a NULL price). Adding
-// a third bread later means adding a slug to BREADS below and reshipping.
+// The prices grid uses TWO fixed bread columns: 'high-protein' and
+// 'multigrain' — these match products.slug on live. An empty cell = the
+// sandwich is not offered on that bread (matches the seed migration's "—"
+// contract — a MISSING row, not a NULL price). Adding a third bread later
+// means adding a slug to BREADS below and reshipping.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -19,7 +20,7 @@ const BORDER = "rgba(251,243,212,0.18)";
 
 // The bread slugs offered today. Kept in sync with the seed migration.
 const BREADS = [
-  { slug: "plain", label: "Plain" },
+  { slug: "high-protein", label: "Plain" },
   { slug: "multigrain", label: "Multigrain" },
 ] as const;
 
