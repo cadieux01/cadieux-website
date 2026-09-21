@@ -11,6 +11,7 @@ import { seedDefaultProductContent } from "@/lib/admin-product-content-seed";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { logLogisticsAudit } from "@/lib/logistics-audit";
 import { hasValidPinGrant } from "@/lib/pin-grant";
+import { COVER_MUST_BE_PHOTO, isVideoUrl } from "@/lib/product-media";
 import { CONTENT_CACHE_TAG } from "@/lib/content";
 
 // Bust the unstable_cache entries that key off the same product rows.
@@ -175,6 +176,13 @@ export async function POST(req: NextRequest) {
     body.subscription_blurb.trim().length > 0
       ? body.subscription_blurb.trim()
       : null;
+
+  // Same rule as the PUT: a video cannot be the primary image. Guarding
+  // create too means there is no window where a brand-new product ships a
+  // video as its cover (see COVER_MUST_BE_PHOTO).
+  if (typeof body.image_url === "string" && isVideoUrl(body.image_url.trim())) {
+    return NextResponse.json({ error: COVER_MUST_BE_PHOTO }, { status: 400 });
+  }
 
   const insertRow = {
     id,

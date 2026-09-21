@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { MAX_GALLERY_URLS } from "@/lib/product-media";
+
 import { NUTRIENT_INPUT_PATTERN } from "@/lib/nutrition";
 
 // ── primitives ──────────────────────────────────────────────────────────────
@@ -84,8 +86,13 @@ export const ProductUpdateSchema = z
     tagline: boundedText(200).nullable().optional(),
     highlights: z.array(boundedText(200)).max(20).optional(),
     image_url: z.string().url().max(2048).nullable().optional(),
-    // Admin-curated PDP gallery — ordered list of public image URLs.
-    gallery_urls: z.array(z.string().url().max(2048)).max(20).optional(),
+    // Admin-curated PDP gallery — ordered list of public media URLs
+    // (photos and videos). The route handlers reject a VIDEO for
+    // image_url; the gallery itself accepts both.
+    gallery_urls: z
+      .array(z.string().url().max(2048))
+      .max(MAX_GALLERY_URLS)
+      .optional(),
     in_stock: z.boolean().optional(),
     is_active: z.boolean().optional(),
     sort_order: z.number().int().min(0).max(100000).optional(),

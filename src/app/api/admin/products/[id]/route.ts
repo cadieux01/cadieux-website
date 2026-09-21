@@ -18,6 +18,7 @@ import {
   type NutrientValue,
 } from "@/lib/nutrition";
 import { hasValidPinGrant } from "@/lib/pin-grant";
+import { COVER_MUST_BE_PHOTO, isVideoUrl } from "@/lib/product-media";
 import { parseBodyFromObject, ProductUpdateSchema } from "@/lib/validation";
 import { CONTENT_CACHE_TAG } from "@/lib/content";
 
@@ -200,6 +201,17 @@ export async function PATCH(
     update.gallery_urls = (update.gallery_urls as unknown[])
       .filter((u): u is string => typeof u === "string" && u.trim().length > 0)
       .map((u) => u.trim());
+  }
+
+  // A video may not be the primary image. The admin form already hides
+  // "Make primary" on a video tile; this is the guard that holds for every
+  // other caller, and it is the one that actually protects the Android app
+  // (see COVER_MUST_BE_PHOTO).
+  if (
+    typeof update.image_url === "string" &&
+    isVideoUrl(update.image_url.trim())
+  ) {
+    return NextResponse.json({ error: COVER_MUST_BE_PHOTO }, { status: 400 });
   }
 
   // Regulatory label paragraphs — trim + normalise empty→null so the

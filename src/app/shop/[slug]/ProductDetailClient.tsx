@@ -23,6 +23,7 @@ import {
   nutrientLabel,
   type NutrientValue,
 } from "@/lib/nutrition";
+import { videoMimeType } from "@/lib/product-media";
 import { costPerGramProtein } from "@/lib/stat-tiles";
 import type { PreorderInfo } from "@/lib/product-availability";
 import ReviewSection from "@/components/ReviewSection";
@@ -891,6 +892,28 @@ function Gallery({
   // product that simply has one picture.
   const isSingle = media.length === 1;
 
+  // A video the browser will not play must not leave a black rectangle
+  // where a product photo should be. Fall back to the cover — the first
+  // PHOTO in the set, which is products.image_url and is kept a photo by
+  // the admin form and the product write routes.
+  //
+  // Keyed on src rather than index so a failing clip and its thumbnail fall
+  // back together, and so the set survives a reorder.
+  const [failedVideos, setFailedVideos] = useState<string[]>([]);
+  const cover = media.find((m) => m.type === "image") ?? null;
+  const shown = (m: ProductMedia): ProductMedia =>
+    m.type === "video" && cover && failedVideos.includes(m.src) ? cover : m;
+  const markVideoFailed = (src: string) =>
+    setFailedVideos((f) => (f.includes(src) ? f : [...f, src]));
+  // A source that 404s errors while the page is still server-rendered HTML,
+  // before hydration has attached onError — so the React handler alone never
+  // hears about it and the slide stays a black rectangle. On mount, ask the
+  // element directly: NETWORK_NO_SOURCE means it has already tried every
+  // source and given up. onError still covers failures after hydration.
+  const checkVideoLoaded = (src: string) => (el: HTMLVideoElement | null) => {
+    if (el && el.networkState === el.NETWORK_NO_SOURCE) markVideoFailed(src);
+  };
+
   // Display width of the gallery column, used for `sizes`. The shell is
   // maxWidth 1200 with clamp(18px,5vw,64px) padding; from 900px up .pdp-top
   // is a 1.1fr / 1fr grid with a 56px gap, so the image column tops out at
@@ -1046,7 +1069,9 @@ function Gallery({
             WebkitOverflowScrolling: "touch",
           }}
         >
-          {media.map((m, i) => (
+          {media.map((raw, i) => {
+            const m = shown(raw);
+            return (
             <div
               key={i}
               // Each slide is announced as "3 of 5" rather than as a bare
@@ -1069,12 +1094,19 @@ function Gallery({
               }}
             >
               {m.type === "video" ? (
+                // One source, typed from the extension. The pair this
+                // replaced derived an ".av1.mp4" sibling and a
+                // ".poster.jpg" sibling that admin uploads never have — a
+                // 404 round-trip before the real file, and for a .webm or
+                // .mov neither replace matched, so BOTH sources became the
+                // same URL declared "video/mp4".
                 <video
+                  ref={checkVideoLoaded(m.src)}
                   autoPlay
                   muted
                   loop
                   playsInline
-                  poster={m.src.replace(/\.mp4$/, ".poster.jpg")}
+                  {...(m.poster ? { poster: m.poster } : {})}
                   style={{
                     width: "100%",
                     height: "100%",
@@ -1084,8 +1116,11 @@ function Gallery({
                     pointerEvents: "none",
                   }}
                 >
-                  <source src={m.src.replace(/\.mp4$/, ".av1.mp4")} type='video/mp4; codecs="av01.0.05M.08"' />
-                  <source src={m.src} type="video/mp4" />
+                  <source
+                    src={m.src}
+                    type={videoMimeType(m.src)}
+                    onError={() => markVideoFailed(m.src)}
+                  />
                 </video>
               ) : (
                 <Image
@@ -1107,7 +1142,8 @@ function Gallery({
                 />
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Swipe hint — first photo only, and only below 900px. From 900px up
@@ -1223,7 +1259,9 @@ function Gallery({
           paddingBottom: 4,
         }}
       >
-        {media.map((m, i) => (
+        {media.map((raw, i) => {
+          const m = shown(raw);
+          return (
           <button
             key={i}
             type="button"
@@ -1245,15 +1283,23 @@ function Gallery({
             aria-label={`Show media ${i + 1}`}
           >
             {m.type === "video" ? (
+              // preload="metadata", not "none": without the derived poster
+              // that used to sit here, "none" fetches nothing and the
+              // thumbnail is an empty black box. Metadata is enough for the
+              // browser to paint the first frame.
               <video
+                ref={checkVideoLoaded(m.src)}
                 muted
                 playsInline
-                poster={m.src.replace(/\.mp4$/, ".poster.jpg")}
-                preload="none"
+                {...(m.poster ? { poster: m.poster } : {})}
+                preload="metadata"
                 style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }}
               >
-                <source src={m.src.replace(/\.mp4$/, ".av1.mp4")} type='video/mp4; codecs="av01.0.05M.08"' />
-                <source src={m.src} type="video/mp4" />
+                <source
+                  src={m.src}
+                  type={videoMimeType(m.src)}
+                  onError={() => markVideoFailed(m.src)}
+                />
               </video>
             ) : (
               <Image
@@ -1265,7 +1311,8 @@ function Gallery({
               />
             )}
           </button>
-        ))}
+          );
+        })}
       </div>
       )}
 

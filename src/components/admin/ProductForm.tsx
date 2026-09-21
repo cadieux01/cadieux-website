@@ -19,6 +19,11 @@ import {
   validateNutritionPerSlice,
   type NutrientValue,
 } from "@/lib/nutrition";
+import {
+  isVideoUrl,
+  MAX_GALLERY_URLS,
+  MAX_PRODUCT_MEDIA,
+} from "@/lib/product-media";
 import { subscriptionUnitPrice, subscriptionSavingsInr } from "@/lib/subscription-pricing";
 
 import {
@@ -37,13 +42,6 @@ import {
 //   INK / SURFACE_* -> on a CREAM card or input
 const FG = CREAM;
 const FG_MUTED = TEXT_MUTED;
-
-// True when the URL is a product-video upload. Used by the media grid
-// to pick <img> vs <video> preview. The uploader stamps a real
-// extension (mp4/webm/mov/jpg/png/webp) so the string check is enough.
-function isVideoUrl(url: string): boolean {
-  return /\.(mp4|webm|mov)(\?|$)/i.test(url);
-}
 
 // A single nutrition_per_slice row in form state. `key` is the JSON key
 // (protein_g, sodium_mg, calories, or a custom key); `value` is stored as a
@@ -591,8 +589,26 @@ function MediaUploader({
     });
   }
 
+  // products.gallery_urls is capped at MAX_GALLERY_URLS by the zod schema,
+  // so the grid holds that many plus the primary. Refuse an over-cap batch
+  // here, before anything is uploaded: the alternative is a successful
+  // upload followed by a bare 400 at save, with the operator's files
+  // already sitting in the bucket and no clue which ones to remove.
   async function uploadFiles(files: File[]) {
     if (files.length === 0) return;
+    const room = MAX_PRODUCT_MEDIA - combined.length;
+    if (room <= 0) {
+      setErr(
+        `This product already holds the maximum of ${MAX_PRODUCT_MEDIA} files (1 primary + ${MAX_GALLERY_URLS} gallery). Remove one before adding another.`,
+      );
+      return;
+    }
+    if (files.length > room) {
+      setErr(
+        `That's ${files.length} files but only ${room} will fit — a product holds at most ${MAX_PRODUCT_MEDIA} (1 primary + ${MAX_GALLERY_URLS} gallery). Remove some first, or add them in smaller batches.`,
+      );
+      return;
+    }
     setBusy(true);
     setErr(null);
     const added: string[] = [];
@@ -654,12 +670,56 @@ function MediaUploader({
     serialize(next);
   }
 
+  // The primary tile is already a video — legacy data, or a product whose
+  // only upload so far is a clip. Nothing below should then lock the
+  // operator out of rearranging, since rearranging is how they fix it.
+  const coverIsVideo = combined.length > 0 && isVideoUrl(combined[0]);
+
+  // A video must never land at index 0: that value becomes
+  // products.image_url, which the Android app renders with no video player
+  // and no way to patch it without a Play release. Rather than allow the
+  // move and bounce it at save with a 400, the arrow that would produce it
+  // simply isn't offered.
+  function swapAllowed(i: number, delta: number): boolean {
+    const j = i + delta;
+    if (j < 0 || j >= combined.length) return false;
+    if (coverIsVideo) return true;
+    const next = [...combined];
+    [next[i], next[j]] = [next[j], next[i]];
+    return !isVideoUrl(next[0]);
+  }
+
+  function swapAt(i: number, delta: number) {
+    if (!swapAllowed(i, delta)) return;
+    const j = i + delta;
+    const next = [...combined];
+    [next[i], next[j]] = [next[j], next[i]];
+    serialize(next);
+  }
+
   return (
     <Field
       label="Media (photos + videos)"
-      hint="First tile is the primary cover on the shop grid. Drag files onto the drop zone or click to pick multiple. Both images and videos are accepted."
+      hint={`First tile is the primary cover on the shop grid and in the app, and must be a photo. Use ◀ ▶ to reorder. Drag files onto the drop zone or click to pick multiple — up to ${MAX_PRODUCT_MEDIA} in all.`}
     >
       <div className="flex flex-col gap-3">
+        {coverIsVideo ? (
+          <p
+            style={{
+              color: INK,
+              fontFamily: "var(--font-body)",
+              fontSize: "1rem",
+              backgroundColor: CREAM,
+              border: `1px solid ${SURFACE_BORDER}`,
+              borderRadius: 6,
+              padding: "0.5rem 0.75rem",
+            }}
+          >
+            The first tile is a video. Use “Make primary” on a photo — the shop
+            grid and the app both show the first tile as the cover, and neither
+            can play a video. Saving will be rejected until it is a photo.
+          </p>
+        ) : null}
         {combined.length > 0 ? (
           <div
             className="grid gap-2"
@@ -726,14 +786,55 @@ function MediaUploader({
                     >
                       {i === 0
                         ? video
-                          ? "Primary · video"
+                          ? "Cover photo needed"
                           : "Primary"
                         : video
                         ? `#${i + 1} · video`
                         : `#${i + 1}`}
                     </span>
                     <div className="flex gap-2">
-                      {i !== 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => swapAt(i, -1)}
+                        disabled={!swapAllowed(i, -1)}
+                        title="Move earlier"
+                        aria-label="Move earlier"
+                        style={{
+                          color: CREAM,
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                          fontSize: "0.875rem",
+                          lineHeight: 1,
+                          cursor: swapAllowed(i, -1) ? "pointer" : "default",
+                          opacity: swapAllowed(i, -1) ? 1 : 0.3,
+                        }}
+                      >
+                        ◀
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => swapAt(i, 1)}
+                        disabled={!swapAllowed(i, 1)}
+                        title="Move later"
+                        aria-label="Move later"
+                        style={{
+                          color: CREAM,
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                          fontSize: "0.875rem",
+                          lineHeight: 1,
+                          cursor: swapAllowed(i, 1) ? "pointer" : "default",
+                          opacity: swapAllowed(i, 1) ? 1 : 0.3,
+                        }}
+                      >
+                        ▶
+                      </button>
+                      {/* A video can never become the primary — that value is
+                          products.image_url, which the app renders with no
+                          video player. */}
+                      {i !== 0 && !video ? (
                         <button
                           type="button"
                           onClick={() => promoteAt(i)}

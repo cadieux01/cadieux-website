@@ -15,6 +15,7 @@ import {
   type ProductSlug,
 } from "@/lib/data";
 import type { NutrientValue } from "@/lib/nutrition";
+import { isVideoUrl } from "@/lib/product-media";
 import {
   availabilityLine,
   preorderButtonNote,
@@ -172,7 +173,7 @@ export function resolveProductMedia(
   );
   if (gallery.length > 0) {
     return gallery.map((src, i) => ({
-      type: "image",
+      type: isVideoUrl(src) ? "video" : "image",
       src,
       alt: bundledName ? `${bundledName} — ${i + 1}` : "Product image",
     }));
@@ -228,7 +229,11 @@ export function resolvePdpGallery(
 
   const name = (productName ?? "").trim();
   return unique.map((src, i) => ({
-    type: "image",
+    // The media type comes from the URL's extension — the upload route
+    // stamps one on from the verified MIME. Hardcoding "image" here is what
+    // sent admin-uploaded videos to next/image, whose optimizer 400s on a
+    // video content-type and leaves a blank slide.
+    type: isVideoUrl(src) ? "video" : "image",
     src,
     // Single-photo products get a plain product-name alt; numbering a list of
     // one reads as broken to a screen reader.

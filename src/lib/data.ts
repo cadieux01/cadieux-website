@@ -69,7 +69,17 @@ export const PRODUCTS = [
 
 export type ProductSlug = "multigrain" | "high-protein";
 
-export type ProductMedia = { type: "video" | "image"; src: string; alt?: string };
+export type ProductMedia = {
+  type: "video" | "image";
+  src: string;
+  alt?: string;
+  /** Still frame for a video, painted before playback starts. Set only by
+   *  bundled editorial entries, which ship a poster file alongside the
+   *  clip. An admin upload is a single object with no sibling, so deriving
+   *  one from the src — as the gallery used to, with `.poster.jpg` — only
+   *  ever 404s. */
+  poster?: string;
+};
 export type ProductIngredient = { name: string; role: string };
 export type ProductTestReport = { metric: string; value: string; note?: string };
 export type ProductDetail = {

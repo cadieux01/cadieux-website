@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRef, useState } from "react";
 import type { ProductMedia } from "@/lib/data";
+import { videoMimeType } from "@/lib/product-media";
 import { toUrlSlug } from "@/lib/product-slugs";
 import { costPerGramProtein } from "@/lib/stat-tiles";
 import { useCart } from "@/context/CartContext";
@@ -72,6 +73,22 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
   const [hover, setHover] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  // A video the browser will not play falls back to the first PHOTO in the
+  // set rather than leaving a green rectangle on the shop grid. Keyed on
+  // src so it survives a reorder. Same rule as the PDP gallery.
+  const [failedVideos, setFailedVideos] = useState<string[]>([]);
+  const cover = media.find((m) => m.type === "image") ?? null;
+  const shown = (m: ProductMedia): ProductMedia =>
+    m.type === "video" && cover && failedVideos.includes(m.src) ? cover : m;
+  const markVideoFailed = (src: string) =>
+    setFailedVideos((f) => (f.includes(src) ? f : [...f, src]));
+  // A source that 404s errors before hydration attaches onError, so the React
+  // handler alone never hears about it. On mount, ask the element directly:
+  // NETWORK_NO_SOURCE means it has already tried every source and given up.
+  const checkVideoLoaded = (src: string) => (el: HTMLVideoElement | null) => {
+    if (el && el.networkState === el.NETWORK_NO_SOURCE) markVideoFailed(src);
+  };
 
   // Per-tile add-to-cart. The stepper reflects the LIVE cart quantity for
   // this product (0 when it isn't in the cart), so the controls are exact:
@@ -237,7 +254,9 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               Photography coming soon
             </div>
           )}
-          {media.map((m, i) => (
+          {media.map((raw, i) => {
+            const m = shown(raw);
+            return (
             <div
               key={i}
               style={{
@@ -250,12 +269,17 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               }}
             >
               {m.type === "video" ? (
+                // One source, typed from the extension — see the same
+                // change in the PDP gallery. The derived ".av1.mp4" and
+                // ".poster.jpg" siblings only exist for bundled editorial
+                // clips, never for an admin upload.
                 <video
+                  ref={checkVideoLoaded(m.src)}
                   autoPlay
                   muted
                   loop
                   playsInline
-                  poster={m.src.replace(/\.mp4$/, ".poster.jpg")}
+                  {...(m.poster ? { poster: m.poster } : {})}
                   style={{
                     width: "100%",
                     height: "100%",
@@ -265,8 +289,11 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                     pointerEvents: "none",
                   }}
                 >
-                  <source src={m.src.replace(/\.mp4$/, ".av1.mp4")} type='video/mp4; codecs="av01.0.05M.08"' />
-                  <source src={m.src} type="video/mp4" />
+                  <source
+                    src={m.src}
+                    type={videoMimeType(m.src)}
+                    onError={() => markVideoFailed(m.src)}
+                  />
                 </video>
               ) : (
                 <Image
@@ -284,7 +311,8 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                 />
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Test Reports badge — cream pill + FG label so it reads on any photo. */}
