@@ -33,7 +33,6 @@ import {
 } from "@/lib/order-checkout";
 import { getPreorderMode } from "@/lib/preorderMode";
 import { enforceDeliveryFloor } from "@/lib/order-validation";
-import { subscriptionFloorError } from "@/lib/product-availability";
 import { queueOrderNotification } from "@/lib/order-notification";
 import { queueBurstAlert } from "@/lib/order-burst-alert";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
@@ -758,29 +757,18 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // A pre-order loaf cannot START a new plan at all — see
-      // subscriptionFloorError. Checked before the delivery floor below,
-      // which is the weaker "pick a later date" rule.
-      const subBlocked = subscriptionFloorError(
-        snapItems.map((s) => ({
-          name: s.product_name,
-          available_from: bySlug.get(s.product_slug)?.available_from as
-            | string
-            | null
-            | undefined,
-        })),
-      );
-      if (subBlocked) {
-        return NextResponse.json(
-          { error: subBlocked.error, code: subBlocked.code },
-          { status: subBlocked.status },
-        );
-      }
-
-      // Pre-order floor. A NEW subscription must not schedule a delivery of
-      // a pre-order loaf before its date. Checked against the EARLIEST
-      // delivery in the template — if the first one clears the floor, every
-      // later one does. Existing subscriptions are untouched by design.
+      // Pre-order floor. A NEW subscription containing a pre-order loaf can
+      // START on or after that loaf's `available_from`, and every generated
+      // delivery must fall on or after it too. Checked against the EARLIEST
+      // delivery in the template — deliveries are sorted ascending, so if
+      // the first one clears the floor every later one does. Existing
+      // subscriptions are untouched by design.
+      //
+      // Historically there was a stricter "pre-order loaf cannot start a
+      // new plan at all" gate (`subscriptionFloorError`) checked ahead of
+      // this one; that gate has been removed so a customer can open a
+      // subscription on Multigrain (etc.) as long as the first delivery is
+      // on/after its floor, which is exactly what the calendar surfaces.
       const earliestDelivery = deliveryTemplate
         .map((d) => d.delivery_date)
         .sort()[0];
@@ -944,23 +932,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    // A pre-order loaf cannot START a new plan — same rule as the
-    // multi-variant branch above, checked before the delivery floor.
-    {
-      const planBlocked = subscriptionFloorError([
-        {
-          name: planRow.name as string,
-          available_from: planRow.available_from as string | null | undefined,
-        },
-      ]);
-      if (planBlocked) {
-        return NextResponse.json(
-          { error: planBlocked.error, code: planBlocked.code },
-          { status: planBlocked.status },
-        );
-      }
-    }
-    // Pre-order floor — same rule as the multi-variant branch above.
+    // Pre-order floor — same rule as the multi-variant branch above:
+    // the first delivery (and therefore every subsequent one) must land
+    // on/after the loaf's `available_from`. A stricter "cannot start a
+    // new plan at all" gate previously ran ahead of this and has been
+    // removed — the calendar disables earlier dates, and this server gate
+    // is the safety net.
     {
       const earliestDelivery = deliveryTemplate
         .map((d) => d.delivery_date)

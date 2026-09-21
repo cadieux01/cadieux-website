@@ -168,6 +168,21 @@ export function formatFloorLong(iso: string): string {
   return `${WEEKDAYS[dt.getUTCDay()]} ${dt.getUTCDate()} ${MONTHS[dt.getUTCMonth()]}`;
 }
 
+/** "Thu 24 Sep" — the weekday-abbreviated inline form used on the
+ *  subscription plan tiles. Sits between `formatFloorLong` (delivery-promise
+ *  sentence) and `formatFloorShort` (plan-tile stock badge): a weekday is
+ *  informative here because subscription pickers show a delivery *day of
+ *  the week*, so naming the day the plan actually opens is what the
+ *  customer needs. Same UTC parse + hand-spelled tables as its siblings so
+ *  the three forms can never disagree on the day. */
+export function formatFloorMedium(iso: string): string {
+  const dt = parseIso(iso);
+  if (!dt) return iso;
+  const wk = WEEKDAYS[dt.getUTCDay()].slice(0, 3);
+  const mo = MONTHS[dt.getUTCMonth()].slice(0, 3);
+  return `${wk} ${dt.getUTCDate()} ${mo}`;
+}
+
 /** "24 September" — day + month, no weekday.
  *
  *  The long form names the weekday, which is the right thing for a
@@ -182,55 +197,31 @@ export function formatFloorShort(iso: string): string {
   return `${dt.getUTCDate()} ${MONTHS[dt.getUTCMonth()]}`;
 }
 
-// ── Subscriptions: a pre-order loaf cannot start a NEW plan ─────────────
+// ── Subscriptions: a pre-order loaf shifts the START date ───────────────
 //
-// Stricter than the one-off rule on purpose. A one-off can simply be
-// delivered on or after the floor — the customer waits once. A SUBSCRIPTION
-// is a standing commitment whose whole schedule would have to be pushed,
-// and the customer has already paid for every stop up front, so the honest
-// answer is "not yet" rather than a rescheduled plan.
+// Same rule as the one-off: a subscription containing a pre-order loaf can
+// only START on or after that loaf's floor, and every generated delivery
+// must fall on or after it. Both are enforced by `enforceDeliveryFloor` on
+// the earliest delivery in the template (deliveries are sorted ascending,
+// so if the first clears the floor every later one does).
 //
-// EXISTING subscriptions are untouched. This gates creation only.
+// There used to be a stricter gate that refused subscription creation
+// entirely (`subscriptionFloorError` + the `preorder_subscription` code,
+// paired with a plan-tile "Out of stock — back 24 September" line from
+// `subscriptionBlockLine`). Removed: a customer wanting a Multigrain plan
+// starting on the release date is a real sale, not a mistake.
 
-/** Response `code` for a new subscription containing a pre-order loaf.
- *
- *  Unknown to the Android app by design — its `handleOrderApiError` falls
- *  through to rendering the server's `error` string verbatim, which is the
- *  only way to put an accurate sentence in front of an app customer without
- *  a Play release. */
-export const PREORDER_SUBSCRIPTION_CODE = "preorder_subscription";
-
-/** The plan-tile line: "Out of stock — back 24 September", or null when the
- *  product can be subscribed to today. */
-export function subscriptionBlockLine(
+/** Plan-tile informational line: "Available from Thu 24 Sep.", or null when
+ *  the product can be subscribed to today. Renders ALONGSIDE the qty
+ *  stepper — this is a promise about when the plan opens, not a block on
+ *  selection. */
+export function subscriptionAvailabilityLine(
   row: AvailabilityRow,
   now: Date = new Date(),
 ): string | null {
   const floor = productFloor(row, now);
   if (!floor) return null;
-  return `Out of stock — back ${formatFloorShort(floor)}.`;
-}
-
-/** Server gate for subscription CREATE. Returns null when every line can be
- *  subscribed to, else a ready-to-send rejection. */
-export function subscriptionFloorError(
-  rows: AvailabilityRow[],
-  now: Date = new Date(),
-): { status: number; error: string; code: string } | null {
-  const blocked: string[] = [];
-  let date: string | null = null;
-  for (const row of rows) {
-    const floor = productFloor(row, now);
-    if (!floor) continue;
-    if (!blocked.includes(row.name)) blocked.push(row.name);
-    if (date === null || floor > date) date = floor;
-  }
-  if (!date) return null;
-  return {
-    status: 400,
-    error: `${joinNames(blocked)} is out of stock — back ${formatFloorShort(date)}. Please subscribe to it after that date.`,
-    code: PREORDER_SUBSCRIPTION_CODE,
-  };
+  return `Available from ${formatFloorMedium(floor)}.`;
 }
 
 /** The line shown under the OUT OF STOCK badge.

@@ -590,6 +590,19 @@ function NewAddressForm({
               style={inputStyle}
             />
           </Field>
+          {/* Turnstile — directly under the phone field per Task 4. Only
+              visible until OTP is sent (once sent, we already have a token
+              on the server side and the widget's role is done). */}
+          {!otpVerified && !otpSent && (
+            <div style={{ marginTop: 4 }}>
+              <TurnstileWidget
+                ref={turnstileRef}
+                onVerify={(t) => setTurnstileToken(t)}
+                onExpire={() => setTurnstileToken("")}
+                theme="dark"
+              />
+            </div>
+          )}
           <Field label="Address">
             <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
           </Field>
@@ -617,23 +630,13 @@ function NewAddressForm({
           </div>
 
           {!otpSent && (
-            <>
-              <div style={{ marginBottom: 10 }}>
-                <TurnstileWidget
-                  ref={turnstileRef}
-                  onVerify={(t) => setTurnstileToken(t)}
-                  onExpire={() => setTurnstileToken("")}
-                  theme="dark"
-                />
-              </div>
-              <button
-                onClick={sendOtp}
-                disabled={sending || phone.replace(/\D/g, "").length !== 10 || !turnstileToken}
-                style={primaryBtnStyle(!sending && phone.replace(/\D/g, "").length === 10 && Boolean(turnstileToken))}
-              >
-                {sending ? "Sending…" : "Send code"}
-              </button>
-            </>
+            <button
+              onClick={sendOtp}
+              disabled={sending || phone.replace(/\D/g, "").length !== 10 || !turnstileToken}
+              style={primaryBtnStyle(!sending && phone.replace(/\D/g, "").length === 10 && Boolean(turnstileToken))}
+            >
+              {sending ? "Sending…" : "Send code"}
+            </button>
           )}
 
           {otpSent && (

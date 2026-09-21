@@ -44,7 +44,6 @@ import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import { formatSubscriptionNumber } from "@/lib/order-number";
 import { getPreorderMode } from "@/lib/preorderMode";
 import { enforceDeliveryFloor } from "@/lib/order-validation";
-import { subscriptionFloorError } from "@/lib/product-availability";
 import {
   isValidSlotValue,
   validateBookingSlot,
@@ -779,25 +778,14 @@ async function handleMultiVariant(
     });
   }
 
-  // A pre-order loaf cannot START a new plan at all. Checked before the
-  // delivery floor below, which is the weaker "pick a later date" rule.
-  {
-    const blocked = subscriptionFloorError(
-      snapItems.map((s) => ({
-        name: s.product_name,
-        available_from: bySlug.get(s.product_slug)?.available_from as
-          | string
-          | null
-          | undefined,
-      })),
-    );
-    if (blocked) return fail(blocked.status, blocked.error, blocked.code);
-  }
-
-  // Pre-order floor. A NEW subscription must not schedule a pre-order loaf
-  // before its date. `deliveries` is already sorted ascending, so the first
-  // entry is the only one that can breach the floor. Existing subscriptions
-  // are deliberately untouched — those are handled by phone.
+  // Pre-order floor. A NEW subscription containing a pre-order loaf can
+  // start on/after that loaf's `available_from`, and every generated
+  // delivery must fall on or after it. `deliveries` is sorted ascending
+  // so the first entry is the only one that can breach the floor.
+  // Existing subscriptions are deliberately untouched — those are handled
+  // by phone. The stricter "cannot start a new plan at all" gate that
+  // used to run ahead of this check has been removed so Multigrain (etc.)
+  // is a first-class subscription option again.
   {
     const floorFailure = enforceDeliveryFloor(
       snapItems.map((s) => ({
@@ -1170,16 +1158,11 @@ export async function POST(req: NextRequest) {
       "out_of_stock",
     );
   }
-  {
-    // A pre-order loaf cannot START a new plan at all.
-    const blocked = subscriptionFloorError([
-      {
-        name: product.name as string,
-        available_from: product.available_from as string | null | undefined,
-      },
-    ]);
-    if (blocked) return fail(blocked.status, blocked.error, blocked.code);
-  }
+  // (The stricter "pre-order loaf cannot start a new plan at all" gate has
+  // been removed. The 6b delivery-floor block below is the only guard —
+  // first delivery ≥ `available_from` implies every subsequent delivery
+  // clears the floor too.)
+  //
   // V10 back-compat bridge: the authoritative subscription price is now
   // DERIVED from price_inr × (1 − subscription_discount_pct/100). The v8 app
   // still sends the legacy stored price (subscription_per_loaf_inr ?? price_inr).

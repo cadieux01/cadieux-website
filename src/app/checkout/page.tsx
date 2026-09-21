@@ -18,9 +18,12 @@ import { DELIVERY_FEE_INR } from "@/lib/order-validation";
 import {
   formatSlot12,
   formatDeliveryDate,
-  getOrderDeliveryDateOptions,
 } from "@/lib/order-delivery";
-import { bookableSlots, PAUSED_SLOT_MESSAGE } from "@/lib/delivery-slots";
+import {
+  bookableSlots,
+  PAUSED_SLOT_MESSAGE,
+  nextDeliveryDateWindow,
+} from "@/lib/delivery-slots";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/TurnstileWidget";
 import { GOOGLE_MAPS_LOADER_ID, GOOGLE_MAPS_LIBRARIES } from "@/lib/google-maps-loader";
 import { geocodePincodeClient, reverseGeocodeClient } from "@/lib/clientGeocode";
@@ -118,6 +121,25 @@ const sectionHead: React.CSSProperties = {
   color: "#024628",
 };
 
+// Weekday + day + short month for the 30-day date pill strip. UTC-parsed
+// so the rendered day cannot drift by one in another timezone (same
+// pattern as `formatFloorMedium` in product-availability).
+const PILL_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const PILL_MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+function formatDatePillParts(iso: string): { weekday: string; day: string; month: string } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return { weekday: "", day: iso, month: "" };
+  const [y, m, d] = iso.split("-").map((s) => parseInt(s, 10));
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return {
+    weekday: PILL_WEEKDAYS[dt.getUTCDay()],
+    day: String(dt.getUTCDate()),
+    month: PILL_MONTHS[dt.getUTCMonth()],
+  };
+}
+
 /* ── Main page ─────────────────────────────────────────────────────────── */
 export default function CheckoutPage() {
   const router = useRouter();
@@ -209,11 +231,17 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [otpError, setOtpError] = useState("");
 
-  // Delivery date + slot
-  const [{ tomorrow: tomorrowIso, dayAfter: dayAfterIso }] = useState(() =>
-    getOrderDeliveryDateOptions(),
-  );
-  const [deliveryDate, setDeliveryDate] = useState<string>(tomorrowIso);
+  // Delivery date + slot.
+  //
+  // 30-day calendar horizon (Task 1): the customer can pick any day from
+  // today up to 29 days out. Non-bookable days (all slots below the 12h10m
+  // lead, or all paused) stay VISIBLE but disabled. The initial pick is the
+  // first bookable date in the window — usually today, otherwise tomorrow
+  // once every same-day slot is spent.
+  const [dateWindow] = useState(() => nextDeliveryDateWindow(30));
+  const firstBookableIso =
+    dateWindow.find((d) => d.bookable)?.iso ?? dateWindow[0]?.iso ?? "";
+  const [deliveryDate, setDeliveryDate] = useState<string>(firstBookableIso);
   const [deliverySlot, setDeliverySlot] = useState<string>("");
 
   // Pre-order floor for this cart: MAX(products.available_from) across its
@@ -1496,6 +1524,61 @@ export default function CheckoutPage() {
   // render nothing to avoid a flash of the empty-cart checkout.
   if (cart.length === 0) return null;
 
+  // Turnstile block, defined once and passed down to whichever
+  // phone-collecting subcomponent is on screen (AddressForm, PickupSection,
+  // or the inline saved-customer branch). Only one of those renders at any
+  // time, so a single widget mounts and the parent's ref stays valid.
+  // Task 4 places this DIRECTLY under the mobile number field on both
+  // fulfillment paths — the widget belongs with the phone it verifies.
+  const turnstileBlock = step === "address" ? (
+    <div
+      style={{
+        marginTop: 14,
+        marginBottom: 18,
+        padding: "14px 16px 12px",
+        border: "1px solid #024628",
+        background: "var(--surface-paper)",
+        borderRadius: "var(--card-radius)",
+      }}
+    >
+      <p
+        style={{
+          margin: "0 0 8px",
+          fontFamily: "var(--font-body)",
+          fontSize: 14,
+          fontWeight: 500,
+          letterSpacing: "0.35em",
+          textTransform: "uppercase",
+          color: "#024628",
+        }}
+      >
+        Human Check
+      </p>
+      <p
+        style={{
+          margin: "0 0 10px",
+          fontFamily: "var(--font-body)",
+          fontSize: 15,
+          fontWeight: 200,
+          lineHeight: 1.5,
+          letterSpacing: "0.02em",
+          color: "#024628",
+        }}
+      >
+        {TURNSTILE_BYPASS
+          ? "Human-verification is bypassed on this preview build for payment testing."
+          : "Solve once to verify your phone and continue to delivery."}
+      </p>
+      {!TURNSTILE_BYPASS && (
+        <TurnstileWidget
+          ref={turnstileRef}
+          onVerify={(t) => setTurnstileToken(t)}
+          onExpire={() => setTurnstileToken("")}
+        />
+      )}
+    </div>
+  ) : null;
+
   return (
     <div style={{ minHeight: "100dvh", background: "var(--surface-canvas)", position: "relative", overflowX: "clip" }}>
       <style>{`
@@ -1735,6 +1818,7 @@ export default function CheckoutPage() {
                 pickupLocationId={pickupLocationId}
                 setPickupLocationId={(id) => { setPickupLocationId(id); setError(""); }}
                 customerHasCoords={orderLat !== null && orderLng !== null}
+                turnstileSlot={turnstileBlock}
               />
             ) : formMode === "returning" && savedCustomer ? (
               <section>
@@ -1914,6 +1998,9 @@ export default function CheckoutPage() {
                   </p>
                 )}
 
+                {/* Turnstile — directly under the mobile block per Task 4. */}
+                {turnstileBlock}
+
                 <button
                   onClick={() => { setFormMode("edit"); setError(""); setAddressConfirmed(false); }}
                   style={{
@@ -2004,6 +2091,7 @@ export default function CheckoutPage() {
                 setAddressLabel={setAddressLabel}
                 customLabel={customLabel}
                 setCustomLabel={setCustomLabel}
+                turnstileSlot={turnstileBlock}
               />
             )}
           </>
@@ -2012,8 +2100,7 @@ export default function CheckoutPage() {
         {/* ── DELIVERY STEP ────────────────────────────────────────────── */}
         {step === "delivery" && (
           <DeliveryScheduleSection
-            tomorrowIso={tomorrowIso}
-            dayAfterIso={dayAfterIso}
+            dateWindow={dateWindow}
             deliveryDate={deliveryDate}
             deliverySlot={deliverySlot}
             onPickDate={(d) => { setDeliveryDate(d); setError(""); }}
@@ -2054,59 +2141,10 @@ export default function CheckoutPage() {
           </p>
         )}
 
-        {/* Single Turnstile widget for the entire address step.
-            One solve here satisfies BOTH gates:
-              • Send OTP    (server-verified via /api/verify/send)
-              • Continue to Delivery (client-side gate)
-            so the customer never re-solves the captcha. Visible on
-            BOTH the saved-details and the new-address paths. */}
-        {step === "address" && (
-          <div
-            style={{
-              marginTop: 28,
-              padding: "18px 18px 16px",
-              border: "1px solid #024628",
-              background: "var(--surface-paper)",
-              borderRadius: "var(--card-radius)",
-            }}
-          >
-            <p
-              style={{
-                margin: "0 0 10px",
-                fontFamily: "var(--font-body)",
-                fontSize: 14,
-                fontWeight: 500,
-                letterSpacing: "0.35em",
-                textTransform: "uppercase",
-                color: "#024628",
-              }}
-            >
-              Human Check
-            </p>
-            <p
-              style={{
-                margin: "0 0 12px",
-                fontFamily: "var(--font-body)",
-                fontSize: 16,
-                fontWeight: 200,
-                lineHeight: 1.5,
-                letterSpacing: "0.02em",
-                color: "#024628",
-              }}
-            >
-              {TURNSTILE_BYPASS
-                ? "Human-verification is bypassed on this preview build for payment testing."
-                : "Solve once to verify your phone and continue to delivery."}
-            </p>
-            {!TURNSTILE_BYPASS && (
-              <TurnstileWidget
-                ref={turnstileRef}
-                onVerify={(t) => setTurnstileToken(t)}
-                onExpire={() => setTurnstileToken("")}
-              />
-            )}
-          </div>
-        )}
+        {/* Turnstile is rendered INLINE under the mobile block in each
+            of the three phone-collecting branches (AddressForm,
+            PickupSection, saved-customer inline). Task 4 — see
+            `turnstileBlock` defined above. */}
       </main>
 
       {/* ── Sticky bottom CTA bar ──────────────────────────────────────── */}
@@ -2254,6 +2292,10 @@ function AddressForm(props: {
   setAddressLabel: (l: "Home" | "Work" | "Other") => void;
   customLabel: string;
   setCustomLabel: (s: string) => void;
+  // Turnstile card, defined at page level so the widget can be attached to
+  // the parent's ref and reset. Rendered directly under the mobile block
+  // (Task 4) — pass null on any surface that shouldn't show a captcha.
+  turnstileSlot: React.ReactNode;
 }) {
   const {
     name, setName, phone, setPhone,
@@ -2265,6 +2307,7 @@ function AddressForm(props: {
     pinStatus, setError, savedCustomer, onCoordsCapture, onBackToSaved,
     locQuestion, setLocQuestion,
     addressLabel, setAddressLabel, customLabel, setCustomLabel,
+    turnstileSlot,
   } = props;
 
   // Load Maps JS API (places library needed for Autocomplete).
@@ -2496,6 +2539,9 @@ function AddressForm(props: {
           </p>
         )}
       </div>
+
+      {/* Turnstile — directly under the mobile block per Task 4. */}
+      {turnstileSlot}
 
       {/* ── Location question (REQUIRED) ───────────────────────────── */}
       {/* Task G: gold-tinted pills → matrix-legal FG-fill selected, ash+FG
@@ -2983,6 +3029,8 @@ function PickupSection(props: {
   pickupLocationId: string | null;
   setPickupLocationId: (id: string) => void;
   customerHasCoords: boolean;
+  // Turnstile card, rendered right under the mobile block (Task 4).
+  turnstileSlot: React.ReactNode;
 }) {
   const {
     formMode, savedCustomer,
@@ -2995,6 +3043,7 @@ function PickupSection(props: {
     pickupLocations, pickupLocationsLoading,
     pickupLocationId, setPickupLocationId,
     customerHasCoords,
+    turnstileSlot,
   } = props;
 
   const isReturning = formMode === "returning" && !!savedCustomer;
@@ -3040,6 +3089,9 @@ function PickupSection(props: {
               ✓ Phone Verified
             </p>
           )}
+
+          {/* Turnstile — directly under the mobile block per Task 4. */}
+          {turnstileSlot}
 
           <button
             type="button"
@@ -3164,6 +3216,9 @@ function PickupSection(props: {
               )}
             </div>
           )}
+
+          {/* Turnstile — directly under the mobile block per Task 4. */}
+          {turnstileSlot}
         </section>
       )}
 
@@ -3358,8 +3413,7 @@ function PincodeStatusStrip({ pinStatus }: { pinStatus: PinState }) {
 
 /* ── Delivery date + slot picker ─────────────────────────────────────── */
 function DeliveryScheduleSection({
-  tomorrowIso,
-  dayAfterIso,
+  dateWindow,
   deliveryDate,
   deliverySlot,
   onPickDate,
@@ -3369,27 +3423,24 @@ function DeliveryScheduleSection({
   floorMessage,
   floorHint,
 }: {
-  tomorrowIso: string;
-  dayAfterIso: string;
+  // 30 consecutive calendar days (today + 29 more), each with a bookable
+  // flag from `nextDeliveryDateWindow`. Days below the 12h10m lead OR
+  // where every slot is paused come in as `bookable: false` and render
+  // disabled — see Task 1.
+  dateWindow: { iso: string; bookable: boolean }[];
   deliveryDate: string;
   deliverySlot: string;
   onPickDate: (d: string) => void;
   onPickSlot: (s: string) => void;
   preorderMode: boolean;
   // Pre-order floor for the whole cart (MAX across its lines), or null.
-  // Tomorrow / day-after are both below it by definition, so rendering them
-  // disabled would leave nothing selectable — the picker collapses to the one
-  // date that IS deliverable instead.
+  // Days before it are additionally disabled — the customer can still see
+  // them, so "why not tomorrow?" answers itself when combined with the
+  // banner above.
   floorDate: string | null;
   floorMessage: string | null;
   floorHint: string | null;
 }) {
-  const dates: { iso: string; tag: string }[] = floorDate
-    ? [{ iso: floorDate, tag: "Earliest delivery" }]
-    : [
-        { iso: tomorrowIso, tag: "Tomorrow" },
-        { iso: dayAfterIso, tag: "Day after" },
-      ];
   return (
     <section style={{ marginBottom: 24 }}>
       {preorderMode ? (
@@ -3410,10 +3461,10 @@ function DeliveryScheduleSection({
         </div>
       ) : null}
 
-      {/* The floor is explained BEFORE the pill, so the single fixed date
-          reads as a consequence the customer understands rather than a
-          choice that was taken away. Suppressed under site-wide pre-order
-          mode, which already says no date is being promised. */}
+      {/* The floor is explained BEFORE the picker, so the disabled early
+          days read as a consequence the customer understands rather than a
+          silent gate. Suppressed under site-wide pre-order mode, which
+          already says no date is being promised. */}
       {floorMessage && !preorderMode ? (
         <div
           role="status"
@@ -3440,49 +3491,74 @@ function DeliveryScheduleSection({
 
       <p style={sectionHead}>Pick a Date</p>
 
+      {/* Horizontally scrollable 30-day strip. Wraps naturally on wide
+          viewports; scrolls with a touch flick on mobile. Non-bookable and
+          below-floor days remain visible but disabled — see Task 1. */}
       <div
         style={{
           display: "flex",
-          gap: 12,
+          gap: 10,
           marginBottom: 26,
+          overflowX: "auto",
+          paddingBottom: 8,
           opacity: preorderMode ? 0.5 : 1,
           pointerEvents: preorderMode ? "none" : "auto",
+          WebkitOverflowScrolling: "touch",
         }}
         aria-disabled={preorderMode || undefined}
+        role="radiogroup"
+        aria-label="Delivery date"
       >
-        {dates.map((d) => {
+        {dateWindow.map((d) => {
+          const belowFloor = floorDate ? d.iso < floorDate : false;
+          const disabled = preorderMode || !d.bookable || belowFloor;
           const active = d.iso === deliveryDate;
+          const { weekday, day, month } = formatDatePillParts(d.iso);
           return (
             <button
               key={d.iso}
               type="button"
-              disabled={preorderMode}
+              role="radio"
+              aria-checked={active}
+              disabled={disabled}
               onClick={() => onPickDate(d.iso)}
               style={{
-                flex: 1,
-                minHeight: 72,
-                padding: "14px 12px",
+                flex: "0 0 auto",
+                minWidth: 84,
+                minHeight: 84,
+                padding: "12px 10px",
                 background: active ? "var(--surface-brand)" : "transparent",
-                border: "1px solid #024628",
-                cursor: preorderMode ? "not-allowed" : "pointer",
+                border: `1px solid ${active ? "#024628" : "rgba(2,70,40,0.35)"}`,
+                cursor: disabled ? "not-allowed" : "pointer",
                 fontFamily: "var(--font-body)",
                 color: active ? "#FBF3D4" : "#024628",
-                textAlign: "left",
+                textAlign: "center",
+                opacity: disabled && !active ? 0.4 : 1,
                 WebkitTapHighlightColor: "transparent",
               }}
             >
               <div
                 style={{
-                  fontSize: 14, fontWeight: 500,
-                  letterSpacing: "0.35em", textTransform: "uppercase",
+                  fontSize: 11, fontWeight: 500,
+                  letterSpacing: "0.28em", textTransform: "uppercase",
                   color: active ? "rgba(251,243,212,0.75)" : "#024628",
                   marginBottom: 6,
                 }}
               >
-                {d.tag}
+                {weekday}
               </div>
-              <div style={{ fontSize: 16, fontWeight: 300, letterSpacing: "0.04em" }}>
-                {formatDeliveryDate(d.iso)}
+              <div style={{ fontSize: 22, fontWeight: 300, lineHeight: 1 }}>
+                {day}
+              </div>
+              <div
+                style={{
+                  fontSize: 11, fontWeight: 500,
+                  letterSpacing: "0.28em", textTransform: "uppercase",
+                  color: active ? "rgba(251,243,212,0.75)" : "#024628",
+                  marginTop: 6,
+                }}
+              >
+                {month}
               </div>
             </button>
           );

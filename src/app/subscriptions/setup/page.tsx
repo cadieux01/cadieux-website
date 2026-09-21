@@ -38,7 +38,7 @@ import {
   cartFloorEscapeHint,
   cartFloorMessage,
   isPreorder,
-  subscriptionBlockLine,
+  subscriptionAvailabilityLine,
 } from "@/lib/product-availability";
 import {
   MIN_SUBSCRIPTION_DAYS_PER_WEEK,
@@ -538,7 +538,11 @@ function Step1Product({
         {plans.map((p) => {
           // Resolved at RENDER time, not at fetch time — the plan list is
           // cached 60 s and this must flip by itself on the release date.
-          const blockedLine = subscriptionBlockLine(p);
+          // This is INFORMATIONAL: the customer can still add the loaf and
+          // pick a start date on/after the floor. The calendar (step 3)
+          // disables earlier dates, and the server re-enforces the floor
+          // on every generated delivery.
+          const availabilityLineText = subscriptionAvailabilityLine(p);
           const qty = qtyBySlug[p.slug] ?? 0;
           const selected = qty > 0;
           const mrp = typeof p.mrp_inr === "number" ? p.mrp_inr : null;
@@ -585,42 +589,41 @@ function Step1Product({
                   You save ₹{fmtMoney(savings)}{pct > 0 ? ` (${pct}%)` : ""} per loaf
                 </div>
               )}
-              {blockedLine ? (
+              {availabilityLineText && (
                 <div
                   style={{
-                    marginTop: 14,
-                    fontSize: 16,
-                    color: "#991B1B",
+                    marginTop: 10,
+                    fontSize: 15,
+                    color: GOLD,
                     letterSpacing: "0.02em",
                   }}
                   role="status"
                 >
-                  {blockedLine}
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14 }}>
-                  <button
-                    onClick={() => onAdjustQty(p.slug, -1)}
-                    disabled={qty <= 0}
-                    aria-label={`Decrease ${p.title}`}
-                    style={qtyBtnStyle(qty <= 0)}
-                  >
-                    −
-                  </button>
-                  <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 28, minWidth: 34, textAlign: "center" }}>
-                    {qty}
-                  </div>
-                  <button
-                    onClick={() => onAdjustQty(p.slug, 1)}
-                    disabled={qty >= 5}
-                    aria-label={`Increase ${p.title}`}
-                    style={qtyBtnStyle(qty >= 5)}
-                  >
-                    +
-                  </button>
-                  <div style={{ fontSize: 16, color: FADED, marginLeft: 4 }}>per delivery</div>
+                  {availabilityLineText}
                 </div>
               )}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14 }}>
+                <button
+                  onClick={() => onAdjustQty(p.slug, -1)}
+                  disabled={qty <= 0}
+                  aria-label={`Decrease ${p.title}`}
+                  style={qtyBtnStyle(qty <= 0)}
+                >
+                  −
+                </button>
+                <div style={{ fontFamily: "var(--font-heading)", fontWeight: 300, fontSize: 28, minWidth: 34, textAlign: "center" }}>
+                  {qty}
+                </div>
+                <button
+                  onClick={() => onAdjustQty(p.slug, 1)}
+                  disabled={qty >= 5}
+                  aria-label={`Increase ${p.title}`}
+                  style={qtyBtnStyle(qty >= 5)}
+                >
+                  +
+                </button>
+                <div style={{ fontSize: 16, color: FADED, marginLeft: 4 }}>per delivery</div>
+              </div>
             </div>
           );
         })}

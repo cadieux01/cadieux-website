@@ -317,6 +317,30 @@ export function nextDeliveryDates(
   return out;
 }
 
+/** Returns a WINDOW of `days` consecutive calendar dates starting from
+ *  today (IST), each annotated with whether it has any bookable slot from
+ *  `now`. Non-bookable dates are KEPT in the list so the picker can render
+ *  them disabled instead of silently vanishing — the customer can see the
+ *  full month at a glance and understand which days are already full.
+ *
+ *  `days` defaults to 30. Contrast with `nextDeliveryDates(n)` which
+ *  returns the next N *bookable* dates only. */
+export type DeliveryDateOption = { iso: string; bookable: boolean };
+export function nextDeliveryDateWindow(
+  days: number = 30,
+  now: Date = new Date(),
+): DeliveryDateOption[] {
+  const out: DeliveryDateOption[] = [];
+  const todayIso = todayIst(now);
+  const [y, m, d] = todayIso.split("-").map(Number);
+  for (let i = 0; i < days; i++) {
+    const future = new Date(Date.UTC(y, (m ?? 1) - 1, (d ?? 1) + i));
+    const iso = future.toISOString().slice(0, 10);
+    out.push({ iso, bookable: dateHasAnyBookable(iso, now) });
+  }
+  return out;
+}
+
 /** First slot value on `dateIso` that satisfies the booking rule, or null. */
 export function firstBookableSlot(
   dateIso: string,
