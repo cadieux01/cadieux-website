@@ -105,8 +105,15 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   // Per-product PDP name / tag — never let the heading or eyebrow blank
   "pdp.name::multigrain": "Protein Bread",
   "pdp.name::high-protein": "Protein Bread",
+  "pdp.name::burger-bun": "Protein Burger Bun",
   "pdp.tag::multigrain": "Multigrain Edition",
   "pdp.tag::high-protein": "Plain Edition",
+  "pdp.tag::burger-bun": "Burger Bun",
+  // The burger bun's unit label. It sits in the subtitle slot rather than in
+  // products.weight because that column must stay machine-readable — see the
+  // migration that creates the row. No content_strings row exists for this
+  // product yet, so these fallbacks are what actually renders.
+  "pdp.subtitle::burger-bun": "Pack of 2 · 90 g each · 180 g net",
   // H1 fallback per product. The client reads pickString("pdp.title", slug)
   // for the on-page <h1>. Prompt 4 promoted these to keyword-rich phrases
   // that match the new URL slugs (`plain-protein-bread`,
@@ -115,6 +122,8 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   // edits in content_strings still take precedence.
   "pdp.title::multigrain": "Cadieux Multigrain Protein Bread",
   "pdp.title::high-protein": "Cadieux Plain Protein Bread",
+  "pdp.title::burger-bun": "Cadieux Protein Burger Bun",
+  "pdp.description::burger-bun": "High-protein burger bun. No maida.",
   "pdp.description::multigrain":
     "Our multigrain loaf is the full expression of Cadieux: ancient grains, seeds, and protein, slow-fermented and baked to hold structure.",
   "pdp.description::high-protein":
@@ -127,10 +136,14 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
     "Cadieux Multigrain Protein Bread — Baked in Visakhapatnam",
   "pdp.seo.title::high-protein":
     "Cadieux Plain Protein Bread — Baked in Visakhapatnam",
+  "pdp.seo.title::burger-bun":
+    "Cadieux Protein Burger Bun — Baked in Visakhapatnam",
   "pdp.seo.description::multigrain":
     "Cadieux Multigrain Protein Bread. Slow-fermented, lab-tested, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
   "pdp.seo.description::high-protein":
     "Cadieux Plain Protein Bread. Clean sandwich slices, slow-fermented and lab-tested, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
+  "pdp.seo.description::burger-bun":
+    "Cadieux Protein Burger Bun. Pack of two, no maida, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
 };
 
 function fallbackFor(key: string, productId: string | null | undefined): string | undefined {

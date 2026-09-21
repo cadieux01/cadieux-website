@@ -126,7 +126,7 @@ export default function ShopListClient({
             </h1>
             <ShareButton
               title="Cadieux Protein Bread"
-              text="Cadieux Protein Bread — two clean, high-protein loaves: Multigrain and Plain. Slow-fermented, lab-tested, baked fresh in Vizag."
+              text="Cadieux — high-protein bread and burger buns. Slow-fermented, lab-tested, baked fresh in Vizag."
               url="https://www.cadieux.in/shop"
               size={36}
             />
@@ -140,7 +140,7 @@ export default function ShopListClient({
             color: "#024628",
             maxWidth: 520,
           }}>
-            Two clean, high-protein loaves. High in protein, slow-fermented and lab-tested. A protein bread with no artificial preservatives, baked fresh in Vizag and delivered across Andhra Pradesh. Pick a variant to see photos, ingredients, and reports.
+            Two clean, high-protein loaves and a protein burger bun. Slow-fermented and lab-tested, with no artificial preservatives, baked fresh in Vizag and delivered across Andhra Pradesh. Pick one to see photos, ingredients, and reports.
           </p>
 
           <div data-stagger className="cdx-tab-group" style={{ marginBottom: 28 }} role="tablist">

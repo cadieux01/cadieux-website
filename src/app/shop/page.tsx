@@ -21,12 +21,16 @@ import ShopListClient, {
 
 const SITE_URL = "https://www.cadieux.in";
 
-const SLUGS = ["multigrain", "high-protein"] as const;
+// Which slugs this page pulls CONTENT for. Must list every slug the grid can
+// render — a missing entry leaves that tile with no name, tag or stat strip.
+// The grid itself is driven by the bundled PRODUCTS array filtered against
+// live availability (see ShopListClient), not by this list.
+const SLUGS = ["multigrain", "high-protein", "burger-bun"] as const;
 
 export const metadata: Metadata = {
-  title: "Shop Protein Bread — Multigrain & High Protein | Cadieux",
+  title: "Shop Protein Bread & Burger Buns | Cadieux",
   description:
-    "Premium high-protein bread, baked fresh in Visakhapatnam. Choose your delivery day and slot across Vizag.",
+    "Premium high-protein bread and burger buns, baked fresh in Visakhapatnam. Choose your delivery day and slot across Vizag.",
   alternates: { canonical: "/shop" },
 };
 

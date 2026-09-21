@@ -6,6 +6,7 @@ import { useRef, useState, type CSSProperties, type KeyboardEvent } from "react"
 import {
   PRODUCTS,
   PRODUCT_DETAILS,
+  PRODUCT_UNIT,
   type ProductSlug,
   type ProductMedia,
 } from "@/lib/data";
@@ -680,7 +681,7 @@ export default function ProductDetailClient({
           </div>
         </div>
 
-        <LabelInfoSections labelInfo={labelInfo} />
+        <LabelInfoSections labelInfo={labelInfo} unit={PRODUCT_UNIT[typedSlug]} />
 
         {reports.length > 0 ? (
           <>
@@ -1394,7 +1395,18 @@ function canonicalRank(key: string): number {
   return i === -1 ? Number.MAX_SAFE_INTEGER : i;
 }
 
-function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
+function LabelInfoSections({
+  labelInfo,
+  unit,
+}: {
+  labelInfo: PdpLabelInfo | null;
+  // What one row of this table describes, and what it comes in. Passed in
+  // rather than assumed: the table used to say "slice" and "loaf" for every
+  // product, which is a labelling error on a pack of burger buns, not a
+  // wording preference. `undefined` when the slug isn't a known product —
+  // the panel then falls back to the unqualified "Values per unit."
+  unit?: (typeof PRODUCT_UNIT)[ProductSlug];
+}) {
   if (!labelInfo) return null;
   const { ingredients, allergens, nutritionPerSlice, slicesPerLoaf } = labelInfo;
   const ingText = (ingredients ?? "").trim();
@@ -1417,10 +1429,11 @@ function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
     : [];
   if (!ingText && !allergText && nutriEntries.length === 0) return null;
 
+  const one = unit?.unit ?? "unit";
   const nutriSubtitle =
-    typeof slicesPerLoaf === "number" && slicesPerLoaf > 0
-      ? `Values per single slice (approx. ${slicesPerLoaf} slices per loaf).`
-      : "Values per single slice.";
+    typeof slicesPerLoaf === "number" && slicesPerLoaf > 0 && unit
+      ? `Values per single ${one} (${unit.countIsApprox ? "approx. " : ""}${slicesPerLoaf} ${unit.units} per ${unit.container}).`
+      : `Values per single ${one}.`;
 
   return (
     <>
@@ -1449,7 +1462,7 @@ function LabelInfoSections({ labelInfo }: { labelInfo: PdpLabelInfo | null }) {
       {nutriEntries.length > 0 ? (
         <>
           <hr style={DIVIDER_STYLE} />
-          <Section label="Nutrition" title="Per slice">
+          <Section label="Nutrition" title={`Per ${one}`}>
             <p
               style={{
                 margin: "-16px 0 20px",

@@ -65,9 +65,47 @@ export const PRODUCTS = [
     subtitle: "Clean sandwich bread built for protein without the fuss. Soft slices, no compromise.",
     desc: "Clean, everyday bread built for high protein without the fuss. Soft sandwich slices with no compromise on nutrition.",
   },
+  // APPENDED, never inserted. A cart line persists a `productIndex` into this
+  // array (see CartItem), so a saved cart from before this entry existed
+  // still resolves to the loaf it was added for. Inserting here would silently
+  // repoint every stored cart.
+  {
+    slug: "burger-bun",
+    name: "Protein Burger Bun",
+    tag: "Burger Bun",
+    title: "Burger Bun",
+    tags: ["Pack of 2", "No Maida"],
+    price: 69,
+    protein: "High protein content",
+    subtitle: "Pack of 2 · 90 g each · 180 g net",
+    desc: "High-protein burger bun. No maida.",
+  },
 ];
 
-export type ProductSlug = "multigrain" | "high-protein";
+export type ProductSlug = "multigrain" | "high-protein" | "burger-bun";
+
+/** The noun the per-unit nutrition panel is counting, per product.
+ *
+ *  `products.slices_per_loaf` stores the COUNT; this is the thing being
+ *  counted, and the container it comes in. It lives in code rather than on
+ *  the products row because it is editorial wording, not a food-label
+ *  figure — the rule this file's header states is that FIGURES never get a
+ *  bundled copy, and a noun is not a figure.
+ *
+ *  Printing "2 slices per loaf" on a pack of burger buns is a labelling
+ *  error, not a cosmetic one, which is why this is a map and not a default.
+ *
+ *  `countIsApprox` because a loaf yields roughly seven slices depending on
+ *  how it is cut, while a pack holds exactly two buns. "approx. 2 buns per
+ *  pack" would hedge a number that is not in doubt. */
+export const PRODUCT_UNIT: Record<
+  ProductSlug,
+  { unit: string; units: string; container: string; countIsApprox: boolean }
+> = {
+  multigrain: { unit: "slice", units: "slices", container: "loaf", countIsApprox: true },
+  "high-protein": { unit: "slice", units: "slices", container: "loaf", countIsApprox: true },
+  "burger-bun": { unit: "bun", units: "buns", container: "pack", countIsApprox: false },
+};
 
 export type ProductMedia = {
   type: "video" | "image";
@@ -138,6 +176,21 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
       { metric: "Protein", value: "High", note: "NABL-accredited lab verified" },
       { metric: "Added sugar", value: "None", note: "Trace honey for ferment only" },
     ],
+  },
+  "burger-bun": {
+    description: [
+      "High-protein burger bun. No maida.",
+      "Sold in packs of two — 90 g each, 180 g net.",
+    ],
+    // Empty for the same reason as the loaves: the gallery comes from
+    // products.image_url / gallery_urls. No photo has been uploaded yet, so
+    // the PDP renders its empty state rather than a stand-in.
+    media: [],
+    // Left empty until the ingredient declaration for this bake is signed
+    // off. An ingredient list is a regulated statement — a plausible one
+    // copied from the loaves would be a false label.
+    ingredients: [],
+    testReports: [],
   },
 };
 

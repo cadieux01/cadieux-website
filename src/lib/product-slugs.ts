@@ -20,14 +20,23 @@
 
 import type { ProductSlug } from "@/lib/data";
 
+// `burger-bun` maps to ITSELF. The two loaves have a URL slug that differs
+// from the internal one because Prompts 4+5 renamed their URLs for SEO after
+// the internal keys were already spread across seeds, reviews and the mobile
+// app. A brand-new product has no such history, so it gets one slug in both
+// roles — and it has to appear here regardless, because `resolveInternalSlug`
+// returns null for any unmapped URL and the [slug] page then 404s. A products
+// row alone does not make a product reachable.
 const URL_TO_INTERNAL: Record<string, ProductSlug> = {
   "plain-protein-bread": "high-protein",
   "multigrain-protein-bread": "multigrain",
+  "burger-bun": "burger-bun",
 };
 
 const INTERNAL_TO_URL: Record<ProductSlug, string> = {
   "high-protein": "plain-protein-bread",
   "multigrain": "multigrain-protein-bread",
+  "burger-bun": "burger-bun",
 };
 
 // Resolve a URL slug (from the [slug] route param or a Link target)
