@@ -11,6 +11,7 @@ import {
 } from "@/lib/products";
 import { getPageContent, pickString } from "@/lib/content";
 import { getSubscriptionPlans } from "@/lib/subscription-plans";
+import { getSandwichKitchenState } from "@/lib/sandwich-kitchen";
 import { proteinPerLoafGrams } from "@/lib/stat-tiles";
 import type { ProductMedia } from "@/lib/data";
 
@@ -36,6 +37,10 @@ export const metadata: Metadata = {
 
 export default async function ShopPage() {
   const availability = await getProductAvailability();
+  // Sandwich kitchen switch drives the extra tile after the three products.
+  // Read server-side so the grid ships with the tile either present or not —
+  // never a hydration flash.
+  const sandwichKitchen = await getSandwichKitchenState();
   // Live DB price per slug — single source of truth for the catalogue.
   const products = await getActiveProducts();
   const priceBySlug: Record<string, number> = {};
@@ -123,6 +128,7 @@ export default async function ShopPage() {
         contentBySlug={contentBySlug}
         subscribeBySlug={subscribeBySlug}
         proteinPerLoafBySlug={proteinPerLoafBySlug}
+        showSandwich={sandwichKitchen.enabled}
       />
     </>
   );

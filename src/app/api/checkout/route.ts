@@ -32,6 +32,11 @@ import {
   logProximitySuggestion,
 } from "@/lib/order-checkout";
 import { getPreorderMode } from "@/lib/preorderMode";
+import {
+  hasSandwichItems,
+  SANDWICH_CHECKOUT_BLOCK_CODE,
+  SANDWICH_CHECKOUT_BLOCK_MESSAGE,
+} from "@/lib/sandwich-checkout-guard";
 import { enforceDeliveryFloor } from "@/lib/order-validation";
 import { queueOrderNotification } from "@/lib/order-notification";
 import { queueBurstAlert } from "@/lib/order-burst-alert";
@@ -310,6 +315,18 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === "place_order") {
+    // TEMPORARY SCAFFOLDING (SANDWICH_CHECKOUT_BLOCK_CODE) — remove with the
+    // OLF/OLW cart-split. Belt-and-braces to the client refusal: a stale
+    // client from before the block shipped could still send a sandwich
+    // line, and prepareOneTimeOrder has no code path to price one. Fail
+    // loud with a stable code so the client can special-case the message
+    // if it wants to.
+    if (hasSandwichItems(body?.items)) {
+      return NextResponse.json(
+        { error: SANDWICH_CHECKOUT_BLOCK_MESSAGE, code: SANDWICH_CHECKOUT_BLOCK_CODE },
+        { status: 400 },
+      );
+    }
     // All validation + server-authoritative pricing lives in the shared
     // helper so the COD path here and the Razorpay path in /api/create-order
     // derive an IDENTICAL grand total from the SAME logic. This route is the

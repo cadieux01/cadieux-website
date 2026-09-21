@@ -6,7 +6,12 @@ import { useRouter, usePathname } from "next/navigation";
 const GRAIN = "url(/grain.svg)";
 
 /* ── Nav ── */
-export default function Nav() {
+// `showSandwich` is read server-side from the kitchen switch and threaded
+// down (see NavGateServer). We deliberately do NOT read the flag on the
+// client — see the hard rule in the storefront plan: while the kitchen is
+// off, a customer must see NOTHING about sandwiches, including a nav entry
+// that a JS-blocked device might briefly render on hydration.
+export default function Nav({ showSandwich = false }: { showSandwich?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const isHome = pathname === "/";
@@ -153,6 +158,12 @@ export default function Nav() {
             // the cart.
             const mainItems: { label: string; action: () => void }[] = [
               { label: "Products",       action: () => nav("/shop") },
+              // "Sandwich" sits right after "Products" and only when the
+              // kitchen switch is ON (server-provided). Removed by the SAME
+              // flag that gates /sandwiches, /api/checkout, etc.
+              ...(showSandwich
+                ? [{ label: "Sandwich", action: () => nav("/sandwiches") }]
+                : []),
               { label: "Orders",         action: () => nav("/orders") },
               ...(hasSavedPhone
                 ? [

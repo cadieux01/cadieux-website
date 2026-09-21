@@ -30,6 +30,11 @@ import {
   logProximitySuggestion,
 } from "@/lib/order-checkout";
 import { getPreorderMode } from "@/lib/preorderMode";
+import {
+  hasSandwichItems,
+  SANDWICH_CHECKOUT_BLOCK_CODE,
+  SANDWICH_CHECKOUT_BLOCK_MESSAGE,
+} from "@/lib/sandwich-checkout-guard";
 import { queueBurstAlert } from "@/lib/order-burst-alert";
 import {
   normalizePhone,
@@ -54,6 +59,18 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+
+  // TEMPORARY SCAFFOLDING (SANDWICH_CHECKOUT_BLOCK_CODE) — remove with the
+  // OLF/OLW cart-split. Refused BEFORE any rate-limit spend or Razorpay
+  // create call: this request would only fail loudly downstream, and letting
+  // it consume the per-phone budget on the way in is worse than refusing
+  // here. Mirror of the check in /api/checkout `place_order`.
+  if (hasSandwichItems(body?.items)) {
+    return NextResponse.json(
+      { error: SANDWICH_CHECKOUT_BLOCK_MESSAGE, code: SANDWICH_CHECKOUT_BLOCK_CODE },
+      { status: 400 },
+    );
+  }
 
   // Per-IP cap. This route had none, and 29 of the 34 orders the 13 Sep probe
   // created came through it rather than the COD path.

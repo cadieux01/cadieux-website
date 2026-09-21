@@ -11,6 +11,7 @@ import IOSInstallHint from "@/components/IOSInstallHint";
 import FloatingCartButton from "@/components/FloatingCartButton";
 import { CartProvider } from "@/context/CartContext";
 import { getActiveProducts } from "@/lib/products";
+import { getSandwichKitchenState } from "@/lib/sandwich-kitchen";
 
 // Single source of the GA4 Measurement ID. Referenced only here.
 const GA_ID = "G-HVBGHYD7M7";
@@ -143,6 +144,10 @@ export default async function RootLayout({
   // listed): priceRange is an optional property, and publishing no range is
   // honest where publishing "₹0-₹0" would not be.
   const activeProducts = await getActiveProducts();
+  // Sandwich kitchen switch is read server-side so the drawer's "Sandwich"
+  // entry is either present or absent in the initial HTML — never a
+  // client-side flash. Cached 10 s + tag, revalidated on admin flip.
+  const sandwichKitchen = await getSandwichKitchenState();
   const activePrices = activeProducts
     .map((p) => p.price_inr)
     .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
@@ -205,7 +210,7 @@ export default async function RootLayout({
       </head>
       <body className="font-body" suppressHydrationWarning>
         <CartProvider>
-          <NavGate />
+          <NavGate showSandwich={sandwichKitchen.enabled} />
           <SiteMusic />
           <EdgeSwipeNav />
           <PWAServiceWorker />

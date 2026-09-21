@@ -42,8 +42,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (item.orderType === "sub") {
         return [...prev, item];
       }
+      // Merge key includes the sandwich discriminators so a "Chicken Tikka on
+      // Plain" and a "Chicken Tikka on Multigrain" do not collapse into one
+      // qty. Both sides are `undefined` on loaf lines, so loaf merging is
+      // unchanged (undefined === undefined).
       const idx = prev.findIndex(
-        c => c.productIndex === item.productIndex && c.orderType === item.orderType
+        c =>
+          c.productIndex === item.productIndex &&
+          c.orderType === item.orderType &&
+          c.sandwichSlug === item.sandwichSlug &&
+          c.breadSlug === item.breadSlug
       );
       if (idx >= 0) {
         const updated = [...prev];

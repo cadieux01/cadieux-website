@@ -1,5 +1,18 @@
 export type CartItem = {
+  // Discriminator. Undefined means "loaf" — every existing localStorage cart
+  // was written before this field existed and MUST continue to resolve as a
+  // loaf. Do not tighten this to a required field without a migration.
+  kind?: "loaf" | "sandwich";
+  // For loaf lines this is the index into PRODUCTS (append-only, persisted).
+  // For sandwich lines this is the sentinel -1 — sandwiches are keyed by
+  // sandwichSlug/breadSlug below, not by an index into any bundled array.
   productIndex: number;
+  // Sandwich-only fields. Absent on loaf lines. `breadLabel` is the storefront
+  // name ("Plain"/"Multigrain") frozen at add-to-cart so a later rename of the
+  // storefront label does not change what a customer already saw in their cart.
+  sandwichSlug?: string;
+  breadSlug?: string;
+  breadLabel?: string;
   name: string;
   price: number;
   qty: number;

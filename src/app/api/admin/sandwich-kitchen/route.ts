@@ -6,10 +6,12 @@
 // — the client is responsible for a confirm prompt; the route just writes.
 
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { isAdmin } from "@/lib/admin-auth";
 import {
-  getSandwichKitchenState,
+  getSandwichKitchenStateUncached,
   setSandwichKitchenState,
+  SANDWICH_KITCHEN_TAG,
 } from "@/lib/sandwich-kitchen";
 import { recordAuditEvent } from "@/lib/audit-log";
 
@@ -20,7 +22,9 @@ export async function GET(req: NextRequest) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const state = await getSandwichKitchenState();
+  // Admin GET must never observe the customer-side 10 s cache: it renders the
+  // form and a stale value would let an admin overwrite fresher DB state.
+  const state = await getSandwichKitchenStateUncached();
   return NextResponse.json(state, {
     headers: { "cache-control": "no-store" },
   });
@@ -52,7 +56,10 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  const previous = await getSandwichKitchenState();
+  // Uncached read for the pre-write compare: reading through the customer
+  // cache here would silently produce "no change" verdicts when the row has
+  // drifted from the cached copy. See sandwich-kitchen.ts prose.
+  const previous = await getSandwichKitchenStateUncached();
   let next;
   try {
     next = await setSandwichKitchenState(patch);
@@ -71,6 +78,11 @@ export async function PUT(req: NextRequest) {
   if (patch.close !== undefined && previous.close !== next.close) changed.push("close");
 
   if (changed.length > 0) {
+    // Bust the customer-facing cache immediately. Without this, an admin flip
+    // would only be visible after each caller's next 10 s expiry — Sunny would
+    // read it as broken.
+    revalidateTag(SANDWICH_KITCHEN_TAG);
+
     void recordAuditEvent({
       req,
       entity: "other",

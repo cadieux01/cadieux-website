@@ -14,6 +14,10 @@ import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
 import { useCart } from "@/context/CartContext";
 import { trackBeginCheckout } from "@/lib/analytics";
 import { PRODUCTS } from "@/lib/data";
+import {
+  hasSandwichItems,
+  SANDWICH_CHECKOUT_BLOCK_MESSAGE,
+} from "@/lib/sandwich-checkout-guard";
 import { DELIVERY_FEE_INR } from "@/lib/order-validation";
 import {
   formatSlot12,
@@ -195,12 +199,27 @@ export default function CheckoutPage() {
   }, [cart, cartTotal]);
 
   // Cart snapshot for place_order body.
-  const orderItems = cart.map((c) => ({
-    slug: PRODUCTS[c.productIndex].slug,
-    quantity: c.qty,
-    kind: c.orderType,
-    line_total_inr: c.price * c.qty,
-  }));
+  //
+  // TEMPORARY SCAFFOLDING (SANDWICH_CHECKOUT_BLOCK_CODE) — remove with the
+  // OLF/OLW cart-split. Sandwich lines (kind === "sandwich",
+  // productIndex === -1) cannot be turned into loaf order items today.
+  // Skip them here so PRODUCTS[-1] does NOT crash the render; without this
+  // filter the checkout page white-screens on mount and the customer never
+  // sees the refusal the guards in placeOrderCOD / payOnline (and both
+  // server routes) are meant to surface. This filter is PAIRED with those
+  // guards — if you remove them, remove this filter too, or you turn a
+  // loud refusal into a silent drop (customer pays for bread only and
+  // never learns the sandwich vanished). The SANDWICH_CHECKOUT_BLOCK_CODE
+  // tag above is here so the grep-audit that finds the guards also finds
+  // this site.
+  const orderItems = cart
+    .filter((c) => c.kind !== "sandwich")
+    .map((c) => ({
+      slug: PRODUCTS[c.productIndex].slug,
+      quantity: c.qty,
+      kind: c.orderType,
+      line_total_inr: c.price * c.qty,
+    }));
 
   const [step, setStep] = useState<Step>("address");
   const [formMode, setFormMode] = useState<FormMode>("fresh");
@@ -1183,6 +1202,14 @@ export default function CheckoutPage() {
 
   /* ── COD ──────────────────────────────────────────────────────────────── */
   async function placeOrderCOD() {
+    // TEMPORARY SCAFFOLDING (SANDWICH_CHECKOUT_BLOCK_CODE) — remove with the
+    // OLF/OLW cart-split. Sandwiches cannot be turned into order rows yet;
+    // fail loud so the customer removes the line rather than silently
+    // dropping the sandwich value from the total.
+    if (hasSandwichItems(cart)) {
+      setError(SANDWICH_CHECKOUT_BLOCK_MESSAGE);
+      return;
+    }
     const { fullAddress, customerPhone, customerName } = resolveOrderIdentity();
     // Defensive: should be unreachable since step 1 gates on otpVerified,
     // but if a user clears sessionStorage / cookies mid-flow the server
@@ -1263,6 +1290,11 @@ export default function CheckoutPage() {
 
   /* ── Razorpay ─────────────────────────────────────────────────────────── */
   async function payOnline() {
+    // TEMPORARY SCAFFOLDING (SANDWICH_CHECKOUT_BLOCK_CODE) — see placeOrderCOD.
+    if (hasSandwichItems(cart)) {
+      setError(SANDWICH_CHECKOUT_BLOCK_MESSAGE);
+      return;
+    }
     // Same defensive check as COD — server rejects place_order without
     // a valid OTP cookie, so refuse to even open the gateway.
     if (!otpVerified) {

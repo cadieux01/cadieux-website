@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import ProductTile, { type TileStat } from "@/components/ProductTile";
+import ShopSandwichTile from "@/components/ShopSandwichTile";
 import BackLink from "@/components/BackLink";
 import ScrollReveal from "@/components/ScrollReveal";
 import { ShareButton } from "@/components/ShareButton";
@@ -56,6 +57,7 @@ export default function ShopListClient({
   contentBySlug,
   subscribeBySlug,
   proteinPerLoafBySlug,
+  showSandwich = false,
 }: {
   availability: AvailabilityMap | null;
   // Live DB price per slug. Falls back to the bundled PRODUCTS price only
@@ -77,6 +79,10 @@ export default function ShopListClient({
   // products fields the protein/slices stat tiles read. Null (or a missing
   // slug) means the tile prints no per-gram price.
   proteinPerLoafBySlug?: Record<string, number | null>;
+  // Sandwich kitchen switch, resolved server-side. When true, an extra tile
+  // is rendered AFTER the product tiles; when false, /shop is exactly the
+  // three-loaf grid it was before.
+  showSandwich?: boolean;
 }) {
   const visibleProducts = availability
     ? PRODUCTS.filter((p) => availability.listed.has(p.slug))
@@ -187,6 +193,14 @@ export default function ShopListClient({
                   </div>
                 );
               })}
+              {/* Sandwich entry — LAST in the grid, only when the kitchen
+                  is open. The switch is server-provided, so this branch
+                  disappears entirely from the initial HTML when off. */}
+              {showSandwich && (
+                <div data-stagger key="__sandwich" style={{ height: "100%" }}>
+                  <ShopSandwichTile />
+                </div>
+              )}
             </div>
           </ScrollReveal>
         ) : (
