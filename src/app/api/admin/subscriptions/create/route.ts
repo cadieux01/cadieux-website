@@ -460,7 +460,14 @@ export async function POST(req: NextRequest) {
     rawStatus === "pending_confirmation" ? "pending_confirmation" : "active";
   // Prepaid only. Admin either collected the whole plan in cash UP FRONT
   // ('cash' + paid) or hasn't been paid yet (null + pending). 'cod' is
-  // gone — the subscriptions_no_cod CHECK rejects it outright.
+  // gone — the trigger tg_subscriptions_assert_not_cod on
+  // public.subscriptions rejects it outright (a TRIGGER, not a CHECK, so
+  // pg_constraint comes back empty for it).
+  //
+  // The null + pending branch is PAY-LATER: the plan exists but no money has
+  // arrived, so it is excluded from the bake list proper and printed under
+  // "UNPAID — DO NOT BAKE" instead (see bake-plan-lines.ts). The create form
+  // says so on screen; do not quietly turn it into a silent default.
   const isPaid = body.payment === "paid";
   const paymentMethod: "cash" | null = isPaid ? "cash" : null;
   const paymentStatus: "paid" | "pending" = isPaid ? "paid" : "pending";

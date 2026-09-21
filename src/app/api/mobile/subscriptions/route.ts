@@ -947,7 +947,8 @@ async function handleMultiVariant(
       total_weeks: 0,
       delivery_address: deliveryAddressJson,
       total_amount: serverAmount,
-      // Prepaid. Never 'cod' — the subscriptions_no_cod CHECK rejects it.
+      // Prepaid. Never 'cod' — the trigger tg_subscriptions_assert_not_cod
+      // on public.subscriptions rejects it (a TRIGGER, not a CHECK).
       payment_status: "created",
       payment_method: null,
       razorpay_order_id: rzp.order.id,
@@ -1410,7 +1411,8 @@ export async function POST(req: NextRequest) {
       total_weeks: subRowWeeks,
       delivery_address: deliveryAddressJson,
       total_amount: totalAmountInr,
-      // Prepaid. Never 'cod' — the subscriptions_no_cod CHECK rejects it.
+      // Prepaid. Never 'cod' — the trigger tg_subscriptions_assert_not_cod
+      // on public.subscriptions rejects it (a TRIGGER, not a CHECK).
       payment_status: "created",
       payment_method: null,
       razorpay_order_id: rzpLegacy.order.id,

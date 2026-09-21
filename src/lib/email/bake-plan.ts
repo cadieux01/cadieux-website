@@ -117,6 +117,29 @@ function readyTimeLabel(line: BakePlanLine): string {
   return `Ready ${SLOT_WINDOW.get(raw) ?? raw}`;
 }
 
+/**
+ * Is this line a subscription delivery whose plan has not been paid for?
+ *
+ * Subscriptions are PREPAID — the whole plan is paid before the first
+ * delivery — so an unpaid plan is bread nobody has paid for, and baking it
+ * is a decision, not a default. These lines are pulled out of the bake
+ * totals and the slot sections and printed under their own heading instead.
+ *
+ * SEGREGATED, NEVER DROPPED. Filtering them out of the email entirely was
+ * the obvious fix and the wrong one: a customer who pays at 11pm would
+ * silently vanish from the 04:45 list, and an absence is invisible — the
+ * baker cannot notice a line that isn't there. A heading he has to read
+ * past is the point.
+ *
+ * ORDERS ARE NEVER IN HERE. A one-time order is `paid:false` on every COD
+ * row, which is the normal case and absolutely does get baked. Only
+ * `kind === "subscription"` splits on payment; `paid` is read from STATUS
+ * only (see BakePlanLine.paid).
+ */
+function isUnpaidSubscription(l: BakePlanLine): boolean {
+  return l.kind === "subscription" && !l.paid;
+}
+
 /** Total loaves across every item on every line. Items are structured
  *  ({name, qty}), so no regex reparse — see BakeItem for why. */
 function loafCount(lines: BakePlanLine[]): number {
@@ -360,6 +383,79 @@ function renderStaleSection(stale: StaleDeliveryLine[]): {
 }
 
 /**
+ * Render the "UNPAID — DO NOT BAKE" HTML + text blocks. Empty `unpaid`
+ * returns two empty strings, so the caller can concatenate blindly.
+ *
+ * Name and phone are on every row on purpose: this section is a chase
+ * list, not a tally. The baker needs to know the bread is not his problem;
+ * Sunny needs to know who to ring before it becomes one. The items are
+ * printed too, so that if the money lands the bread can be added back
+ * without reopening the plan.
+ */
+function renderUnpaidSection(unpaid: BakePlanLine[]): {
+  html: string;
+  text: string;
+} {
+  if (unpaid.length === 0) return { html: "", text: "" };
+  const loaves = loafCount(unpaid);
+  // Deliberately says neither "today" nor "above": this section renders on
+  // all three sends (two of which are for TOMORROW) and on the zero-bake
+  // path, where there are no totals above it to point at.
+  const intro = `${unpaid.length} subscription deliver${unpaid.length === 1 ? "y" : "ies"} due on this date ${unpaid.length === 1 ? "is" : "are"} on an unpaid plan — ${loaves} ${pluralize(loaves, "loaf", "loaves")} NOT counted in the bake totals.`;
+
+  const textParts: string[] = [];
+  textParts.push("UNPAID — DO NOT BAKE");
+  textParts.push(intro);
+  textParts.push("Subscriptions are prepaid. Chase the payment; bake only if Sunny says so.");
+  for (const l of unpaid) {
+    const phone = l.customerPhone ? ` — ${l.customerPhone}` : "";
+    textParts.push(`  ${l.ref} — ${l.customerName}${phone}`);
+    for (const item of l.items) textParts.push(`    · ${itemLine(item)}`);
+  }
+  textParts.push("");
+
+  const rows = unpaid
+    .map((l) => {
+      const phoneHtml = l.customerPhone
+        ? `<div><a href="tel:${escapeHtml(l.customerPhone)}" style="color:#991B1B">${escapeHtml(l.customerPhone)}</a></div>`
+        : "";
+      const itemLis = l.items
+        .map((i) => `<li style="margin:2px 0">${escapeHtml(itemLine(i))}</li>`)
+        .join("");
+      return `
+      <tr>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;font-weight:600;vertical-align:top">${escapeHtml(l.ref)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top">
+          <div><strong>${escapeHtml(l.customerName)}</strong></div>
+          ${phoneHtml}
+        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top">
+          <ul style="margin:0;padding-left:16px;font-size:13px;color:#666">${itemLis}</ul>
+        </td>
+      </tr>`;
+    })
+    .join("");
+
+  const html = `
+      <h3 style="margin:28px 0 6px;font-size:15px;color:#991B1B">
+        UNPAID — DO NOT BAKE
+        <span style="color:#999;font-weight:400;font-size:13px"> · ${unpaid.length} ${pluralize(unpaid.length, "stop", "stops")} · ${loaves} ${pluralize(loaves, "loaf", "loaves")}</span>
+      </h3>
+      <p style="margin:0 0 8px;font-size:13px;color:#666">
+        ${escapeHtml(intro)} Subscriptions are prepaid — chase the payment, and bake only if Sunny says so.
+      </p>
+      <table style="border-collapse:collapse;width:100%;font-size:14px;border-left:3px solid #991B1B">
+        <tr style="text-align:left;color:#666">
+          <th style="padding:6px 10px;border-bottom:1px solid #ddd">Plan</th>
+          <th style="padding:6px 10px;border-bottom:1px solid #ddd">Customer</th>
+          <th style="padding:6px 10px;border-bottom:1px solid #ddd">Not baking</th>
+        </tr>
+        ${rows}
+      </table>`;
+  return { html, text: textParts.join("\n") };
+}
+
+/**
  * Which of the three cron sends this email represents. Controls the subject
  * line (planning vs instruction) and the empty-body wording ("nothing
  * scheduled for tomorrow" vs "nothing to bake today"). Default is d1_1800
@@ -385,8 +481,21 @@ function subjectPrefix(sendSlot: SendSlot): string {
   }
 }
 
-function emptyBodySentence(sendSlot: SendSlot): string {
-  return sendSlot === "d0_0445"
+/** The body sentence when there is nothing to BAKE.
+ *
+ *  `hasUnpaid` changes the wording rather than the section below it: with
+ *  unpaid stops on the day, "no subscription deliveries" is false — there
+ *  are deliveries, they are just not paid for — and a sentence that
+ *  contradicts the table underneath it teaches the reader to skim past
+ *  both. */
+function emptyBodySentence(sendSlot: SendSlot, hasUnpaid: boolean): string {
+  const today = sendSlot === "d0_0445";
+  if (hasUnpaid) {
+    return today
+      ? "Nothing to bake today — every stop due is on an unpaid plan. They are listed below."
+      : "Nothing to bake for tomorrow — every stop due is on an unpaid plan. They are listed below.";
+  }
+  return today
     ? "Nothing to bake today — no orders, no subscription deliveries."
     : "Nothing scheduled for tomorrow — no orders, no subscription deliveries.";
 }
@@ -398,16 +507,27 @@ export function buildBakePlan(
   sendSlot: SendSlot = "d1_1800",
 ): BakePlanEmail {
   const humanDate = formatBakeDate(deliveryDateIso);
-  const orderCount = lines.filter((l) => l.kind === "order").length;
-  const subCount = lines.filter((l) => l.kind === "subscription").length;
-  const total = lines.length;
-  const totalLoaves = loafCount(lines);
+
+  // THE SPLIT HAPPENS FIRST, before anything counts anything. Unpaid
+  // subscription stops are not bread to bake, so they must be out of the
+  // rollup, out of the slot sections and out of the headline totals — if
+  // they reached any one of those the baker would make the loaf anyway and
+  // the "DO NOT BAKE" heading below would be contradicted by the numbers
+  // above it. `bakeLines` is what the oven is for; `unpaidLines` is a
+  // chase list that happens to be on the same page.
+  const unpaidLines = lines.filter(isUnpaidSubscription);
+  const bakeLines = lines.filter((l) => !isUnpaidSubscription(l));
+
+  const orderCount = bakeLines.filter((l) => l.kind === "order").length;
+  const subCount = bakeLines.filter((l) => l.kind === "subscription").length;
+  const total = bakeLines.length;
+  const totalLoaves = loafCount(bakeLines);
 
   // Pickups are already inside `total`, `totalLoaves` and the bake rollup —
   // they always were. This makes that VISIBLE, because a counter loaf and a
   // van loaf come out of the same oven and the summary line says
   // "N deliveries", which reads like pickups were left out.
-  const pickupLines = lines.filter((l) => l.fulfillment === "pickup");
+  const pickupLines = bakeLines.filter((l) => l.fulfillment === "pickup");
   const pickupCount = pickupLines.length;
   const pickupSummary =
     pickupCount === 0
@@ -421,23 +541,29 @@ export function buildBakePlan(
   const liveHref = `https://www.cadieux.in/admin/orders?basis=delivery&date=${encodeURIComponent(deliveryDateIso)}`;
 
   const staleSection = renderStaleSection(stale);
+  const unpaidSection = renderUnpaidSection(unpaidLines);
   const prefix = subjectPrefix(sendSlot);
 
-  // Stale count rides in the subject line when there are unresolved rows,
+  // Stale and unpaid counts ride in the subject line when there are rows,
   // so the summary is visible from the inbox list without opening. Format
   // examples:
   //   "Bake plan for Fri, 12 Sep 2026: 6 deliveries · 14 loaves"
   //   "Bake plan for Fri, 12 Sep 2026: nothing scheduled · 4 stale"
-  //   "Bake today Sat, 20 Sep 2026: 4 deliveries · 8 loaves"
+  //   "Bake today Sat, 20 Sep 2026: 4 deliveries · 8 loaves · 1 unpaid"
   const staleSuffix =
     stale.length > 0 ? ` · ${stale.length} stale` : "";
+  // The unpaid count is NOT folded into the delivery count — it is the
+  // number that was taken OUT of it. Keeping it separate in the subject is
+  // what stops "4 deliveries" from quietly meaning five.
+  const unpaidSuffix =
+    unpaidLines.length > 0 ? ` · ${unpaidLines.length} unpaid` : "";
   const subject =
     total === 0
-      ? `${prefix} ${humanDate}: nothing scheduled${staleSuffix}`
-      : `${prefix} ${humanDate}: ${total} deliver${total === 1 ? "y" : "ies"} · ${totalLoaves} ${pluralize(totalLoaves, "loaf", "loaves")}${staleSuffix}`;
+      ? `${prefix} ${humanDate}: ${unpaidLines.length > 0 ? "nothing to bake" : "nothing scheduled"}${staleSuffix}${unpaidSuffix}`
+      : `${prefix} ${humanDate}: ${total} deliver${total === 1 ? "y" : "ies"} · ${totalLoaves} ${pluralize(totalLoaves, "loaf", "loaves")}${staleSuffix}${unpaidSuffix}`;
 
   if (total === 0) {
-    const emptyBody = emptyBodySentence(sendSlot);
+    const emptyBody = emptyBodySentence(sendSlot, unpaidLines.length > 0);
     const html = `
       <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1a;max-width:720px">
         <p style="font-size:16px;margin:0 0 12px">
@@ -449,6 +575,7 @@ export function buildBakePlan(
         <p style="font-size:13px;color:#666;margin:0 0 12px">
           This email is sent on schedule so a silent inbox means the cron is down, not a quiet day.
         </p>
+        ${unpaidSection.html}
         ${staleSection.html}
       </div>`;
     const textLines = [
@@ -458,14 +585,20 @@ export function buildBakePlan(
       "",
       "This email is sent on schedule so a silent inbox means the cron is down, not a quiet day.",
     ];
+    // Unpaid stops are rendered on the zero-bake path too. A day whose
+    // every stop is unpaid is exactly the day this section exists for;
+    // returning early without it would be the silent drop again.
+    if (unpaidSection.text) {
+      textLines.push("", unpaidSection.text);
+    }
     if (staleSection.text) {
       textLines.push("", staleSection.text);
     }
     return { subject, html, text: textLines.join("\n") };
   }
 
-  const sections = buildSections(lines);
-  const rollup = rollupProducts(lines);
+  const sections = buildSections(bakeLines);
+  const rollup = rollupProducts(bakeLines);
 
   // ── Text ───────────────────────────────────────────────────────────────
   const textParts: string[] = [];
@@ -497,6 +630,10 @@ export function buildBakePlan(
       if (sec.isPickup) textParts.push(`    ${readyTimeLabel(l)}`);
       for (const item of l.items) textParts.push(`    · ${itemLine(item)}`);
     }
+    textParts.push("");
+  }
+  if (unpaidSection.text) {
+    textParts.push(unpaidSection.text);
     textParts.push("");
   }
   if (staleSection.text) {
@@ -595,6 +732,8 @@ export function buildBakePlan(
       </table>
 
       ${groupHtml}
+
+      ${unpaidSection.html}
 
       ${staleSection.html}
     </div>`;

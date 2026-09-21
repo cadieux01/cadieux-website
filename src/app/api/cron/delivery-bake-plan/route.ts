@@ -280,6 +280,12 @@ export async function GET(req: NextRequest) {
         delivery_date: targetDate,
         send_slot: sendSlot,
         email_to: BAKE_PLAN_EMAIL,
+        // ROWS LOADED, not loaves baked. `subscription_count` counts every
+        // delivery due that day including ones on unpaid plans, which the
+        // email segregates under "UNPAID — DO NOT BAKE" and leaves out of
+        // its own totals. The two numbers can therefore differ on purpose;
+        // this column's job is "did the legs return data", which is what
+        // the false-zero guard above depends on.
         order_count: orderLines.length,
         subscription_count: subLines.length,
       });

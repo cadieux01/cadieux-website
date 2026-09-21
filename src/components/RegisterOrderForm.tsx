@@ -1066,6 +1066,23 @@ export function RegisterOrderForm({
                   delivery) is charged up front.
                 </p>
               )}
+              {/* Pay-later, said out loud. Creating a subscription without
+                  payment writes payment_method null + payment_status
+                  'pending', which is a legitimate thing to do — the row has
+                  to exist before money can be attached to it — but it is
+                  NOT a plan that bakes. The bake-plan email pulls these
+                  stops out of its totals and lists them under "UNPAID — DO
+                  NOT BAKE", so without this line the only place the
+                  consequence appears is an email nobody has opened yet. */}
+              {orderType === "subscription" && payment !== "paid" && (
+                <div style={warnBox}>
+                  <strong>This plan will not be baked.</strong> Until the full
+                  amount is collected it is listed under &ldquo;Unpaid — do not
+                  bake&rdquo; in the bake plan and is left out of the loaf
+                  totals. Choose &ldquo;Mark as paid&rdquo; once the cash is in,
+                  or take payment before the first delivery date.
+                </div>
+              )}
               {orderType === "one_time" && (
                 <label style={label}>
                   Initial order status
@@ -1084,7 +1101,7 @@ export function RegisterOrderForm({
           {isTeam && (
             <div style={{ ...mutedNote, textAlign: "center" }}>
               {orderType === "subscription"
-                ? "Team subscriptions are always recorded as unpaid and pending confirmation — subscriptions are prepaid, so Sunny will review and take payment before the first delivery."
+                ? "Team subscriptions are always recorded as unpaid and pending confirmation — subscriptions are prepaid, so Sunny will review and take payment before the first delivery. Until then the plan does not bake: it is listed under “Unpaid — do not bake” in the bake plan and left out of the loaf totals."
                 : "Team orders are always recorded as COD (unpaid) and pending confirmation — Sunny will review before dispatch."}
             </div>
           )}
@@ -1242,6 +1259,21 @@ const mutedNote: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: "1rem",
   color: CREAM_FAINT,
+};
+
+// Amber, not red: an unpaid plan is not an error, it is a plan that will
+// not be baked. The distinction matters — a red box reads as "you did
+// something wrong" and gets dismissed, and the point of this one is to be
+// read and acted on.
+const warnBox: React.CSSProperties = {
+  padding: "0.6rem 0.9rem",
+  border: "1px solid rgba(229,184,92,0.6)",
+  background: "rgba(229,184,92,0.14)",
+  color: "rgba(253,240,211,0.98)",
+  fontFamily: "var(--font-body)",
+  fontSize: "1rem",
+  borderRadius: 4,
+  marginTop: "0.75rem",
 };
 
 const errorBox: React.CSSProperties = {

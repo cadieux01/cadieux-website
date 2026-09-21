@@ -95,7 +95,9 @@ export type MultiVariantSubscriptionInsertCtx = {
     pincode: string | null;
   };
   subStatus: "active" | "pending_confirmation";
-  /** Prepaid only. "cod" is rejected by the subscriptions_no_cod CHECK. */
+  /** Prepaid only. "cod" is rejected in the database by the trigger
+   *  `tg_subscriptions_assert_not_cod` on public.subscriptions — a TRIGGER,
+   *  not a CHECK constraint, so pg_constraint comes back empty for it. */
   paymentMethod: SubscriptionPaymentMethod;
   /** Initial payment_status. "created" = Razorpay order raised, awaiting
    *  a verified signature. "paid" = admin collected cash up front. */
