@@ -212,7 +212,15 @@ export async function loadOrderLines(
       .from("pickup_locations")
       .select("id, name")
       .in("id", pickupIds);
-    if (locErr) throw new Error(`pickup_locations lookup: ${locErr.message}`);
+    // DEGRADE, DO NOT THROW. This lookup supplies a LABEL; it decides no
+    // quantity. Throwing here failed the whole orders leg, which the caller
+    // turns into a 500 before reserving — so a bad name lookup suppressed
+    // the entire send and the baker got nothing at all for the day. Losing
+    // the point name costs one header ("(unspecified point)"); losing the
+    // email costs the bake. Logged so the cause is still findable.
+    if (locErr) {
+      console.error("[bake-plan-lines] pickup_locations lookup failed:", locErr.message);
+    }
     for (const l of (locs || []) as { id: string; name: string | null }[]) {
       if (l.name) pickupNames.set(l.id, l.name);
     }
@@ -246,14 +254,17 @@ export async function loadOrderLines(
   });
 }
 
-/** Subscription stops due on `dateIso`, excluding cancelled only.
+/** Subscription stops due on `dateIso`, excluding delivered and cancelled.
  *
- *  DELIVERED IS INCLUDED — the orders leg also keeps delivered, and asymmetry
- *  between the two legs is what caused the strip and the DB to disagree
- *  ("18 orders vs 3 subs" when the DB held 18 and 6). Whatever "how many
- *  loaves did this date carry" means, both legs must answer it the same way.
- *  For a past date, delivered IS the fulfilled count. For a future date,
- *  nothing is delivered yet, so the filter is a no-op there.
+ *  IDENTICAL to the orders leg's exclusion, and that is the whole point. This
+ *  docstring used to claim "DELIVERED IS INCLUDED — the orders leg also keeps
+ *  delivered"; the orders leg has always excluded it, so the two legs answered
+ *  "what is due on date D" differently and the comment asserted the opposite of
+ *  the code beside it. Asymmetry here is what made the strip and the DB
+ *  disagree ("18 orders vs 3 subs" when the DB held 18 and 6). On a
+ *  forward-looking bake plan nothing is delivered yet, so this changes no
+ *  count the baker reads; it changes what a re-run for a PAST date reports,
+ *  which is now "still outstanding" on both sides rather than one of each.
  *
  *  Deliberately does NOT filter on the parent plan's payment_status. An
  *  unpaid plan's deliveries are already written at checkout and the bread
@@ -270,7 +281,7 @@ export async function loadSubscriptionLines(
       "id, subscription_id, slot, scheduled_time_slot, items_override, subscriptions(id, subscription_number, customer_name, customer_phone, customer_pincode, payment_status, delivery_address)",
     )
     .eq("delivery_date", dateIso)
-    .neq("status", "cancelled");
+    .not("status", "in", "(delivered,cancelled)");
 
   if (error) throw new Error(`subscription_deliveries leg: ${error.message}`);
 

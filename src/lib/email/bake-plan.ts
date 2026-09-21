@@ -82,8 +82,39 @@ interface Section {
   key: string;
   headerLabel: string;
   groupSlotValue: string | null;
+  /** Pickup counter rather than a van run. Drives the ready-time line and
+   *  the header colour; pickup lines never get the slot hint, because the
+   *  ready-time line already prints the same stored value. */
+  isPickup: boolean;
   lines: BakePlanLine[];
   loaves: number;
+}
+
+/** Canonical slot value → human window, e.g. "10:00-14:00" → "10 AM – 2 PM". */
+const SLOT_WINDOW = new Map(
+  DELIVERY_SLOTS.map((s) => [s.value, s.windowLabel] as const),
+);
+
+/**
+ * The ready time printed on every pickup line.
+ *
+ * THE ONLY HONEST SOURCE IS THE STORED SLOT. There is no promised-ready-time
+ * field anywhere: `orders.pickup_ready_at` is an EVENT STAMP written when an
+ * admin flips the status to `ready_for_pickup`, so on a plan for a future
+ * date it is always NULL (measured: 0 of the future-dated pickup rows carry
+ * one, against 18 of the 58 historical rows), and `pickup_locations` has no
+ * opening-hours column at all. So this prints the slot when one was stored —
+ * 2 of 58 pickup orders on record have one — and says so plainly when it was
+ * not. Inventing an hour here would be promising a time nobody committed to;
+ * the customer-facing share message refuses the same invention for the same
+ * reason (see order-share-customer.ts::whenLine).
+ */
+function readyTimeLabel(line: BakePlanLine): string {
+  const raw = (line.slot || "").trim();
+  if (!raw) return "Ready time not set";
+  // Legacy bare "07:30" values print verbatim — never mapped to a window
+  // name, because the window it belongs to is a guess.
+  return `Ready ${SLOT_WINDOW.get(raw) ?? raw}`;
 }
 
 /** Total loaves across every item on every line. Items are structured
@@ -115,10 +146,12 @@ function sectionCountsLabel(s: Section): string {
  * has a slot value that isn't the section's canonical string — so:
  *   • legacy times in a canonical section ("07:30" inside Morning)
  *   • any slot value in Slot not set (all deliveries with non-canonical times)
- *   • any slot value in a pickup section (pickups aren't slot-driven, but
- *     if the field was set anyway, the operator sees it)
  * Empty when the line matches the header, or when there is no value —
  * repeating the header on every line would be noise.
+ *
+ * NOT called on pickup lines: readyTimeLabel() already prints that same
+ * stored value as the ready time, and two renderings of one field on one
+ * line reads as two different facts.
  */
 function slotHint(
   line: BakePlanLine,
@@ -175,6 +208,7 @@ function buildSections(lines: BakePlanLine[]): Section[] {
       key: `slot:${s.value}`,
       headerLabel: `${s.label} · ${s.windowLabel}`,
       groupSlotValue: s.value,
+      isPickup: false,
       lines: lns,
       loaves: loafCount(lns),
     });
@@ -188,6 +222,7 @@ function buildSections(lines: BakePlanLine[]): Section[] {
     key: "slot:unset",
     headerLabel: "Slot not set",
     groupSlotValue: null,
+    isPickup: false,
     lines: unset,
     loaves: loafCount(unset),
   });
@@ -207,6 +242,7 @@ function buildSections(lines: BakePlanLine[]): Section[] {
       key: `pickup:${k}`,
       headerLabel: `Pickup · ${displayName}`,
       groupSlotValue: null,
+      isPickup: true,
       lines: lns,
       loaves: loafCount(lns),
     });
@@ -367,6 +403,17 @@ export function buildBakePlan(
   const total = lines.length;
   const totalLoaves = loafCount(lines);
 
+  // Pickups are already inside `total`, `totalLoaves` and the bake rollup —
+  // they always were. This makes that VISIBLE, because a counter loaf and a
+  // van loaf come out of the same oven and the summary line says
+  // "N deliveries", which reads like pickups were left out.
+  const pickupLines = lines.filter((l) => l.fulfillment === "pickup");
+  const pickupCount = pickupLines.length;
+  const pickupSummary =
+    pickupCount === 0
+      ? ""
+      : ` (incl. ${pickupCount} pickup · ${loafCount(pickupLines)} ${pluralize(loafCount(pickupLines), "loaf", "loaves")})`;
+
   // Cutoff notice. Never print an exact time — the schedule may drift by up
   // to an hour on Hobby's random-jitter behaviour, and a printed clock time
   // that disagrees with the "Received:" header is worse than no time at all.
@@ -424,7 +471,7 @@ export function buildBakePlan(
   const textParts: string[] = [];
   textParts.push(humanDate);
   textParts.push(
-    `${total} deliver${total === 1 ? "y" : "ies"} · ${totalLoaves} ${pluralize(totalLoaves, "loaf", "loaves")} — ${orderCount} order${orderCount === 1 ? "" : "s"}, ${subCount} subscription${subCount === 1 ? "" : "s"}`,
+    `${total} deliver${total === 1 ? "y" : "ies"} · ${totalLoaves} ${pluralize(totalLoaves, "loaf", "loaves")} — ${orderCount} order${orderCount === 1 ? "" : "s"}, ${subCount} subscription${subCount === 1 ? "" : "s"}${pickupSummary}`,
   );
   textParts.push(
     `Orders placed after this email are not counted. Live figure: ${liveHref}`,
@@ -442,11 +489,12 @@ export function buildBakePlan(
       continue;
     }
     for (const l of sec.lines) {
-      const hint = slotHint(l, sec.groupSlotValue);
+      const hint = sec.isPickup ? "" : slotHint(l, sec.groupSlotValue);
       textParts.push(
         `  [${l.kind === "order" ? "ORD" : "SUB"}] ${l.ref}${hint} — ${l.customerName} — ${l.customerPhone}`,
       );
       textParts.push(`    ${l.address}`);
+      if (sec.isPickup) textParts.push(`    ${readyTimeLabel(l)}`);
       for (const item of l.items) textParts.push(`    · ${itemLine(item)}`);
     }
     textParts.push("");
@@ -470,7 +518,7 @@ export function buildBakePlan(
 
   const groupHtml = sections
     .map((sec) => {
-      const headerColor = sec.key.startsWith("pickup:") ? "#436CB4" : "#024628";
+      const headerColor = sec.isPickup ? "#436CB4" : "#024628";
       const emptyBodyRow =
         sec.lines.length === 0
           ? `<p style="margin:0 0 0 4px;font-size:13px;color:#999">(nothing here — the section is rendered anyway so a missing header would read as a bug, not a zero)</p>`
@@ -481,9 +529,12 @@ export function buildBakePlan(
             l.kind === "order"
               ? `<span style="display:inline-block;padding:1px 6px;font-size:11px;background:#024628;color:#FBF3D4;border-radius:3px;letter-spacing:0.4px">ORDER</span>`
               : `<span style="display:inline-block;padding:1px 6px;font-size:11px;background:#436CB4;color:#FBF3D4;border-radius:3px;letter-spacing:0.4px">SUB</span>`;
-          const hint = slotHint(l, sec.groupSlotValue);
+          const hint = sec.isPickup ? "" : slotHint(l, sec.groupSlotValue);
           const hintHtml = hint
             ? `<span style="color:#B45309;font-weight:400;font-size:12px">${escapeHtml(hint.trim())}</span>`
+            : "";
+          const readyHtml = sec.isPickup
+            ? `<div style="color:#436CB4;font-size:12px;margin-top:4px;font-weight:600">${escapeHtml(readyTimeLabel(l))}</div>`
             : "";
           const itemLis = l.items
             .map(
@@ -500,6 +551,7 @@ export function buildBakePlan(
                 <div><strong>${escapeHtml(l.customerName)}</strong></div>
                 <div><a href="tel:${escapeHtml(l.customerPhone)}" style="color:#024628">${escapeHtml(l.customerPhone)}</a></div>
                 <div style="color:#666;font-size:12px;margin-top:4px">${escapeHtml(l.address)}</div>
+                ${readyHtml}
               </td>
               <td style="padding:10px 8px;border-bottom:1px solid #eee;vertical-align:top">
                 <ul style="margin:0;padding-left:16px;font-size:13px">${itemLis}</ul>
@@ -526,7 +578,7 @@ export function buildBakePlan(
         <strong>${escapeHtml(humanDate)}</strong>
       </p>
       <p style="font-size:14px;color:#666;margin:0 0 4px">
-        ${total} deliver${total === 1 ? "y" : "ies"} · ${orderCount} order${orderCount === 1 ? "" : "s"} · ${subCount} subscription${subCount === 1 ? "" : "s"}
+        ${total} deliver${total === 1 ? "y" : "ies"} · ${orderCount} order${orderCount === 1 ? "" : "s"} · ${subCount} subscription${subCount === 1 ? "" : "s"}${escapeHtml(pickupSummary)}
       </p>
       <p style="font-size:12px;color:#888;margin:0 0 20px">
         Orders placed after this email are not counted.
