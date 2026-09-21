@@ -5,8 +5,13 @@
 // authed admin surface); write goes through PUT with an audit trail.
 
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { isAdmin } from "@/lib/admin-auth";
-import { getPreorderMode, setPreorderMode } from "@/lib/preorderMode";
+import {
+  getPreorderModeUncached,
+  PREORDER_MODE_TAG,
+  setPreorderMode,
+} from "@/lib/preorderMode";
 import { recordAuditEvent } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +21,9 @@ export async function GET(req: NextRequest) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const enabled = await getPreorderMode();
+  // Uncached: the admin settings page is showing the operator the value they
+  // are about to change, and it is one request on a low-traffic surface.
+  const enabled = await getPreorderModeUncached();
   return NextResponse.json(
     { enabled },
     { headers: { "cache-control": "no-store" } },
@@ -32,12 +39,18 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Missing boolean 'enabled'" }, { status: 400 });
   }
 
-  const previous = await getPreorderMode();
+  // Uncached on purpose — see getPreorderModeUncached. Comparing against a
+  // cached value could make a real flip look like a no-op and silently skip
+  // the write.
+  const previous = await getPreorderModeUncached();
   const next = body.enabled;
 
   // No-op flip → return current value without touching the DB (still 200 so
-  // the client's optimistic UI settles cleanly).
+  // the client's optimistic UI settles cleanly). Still drop the cache: if the
+  // row already held `next` while the cache held the opposite (a direct DB
+  // edit), pressing the toggle is the operator's way of forcing a resync.
   if (previous === next) {
+    revalidateTag(PREORDER_MODE_TAG);
     return NextResponse.json({ enabled: next, changed: false });
   }
 
@@ -50,6 +63,11 @@ export async function PUT(req: NextRequest) {
       { status: 500 },
     );
   }
+
+  // Drop the cached read immediately, so the flip is live on the next request
+  // instead of waiting out the 10 s window. This is what lets the public read
+  // be cached at all without the toggle ever looking stale.
+  revalidateTag(PREORDER_MODE_TAG);
 
   void recordAuditEvent({
     req,

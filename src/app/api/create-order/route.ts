@@ -57,10 +57,24 @@ export async function POST(req: NextRequest) {
 
   // Per-IP cap. This route had none, and 29 of the 34 orders the 13 Sep probe
   // created came through it rather than the COD path.
-  const ipUnderLimit = await allowedOrFailOpen(
+  //
+  // Started alongside the pre-order-mode read rather than awaited before it.
+  // Both are prerequisites of `prepareOneTimeOrder` and neither depends on the
+  // other, so running them in series added one Upstash round trip to the
+  // customer's wait for no reason. Overlapping is only safe because
+  // getPreorderMode reads one global config value and writes nothing — no
+  // per-customer work happens before the cap is honoured two lines below.
+  const ipLimitCheck = allowedOrFailOpen(
     orderRateLimit,
     `create-order:${getClientIP(req)}`,
   );
+  const preorderModeRead = getPreorderMode();
+  // Attach a handler now, not at the await: every early return below leaves
+  // this promise untouched, and an untouched rejected promise is an unhandled
+  // rejection. The value is still read from the original promise.
+  void preorderModeRead.catch(() => {});
+
+  const ipUnderLimit = await ipLimitCheck;
   if (!ipUnderLimit) {
     return NextResponse.json(
       {
@@ -80,10 +94,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Identical validation + authoritative pricing as the COD path.
-  // Pre-order mode is read fresh every request so a flip in the admin
-  // toggle takes effect immediately without invalidating any cache.
-  const preorderMode = await getPreorderMode();
+  // Identical validation + authoritative pricing as the COD path. The
+  // pre-order read was started above and has almost certainly resolved by now.
+  const preorderMode = await preorderModeRead;
   const prep = await prepareOneTimeOrder(body, req, supabaseAdmin, {
     preorderMode,
   });

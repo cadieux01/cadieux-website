@@ -114,6 +114,35 @@ export const apiRateLimit = new Ratelimit({
   prefix: "ratelimit:api",
 });
 
+/**
+ * The same 30/min ceiling, on a SEPARATE budget, for the handful of endpoints
+ * a customer cannot complete a purchase without: /api/verify/*,
+ * /api/create-order and /api/verify-payment. See CHECKOUT_CRITICAL_PATHS in
+ * src/middleware.ts for the routing.
+ *
+ * Why this exists: one shared 30/min bucket meant ordinary page chatter
+ * (pre-order mode, product floors, serviceability, delivery quote — some of it
+ * fired twice per load before the client dedupe) spent the budget that the pay
+ * step then needed, and a failed card that the customer retries spends more of
+ * it per attempt. I tripped a real 429 on live prod with modest probing. The
+ * customer sees "Rate limit exceeded. Please slow down." with money not yet
+ * taken, which is the worst moment on the site to hand someone a dead end.
+ *
+ * This does NOT raise any ceiling — it stops browsing traffic and paying
+ * traffic from competing for the same one, and 30/min is still far above human
+ * pace on four endpoints. Nothing is opened up, because every path on the list
+ * keeps its own much tighter domain limiter underneath: orders are 5/IP/hour
+ * plus 3/phone/30min, OTP send is 3/phone/hour, and OTP check burns the code
+ * after MAX_ATTEMPTS guesses per phone (otp-store.ts) — a per-phone counter
+ * that a wider IP allowance cannot touch. verify-payment is signature-gated.
+ */
+export const checkoutRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(30, "1 m"),
+  analytics: true,
+  prefix: "ratelimit:api:checkout",
+});
+
 // Self-serve subscription delivery edits: 10 per customer per day. Keyed by
 // the OTP-verified phone so admins / multiple customers behind the same NAT
 // don't share a quota.

@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { cachedJson } from "@/lib/client-json-cache";
 import { PRODUCTS } from "@/lib/data";
 import {
   cartFloor,
@@ -19,15 +20,23 @@ import {
 
 export type FloorsBySlug = Record<string, PreorderInfo>;
 
+/** Matches usePreorderMode. A floor moves when an admin edits a product, which
+ *  is rare relative to a checkout session. */
+const TTL_MS = 30_000;
+
 export function useProductFloors(): { floors: FloorsBySlug; loading: boolean } {
   const [floors, setFloors] = useState<FloorsBySlug>({});
   const [loading, setLoading] = useState(true);
 
+  // Shared client cache: /checkout mounts this hook twice (checkout page and
+  // cart summary) and useCartFloor mounts it again, so without dedupe one page
+  // load fired the same request two or three times.
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/product-floors", { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { floors?: FloorsBySlug };
+      const json = await cachedJson<{ floors?: FloorsBySlug }>(
+        "/api/product-floors",
+        TTL_MS,
+      );
       setFloors(json.floors ?? {});
     } catch (err) {
       console.warn("[useProductFloors] fetch failed:", err);
@@ -39,9 +48,12 @@ export function useProductFloors(): { floors: FloorsBySlug; loading: boolean } {
 
   useEffect(() => {
     void load();
-    // Unlike usePreorderMode (fetched once per page load), floors DO refresh
-    // on focus: stock can land while a tab sits open, and a stale floor shows
-    // a loaf as unorderable that we could have sold.
+    // Unlike usePreorderMode, floors still listen for focus: stock can land
+    // while a tab sits open, and a stale floor shows a loaf as unorderable
+    // that we could have sold. What made the old listener expensive was that
+    // EVERY focus event cost a round trip — an alt-tab to read an OTP paid for
+    // one. It goes through the TTL cache now, so a focus inside the window is
+    // free and only a genuinely old map is re-read.
     const onFocus = () => void load();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
