@@ -376,6 +376,7 @@ export default async function ProductDetailPage({
         preorder={preorder}
         reports={reports}
         price={productRow?.price_inr ?? null}
+        canSubscribe={productRow?.is_subscription_plan ?? false}
         subscribePrice={subscriptionPlan?.price ?? null}
         subscribeDiscountPct={subscriptionPlan?.subscription_discount_pct ?? null}
         proteinPerLoafG={productRow ? proteinPerLoafGrams(productRow) : null}

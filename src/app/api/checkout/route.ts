@@ -40,7 +40,11 @@ import {
 import { enforceDeliveryFloor } from "@/lib/order-validation";
 import { queueOrderNotification } from "@/lib/order-notification";
 import { queueBurstAlert } from "@/lib/order-burst-alert";
-import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
+import {
+  subscriptionUnitPrice,
+  isSubscribablePlan,
+  NOT_A_SUBSCRIPTION_PLAN_ERROR,
+} from "@/lib/subscription-pricing";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import {
   buildMultiVariantSubscriptionInsert,
@@ -716,7 +720,7 @@ export async function POST(req: NextRequest) {
       const { data: rows, error: rowsErr } = await supabaseAdmin
         .from("products")
         .select(
-          "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message",
+          "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message, is_subscription_plan",
         )
         .in("slug", slugs);
       if (rowsErr) {
@@ -754,6 +758,14 @@ export async function POST(req: NextRequest) {
         if (!row.in_stock) {
           return NextResponse.json(
             { error: "This bread is currently out of stock." },
+            { status: 400 },
+          );
+        }
+        // Must come BEFORE the price guard: a one-time-only product prices
+        // out at full MRP, so `unit <= 0` never catches it.
+        if (!isSubscribablePlan(row)) {
+          return NextResponse.json(
+            { error: NOT_A_SUBSCRIPTION_PLAN_ERROR, code: "not_a_subscription_plan" },
             { status: 400 },
           );
         }
@@ -915,12 +927,13 @@ export async function POST(req: NextRequest) {
     //   - product is_archived                   → 400 unknown plan
     //   - product is_active=false               → 400 not available
     //   - product in_stock=false                → 400 out of stock
+    //   - is_subscription_plan=false            → 400 one-time only
     //   - subscription_per_loaf_inr is null/<=0 → 400 not available
     const planId: string = String(bread_slug);
     const { data: planRow, error: planErr } = await supabaseAdmin
       .from("products")
       .select(
-        "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message",
+        "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message, is_subscription_plan",
       )
       .eq("slug", planId)
       .maybeSingle();
@@ -946,6 +959,14 @@ export async function POST(req: NextRequest) {
     if (!planRow.in_stock) {
       return NextResponse.json(
         { error: "This bread is currently out of stock." },
+        { status: 400 }
+      );
+    }
+    // Must come BEFORE the price guard: a one-time-only product prices out at
+    // full MRP, so `pricePerLoaf <= 0` never catches it.
+    if (!isSubscribablePlan(planRow)) {
+      return NextResponse.json(
+        { error: NOT_A_SUBSCRIPTION_PLAN_ERROR, code: "not_a_subscription_plan" },
         { status: 400 }
       );
     }

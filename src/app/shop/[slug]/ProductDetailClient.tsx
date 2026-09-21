@@ -110,6 +110,7 @@ export default function ProductDetailClient({
   preorder = null,
   reports = [],
   price = null,
+  canSubscribe = false,
   subscribePrice = null,
   subscribeDiscountPct = null,
   proteinPerLoafG = null,
@@ -141,6 +142,16 @@ export default function ProductDetailClient({
   // price only when the DB read was empty, so display + cart snapshot stay
   // pinned to the products table — the single source of truth.
   price?: number | null;
+  // products.is_subscription_plan for THIS product. False hides the entire
+  // BUY ONCE / SUBSCRIBE toggle, leaving the one-time price and Add to Cart —
+  // burger buns are sold one-off only. Read from the flag, never from the
+  // slug, so the next one-time product behaves correctly with no code change.
+  //
+  // Defaults to false, which is also what a failed products read yields. That
+  // is the right way round: offering Subscribe on a product we cannot confirm
+  // is a plan is exactly the bug this fixes, and the wizard reads the same
+  // table, so during an outage the tab would lead nowhere anyway.
+  canSubscribe?: boolean;
   // DERIVED per-loaf subscribe price (MRP × (1 − discount%)), resolved
   // server-side via getSubscriptionPlans so it is in first paint. Null when
   // this product isn't a subscription plan, or the read failed — the subscribe
@@ -450,40 +461,46 @@ export default function ProductDetailClient({
               </div>
             )}
 
-            {/* Order type toggle — FIX 4: selected=solid FG+ash label, unselected=transparent+FG+FG border */}
-            <div
-              style={{
-                display: "inline-flex",
-                padding: 4,
-                borderRadius: 999,
-                border: "1px solid #024628",
-                background: "transparent",
-                marginBottom: 18,
-              }}
-            >
-              {(["once", "sub"] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setOrderType(type)}
-                  style={{
-                    padding: "8px 18px",
-                    borderRadius: 999,
-                    border: "none",
-                    background: orderType === type ? "#024628" : "transparent",
-                    color: orderType === type ? "#C0C8CE" : "#024628",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    letterSpacing: "0.28em",
-                    textTransform: "uppercase",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  {type === "once" ? "Buy Once" : "Subscribe"}
-                </button>
-              ))}
-            </div>
+            {/* Order type toggle — FIX 4: selected=solid FG+ash label, unselected=transparent+FG+FG border.
+                Only rendered for products flagged is_subscription_plan. When it
+                is absent `orderType` stays "once" (its initial value, and
+                nothing else writes it), so the price line reads "one-time" and
+                Add to Cart takes the normal one-time path. */}
+            {canSubscribe && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  padding: 4,
+                  borderRadius: 999,
+                  border: "1px solid #024628",
+                  background: "transparent",
+                  marginBottom: 18,
+                }}
+              >
+                {(["once", "sub"] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setOrderType(type)}
+                    style={{
+                      padding: "8px 18px",
+                      borderRadius: 999,
+                      border: "none",
+                      background: orderType === type ? "#024628" : "transparent",
+                      color: orderType === type ? "#C0C8CE" : "#024628",
+                      fontFamily: "var(--font-body)",
+                      fontSize: 14,
+                      fontWeight: 500,
+                      letterSpacing: "0.28em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    {type === "once" ? "Buy Once" : "Subscribe"}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {outOfStock && (
               <div
@@ -1431,7 +1448,7 @@ function LabelInfoSections({
 
   const one = unit?.unit ?? "unit";
   const nutriSubtitle =
-    typeof slicesPerLoaf === "number" && slicesPerLoaf > 0 && unit
+    typeof slicesPerLoaf === "number" && slicesPerLoaf > 0 && unit?.showContainerCount
       ? `Values per single ${one} (${unit.countIsApprox ? "approx. " : ""}${slicesPerLoaf} ${unit.units} per ${unit.container}).`
       : `Values per single ${one}.`;
 

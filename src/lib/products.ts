@@ -59,6 +59,12 @@ export type ProductRow = {
   // a lab result reported as "less than" — see lib/nutrition.
   nutrition_per_slice: Record<string, NutrientValue> | null;
   slices_per_loaf: number | null;
+  // Whether this product can be SUBSCRIBED to, as opposed to bought once.
+  // Owned by the admin product form and already the filter behind the
+  // subscription wizard's plan list; the PDP reads it so a one-time-only
+  // product (burger buns) never offers a Subscribe tab. A new one-time
+  // product needs no code change — just the flag off.
+  is_subscription_plan: boolean;
 };
 
 const supabaseAnon = createClient(
@@ -75,7 +81,7 @@ export const getActiveProducts = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, available_from, stock_message, sort_order, updated_at, ingredients, allergens, nutrition_per_slice, slices_per_loaf",
+        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, available_from, stock_message, sort_order, updated_at, ingredients, allergens, nutrition_per_slice, slices_per_loaf, is_subscription_plan",
       )
       .eq("is_active", true)
       .eq("is_archived", false)

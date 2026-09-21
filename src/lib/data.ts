@@ -110,14 +110,27 @@ export type ProductSlug = "multigrain" | "high-protein" | "burger-bun";
  *
  *  `countIsApprox` because a loaf yields roughly seven slices depending on
  *  how it is cut, while a pack holds exactly two buns. "approx. 2 buns per
- *  pack" would hedge a number that is not in doubt. */
+ *  pack" would hedge a number that is not in doubt.
+ *
+ *  `showContainerCount` puts the count in the nutrition panel's subtitle
+ *  ("Values per single slice (approx. 20 slices per loaf)."). It is OFF for
+ *  buns: sitting directly above the numbers, "(2 buns per pack)" reads as
+ *  though the values describe the pack. A loaf does not have that problem —
+ *  nobody reads per-slice figures as a whole loaf — so the bread wording is
+ *  unchanged. The pack size is still stated in the bun's tagline. */
 export const PRODUCT_UNIT: Record<
   ProductSlug,
-  { unit: string; units: string; container: string; countIsApprox: boolean }
+  {
+    unit: string;
+    units: string;
+    container: string;
+    countIsApprox: boolean;
+    showContainerCount: boolean;
+  }
 > = {
-  multigrain: { unit: "slice", units: "slices", container: "loaf", countIsApprox: true },
-  "high-protein": { unit: "slice", units: "slices", container: "loaf", countIsApprox: true },
-  "burger-bun": { unit: "bun", units: "buns", container: "pack", countIsApprox: false },
+  multigrain: { unit: "slice", units: "slices", container: "loaf", countIsApprox: true, showContainerCount: true },
+  "high-protein": { unit: "slice", units: "slices", container: "loaf", countIsApprox: true, showContainerCount: true },
+  "burger-bun": { unit: "bun", units: "buns", container: "pack", countIsApprox: false, showContainerCount: false },
 };
 
 export type ProductMedia = {

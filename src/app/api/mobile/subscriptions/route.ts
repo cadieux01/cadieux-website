@@ -39,7 +39,11 @@ import {
   generateDeliveries,
   type DayKey,
 } from "@/lib/subscription-dates";
-import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
+import {
+  subscriptionUnitPrice,
+  isSubscribablePlan,
+  NOT_A_SUBSCRIPTION_PLAN_ERROR,
+} from "@/lib/subscription-pricing";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import { formatSubscriptionNumber } from "@/lib/order-number";
 import { getPreorderMode } from "@/lib/preorderMode";
@@ -731,7 +735,7 @@ async function handleMultiVariant(
   const { data: rows, error: rowsErr } = await supabaseAdmin
     .from("products")
     .select(
-      "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message",
+      "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message, is_subscription_plan",
     )
     .in("slug", slugs);
   if (rowsErr) {
@@ -759,6 +763,11 @@ async function handleMultiVariant(
     }
     if (row.in_stock === false) {
       return fail(400, `This bread is currently out of stock: ${row.name}`, "out_of_stock");
+    }
+    // Must come BEFORE the price guard: a one-time-only product prices out at
+    // full MRP, so `unit <= 0` never catches it.
+    if (!isSubscribablePlan(row)) {
+      return fail(400, NOT_A_SUBSCRIPTION_PLAN_ERROR, "not_a_subscription_plan");
     }
     const unit = subscriptionUnitPrice(row);
     if (!Number.isFinite(unit) || unit <= 0) {
@@ -1140,7 +1149,7 @@ export async function POST(req: NextRequest) {
   const { data: product, error: productErr } = await supabaseAdmin
     .from("products")
     .select(
-      "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock, available_from, stock_message",
+      "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock, available_from, stock_message, is_subscription_plan",
     )
     .eq("id", body.product_id)
     .maybeSingle();
@@ -1158,6 +1167,13 @@ export async function POST(req: NextRequest) {
       `Product is out of stock: ${product.name}`,
       "out_of_stock",
     );
+  }
+  // Must come BEFORE the price reconcile below: a one-time-only product
+  // prices out at full MRP, so `derivedPrice <= 0` never catches it. The
+  // installed app can't be rebuilt, so this message is written to be shown
+  // verbatim to the customer.
+  if (!isSubscribablePlan(product)) {
+    return fail(400, NOT_A_SUBSCRIPTION_PLAN_ERROR, "not_a_subscription_plan");
   }
   // (The stricter "pre-order loaf cannot start a new plan at all" gate has
   // been removed. The 6b delivery-floor block below is the only guard —

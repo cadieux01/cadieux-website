@@ -27,6 +27,33 @@ export type PricingInput = {
   subscription_discount_pct?: number | string | null;
 };
 
+/** Whether a products row may be subscribed to AT ALL.
+ *
+ *  `subscriptionUnitPrice` below cannot answer this. It derives the price as
+ *  MRP × (1 − discount%), so a one-time-only product with a 0% discount and a
+ *  NULL `subscription_per_loaf_inr` prices out at its full MRP — a positive,
+ *  plausible number that sails through every `<= 0` guard. The result is not
+ *  a ₹0 or NaN subscription, it is a perfectly-formed FULL-PRICE subscription
+ *  for a product we never meant to sell that way. `is_subscription_plan` is
+ *  the only column that actually says no.
+ *
+ *  Compares `=== true` on purpose: when a caller forgets this column in its
+ *  `.select(...)` the value is `undefined` and every subscription is refused.
+ *  That breaks loudly and immediately, which is the correct way round — the
+ *  alternative default silently reopens this hole.
+ */
+export function isSubscribablePlan(p: {
+  is_subscription_plan?: boolean | null;
+}): boolean {
+  return p.is_subscription_plan === true;
+}
+
+/** Customer-facing refusal for a product that isn't a subscription plan.
+ *  Shared so all four creation paths (web + mobile, single + multi-variant)
+ *  say the same thing. */
+export const NOT_A_SUBSCRIPTION_PLAN_ERROR =
+  "This product is only available as a one-time order, not a subscription.";
+
 function clamp(n: number, lo: number, hi: number): number {
   if (!Number.isFinite(n)) return lo;
   return Math.min(hi, Math.max(lo, n));
