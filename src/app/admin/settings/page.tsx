@@ -5,11 +5,13 @@
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import PreorderModeToggle from "./PreorderModeToggle";
+import SandwichKitchenCard from "./SandwichKitchenCard";
 
 export default function AdminSettingsPage() {
   return (
     <AdminShell title="Settings" subtitle="Site-wide toggles">
       <PreorderModeToggle />
+      <SandwichKitchenCard />
     </AdminShell>
   );
 }

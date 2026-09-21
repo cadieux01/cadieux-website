@@ -174,6 +174,10 @@ export type AdminOrderRow = {
   is_preorder?: boolean | null;
   /** Timestamp when admin first set delivery_date on a preorder row. */
   scheduled_delivery_date_at?: string | null;
+  /** 'bread' | 'sandwich'. Every legacy row is 'bread' (DB-level default);
+   *  'sandwich' rows only appear once the sandwich kitchen is opened. Used
+   *  by the admin orders board to split into Bread / Sandwiches tabs. */
+  order_kind?: "bread" | "sandwich" | null;
   customers?: AdminCustomerSummary | null;
   /** Total order_notes rows attached to this order (both 'note' and
    *  'call'). Zero when nothing has been logged. Populated by the list

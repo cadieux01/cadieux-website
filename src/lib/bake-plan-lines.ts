@@ -168,7 +168,12 @@ function flattenSubAddress(addr: unknown): string {
 
 // ── Data legs ────────────────────────────────────────────────────────────
 
-/** One-time orders due on `dateIso`, excluding delivered and cancelled. */
+/** One-time orders due on `dateIso`, excluding delivered and cancelled.
+ *
+ * order_kind='sandwich' is EXCLUDED — the sandwich kitchen is same-day
+ * cooked-to-order and has nothing to do with tomorrow's bread bake. The
+ * column is NOT NULL DEFAULT 'bread', so an explicit .eq('bread') matches
+ * every historical row without a backfill window. */
 export async function loadOrderLines(
   supabase: SupabaseClient,
   dateIso: string,
@@ -179,6 +184,7 @@ export async function loadOrderLines(
       "id, order_number, delivery_slot, delivery_address, total_amount, fulfillment_type, payment_status, items, pickup_location_id, customers(full_name, phone)",
     )
     .eq("delivery_date", dateIso)
+    .eq("order_kind", "bread")
     .not("status", "in", "(delivered,cancelled)");
 
   if (error) throw new Error(`orders leg: ${error.message}`);

@@ -439,6 +439,10 @@ function OrdersPageInner() {
   const [sort, setSort] = useState<SortKey>(urlInit.sort);
   const [basis, setBasis] = useState<DateBasis>(urlInit.basis);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // 'bread' (default) | 'sandwich' — order_kind tab. Every legacy row
+  // is 'bread' at the DB default, so the initial view is unchanged.
+  // Sandwich rows only appear once the kitchen is opened.
+  const [kindTab, setKindTab] = useState<"bread" | "sandwich">("bread");
   const [selected, setSelected] = useStoredSelection(SELECTION_KEY);
   const [pendingBulk, setPendingBulk] = useState<BulkAction | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
@@ -708,6 +712,11 @@ function OrdersPageInner() {
 
   const filtered = useMemo(() => {
     const rows = orders.filter((o) => {
+      // Bread / Sandwiches tab. NULL is grandfathered as 'bread' — every
+      // row predating the sandwich migration lacks the column and must
+      // still show up under Bread.
+      const kind = (o.order_kind ?? "bread") as "bread" | "sandwich";
+      if (kind !== kindTab) return false;
       if (!matchesDay(orderDateForBasis(o, basis), day)) return false;
       // Statuses OR'd, call updates OR'd, zones OR'd, the groups AND'd.
       // Shared with the print view so the packing list can't disagree with
@@ -777,7 +786,7 @@ function OrdersPageInner() {
         if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [orders, statusSel, callSel, zoneSel, repeatOnly, query, sort, day, rankOf, anchor, pincodeCoords, basis, zoneOf]);
+  }, [orders, statusSel, callSel, zoneSel, repeatOnly, query, sort, day, rankOf, anchor, pincodeCoords, basis, zoneOf, kindTab]);
 
   // A restored id is only meaningful if the row is still there — an order
   // can have been cancelled, or the filters can have moved on, while the
@@ -1320,6 +1329,51 @@ function OrdersPageInner() {
         </>
       }
     >
+      {/* Bread / Sandwiches tabs — filters the same board in-memory,
+          keyed off orders.order_kind. Every legacy row is 'bread' at the
+          DB default, so switching to Sandwiches on a pre-launch DB shows
+          an empty list (not an error). */}
+      <div
+        className="mb-4"
+        role="tablist"
+        aria-label="Order kind"
+        style={{ display: "flex", gap: "0.5rem" }}
+      >
+        {(["bread", "sandwich"] as const).map((k) => {
+          const on = kindTab === k;
+          const count = orders.filter(
+            (o) => ((o.order_kind ?? "bread") as string) === k,
+          ).length;
+          return (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => {
+                if (on) return;
+                clearRankPins();
+                setKindTab(k);
+              }}
+              className="uppercase"
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "0.75rem",
+                letterSpacing: "0.22em",
+                color: on ? "#1D1D1F" : "#FBF3D4",
+                background: on ? "#FBF3D4" : "transparent",
+                border: `1px solid ${on ? "#FBF3D4" : "rgba(251,243,212,0.3)"}`,
+                padding: "0.4rem 0.85rem",
+                cursor: "pointer",
+              }}
+            >
+              {k === "bread" ? "Bread" : "Sandwiches"}
+              <span style={{ marginLeft: 8, opacity: 0.7 }}>{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div
         className="mb-4"
         style={{
