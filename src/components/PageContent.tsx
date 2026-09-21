@@ -155,8 +155,13 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               It contains the hero <video>; skipping its rendering
               off-screen leaves the video frozen on its first frame and it
               never resumes on re-entry. */}
+          {/* `vh`, not `dvh`: this panel sits directly ABOVE QASection, whose
+              scroll engine caches the section's absolute top once. A `dvh`
+              hero re-heights itself as mobile Safari's toolbar animates, which
+              moves everything below it and silently invalidates that cached
+              origin mid-scroll. Static unit here keeps it honest. */}
           <div style={{
-            position: "relative", height: "100dvh",
+            position: "relative", height: "100vh",
           }}>
             <section style={{
               position: "absolute", inset: 0, overflow: "hidden",

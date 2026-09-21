@@ -36,6 +36,40 @@ const SLICES: Array<{ enter: number; exit: number }> = QAS.map((_, i) => ({
   exit: i === QAS.length - 1 ? 1 : (i + 1) * STEP,
 }));
 
+/* Hysteresis around each slice boundary, as a fraction of total progress.
+   ~0.02 of a 470vh section is roughly 90px of scroll.
+
+   WHY THIS EXISTS. Changing `active` re-keys the stage below, which makes
+   React destroy and rebuild the question and every word span, restarting
+   `qa-word-in` from opacity 0 / translateY(8px). With a bare `p >= boundary`
+   test, a few pixels of scroll oscillation across 0.23 or 0.46 re-ran that
+   whole reveal on every wobble — the text jumped 8px and re-typed, over and
+   over. Safari's momentum and rubber-band scrolling oscillate `scrollY` far
+   more than Chromium's, which is why it showed there and not in dev tooling.
+   That was the reported "shaking", and it read as the section being latched. */
+const DEADBAND = 0.02;
+
+/** Next slice index given progress `p` and the slice we are CURRENTLY on.
+ *
+ *  Deliberately a function of `cur`, not of `p` alone. A deadband measured
+ *  against fixed boundaries would merely move the chatter to the edge of the
+ *  deadband; measuring it against the slice we already committed to means the
+ *  thresholds for leaving are asymmetric, so once we move the only way back is
+ *  a genuine reversal of at least DEADBAND. Fast scrolls that skip a slice
+ *  still land directly on the right one. */
+function nextSlice(p: number, cur: number): number {
+  let raw = SLICES.length - 1;
+  for (let i = 0; i < SLICES.length; i++) {
+    if (p < SLICES[i].exit) {
+      raw = i;
+      break;
+    }
+  }
+  if (raw === cur) return cur;
+  if (raw > cur) return p >= SLICES[cur].exit + DEADBAND ? raw : cur;
+  return p <= SLICES[cur].enter - DEADBAND ? raw : cur;
+}
+
 /* Per-word stagger for the answer reveal. ~80ms keeps a sentence
    readable but unhurried — a 30-word answer types in ~2.4 s.         */
 const WORD_STAGGER_MS = 80;
@@ -98,7 +132,26 @@ export default function QASection() {
       cachedRange = Math.max(outer.scrollHeight - window.innerHeight, 1);
     };
     measure();
-    window.addEventListener("resize", measure, { passive: true });
+
+    /* Re-measure on WIDTH changes only.
+     *
+     * `cachedRange` subtracts the LIVE `window.innerHeight`, so it moves with
+     * mobile Safari's toolbar even though the section's own height no longer
+     * does. Safari fires `resize` on every toolbar show/hide, which re-ran
+     * measure() mid-gesture and made `p` jump discontinuously — tripping the
+     * slice flip above. Scrolling UP is what expands that toolbar, which is
+     * exactly why the shake was worst in that direction.
+     *
+     * A toolbar show/hide changes height only; a rotation or a real window
+     * resize changes width. Gating on width keeps the cases that genuinely
+     * invalidate the geometry and drops the one that does not. */
+    let lastWidth = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      measure();
+    };
+    window.addEventListener("resize", onResize, { passive: true });
     window.addEventListener("load", measure);
 
     const tick = () => {
@@ -108,15 +161,8 @@ export default function QASection() {
       lastSy = sy;
       const p = Math.min(Math.max((sy - cachedTop) / cachedRange, 0), 1);
 
-      /* Active slice index. */
-      let idx = 0;
-      for (let i = 0; i < SLICES.length; i++) {
-        if (p >= SLICES[i].enter && p < SLICES[i].exit) {
-          idx = i;
-          break;
-        }
-        if (i === SLICES.length - 1 && p >= SLICES[i].enter) idx = i;
-      }
+      /* Active slice index, with hysteresis — see nextSlice(). */
+      const idx = nextSlice(p, activeRef.current);
       if (idx !== activeRef.current) {
         activeRef.current = idx;
         setActive(idx);
@@ -133,7 +179,7 @@ export default function QASection() {
     raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener("resize", measure);
+      window.removeEventListener("resize", onResize);
       window.removeEventListener("load", measure);
     };
   }, []);
@@ -174,7 +220,16 @@ export default function QASection() {
         style={{
           position: "sticky",
           top: 0,
-          height: "100dvh",
+          /* `vh`, NOT `dvh`, and it must stay that way. The outer's scroll
+             range above is in `vh`; a `dvh` child meant the range and the
+             pinned panel were measured in two different units, one static and
+             one tracking mobile Safari's toolbar. `vh` IS the large viewport,
+             so this renders identically to `dvh` with the toolbar hidden —
+             which is how the section is seen for all but the first moment —
+             while never resizing mid-scroll. Nothing about the pacing changes:
+             the outer keeps its 470vh and the 0.23/0.46 boundaries are
+             fractions of it. */
+          height: "100vh",
           overflow: "hidden",
           background: "linear-gradient(135deg,#024628 0%,#024628 40%,#035c35 70%,#024628 100%)",
           /* Static gradient. The former `qa-glow` animation shifted
