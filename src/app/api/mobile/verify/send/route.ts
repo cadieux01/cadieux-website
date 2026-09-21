@@ -16,6 +16,7 @@ import { otpRateLimit, getClientIP } from "@/lib/ratelimit";
 import { generateOtp, putOtp } from "@/lib/otp-store";
 import { sendOtpSms } from "@/lib/msg91";
 import { otpAuditMeta, logOtpSend } from "@/lib/otp-audit";
+import { otpUnavailable } from "@/lib/otp-unavailable";
 
 export async function POST(req: NextRequest) {
   // Fail closed if MOBILE_APP_KEY isn't configured — never accept requests.
@@ -64,7 +65,17 @@ export async function POST(req: NextRequest) {
   const meta = otpAuditMeta(req, getClientIP(req), "mobile");
 
   // Same Upstash key prefix as the web route -> shared 3/hr/phone budget.
-  const { success, limit, remaining, reset } = await otpRateLimit.limit(to);
+  // An unreachable Upstash fails CLOSED here — see otp-unavailable.ts. It
+  // matters more on this route than on the web one: the app has no OTA, so a
+  // raw 500 here could not be hotfixed, whereas the copy that helper returns
+  // is rendered verbatim by apiFetch without a Play release.
+  let gate: Awaited<ReturnType<typeof otpRateLimit.limit>>;
+  try {
+    gate = await otpRateLimit.limit(to);
+  } catch (err) {
+    return otpUnavailable(to, meta, "limiter_unavailable", err);
+  }
+  const { success, limit, remaining, reset } = gate;
   if (!success) {
     logOtpSend("BLOCKED", to, { ...meta, outcome: "rate_limited" });
     return NextResponse.json(
@@ -94,7 +105,13 @@ export async function POST(req: NextRequest) {
   // Self-generate a 6-digit code, store its HMAC in Upstash (TTL 600s),
   // then deliver the plaintext via MSG91's DLT-approved template.
   const otp = generateOtp();
-  await putOtp(to, otp);
+  try {
+    await putOtp(to, otp);
+  } catch (err) {
+    // A code we could not store is a code we could not verify, so the SMS
+    // below must not go out. Same answer as the limiter failing.
+    return otpUnavailable(to, meta, "store_unavailable", err);
+  }
 
   const sent = await sendOtpSms(to, otp);
   if (!sent.ok) {
