@@ -202,8 +202,11 @@ export default function QASection() {
             objectFit: "cover", zIndex: 0, backgroundColor: "#024628",
           }}
         >
-          <source src="/product-video-06.mp4" type="video/mp4" />
+          {/* AV1 first: the browser takes the first source it can decode, so
+              an h264-first pair means the .av1 file never ships. 1,026,818 B
+              against 1,504,461 B here. */}
           <source src="/product-video-06.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
+          <source src="/product-video-06.mp4" type="video/mp4" />
         </video>
 
         {/* Dark video overlay */}

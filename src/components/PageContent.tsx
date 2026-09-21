@@ -344,8 +344,9 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   backgroundColor: "#024628",
                 }}
               >
-                <source src="/product-video-05.mp4" type="video/mp4" />
+                {/* AV1 first — 1,497,327 B against 2,541,494 B. */}
                 <source src="/product-video-05.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
+                <source src="/product-video-05.mp4" type="video/mp4" />
               </video>
               {/* Dark overlay */}
               <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.62)", zIndex: 0, pointerEvents: "none" }} />
@@ -511,8 +512,12 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   backgroundColor: "#024628",
                 }}
               >
-                <source src="/bread-eating-01.mp4" type="video/mp4" />
+                {/* AV1 first for consistency with the other four, but note
+                    this encode saves almost nothing — 2,089,674 B against
+                    2,091,917 B. The source file wants re-encoding; the order
+                    is not what is costing bytes here. */}
                 <source src="/bread-eating-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
+                <source src="/bread-eating-01.mp4" type="video/mp4" />
               </video>
               {/* Dark overlay — matched to Phase 3 */}
               <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.62)", zIndex: 0, pointerEvents: "none" }} />
@@ -766,8 +771,9 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 position: "absolute", inset: 0, width: "100%", height: "100%",
                 objectFit: "cover", zIndex: 0, backgroundColor: "#024628",
               }}>
-              <source src="/bread-making-01.mp4" type="video/mp4" />
+              {/* AV1 first — 2,734,230 B against 3,090,488 B. */}
               <source src="/bread-making-01.av1.mp4" type='video/mp4; codecs="av01.0.05M.08"' />
+              <source src="/bread-making-01.mp4" type="video/mp4" />
             </video>
             {/* Dark overlay */}
             <div style={{ position: "absolute", inset: 0, background: "rgba(29,29,31,0.70)", zIndex: 1, pointerEvents: "none" }} />

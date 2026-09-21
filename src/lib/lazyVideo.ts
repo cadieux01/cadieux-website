@@ -4,8 +4,9 @@
 // downloaded in full on page load — ~13.8 MB before the visitor had scrolled
 // past the hero. Only the hero keeps preload="auto" (it is the LCP surface and
 // must be ready immediately). The other four ship as preload="none" and are
-// fetched by this ref, ~200px before they reach the viewport. All four already
-// have a poster, so nothing is blank while the file loads.
+// fetched by this ref: never before the visitor's first scroll, and then ~200px
+// before they reach the viewport. All four already have a poster, so nothing is
+// blank while the file loads.
 //
 // The `autoplay` ATTRIBUTE must NOT be set on a deferred video: it tells the
 // browser to start playback as soon as possible, which starts the download and
@@ -20,6 +21,33 @@ const bound = new WeakSet<HTMLVideoElement>();
 
 // How early a video starts loading, in px of scroll distance from the viewport.
 const ROOT_MARGIN = "200px 0px";
+
+// The look-ahead above is unconditionally satisfied by the section directly
+// under the hero: it begins at exactly one viewport height, so `top < vh + 200`
+// is true at rest and its observer fired on mount — measured at 1,504,461 B of
+// product-video-06.mp4 fetched on a homepage load with no scroll at all.
+//
+// Shrinking ROOT_MARGIN would fix that one section and lose the pre-roll for
+// every other. Gating on the first scroll keeps the 200px look-ahead for all of
+// them and still fetches nothing until the visitor actually moves.
+let scrolled = typeof window !== "undefined" && window.scrollY > 0;
+const waiting: (() => void)[] = [];
+
+function onFirstScroll(fn: () => void) {
+  // Already scrolled (back-navigation restores the offset before we mount).
+  if (scrolled) {
+    fn();
+    return;
+  }
+  waiting.push(fn);
+  if (waiting.length > 1) return;
+  const fire = () => {
+    scrolled = true;
+    window.removeEventListener("scroll", fire);
+    while (waiting.length) waiting.shift()!();
+  };
+  window.addEventListener("scroll", fire, { passive: true });
+}
 
 /* React ref callback. Attach to any background video that ships with
    preload="none" and no autoplay attribute. */
@@ -53,15 +81,17 @@ export const lazyPlayOnEnter = (el: HTMLVideoElement | null) => {
     return;
   }
 
-  const io = new IntersectionObserver(
-    (entries) => {
-      if (!entries.some((e) => e.isIntersecting)) return;
-      // One-shot: disconnect before loading so a scroll-out/scroll-in can
-      // never restart the fetch or reset playback.
-      io.disconnect();
-      load();
-    },
-    { rootMargin: ROOT_MARGIN },
-  );
-  io.observe(el);
+  onFirstScroll(() => {
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        // One-shot: disconnect before loading so a scroll-out/scroll-in can
+        // never restart the fetch or reset playback.
+        io.disconnect();
+        load();
+      },
+      { rootMargin: ROOT_MARGIN },
+    );
+    io.observe(el);
+  });
 };
