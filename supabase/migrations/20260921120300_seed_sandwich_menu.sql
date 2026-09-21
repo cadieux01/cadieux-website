@@ -9,8 +9,9 @@
 -- combinations the menu marks "—". Two rows minus one, not two rows with a
 -- NULL sentinel.
 --
--- Bread slugs used: 'plain' and 'multigrain'. Free-text on sandwich_variants
--- (no FK to products); rename-safe.
+-- Bread slugs used: 'high-protein' and 'multigrain' — these match products.slug
+-- on live (the Plain loaf's product row has slug='high-protein'). Free-text on
+-- sandwich_variants (no FK to products); rename-safe.
 --
 -- sort_order steps in 10s so admin can insert-between without renumbering the
 -- whole list.
@@ -48,16 +49,16 @@ on conflict (slug) do nothing;
 -- keyed on the (sandwich_id, bread_slug) UNIQUE — an existing price is
 -- respected. "—" combinations are ABSENT rows, never present-with-NULL.
 
--- Veg: plain
+-- Veg: high-protein
 insert into public.sandwich_variants (sandwich_id, bread_slug, price_inr)
-  select id, 'plain', 120 from public.sandwiches where slug='veg-plain'
-  union all select id, 'plain', 160 from public.sandwiches where slug='veg-grilled'
-  union all select id, 'plain', 140 from public.sandwiches where slug='grilled-spinach-corn'
-  union all select id, 'plain', 100 from public.sandwiches where slug='cucumber-herb-tramezzini'
-  union all select id, 'plain', 140 from public.sandwiches where slug='grilled-cheesy-garlic'
-  union all select id, 'plain', 160 from public.sandwiches where slug='tawa-paneer'
-  union all select id, 'plain', 140 from public.sandwiches where slug='no-cook-paneer'
-  union all select id, 'plain', 150 from public.sandwiches where slug='guac'
+  select id, 'high-protein', 120 from public.sandwiches where slug='veg-plain'
+  union all select id, 'high-protein', 160 from public.sandwiches where slug='veg-grilled'
+  union all select id, 'high-protein', 140 from public.sandwiches where slug='grilled-spinach-corn'
+  union all select id, 'high-protein', 100 from public.sandwiches where slug='cucumber-herb-tramezzini'
+  union all select id, 'high-protein', 140 from public.sandwiches where slug='grilled-cheesy-garlic'
+  union all select id, 'high-protein', 160 from public.sandwiches where slug='tawa-paneer'
+  union all select id, 'high-protein', 140 from public.sandwiches where slug='no-cook-paneer'
+  union all select id, 'high-protein', 150 from public.sandwiches where slug='guac'
 on conflict (sandwich_id, bread_slug) do nothing;
 
 -- Veg: multigrain (veg-plain is intentionally OMITTED — menu says "—")
@@ -71,19 +72,19 @@ insert into public.sandwich_variants (sandwich_id, bread_slug, price_inr)
   union all select id, 'multigrain', 190 from public.sandwiches where slug='guac'
 on conflict (sandwich_id, bread_slug) do nothing;
 
--- Non-veg: plain
+-- Non-veg: high-protein
 insert into public.sandwich_variants (sandwich_id, bread_slug, price_inr)
-  select id, 'plain', 150 from public.sandwiches where slug='sunny-side-avocado'
-  union all select id, 'plain', 118 from public.sandwiches where slug='tamago-sando'
-  union all select id, 'plain', 128 from public.sandwiches where slug='grilled-tamago-sando'
-  union all select id, 'plain', 140 from public.sandwiches where slug='plain-chicken-coleslaw'
-  union all select id, 'plain', 160 from public.sandwiches where slug='grilled-chicken-coleslaw'
-  union all select id, 'plain', 180 from public.sandwiches where slug='grilled-chicken-tikka'
-  union all select id, 'plain', 160 from public.sandwiches where slug='grilled-chicken-mozzarella'
-  union all select id, 'plain', 190 from public.sandwiches where slug='grilled-chicken-special'
-  union all select id, 'plain', 200 from public.sandwiches where slug='grilled-chicken-pesto'
-  union all select id, 'plain', 220 from public.sandwiches where slug='grilled-chicken-avocado'
-  union all select id, 'plain', 180 from public.sandwiches where slug='fried-chicken-mozzarella'
+  select id, 'high-protein', 150 from public.sandwiches where slug='sunny-side-avocado'
+  union all select id, 'high-protein', 118 from public.sandwiches where slug='tamago-sando'
+  union all select id, 'high-protein', 128 from public.sandwiches where slug='grilled-tamago-sando'
+  union all select id, 'high-protein', 140 from public.sandwiches where slug='plain-chicken-coleslaw'
+  union all select id, 'high-protein', 160 from public.sandwiches where slug='grilled-chicken-coleslaw'
+  union all select id, 'high-protein', 180 from public.sandwiches where slug='grilled-chicken-tikka'
+  union all select id, 'high-protein', 160 from public.sandwiches where slug='grilled-chicken-mozzarella'
+  union all select id, 'high-protein', 190 from public.sandwiches where slug='grilled-chicken-special'
+  union all select id, 'high-protein', 200 from public.sandwiches where slug='grilled-chicken-pesto'
+  union all select id, 'high-protein', 220 from public.sandwiches where slug='grilled-chicken-avocado'
+  union all select id, 'high-protein', 180 from public.sandwiches where slug='fried-chicken-mozzarella'
 on conflict (sandwich_id, bread_slug) do nothing;
 
 -- Non-veg: multigrain (tamago-sando + plain-chicken-coleslaw OMITTED — "—")

@@ -68,7 +68,8 @@ create table if not exists public.sandwich_variants (
 
   -- The bread slug this variant is offered on. Free-text and NOT a FK so a
   -- future rename of a product does not orphan the entire menu — the catalogue
-  -- is small and hand-edited. Seeded values today are 'plain' and 'multigrain'.
+  -- is small and hand-edited. Seeded values today are 'high-protein' and 'multigrain'
+  -- (matching products.slug on live).
   bread_slug text not null
     check (length(btrim(bread_slug)) between 1 and 60),
 
