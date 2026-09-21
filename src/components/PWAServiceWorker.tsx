@@ -9,7 +9,8 @@
 //   • Update flow: when a new SW takes control (`controllerchange`), we ask
 //     it to skipWaiting and reload the page once. The user sees a single
 //     refresh after a deploy — never an infinite reload loop (the
-//     `reloaded` flag).
+//     `reloaded` flag), and never a refresh on a FIRST install (the
+//     `adoptedInitialWorker` latch — see below).
 //   • Errors are swallowed: SW registration failures should never crash the
 //     UI. They get a console warning so they're visible in DevTools.
 
@@ -53,7 +54,32 @@ export default function PWAServiceWorker() {
 
     let reloaded = false;
 
+    // `controllerchange` fires on a FIRST INSTALL as well as on an update:
+    // sw.js calls skipWaiting() during install and clients.claim() on activate,
+    // so a brand-new worker claims a page that is already showing content it
+    // fetched from the network seconds ago. Reloading then re-downloads the
+    // whole document — measured on live at 7,286,746 B for a first visit
+    // against 3,641,437 B for a second, the hero video alone counted twice.
+    //
+    // Only an UPDATE warrants the refresh, and an update is exactly the case
+    // where some worker was already in control. Read that once here rather
+    // than inside the handler: by the time controllerchange fires,
+    // navigator.serviceWorker.controller is ALREADY the new worker, so
+    // checking it there would be true in both cases and guard nothing.
+    //
+    // This is a latch, not a constant. A plain `hadController` const would
+    // suppress the reload for the whole life of the page, so a tab that
+    // first-installed the worker and then sat open across a deploy would never
+    // pick that deploy up (verified: it does not reload). Consuming only the
+    // FIRST controllerchange keeps the first install silent while leaving every
+    // later update — in that same tab — reloading as before.
+    let adoptedInitialWorker = !!navigator.serviceWorker.controller;
+
     const onControllerChange = () => {
+      if (!adoptedInitialWorker) {
+        adoptedInitialWorker = true;
+        return;
+      }
       if (reloaded) return;
       reloaded = true;
       window.location.reload();
