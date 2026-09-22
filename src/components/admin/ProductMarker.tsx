@@ -5,41 +5,70 @@
 // knows about bread; the bread mapping lives in PRODUCT_TONES below and is
 // the only part that would change.
 //
-// TONES. Plain green, Multigrain amber. Amber and NOT red: #EF4444 appears
-// 101 times across this admin and means destructive every time — cancel,
-// delete, the failure line on a bulk result. A colour that means "you are
-// about to lose something" must not also mean "this bag has multigrain in
-// it", or the operator learns to discount it.
+// TONES. Plain green, Multigrain RED, Burger bun yellow.
 //
-// KNOWN INCONSISTENCY, deliberately not fixed here: components/admin/
-// LoafDots.tsx paints Multigrain #D6453F (red) on every /admin/orders row,
-// under the same reasoning this rejects. Changing that repaints a board
-// this branch was not asked to touch, so it is reported rather than
-// silently reconciled. If it is reconciled later, LoafDots should import
-// PRODUCT_TONES from here instead of declaring its own constants.
+// THE PALETTE IS SUNNY'S, DECIDED 2026-09-22, and it overrules what this
+// file used to argue. The original objection is kept verbatim because it is
+// the reason the decision had to be made at all:
+//
+//   "Multigrain must be amber and NOT red: #EF4444 appears 101 times across
+//    this admin and means destructive every time — cancel, delete, the
+//    failure line on a bulk result. A colour that means 'you are about to
+//    lose something' must not also mean 'this bag has multigrain in it', or
+//    the operator learns to discount it."
+//
+// What answers it: THE TWO REDS ARE NOT THE SAME RED. Destructive is
+// #EF4444. The Multigrain product tone is #D6453F — the value LoafDots has
+// painted on every /admin/orders row since it shipped. They are
+// distinguishable side by side and they never appear in the same role, so
+// the collision the objection feared does not occur.
+//
+// Sunny's deciding reason: red is what he already reads on the orders board
+// every morning, so amber here meant one loaf was two different colours on
+// two different boards. And with a third product arriving, amber (#F59E0B)
+// and the bun's yellow (#F2C037) are too close to separate at a glance —
+// three clearly distinct colours beat two that look alike.
+//
+// This file is now the ONE source of product colour: LoafDots imports
+// PRODUCT_TONES/TONE_COLOURS from here and declares none of its own. The
+// "known inconsistency" note that used to sit here is resolved, not moved.
 
 import type { CSSProperties } from "react";
 import { DAY_LABEL } from "@/lib/subscription-ui";
 import type { CountLine } from "@/lib/subscription-counts";
 
-export type MarkerTone = "green" | "amber" | "neutral";
+export type MarkerTone = "green" | "red" | "yellow" | "neutral";
 
 export const TONE_COLOURS: Record<MarkerTone, { bg: string; fg: string }> = {
-  // Cream text on the two saturated fills; the admin body colour is
-  // #FBF3D4, so the letter reads as part of the page rather than as a
-  // second accent.
+  // Near-black ink on the three saturated fills. Yellow especially needs a
+  // dark letter — cream on #F2C037 is under 2:1 and unreadable at 16px.
   green: { bg: "#3FBF6A", fg: "#0F1A18" },
-  amber: { bg: "#F59E0B", fg: "#0F1A18" },
+  // NOT #EF4444 (destructive). See the header.
+  red: { bg: "#D6453F", fg: "#0F1A18" },
+  yellow: { bg: "#F2C037", fg: "#0F1A18" },
   // A product we have no tone for: hollow, never a guessed colour. An
   // unknown bread silently rendering as Plain is exactly the class of bug
   // this whole branch exists to remove.
   neutral: { bg: "transparent", fg: "#FBF3D4" },
 };
 
-/** slug → tone. The ONLY bread-aware line in this file. */
+/** slug → tone. The ONLY product-aware line in this file, and the registry
+ *  every other surface reads — adding a product means adding it HERE and
+ *  nowhere else. Keys are the `slug`/`product_id` vocabulary shared by both
+ *  orders.items shapes and by subscription_items.product_slug. */
 export const PRODUCT_TONES: Record<string, MarkerTone> = {
   "high-protein": "green",
-  multigrain: "amber",
+  multigrain: "red",
+  "burger-bun": "yellow",
+};
+
+/** slug → short label, for surfaces that must name a product with no row
+ *  in hand (the CSV header set). Where a row IS in hand, prefer its own
+ *  `name` — these are the fallback, not the display source of truth. */
+export const PRODUCT_LABELS: Record<string, string> = {
+  "high-protein": "Plain",
+  multigrain: "Multigrain",
+  "burger-bun": "Burger Bun",
 };
 
 export function toneForProduct(slug: string): MarkerTone {

@@ -116,6 +116,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Catalog",
     items: [
       { href: "/admin/products", label: "Products" },
+      // The sandwich builder was reachable only by typing the URL.
+      // It sits beside Products because it is a catalogue editor, not
+      // an order surface — sandwiches are ordered elsewhere.
+      { href: "/admin/sandwiches", label: "Sandwiches" },
       { href: "/admin/locations", label: "Store Locator" },
       { href: "/admin/service-areas", label: "Areas We Serve" },
     ],

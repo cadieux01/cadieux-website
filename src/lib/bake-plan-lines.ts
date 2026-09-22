@@ -18,6 +18,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isPaidStatus } from "@/lib/payment-label";
+import { itemSlug, type OrderItemLike } from "@/lib/order-items";
 
 /** One product line to bake. Structured, NOT the rendered "2 × Plain"
  *  string this used to be: the email built that string and then parsed it
@@ -27,6 +28,14 @@ import { isPaidStatus } from "@/lib/payment-label";
 export interface BakeItem {
   name: string;
   qty: number;
+  /** Product identity ('high-protein' | 'multigrain' | 'burger-bun'), when
+   *  the source row carried one. Added so the admin production strip can
+   *  bucket subscription stops by the SAME key it buckets orders by rather
+   *  than by display name — see lib/order-items.ts. The bake-plan EMAIL
+   *  does not read this; it renders `name` exactly as before. Optional
+   *  because a per-delivery `items_override` is free-form jsonb and may
+   *  carry no identity at all. */
+  slug?: string | null;
 }
 
 /** One deliverable — same shape for orders and subscription deliveries. */
@@ -111,6 +120,7 @@ interface SubDeliveryRow {
 
 interface SubItemRow {
   subscription_id: string;
+  product_slug: string | null;
   product_name: string | null;
   quantity_per_delivery: number | null;
 }
@@ -121,6 +131,12 @@ interface RawItem {
   qty?: unknown;
   quantity?: unknown;
   quantity_per_delivery?: unknown;
+  /** Identity, in each of the three spellings the three writers use:
+   *  website orders `slug`, app orders `product_id`, subscription_items
+   *  `product_slug`. Normalised by itemSlug(). */
+  slug?: unknown;
+  product_id?: unknown;
+  product_slug?: unknown;
 }
 
 interface SubAddress {
@@ -144,7 +160,10 @@ function readItem(raw: RawItem): BakeItem | null {
   if (!name) return null;
   const q = Number(raw?.qty ?? raw?.quantity ?? raw?.quantity_per_delivery ?? 0);
   if (!Number.isFinite(q) || q <= 0) return null;
-  return { name, qty: Math.floor(q) };
+  // `name` stays the gate: a line with no name is unrenderable in the email
+  // and is dropped exactly as before. Slug is carried alongside when the
+  // row has one, and is null when it does not — never inferred from name.
+  return { name, qty: Math.floor(q), slug: itemSlug(raw as OrderItemLike) };
 }
 
 function readItems(items: unknown): BakeItem[] {
@@ -303,7 +322,9 @@ export async function loadSubscriptionLines(
   if (subIds.length > 0) {
     const { data: items, error: iErr } = await supabase
       .from("subscription_items")
-      .select("subscription_id, product_name, quantity_per_delivery")
+      .select(
+        "subscription_id, product_slug, product_name, quantity_per_delivery",
+      )
       .in("subscription_id", subIds);
     if (iErr) throw new Error(`subscription_items lookup: ${iErr.message}`);
     for (const row of (items || []) as SubItemRow[]) {
