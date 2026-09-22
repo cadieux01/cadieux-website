@@ -1752,6 +1752,12 @@ function SubscriptionsPageInner() {
                         <Link
                           href={`/admin/subscriptions/${s.id}`}
                           style={{ ...buttonSm, textDecoration: "none" }}
+                          // The row's own onClick bails on anything matching
+                          // ROW_INTERACTIVE_SELECTOR, which includes <a>, so
+                          // this link has to stash for itself — otherwise
+                          // Back from here lands on the top of the board while
+                          // Back from a click on the row lands on the row.
+                          onClick={() => stashScrollY(SCROLL_KEY)}
                         >
                           Details
                         </Link>
