@@ -1,10 +1,13 @@
--- HELD — NOT APPLIED. Sunny to review before running.
+-- APPLIED 2026-09-21. Live in production under Supabase migration ledger
+-- version 20260921174400 (this file's own prefix drifted from that version;
+-- bodies verified identical against prod 2026-09-22). Every statement is
+-- idempotent — re-running is a no-op.
 --
 -- Adds order_kind + payment_group_id to public.orders, introduces the OLW
 -- number series for sandwich orders, and REPLACES public.tg_orders_assign_number
 -- so the BEFORE INSERT trigger dispatches OLF vs OLW off order_kind. The OLF
 -- side is BYTE-FOR-BYTE the current live body (introspected against production
--- 2026-09-21). Every statement is idempotent — re-running is a no-op.
+-- 2026-09-21).
 --
 -- Two axes:
 --

@@ -27,6 +27,24 @@ export const MAX_DELIVERY_KM = 20;
 /** The whole fee, every delivery, every distance inside the service area. */
 export const DELIVERY_FEE_FLAT_INR = 12;
 
+/** How the delivery fee is apportioned when ONE payment produces TWO orders
+ *  (mixed cart → OLF bread row + OLW sandwich row, per the OLF/OLW split
+ *  plan). Two modes:
+ *
+ *    "single"   — ONE fee, charged on the OLF row only. OLW carries a zero
+ *                 delivery fee. This is TWO rider trips (bread on its own
+ *                 slot, sandwich on its own same-day slot under Option C)
+ *                 against ONE collected fee — a MARGIN choice, not a
+ *                 technical one, and the current default until Sunny rules
+ *                 otherwise.
+ *
+ *    "per_order" — Each row carries its own DELIVERY_FEE_FLAT_INR. Customer
+ *                  pays two fees for two trips.
+ *
+ *  Read server-side only; a constant, not a DB flag, so a change is a
+ *  deploy-visible audit event rather than a silent runtime flip. */
+export const DELIVERY_FEE_SPLIT_MODE: "single" | "per_order" = "single";
+
 export function computeDeliveryFee(distanceKm: number): {
   serviceable: boolean;
   feeInr: number;
