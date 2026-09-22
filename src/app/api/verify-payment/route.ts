@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
   //    razorpay order id binds to it.
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
-    .select("id, total_amount, razorpay_order_id, payment_status")
+    .select("id, total_amount, razorpay_order_id, payment_status, payment_group_id")
     .eq("id", dbOrderId)
     .maybeSingle();
   if (orderErr) {
@@ -128,6 +128,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // AMOUNT-CHECK LANDMINE (SANDWICH_CHECKOUT_BLOCK_CODE) — under the OLF/OLW
+  // split, ONE Razorpay payment covers BOTH order rows, so payment.amount is
+  // (bread.total + sandwich.total) × 100, but expectedAmount below compares
+  // against a SINGLE row's total. Any mixed cart that reaches this route
+  // with the split in effect fails "not_captured" AFTER the customer's money
+  // moved. Step 5 (route wiring) MUST fix this in the same sweep that removes
+  // the sandwich checkout refusal — grep SANDWICH_CHECKOUT_BLOCK_CODE.
   const expectedAmount = Math.round(Number(order.total_amount) * 100);
   if (
     payment.status !== "captured" ||
@@ -148,15 +155,30 @@ export async function POST(req: NextRequest) {
   }
 
   // Verified — mark paid. Only flip a row that is not already paid.
-  const { error: updErr } = await supabaseAdmin
-    .from("orders")
-    .update({
-      payment_status: "paid",
-      razorpay_payment_id: rzpPaymentId,
-      paid_at: new Date().toISOString(),
-    })
-    .eq("id", order.id)
-    .neq("payment_status", "paid");
+  //
+  // Under the OLF/OLW cart split, one Razorpay payment covers BOTH order
+  // rows (bread + sandwich) sharing a payment_group_id, so paying one row
+  // must flip its sibling in the same UPDATE. Rows outside a split have
+  // payment_group_id = NULL and fall through to the by-id path unchanged.
+  const { error: updErr } = order.payment_group_id
+    ? await supabaseAdmin
+        .from("orders")
+        .update({
+          payment_status: "paid",
+          razorpay_payment_id: rzpPaymentId,
+          paid_at: new Date().toISOString(),
+        })
+        .eq("payment_group_id", order.payment_group_id)
+        .neq("payment_status", "paid")
+    : await supabaseAdmin
+        .from("orders")
+        .update({
+          payment_status: "paid",
+          razorpay_payment_id: rzpPaymentId,
+          paid_at: new Date().toISOString(),
+        })
+        .eq("id", order.id)
+        .neq("payment_status", "paid");
   if (updErr) {
     console.error("[verify-payment] mark-paid failed:", updErr.message);
     return NextResponse.json({ error: "Failed to mark order paid" }, { status: 500 });

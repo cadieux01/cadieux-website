@@ -113,7 +113,7 @@ export async function POST(
   //    order id binds to it.
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
-    .select("id, customer_id, total_amount, razorpay_order_id, payment_status")
+    .select("id, customer_id, total_amount, razorpay_order_id, payment_status, payment_group_id")
     .eq("id", id)
     .maybeSingle();
   if (orderErr) {
@@ -162,6 +162,13 @@ export async function POST(
     );
   }
 
+  // AMOUNT-CHECK LANDMINE (SANDWICH_CHECKOUT_BLOCK_CODE) — under the OLF/OLW
+  // split, ONE Razorpay payment covers BOTH order rows, so payment.amount is
+  // (bread.total + sandwich.total) × 100, but expectedAmount below compares
+  // against a SINGLE row's total. Any mixed cart that reaches this route
+  // with the split in effect fails "not_captured" AFTER the customer's money
+  // moved. Step 5 (route wiring) MUST fix this in the same sweep that removes
+  // the sandwich checkout refusal — grep SANDWICH_CHECKOUT_BLOCK_CODE.
   const expectedAmount = Math.round(Number(order.total_amount) * 100);
   if (
     payment.status !== "captured" ||
@@ -182,16 +189,37 @@ export async function POST(
   }
 
   // Verified — flip the SAME row to paid. Delivery `status` is untouched.
-  const { error: updErr } = await supabaseAdmin
-    .from("orders")
-    .update({
-      payment_status: "paid",
-      payment_method: "razorpay",
-      razorpay_payment_id: rzpPaymentId,
-      paid_at: new Date().toISOString(),
-    })
-    .eq("id", order.id)
-    .neq("payment_status", "paid");
+  //
+  // Under the OLF/OLW cart split, ONE Razorpay payment covers BOTH rows
+  // (bread + sandwich) sharing a payment_group_id. This route is scoped to
+  // a SINGLE order id by path, but a "Pay Now" against either member of a
+  // group covers the group's whole balance — so the UPDATE deliberately
+  // fans out to every row with the same payment_group_id, marking the
+  // sibling paid too. That is correct: the customer has paid the group's
+  // total, they must not be asked to Pay Now on the sibling as well.
+  // Rows outside a split have payment_group_id = NULL and fall through to
+  // the by-id path unchanged.
+  const { error: updErr } = order.payment_group_id
+    ? await supabaseAdmin
+        .from("orders")
+        .update({
+          payment_status: "paid",
+          payment_method: "razorpay",
+          razorpay_payment_id: rzpPaymentId,
+          paid_at: new Date().toISOString(),
+        })
+        .eq("payment_group_id", order.payment_group_id)
+        .neq("payment_status", "paid")
+    : await supabaseAdmin
+        .from("orders")
+        .update({
+          payment_status: "paid",
+          payment_method: "razorpay",
+          razorpay_payment_id: rzpPaymentId,
+          paid_at: new Date().toISOString(),
+        })
+        .eq("id", order.id)
+        .neq("payment_status", "paid");
   if (updErr) {
     console.error("[orders/pay/verify] mark-paid failed:", updErr.message);
     return NextResponse.json({ error: "Failed to mark order paid" }, { status: 500 });

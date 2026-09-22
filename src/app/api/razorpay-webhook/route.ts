@@ -82,9 +82,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ignored: event.event ?? null });
   }
 
+  // LOOKUP LANDMINE (SANDWICH_CHECKOUT_BLOCK_CODE) — under the OLF/OLW split,
+  // admin_create_split_orders stamps THE SAME razorpay_order_id onto BOTH
+  // rows (bread + sandwich). This query then matches two rows, and
+  // .maybeSingle() ERRORS on >1 rows (PostgREST returns "multiple rows
+  // returned" rather than a row). The webhook then falls into the orderErr
+  // branch below and bails without marking anything paid — on the BACKUP
+  // path that exists precisely for the case where the client-side
+  // /api/verify-payment never ran. Failure mode: customer's money captured,
+  // no row marked paid, opaque "Lookup failed" 500 in logs, no signal that
+  // it's the split at fault. WORSE than the amount-check landmine, which
+  // fails with a named reason ("not_captured" / amount_mismatch).
+  //
+  // FIX (step 5 route wiring, DO NOT do it here): add `.limit(1)` before
+  // `.maybeSingle()`. Behaviour-identical today (one row matched anyway
+  // because groups don't exist yet) and correct under groups — both members
+  // share razorpay_order_id AND payment_group_id, so picking either row is
+  // enough for the branch below to fan the UPDATE out to the whole group.
+  //
+  // grep SANDWICH_CHECKOUT_BLOCK_CODE now surfaces THREE kinds of landmine:
+  //   • sandwich checkout refusal — remove to let mixed carts through
+  //   • amount-check landmine (×4) — expectedAmount is per-row, not per-group
+  //   • lookup landmine (×1, this one) — .maybeSingle() cannot survive a group
+  // Whoever runs the step-5 sweep must understand they are not the same fix.
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
-    .select("id, total_amount, payment_status")
+    .select("id, total_amount, payment_status, payment_group_id")
     .eq("razorpay_order_id", rzpOrderId)
     .maybeSingle();
   if (orderErr) {
@@ -96,13 +119,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, unknown_order: rzpOrderId });
   }
 
+  // Under the OLF/OLW cart split, one Razorpay payment covers BOTH order
+  // rows sharing a payment_group_id. Marking one row (paid or failed) must
+  // flip its sibling in the same UPDATE. Rows outside a split have
+  // payment_group_id = NULL and fall through to the by-id path unchanged.
   if (event.event === "payment.failed") {
     if (order.payment_status !== "paid") {
-      await supabaseAdmin
-        .from("orders")
-        .update({ payment_status: "failed" })
-        .eq("id", order.id)
-        .neq("payment_status", "paid");
+      if (order.payment_group_id) {
+        await supabaseAdmin
+          .from("orders")
+          .update({ payment_status: "failed" })
+          .eq("payment_group_id", order.payment_group_id)
+          .neq("payment_status", "paid");
+      } else {
+        await supabaseAdmin
+          .from("orders")
+          .update({ payment_status: "failed" })
+          .eq("id", order.id)
+          .neq("payment_status", "paid");
+      }
     }
     return NextResponse.json({ ok: true });
   }
@@ -113,6 +148,11 @@ export async function POST(req: NextRequest) {
     if (order.payment_status === "paid") {
       return NextResponse.json({ ok: true, already: true });
     }
+    // AMOUNT-CHECK LANDMINE (SANDWICH_CHECKOUT_BLOCK_CODE) — under the split,
+    // `captured` is (bread.total + sandwich.total) × 100, but expectedAmount
+    // compares against a SINGLE row's total. Step 5 (route wiring) MUST fix
+    // this in the same sweep that removes the sandwich checkout refusal —
+    // grep SANDWICH_CHECKOUT_BLOCK_CODE.
     const captured = Number(payment?.amount ?? orderEntity?.amount);
     const expectedAmount = Math.round(Number(order.total_amount) * 100);
     if (Number.isFinite(captured) && captured !== expectedAmount) {
@@ -123,15 +163,27 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ ok: true, amount_mismatch: true });
     }
-    await supabaseAdmin
-      .from("orders")
-      .update({
-        payment_status: "paid",
-        ...(payment?.id ? { razorpay_payment_id: payment.id } : {}),
-        paid_at: new Date().toISOString(),
-      })
-      .eq("id", order.id)
-      .neq("payment_status", "paid");
+    if (order.payment_group_id) {
+      await supabaseAdmin
+        .from("orders")
+        .update({
+          payment_status: "paid",
+          ...(payment?.id ? { razorpay_payment_id: payment.id } : {}),
+          paid_at: new Date().toISOString(),
+        })
+        .eq("payment_group_id", order.payment_group_id)
+        .neq("payment_status", "paid");
+    } else {
+      await supabaseAdmin
+        .from("orders")
+        .update({
+          payment_status: "paid",
+          ...(payment?.id ? { razorpay_payment_id: payment.id } : {}),
+          paid_at: new Date().toISOString(),
+        })
+        .eq("id", order.id)
+        .neq("payment_status", "paid");
+    }
 
     // Money has arrived — alert now. Races /api/verify-payment for the same
     // payment; UNIQUE(order_id, event) on order_notifications_sent decides
