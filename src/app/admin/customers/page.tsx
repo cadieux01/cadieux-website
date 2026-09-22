@@ -5,15 +5,25 @@
 // per-customer aggregates and a click-through to /admin/customers/[id].
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import {
   DateRangeDropdown,
+  parsePresetKey,
+  resolveCustomRange,
   resolvePreset,
   withinDateRange,
+  type DateRangeMeta,
   type DateRangeValue,
+  type PresetKey,
 } from "@/components/admin/DateRangeDropdown";
+import {
+  stashScrollY,
+  useScrollRestore,
+  useUrlWriteback,
+} from "@/lib/admin-url-state";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
@@ -30,10 +40,12 @@ type CustomerListRow = AdminCustomerSummary & {
   last_order_at: string | null;
 };
 
-// Suspense wrapper is required because useDateRangeFromQuery (and the
-// other hooks downstream) read useSearchParams(); Next.js prerender
-// fails the build for any client page that consumes it without a
-// suspense boundary.
+// Suspense wrapper is required because the inner component reads
+// useSearchParams() to hydrate its filters; Next.js prerender fails the
+// build for any client page that consumes it without a suspense
+// boundary. (This comment used to name a `useDateRangeFromQuery` hook
+// that exists nowhere in src — the boundary was right, the reason was
+// stale.)
 export default function CustomersPage() {
   return (
     <Suspense fallback={<AdminLoading />}>
@@ -58,15 +70,80 @@ function AdminLoading() {
   );
 }
 
+// Own bucket per board — coming back from a customer must not inherit
+// where the operator was on the orders list.
+const SCROLL_KEY = "admin:customers:scrollY";
+
 function CustomersPageInner() {
   const [rows, setRows] = useState<CustomerListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [range, setRange] = useState<DateRangeValue | null>(() =>
-    resolvePreset("this_month"),
+
+  // Search box and date range hydrate from the query string on first render
+  // and mirror back to it on change, so opening a customer and pressing
+  // Back returns the operator to the same slice instead of an unfiltered
+  // list they have to re-narrow. Same mechanism as /admin/orders and
+  // /admin/subscriptions — @/lib/admin-url-state, not a second copy of it.
+  //
+  // Read ONCE, in lazy initialisers: useSearchParams() subscribes, and
+  // re-deriving state from it on every render would fight the writeback
+  // below for control of the same values.
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  // The picker's own label, kept alongside the resolved dates: a bare
+  // { from, to } cannot say whether the operator picked "This Week" or
+  // typed those two dates, and the dropdown would reopen on the default.
+  const [preset, setPreset] = useState<PresetKey>(
+    () => parsePresetKey(searchParams.get("preset")) ?? "this_month",
   );
+  const [customFrom] = useState(() => searchParams.get("from") ?? "");
+  const [customTo] = useState(() => searchParams.get("to") ?? "");
+  const [range, setRange] = useState<DateRangeValue | null>(() => {
+    const p = parsePresetKey(searchParams.get("preset")) ?? "this_month";
+    if (p !== "custom") return resolvePreset(p);
+    // A `custom` preset with unparseable dates is a broken link, not an
+    // instruction to show everything — fall back to the default rather
+    // than silently widening the range to all time.
+    return (
+      resolveCustomRange(
+        searchParams.get("from") ?? "",
+        searchParams.get("to") ?? "",
+      ) ?? resolvePreset("this_month")
+    );
+  });
+  // Whatever the picker last emitted, so the writeback can reproduce it.
+  const [rangeMeta, setRangeMeta] = useState<DateRangeMeta>(() => ({
+    preset: parsePresetKey(searchParams.get("preset")) ?? "this_month",
+    customFrom: searchParams.get("from") ?? "",
+    customTo: searchParams.get("to") ?? "",
+  }));
+
+  const handleRangeChange = useCallback(
+    (next: DateRangeValue, meta?: DateRangeMeta) => {
+      setRange(next);
+      if (meta) {
+        setRangeMeta(meta);
+        setPreset(meta.preset);
+      }
+    },
+    [],
+  );
+
+  // Defaults are OMITTED, not encoded, so a plain /admin/customers link
+  // stays clean and the parsers above stay the single definition of what
+  // "unset" means.
+  const qs = useMemo(() => {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query);
+    if (rangeMeta.preset !== "this_month")
+      params.set("preset", rangeMeta.preset);
+    if (rangeMeta.customFrom) params.set("from", rangeMeta.customFrom);
+    if (rangeMeta.customTo) params.set("to", rangeMeta.customTo);
+    return params.toString();
+  }, [query, rangeMeta]);
+  useUrlWriteback("/admin/customers", qs);
+  useScrollRestore(SCROLL_KEY, !loading);
 
   const load = useCallback(async (q: string) => {
     setError(null);
@@ -96,12 +173,12 @@ function CustomersPageInner() {
     }
   }, [load, query]);
 
-  useEffect(() => {
-    void load("");
-  }, [load]);
-
   // Debounced reload on query change — 300ms so we don't slam the
-  // server on every keystroke.
+  // server on every keystroke. This also performs the FIRST load; there
+  // used to be a separate mount effect calling load(""), which was
+  // harmless while `query` always started empty but is a race now that it
+  // hydrates from the URL — the unfiltered response could land second and
+  // overwrite the filtered one.
   useEffect(() => {
     const t = setTimeout(() => void load(query), 300);
     return () => clearTimeout(t);
@@ -159,7 +236,12 @@ function CustomersPageInner() {
       }
     >
       <div className="mb-4">
-        <DateRangeDropdown onChange={setRange} />
+        <DateRangeDropdown
+          onChange={handleRangeChange}
+          initialPreset={preset}
+          initialCustomFrom={customFrom}
+          initialCustomTo={customTo}
+        />
       </div>
       <div className="flex flex-wrap gap-3 mb-6 items-center">
         <input
@@ -234,6 +316,10 @@ function CustomersPageInner() {
                   <td style={td}>
                     <Link
                       href={`/admin/customers/${c.id}`}
+                      // Stash on click, not on unmount: the offset has to be
+                      // read while the list is still the scrolled document.
+                      // The entry is one-shot — useScrollRestore clears it.
+                      onClick={() => stashScrollY(SCROLL_KEY)}
                       style={{ color: "#FBF3D4", textDecoration: "none" }}
                     >
                       {c.full_name ?? "—"}
@@ -266,6 +352,7 @@ function CustomersPageInner() {
                   <td style={td}>
                     <Link
                       href={`/admin/customers/${c.id}`}
+                      onClick={() => stashScrollY(SCROLL_KEY)}
                       style={buttonSmAnchor}
                     >
                       View

@@ -10,7 +10,7 @@
 // rendered in a collapsible history strip.
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
@@ -96,6 +96,7 @@ type AdminEmailRow = {
 
 export default function CustomerDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = String(params?.id ?? "");
 
   const [data, setData] = useState<DetailResponse | null>(null);
@@ -186,9 +187,26 @@ export default function CustomerDetailPage() {
           >
             Send email
           </button>
-          <Link href="/admin/customers" style={chipNeutral}>
+          {/* router.back(), not a bare link to /admin/customers: the list
+              keeps its search text and date range in the query string, and a
+              plain link drops both and lands the operator on an unfiltered
+              board. Same shape as /admin/orders/[id]. Falls back to a push
+              when there is no history to go back to — a deep link, a new
+              tab, or a bookmark. history.length is per-tab and starts at 1,
+              so a real navigation from the list always clears the check. */}
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                router.back();
+              } else {
+                router.push("/admin/customers");
+              }
+            }}
+            style={{ ...chipNeutral, cursor: "pointer" }}
+          >
             Back
-          </Link>
+          </button>
         </>
       }
     >

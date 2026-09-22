@@ -334,6 +334,12 @@ export type AdminSubscriptionRow = {
   // subscription_items existed — call sites fall back to product_name ×
   // quantity_per_delivery.
   items?: AdminSubscriptionItem[] | null;
+  // slug → loaves across every NON-CANCELLED delivery on this plan, summed
+  // server-side from subscription_deliveries (honouring items_override)
+  // against `items`. This is a LIFETIME total, not a per-delivery figure —
+  // the per-delivery one is derived from `items` at the call site. Present
+  // on the ?enrich=1 list payload only.
+  loaf_counts?: Record<string, number> | null;
   // Coordinates matched from public.addresses by customer_id (see
   // subscription-coordinates.ts). Only set when a saved address has
   // finite, non-zero lat/lng; otherwise absent → Maps uses address text.

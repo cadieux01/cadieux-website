@@ -182,15 +182,27 @@ export async function GET(req: NextRequest) {
     .select("id", { count: "exact", head: true })
     .eq("is_active", true);
 
-  const [oRes, sRes, cRes, cohRes, moRes, stRes, arRes] = await Promise.all([
-    ordersP,
-    subsP,
-    customersP,
-    cohortsP,
-    monthlyOrdersP,
-    storesP,
-    areasP,
-  ]);
+  // Per-variant lines, for top_products. Fetched unfiltered and joined by
+  // id below rather than chained off the subs query: it is one extra
+  // round-trip either way, and waiting for `subsP` to resolve just to
+  // build an `.in(...)` list would serialise two queries that can run
+  // together. 52 rows on prod today.
+  const subItemsP = supabaseAdmin
+    .from("subscription_items")
+    .select("subscription_id, product_slug, product_name, quantity_per_delivery")
+    .limit(5000);
+
+  const [oRes, sRes, cRes, cohRes, moRes, stRes, arRes, siRes] =
+    await Promise.all([
+      ordersP,
+      subsP,
+      customersP,
+      cohortsP,
+      monthlyOrdersP,
+      storesP,
+      areasP,
+      subItemsP,
+    ]);
 
   if (oRes.error) {
     return NextResponse.json({ error: oRes.error.message }, { status: 500 });
@@ -222,10 +234,20 @@ export async function GET(req: NextRequest) {
     days: string[] | null;
     frequency: string | null;
   };
+  type SubItemRow = {
+    subscription_id: string;
+    product_slug: string | null;
+    product_name: string | null;
+    quantity_per_delivery: number | null;
+  };
   type CustomerRow = { id: string; created_at: string };
 
   const allOrders = (oRes.data ?? []) as OrderRow[];
   const allSubs = (sRes.data ?? []) as SubRow[];
+  // A failed items read is NOT fatal: every other tile on this dashboard
+  // is orders-and-money and does not depend on it. top_products falls
+  // back to the legacy pair below, which is the pre-existing behaviour.
+  const allSubItems = (siRes.data ?? []) as SubItemRow[];
   const recentCustomers = (cRes.data ?? []) as CustomerRow[];
   const cohortCustomers = ((cohRes.data ?? []) as CustomerRow[]) ?? [];
 
@@ -373,16 +395,58 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.count - a.count);
 
   // ---------- top products (from subs in range) ----------
+  //
+  // Counted off subscription_items, NOT off subscriptions.product_name.
+  // On every one of the nine multi-variant plans on prod the row stores
+  // product_name = "Protein Bread — Multigrain" regardless of which line
+  // was written first, so the legacy column credits the whole plan —
+  // including its Plain loaves and all of its revenue — to Multigrain and
+  // leaves Plain at zero. A mixed plan now counts once against EACH
+  // variant it contains, which is what "how many subscriptions include
+  // this bread" means.
+  //
+  // REVENUE IS A PRO-RATA SPLIT BY LOAVES, not a stored per-variant
+  // figure — there is no such figure. It keeps the column's total equal
+  // to the sum of total_amount, and it is exact whenever the variants
+  // share a per-loaf price, which they do today. Anything that needs
+  // revenue attributed precisely (MRR included) is a separate job.
   const subsInRange = allSubs.filter((s) =>
     dayBetween(s.created_at.slice(0, 10), from, to),
   );
+  const itemsBySub = new Map<string, SubItemRow[]>();
+  for (const it of allSubItems) {
+    const list = itemsBySub.get(it.subscription_id) ?? [];
+    list.push(it);
+    itemsBySub.set(it.subscription_id, list);
+  }
   const productMap = new Map<string, { subscriptions: number; revenue: number }>();
   for (const s of subsInRange) {
-    const name = s.product_name ?? s.product_slug ?? "Unknown";
-    const cur = productMap.get(name) ?? { subscriptions: 0, revenue: 0 };
-    cur.subscriptions += 1;
-    cur.revenue += Number(s.total_amount) || 0;
-    productMap.set(name, cur);
+    const revenue = Number(s.total_amount) || 0;
+    // Rows written before subscription_items existed have no lines; the
+    // legacy pair is all they carry, so it is used rather than dropping
+    // the plan from the chart entirely. None on prod today.
+    const lines = (itemsBySub.get(s.id) ?? []).filter(
+      (i) => Number(i.quantity_per_delivery) > 0,
+    );
+    if (lines.length === 0) {
+      const name = s.product_name ?? s.product_slug ?? "Unknown";
+      const cur = productMap.get(name) ?? { subscriptions: 0, revenue: 0 };
+      cur.subscriptions += 1;
+      cur.revenue += revenue;
+      productMap.set(name, cur);
+      continue;
+    }
+    const loaves = lines.reduce(
+      (n, i) => n + Number(i.quantity_per_delivery),
+      0,
+    );
+    for (const line of lines) {
+      const name = line.product_name || line.product_slug || "Unknown";
+      const cur = productMap.get(name) ?? { subscriptions: 0, revenue: 0 };
+      cur.subscriptions += 1;
+      cur.revenue += (revenue * Number(line.quantity_per_delivery)) / loaves;
+      productMap.set(name, cur);
+    }
   }
   const top_products: TopProduct[] = Array.from(productMap.entries())
     .map(([name, v]) => ({ name, ...v }))

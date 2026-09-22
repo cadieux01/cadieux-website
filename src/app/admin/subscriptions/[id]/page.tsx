@@ -23,6 +23,7 @@
 // Block / KeyVal idiom, same print stylesheet) rather than invented.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
@@ -63,6 +64,20 @@ import {
   buildSubscriptionMoney,
   type SubscriptionMoney,
 } from "@/lib/subscription-money";
+import {
+  addCounts,
+  countDelivery,
+  countLines,
+  isCancelledDelivery,
+  longCountText,
+  nameHintFor,
+  planItemsOf,
+  shortCountText,
+  totalLoaves,
+  type LoafCounts,
+} from "@/lib/subscription-counts";
+import { CountMarkers } from "@/components/admin/ProductMarker";
+import { cream } from "@/components/admin/theme";
 import { dayKeyForIsoDate } from "@/lib/subscription-dates";
 import { DAY_LABEL } from "@/lib/subscription-ui";
 import { isOrphanedPayment } from "@/lib/subscription-visibility";
@@ -185,6 +200,7 @@ export default function AdminSubscriptionDetailPage({
 }: {
   params: { id: string };
 }) {
+  const router = useRouter();
   const [sub, setSub] = useState<AdminSubscriptionRow | null>(null);
   const [deliveries, setDeliveries] = useState<AdminDeliveryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -318,10 +334,25 @@ export default function AdminSubscriptionDetailPage({
     }
   };
 
+  // router.back(), not a bare link: /admin/subscriptions keeps its status
+  // filter, zones, search, date basis and day in the query string, and a
+  // plain href drops all of it. Same shape as /admin/orders/[id]; falls
+  // back to a push for a deep link with no history behind it.
   const backLink = (
-    <Link href="/admin/subscriptions" style={chipNeutral} className="no-print">
+    <button
+      type="button"
+      onClick={() => {
+        if (typeof window !== "undefined" && window.history.length > 1) {
+          router.back();
+        } else {
+          router.push("/admin/subscriptions");
+        }
+      }}
+      style={{ ...chipNeutral, cursor: "pointer" }}
+      className="no-print"
+    >
       ← Back to subscriptions
-    </Link>
+    </button>
   );
 
   if (loading) {
@@ -409,6 +440,47 @@ export default function AdminSubscriptionDetailPage({
   // addresses (GET route); none → an address-text search.
   const resolvedAddr = resolveSubscriptionAddress(sub);
   const planSentence = describeSubscriptionPlan(sub);
+
+  // ── Loaf counts: per delivery, per week, and overall ──────────────────
+  //
+  // Counted off subscription_items (with each delivery's items_override
+  // taking precedence), NEVER off subscriptions.product_slug — on a mixed
+  // plan that column names only one variant and carries the COMBINED
+  // quantity, which books every loaf to the wrong bread.
+  //
+  // CANCELLED DELIVERIES COUNT ZERO, unlike the money breakdown directly
+  // above, which counts every row. The two answer different questions: the
+  // customer was priced for the whole schedule, but nobody is going to
+  // bake a cancelled stop. A page that used one number for both would be
+  // wrong for one of them.
+  const countHint = nameHintFor([sub]);
+  const planItems = planItemsOf(sub);
+  const countsByDelivery = new Map<string, LoafCounts>();
+  const countsByWeek = new Map<number, LoafCounts>();
+  const grandCounts: LoafCounts = new Map();
+  for (const d of deliveries) {
+    const c = countDelivery(d, planItems);
+    countsByDelivery.set(d.id, c);
+    // A row with no week_number buckets under 0 and renders as "—" rather
+    // than silently joining week 1.
+    const w = Number(d.week_number);
+    const key = Number.isFinite(w) && w > 0 ? w : 0;
+    let bucket = countsByWeek.get(key);
+    if (!bucket) {
+      bucket = new Map();
+      countsByWeek.set(key, bucket);
+    }
+    addCounts(bucket, c);
+    addCounts(grandCounts, c);
+  }
+  const weekRows = Array.from(countsByWeek.entries())
+    .map(([week, counts]) => ({ week, lines: countLines(counts, countHint) }))
+    .filter((w) => w.lines.length > 0)
+    .sort((a, b) => a.week - b.week);
+  const grandLines = countLines(grandCounts, countHint);
+  const bakedDeliveries = deliveries.filter(
+    (d) => !isCancelledDelivery(d),
+  ).length;
   const accountPhone = sub.customer?.phone ?? null;
   const showBothPhones = phonesDiffer(resolvedAddr.phone, accountPhone);
   const hasCoords =
@@ -626,6 +698,79 @@ export default function AdminSubscriptionDetailPage({
         {/* 5 · DELIVERY SCHEDULE -------------------------------------- */}
         <section style={panel}>
           <h3 style={blockHeading}>Deliveries · {deliveries.length}</h3>
+          {grandLines.length > 0 ? (
+            <div
+              style={{
+                margin: "0 0 14px",
+                padding: "10px 12px",
+                border: `1px solid ${cream(0.15)}`,
+                borderRadius: 6,
+                background: cream(0.04),
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "6px 18px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 500,
+                    letterSpacing: "0.35em",
+                    textTransform: "uppercase",
+                    color: cream(0.6),
+                  }}
+                >
+                  Loaves
+                </span>
+                <CountMarkers lines={grandLines} />
+                <span style={{ marginLeft: "auto", color: cream(0.85) }}>
+                  {totalLoaves(grandCounts)} total
+                </span>
+                <span style={{ flexBasis: "100%", color: cream(0.55), fontSize: 12 }}>
+                  across {bakedDeliveries} delivery
+                  {bakedDeliveries === 1 ? "" : " stops"} — cancelled stops
+                  excluded, so this can be less than the plan was priced for.
+                </span>
+              </div>
+              {weekRows.length > 1 ? (
+                <div
+                  style={{
+                    marginTop: 8,
+                    paddingTop: 8,
+                    borderTop: `1px solid ${cream(0.12)}`,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "6px 22px",
+                    fontSize: 13,
+                  }}
+                >
+                  {weekRows.map((w) => (
+                    <span
+                      key={w.week}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                      title={longCountText(w.lines)}
+                    >
+                      <span style={{ color: cream(0.55) }}>
+                        {w.week > 0 ? `Week ${w.week}` : "Unscheduled"}
+                      </span>
+                      <CountMarkers lines={w.lines} size={14} gap={7} />
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div style={tableWrap}>
             <table
               className="deliveries-table"
@@ -666,6 +811,34 @@ export default function AdminSubscriptionDetailPage({
                         ]
                           .filter(Boolean)
                           .join(", ")}
+                        {/* What goes in THIS bag. Absent on a cancelled
+                            stop, because nothing does. */}
+                        {(() => {
+                          const chip = shortCountText(
+                            countLines(
+                              countsByDelivery.get(d.id) ?? new Map(),
+                              countHint,
+                            ),
+                          );
+                          return chip ? (
+                            <div
+                              style={{
+                                marginTop: 3,
+                                fontSize: "0.875rem",
+                                color: cream(0.7),
+                                letterSpacing: "0.04em",
+                              }}
+                              title={longCountText(
+                                countLines(
+                                  countsByDelivery.get(d.id) ?? new Map(),
+                                  countHint,
+                                ),
+                              )}
+                            >
+                              {chip}
+                            </div>
+                          ) : null;
+                        })()}
                       </td>
                       <td style={td} data-label="Status">
                         <div className="no-print">

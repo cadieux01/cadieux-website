@@ -135,6 +135,36 @@ function parseYmd(s: string): Date | null {
 
 // ── exported helpers for consuming pages ─────────────────────────────────
 
+const PRESET_KEYS = new Set<string>([...PRESETS.map((p) => p.key), "custom"]);
+
+/**
+ * A preset key read back off a query string, or null.
+ *
+ * Returns null for anything unrecognised — a hand-edited link, or a preset
+ * that has since been removed — so the caller falls back to its default
+ * instead of rendering a dropdown whose selection matches no option.
+ */
+export function parsePresetKey(v: string | null | undefined): PresetKey | null {
+  return v && PRESET_KEYS.has(v) ? (v as PresetKey) : null;
+}
+
+/**
+ * A custom range from two YYYY-MM-DD strings, or null if either is
+ * unparseable. Same normalisation as the Apply button inside the
+ * component — reversed input is swapped so `from <= to` always holds.
+ */
+export function resolveCustomRange(
+  from: string,
+  to: string,
+): DateRangeValue | null {
+  const f = parseYmd(from);
+  const t = parseYmd(to);
+  if (!f || !t) return null;
+  const earlier = f.getTime() <= t.getTime() ? f : t;
+  const later = f.getTime() <= t.getTime() ? t : f;
+  return { from: startOfDay(earlier), to: endOfDay(later) };
+}
+
 /** YYYY-MM-DD in local time (for API params that expect date-only). */
 export function toYMD(d: Date): string {
   const y = d.getFullYear();
@@ -156,27 +186,44 @@ export function withinDateRange(
 }
 
 // ── component ─────────────────────────────────────────────────────────────
-// `presetValue`, `showCustomPanel`, `initialCustomFrom` and
-// `initialCustomTo` used to be props here. They existed ONLY for
-// /admin/orders, which offered its own always-visible From/To pair next
-// to this dropdown and needed the two controls kept from contradicting
-// each other. That page now has a single date and does not use this
-// component at all, so the props had no caller left. Deleted rather than
-// defaulted: a prop nothing passes is a second way to configure a
-// control, which is how the two surfaces disagreed in the first place.
-// The four remaining consumers (overview, customers, audit, audit-log)
-// all render <DateRangeDropdown onChange={…} /> and are untouched.
+// `presetValue` and `showCustomPanel` used to be props here. They existed
+// ONLY for /admin/orders, which offered its own always-visible From/To
+// pair next to this dropdown and needed the two controls kept from
+// contradicting each other. That page now has a single date and does not
+// use this component at all, so the props had no caller left. Deleted
+// rather than defaulted: a prop nothing passes is a second way to
+// configure a control, which is how the two surfaces disagreed in the
+// first place.
+//
+// The `initial*` props below are NOT those. They are write-once seeds for
+// a page hydrating its filters from the query string, and they are
+// deliberately one-way — see the doc comment on them.
+//
+// Consumers: /admin/customers passes the seeds; overview, audit and
+// audit-log still render <DateRangeDropdown onChange={…} /> and take the
+// defaults.
 export function DateRangeDropdown({
   onChange,
   initialPreset = DEFAULT_PRESET,
+  initialCustomFrom = "",
+  initialCustomTo = "",
 }: {
   onChange: (range: DateRangeValue, meta?: DateRangeMeta) => void;
   initialPreset?: PresetKey;
+  /** SEED ONLY, for a page restoring a custom range off its query string.
+   *  Not the deleted two-control props this comment block describes: those
+   *  kept a second always-visible From/To pair in sync and could disagree
+   *  with this one. These are read once by useState and never again, so
+   *  this control remains the only thing that owns the value. Without them
+   *  a restored `custom` range filters the list correctly but reopens the
+   *  panel with blank inputs. */
+  initialCustomFrom?: string;
+  initialCustomTo?: string;
 }) {
   const [preset, setPreset] = useState<PresetKey>(initialPreset);
   const [customMode, setCustomMode] = useState<CustomMode>("range");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  const [customFrom, setCustomFrom] = useState(initialCustomFrom);
+  const [customTo, setCustomTo] = useState(initialCustomTo);
   const [singleDate, setSingleDate] = useState("");
   const [yearValue, setYearValue] = useState<string>(String(new Date().getFullYear()));
   const [customError, setCustomError] = useState<string | null>(null);

@@ -116,6 +116,17 @@ import {
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import {
+  addCounts,
+  countLines,
+  countPlan,
+  countsFromRecord,
+  longCountText,
+  nameHintFor,
+  totalLoaves,
+  type LoafCounts,
+} from "@/lib/subscription-counts";
+import { CountMarkers, DayDotRow } from "@/components/admin/ProductMarker";
+import {
   addDaysISO,
   formatDate,
   formatINR,
@@ -124,6 +135,8 @@ import {
 } from "@/lib/admin-formatting";
 import {
   describeSubscriptionPlan,
+  formatSubscriptionItems,
+  subscriptionDays,
   resolveSubscriptionAddress,
   formatAddressShort,
   formatAddressFull,
@@ -796,6 +809,28 @@ function SubscriptionsPageInner() {
     pincodeCoords,
   ]);
 
+  // ── loaf counts ─────────────────────────────────────────────────────────
+  //
+  // Derived from `filtered`, so every filter — status, zone, day, search,
+  // distance sort — moves these numbers with the rows. Nothing here
+  // re-reads the raw list, which is the only way the bar and the table can
+  // be guaranteed to agree.
+  //
+  // `loaf_counts` is summed server-side across each plan's non-cancelled
+  // deliveries (see the enrich branch of /api/admin/subscriptions). Rows
+  // fetched without ?enrich=1 have none, and countsFromRecord returns an
+  // empty map for them rather than guessing.
+  const nameHint = useMemo(() => nameHintFor(filtered), [filtered]);
+  const filteredCounts = useMemo(() => {
+    const out: LoafCounts = new Map();
+    for (const s of filtered) addCounts(out, countsFromRecord(s.loaf_counts));
+    return out;
+  }, [filtered]);
+  const filteredLines = useMemo(
+    () => countLines(filteredCounts, nameHint),
+    [filteredCounts, nameHint],
+  );
+
   // ── bulk selection ──────────────────────────────────────────────────────
   const [selected, setSelected] = useStoredSelection(SELECTION_KEY);
   const [bulkRunning, setBulkRunning] = useState(false);
@@ -1252,7 +1287,8 @@ function SubscriptionsPageInner() {
             color: CREAM,
             display: "flex",
             alignItems: "center",
-            gap: 20,
+            flexWrap: "wrap",
+            gap: "6px 20px",
             fontFamily: "var(--font-body)",
             fontSize: 14,
           }}
@@ -1268,12 +1304,37 @@ function SubscriptionsPageInner() {
           >
             Summary
           </span>
+          {/* Loaf counts for the CURRENT filter, recomputed from the same
+              `filtered` array the table below renders — so the numbers and
+              the rows can never disagree.
+
+              Counted off subscription_items via loaf_counts, NEVER off
+              subscriptions.product_slug. All nine mixed plans on prod
+              store the Multigrain name against their COMBINED quantity, so
+              the legacy column would show Multigrain 31 / Plain 12 where
+              the truth is 31 / 21. */}
+          <CountMarkers lines={filteredLines} />
           <span style={{ marginLeft: "auto", color: cream(0.85) }}>
             {filtered.reduce(
               (n, s) => (isSubscriptionFulfilled(s) ? n + 1 : n),
               0,
             )}{" "}
             of {filtered.length} fulfilled
+          </span>
+          {/* WHAT THE NUMBERS COVER, on screen. A loaf total means nothing
+              without its population, and this board's filters change that
+              population constantly. Spelled out rather than left to be
+              inferred from the chips. */}
+          <span
+            style={{
+              flexBasis: "100%",
+              color: cream(0.55),
+              fontSize: 12,
+            }}
+          >
+            {totalLoaves(filteredCounts)} loaves across {filtered.length}{" "}
+            subscription{filtered.length === 1 ? "" : "s"} in this filter —
+            every non-cancelled delivery, whole plan, not per week.
           </span>
         </section>
       ) : null}
@@ -1336,6 +1397,25 @@ function SubscriptionsPageInner() {
                 // stays enabled, because the payment is good and the bread
                 // is owed, which is the whole reason it needs chasing.
                 const paidUnconfirmed = isPaidUnconfirmed(s);
+                // Two different totals, deliberately: the markers show the
+                // WHOLE PLAN (cancelled stops excluded), the tooltip adds
+                // what goes in one bag. Showing only the per-delivery
+                // figure is how a 5-week plan reads as 2 loaves.
+                const rowLines = countLines(
+                  countsFromRecord(s.loaf_counts),
+                  nameHint,
+                );
+                const perDelivery = longCountText(
+                  countLines(countPlan(s), nameHint),
+                );
+                const rowCountTitle = [
+                  rowLines.length > 0
+                    ? `${longCountText(rowLines)} across all non-cancelled deliveries`
+                    : null,
+                  perDelivery ? `${perDelivery} per delivery` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
                 return (
                   <tr
                     key={s.id}
@@ -1432,6 +1512,24 @@ function SubscriptionsPageInner() {
                       {/* One line naming the variants and the cadence —
                           "Multigrain 1, Plain 1 — every week on Sunday". */}
                       <div>{describeSubscriptionPlan(s)}</div>
+                      {/* Lifetime loaves for THIS plan, and which days it
+                          goes out. The markers carry the whole-plan figure
+                          because that is what the bar above totals; the
+                          per-delivery figure is one hover away rather than
+                          a second set of numbers competing with it. */}
+                      <div
+                        style={{
+                          marginTop: 6,
+                          display: "flex",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: "6px 14px",
+                        }}
+                        title={rowCountTitle}
+                      >
+                        <CountMarkers lines={rowLines} size={15} gap={8} />
+                        <DayDotRow days={subscriptionDays(s)} />
+                      </div>
                       <div style={{ marginTop: 4 }}>
                         <ZoneBadge
                           zone={zoneOf.get(s.id)}
@@ -2061,7 +2159,12 @@ function SubscriptionDrawer({
                 letterSpacing: "0.04em",
               }}
             >
-              {subscription.product_name} × {subscription.quantity_per_delivery}
+              {/* NOT `product_name × quantity_per_delivery`. On a mixed
+                  plan that reads "Protein Bread — Multigrain × 2" when the
+                  bag actually holds one Plain and one Multigrain — the row
+                  stores the Multigrain name against the COMBINED quantity.
+                  formatSubscriptionItems names every variant. */}
+              {formatSubscriptionItems(subscription)}
             </p>
             <p
               style={{
@@ -2638,14 +2741,69 @@ const drawerSelect: React.CSSProperties = {
   minWidth: 150,
 };
 
+/**
+ * CSV export.
+ *
+ * The old `Product` / `Quantity per delivery` pair came straight off the
+ * subscriptions row, and on a mixed plan that pair is not merely incomplete
+ * — it is wrong. All nine multi-variant plans on prod store product_name =
+ * "Protein Bread — Multigrain" while quantity_per_delivery holds the
+ * COMBINED total, so a pivot on those two columns books every loaf to
+ * Multigrain and shows Plain at zero. The grand total comes out right,
+ * which is what made it survive.
+ *
+ * Replaced with: one readable `Items per delivery` string, then ONE NUMERIC
+ * COLUMN PER PRODUCT so the export pivots correctly, then the combined
+ * total under its own name. The per-product columns are derived from the
+ * rows being exported, not hardcoded, so a third bread needs no code change
+ * — and a slice with no subscriptions simply has no column.
+ */
 function exportSubsCsv(rows: AdminSubscriptionRow[]): void {
+  const hint = nameHintFor(rows);
+  const perRow = new Map<AdminSubscriptionRow, LoafCounts>();
+  const union: LoafCounts = new Map();
+  for (const s of rows) {
+    const c = countPlan(s);
+    perRow.set(s, c);
+    addCounts(union, c);
+  }
+
+  // label → the keys rendering under it. Two keys CAN share a label: a
+  // legacy row (none on prod today) is keyed by its full product_name
+  // while an itemised row is keyed by slug, and both label as
+  // "Multigrain". Summing them into one column keeps the pivot honest
+  // instead of splitting one product across two headers.
+  const keysByLabel = new Map<string, string[]>();
+  for (const line of countLines(union, hint)) {
+    const keys = keysByLabel.get(line.label) ?? [];
+    keys.push(line.slug);
+    keysByLabel.set(line.label, keys);
+  }
+
+  const productColumns = Array.from(keysByLabel.entries()).map(
+    ([label, keys]) => ({
+      header: `${label} per delivery`,
+      value: (s: AdminSubscriptionRow) => {
+        const counts = perRow.get(s);
+        return keys.reduce((n, k) => n + (counts?.get(k) ?? 0), 0);
+      },
+    }),
+  );
+
   const csv = toCsv(rows, [
     { header: "Subscription", value: (s) => formatSubscriptionNumber(s) },
     { header: "Subscription ID", value: (s) => s.id },
     { header: "Customer", value: (s) => s.customer?.full_name ?? "" },
     { header: "Phone", value: (s) => s.customer?.phone ?? "" },
-    { header: "Product", value: (s) => s.product_name },
-    { header: "Quantity per delivery", value: (s) => s.quantity_per_delivery },
+    {
+      header: "Items per delivery",
+      value: (s) => longCountText(countLines(countPlan(s), hint)),
+    },
+    ...productColumns,
+    {
+      header: "Loaves per delivery",
+      value: (s) => totalLoaves(countPlan(s)),
+    },
     { header: "Frequency", value: (s) => s.frequency },
     { header: "Total weeks", value: (s) => s.total_weeks },
     { header: "Status", value: (s) => s.status },

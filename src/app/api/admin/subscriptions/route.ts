@@ -11,6 +11,10 @@ import {
   type AddressCoordRow,
 } from "@/lib/subscription-coordinates";
 import type { AdminSubscriptionItem } from "@/lib/admin-shared";
+import {
+  countDeliveries,
+  type CountableDelivery,
+} from "@/lib/subscription-counts";
 import { aggregateNotesFor } from "@/lib/order-notes";
 
 // Server-side allowlist for the optional `?status=` param. This is INPUT
@@ -120,7 +124,7 @@ export async function GET(req: NextRequest) {
         ? supabaseAdmin
             .from("subscription_deliveries")
             .select(
-              "subscription_id, delivery_date, scheduled_date, scheduled_time_slot, slot, sequence, week_number, status",
+              "subscription_id, delivery_date, scheduled_date, scheduled_time_slot, slot, sequence, week_number, status, items_override",
             )
             .in("subscription_id", subIds)
         : null,
@@ -156,6 +160,14 @@ export async function GET(req: NextRequest) {
     string,
     { latitude: number; longitude: number }
   >();
+  // subscription_id → slug → loaves across every non-cancelled delivery.
+  //
+  // Summed HERE rather than shipped as delivery rows for the client to
+  // add up. The board polls every 10 seconds; 113 delivery rows carrying
+  // an items_override jsonb each is a lot of wire to re-send for two
+  // numbers per subscription. The per-DELIVERY figure the row's tooltip
+  // shows is derived client-side from `items`, which is already sent.
+  const countsBySub = new Map<string, Record<string, number>>();
   if (enrich) {
     const deliveries = deliveriesRes?.data;
     const items = itemsRes?.data;
@@ -180,6 +192,23 @@ export async function GET(req: NextRequest) {
       subLites,
       (deliveries as DeliveryLite[]) ?? [],
     );
+
+    const deliveriesBySub = new Map<string, CountableDelivery[]>();
+    for (const d of (deliveries ?? []) as (CountableDelivery & {
+      subscription_id: string;
+    })[]) {
+      const list = deliveriesBySub.get(d.subscription_id) ?? [];
+      list.push(d);
+      deliveriesBySub.set(d.subscription_id, list);
+    }
+    for (const s of subs) {
+      const counts = countDeliveries(deliveriesBySub.get(s.id) ?? [], {
+        product_name: s.product_name,
+        quantity_per_delivery: s.quantity_per_delivery,
+        items: itemsBySub.get(s.id) ?? [],
+      });
+      countsBySub.set(s.id, Object.fromEntries(counts));
+    }
 
     // Saved addresses for these customers, grouped for coordinate matching.
     const addrByCustomer = new Map<string, AddressCoordRow[]>();
@@ -212,7 +241,12 @@ export async function GET(req: NextRequest) {
         ...s,
         customer: cmap.get(s.customer_id) ?? null,
         ...(derivedById?.get(s.id) ?? {}),
-        ...(enrich ? { items: itemsBySub.get(s.id) ?? [] } : {}),
+        ...(enrich
+          ? {
+              items: itemsBySub.get(s.id) ?? [],
+              loaf_counts: countsBySub.get(s.id) ?? {},
+            }
+          : {}),
         ...(coordsBySub.get(s.id) ?? {}),
         note_count: agg?.note_count ?? 0,
         last_call_note: agg?.last_call_note ?? null,
