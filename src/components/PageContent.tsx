@@ -199,7 +199,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 autoPlay
                 muted
                 playsInline
-                preload="auto"
+                preload="metadata"
                 loop
                 disablePictureInPicture
                 disableRemotePlayback
