@@ -37,7 +37,9 @@ const SLICES: Array<{ enter: number; exit: number }> = QAS.map((_, i) => ({
 }));
 
 /* Hysteresis around each slice boundary, as a fraction of total progress.
-   ~0.02 of a 470vh section is roughly 90px of scroll.
+   470vh is 4.7 viewports, so the section's scroll travel is 3.7 viewports
+   (2960px at an 800px-tall one) and 0.02 of it is ~59px — measured, not
+   assumed. Comfortably more than Safari wobbles, well under a 681px slice.
 
    WHY THIS EXISTS. Changing `active` re-keys the stage below, which makes
    React destroy and rebuild the question and every word span, restarting
