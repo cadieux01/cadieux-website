@@ -1,4 +1,15 @@
--- HELD — NOT APPLIED. Sunny to review before running.
+-- APPLIED 2026-09-22 under Supabase ledger version 20260922134956
+-- (filename now matches). Function live in production. `create or
+-- replace function` means a stray db push is a no-op — but the
+-- `revoke all ... from public` at the bottom did NOT actually lock the
+-- function down: Supabase grants EXECUTE to anon and authenticated
+-- DIRECTLY, not through PUBLIC, so revoking from PUBLIC alone leaves
+-- both roles able to call the RPC. See the follow-up migration
+-- 20260922135021_lock_split_creation_rpc_to_service_role.sql which
+-- revokes from anon and authenticated by name. Not exploitable in the
+-- interim window (SECURITY INVOKER + revoked orders table grants would
+-- have blocked the actual insert), but the intended lockdown did not
+-- happen until the follow-up ran.
 --
 -- Adds public.admin_create_split_orders(p_bread jsonb, p_sandwich jsonb,
 -- p_razorpay_order_id text): the ATOMIC creation path for the OLF/OLW

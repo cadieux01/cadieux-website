@@ -1,4 +1,7 @@
--- HELD — NOT APPLIED. Sunny to review before running.
+-- APPLIED 2026-09-22 under Supabase ledger version 20260922134936
+-- (filename now matches). Live in production. Every statement is
+-- idempotent — `add column if not exists` + guarded constraint block —
+-- so a stray db push is a no-op.
 --
 -- Adds public.orders.refund_amount_paise, the per-row record of how many
 -- paise have already been refunded against a given order. Introduced for
