@@ -1,7 +1,25 @@
 -- Protein Burger Bun — a new one-time-only product.
 --
--- APPLIED TO PRODUCTION BY HAND 2026-09-21. This file is the record of what
--- ran; it is not re-run by anything.
+-- APPLIED TO PRODUCTION 2026-09-21 BY A DIRECT execute_sql CALL, NOT
+-- THROUGH THE MIGRATION RUNNER. As a result this file is ABSENT from
+-- supabase_migrations.schema_migrations — the ledger has no row for it.
+-- Every other migration in this tree carries a real ledger version and
+-- has been renamed to match; this one has nowhere to be renamed TO, so
+-- it keeps a chosen prefix (deliberately 235959, past any real Supabase
+-- clock stamp of that day) and this header instead.
+--
+-- Consequence: `supabase db push` (or any reconciliation that trusts the
+-- ledger) will treat this file as UNAPPLIED and try to run it. That is
+-- safe, and only safe, because both INSERTs below are guarded:
+--   • public.products insert → `on conflict (id) do nothing`
+--   • public.product_stat_tiles insert → `on conflict (product_id,
+--     locale, tile_key) do nothing`
+-- so a stray re-run is a no-op, not a duplicate. If you edit either
+-- statement, preserve the ON CONFLICT clause or add the ledger row by
+-- hand before the next push.
+--
+-- This file is the record of what ran; it is not re-run by anything the
+-- team owns.
 --
 -- Inserted with `is_active = false` ON PURPOSE. The Android app reads the
 -- products table DIRECTLY (anon key, no code deploy in between), so an active

@@ -25,12 +25,25 @@
 --
 --   Test 3  BAD SHAPE. Non-object payload. Must raise SQLSTATE 22023.
 --
+--   Test 4  ZERO DELIVERY FEE. Under DELIVERY_FEE_SPLIT_MODE = "single"
+--           (src/lib/deliveryFee.ts) the OLW row must carry a ZERO
+--           delivery fee — the fee is charged on OLF alone. But
+--           orders.delivery_fee is NOT NULL DEFAULT 50, so a payload
+--           that OMITS the key silently gets ₹50, not ₹0. That is the
+--           trap: the RPC's dynamic column list correctly omits an
+--           absent key from the INSERT, and the column then applies its
+--           default. Test 4 sends delivery_fee => 0 EXPLICITLY on the
+--           sandwich payload and asserts it lands as 0, proving the
+--           behaviour step 5 (route wiring) depends on. Cheap to prove
+--           now, expensive to catch after a live split.
+--
 -- HOW IT RUNS:
 --
 --   Wrapped in `begin; ... rollback;`. Nothing lands. Sequence numbers
 --   ARE burned regardless — that is the price of proof and it is
---   already policy (see plan §1 on OLF285). Roughly TWO OLF + TWO OLW
---   numbers burned per run. Do not run this in a loop.
+--   already policy (see plan §1 on OLF285). Roughly THREE OLF + THREE
+--   OLW numbers burned per run (one successful call per Test 1/2/4;
+--   Test 3 raises before any insert). Do not run this in a loop.
 --
 -- BEFORE RUNNING:
 --
@@ -93,7 +106,12 @@ begin
   assert v_bread.id is not null, 'bread.id default did not apply (BUG 1 REGRESSION)';
   assert v_sand.id is not null,  'sandwich.id default did not apply (BUG 1 REGRESSION)';
   assert v_bread.items is not null,             'bread.items default did not apply';
-  assert v_bread.delivery_fee is not null,      'bread.delivery_fee default did not apply';
+  -- ACTUAL VALUE, not just non-nullness. orders.delivery_fee is NOT NULL
+  -- DEFAULT 50. Absence-of-value is the WRONG assertion here: a default
+  -- of 50 is exactly the trap Test 4 exists to catch. If the default
+  -- ever changes to 0 or NULL, this assert fires and Test 4 needs a
+  -- re-read.
+  assert v_bread.delivery_fee = 50,             'bread delivery_fee default changed';
   assert v_bread.payment_status is not null,    'bread.payment_status was null';
   assert v_bread.fulfillment_type is not null,  'bread.fulfillment_type default did not apply';
   assert v_bread.is_preorder is not null,       'bread.is_preorder default did not apply';
@@ -162,6 +180,49 @@ begin
     'forged payment_group_id not overridden — CALLER CAN PIN GROUP';
 
   raise notice 'Test 2 forgery: PASS';
+
+  ------------------------------------------------------------------
+  -- Test 4: explicit delivery_fee => 0 on the sandwich payload must
+  -- LAND as 0, not fall back to the ₹50 column default. This is what
+  -- DELIVERY_FEE_SPLIT_MODE = "single" needs at step 5 — one fee on
+  -- OLF, zero on OLW. The dynamic column list mentions delivery_fee
+  -- when the key IS present, so 0 must be preserved verbatim.
+  ------------------------------------------------------------------
+  select * into v_result from public.admin_create_split_orders(
+    jsonb_build_object(
+      'customer_id',      v_cust,
+      'total_amount',     100,
+      'delivery_fee',     50,   -- bread carries the whole fee
+      'delivery_address', 'smoke test — DO NOT SHIP',
+      'delivery_date',    current_date::text,
+      'delivery_slot',    '10:00-14:00',
+      'status',           'pending',
+      'payment_method',   'razorpay',
+      'payment_status',   'created'
+    ),
+    jsonb_build_object(
+      'customer_id',      v_cust,
+      'total_amount',     109,
+      'delivery_fee',     0,    -- sandwich carries zero (single-mode)
+      'delivery_address', 'smoke test — DO NOT SHIP',
+      'delivery_date',    current_date::text,
+      'delivery_slot',    '10:00-14:00',
+      'status',           'pending',
+      'payment_method',   'razorpay',
+      'payment_status',   'created'
+    ),
+    'order_smoke_test_do_not_ship_3'
+  );
+
+  select * into v_bread from public.orders where id = v_result.bread_id;
+  select * into v_sand  from public.orders where id = v_result.sandwich_id;
+
+  assert v_bread.delivery_fee = 50,
+    'bread.delivery_fee not preserved (expected 50, got other)';
+  assert v_sand.delivery_fee = 0,
+    'sandwich.delivery_fee not preserved (expected 0 — SPLIT MODE SINGLE WOULD DOUBLE-CHARGE)';
+
+  raise notice 'Test 4 zero delivery_fee: PASS (bread=50, sandwich=0)';
 
   ------------------------------------------------------------------
   -- Test 3: bad shape → SQLSTATE 22023.

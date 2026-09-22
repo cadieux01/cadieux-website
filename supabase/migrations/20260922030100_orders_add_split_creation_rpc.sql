@@ -22,7 +22,9 @@
 --   The one cost we accept: a rolled-back insert BURNS its sequence
 --   number (nextval is not transactional). See plan §1 — gaps are
 --   audit-visible, cost nothing, and match how OLF285 already sits.
---   The smoke test burns two numbers every run; that is policy.
+--   The smoke test burns SIX numbers per run (three successful RPC
+--   calls, each producing one OLF and one OLW, all rolled back);
+--   that is policy.
 --
 -- WHY DYNAMIC-COLUMN-LIST + EXECUTE, NOT jsonb_populate_record ALONE:
 --
