@@ -16,5 +16,6 @@
       "path": "/api/cron/delivery-bake-plan?slot=d0_0445",
       "schedule": "15 23 * * *"
     }
-  ]
+  ],
+  "regions": ["bom1"]
 }
