@@ -2,11 +2,17 @@
 //
 // Every homepage <video> used to carry preload="auto", so all five files
 // downloaded in full on page load — ~13.8 MB before the visitor had scrolled
-// past the hero. Only the hero keeps preload="auto" (it is the LCP surface and
-// must be ready immediately). The other four ship as preload="none" and are
-// fetched by this ref: never before the visitor's first scroll, and then ~200px
-// before they reach the viewport. All four already have a poster, so nothing is
-// blank while the file loads.
+// past the hero. All five are now deferred, but by two different triggers,
+// because the hero is the one video that is already on screen at rest:
+//   - The four background videos use this ref: preload="none", fetched never
+//     before the visitor's first scroll and then ~200px before they reach the
+//     viewport. Gating on scroll/intersection is right for them.
+//   - The HERO defers on requestIdleCallback instead (see the effect in
+//     PageContent.tsx). It must NOT use this ref — a visitor who never scrolls
+//     would never see it play. The earlier note here claimed the hero had to
+//     keep preload="auto" as "the LCP surface"; that was wrong. LCP is the
+//     headline text, measured at 1,592 ms, and the video is not on its path.
+// All five have a poster, so nothing is blank while the file loads.
 //
 // The `autoplay` ATTRIBUTE must NOT be set on a deferred video: it tells the
 // browser to start playback as soon as possible, which starts the download and
