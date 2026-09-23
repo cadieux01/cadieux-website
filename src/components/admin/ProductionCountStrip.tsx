@@ -17,8 +17,9 @@
 // into one unattributable total.
 //
 // Rules:
-//   - "loaves" = sum of (items[].qty || items[].quantity) grouped by
-//     item.name. An order for 2 loaves counts 2 loaves.
+//   - "loaves" = sum of each line's quantity grouped by PRODUCT IDENTITY
+//     (`slug ?? product_id`, see lib/order-items.ts), not by display
+//     name. An order for 2 loaves counts 2 loaves.
 //   - "stops" = distinct orders + distinct subscription deliveries that
 //     contained at least one line of that product. Two lines of the same
 //     product on one order count 1 stop.
@@ -30,8 +31,8 @@
 //     be decided about; silently excluding them hides a decision, and
 //     silently including them hides a risk. Paid is read from STATUS only,
 //     never method — see payment-label.ts.
-//   - No hardcoded product list — group names are whatever appears in
-//     the filtered items, alphabetically sorted so the row order is
+//   - No hardcoded product list — groups are whatever identities appear
+//     in the filtered items, sorted by display name so the row order is
 //     stable frame-to-frame.
 //   - Empty filtered set → render nothing (no zero-noise strip).
 //
@@ -45,6 +46,7 @@ import { variantLabel } from "@/lib/order-share-message";
 import { isOrderFulfilled } from "@/lib/order-fulfillment";
 import { isPaidStatus } from "@/lib/payment-label";
 import { ZONE_LABELS, type ZoneKey } from "@/lib/delivery-zones";
+import { itemQty, itemSlug, type OrderItemLike } from "@/lib/order-items";
 
 /** One subscription stop due on the day the strip is showing. Shaped by
  *  GET /api/admin/bake-plan, which is a thin wrapper over the cron's
@@ -56,7 +58,12 @@ export type BakeSubscriptionStop = {
 };
 
 type ProductAgg = {
+  /** Display name — the first `name` seen for this product. Humans read
+   *  this; nothing is bucketed by it. */
   name: string;
+  /** Bucket identity. The product slug where the line carried one, else
+   *  `name:<name>` for a line with no identity at all. */
+  key: string;
   loaves: number;
   /** Distinct orders carrying this product. */
   orders: number;
@@ -64,13 +71,15 @@ type ProductAgg = {
   subStops: number;
 };
 
-function itemQty(it: { qty?: number | null; quantity?: number | null }): number {
-  // Prefer qty (the newer field). Fall back to quantity (legacy).
-  // Anything not a positive finite number is treated as zero — a
-  // 0-loaf line is not baked, and a NaN line must not poison the sum.
-  const raw = it.qty ?? it.quantity ?? 0;
-  const n = typeof raw === "number" ? raw : Number(raw);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+/** Bucket key for one line. Slug where there is one — see
+ *  lib/order-items.ts for why `slug ?? product_id` and never `name`.
+ *
+ *  A line with NO identity keeps its own name-derived bucket rather than
+ *  being merged into a single "unknown" pile: two different unidentified
+ *  products must not silently add up together. There are no such lines on
+ *  prod today; this is the shape of the fallback, not a live path. */
+function bucketKey(it: OrderItemLike, name: string): string {
+  return itemSlug(it) ?? `name:${name.toLowerCase()}`;
 }
 
 export function aggregateProduction(
@@ -87,17 +96,27 @@ export function aggregateProduction(
   unpaidLoaves: number;
   unpaidStops: number;
 } {
-  const byName = new Map<
+  const byKey = new Map<
     string,
-    { loaves: number; orderIds: Set<string>; subRefs: Set<string> }
+    {
+      name: string;
+      loaves: number;
+      orderIds: Set<string>;
+      subRefs: Set<string>;
+    }
   >();
-  const entryFor = (name: string) => {
-    const e = byName.get(name) ?? {
+  // First `name` seen for a key wins as the display label. Later lines may
+  // spell it differently (a rename mid-day, or the app's string vs the
+  // web's) — they still add to the SAME bucket, which is the whole point
+  // of keying on identity.
+  const entryFor = (key: string, name: string) => {
+    const e = byKey.get(key) ?? {
+      name,
       loaves: 0,
       orderIds: new Set<string>(),
       subRefs: new Set<string>(),
     };
-    byName.set(name, e);
+    byKey.set(key, e);
     return e;
   };
 
@@ -114,7 +133,7 @@ export function aggregateProduction(
       if (!name) continue;
       const q = itemQty(it);
       if (q === 0) continue;
-      const entry = entryFor(name);
+      const entry = entryFor(bucketKey(it, name), name);
       entry.loaves += q;
       entry.orderIds.add(o.id);
       orderLoaves += q;
@@ -129,9 +148,9 @@ export function aggregateProduction(
     for (const it of s.items) {
       const name = (it?.name ?? "").trim();
       if (!name) continue;
-      const q = itemQty({ qty: it.qty });
+      const q = itemQty(it);
       if (q === 0) continue;
-      const entry = entryFor(name);
+      const entry = entryFor(bucketKey(it, name), name);
       entry.loaves += q;
       entry.subRefs.add(s.ref);
       subLoaves += q;
@@ -142,9 +161,10 @@ export function aggregateProduction(
     }
   }
 
-  const rows = Array.from(byName.entries())
-    .map(([name, v]) => ({
-      name,
+  const rows = Array.from(byKey.entries())
+    .map(([key, v]) => ({
+      key,
+      name: v.name,
       loaves: v.loaves,
       orders: v.orderIds.size,
       subStops: v.subRefs.size,
@@ -239,7 +259,7 @@ export function ProductionCountStrip({
         const label = variantLabel(r.name);
         return (
           <span
-            key={r.name}
+            key={r.key}
             title={
               r.subStops > 0
                 ? `${r.orders} order${r.orders === 1 ? "" : "s"} · ${r.subStops} subscription stop${r.subStops === 1 ? "" : "s"}`

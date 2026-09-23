@@ -698,7 +698,7 @@ function MetricChart({
               scale.unit === "month" ? "MRR (monthly)" : "ARR (annual)",
             ],
           ]}
-          note={`MRR = Σ (bread_price × quantity_per_delivery × days_per_week × 4.33) across active subs. ARR = MRR × 12. Which one is shown depends on the selected span: ≤ ${RUN_RATE_MONTHLY_SPAN_DAYS} days → MRR (/month), otherwise ARR (/year).`}
+          note={`MRR = Σ ((Σ per-item price × qty) + delivery fee) × days_per_week × 4.33, priced per bread from each plan's own subscription_items so a plan holding two breads is charged at each bread's real price. ARR = MRR × 12. Every plan with status "active" counts, whether or not its payment has cleared. Which one is shown depends on the selected span: ≤ ${RUN_RATE_MONTHLY_SPAN_DAYS} days → MRR (/month), otherwise ARR (/year).`}
         />
       );
     }

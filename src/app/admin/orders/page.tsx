@@ -42,6 +42,8 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ZoneBadge } from "@/components/admin/ZoneBadge";
 import { adminAuthHeaders, adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
+import { itemQty, itemSlug } from "@/lib/order-items";
+import { PRODUCT_LABELS } from "@/components/admin/ProductMarker";
 import {
   formatDate,
   formatDateTime,
@@ -2567,6 +2569,43 @@ const modalInput: React.CSSProperties = {
   textTransform: "none",
 };
 
+/** Units of each product on one order, keyed by `slug ?? product_id`.
+ *  Lines with no identity at all are dropped rather than guessed into a
+ *  column — see lib/order-items.ts. */
+function unitsBySlug(o: AdminOrderRow): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const it of o.items ?? []) {
+    const slug = itemSlug(it);
+    if (!slug) continue;
+    const q = itemQty(it);
+    if (q === 0) continue;
+    m.set(slug, (m.get(slug) ?? 0) + q);
+  }
+  return m;
+}
+
+/** One column per product, so the export answers "how many of each" and
+ *  not just "how much money".
+ *
+ *  The three known products always get a column, in a fixed order, even
+ *  when the exported slice contains none of them — a column that appears
+ *  and disappears between exports cannot be pasted into the same sheet
+ *  twice. Anything else that turns up is appended, so a product added to
+ *  the catalogue shows up here with no code change. */
+function productColumns(rows: AdminOrderRow[]) {
+  const known = Object.keys(PRODUCT_LABELS);
+  const extra = new Set<string>();
+  for (const o of rows) {
+    for (const slug of Array.from(unitsBySlug(o).keys())) {
+      if (!known.includes(slug)) extra.add(slug);
+    }
+  }
+  return [...known, ...Array.from(extra).sort()].map((slug) => ({
+    header: `${PRODUCT_LABELS[slug] ?? slug} units`,
+    value: (o: AdminOrderRow) => unitsBySlug(o).get(slug) ?? 0,
+  }));
+}
+
 function exportCsv(rows: AdminOrderRow[]): void {
   const csv = toCsv(rows, [
     { header: "Order ID", value: (o) => o.id },
@@ -2581,6 +2620,9 @@ function exportCsv(rows: AdminOrderRow[]): void {
     },
     { header: "Delivery address", value: (o) => o.delivery_address ?? "" },
     { header: "Created", value: (o) => o.created_at },
+    // Appended, never inserted: an existing sheet keyed on column
+    // position keeps working.
+    ...productColumns(rows),
   ]);
   downloadCsv(csvFilename("orders"), csv);
 }

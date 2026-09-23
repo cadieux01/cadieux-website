@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
+import { buildSubscriptionMoney } from "@/lib/subscription-money";
 
 // Analytics overview endpoint. All aggregations happen in this route so
 // the dashboard can render off a single network round-trip.
@@ -119,7 +120,7 @@ export async function GET(req: NextRequest) {
   const subsP = supabaseAdmin
     .from("subscriptions")
     .select(
-      "id, product_name, product_slug, total_amount, status, created_at, updated_at, bread_price, quantity_per_delivery, days, frequency",
+      "id, product_name, product_slug, total_amount, status, created_at, updated_at, bread_price, quantity_per_delivery, delivery_fee_inr, days, frequency",
     )
     // Unpaid shells would inflate MRR and revenue with money nobody paid.
     //
@@ -182,14 +183,20 @@ export async function GET(req: NextRequest) {
     .select("id", { count: "exact", head: true })
     .eq("is_active", true);
 
-  // Per-variant lines, for top_products. Fetched unfiltered and joined by
-  // id below rather than chained off the subs query: it is one extra
-  // round-trip either way, and waiting for `subsP` to resolve just to
+  // Per-variant lines, for top_products AND for MRR. Fetched unfiltered and
+  // joined by id below rather than chained off the subs query: it is one
+  // extra round-trip either way, and waiting for `subsP` to resolve just to
   // build an `.in(...)` list would serialise two queries that can run
   // together. 52 rows on prod today.
+  //
+  // `price_snapshot_inr` is what the customer was actually charged per loaf
+  // at signup. It is the ONLY correct unit price for a plan holding two
+  // breads — see the MRR block below.
   const subItemsP = supabaseAdmin
     .from("subscription_items")
-    .select("subscription_id, product_slug, product_name, quantity_per_delivery")
+    .select(
+      "subscription_id, product_slug, product_name, quantity_per_delivery, price_snapshot_inr",
+    )
     .limit(5000);
 
   const [oRes, sRes, cRes, cohRes, moRes, stRes, arRes, siRes] =
@@ -231,6 +238,7 @@ export async function GET(req: NextRequest) {
     updated_at: string | null;
     bread_price: number | null;
     quantity_per_delivery: number | null;
+    delivery_fee_inr: number | string | null;
     days: string[] | null;
     frequency: string | null;
   };
@@ -239,6 +247,7 @@ export async function GET(req: NextRequest) {
     product_slug: string | null;
     product_name: string | null;
     quantity_per_delivery: number | null;
+    price_snapshot_inr: number | string | null;
   };
   type CustomerRow = { id: string; created_at: string };
 
@@ -246,8 +255,19 @@ export async function GET(req: NextRequest) {
   const allSubs = (sRes.data ?? []) as SubRow[];
   // A failed items read is NOT fatal: every other tile on this dashboard
   // is orders-and-money and does not depend on it. top_products falls
-  // back to the legacy pair below, which is the pre-existing behaviour.
+  // back to the legacy pair below, which is the pre-existing behaviour;
+  // MRR falls back the same way, through buildSubscriptionMoney's own
+  // legacy branch. A degraded MRR is the pre-existing (wrong-on-mixed)
+  // number, which is strictly no worse than before this change.
   const allSubItems = (siRes.data ?? []) as SubItemRow[];
+  // Grouped once, here, because BOTH the MRR block and top_products read
+  // it. It used to be built inside top_products, below MRR.
+  const itemsBySub = new Map<string, SubItemRow[]>();
+  for (const it of allSubItems) {
+    const list = itemsBySub.get(it.subscription_id) ?? [];
+    list.push(it);
+    itemsBySub.set(it.subscription_id, list);
+  }
   const recentCustomers = (cRes.data ?? []) as CustomerRow[];
   const cohortCustomers = ((cohRes.data ?? []) as CustomerRow[]) ?? [];
 
@@ -298,16 +318,54 @@ export async function GET(req: NextRequest) {
 
   // ---------- MRR / ARR ----------
   // Textbook MRR: sum of monthly recurring revenue from currently active
-  // subscriptions. For each active sub we compute the weekly delivery
-  // revenue (bread_price × quantity_per_delivery × days_per_week) and
-  // scale to a month via WEEKS_PER_MONTH.
+  // subscriptions. For each active sub we take what ONE delivery is worth,
+  // multiply by deliveries per week, and scale to a month via
+  // WEEKS_PER_MONTH. ARR is MRR × 12 — the standard SaaS convention.
+  //
+  // WHAT ONE DELIVERY IS WORTH IS NOT COMPUTED HERE.
+  //
+  // It used to be: `bread_price × quantity_per_delivery`. That is wrong on
+  // any plan holding two breads. `subscriptions.bread_price` is written at
+  // checkout as the PRIMARY item's price_snapshot_inr — on every mixed plan
+  // on prod that is Multigrain (₹144), while Plain is ₹108 — and
+  // `quantity_per_delivery` is the COMBINED loaf count of both. So the
+  // formula charged the dearer price for every loaf and MRR always
+  // overstated. Measured on prod: 9 of 43 plans are mixed, and the one in
+  // the live MRR population (OLS22, Plain 1 + Multigrain 1 × 3 days/wk)
+  // read 288/delivery against a true 252.
+  //
+  // `buildSubscriptionMoney` already sums price_snapshot_inr × qty across
+  // the real item rows, and is what /admin/subscriptions/[id] renders. It
+  // is reused verbatim rather than reimplemented so the dashboard headline
+  // and the plan page can never drift apart again — that drift is the
+  // entire bug. Its legacy bread_price fallback is kept for item-less
+  // plans (none on prod, but a pre-items row must still report something).
+  //
+  // `deliveryCount: 0` is deliberate. MRR is a RATE — it wants the value of
+  // one delivery, not the lifetime total of a plan that may have any number
+  // of stops left. Only `breadPerDelivery` and `feePerDelivery` are read;
+  // breadTotal/feeTotal/feeStatus are lifetime figures that mean nothing
+  // here and are ignored.
+  //
+  // THE DELIVERY FEE IS INCLUDED UNCONDITIONALLY. It is recurring revenue —
+  // it arrives every time a van goes out. Note that buildSubscriptionMoney
+  // can also tell you whether a given plan's fee was actually billed or
+  // merely backfilled for reporting (`feeStatus`), and that distinction is
+  // NOT applied here: one active plan on prod (OLS10) carries a backfilled
+  // fee its customer was never charged. Counting it is Sunny's explicit
+  // call, on the grounds that the fee is charged on every plan written
+  // today. If that ruling is ever revisited, `feeStatus === "charged"` is
+  // the gate, and it needs a real deliveryCount to be meaningful.
   //
   // `subscriptions.days[]` holds the delivery days-of-week for the plan.
   // Some legacy weekly rows have an empty `days` array — we fall back to
   // 1 delivery/week when frequency='weekly' so they still contribute a
   // sensible number rather than 0.
   //
-  // ARR is just MRR × 12 (annualised) — the standard SaaS convention.
+  // POPULATION IS UNCHANGED AND IS NOT A BUG. Every plan with
+  // status='active' counts, on top of the route-wide payment_status filter,
+  // whether or not its payment has cleared. Sunny's call; the KPI note on
+  // /admin/overview says so out loud.
   const daysPerWeek = (s: SubRow): number => {
     const n = Array.isArray(s.days) ? s.days.length : 0;
     if (n > 0) return n;
@@ -317,10 +375,21 @@ export async function GET(req: NextRequest) {
   const mrr = allSubs
     .filter((s) => (s.status ?? "").toLowerCase() === "active")
     .reduce((acc, s) => {
-      const price = Number(s.bread_price) || 0;
-      const qty = Number(s.quantity_per_delivery) || 0;
-      const dpw = daysPerWeek(s);
-      return acc + price * qty * dpw * WEEKS_PER_MONTH;
+      const money = buildSubscriptionMoney({
+        items: itemsBySub.get(s.id) ?? [],
+        deliveryCount: 0,
+        storedTotal: s.total_amount,
+        feePerDelivery: s.delivery_fee_inr,
+        legacy: {
+          product_name: s.product_name,
+          product_slug: s.product_slug,
+          quantity_per_delivery: s.quantity_per_delivery,
+          bread_price: s.bread_price,
+        },
+      });
+      const perDelivery =
+        (money.breadPerDelivery ?? 0) + (money.feePerDelivery ?? 0);
+      return acc + perDelivery * daysPerWeek(s) * WEEKS_PER_MONTH;
     }, 0);
   const arr = mrr * 12;
 
@@ -407,18 +476,18 @@ export async function GET(req: NextRequest) {
   //
   // REVENUE IS A PRO-RATA SPLIT BY LOAVES, not a stored per-variant
   // figure — there is no such figure. It keeps the column's total equal
-  // to the sum of total_amount, and it is exact whenever the variants
-  // share a per-loaf price, which they do today. Anything that needs
-  // revenue attributed precisely (MRR included) is a separate job.
+  // to the sum of total_amount, which is why it is shaped this way.
+  //
+  // It is NOT exact. An earlier version of this comment claimed the split
+  // "is exact whenever the variants share a per-loaf price, which they do
+  // today" — they do not: Plain is 108 and Multigrain is 144. Across the
+  // nine mixed plans on prod the split misattributes ₹220.29 from
+  // Multigrain to Plain. Per-item price_snapshot_inr is now fetched above
+  // (MRR uses it), so an exact split is available if this column is ever
+  // rendered — today it is computed and displayed nowhere.
   const subsInRange = allSubs.filter((s) =>
     dayBetween(s.created_at.slice(0, 10), from, to),
   );
-  const itemsBySub = new Map<string, SubItemRow[]>();
-  for (const it of allSubItems) {
-    const list = itemsBySub.get(it.subscription_id) ?? [];
-    list.push(it);
-    itemsBySub.set(it.subscription_id, list);
-  }
   const productMap = new Map<string, { subscriptions: number; revenue: number }>();
   for (const s of subsInRange) {
     const revenue = Number(s.total_amount) || 0;
