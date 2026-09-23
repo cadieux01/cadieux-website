@@ -31,19 +31,26 @@ export const DELIVERY_FEE_FLAT_INR = 12;
  *  (mixed cart → OLF bread row + OLW sandwich row, per the OLF/OLW split
  *  plan). Two modes:
  *
- *    "single"   — ONE fee, charged on the OLF row only. OLW carries a zero
- *                 delivery fee. This is TWO rider trips (bread on its own
- *                 slot, sandwich on its own same-day slot under Option C)
- *                 against ONE collected fee — a MARGIN choice, not a
- *                 technical one, and the current default until Sunny rules
- *                 otherwise.
+ *    "per_order" — Each row carries its own DELIVERY_FEE_FLAT_INR. Two
+ *                  rider trips (bread on its own slot, sandwich on its own
+ *                  same-day slot under Option C), two fees. CURRENT — Sunny
+ *                  ruled 2026-09-23: two trips means two fees.
  *
- *    "per_order" — Each row carries its own DELIVERY_FEE_FLAT_INR. Customer
- *                  pays two fees for two trips.
+ *    "single"    — RETIRED 2026-09-23. ONE fee on the OLF row only, OLW
+ *                  zero. That was two trips against one collected fee — a
+ *                  margin choice, and the wrong one. The branch is kept so
+ *                  the apportionment stays an explicit, named decision at
+ *                  the call site rather than a bare constant; it is not a
+ *                  mode to go back to without a reason.
+ *
+ *  Both rows must send delivery_fee EXPLICITLY. public.orders.delivery_fee
+ *  is NOT NULL DEFAULT 50 — omit the key and the row silently takes ₹50, a
+ *  fee this file no longer charges at any distance. Pickup groups send 0 on
+ *  both rows.
  *
  *  Read server-side only; a constant, not a DB flag, so a change is a
  *  deploy-visible audit event rather than a silent runtime flip. */
-export const DELIVERY_FEE_SPLIT_MODE: "single" | "per_order" = "single";
+export const DELIVERY_FEE_SPLIT_MODE: "single" | "per_order" = "per_order";
 
 export function computeDeliveryFee(distanceKm: number): {
   serviceable: boolean;
