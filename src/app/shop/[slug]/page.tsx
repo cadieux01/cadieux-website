@@ -30,7 +30,7 @@ import {
 } from "@/lib/products";
 import { parseWeightGrams, proteinPerLoafGrams } from "@/lib/stat-tiles";
 import { getProductReports } from "@/lib/product-reports";
-import { getPageContent, pickString } from "@/lib/content";
+import { getPageContent, pickProductTitle, pickString } from "@/lib/content";
 import { resolveInternalSlug } from "@/lib/product-slugs";
 
 import { getSubscriptionPlans } from "@/lib/subscription-plans";
@@ -215,7 +215,8 @@ export default async function ProductDetailPage({
   const pdpStrings = {
     name: pickString(content, "pdp.name", internalSlug),
     tag: pickString(content, "pdp.tag", internalSlug),
-    title: pickString(content, "pdp.title", internalSlug),
+    // The <h1>. Driven by products.name — see pickProductTitle.
+    title: pickProductTitle(content, internalSlug, productRow?.name),
     // A pre-order product ignores pdp.subtitle and falls back to the bundled
     // editorial line. The Android app has no OTA, so its PDP subtitle is the
     // only place we can put the pre-order sentence in front of an installed
