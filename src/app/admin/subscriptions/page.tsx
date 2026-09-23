@@ -832,29 +832,49 @@ function SubscriptionsPageInner() {
   // answer there, and it is what `dateScoped === false` gives.
   const dateScoped = day !== null && basis === "delivery";
 
-  // The summary's two jobs in one pass: the loaf counts, and how many plans
-  // actually contributed to them.
+  // subscription_id → the counts THIS ROW contributes, under whichever
+  // scoping is in force.
   //
-  // Why `subs` is counted here rather than read off `filtered.length`: when
-  // a date is selected the sentence claims the plans are "delivering on"
-  // that date, and only a plan with a non-cancelled stop on it qualifies.
+  // ONE map, read by both the summary bar and the per-row chip. That is the
+  // point of building it here rather than letting each surface do its own
+  // lookup: the bar is a sum of the rows, so if the two derive their numbers
+  // independently they can drift, and the screen shows a total that none of
+  // the visible rows add up to. Deriving both from this map makes that
+  // unrepresentable rather than merely unlikely.
+  const countsBySub = useMemo(() => {
+    const out = new Map<string, LoafCounts>();
+    for (const s of filtered) {
+      out.set(
+        s.id,
+        dateScoped
+          ? countsByDateFromRecord(s.loaf_counts_by_date).get(day) ??
+            (new Map() as LoafCounts)
+          : countsFromRecord(s.loaf_counts),
+      );
+    }
+    return out;
+  }, [filtered, dateScoped, day]);
+
+  // The summary's two jobs: the loaf counts, and how many plans actually
+  // contributed to them.
+  //
+  // Why `subs` is counted rather than read off `filtered.length`: when a
+  // date is selected the sentence claims the plans are "delivering on" that
+  // date, and only a plan with a non-cancelled stop on it qualifies.
   // `filtered.length` is the row count, which is the right number for the
   // unscoped sentence and would merely be a plausible one here.
   const summary = useMemo(() => {
     const counts: LoafCounts = new Map();
     let subs = 0;
     for (const s of filtered) {
-      const c = dateScoped
-        ? countsByDateFromRecord(s.loaf_counts_by_date).get(day) ??
-          (new Map() as LoafCounts)
-        : countsFromRecord(s.loaf_counts);
+      const c = countsBySub.get(s.id) ?? (new Map() as LoafCounts);
       if (c.size > 0) subs += 1;
       addCounts(counts, c);
     }
     // Unscoped keeps its long-standing meaning: every row in the filter,
     // including any that carry no counts (rows fetched without ?enrich=1).
     return { counts, subs: dateScoped ? subs : filtered.length };
-  }, [filtered, dateScoped, day]);
+  }, [filtered, countsBySub, dateScoped]);
 
   const filteredCounts = summary.counts;
   const filteredLines = useMemo(
@@ -1448,19 +1468,30 @@ function SubscriptionsPageInner() {
                 // is owed, which is the whole reason it needs chasing.
                 const paidUnconfirmed = isPaidUnconfirmed(s);
                 // Two different totals, deliberately: the markers show the
-                // WHOLE PLAN (cancelled stops excluded), the tooltip adds
-                // what goes in one bag. Showing only the per-delivery
-                // figure is how a 5-week plan reads as 2 loaves.
-                const rowLines = countLines(
-                  countsFromRecord(s.loaf_counts),
-                  nameHint,
-                );
+                // scope the SUMMARY BAR is showing — whole plan normally,
+                // that date's stops only when a delivery-date filter is on —
+                // while the tooltip adds what goes in one bag. Showing only
+                // the per-delivery figure is how a 5-week plan reads as 2
+                // loaves.
+                //
+                // Read from countsBySub, NOT from s.loaf_counts directly.
+                // The bar is the sum of these rows; if the row re-derived its
+                // own number the two could disagree on the same screen, which
+                // is exactly the bug that made the bar say 25 loaves on a day
+                // with 5 to bake.
+                const rowCounts =
+                  countsBySub.get(s.id) ?? (new Map() as LoafCounts);
+                const rowLines = countLines(rowCounts, nameHint);
                 const perDelivery = longCountText(
                   countLines(countPlan(s), nameHint),
                 );
                 const rowCountTitle = [
                   rowLines.length > 0
-                    ? `${longCountText(rowLines)} across all non-cancelled deliveries`
+                    ? `${longCountText(rowLines)} ${
+                        dateScoped
+                          ? `delivering on ${formatDate(day)}`
+                          : "across all non-cancelled deliveries"
+                      }`
                     : null,
                   perDelivery ? `${perDelivery} per delivery` : null,
                 ]
