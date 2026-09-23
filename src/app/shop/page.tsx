@@ -9,7 +9,7 @@ import {
   getProductAvailability,
   resolveProductMedia,
 } from "@/lib/products";
-import { getPageContent, pickString } from "@/lib/content";
+import { getPageContent, pickProductTitle, pickString } from "@/lib/content";
 import { getSubscriptionPlans } from "@/lib/subscription-plans";
 import { getSandwichKitchenState } from "@/lib/sandwich-kitchen";
 import { proteinPerLoafGrams } from "@/lib/stat-tiles";
@@ -53,8 +53,13 @@ export default async function ShopPage() {
   // each tile. Null for any product whose per-slice protein or slice count
   // is missing, and that tile then shows no per-gram line at all.
   const proteinPerLoafBySlug: Record<string, number | null> = {};
+  // Live DB product name per slug. The tile heading is the same `pdp.title`
+  // the PDP <h1> resolves, so it has to be resolved the same way or the grid
+  // and the product page would print two different names for one product.
+  const nameBySlug: Record<string, string> = {};
   for (const p of products) {
     priceBySlug[p.slug] = p.price_inr;
+    nameBySlug[p.slug] = p.name;
     mediaBySlug[p.slug] = resolveProductMedia(p.slug, p.image_url, p.gallery_urls);
     proteinPerLoafBySlug[p.slug] = proteinPerLoafGrams(p);
   }
@@ -87,7 +92,7 @@ export default async function ShopPage() {
     contentBySlug[slug] = {
       name: pickString(c, "pdp.name", slug),
       tag: pickString(c, "pdp.tag", slug),
-      title: pickString(c, "pdp.title", slug),
+      title: pickProductTitle(c, slug, nameBySlug[slug]),
       // Same suppression as the PDP: `shop` pulls the `pdp` prefix, and the
       // pdp.subtitle row for a pre-order product carries app-only copy (the
       // app has no OTA — see migration 20260918090000). The tile renders the

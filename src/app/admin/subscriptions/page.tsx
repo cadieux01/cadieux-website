@@ -38,18 +38,7 @@ import {
   useUrlWriteback,
   stashScrollY,
 } from "@/lib/admin-url-state";
-import { AreaSortControl } from "@/components/admin/AreaSortControl";
-import { DistanceBadge } from "@/components/admin/DistanceBadge";
-import {
-  distanceFrom,
-  parseAnchorParams,
-  sortByDistanceFromAnchor,
-  subscriptionLocation,
-  writeAnchorParams,
-  type ResolvedArea,
-} from "@/lib/distance-sort";
 import { MONTH_SHORT, WEEKDAY_SHORT } from "@/lib/date-names";
-import { usePincodeCoords } from "@/lib/use-pincode-coords";
 import {
   EXPIRING_7D,
   PAID_UNCONFIRMED,
@@ -119,6 +108,7 @@ import {
   addCounts,
   countLines,
   countPlan,
+  countsByDateFromRecord,
   countsFromRecord,
   longCountText,
   nameHintFor,
@@ -395,29 +385,16 @@ function SubscriptionsPageInner() {
     parseDayParam(searchParams.get("date")),
   );
 
-  // "Nearest from typed area" — the same control, the same four params and
-  // the same arithmetic as /admin/orders.
-  //
-  // UNLIKE the orders board there is no sort Select to hang it off. Orders
-  // has one because it has three sorts; this board has exactly two, so the
-  // anchor IS the toggle: match an area and the rows go nearest-first,
-  // clear the chip and they fall back to status-grouped. A dropdown whose
-  // only job is to mirror the presence of the chip beside it would be a
-  // second control for one piece of state, and the two would eventually
-  // disagree.
-  //
-  // Subscriptions have no coordinates of their own — the route matches them
-  // out of public.addresses, and ONLY on ?enrich=1, which this board always
-  // sends. Rows with no saved address fall back to the pincode centroid,
-  // then to "No location", which sorts last rather than sorting as zero.
-  const [anchor, setAnchor] = useState<ResolvedArea | null>(() =>
-    parseAnchorParams(searchParams),
-  );
-  const pincodeCoords = usePincodeCoords();
-
   // Defaults are OMITTED, not encoded, so a plain /admin/subscriptions link
   // stays clean and the parsers above remain the single source of truth for
   // what "unset" means.
+  //
+  // This builds the query string from scratch out of the state the board
+  // actually has, so a param it no longer understands cannot survive. That
+  // is what retires the old "nearest from area" sort safely: a bookmark
+  // still carrying ?area=&area_lat=&area_lng=&area_via= is parsed by
+  // nothing, sorts nothing, and is dropped from the URL on the first
+  // writeback. The board opens status-grouped, its only sort.
   const qs = useMemo(() => {
     const params = new URLSearchParams();
     // Zones ride in the same flat `filter` as everything else but are
@@ -430,9 +407,8 @@ function SubscriptionsPageInner() {
     if (day) params.set("date", day);
     if (selection.zones.length > 0)
       params.set("zone", encodeZoneParam(selection.zones));
-    writeAnchorParams(params, anchor);
     return params.toString();
-  }, [filter, selection.zones, query, basis, day, anchor]);
+  }, [filter, selection.zones, query, basis, day]);
   useUrlWriteback("/admin/subscriptions", qs);
   useScrollRestore(SCROLL_KEY, !loading);
 
@@ -767,21 +743,6 @@ function SubscriptionsPageInner() {
         s.subscription_number,
       ]);
     });
-    // Distance sort — nearest first, "no location" grouped last. Runs over
-    // the SAME filtered set as the default sort, so the counts in the
-    // filter trigger never diverge from the table underneath it.
-    if (anchor) {
-      // sortByDistanceFromAnchor attaches a `distance` field. Strip it so
-      // `filtered` stays typed as AdminSubscriptionRow[]; the row badge
-      // recomputes it from the same anchor and the same coords.
-      return sortByDistanceFromAnchor(
-        rows,
-        anchor,
-        pincodeCoords,
-        subscriptionLocation,
-      ).map(({ distance: _distance, ...rest }) => rest as AdminSubscriptionRow);
-    }
-
     // Status group first, newest-first within each group, so completed and
     // cancelled subscriptions stop pushing live ones down the page. The API
     // already returns created_at DESC; this re-sorts a copy. Display only —
@@ -805,27 +766,74 @@ function SubscriptionsPageInner() {
     isExpiring,
     query,
     zoneOf,
-    anchor,
-    pincodeCoords,
   ]);
 
   // ── loaf counts ─────────────────────────────────────────────────────────
   //
-  // Derived from `filtered`, so every filter — status, zone, day, search,
-  // distance sort — moves these numbers with the rows. Nothing here
-  // re-reads the raw list, which is the only way the bar and the table can
-  // be guaranteed to agree.
+  // Derived from `filtered`, so every filter — status, zone, day, search —
+  // moves these numbers with the rows. Nothing here re-reads the raw list,
+  // which is the only way the bar and the table can be guaranteed to agree.
   //
   // `loaf_counts` is summed server-side across each plan's non-cancelled
   // deliveries (see the enrich branch of /api/admin/subscriptions). Rows
   // fetched without ?enrich=1 have none, and countsFromRecord returns an
   // empty map for them rather than guessing.
   const nameHint = useMemo(() => nameHintFor(filtered), [filtered]);
-  const filteredCounts = useMemo(() => {
-    const out: LoafCounts = new Map();
-    for (const s of filtered) addCounts(out, countsFromRecord(s.loaf_counts));
+
+  // Is the summary scoped to ONE date?
+  //
+  // Only on the DELIVERY basis. On the order basis the day means "booked on
+  // this date", and a plan booked on the 23rd delivers on quite different
+  // days — counting its delivery rows against the booking date would produce
+  // a number that belongs to neither question. Whole-plan is the honest
+  // answer there, and it is what `dateScoped === false` gives.
+  const dateScoped = day !== null && basis === "delivery";
+
+  // subscription_id → the counts THIS ROW contributes, under whichever
+  // scoping is in force.
+  //
+  // ONE map, read by both the summary bar and the per-row chip. That is the
+  // point of building it here rather than letting each surface do its own
+  // lookup: the bar is a sum of the rows, so if the two derive their numbers
+  // independently they can drift, and the screen shows a total that none of
+  // the visible rows add up to. Deriving both from this map makes that
+  // unrepresentable rather than merely unlikely.
+  const countsBySub = useMemo(() => {
+    const out = new Map<string, LoafCounts>();
+    for (const s of filtered) {
+      out.set(
+        s.id,
+        dateScoped
+          ? countsByDateFromRecord(s.loaf_counts_by_date).get(day) ??
+            (new Map() as LoafCounts)
+          : countsFromRecord(s.loaf_counts),
+      );
+    }
     return out;
-  }, [filtered]);
+  }, [filtered, dateScoped, day]);
+
+  // The summary's two jobs: the loaf counts, and how many plans actually
+  // contributed to them.
+  //
+  // Why `subs` is counted rather than read off `filtered.length`: when a
+  // date is selected the sentence claims the plans are "delivering on" that
+  // date, and only a plan with a non-cancelled stop on it qualifies.
+  // `filtered.length` is the row count, which is the right number for the
+  // unscoped sentence and would merely be a plausible one here.
+  const summary = useMemo(() => {
+    const counts: LoafCounts = new Map();
+    let subs = 0;
+    for (const s of filtered) {
+      const c = countsBySub.get(s.id) ?? (new Map() as LoafCounts);
+      if (c.size > 0) subs += 1;
+      addCounts(counts, c);
+    }
+    // Unscoped keeps its long-standing meaning: every row in the filter,
+    // including any that carry no counts (rows fetched without ?enrich=1).
+    return { counts, subs: dateScoped ? subs : filtered.length };
+  }, [filtered, countsBySub, dateScoped]);
+
+  const filteredCounts = summary.counts;
   const filteredLines = useMemo(
     () => countLines(filteredCounts, nameHint),
     [filteredCounts, nameHint],
@@ -1196,14 +1204,6 @@ function SubscriptionsPageInner() {
             minWidth: 240,
           }}
         />
-        {/* Matching an area flips the board to nearest-first; the chip's ×
-            clears it. See the anchor state above for why there is no sort
-            dropdown beside it. */}
-        <AreaSortControl
-          anchor={anchor}
-          onResolve={setAnchor}
-          onClear={() => setAnchor(null)}
-        />
       </div>
 
       {selected.size > 0 ? (
@@ -1312,7 +1312,16 @@ function SubscriptionsPageInner() {
               subscriptions.product_slug. All nine mixed plans on prod
               store the Multigrain name against their COMBINED quantity, so
               the legacy column would show Multigrain 31 / Plain 12 where
-              the truth is 31 / 21. */}
+              the truth is 31 / 21.
+
+              WITH A DATE SELECTED these become THAT DATE's stops, summed
+              from loaf_counts_by_date instead of the whole-plan
+              loaf_counts. A date-filtered board showing lifetime totals
+              answered a question nobody had asked: on 23 Sep it read
+              P 3 / M 22 / 25 loaves, which is what those four plans come to
+              over their whole runs, when six loaves were going out. Both
+              maps are bucketed by `scheduled_date ?? delivery_date`, the
+              same precedence the day filter matches rows on. */}
           <CountMarkers lines={filteredLines} />
           <span style={{ marginLeft: "auto", color: cream(0.85) }}>
             {filtered.reduce(
@@ -1332,9 +1341,19 @@ function SubscriptionsPageInner() {
               fontSize: 12,
             }}
           >
-            {totalLoaves(filteredCounts)} loaves across {filtered.length}{" "}
-            subscription{filtered.length === 1 ? "" : "s"} in this filter —
-            every non-cancelled delivery, whole plan, not per week.
+            {totalLoaves(filteredCounts)} loaves across {summary.subs}{" "}
+            subscription{summary.subs === 1 ? "" : "s"}{" "}
+            {dateScoped ? (
+              <>
+                delivering on {formatDate(day)} — that date&rsquo;s stops
+                only, cancelled excluded. Not the whole plan.
+              </>
+            ) : (
+              <>
+                in this filter — every non-cancelled delivery, whole plan, not
+                per week.
+              </>
+            )}
           </span>
         </section>
       ) : null}
@@ -1386,31 +1405,36 @@ function SubscriptionsPageInner() {
                 const canCancel =
                   s.status !== "cancelled" && s.status !== "completed";
                 const rowAddr = resolveSubscriptionAddress(s);
-                // Only while the board is actually sorted by distance —
-                // a km figure against a status-grouped list would invite
-                // someone to read the order of the rows as a route.
-                const dist = anchor
-                  ? distanceFrom(subscriptionLocation(s), anchor, pincodeCoords)
-                  : null;
                 // Money in, plan not confirmed. Derived, never stored — see
                 // isPaidUnconfirmed. Marks the row and nothing else: Share
                 // stays enabled, because the payment is good and the bread
                 // is owed, which is the whole reason it needs chasing.
                 const paidUnconfirmed = isPaidUnconfirmed(s);
                 // Two different totals, deliberately: the markers show the
-                // WHOLE PLAN (cancelled stops excluded), the tooltip adds
-                // what goes in one bag. Showing only the per-delivery
-                // figure is how a 5-week plan reads as 2 loaves.
-                const rowLines = countLines(
-                  countsFromRecord(s.loaf_counts),
-                  nameHint,
-                );
+                // scope the SUMMARY BAR is showing — whole plan normally,
+                // that date's stops only when a delivery-date filter is on —
+                // while the tooltip adds what goes in one bag. Showing only
+                // the per-delivery figure is how a 5-week plan reads as 2
+                // loaves.
+                //
+                // Read from countsBySub, NOT from s.loaf_counts directly.
+                // The bar is the sum of these rows; if the row re-derived its
+                // own number the two could disagree on the same screen, which
+                // is exactly the bug that made the bar say 25 loaves on a day
+                // with 5 to bake.
+                const rowCounts =
+                  countsBySub.get(s.id) ?? (new Map() as LoafCounts);
+                const rowLines = countLines(rowCounts, nameHint);
                 const perDelivery = longCountText(
                   countLines(countPlan(s), nameHint),
                 );
                 const rowCountTitle = [
                   rowLines.length > 0
-                    ? `${longCountText(rowLines)} across all non-cancelled deliveries`
+                    ? `${longCountText(rowLines)} ${
+                        dateScoped
+                          ? `delivering on ${formatDate(day)}`
+                          : "across all non-cancelled deliveries"
+                      }`
                     : null,
                   perDelivery ? `${perDelivery} per delivery` : null,
                 ]
@@ -1566,7 +1590,6 @@ function SubscriptionsPageInner() {
                           ) : null}
                         </div>
                       ) : null}
-                      {dist ? <DistanceBadge info={dist} /> : null}
                     </td>
                     <td style={td} data-label="Date">
                       {/* The date I owe them, not the day they signed up.

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import QASection from "./QASection";
-import { lazyPlayOnEnter } from "@/lib/lazyVideo";
+import { lazyPlayOnEnter, markVideoStarted, watchForResume } from "@/lib/lazyVideo";
 
 /* ── SVG grain texture ── */
 const GRAIN =
@@ -84,8 +84,8 @@ export default function PageContent({ introActive = false }: { introActive?: boo
       }
     };
 
-    // Ensure muted is asserted up-front too, before the browser evaluates
-    // the autoPlay attribute on first paint.
+    // Ensure muted is asserted up-front too, before the element is ever
+    // asked to play.
     v.muted = true;
     v.defaultMuted = true;
 
@@ -98,8 +98,52 @@ export default function PageContent({ introActive = false }: { introActive?: boo
     v.addEventListener("canplaythrough", play);
     if (v.readyState >= 3) play();
 
+    /* Deferred fetch. The element ships preload="none" with no autoplay
+       attribute, so NOTHING is downloaded until this runs — 1,771.7 KB of the
+       homepage's 3,093 KB first load, which is 57% of it, and none of it is on
+       the LCP path (LCP is the headline text, measured at 1,592 ms).
+
+       load() is MANDATORY and its absence is silent: without it the element
+       never fetches, canplay never fires, play() is never reached, and the
+       hero sits on its poster forever with no error in the console. Setting
+       preload="auto" BEFORE load() is equally load-bearing — flip it after
+       and the fetch stops at metadata (same ordering as lazyVideo.ts).
+
+       Trigger: requestIdleCallback so the fetch waits for a quiet main thread,
+       with a timeout so a busy one cannot starve it indefinitely. Safari only
+       shipped rIC in 16.4 and iOS is the primary surface here, so older
+       WebKit falls back to a plain timer. Whichever fires, `started` makes
+       this run exactly once. */
+    let started = false;
+    const startLoad = () => {
+      if (started) return;
+      started = true;
+      v.preload = "auto";
+      v.load();
+      markVideoStarted(v);
+      play();
+    };
+
+    // Resume if a backgrounded tab suspended playback — see lazyVideo.ts.
+    // The four background videos register themselves; the hero is registered
+    // here because it defers on idle rather than through that ref.
+    const unwatchResume = watchForResume(v);
+
+    const IDLE_TIMEOUT_MS = 2000;
+    const ric =
+      typeof window.requestIdleCallback === "function"
+        ? window.requestIdleCallback(startLoad, { timeout: IDLE_TIMEOUT_MS })
+        : null;
+    const fallbackTimer =
+      ric === null ? setTimeout(startLoad, IDLE_TIMEOUT_MS) : null;
+
     return () => {
       if (retryTimer) clearTimeout(retryTimer);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      if (ric !== null && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(ric);
+      }
+      unwatchResume();
       v.removeEventListener("canplay", play);
       v.removeEventListener("loadeddata", play);
       v.removeEventListener("canplaythrough", play);
@@ -194,12 +238,19 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   mobile  av1 1,814,271 B  vs  h264 2,399,317 B  (−24%)
                   desktop av1 3,727,185 B  vs  h264 5,237,139 B  (−29%)
               */}
+              {/* No `autoplay` attribute and preload="none" — see the effect at
+                  the top of this component. The attribute would start the
+                  download on parse no matter what `preload` says (measured:
+                  auto/metadata/none all fetched the full 1,771.7 KB while
+                  autoplay was present), so the deferral lives entirely in
+                  JS: the effect calls load() once the page is idle. Playback
+                  is unchanged — that same effect has always called play()
+                  itself; the attribute was redundant. */}
               <video
                 ref={videoRef}
-                autoPlay
                 muted
                 playsInline
-                preload="metadata"
+                preload="none"
                 loop
                 disablePictureInPicture
                 disableRemotePlayback

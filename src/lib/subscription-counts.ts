@@ -25,11 +25,16 @@
 import type { AdminSubscriptionItem } from "@/lib/admin-shared";
 import { subscriptionItems } from "@/lib/subscription-display";
 import { productDisplayName } from "@/lib/product-names";
+import { toIstDay } from "@/lib/day-filter";
 
 /** The delivery fields counting needs. Deliberately narrower than
  *  AdminDeliveryRow so this stays a leaf as that row grows. */
 export type CountableDelivery = {
   status?: string | null;
+  /** The originally-booked date. NOT NULL in the schema. */
+  delivery_date?: string | null;
+  /** The admin-edited date, when a stop has been moved. Populated on ALL
+   *  117 prod rows today, so it is the usual reader, not the exception. */
   scheduled_date?: string | null;
   week_number?: number | null;
   /** Per-delivery replacement for the plan's default items. */
@@ -176,6 +181,84 @@ export function countDeliveries(
   return out;
 }
 
+/**
+ * The calendar day a delivery belongs to, for date-scoped counting.
+ *
+ * `scheduled_date ?? delivery_date` — DELIBERATELY the same precedence
+ * buildDerivations uses to build `delivery_dates`, which is the set the
+ * board's day filter matches ROWS against. These two must never diverge:
+ * the summary counts what the table lists, so if one reads the raw booked
+ * date and the other reads the moved date, a rescheduled stop is counted
+ * on a day its row is not shown on, and the bar contradicts the rows
+ * directly beneath it.
+ *
+ * That is not hypothetical. On prod 2026-09-23 exactly one row diverges —
+ * booked for the 23rd, moved to the 21st, already delivered. Counting it
+ * on the 23rd would tell the kitchen to bake a loaf for a stop that was
+ * served two days earlier.
+ *
+ * Returns null when there is no usable date, so the caller can skip the
+ * row rather than bucket it under an empty key.
+ */
+export function deliveryDayKey(d: CountableDelivery): string | null {
+  return toIstDay(d.scheduled_date ?? d.delivery_date);
+}
+
+/**
+ * Loaves for ONE plan, split by the day each delivery lands on.
+ *
+ * This is what lets the board answer "what do we bake on the 23rd" rather
+ * than only "what does this plan come to over its life". items_override is
+ * honoured per delivery via countDelivery, so a stop that was edited to a
+ * different bread counts as the bread that is actually going out — the
+ * whole-plan total already did this, and a date-scoped total that did not
+ * would be a quieter version of the same bug.
+ *
+ * Cancelled rows are skipped BEFORE the bucket is created, so a date whose
+ * only stop was cancelled is absent from the map rather than present with
+ * zero. Absent and zero read the same in the UI but not in code: `.get()`
+ * returning undefined is the honest answer to "is anything going out".
+ */
+export function countDeliveriesByDate(
+  deliveries: CountableDelivery[],
+  plan: CountablePlan,
+): Map<string, LoafCounts> {
+  const planItems = planItemsOf(plan);
+  const out = new Map<string, LoafCounts>();
+  for (const d of deliveries) {
+    if (isCancelledDelivery(d)) continue;
+    const key = deliveryDayKey(d);
+    if (!key) continue;
+    let bucket = out.get(key);
+    if (!bucket) out.set(key, (bucket = new Map()));
+    addCounts(bucket, countDelivery(d, planItems));
+  }
+  return out;
+}
+
+/** `date → slug → loaves`, the wire shape the list route ships. */
+export function countsByDateToRecord(
+  byDate: Map<string, LoafCounts>,
+): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  byDate.forEach((counts, date) => {
+    out[date] = Object.fromEntries(counts);
+  });
+  return out;
+}
+
+/** The wire shape back into Maps, so it goes through the same helpers as a
+ *  freshly-counted one. */
+export function countsByDateFromRecord(
+  rec: Record<string, Record<string, number>> | null | undefined,
+): Map<string, LoafCounts> {
+  const out = new Map<string, LoafCounts>();
+  for (const date of Object.keys(rec ?? {})) {
+    out.set(date, countsFromRecord(rec?.[date]));
+  }
+  return out;
+}
+
 /** Loaves across many plans — the counter bar's arithmetic. Each plan
  *  brings its own deliveries, so a plan with none contributes nothing
  *  rather than contributing its per-delivery figure once. */
@@ -210,6 +293,11 @@ export type CountLine = {
  *  on the nine two-bread plans it is wrong about the product anyway (see
  *  the header of this file). The stored name is still used for a slug the
  *  catalogue has never heard of, where it is the only description there is.
+ *
+ *  This replaced a hand-maintained SLUG_LABEL map ("Plain" / "Multigrain")
+ *  plus a variantLabel() fallback. Two spellings of the catalogue is how
+ *  the boards came to say "Plain" after the product stopped being called
+ *  that, and the map had no entry for the burger bun at all.
  *
  *  Kept as a named export because the subscriptions board calls it directly
  *  for row chips as well as through countLines. */

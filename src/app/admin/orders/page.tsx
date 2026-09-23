@@ -24,8 +24,6 @@ import {
 } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
-import { AreaSortControl } from "@/components/admin/AreaSortControl";
-import { DistanceBadge } from "@/components/admin/DistanceBadge";
 import { EditOrderPanel } from "@/components/admin/EditOrderPanel";
 import {
   ProductionCountStrip,
@@ -116,16 +114,6 @@ import { BulkToolbar, type BulkActionSpec } from "@/components/admin/BulkToolbar
 import { useStoredSelection } from "@/lib/admin-selection";
 import { RetentionPanel } from "@/components/admin/RetentionPanel";
 import type { RetentionSummary } from "@/lib/customer-history";
-import {
-  distanceFrom,
-  orderLocation,
-  parseAnchorParams,
-  sortByDistanceFromAnchor,
-  writeAnchorParams,
-  type DistanceInfo,
-  type ResolvedArea,
-} from "@/lib/distance-sort";
-import { usePincodeCoords } from "@/lib/use-pincode-coords";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isOrderFulfilled } from "@/lib/order-fulfillment";
 import { FulfilledTick } from "@/components/admin/FulfilledTick";
@@ -140,7 +128,7 @@ import { NoteIconButton } from "@/components/admin/NoteIconButton";
 import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
 
-type SortKey = "created_desc" | "delivery_asc" | "nearest_from_area";
+type SortKey = "created_desc" | "delivery_asc";
 
 /** A subscription stop with its zone resolved once, so the per-zone strips
  *  can be fed the same way the per-zone order slices are. Resolved here and
@@ -156,11 +144,13 @@ type ZonedBakeStop = BakeSubscriptionStop & { zone: ZoneKey };
 // axis or a different day than the screen it was printed from.
 const DEFAULT_SORT: SortKey = "created_desc";
 
-const SORT_KEYS: readonly SortKey[] = [
-  "created_desc",
-  "delivery_asc",
-  "nearest_from_area",
-];
+// The allow-list the URL parser validates against. A value that is not in
+// here falls back to DEFAULT_SORT rather than being trusted — which is what
+// retires the old "nearest_from_area" sort safely. Bookmarks and pinned
+// tabs still carrying ?sort=nearest_from_area (and its four `area*` params,
+// now ignored) land on "Status, newest first" instead of putting the table
+// on a sort key nothing implements.
+const SORT_KEYS: readonly SortKey[] = ["created_desc", "delivery_asc"];
 
 // ── URL state ──────────────────────────────────────────────────────────────
 // Everything the operator can touch on this page rides in the query
@@ -183,7 +173,6 @@ type UrlInitial = {
   basis: DateBasis;
   /** The selected day, or null for "all dates". */
   day: string | null;
-  anchor: ResolvedArea | null;
 };
 
 function parseUrlInitial(sp: URLSearchParams): UrlInitial {
@@ -223,17 +212,12 @@ function parseUrlInitial(sp: URLSearchParams): UrlInitial {
   // names is the drift this filter exists to end.
   const day = parseDayParam(sp.get("date"));
 
-  // Area anchor — same four params, same all-or-nothing rule, as
-  // /admin/subscriptions. See parseAnchorParams.
-  const anchor = parseAnchorParams(sp);
-
   return {
     filter,
     query,
     sort,
     basis,
     day,
-    anchor,
   };
 }
 
@@ -243,7 +227,6 @@ function stateToSearch(s: {
   sort: SortKey;
   basis: DateBasis;
   day: string | null;
-  anchor: ResolvedArea | null;
 }): string {
   const params = new URLSearchParams();
   const { statuses, calls, zones, repeatOnly } = splitFilterValues(s.filter);
@@ -255,7 +238,6 @@ function stateToSearch(s: {
   if (s.sort !== DEFAULT_SORT) params.set("sort", s.sort);
   if (s.basis !== DEFAULT_BASIS) params.set("basis", s.basis);
   if (s.day) params.set("date", s.day);
-  writeAnchorParams(params, s.anchor);
   return params.toString();
 }
 
@@ -457,12 +439,6 @@ function OrdersPageInner() {
   // The whole of the date filter: one day, or null for every row. There is
   // no second representation of it to keep in sync — that is the point.
   const [day, setDay] = useState<string | null>(urlInit.day);
-
-  // "Nearest from typed area" sort — see AreaSortControl. anchor is null
-  // until the operator matches an area; pincodeCoords powers the fallback
-  // for orders that lack GPS but carry a pincode in delivery_address.
-  const [anchor, setAnchor] = useState<ResolvedArea | null>(urlInit.anchor);
-  const pincodeCoords = usePincodeCoords();
 
   // Changing a status must update the row where it sits, not teleport it.
   // Without this, flipping Pending → Preparing moves the row from group 1
@@ -700,7 +676,7 @@ function OrdersPageInner() {
   // both boards and lives in admin-url-state.
   useUrlWriteback(
     "/admin/orders",
-    stateToSearch({ filter, query, sort, basis, day, anchor }),
+    stateToSearch({ filter, query, sort, basis, day }),
   );
   useScrollRestore(SCROLL_KEY, !loading);
 
@@ -775,28 +751,6 @@ function OrdersPageInner() {
       ]);
     });
 
-    // Distance sort — nearest first, "no location" grouped last. Runs
-    // over the SAME filtered set as the other sorts so the strip totals
-    // never diverge from the table. Anchor coordinates come from the
-    // typed area, distance falls back to pincode centroid when the
-    // order lacks GPS.
-    if (sort === "nearest_from_area" && anchor) {
-      // sortByDistanceFromAnchor attaches a `distance` field. We strip
-      // it so `filtered` stays typed as AdminOrderRow[]; the row-level
-      // badge recomputes it cheaply from the same anchor/coords.
-      const sorted = sortByDistanceFromAnchor(
-        rows,
-        anchor,
-        pincodeCoords,
-        orderLocation,
-      );
-      return sorted.map((r) => {
-        const copy: AdminOrderRow & { distance?: DistanceInfo } = { ...r };
-        delete copy.distance;
-        return copy as AdminOrderRow;
-      });
-    }
-
     return rows.sort((a, b) => {
         if (sort === "delivery_asc") {
           // Packing list — stays in pure delivery order. Status grouping is
@@ -825,7 +779,7 @@ function OrdersPageInner() {
         if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [orders, statusSel, callSel, zoneSel, repeatOnly, query, sort, day, rankOf, anchor, pincodeCoords, basis, zoneOf, kindTab]);
+  }, [orders, statusSel, callSel, zoneSel, repeatOnly, query, sort, day, rankOf, basis, zoneOf, kindTab]);
 
   // A restored id is only meaningful if the row is still there — an order
   // can have been cancelled, or the filters can have moved on, while the
@@ -1095,9 +1049,9 @@ function OrdersPageInner() {
 
   // Selected orders in the ORDER THE TABLE IS CURRENTLY SORTED IN.
   // Iterating `filtered` and filtering by membership in `selected` is
-  // deliberate: sorting by "nearest from area" makes the concatenated
-  // share message read as a delivery run, and picking up the ids from
-  // the Set would lose that order.
+  // deliberate: under "Delivery date ↑" the concatenated share message
+  // reads as the run in the order it will be driven, and picking the ids
+  // up from the Set would lose that order.
   const selectedInSortOrder = useCallback(
     () => filtered.filter((o) => selected.has(o.id)),
     [filtered, selected],
@@ -1471,36 +1425,15 @@ function OrdersPageInner() {
             value={sort}
             onChange={(v) => {
               clearRankPins();
-              const next = v as SortKey;
-              // Picking any non-area sort drops the anchor so the chip
-              // doesn't linger over a table it isn't sorting.
-              if (next !== "nearest_from_area") setAnchor(null);
-              setSort(next);
+              setSort(v as SortKey);
             }}
             ariaLabel="Sort orders"
             options={[
               { value: "created_desc", label: "Status, newest first" },
               { value: "delivery_asc", label: "Delivery date ↑" },
-              ...(anchor
-                ? [{ value: "nearest_from_area", label: "Nearest from area" }]
-                : []),
             ]}
           />
         </div>
-        <AreaSortControl
-          anchor={anchor}
-          onResolve={(a) => {
-            clearRankPins();
-            setAnchor(a);
-            setSort("nearest_from_area");
-          }}
-          onClear={() => {
-            setAnchor(null);
-            // Flip back to the default sort so the table doesn't sit on
-            // an invalid sort key with a stale row order.
-            if (sort === "nearest_from_area") setSort("created_desc");
-          }}
-        />
       </div>
 
       {selected.size > 0 ? (
@@ -1690,10 +1623,6 @@ function OrdersPageInner() {
               {filtered.map((o, i) => {
                 const next = nextStatusFor(o);
                 const busy = busyId === o.id;
-                const dist =
-                  sort === "nearest_from_area" && anchor
-                    ? distanceFrom(orderLocation(o), anchor, pincodeCoords)
-                    : null;
                 return (
                   <tr
                     key={o.id}
@@ -1835,7 +1764,6 @@ function OrdersPageInner() {
                           orderNumber={o.order_number}
                         />
                       )}
-                      {dist ? <DistanceBadge info={dist} /> : null}
                     </td>
                     <td style={td}>
                       <span style={{ color: "#FBF3D4", fontSize: "1rem" }}>

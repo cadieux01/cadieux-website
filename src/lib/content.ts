@@ -469,3 +469,37 @@ export function pickString(
   if (v !== undefined && v !== null && v !== "") return v;
   return fallbackFor(key, productId) ?? "";
 }
+
+/** Resolve the customer-facing product heading (`pdp.title`).
+ *
+ *  THE PRODUCTS ROW IS THE NAME OF THE PRODUCT. `pickString` alone could not
+ *  see it: `pdp.title` has no content_strings row for ANY product on prod, so
+ *  every PDP <h1> and shop tile was rendering the hardcoded CRITICAL_FALLBACKS
+ *  entry below. Renaming a product in /admin changed the DB, the cart, the
+ *  order and the photo — and not the heading above them, which is what made it
+ *  look like a stale page rather than a string the DB never fed.
+ *
+ *  Order, highest first:
+ *    1. a visible content_strings `pdp.title` row — an explicit editorial
+ *       override, and the documented contract for this key. Nothing on prod
+ *       sets one today; inserting one is how you get an H1 that deliberately
+ *       differs from the catalogue name (e.g. a keyword-rich SEO phrase).
+ *    2. `products.name` — what the admin actually edits.
+ *    3. the hardcoded fallback, so a Supabase outage still renders a heading
+ *       rather than a blank <h1>.
+ *
+ *  The <title> tag and meta description are NOT this key — they read
+ *  `pdp.seo.title` / `pdp.seo.description` and are unaffected.
+ */
+export function pickProductTitle(
+  content: PageContent,
+  productId: string,
+  dbName?: string | null,
+): string {
+  const override = content.strings["pdp.title"];
+  if (override !== undefined && override !== null && override !== "")
+    return override;
+  const name = (dbName ?? "").trim();
+  if (name !== "") return name;
+  return fallbackFor("pdp.title", productId) ?? "";
+}
