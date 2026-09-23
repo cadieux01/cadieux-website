@@ -58,7 +58,7 @@ export const SUB_WEEKS = [2, 3, 4, 6];
 export const PRODUCTS = [
   {
     slug: "multigrain",
-    name: "Protein Bread — Multigrain",
+    name: "Multigrain Protein Bread",
     tag: "Multigrain Edition",
     title: "Multigrain",
     tags: ["Multi Grains", "No Maida"],
@@ -69,7 +69,7 @@ export const PRODUCTS = [
   },
   {
     slug: "high-protein",
-    name: "Protein Bread — Plain",
+    name: "Protein Bread",
     tag: "Plain Edition",
     title: "Plain",
     tags: ["Sandwich Bread", "8 Slices"],
@@ -84,7 +84,7 @@ export const PRODUCTS = [
   // repoint every stored cart.
   {
     slug: "burger-bun",
-    name: "Protein Burger Bun",
+    name: "Whole wheat protein Burger Bun",
     tag: "Burger Bun",
     title: "Burger Bun",
     tags: ["Pack of 2", "No Maida"],

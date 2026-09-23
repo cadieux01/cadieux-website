@@ -42,7 +42,10 @@
 
 import type { AdminOrderRow } from "@/lib/admin-shared";
 import type { BakeItem } from "@/lib/bake-plan-lines";
-import { variantLabel } from "@/lib/order-share-message";
+import {
+  productDisplayName,
+  type ProductNameMap,
+} from "@/lib/product-names";
 import { isOrderFulfilled } from "@/lib/order-fulfillment";
 import { isPaidStatus } from "@/lib/payment-label";
 import { ZONE_LABELS, type ZoneKey } from "@/lib/delivery-zones";
@@ -58,8 +61,10 @@ export type BakeSubscriptionStop = {
 };
 
 type ProductAgg = {
-  /** Display name — the first `name` seen for this product. Humans read
-   *  this; nothing is bucketed by it. */
+  /** Display name, resolved slug → catalogue (see lib/product-names.ts).
+   *  Humans read this; nothing is bucketed by it. NOT the line's stored
+   *  name: a snapshot says what was sold, and the strip is a bake list for
+   *  tomorrow, so it must name the product as the catalogue does today. */
   name: string;
   /** Bucket identity. The product slug where the line carried one, else
    *  `name:<name>` for a line with no identity at all. */
@@ -71,20 +76,13 @@ type ProductAgg = {
   subStops: number;
 };
 
-/** Bucket key for one line. Slug where there is one — see
- *  lib/order-items.ts for why `slug ?? product_id` and never `name`.
- *
- *  A line with NO identity keeps its own name-derived bucket rather than
- *  being merged into a single "unknown" pile: two different unidentified
- *  products must not silently add up together. There are no such lines on
- *  prod today; this is the shape of the fallback, not a live path. */
-function bucketKey(it: OrderItemLike, name: string): string {
-  return itemSlug(it) ?? `name:${name.toLowerCase()}`;
-}
-
 export function aggregateProduction(
   orders: AdminOrderRow[],
   subscriptions: BakeSubscriptionStop[] = [],
+  /** Live slug → catalogue name. Omitted, the bundled catalogue is used.
+   *  Affects labels and therefore row ORDER (rows sort by display name);
+   *  it can never affect a count, because counts key on the slug. */
+  names?: ProductNameMap,
 ): {
   rows: ProductAgg[];
   totalLoaves: number;
@@ -99,19 +97,38 @@ export function aggregateProduction(
   const byKey = new Map<
     string,
     {
-      name: string;
+      slug: string | null;
+      /** First stored name seen. Used ONLY to label a line whose product is
+       *  not in the catalogue — see productDisplayName. */
+      snapshot: string;
       loaves: number;
       orderIds: Set<string>;
       subRefs: Set<string>;
     }
   >();
-  // First `name` seen for a key wins as the display label. Later lines may
-  // spell it differently (a rename mid-day, or the app's string vs the
-  // web's) — they still add to the SAME bucket, which is the whole point
-  // of keying on identity.
-  const entryFor = (key: string, name: string) => {
+
+  // One line in. Bucketed on identity (`slug ?? product_id`, see
+  // lib/order-items.ts) and never on the display string, so two lines
+  // spelling the same product differently — the app's wording against the
+  // web's, or an order placed either side of a rename — still land in the
+  // same bucket.
+  //
+  // A line with NO identity keeps its own name-derived bucket rather than
+  // being merged into a single "unknown" pile: two different unidentified
+  // products must not silently add up together. There are no such lines on
+  // prod today; this is the shape of the fallback, not a live path.
+  //
+  // Returns null for a line worth nothing — no quantity, or nothing at all
+  // to identify it by. A line WITH a slug and no name is kept: the bread is
+  // still going to be baked.
+  const entryFor = (it: OrderItemLike) => {
+    const slug = itemSlug(it);
+    const snapshot = String(it?.name ?? "").trim();
+    if (!slug && !snapshot) return null;
+    const key = slug ?? `name:${snapshot.toLowerCase()}`;
     const e = byKey.get(key) ?? {
-      name,
+      slug,
+      snapshot,
       loaves: 0,
       orderIds: new Set<string>(),
       subRefs: new Set<string>(),
@@ -129,11 +146,10 @@ export function aggregateProduction(
     if ((o.status ?? "").toLowerCase() === "cancelled") continue;
     const paid = isPaidStatus(o.payment_status);
     for (const it of o.items ?? []) {
-      const name = (it?.name ?? "").trim();
-      if (!name) continue;
       const q = itemQty(it);
       if (q === 0) continue;
-      const entry = entryFor(bucketKey(it, name), name);
+      const entry = entryFor(it);
+      if (!entry) continue;
       entry.loaves += q;
       entry.orderIds.add(o.id);
       orderLoaves += q;
@@ -146,11 +162,10 @@ export function aggregateProduction(
 
   for (const s of subscriptions) {
     for (const it of s.items) {
-      const name = (it?.name ?? "").trim();
-      if (!name) continue;
       const q = itemQty(it);
       if (q === 0) continue;
-      const entry = entryFor(bucketKey(it, name), name);
+      const entry = entryFor(it);
+      if (!entry) continue;
       entry.loaves += q;
       entry.subRefs.add(s.ref);
       subLoaves += q;
@@ -164,7 +179,7 @@ export function aggregateProduction(
   const rows = Array.from(byKey.entries())
     .map(([key, v]) => ({
       key,
-      name: v.name,
+      name: productDisplayName(v.slug, names, v.snapshot),
       loaves: v.loaves,
       orders: v.orderIds.size,
       subStops: v.subRefs.size,
@@ -185,8 +200,12 @@ export function ProductionCountStrip({
   orders,
   subscriptions = [],
   zone,
+  names,
 }: {
   orders: AdminOrderRow[];
+  /** Live slug → catalogue name, from the board. Omitted, the bundled
+   *  catalogue is used. */
+  names?: ProductNameMap;
   /** Subscription stops due on the SAME day, from /api/admin/bake-plan.
    *  Empty when the board is not on a single day — a bake is a day's
    *  question and there is no honest subscription number for "all dates".
@@ -199,7 +218,7 @@ export function ProductionCountStrip({
   zone?: ZoneKey;
 }) {
   const { rows, totalLoaves, orderLoaves, subLoaves, unpaidLoaves, unpaidStops } =
-    aggregateProduction(orders, subscriptions);
+    aggregateProduction(orders, subscriptions, names);
 
   // Fulfilment ratio for the current filter. Counted over the full
   // filtered set (cancelled and all), NOT over the bake set — the two
@@ -217,12 +236,14 @@ export function ProductionCountStrip({
   // strip still renders so the ratio is visible.
   if (rows.length === 0 && totalOrders === 0) return null;
 
-  // Display-only compaction: aggregation still groups by full item name
-  // (Postgres cares), but the strip renders variantLabel — "Multigrain",
-  // not "Protein Bread — Multigrain". Sunny reads this at 5am; a bake
-  // decision doesn't need the product family repeated on every row. The
-  // order count moves into a title tooltip so it's one hover away but
-  // stops competing with the loaf number that actually drives baking.
+  // Rows are labelled with the CATALOGUE name, resolved from the slug.
+  // This used to render variantLabel(storedName) — the text after the em
+  // dash — which was a compaction rule built for one naming scheme
+  // ("Protein Bread — Multigrain" → "Multigrain") and silently returns the
+  // whole string for any name without an em dash. The catalogue no longer
+  // uses em dashes, so the rule now does nothing except disagree with the
+  // shop. The order count sits in a title tooltip so it's one hover away
+  // but stops competing with the loaf number that drives baking.
   return (
     <section
       aria-label="Production count for current filter"
@@ -256,7 +277,7 @@ export function ProductionCountStrip({
         Bake{zone ? ` · ${ZONE_LABELS[zone]}` : ""}
       </span>
       {rows.map((r, i) => {
-        const label = variantLabel(r.name);
+        const label = r.name;
         return (
           <span
             key={r.key}

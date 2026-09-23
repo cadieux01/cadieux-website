@@ -43,7 +43,12 @@ import { ZoneBadge } from "@/components/admin/ZoneBadge";
 import { adminAuthHeaders, adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import { itemQty, itemSlug } from "@/lib/order-items";
-import { PRODUCT_LABELS } from "@/components/admin/ProductMarker";
+import {
+  PRODUCT_NAMES,
+  productDisplayName,
+  productNameMap,
+  type ProductNameMap,
+} from "@/lib/product-names";
 import {
   formatDate,
   formatDateTime,
@@ -577,6 +582,38 @@ function OrdersPageInner() {
   // day at the same address could land in different zones — the exact
   // "one row, two zones" failure the rules panel was built to prevent.
   const [subStops, setSubStops] = useState<ZonedBakeStop[]>([]);
+
+  // Catalogue names, slug → name, live from public.products.
+  //
+  // Every product label on this board (dots tooltip, bake strip, CSV
+  // headers) resolves through this rather than printing the `name` stored
+  // on the order line. Those stored names are snapshots of what the
+  // customer bought and are never rewritten, so after a rename the board
+  // would go on naming a product the shop no longer sells.
+  //
+  // Reuses the availability feed, which already returns { id, name } for
+  // every product and is already admin-gated — `products.id` and
+  // `products.slug` hold the same text. Failure is silent and harmless:
+  // productDisplayName falls back to the bundled catalogue, which is one
+  // deploy behind at worst.
+  const [productNames, setProductNames] = useState<ProductNameMap>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch<{
+          products: { id: string; name: string }[];
+        }>("/api/admin/products/availability");
+        if (!cancelled) setProductNames(productNameMap(res.products));
+      } catch {
+        // Bundled fallback stands.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (basis !== "delivery" || !day) {
@@ -1308,7 +1345,7 @@ function OrdersPageInner() {
           </Link>
           <button
             type="button"
-            onClick={() => exportCsv(filtered)}
+            onClick={() => exportCsv(filtered, productNames)}
             className="uppercase"
             style={chipNeutral}
             disabled={filtered.length === 0}
@@ -1600,10 +1637,15 @@ function OrdersPageInner() {
               zone={z}
               orders={filtered.filter((o) => zoneOf.get(o.id) === z)}
               subscriptions={subStops.filter((s) => s.zone === z)}
+              names={productNames}
             />
           ))
         ) : (
-          <ProductionCountStrip orders={filtered} subscriptions={subStops} />
+          <ProductionCountStrip
+            orders={filtered}
+            subscriptions={subStops}
+            names={productNames}
+          />
         )
       ) : null}
       {loading ? (
@@ -1702,7 +1744,7 @@ function OrdersPageInner() {
                         {formatOrderNumber(o)}
                         {isOrderFulfilled(o) ? <FulfilledTick /> : null}
                       </span>
-                      <LoafDots items={o.items} />
+                      <LoafDots items={o.items} names={productNames} />
                     </td>
                     <td style={td}>
                       <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
@@ -2592,8 +2634,8 @@ function unitsBySlug(o: AdminOrderRow): Map<string, number> {
  *  and disappears between exports cannot be pasted into the same sheet
  *  twice. Anything else that turns up is appended, so a product added to
  *  the catalogue shows up here with no code change. */
-function productColumns(rows: AdminOrderRow[]) {
-  const known = Object.keys(PRODUCT_LABELS);
+function productColumns(rows: AdminOrderRow[], names?: ProductNameMap) {
+  const known = Object.keys(PRODUCT_NAMES);
   const extra = new Set<string>();
   for (const o of rows) {
     for (const slug of Array.from(unitsBySlug(o).keys())) {
@@ -2601,12 +2643,15 @@ function productColumns(rows: AdminOrderRow[]) {
     }
   }
   return [...known, ...Array.from(extra).sort()].map((slug) => ({
-    header: `${PRODUCT_LABELS[slug] ?? slug} units`,
+    // Header from the catalogue, not from any line in the export — two
+    // exports taken either side of a rename must not produce two different
+    // column headers for the same slug.
+    header: `${productDisplayName(slug, names)} units`,
     value: (o: AdminOrderRow) => unitsBySlug(o).get(slug) ?? 0,
   }));
 }
 
-function exportCsv(rows: AdminOrderRow[]): void {
+function exportCsv(rows: AdminOrderRow[], names?: ProductNameMap): void {
   const csv = toCsv(rows, [
     { header: "Order ID", value: (o) => o.id },
     { header: "Customer", value: (o) => o.customers?.full_name ?? "" },
@@ -2622,7 +2667,7 @@ function exportCsv(rows: AdminOrderRow[]): void {
     { header: "Created", value: (o) => o.created_at },
     // Appended, never inserted: an existing sheet keyed on column
     // position keeps working.
-    ...productColumns(rows),
+    ...productColumns(rows, names),
   ]);
   downloadCsv(csvFilename("orders"), csv);
 }

@@ -31,10 +31,11 @@ export interface BakeItem {
   /** Product identity ('high-protein' | 'multigrain' | 'burger-bun'), when
    *  the source row carried one. Added so the admin production strip can
    *  bucket subscription stops by the SAME key it buckets orders by rather
-   *  than by display name — see lib/order-items.ts. The bake-plan EMAIL
-   *  does not read this; it renders `name` exactly as before. Optional
-   *  because a per-delivery `items_override` is free-form jsonb and may
-   *  carry no identity at all. */
+   *  than by display name — see lib/order-items.ts. The bake-plan email
+   *  resolves the printed name from this too, so the baker reads the
+   *  catalogue's wording and not the snapshot below. Optional because a
+   *  per-delivery `items_override` is free-form jsonb and may carry no
+   *  identity at all. */
   slug?: string | null;
 }
 

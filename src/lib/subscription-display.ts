@@ -17,7 +17,7 @@
 // module is pure string logic.
 
 import { DAY_LABEL } from "@/lib/subscription-ui";
-import { variantLabel } from "@/lib/order-share-message";
+import { productDisplayName } from "@/lib/product-names";
 import type {
   AdminSubscriptionItem,
   AdminSubscriptionRow,
@@ -62,10 +62,19 @@ export function subscriptionItems(sub: PlanShape): AdminSubscriptionItem[] {
   ];
 }
 
-/** "Multigrain 1, Plain 1" — names the variants, never a bare total. */
+/** "Multigrain Protein Bread 1, Protein Bread 1" — names the products,
+ *  never a bare total.
+ *
+ *  Resolved from `product_slug`, not from the stored `product_name`: that
+ *  column is a snapshot of what the plan was sold as, and on the nine
+ *  two-bread plans it is actively wrong about which product the row is
+ *  (see lib/subscription-counts.ts). The legacy single-column fallback
+ *  above has no slug, so those rows still label from their stored name —
+ *  there is nothing else to label them with. */
 export function formatSubscriptionItems(sub: PlanShape): string {
   const parts = subscriptionItems(sub).map(
-    (i) => `${variantLabel(i.product_name)} ${i.quantity_per_delivery}`,
+    (i) =>
+      `${productDisplayName(i.product_slug, null, i.product_name)} ${i.quantity_per_delivery}`,
   );
   return parts.length > 0 ? parts.join(", ") : "—";
 }

@@ -62,23 +62,24 @@ export const PRODUCT_TONES: Record<string, MarkerTone> = {
   "burger-bun": "yellow",
 };
 
-/** slug → short label, for surfaces that must name a product with no row
- *  in hand (the CSV header set). Where a row IS in hand, prefer its own
- *  `name` — these are the fallback, not the display source of truth. */
-export const PRODUCT_LABELS: Record<string, string> = {
-  "high-protein": "Plain",
-  multigrain: "Multigrain",
-  "burger-bun": "Burger Bun",
-};
+// NAMES ARE NOT DECIDED HERE EITHER. This file used to carry a
+// PRODUCT_LABELS map of short names ("Plain" / "Multigrain" / "Burger
+// Bun"). It is gone: those were a second, hand-maintained spelling of the
+// catalogue, so renaming a product in /admin left the admin boards saying
+// something the shop no longer said. Callers resolve slug → name through
+// productDisplayName() in @/lib/product-names, which reads the live
+// catalogue. This file stays responsible for colour only.
 
 export function toneForProduct(slug: string): MarkerTone {
   return PRODUCT_TONES[slug] ?? "neutral";
 }
 
 /**
- * One marker. `label` is the full human name ("Plain") — the square shows
- * its first letter, the title attribute and the screen-reader label carry
- * the whole thing, so "P" is never the only way to tell them apart.
+ * One marker. `label` is the full catalogue name ("Multigrain Protein
+ * Bread") — the square shows its first letter, the title attribute and the
+ * screen-reader label carry the whole thing, so "M" is never the only way
+ * to tell them apart. Colour is the primary signal; the initial is the
+ * tie-breaker and the tooltip is the answer.
  */
 export function ProductMarker({
   label,

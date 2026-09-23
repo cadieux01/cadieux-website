@@ -20,9 +20,18 @@
 //
 // A product with no tone still gets a hollow cream dot rather than being
 // silently counted as Plain — an unknown must look unknown.
+//
+// THE TOOLTIP IS ALSO RESOLVED BY SLUG. It used to print the line's own
+// stored name, which is a snapshot of what was sold — after a rename the
+// dots on an old order would have named a product that no longer exists.
+// See lib/product-names.ts.
 
 import type { AdminOrderItemSnapshot } from "@/lib/admin-shared";
 import { itemQty, itemSlug } from "@/lib/order-items";
+import {
+  productDisplayName,
+  type ProductNameMap,
+} from "@/lib/product-names";
 import { TONE_COLOURS, toneForProduct, type MarkerTone } from "./ProductMarker";
 
 /** Guard against a bad row painting thousands of nodes. Rendering concern,
@@ -31,8 +40,14 @@ const MAX_DOTS_PER_LINE = 99;
 
 export function LoafDots({
   items,
+  names,
 }: {
   items: AdminOrderItemSnapshot[] | null | undefined;
+  /** Live slug → catalogue name. Omit and the bundled catalogue is used;
+   *  the tooltip is never built from the line's stored name for a product
+   *  we know, because that snapshot is what the customer bought, not what
+   *  the product is called now. */
+  names?: ProductNameMap;
 }) {
   if (!items || items.length === 0) return null;
 
@@ -40,11 +55,7 @@ export function LoafDots({
   for (const it of items) {
     const slug = itemSlug(it);
     const tone = slug ? toneForProduct(slug) : "neutral";
-    // Label from the row's own name — humans read the tooltip, and the
-    // stored name is the most specific thing we have. Falls back to the
-    // slug so an unnamed line is still identifiable.
-    const label =
-      String(it.name ?? "").trim() || slug || "Item";
+    const label = productDisplayName(slug, names, it.name);
     const n = Math.min(itemQty(it), MAX_DOTS_PER_LINE);
     for (let i = 0; i < n; i++) dots.push({ tone, label });
   }

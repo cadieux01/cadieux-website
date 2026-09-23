@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import { productDisplayName } from "@/lib/product-names";
 
 type Reply = {
   id: string;
@@ -307,8 +308,11 @@ export default function FeedbackPage() {
         {(
           [
             ["all", "All products"],
-            ["high-protein", "Plain"],
-            ["multigrain", "Multi-Grain"],
+            // Labels resolved from the catalogue, not spelled here — this
+            // board said "Plain" / "Multi-Grain" while the shop said
+            // something else entirely.
+            ["high-protein", productDisplayName("high-protein")],
+            ["multigrain", productDisplayName("multigrain")],
           ] as [ProductFilter, string][]
         ).map(([key, label]) => {
           const active = productFilter === key;

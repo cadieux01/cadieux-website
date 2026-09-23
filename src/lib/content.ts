@@ -102,10 +102,14 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   "pdp.section.reports.title": "Lab Reports & Certifications",
   "pdp.out_of_stock_banner": "Out of stock",
   "compliance.trials_banner": "Final trials are under process.",
-  // Per-product PDP name / tag — never let the heading or eyebrow blank
-  "pdp.name::multigrain": "Protein Bread",
+  // Per-product PDP name / tag — never let the heading or eyebrow blank.
+  // These mirror public.products.name and must be kept equal to it; the PDP
+  // chain is content_strings -> products.name -> bundled, so a fallback that
+  // disagrees with the catalogue only shows up when the DB is dark, which
+  // is the worst moment to discover it.
+  "pdp.name::multigrain": "Multigrain Protein Bread",
   "pdp.name::high-protein": "Protein Bread",
-  "pdp.name::burger-bun": "Protein Burger Bun",
+  "pdp.name::burger-bun": "Whole wheat protein Burger Bun",
   "pdp.tag::multigrain": "Multigrain Edition",
   "pdp.tag::high-protein": "Plain Edition",
   "pdp.tag::burger-bun": "Burger Bun",

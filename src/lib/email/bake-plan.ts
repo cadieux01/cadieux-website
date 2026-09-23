@@ -23,10 +23,23 @@
 export type { BakeItem, BakePlanLine } from "@/lib/bake-plan-lines";
 
 import type { BakeItem, BakePlanLine } from "@/lib/bake-plan-lines";
+import { productDisplayName } from "@/lib/product-names";
 
-/** "2 × Protein Bread — Plain". The one place this string is built. */
+/** "2 × Multigrain Protein Bread". The one place this string is built.
+ *
+ *  The name is resolved from the line's SLUG, not from the name stored on
+ *  the order or subscription item. Those are snapshots of what the customer
+ *  bought and are never rewritten, so this email — a production order for
+ *  tomorrow — would otherwise tell the baker to make a product under a name
+ *  the catalogue stopped using. 396 live rows still carry the old wording.
+ *
+ *  The bundled catalogue is used rather than a live read: this module is a
+ *  pure template with no database client, and keeping it that way is worth
+ *  more than a rename reaching the baker's inbox a deploy earlier than it
+ *  otherwise would. An item whose slug is not in the catalogue at all still
+ *  falls back to its stored name — better an old string than no line. */
 function itemLine(i: BakeItem): string {
-  return `${i.qty} × ${i.name}`;
+  return `${i.qty} × ${productDisplayName(i.slug, null, i.name)}`;
 }
 
 export interface BakePlanEmail {

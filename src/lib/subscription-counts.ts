@@ -24,7 +24,7 @@
 
 import type { AdminSubscriptionItem } from "@/lib/admin-shared";
 import { subscriptionItems } from "@/lib/subscription-display";
-import { variantLabel } from "@/lib/order-share-message";
+import { productDisplayName } from "@/lib/product-names";
 
 /** The delivery fields counting needs. Deliberately narrower than
  *  AdminDeliveryRow so this stays a leaf as that row grows. */
@@ -196,21 +196,25 @@ const SLUG_ORDER = ["high-protein", "multigrain"];
 
 export type CountLine = {
   slug: string;
-  /** "Plain" / "Multigrain" — the short variant name. */
+  /** Catalogue name, resolved from the slug. */
   label: string;
   loaves: number;
 };
 
-/** Display names for the two bread slugs. Falls back to variantLabel on
- *  the item's own product_name for anything unmapped, so a new product
- *  appears with a sensible name and no code change. */
-const SLUG_LABEL: Record<string, string> = {
-  "high-protein": "Plain",
-  multigrain: "Multigrain",
-};
-
+/** Display name for a bread slug.
+ *
+ *  Resolved from the catalogue (lib/product-names.ts), NOT from the
+ *  `product_name` stored on subscription_items. That column is a snapshot
+ *  of what the plan was sold as and is never rewritten — 54 item rows and
+ *  45 subscription rows on prod still carry the pre-2026-09-23 wording, and
+ *  on the nine two-bread plans it is wrong about the product anyway (see
+ *  the header of this file). The stored name is still used for a slug the
+ *  catalogue has never heard of, where it is the only description there is.
+ *
+ *  Kept as a named export because the subscriptions board calls it directly
+ *  for row chips as well as through countLines. */
 export function labelForSlug(slug: string, fallbackName?: string | null): string {
-  return SLUG_LABEL[slug] ?? variantLabel(fallbackName ?? slug);
+  return productDisplayName(slug, null, fallbackName ?? null);
 }
 
 /** Counts → ordered lines for rendering. Zero-loaf entries are dropped:
