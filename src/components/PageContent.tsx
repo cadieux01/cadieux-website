@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import QASection from "./QASection";
-import { lazyPlayOnEnter } from "@/lib/lazyVideo";
+import { lazyPlayOnEnter, markVideoStarted, watchForResume } from "@/lib/lazyVideo";
 
 /* ── SVG grain texture ── */
 const GRAIN =
@@ -120,8 +120,14 @@ export default function PageContent({ introActive = false }: { introActive?: boo
       started = true;
       v.preload = "auto";
       v.load();
+      markVideoStarted(v);
       play();
     };
+
+    // Resume if a backgrounded tab suspended playback — see lazyVideo.ts.
+    // The four background videos register themselves; the hero is registered
+    // here because it defers on idle rather than through that ref.
+    const unwatchResume = watchForResume(v);
 
     const IDLE_TIMEOUT_MS = 2000;
     const ric =
@@ -137,6 +143,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
       if (ric !== null && typeof window.cancelIdleCallback === "function") {
         window.cancelIdleCallback(ric);
       }
+      unwatchResume();
       v.removeEventListener("canplay", play);
       v.removeEventListener("loadeddata", play);
       v.removeEventListener("canplaythrough", play);
