@@ -13,6 +13,8 @@ import {
 import type { AdminSubscriptionItem } from "@/lib/admin-shared";
 import {
   countDeliveries,
+  countDeliveriesByDate,
+  countsByDateToRecord,
   type CountableDelivery,
 } from "@/lib/subscription-counts";
 import { aggregateNotesFor } from "@/lib/order-notes";
@@ -168,6 +170,15 @@ export async function GET(req: NextRequest) {
   // numbers per subscription. The per-DELIVERY figure the row's tooltip
   // shows is derived client-side from `items`, which is already sent.
   const countsBySub = new Map<string, Record<string, number>>();
+  // subscription_id → date → slug → loaves, over the same deliveries and the
+  // same items_override precedence, bucketed by the day each stop lands on.
+  // Feeds the summary bar when the board has a date filter active — without
+  // it the bar can only report the whole plan, which on a date-filtered
+  // board is an answer to a question nobody asked.
+  const countsByDateBySub = new Map<
+    string,
+    Record<string, Record<string, number>>
+  >();
   if (enrich) {
     const deliveries = deliveriesRes?.data;
     const items = itemsRes?.data;
@@ -202,12 +213,17 @@ export async function GET(req: NextRequest) {
       deliveriesBySub.set(d.subscription_id, list);
     }
     for (const s of subs) {
-      const counts = countDeliveries(deliveriesBySub.get(s.id) ?? [], {
+      const plan = {
         product_name: s.product_name,
         quantity_per_delivery: s.quantity_per_delivery,
         items: itemsBySub.get(s.id) ?? [],
-      });
-      countsBySub.set(s.id, Object.fromEntries(counts));
+      };
+      const rows = deliveriesBySub.get(s.id) ?? [];
+      countsBySub.set(s.id, Object.fromEntries(countDeliveries(rows, plan)));
+      countsByDateBySub.set(
+        s.id,
+        countsByDateToRecord(countDeliveriesByDate(rows, plan)),
+      );
     }
 
     // Saved addresses for these customers, grouped for coordinate matching.
@@ -245,6 +261,7 @@ export async function GET(req: NextRequest) {
           ? {
               items: itemsBySub.get(s.id) ?? [],
               loaf_counts: countsBySub.get(s.id) ?? {},
+              loaf_counts_by_date: countsByDateBySub.get(s.id) ?? {},
             }
           : {}),
         ...(coordsBySub.get(s.id) ?? {}),

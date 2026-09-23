@@ -119,6 +119,7 @@ import {
   addCounts,
   countLines,
   countPlan,
+  countsByDateFromRecord,
   countsFromRecord,
   longCountText,
   nameHintFor,
@@ -821,11 +822,41 @@ function SubscriptionsPageInner() {
   // fetched without ?enrich=1 have none, and countsFromRecord returns an
   // empty map for them rather than guessing.
   const nameHint = useMemo(() => nameHintFor(filtered), [filtered]);
-  const filteredCounts = useMemo(() => {
-    const out: LoafCounts = new Map();
-    for (const s of filtered) addCounts(out, countsFromRecord(s.loaf_counts));
-    return out;
-  }, [filtered]);
+
+  // Is the summary scoped to ONE date?
+  //
+  // Only on the DELIVERY basis. On the order basis the day means "booked on
+  // this date", and a plan booked on the 23rd delivers on quite different
+  // days — counting its delivery rows against the booking date would produce
+  // a number that belongs to neither question. Whole-plan is the honest
+  // answer there, and it is what `dateScoped === false` gives.
+  const dateScoped = day !== null && basis === "delivery";
+
+  // The summary's two jobs in one pass: the loaf counts, and how many plans
+  // actually contributed to them.
+  //
+  // Why `subs` is counted here rather than read off `filtered.length`: when
+  // a date is selected the sentence claims the plans are "delivering on"
+  // that date, and only a plan with a non-cancelled stop on it qualifies.
+  // `filtered.length` is the row count, which is the right number for the
+  // unscoped sentence and would merely be a plausible one here.
+  const summary = useMemo(() => {
+    const counts: LoafCounts = new Map();
+    let subs = 0;
+    for (const s of filtered) {
+      const c = dateScoped
+        ? countsByDateFromRecord(s.loaf_counts_by_date).get(day) ??
+          (new Map() as LoafCounts)
+        : countsFromRecord(s.loaf_counts);
+      if (c.size > 0) subs += 1;
+      addCounts(counts, c);
+    }
+    // Unscoped keeps its long-standing meaning: every row in the filter,
+    // including any that carry no counts (rows fetched without ?enrich=1).
+    return { counts, subs: dateScoped ? subs : filtered.length };
+  }, [filtered, dateScoped, day]);
+
+  const filteredCounts = summary.counts;
   const filteredLines = useMemo(
     () => countLines(filteredCounts, nameHint),
     [filteredCounts, nameHint],
@@ -1312,7 +1343,16 @@ function SubscriptionsPageInner() {
               subscriptions.product_slug. All nine mixed plans on prod
               store the Multigrain name against their COMBINED quantity, so
               the legacy column would show Multigrain 31 / Plain 12 where
-              the truth is 31 / 21. */}
+              the truth is 31 / 21.
+
+              WITH A DATE SELECTED these become THAT DATE's stops, summed
+              from loaf_counts_by_date instead of the whole-plan
+              loaf_counts. A date-filtered board showing lifetime totals
+              answered a question nobody had asked: on 23 Sep it read
+              P 3 / M 22 / 25 loaves, which is what those four plans come to
+              over their whole runs, when six loaves were going out. Both
+              maps are bucketed by `scheduled_date ?? delivery_date`, the
+              same precedence the day filter matches rows on. */}
           <CountMarkers lines={filteredLines} />
           <span style={{ marginLeft: "auto", color: cream(0.85) }}>
             {filtered.reduce(
@@ -1332,9 +1372,19 @@ function SubscriptionsPageInner() {
               fontSize: 12,
             }}
           >
-            {totalLoaves(filteredCounts)} loaves across {filtered.length}{" "}
-            subscription{filtered.length === 1 ? "" : "s"} in this filter —
-            every non-cancelled delivery, whole plan, not per week.
+            {totalLoaves(filteredCounts)} loaves across {summary.subs}{" "}
+            subscription{summary.subs === 1 ? "" : "s"}{" "}
+            {dateScoped ? (
+              <>
+                delivering on {formatDate(day)} — that date&rsquo;s stops
+                only, cancelled excluded. Not the whole plan.
+              </>
+            ) : (
+              <>
+                in this filter — every non-cancelled delivery, whole plan, not
+                per week.
+              </>
+            )}
           </span>
         </section>
       ) : null}

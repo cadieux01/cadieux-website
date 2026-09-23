@@ -340,6 +340,21 @@ export type AdminSubscriptionRow = {
   // the per-delivery one is derived from `items` at the call site. Present
   // on the ?enrich=1 list payload only.
   loaf_counts?: Record<string, number> | null;
+  // date → slug → loaves, over the SAME non-cancelled deliveries loaf_counts
+  // sums, bucketed by the day each stop lands on. This is what the summary
+  // bar uses when a date filter is active; loaf_counts stays the whole-plan
+  // figure for when one is not.
+  //
+  // Keyed by `scheduled_date ?? delivery_date` — the same precedence
+  // `delivery_dates` above uses, so the bar counts exactly the rows the day
+  // filter shows. Reading the raw booked date here instead would put a
+  // rescheduled stop in a bucket whose row is listed under a different day.
+  //
+  // Bucketed SERVER-side for the reason loaf_counts is summed there: the
+  // board polls every 10s, and shipping 117 delivery rows each carrying an
+  // items_override jsonb to compute two numbers is the wire cost this shape
+  // avoids. Each plan's map is a handful of short date keys.
+  loaf_counts_by_date?: Record<string, Record<string, number>> | null;
   // Coordinates matched from public.addresses by customer_id (see
   // subscription-coordinates.ts). Only set when a saved address has
   // finite, non-zero lat/lng; otherwise absent → Maps uses address text.
