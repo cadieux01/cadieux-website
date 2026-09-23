@@ -38,18 +38,7 @@ import {
   useUrlWriteback,
   stashScrollY,
 } from "@/lib/admin-url-state";
-import { AreaSortControl } from "@/components/admin/AreaSortControl";
-import { DistanceBadge } from "@/components/admin/DistanceBadge";
-import {
-  distanceFrom,
-  parseAnchorParams,
-  sortByDistanceFromAnchor,
-  subscriptionLocation,
-  writeAnchorParams,
-  type ResolvedArea,
-} from "@/lib/distance-sort";
 import { MONTH_SHORT, WEEKDAY_SHORT } from "@/lib/date-names";
-import { usePincodeCoords } from "@/lib/use-pincode-coords";
 import {
   EXPIRING_7D,
   PAID_UNCONFIRMED,
@@ -396,29 +385,16 @@ function SubscriptionsPageInner() {
     parseDayParam(searchParams.get("date")),
   );
 
-  // "Nearest from typed area" — the same control, the same four params and
-  // the same arithmetic as /admin/orders.
-  //
-  // UNLIKE the orders board there is no sort Select to hang it off. Orders
-  // has one because it has three sorts; this board has exactly two, so the
-  // anchor IS the toggle: match an area and the rows go nearest-first,
-  // clear the chip and they fall back to status-grouped. A dropdown whose
-  // only job is to mirror the presence of the chip beside it would be a
-  // second control for one piece of state, and the two would eventually
-  // disagree.
-  //
-  // Subscriptions have no coordinates of their own — the route matches them
-  // out of public.addresses, and ONLY on ?enrich=1, which this board always
-  // sends. Rows with no saved address fall back to the pincode centroid,
-  // then to "No location", which sorts last rather than sorting as zero.
-  const [anchor, setAnchor] = useState<ResolvedArea | null>(() =>
-    parseAnchorParams(searchParams),
-  );
-  const pincodeCoords = usePincodeCoords();
-
   // Defaults are OMITTED, not encoded, so a plain /admin/subscriptions link
   // stays clean and the parsers above remain the single source of truth for
   // what "unset" means.
+  //
+  // This builds the query string from scratch out of the state the board
+  // actually has, so a param it no longer understands cannot survive. That
+  // is what retires the old "nearest from area" sort safely: a bookmark
+  // still carrying ?area=&area_lat=&area_lng=&area_via= is parsed by
+  // nothing, sorts nothing, and is dropped from the URL on the first
+  // writeback. The board opens status-grouped, its only sort.
   const qs = useMemo(() => {
     const params = new URLSearchParams();
     // Zones ride in the same flat `filter` as everything else but are
@@ -431,9 +407,8 @@ function SubscriptionsPageInner() {
     if (day) params.set("date", day);
     if (selection.zones.length > 0)
       params.set("zone", encodeZoneParam(selection.zones));
-    writeAnchorParams(params, anchor);
     return params.toString();
-  }, [filter, selection.zones, query, basis, day, anchor]);
+  }, [filter, selection.zones, query, basis, day]);
   useUrlWriteback("/admin/subscriptions", qs);
   useScrollRestore(SCROLL_KEY, !loading);
 
@@ -768,21 +743,6 @@ function SubscriptionsPageInner() {
         s.subscription_number,
       ]);
     });
-    // Distance sort — nearest first, "no location" grouped last. Runs over
-    // the SAME filtered set as the default sort, so the counts in the
-    // filter trigger never diverge from the table underneath it.
-    if (anchor) {
-      // sortByDistanceFromAnchor attaches a `distance` field. Strip it so
-      // `filtered` stays typed as AdminSubscriptionRow[]; the row badge
-      // recomputes it from the same anchor and the same coords.
-      return sortByDistanceFromAnchor(
-        rows,
-        anchor,
-        pincodeCoords,
-        subscriptionLocation,
-      ).map(({ distance: _distance, ...rest }) => rest as AdminSubscriptionRow);
-    }
-
     // Status group first, newest-first within each group, so completed and
     // cancelled subscriptions stop pushing live ones down the page. The API
     // already returns created_at DESC; this re-sorts a copy. Display only —
@@ -806,16 +766,13 @@ function SubscriptionsPageInner() {
     isExpiring,
     query,
     zoneOf,
-    anchor,
-    pincodeCoords,
   ]);
 
   // ── loaf counts ─────────────────────────────────────────────────────────
   //
-  // Derived from `filtered`, so every filter — status, zone, day, search,
-  // distance sort — moves these numbers with the rows. Nothing here
-  // re-reads the raw list, which is the only way the bar and the table can
-  // be guaranteed to agree.
+  // Derived from `filtered`, so every filter — status, zone, day, search —
+  // moves these numbers with the rows. Nothing here re-reads the raw list,
+  // which is the only way the bar and the table can be guaranteed to agree.
   //
   // `loaf_counts` is summed server-side across each plan's non-cancelled
   // deliveries (see the enrich branch of /api/admin/subscriptions). Rows
@@ -1247,14 +1204,6 @@ function SubscriptionsPageInner() {
             minWidth: 240,
           }}
         />
-        {/* Matching an area flips the board to nearest-first; the chip's ×
-            clears it. See the anchor state above for why there is no sort
-            dropdown beside it. */}
-        <AreaSortControl
-          anchor={anchor}
-          onResolve={setAnchor}
-          onClear={() => setAnchor(null)}
-        />
       </div>
 
       {selected.size > 0 ? (
@@ -1456,12 +1405,6 @@ function SubscriptionsPageInner() {
                 const canCancel =
                   s.status !== "cancelled" && s.status !== "completed";
                 const rowAddr = resolveSubscriptionAddress(s);
-                // Only while the board is actually sorted by distance —
-                // a km figure against a status-grouped list would invite
-                // someone to read the order of the rows as a route.
-                const dist = anchor
-                  ? distanceFrom(subscriptionLocation(s), anchor, pincodeCoords)
-                  : null;
                 // Money in, plan not confirmed. Derived, never stored — see
                 // isPaidUnconfirmed. Marks the row and nothing else: Share
                 // stays enabled, because the payment is good and the bread
@@ -1647,7 +1590,6 @@ function SubscriptionsPageInner() {
                           ) : null}
                         </div>
                       ) : null}
-                      {dist ? <DistanceBadge info={dist} /> : null}
                     </td>
                     <td style={td} data-label="Date">
                       {/* The date I owe them, not the day they signed up.
