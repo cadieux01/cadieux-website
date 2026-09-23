@@ -109,9 +109,13 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   // is the worst moment to discover it.
   "pdp.name::multigrain": "Multigrain Protein Bread",
   "pdp.name::high-protein": "Protein Bread",
-  "pdp.name::burger-bun": "Whole wheat protein Burger Bun",
-  "pdp.tag::multigrain": "Multigrain Edition",
-  "pdp.tag::high-protein": "Plain Edition",
+  "pdp.name::burger-bun": "Protein Burger Bun",
+  // No "Plain Edition" / "Multigrain Edition" eyebrow any more. The two
+  // loaves are "Protein Bread" and "Multigrain Protein Bread" — the edition
+  // word was a second way of saying the variant, and with "Plain" gone from
+  // the name it described nothing. Dropping the KEY (rather than setting it
+  // to "") means pickString finds no fallback and the tag slot renders
+  // nothing at all. An admin content_strings row still wins if one is added.
   "pdp.tag::burger-bun": "Burger Bun",
   // The burger bun's unit label. It sits in the subtitle slot rather than in
   // products.weight because that column must stay machine-readable — see the
@@ -119,13 +123,14 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   // product yet, so these fallbacks are what actually renders.
   "pdp.subtitle::burger-bun": "Pack of 2 · 90 g each · 180 g net",
   // H1 fallback per product. The client reads pickString("pdp.title", slug)
-  // for the on-page <h1>. Prompt 4 promoted these to keyword-rich phrases
-  // that match the new URL slugs (`plain-protein-bread`,
-  // `multigrain-protein-bread`) so the H1, canonical URL, breadcrumb
-  // trail, and title tag all reinforce the same primary keyword. Admin
-  // edits in content_strings still take precedence.
+  // for the on-page <h1>, and it is ALSO the Product JSON-LD `name`, the
+  // position-3 breadcrumb label and the share label — so this one string is
+  // most of what "Plain" used to mean on the storefront. It matches the URL
+  // slug (`protein-bread`, `multigrain-protein-bread`) so the H1, canonical
+  // URL, breadcrumb trail and title tag all reinforce the same keyword.
+  // Admin edits in content_strings still take precedence.
   "pdp.title::multigrain": "Cadieux Multigrain Protein Bread",
-  "pdp.title::high-protein": "Cadieux Plain Protein Bread",
+  "pdp.title::high-protein": "Cadieux Protein Bread",
   "pdp.title::burger-bun": "Cadieux Protein Burger Bun",
   "pdp.description::burger-bun": "High-protein burger bun. No maida.",
   "pdp.description::multigrain":
@@ -139,13 +144,13 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   "pdp.seo.title::multigrain":
     "Cadieux Multigrain Protein Bread — Baked in Visakhapatnam",
   "pdp.seo.title::high-protein":
-    "Cadieux Plain Protein Bread — Baked in Visakhapatnam",
+    "Cadieux Protein Bread — Baked in Visakhapatnam",
   "pdp.seo.title::burger-bun":
     "Cadieux Protein Burger Bun — Baked in Visakhapatnam",
   "pdp.seo.description::multigrain":
     "Cadieux Multigrain Protein Bread. Slow-fermented, lab-tested, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
   "pdp.seo.description::high-protein":
-    "Cadieux Plain Protein Bread. Clean sandwich slices, slow-fermented and lab-tested, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
+    "Cadieux Protein Bread. Clean sandwich slices, slow-fermented and lab-tested, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
   "pdp.seo.description::burger-bun":
     "Cadieux Protein Burger Bun. Pack of two, no maida, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
 };

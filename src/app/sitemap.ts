@@ -36,7 +36,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   //
   // The DB stores the INTERNAL slug (`high-protein`, `multigrain`); we
   // map each one through toUrlSlug() so the sitemap emits the canonical
-  // URL slug (`plain-protein-bread`, `multigrain-protein-bread`) —
+  // URL slug (`protein-bread`, `multigrain-protein-bread`) —
   // matching what canonical + Google-indexed URLs return post-Prompt-5.
   // Unaliased DB slugs (future admin-created products) pass through
   // unchanged so their `/shop/<db-slug>` URL keeps working.

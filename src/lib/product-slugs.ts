@@ -27,14 +27,19 @@ import type { ProductSlug } from "@/lib/data";
 // roles — and it has to appear here regardless, because `resolveInternalSlug`
 // returns null for any unmapped URL and the [slug] page then 404s. A products
 // row alone does not make a product reachable.
+// `high-protein` moved from `plain-protein-bread` to `protein-bread` when
+// "Plain" was dropped from the product's name. The old URL is 301'd in
+// next.config.js and deliberately does NOT appear below: keeping it here as
+// a second live URL would serve the same page on two paths and split the
+// ranking signal, which is the thing the 301 exists to prevent.
 const URL_TO_INTERNAL: Record<string, ProductSlug> = {
-  "plain-protein-bread": "high-protein",
+  "protein-bread": "high-protein",
   "multigrain-protein-bread": "multigrain",
   "burger-bun": "burger-bun",
 };
 
 const INTERNAL_TO_URL: Record<ProductSlug, string> = {
-  "high-protein": "plain-protein-bread",
+  "high-protein": "protein-bread",
   "multigrain": "multigrain-protein-bread",
   "burger-bun": "burger-bun",
 };

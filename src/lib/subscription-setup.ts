@@ -52,7 +52,7 @@ export const SETUP_PRODUCTS: WizardProduct[] = [
   {
     slug: "multigrain",
     name: "Multigrain Protein Bread",
-    title: "Multigrain",
+    title: "Multigrain Protein Bread",
     price: 135,
     blurb: "Ancient grains, seeds, whey protein.",
     mrp_inr: 150,
@@ -62,7 +62,7 @@ export const SETUP_PRODUCTS: WizardProduct[] = [
   {
     slug: "high-protein",
     name: "Protein Bread",
-    title: "Plain",
+    title: "Protein Bread",
     price: 107.1,
     blurb: "Soft sandwich slices, clean build.",
     mrp_inr: 119,

@@ -5,7 +5,7 @@
 // knows about bread; the bread mapping lives in PRODUCT_TONES below and is
 // the only part that would change.
 //
-// TONES. Plain green, Multigrain RED, Burger bun yellow.
+// TONES. Protein Bread green, Multigrain RED, Burger bun yellow.
 //
 // THE PALETTE IS SUNNY'S, DECIDED 2026-09-22, and it overrules what this
 // file used to argue. The original objection is kept verbatim because it is
@@ -47,8 +47,8 @@ export const TONE_COLOURS: Record<MarkerTone, { bg: string; fg: string }> = {
   red: { bg: "#D6453F", fg: "#0F1A18" },
   yellow: { bg: "#F2C037", fg: "#0F1A18" },
   // A product we have no tone for: hollow, never a guessed colour. An
-  // unknown bread silently rendering as Plain is exactly the class of bug
-  // this whole branch exists to remove.
+  // unknown bread silently rendering as Protein Bread is exactly the class
+  // of bug this whole branch exists to remove.
   neutral: { bg: "transparent", fg: "#FBF3D4" },
 };
 
@@ -62,30 +62,60 @@ export const PRODUCT_TONES: Record<string, MarkerTone> = {
   "burger-bun": "yellow",
 };
 
+/** slug → the letter in the square. FIXED per product, never derived from
+ *  the name.
+ *
+ *  Deriving it was the bug: the square read `name.charAt(0)`, so when
+ *  `products.name` for the bun was "Whole wheat protein Burger Bun" the
+ *  marker said **W**, and it would have changed again on the next rename —
+ *  an identifier the operator has learned by sight must not move when
+ *  marketing copy does. P / M / B are the letters Sunny already says out
+ *  loud. Registered alongside PRODUCT_TONES so a new product is still one
+ *  edit to this file.
+ *
+ *  A slug with no entry falls back to the name's first letter, which is the
+ *  old behaviour and the only thing available for a product this file has
+ *  never heard of. */
+export const PRODUCT_INITIALS: Record<string, string> = {
+  "high-protein": "P",
+  multigrain: "M",
+  "burger-bun": "B",
+};
+
 // NAMES ARE NOT DECIDED HERE EITHER. This file used to carry a
 // PRODUCT_LABELS map of short names ("Plain" / "Multigrain" / "Burger
 // Bun"). It is gone: those were a second, hand-maintained spelling of the
 // catalogue, so renaming a product in /admin left the admin boards saying
 // something the shop no longer said. Callers resolve slug → name through
 // productDisplayName() in @/lib/product-names, which reads the live
-// catalogue. This file stays responsible for colour only.
+// catalogue. This file owns colour and the one-letter code — neither of
+// which is a name.
 
 export function toneForProduct(slug: string): MarkerTone {
   return PRODUCT_TONES[slug] ?? "neutral";
 }
 
+export function initialForProduct(slug: string): string | undefined {
+  return PRODUCT_INITIALS[slug];
+}
+
 /**
  * One marker. `label` is the full catalogue name ("Multigrain Protein
- * Bread") — the square shows its first letter, the title attribute and the
- * screen-reader label carry the whole thing, so "M" is never the only way
- * to tell them apart. Colour is the primary signal; the initial is the
- * tie-breaker and the tooltip is the answer.
+ * Bread") — the title attribute and the screen-reader label carry the whole
+ * thing, so the letter is never the only way to tell them apart. Colour is
+ * the primary signal; the letter is the tie-breaker and the tooltip is the
+ * answer.
+ *
+ * `initial` is the fixed per-product letter (see PRODUCT_INITIALS). It is a
+ * separate prop rather than something derived from `label` precisely so a
+ * name change cannot move it.
  */
 export function ProductMarker({
   label,
   tone,
   count,
   title,
+  initial,
   size = 16,
 }: {
   label: string;
@@ -94,6 +124,9 @@ export function ProductMarker({
   count?: number;
   /** Overrides the default "<label> <count>" tooltip. */
   title?: string;
+  /** Letter in the square. Defaults to the label's first letter for a
+   *  product with no registered code. */
+  initial?: string;
   size?: number;
 }) {
   const { bg, fg } = TONE_COLOURS[tone];
@@ -125,7 +158,7 @@ export function ProductMarker({
       }}
     >
       <span aria-hidden style={square}>
-        {label.charAt(0).toUpperCase()}
+        {(initial ?? label.charAt(0)).toUpperCase()}
       </span>
       {typeof count === "number" ? (
         <span style={{ fontSize: 14, fontWeight: 500 }}>{count}</span>
@@ -158,6 +191,7 @@ export function CountMarkers({
           key={l.slug}
           label={l.label}
           tone={toneForProduct(l.slug)}
+          initial={initialForProduct(l.slug)}
           count={l.loaves}
           size={size}
         />

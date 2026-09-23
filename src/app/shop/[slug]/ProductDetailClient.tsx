@@ -125,7 +125,7 @@ export default function ProductDetailClient({
   // PRODUCT_DETAILS, and the review scope. Never changes across a URL
   // rename, so historical review data stays attached to the same product.
   slug: string;
-  // URL slug (`plain-protein-bread` | `multigrain-protein-bread`) — used
+  // URL slug (`protein-bread` | `multigrain-protein-bread`) — used
   // only for outbound public links (share button, any deep link back to
   // this page). Kept separate so we can rename URLs again without touching
   // the DB / review scope.

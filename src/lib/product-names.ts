@@ -43,7 +43,7 @@ export type ProductNameMap = Record<string, string>;
 export const PRODUCT_NAMES: ProductNameMap = {
   "high-protein": "Protein Bread",
   multigrain: "Multigrain Protein Bread",
-  "burger-bun": "Whole wheat protein Burger Bun",
+  "burger-bun": "Protein Burger Bun",
 };
 
 /**

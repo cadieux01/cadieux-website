@@ -154,12 +154,20 @@ const nextConfig = {
       // internal slug via `resolveInternalSlug` in @/lib/product-slugs.
       // These entries must sit ABOVE the apex→www catch-all below so the
       // 301 fires before host rewriting.
-      { source: "/shop/high-protein", destination: "/shop/plain-protein-bread", permanent: true },
+      { source: "/shop/high-protein", destination: "/shop/protein-bread", permanent: true },
       { source: "/shop/multigrain", destination: "/shop/multigrain-protein-bread", permanent: true },
       // Phase 1A: legacy `/shop/plain` (from before the DB slug rename)
       // now jumps directly to the new URL, avoiding a 301 chain through
       // `/shop/high-protein` (which is itself 301'd above).
-      { source: "/shop/plain", destination: "/shop/plain-protein-bread", permanent: true },
+      { source: "/shop/plain", destination: "/shop/protein-bread", permanent: true },
+      // "Plain" dropped from the product name: /shop/plain-protein-bread is
+      // now the indexed URL and moves to /shop/protein-bread. The three
+      // entries above were REPOINTED at the new destination rather than left
+      // aiming at plain-protein-bread — otherwise every one of them would
+      // become a 301 chain (old → plain-protein-bread → protein-bread), which
+      // costs a round trip and which Search Console reports as a redirect
+      // error past two hops.
+      { source: "/shop/plain-protein-bread", destination: "/shop/protein-bread", permanent: true },
       // Force the admin onto www. localStorage is per-origin, so a bearer
       // token saved on www.cadieux.in is invisible on the apex cadieux.in
       // (and vice-versa) — landing on the apex looked "logged out". Sending

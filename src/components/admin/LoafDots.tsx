@@ -1,8 +1,8 @@
 // One dot per unit, under the OLF number on every order row.
 //
-// Green = Plain, red = Multigrain, yellow = Burger bun. Two plain + two
-// multigrain reads as two green dots and two red dots, so the operator sees
-// the bag contents without opening the order.
+// Green = Protein Bread, red = Multigrain, yellow = Burger bun. Two of the
+// plain loaf + two multigrain reads as two green dots and two red dots, so
+// the operator sees the bag contents without opening the order.
 //
 // COLOUR IS NOT DECIDED HERE. The palette and the slug→tone registry live
 // in ProductMarker (PRODUCT_TONES / TONE_COLOURS) and this file imports

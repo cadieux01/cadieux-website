@@ -59,8 +59,12 @@ export const PRODUCTS = [
   {
     slug: "multigrain",
     name: "Multigrain Protein Bread",
-    tag: "Multigrain Edition",
-    title: "Multigrain",
+    // Eyebrow retired with the rename — see CRITICAL_FALLBACKS in
+    // lib/content.ts. Kept as "" rather than deleted because the shop tile
+    // resolves `c?.tag || p.tag`: an admin content_strings row still wins,
+    // and the key has to exist for the bundled shape to typecheck.
+    tag: "",
+    title: "Multigrain Protein Bread",
     tags: ["Multi Grains", "No Maida"],
     price: 149,
     protein: "High protein content",
@@ -70,8 +74,8 @@ export const PRODUCTS = [
   {
     slug: "high-protein",
     name: "Protein Bread",
-    tag: "Plain Edition",
-    title: "Plain",
+    tag: "",
+    title: "Protein Bread",
     tags: ["Sandwich Bread", "8 Slices"],
     price: 109,
     protein: "High protein content",
@@ -84,7 +88,7 @@ export const PRODUCTS = [
   // repoint every stored cart.
   {
     slug: "burger-bun",
-    name: "Whole wheat protein Burger Bun",
+    name: "Protein Burger Bun",
     tag: "Burger Bun",
     title: "Burger Bun",
     tags: ["Pack of 2", "No Maida"],
@@ -182,7 +186,7 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
   },
   "high-protein": {
     description: [
-      "Plain is the everyday Cadieux — a soft, clean sandwich loaf that happens to carry serious protein.",
+      "Protein Bread is the everyday Cadieux — a soft, clean sandwich loaf that happens to carry serious protein.",
       "Same careful process as our multigrain, just a milder crumb built for daily use: toast, sandwiches, kids' lunches, late-night eggs.",
       "High in protein. Nothing hidden.",
     ],

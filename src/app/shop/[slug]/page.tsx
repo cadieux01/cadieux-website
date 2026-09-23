@@ -2,7 +2,7 @@
 //
 // Two slugs travel through this file:
 //   • `urlSlug`      — the [slug] route param, i.e. what appears in the
-//     browser bar (`plain-protein-bread`, `multigrain-protein-bread`).
+//     browser bar (`protein-bread`, `multigrain-protein-bread`).
 //     Used for canonical, OG url, breadcrumb item, and the JSON-LD
 //     Offer.url. This is the SEO-visible form and the only slug the
 //     external world ever sees post-Prompt-5.

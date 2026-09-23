@@ -532,7 +532,7 @@ export default async function SubscribeLandingPage() {
         {/* Cross-link back to shop for buyers still deciding. Kept as
             a soft line, not a card, so the CTA above stays the primary
             action. Product URLs go through toUrlSlug() so this always
-            emits the canonical /shop/plain-protein-bread and
+            emits the canonical /shop/protein-bread and
             /shop/multigrain-protein-bread slugs (Prompts 4+5). */}
         <p
           style={{
@@ -566,7 +566,7 @@ export default async function SubscribeLandingPage() {
               fontWeight: 500,
             }}
           >
-            plain
+            protein bread
           </Link>
           .
         </p>

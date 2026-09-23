@@ -310,7 +310,7 @@ export default async function DeliveryAreaPage({
                 fontWeight: 500,
               }}
             >
-              Plain Protein Bread
+              Protein Bread
             </Link>{" "}
             or{" "}
             <Link

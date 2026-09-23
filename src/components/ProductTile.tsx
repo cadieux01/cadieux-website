@@ -180,7 +180,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
 
   // The `slug` prop is the INTERNAL slug (products.slug from Supabase or
   // the bundled PRODUCTS[]). Map it to the URL slug so the tile links to
-  // the canonical, SEO-visible URL (`/shop/plain-protein-bread`) rather
+  // the canonical, SEO-visible URL (`/shop/protein-bread`) rather
   // than the internal-only form. Unaliased slugs pass through unchanged.
   return (
     <Link

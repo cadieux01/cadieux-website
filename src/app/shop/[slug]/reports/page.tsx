@@ -11,7 +11,7 @@ const GRAIN = "url(/grain.svg)";
 
 export default function ProductReportsPage() {
   const params = useParams<{ slug: string }>();
-  // `urlSlug` = whatever's in the URL bar (`plain-protein-bread`,
+  // `urlSlug` = whatever's in the URL bar (`protein-bread`,
   // `multigrain-protein-bread`). We resolve it to the internal slug
   // for the PRODUCTS lookup, but the "back" link stays on the URL
   // slug so the user round-trips through the same SEO-visible URL.
