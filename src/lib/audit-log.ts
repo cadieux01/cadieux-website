@@ -28,6 +28,10 @@ export type AuditEntity =
   | "feedback"
   | "service_area"
   | "delivery_request"
+  // The order PIN itself — set / changed / reset, and every rejected
+  // status change. Its own entity so the audit-log page can filter the
+  // security trail apart from ordinary order edits.
+  | "order_pin"
   | "other";
 
 export type AuditAction =
@@ -43,6 +47,8 @@ export type AuditAction =
   | "refund"
   | "pause"
   | "resume"
+  | "pin_reset"
+  | "pin_blocked"
   | "other";
 
 export const AUDIT_ENTITIES: AuditEntity[] = [
@@ -59,6 +65,7 @@ export const AUDIT_ENTITIES: AuditEntity[] = [
   "feedback",
   "service_area",
   "delivery_request",
+  "order_pin",
   "other",
 ];
 
@@ -75,6 +82,8 @@ export const AUDIT_ACTIONS: AuditAction[] = [
   "refund",
   "pause",
   "resume",
+  "pin_reset",
+  "pin_blocked",
   "other",
 ];
 
@@ -92,6 +101,7 @@ export const AUDIT_ENTITY_LABEL: Record<AuditEntity, string> = {
   feedback: "Feedback",
   service_area: "Service area",
   delivery_request: "Delivery request",
+  order_pin: "Order PIN",
   other: "Other",
 };
 
@@ -108,6 +118,8 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   refund: "Refunded",
   pause: "Paused",
   resume: "Resumed",
+  pin_reset: "PIN reset",
+  pin_blocked: "Blocked",
   other: "Other",
 };
 

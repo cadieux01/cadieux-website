@@ -425,9 +425,224 @@ function ForgotPinPanel({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
+// ═══ ORDER PIN ════════════════════════════════════════════════════════════════
+//
+// A SECOND, independent PIN. The one above gates product-catalogue edits and
+// mints a 5-minute grant; this one gates order/subscription status changes to
+// confirmed / active / cancelled and mints nothing — it is re-entered on
+// every single change.
+//
+// The security answer is typed here and stored as a scrypt hash. It appears
+// in no source file, no migration and no client bundle — the only comparison
+// happens server-side in /api/admin/order-pin.
+
+function OrderPinSetPanel({
+  pinExists,
+  onSuccess,
+}: {
+  pinExists: boolean;
+  onSuccess: () => void;
+}) {
+  const [newPin, setNewPin] = useState("");
+  const [currentPin, setCurrentPin] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (newPin.length !== 6) { setError("Order PIN must be exactly 6 digits."); return; }
+    if (pinExists && currentPin.length !== 6) { setError("Current order PIN must be exactly 6 digits."); return; }
+    // Only mandatory on first set — a PIN with no answer has no reset path.
+    if (!pinExists && answer.trim().length < 2) {
+      setError("Answer the security question — without it a forgotten PIN cannot be reset.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      await adminFetch<{ ok: boolean }>("/api/admin/order-pin", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "set",
+          pin: newPin,
+          ...(pinExists ? { currentPin } : {}),
+          ...(answer.trim() ? { answer: answer.trim() } : {}),
+        }),
+      });
+      setSuccess(pinExists ? "Order PIN changed." : "Order PIN set.");
+      setNewPin("");
+      setCurrentPin("");
+      setAnswer("");
+      onSuccess();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <p
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: "1rem",
+          color: FADED,
+          letterSpacing: "0.06em",
+          lineHeight: 1.6,
+          margin: 0,
+        }}
+      >
+        {pinExists
+          ? "Change the order PIN. Enter the current one first. Leave the security answer blank to keep the existing answer."
+          : "Choose a 6-digit order PIN and set the answer to your security question. Both are required."}
+      </p>
+
+      {pinExists && (
+        <div>
+          <label style={LABEL} htmlFor="order-current-pin">Current order PIN</label>
+          <PinInput
+            id="order-current-pin"
+            value={currentPin}
+            onChange={setCurrentPin}
+            placeholder="Current order PIN"
+            autoComplete="current-password"
+          />
+        </div>
+      )}
+
+      <div>
+        <label style={LABEL} htmlFor="order-new-pin">New order PIN</label>
+        <PinInput
+          id="order-new-pin"
+          value={newPin}
+          onChange={setNewPin}
+          placeholder="New 6-digit PIN"
+          autoComplete="new-password"
+        />
+      </div>
+
+      <div>
+        <label style={LABEL} htmlFor="order-answer">
+          Security question: Who is your best friend?
+          {pinExists ? " (leave blank to keep)" : ""}
+        </label>
+        <input
+          id="order-answer"
+          type="text"
+          autoComplete="off"
+          value={answer}
+          onChange={(e) => setAnswer(e.target.value)}
+          placeholder="Your answer"
+          style={{ ...INPUT, letterSpacing: "0.06em" }}
+        />
+      </div>
+
+      {error && <p style={ERROR_STYLE}>{error}</p>}
+      {success && <p style={SUCCESS_STYLE}>{success}</p>}
+
+      <div>
+        <button type="submit" style={BTN_PRIMARY} disabled={busy}>
+          {busy ? "Saving…" : pinExists ? "Change order PIN" : "Set order PIN"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function OrderPinForgotPanel({ onSuccess }: { onSuccess: () => void }) {
+  const [answer, setAnswer] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (!answer.trim()) { setError("Please answer the security question."); return; }
+    if (newPin.length !== 6) { setError("New order PIN must be exactly 6 digits."); return; }
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      await adminFetch<{ ok: boolean }>("/api/admin/order-pin", {
+        method: "POST",
+        body: JSON.stringify({ action: "reset", answer: answer.trim(), newPin }),
+      });
+      setSuccess("Order PIN reset.");
+      setAnswer("");
+      setNewPin("");
+      onSuccess();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <p
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: "1rem",
+          color: FADED,
+          letterSpacing: "0.06em",
+          lineHeight: 1.6,
+          margin: 0,
+        }}
+      >
+        Answer the security question to reset the order PIN. Wrong answers are
+        rate-limited (3 attempts per IP, then a 30-minute lockout).
+      </p>
+
+      <div>
+        <label style={LABEL} htmlFor="order-reset-answer">
+          Security question: Who is your best friend?
+        </label>
+        <input
+          id="order-reset-answer"
+          type="text"
+          autoComplete="off"
+          value={answer}
+          onChange={(e) => setAnswer(e.target.value)}
+          placeholder="Your answer"
+          style={{ ...INPUT, letterSpacing: "0.06em" }}
+        />
+      </div>
+
+      <div>
+        <label style={LABEL} htmlFor="order-reset-new-pin">New order PIN</label>
+        <PinInput
+          id="order-reset-new-pin"
+          value={newPin}
+          onChange={setNewPin}
+          placeholder="New 6-digit PIN"
+          autoComplete="new-password"
+        />
+      </div>
+
+      {error && <p style={ERROR_STYLE}>{error}</p>}
+      {success && <p style={SUCCESS_STYLE}>{success}</p>}
+
+      <div>
+        <button type="submit" style={BTN_PRIMARY} disabled={busy}>
+          {busy ? "Resetting…" : "Reset order PIN"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ─── Active flow ──────────────────────────────────────────────────────────────
 
 type ActiveFlow = "none" | "generate" | "set" | "forgot";
+type OrderFlow = "none" | "set" | "forgot";
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -435,6 +650,10 @@ export default function AdminProfilePage() {
   const [status, setStatus] = useState<PinStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeFlow, setActiveFlow] = useState<ActiveFlow>("none");
+
+  const [orderStatus, setOrderStatus] = useState<PinStatus | null>(null);
+  const [orderLoading, setOrderLoading] = useState(true);
+  const [orderFlow, setOrderFlow] = useState<OrderFlow>("none");
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -447,16 +666,34 @@ export default function AdminProfilePage() {
     }
   }, []);
 
+  const fetchOrderStatus = useCallback(async () => {
+    try {
+      const data = await adminFetch<PinStatus>("/api/admin/order-pin");
+      setOrderStatus(data);
+    } catch {
+      // silently ignore — page still renders without status
+    } finally {
+      setOrderLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void fetchStatus();
-  }, [fetchStatus]);
+    void fetchOrderStatus();
+  }, [fetchStatus, fetchOrderStatus]);
 
   const handleSuccess = useCallback(() => {
     void fetchStatus();
   }, [fetchStatus]);
 
+  const handleOrderSuccess = useCallback(() => {
+    void fetchOrderStatus();
+  }, [fetchOrderStatus]);
+
   const pinExists = status?.exists ?? false;
   const pinLocked = status?.locked ?? false;
+  const orderPinExists = orderStatus?.exists ?? false;
+  const orderPinLocked = orderStatus?.locked ?? false;
 
   return (
     <AdminShell title="Profile" subtitle="Account & security settings">
@@ -606,6 +843,114 @@ export default function AdminProfilePage() {
                   onSuccess={() => { handleSuccess(); setActiveFlow("none"); }}
                 />
               </>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Order PIN ── */}
+      <div style={CARD}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+            marginBottom: "1rem",
+          }}
+        >
+          <p style={{ ...SECTION_TITLE, margin: 0 }}>Order PIN</p>
+          {!orderLoading && (
+            <span
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "0.875rem",
+                letterSpacing: "0.22em",
+                textTransform: "uppercase",
+                padding: "0.25rem 0.7rem",
+                border: `1px solid ${
+                  orderPinLocked ? "#EF4444" : orderPinExists ? CREAM : "#EF4444"
+                }`,
+                color: orderPinLocked ? "#EF4444" : orderPinExists ? CREAM : "#EF4444",
+              }}
+            >
+              {orderPinLocked ? "Locked" : orderPinExists ? "Active" : "Not set"}
+            </span>
+          )}
+        </div>
+
+        <p
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "1rem",
+            color: FADED,
+            letterSpacing: "0.06em",
+            lineHeight: 1.7,
+            margin: "0 0 1rem",
+          }}
+        >
+          Required to change an order to{" "}
+          <strong style={{ color: CREAM }}>Confirmed</strong> or{" "}
+          <strong style={{ color: CREAM }}>Cancelled</strong>, and a subscription to{" "}
+          <strong style={{ color: CREAM }}>Active</strong> or{" "}
+          <strong style={{ color: CREAM }}>Cancelled</strong>. It is entered{" "}
+          <strong style={{ color: CREAM }}>every time</strong> — there is no
+          remember-me window. Bulk confirm and bulk cancel take one PIN for up to
+          10 orders.
+        </p>
+
+        {/* Not-set is a RED badge, not a neutral one: until a PIN exists the
+            server refuses every confirm and cancel on both boards. That is the
+            intended fail-closed behaviour, but the operator needs to know. */}
+        {!orderLoading && !orderPinExists && (
+          <p style={{ ...ERROR_STYLE, marginBottom: "1rem" }}>
+            No order PIN is set — confirming and cancelling are blocked on both
+            the Orders and Subscriptions boards until you set one.
+          </p>
+        )}
+
+        {orderLoading ? (
+          <p style={{ color: MUTED, fontFamily: "var(--font-body)", fontSize: "1rem" }}>
+            Loading…
+          </p>
+        ) : (
+          <>
+            {orderFlow === "none" && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
+                <button style={BTN_PRIMARY} onClick={() => setOrderFlow("set")}>
+                  {orderPinExists ? "Change order PIN" : "Set order PIN"}
+                </button>
+                {orderPinExists && (
+                  <button
+                    style={{ ...BTN_GHOST, color: MUTED, borderColor: "transparent" }}
+                    onClick={() => setOrderFlow("forgot")}
+                  >
+                    Forgot order PIN
+                  </button>
+                )}
+              </div>
+            )}
+
+            {orderFlow !== "none" && (
+              <div style={{ marginBottom: "1.25rem" }}>
+                <button style={BTN_GHOST} onClick={() => setOrderFlow("none")}>
+                  ← Back
+                </button>
+              </div>
+            )}
+
+            {orderFlow === "set" && (
+              <OrderPinSetPanel
+                pinExists={orderPinExists}
+                onSuccess={() => { handleOrderSuccess(); setOrderFlow("none"); }}
+              />
+            )}
+
+            {orderFlow === "forgot" && (
+              <OrderPinForgotPanel
+                onSuccess={() => { handleOrderSuccess(); setOrderFlow("none"); }}
+              />
             )}
           </>
         )}

@@ -6,6 +6,11 @@ import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/deliver
 import { canAutoRefund } from "@/lib/order-cancellation";
 import { issueRazorpayRefund } from "@/lib/razorpay-refund";
 import { computeOrderState } from "@/lib/order-state";
+import {
+  PIN_GATED_ORDER_STATUSES,
+  orderPinErrorResponse,
+  requireOrderPin,
+} from "@/lib/order-pin";
 import { notifyPreorderScheduled } from "@/lib/preorder-notify";
 
 // New canonical stages + legacy values that pre-date the
@@ -209,6 +214,29 @@ export async function PATCH(
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+  }
+
+  // ── ORDER PIN gate ──────────────────────────────────────────────────────────
+  // Confirming or cancelling an order needs the 6-digit order PIN on the
+  // `x-order-pin` header of THIS request. There is no grant window: the PIN
+  // is re-entered for every change. Gated on the REQUESTED status, not on
+  // whether the value actually differs from the stored one — an operator
+  // re-sending "cancelled" on an already-cancelled order is still asking to
+  // cancel it, and making the gate depend on current state would let a
+  // caller probe that state without a PIN.
+  //
+  // This runs BEFORE the update below. A client that skips the modal gets a
+  // 401 and no write happens; the modal is convenience, this is enforcement.
+  if (
+    typeof update.status === "string" &&
+    PIN_GATED_ORDER_STATUSES.has(update.status)
+  ) {
+    const gate = await requireOrderPin(
+      req,
+      `order #${params.id.slice(0, 8)}`,
+      { surface: "orders", scope: "single", status_after: update.status },
+    );
+    if (!gate.ok) return orderPinErrorResponse(gate);
   }
 
   // `before` was fetched above so the delivery_slot validator could

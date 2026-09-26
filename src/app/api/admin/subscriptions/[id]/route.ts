@@ -6,6 +6,11 @@ import {
 } from "@/lib/admin-subscription-derive";
 import { matchSubscriptionCoordinates } from "@/lib/subscription-coordinates";
 import { recordAuditEvent, type AuditAction } from "@/lib/audit-log";
+import {
+  PIN_GATED_SUBSCRIPTION_STATUSES,
+  orderPinErrorResponse,
+  requireOrderPin,
+} from "@/lib/order-pin";
 
 const ALLOWED_STATUSES = new Set([
   "pending_confirmation",
@@ -137,6 +142,28 @@ export async function PATCH(
 
   if (Object.keys(update).length === 1) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  // ── ORDER PIN gate ──────────────────────────────────────────────────────────
+  // Subscriptions have NO "confirmed" status — ALLOWED_STATUSES above is
+  // pending_confirmation / active / completed / cancelled. The admin
+  // confirm-then-activate workflow moves a subscription from
+  // pending_confirmation to "active", so "active" IS the confirm on this
+  // surface and is gated alongside "cancelled".
+  //
+  // Runs before the write below, and before the optimistic-concurrency
+  // guard — a stale-status 409 must not cost a PIN entry to discover, but
+  // more importantly no write may happen without one.
+  if (
+    typeof update.status === "string" &&
+    PIN_GATED_SUBSCRIPTION_STATUSES.has(update.status)
+  ) {
+    const gate = await requireOrderPin(
+      req,
+      `subscription #${params.id.slice(0, 8)}`,
+      { surface: "subscriptions", scope: "single", status_after: update.status },
+    );
+    if (!gate.ok) return orderPinErrorResponse(gate);
   }
 
   // Optional optimistic-concurrency guard. When the client passes the

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import {
+  BULK_PIN_MAX,
+  PIN_GATED_ORDER_STATUSES,
+  orderPinErrorResponse,
+  requireOrderPin,
+} from "@/lib/order-pin";
 import { notifyCustomer } from "@/lib/push";
 
 // Bulk status transition. Mirrors the single-order PATCH endpoint's
@@ -52,6 +58,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many orders in a single batch (max 200)" }, { status: 400 });
   }
 
+  // ── ORDER PIN gate ──────────────────────────────────────────────────────────
+  // Confirm and cancel are PIN-gated here exactly as they are on the
+  // single-order PATCH. Without this, the bulk route would be a complete
+  // bypass of the gate — it reaches the same statuses on the same table.
+  //
+  // One PIN entry authorises one batch, and a batch of these two actions is
+  // capped at BULK_PIN_MAX. The 200 ceiling above still governs the other
+  // actions (prepare/dispatch/deliver), which are not gated: they are
+  // operational stages, not the money- and customer-visible transitions.
+  if (PIN_GATED_ORDER_STATUSES.has(nextStatus)) {
+    if (ids.length > BULK_PIN_MAX) {
+      return NextResponse.json(
+        {
+          error: `You can ${action} at most ${BULK_PIN_MAX} orders at a time. You selected ${ids.length} — reduce the selection and try again.`,
+          code: "bulk_pin_limit",
+          max: BULK_PIN_MAX,
+        },
+        { status: 400 },
+      );
+    }
+    const gate = await requireOrderPin(
+      req,
+      `${ids.length} order(s) (bulk ${action})`,
+      {
+        surface: "orders",
+        scope: "bulk",
+        status_after: nextStatus,
+        // Every order ID in the batch, so the audit trail names exactly what
+        // one PIN entry authorised rather than just how many.
+        order_ids: ids,
+      },
+    );
+    if (!gate.ok) return orderPinErrorResponse(gate);
+  }
+
   const succeeded: string[] = [];
   const failed: { id: string; error: string }[] = [];
 
@@ -88,6 +129,30 @@ export async function POST(req: NextRequest) {
         status: data.status,
       });
     }
+  }
+
+  // One batch-level record naming every order ID that this single PIN entry
+  // authorised. The per-order entries above say what changed; this one says
+  // what one PIN was spent on, which is the question an audit of the gate
+  // actually asks.
+  if (PIN_GATED_ORDER_STATUSES.has(nextStatus)) {
+    void recordAuditEvent({
+      req,
+      entity: "order_pin",
+      action: "other",
+      targetId: null,
+      targetLabel: "Order PIN",
+      context: `Order PIN authorised a bulk ${action} of ${ids.length} order(s)`,
+      meta: {
+        surface: "orders",
+        scope: "bulk",
+        action,
+        status_after: nextStatus,
+        order_ids: ids,
+        succeeded,
+        failed: failed.map((f) => f.id),
+      },
+    });
   }
 
   return NextResponse.json({ succeeded, failed });
