@@ -129,7 +129,15 @@ function waitForAdminToken(timeoutMs = 10000): Promise<void> {
 }
 
 export class AdminFetchError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(
+    public readonly status: number,
+    message: string,
+    // The `code` field from the error body, when the route sent one.
+    // Callers that need to branch on WHY a request failed (e.g. re-opening
+    // the order-PIN modal on "order_pin_incorrect" but not on a stale-row
+    // 409) read this instead of pattern-matching the message text.
+    public readonly code: string | null = null,
+  ) {
     super(message);
     this.name = "AdminFetchError";
   }
@@ -173,6 +181,10 @@ export async function adminFetch<T = unknown>(
       (json && typeof json === "object" && "error" in json
         ? String((json as { error: unknown }).error)
         : null) ?? `Request failed (${res.status})`;
+    const code =
+      json && typeof json === "object" && typeof (json as { code?: unknown }).code === "string"
+        ? (json as { code: string }).code
+        : null;
     // On 401 the server has rejected our credentials — the cookie has
     // expired (30-day TTL), or ADMIN_TOKEN was rotated, or the session
     // was invalidated. Wipe all client-side admin state and signal
@@ -184,7 +196,7 @@ export async function adminFetch<T = unknown>(
     if (res.status === 401) {
       clearAdminAuthAndSignal();
     }
-    throw new AdminFetchError(res.status, message);
+    throw new AdminFetchError(res.status, message, code);
   }
   return (json as T) ?? (undefined as unknown as T);
 }

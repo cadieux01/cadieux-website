@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
       await recordResetAttempt(ip, false);
       return NextResponse.json(
         { error: "Incorrect answer to the security question." },
-        { status: 401 },
+        { status: 403 },
       );
     }
 
@@ -230,9 +230,12 @@ export async function POST(req: NextRequest) {
           req,
         );
       }
+      // 403, not 401: adminFetch reads a 401 from /api/admin/* as a dead
+      // admin session and wipes the operator's login. A wrong security
+      // answer must not do that.
       return NextResponse.json(
         { error: "Incorrect answer to the security question." },
-        { status: 401 },
+        { status: 403 },
       );
     }
 

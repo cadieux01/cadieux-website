@@ -515,6 +515,28 @@ export function subscriptionStatusRank(sub: {
   return SUBSCRIPTION_STATUS_RANK[s] ?? ORDER_RANK_FALLBACK;
 }
 
+// ---------------------------------------------------------------------------
+// ORDER PIN — which transitions are gated.
+//
+// These live here, not in lib/order-pin.ts, because that module imports
+// supabaseAdmin and therefore cannot be imported by a "use client" board.
+// The boards need the SAME list the server enforces: if they diverge, the
+// board either fails to raise the modal (and the operator sees a bare 403
+// on a click that looked fine) or raises it for a change the server waves
+// through (and one PIN entry is spent on nothing). lib/order-pin.ts
+// re-exports all three so server callers keep a single import.
+//
+// Orders confirm to "confirmed". Subscriptions have NO "confirmed" status —
+// the admin confirm-then-activate workflow moves them from
+// pending_confirmation to "active", so "active" IS the confirm there.
+export const PIN_GATED_ORDER_STATUSES = new Set(["confirmed", "cancelled"]);
+export const PIN_GATED_SUBSCRIPTION_STATUSES = new Set(["active", "cancelled"]);
+
+// Bulk confirm/cancel ceiling. The bulk route's own 200 cap still governs
+// the ungated actions; these two are money- and customer-visible, so one
+// PIN entry may not authorise more than this many rows.
+export const BULK_PIN_MAX = 10;
+
 export const SUBSCRIPTION_PAYMENT_STATUSES = [
   "pending",
   "paid",

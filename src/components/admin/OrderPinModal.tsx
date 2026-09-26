@@ -22,6 +22,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AdminFetchError } from "@/lib/admin-client";
+
 import { CREAM, INK, BORDER, TEXT_MUTED } from "./theme";
 
 export const ORDER_PIN_HEADER = "x-order-pin";
@@ -64,11 +66,54 @@ export function useOrderPinGate() {
     r?.(pin);
   }, []);
 
+  /**
+   * Run a gated mutation behind the PIN.
+   *
+   * Collects a PIN, hands it to `run` as request headers, and — if the
+   * SERVER is the thing that rejected the PIN — re-opens the modal carrying
+   * the server's own message, so a typo costs a retype rather than the whole
+   * action. Only `order_pin_required` / `order_pin_incorrect` retry: a
+   * lockout, an unset PIN, a stale-row 409 or a plain failure are all
+   * rethrown for the caller's existing error handling.
+   *
+   * Resolves `{ ok: true, value }` with whatever `run` returned, or
+   * `{ ok: false }` if the operator dismissed the modal — a discriminated
+   * result rather than a nullable one, because a mutation returning null is
+   * not the same as a mutation that never ran. The loop is bounded in
+   * practice by the server's own 3-attempt lockout, which arrives as a
+   * non-retryable code.
+   */
+  const withOrderPin = useCallback(
+    async <T,>(
+      p: OrderPinPrompt,
+      run: (headers: Record<string, string>) => Promise<T>,
+    ): Promise<{ ok: true; value: T } | { ok: false }> => {
+      let error = p.error ?? null;
+      for (;;) {
+        const pin = await requireOrderPin({ ...p, error });
+        if (!pin) return { ok: false };
+        try {
+          return { ok: true, value: await run(orderPinHeaders(pin)) };
+        } catch (e) {
+          if (
+            e instanceof AdminFetchError &&
+            (e.code === "order_pin_required" || e.code === "order_pin_incorrect")
+          ) {
+            error = e.message;
+            continue;
+          }
+          throw e;
+        }
+      }
+    },
+    [requireOrderPin],
+  );
+
   const modal = prompt ? (
     <OrderPinModal prompt={prompt} onResolve={resolve} />
   ) : null;
 
-  return { requireOrderPin, modal };
+  return { requireOrderPin, withOrderPin, modal };
 }
 
 function OrderPinModal({

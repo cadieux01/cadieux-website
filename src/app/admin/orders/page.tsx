@@ -52,11 +52,14 @@ import {
   formatDateTime,
   formatINR,
 } from "@/lib/admin-formatting";
+import { useOrderPinGate } from "@/components/admin/OrderPinModal";
 import {
   AdminOrderRow,
+  BULK_PIN_MAX,
   ORDER_STATUSES,
   OrderFilterValue,
   OrderStatus,
+  PIN_GATED_ORDER_STATUSES,
   formatStatusLabel,
   orderStatusRank,
 } from "@/lib/admin-shared";
@@ -383,6 +386,10 @@ const ROW_INTERACTIVE_SELECTOR =
 function OrdersPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // ORDER PIN gate. The server is what enforces it (see requireOrderPin in
+  // the PATCH and bulk routes); this only collects the digits so the
+  // operator isn't shown a bare 403 on a click that looked ordinary.
+  const { withOrderPin, modal: orderPinModal } = useOrderPinGate();
   // Parse the URL ONCE on first render. useSearchParams() subscribes,
   // so re-parsing it every render would let our own writeback below
   // re-seed initial state on the very next tick. useMemo with an empty
@@ -1104,15 +1111,45 @@ function OrdersPageInner() {
 
     // action === "cancel". Only status transition still bulkable; the
     // server route continues to expect this exact action string.
+    //
+    // It is PIN-gated, and one PIN entry authorises at most BULK_PIN_MAX
+    // rows. Checked here as well so an oversized selection is refused
+    // BEFORE the operator types a PIN that cannot be spent; the server's
+    // identical check is the one that actually enforces it.
+    if (ids.length > BULK_PIN_MAX) {
+      setBulkResult({
+        succeeded: [],
+        failed: ids.map((id) => ({
+          id,
+          error: `You can cancel at most ${BULK_PIN_MAX} orders at a time. You selected ${ids.length} — reduce the selection and try again.`,
+        })),
+        action,
+      });
+      setPendingBulk(null);
+      return;
+    }
+
     setBulkRunning(true);
     try {
-      const res = await adminFetch<{
-        succeeded: string[];
-        failed: { id: string; error: string }[];
-      }>("/api/admin/orders/bulk", {
-        method: "POST",
-        body: JSON.stringify({ orderIds: ids, action }),
-      });
+      const outcome = await withOrderPin(
+        {
+          title: `Cancel ${ids.length} order${ids.length === 1 ? "" : "s"}`,
+          detail:
+            "Every selected customer is notified straight away. One PIN entry authorises this whole batch.",
+        },
+        (headers) =>
+          adminFetch<{
+            succeeded: string[];
+            failed: { id: string; error: string }[];
+          }>("/api/admin/orders/bulk", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ orderIds: ids, action }),
+          }),
+      );
+      // Dismissed the modal — nothing was sent, so leave the selection be.
+      if (!outcome.ok) return;
+      const res = outcome.value;
       setBulkResult({ ...res, action });
       // Drop succeeded ids from selection and refetch so the UI matches
       // the canonical server state.
@@ -1144,14 +1181,44 @@ function OrdersPageInner() {
     });
     // Optimistic — flip the status locally and roll back on failure.
     const prev = orders;
-    setOrders((curr) =>
-      curr.map((o) => (o.id === order.id ? { ...o, status: next } : o)),
-    );
-    try {
+
+    // The flip lives inside `send` so it happens only AFTER the PIN modal is
+    // satisfied — dismissing the modal must leave the row reading the status
+    // it actually has, not one the server never accepted. On a wrong-PIN
+    // retry it re-applies the same target state, which is idempotent; `prev`
+    // is captured once, above, so the rollbacks below still restore the
+    // genuine original.
+    const send = async (headers: Record<string, string> = {}) => {
+      setOrders((curr) =>
+        curr.map((o) => (o.id === order.id ? { ...o, status: next } : o)),
+      );
       await adminFetch(`/api/admin/orders/${order.id}`, {
         method: "PATCH",
+        headers,
         body: JSON.stringify({ status: next }),
       });
+    };
+
+    try {
+      if (PIN_GATED_ORDER_STATUSES.has(next)) {
+        const done = await withOrderPin(
+          {
+            title: `${formatStatusLabel(next)} order ${formatOrderNumber(order)}`,
+            detail:
+              next === "cancelled"
+                ? "Cancelling notifies the customer straight away and cannot be undone from here. Enter your 6-digit order PIN to continue."
+                : undefined,
+          },
+          send,
+        );
+        if (!done.ok) {
+          setOrders(prev);
+          setBusyId(null);
+          return;
+        }
+      } else {
+        await send();
+      }
       // Mirror legacy: SMS + WhatsApp on every status change we have
       // copy for. Both are fire-and-forget; failures surface in a toast
       // but never roll back the status update.
@@ -2061,6 +2128,8 @@ function OrdersPageInner() {
             );
           })()
         : null}
+
+      {orderPinModal}
     </AdminShell>
   );
 }

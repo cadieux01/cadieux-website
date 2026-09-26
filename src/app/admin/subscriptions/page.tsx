@@ -137,11 +137,13 @@ import {
   composeNextDeliveryShareStop,
   composeSubscriptionShareMessage,
 } from "@/lib/subscription-share-message";
+import { useOrderPinGate } from "@/components/admin/OrderPinModal";
 import {
   AdminDeliveryRow,
   AdminSubscriptionRow,
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUS_OPTIONS,
+  PIN_GATED_SUBSCRIPTION_STATUSES,
   SUBSCRIPTION_PAYMENT_STATUSES,
   SUBSCRIPTION_STATUSES,
   formatStatusLabel,
@@ -310,6 +312,8 @@ const BULK_ACTIONS: readonly BulkActionSpec<SubBulkAction>[] = [
 
 function SubscriptionsPageInner() {
   const router = useRouter();
+  // ORDER PIN gate — the PATCH route enforces it; this collects the digits.
+  const { withOrderPin, modal: orderPinModal } = useOrderPinGate();
   const [subs, setSubs] = useState<AdminSubscriptionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1050,16 +1054,22 @@ function SubscriptionsPageInner() {
     if (nextStatus === sub.status) return;
     setBusyId(sub.id);
     const prev = subs;
-    // Invalidate any load() already in flight. It was fetched BEFORE this
-    // write, so its response describes the old status and would undo the
-    // optimistic update below.
-    subsGeneration.current += 1;
-    setSubs((curr) =>
-      curr.map((s) => (s.id === sub.id ? { ...s, status: nextStatus } : s)),
-    );
-    try {
+
+    // The optimistic flip lives inside `send` so it happens only after the
+    // PIN modal is satisfied — dismissing it must leave the row reading the
+    // status it really has. Re-running it on a wrong-PIN retry is idempotent.
+    //
+    // The generation bump invalidates any load() already in flight: it was
+    // fetched BEFORE this write, so its response describes the old status and
+    // would undo the flip.
+    const send = async (headers: Record<string, string> = {}) => {
+      subsGeneration.current += 1;
+      setSubs((curr) =>
+        curr.map((s) => (s.id === sub.id ? { ...s, status: nextStatus } : s)),
+      );
       await adminFetch(`/api/admin/subscriptions/${sub.id}`, {
         method: "PATCH",
+        headers,
         // Guard on the status we believe is current so a stale row can't
         // clobber a change made elsewhere (409 → rollback + message).
         body: JSON.stringify({
@@ -1067,6 +1077,31 @@ function SubscriptionsPageInner() {
           expected_status: sub.status,
         }),
       });
+    };
+
+    try {
+      if (PIN_GATED_SUBSCRIPTION_STATUSES.has(nextStatus)) {
+        const done = await withOrderPin(
+          {
+            title: `${formatStatusLabel(nextStatus)} subscription ${
+              sub.subscription_number ?? `#${sub.id.slice(0, 8)}`
+            }`,
+            detail:
+              nextStatus === "cancelled"
+                ? "Cancelling also cancels every delivery not yet made, and the customer is notified. Enter your 6-digit order PIN to continue."
+                : undefined,
+          },
+          send,
+        );
+        if (!done.ok) {
+          subsGeneration.current += 1;
+          setSubs(prev);
+          setBusyId(null);
+          return;
+        }
+      } else {
+        await send();
+      }
       void load();
     } catch (e) {
       // Rollback is also a local write — same invalidation.
@@ -1998,6 +2033,8 @@ function SubscriptionsPageInner() {
             );
           })()
         : null}
+
+      {orderPinModal}
     </AdminShell>
   );
 }
@@ -2011,6 +2048,9 @@ function SubscriptionDrawer({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  // The drawer mutates the subscription's status too, so it needs its own
+  // gate — the board's hook instance is not in scope here.
+  const { withOrderPin, modal: orderPinModal } = useOrderPinGate();
   const [deliveries, setDeliveries] = useState<AdminDeliveryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2049,14 +2089,34 @@ function SubscriptionDrawer({
     // Same named confirmation as the row's Cancel button — picking
     // "Cancelled" from this Select cascades to open deliveries too.
     if (next === "cancelled" && !confirm(cancelPrompt(subscription))) return;
-    try {
-      await adminFetch(`/api/admin/subscriptions/${subscription.id}`, {
+    const send = (headers: Record<string, string> = {}) =>
+      adminFetch(`/api/admin/subscriptions/${subscription.id}`, {
         method: "PATCH",
+        headers,
         body: JSON.stringify({
           status: next,
           expected_status: subscription.status,
         }),
       });
+    try {
+      if (PIN_GATED_SUBSCRIPTION_STATUSES.has(next)) {
+        const done = await withOrderPin(
+          {
+            title: `${formatStatusLabel(next)} subscription ${
+              subscription.subscription_number ??
+              `#${subscription.id.slice(0, 8)}`
+            }`,
+            detail:
+              next === "cancelled"
+                ? "Cancelling also cancels every delivery not yet made, and the customer is notified. Enter your 6-digit order PIN to continue."
+                : undefined,
+          },
+          send,
+        );
+        if (!done.ok) return;
+      } else {
+        await send();
+      }
       onChanged();
     } catch (e) {
       alert(e instanceof AdminFetchError ? e.message : "Update failed.");
@@ -2441,6 +2501,8 @@ function SubscriptionDrawer({
           ) : null}
         </div>
       </div>
+
+      {orderPinModal}
     </div>
   );
 }

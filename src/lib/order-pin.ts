@@ -16,7 +16,7 @@
 //
 // Enforcement is SERVER-SIDE. The modal in the admin UI is a convenience:
 // the three mutation routes call `requireOrderPin()` before they touch the
-// database, so a client that skips the modal gets a 401, not a write.
+// database, so a client that skips the modal gets a 403, not a write.
 
 import crypto from "crypto";
 import type { NextRequest } from "next/server";
@@ -46,17 +46,16 @@ const PIN_LOCK_MS = 5 * 60 * 1000;
 const MAX_RESET_ATTEMPTS = 3;
 const RESET_LOCK_MS = 30 * 60 * 1000;
 
-// The statuses that require the PIN. Orders confirm to "confirmed";
-// subscriptions have no "confirmed" status at all — the admin
-// confirm-then-activate workflow moves them from pending_confirmation to
-// "active", so that is the subscription-side equivalent of a confirm.
-export const PIN_GATED_ORDER_STATUSES = new Set(["confirmed", "cancelled"]);
-export const PIN_GATED_SUBSCRIPTION_STATUSES = new Set(["active", "cancelled"]);
-
-// Bulk confirm/cancel ceiling. The route's own 200 cap still applies to the
-// other bulk actions; these two are money- and customer-visible, so a single
-// PIN entry may not authorise more than this many rows.
-export const BULK_PIN_MAX = 10;
+// Which statuses are gated, and the bulk ceiling, live in admin-shared.ts —
+// this module imports supabaseAdmin and so can never be imported by a
+// "use client" board, and the board must decide whether to raise the modal
+// off the SAME list the server enforces. Re-exported here so server callers
+// keep one import.
+export {
+  PIN_GATED_ORDER_STATUSES,
+  PIN_GATED_SUBSCRIPTION_STATUSES,
+  BULK_PIN_MAX,
+} from "@/lib/admin-shared";
 
 // ─── hashing ─────────────────────────────────────────────────────────────────
 
@@ -269,9 +268,11 @@ export async function verifyCurrentPin(
       retryAfterMs: PIN_LOCK_MS,
     };
   }
+  // 403 for the same reason as the gate below — a wrong PIN is not a dead
+  // admin session, and adminFetch logs the operator out on 401.
   return {
     ok: false,
-    status: 401,
+    status: 403,
     error: `Current PIN is incorrect. ${MAX_PIN_ATTEMPTS - (row.failed_attempts + 1)} attempt(s) left before a 5-minute lockout.`,
   };
 }
@@ -345,10 +346,15 @@ export async function requireOrderPin(
     };
   }
 
+  // 403, never 401. `adminFetch` treats ANY 401 from /api/admin/* as "the
+  // admin session is dead" and wipes localStorage + drops back to the
+  // PasswordGate (src/lib/admin-client.ts). A missing or wrong ORDER PIN
+  // must not sign the operator out of the dashboard — the session is
+  // perfectly valid, it just isn't authorisation for THIS change.
   if (!ORDER_PIN_REGEX.test(supplied)) {
     return {
       ok: false,
-      status: 401,
+      status: 403,
       code: "order_pin_required",
       error: "Enter your 6-digit order PIN to make this change.",
     };
@@ -372,7 +378,7 @@ export async function requireOrderPin(
     }
     return {
       ok: false,
-      status: 401,
+      status: 403,
       code: "order_pin_incorrect",
       error: `Incorrect PIN. ${MAX_PIN_ATTEMPTS - (row.failed_attempts + 1)} attempt(s) left before a 5-minute lockout.`,
     };
