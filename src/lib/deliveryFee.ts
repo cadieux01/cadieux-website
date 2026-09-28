@@ -3,20 +3,26 @@
  *
  * THREE BANDS, by measured distance:
  *
- *        km < 15.7   → ₹15
- *   15.7 ≤ km ≤ 25   → ₹25
+ *        km < 15     → ₹15
+ *     15 ≤ km ≤ 25   → ₹25
  *     25 < km ≤ 30   → ₹32
  *          km > 30   → not serviceable
  *
  * This replaces the flat ₹12-at-any-distance fee. Two deliberate details:
  *
- * 1. The first boundary is 15.7 km, not 15.0, and it sits in EMPTY SPACE.
- *    Measured against the live pincode set, band 1 tops out at 530051
- *    (14.94 km) and band 2 opens at 530047 (16.43 km) — a 1.49 km gap with
- *    no pincode in it. 15.7 splits that gap, leaving ~0.75 km of margin on
- *    each side, so no existing pincode changes band and a small drift in
- *    Google's driving distance cannot silently re-price an address. Moving
- *    this number to a round 15.0 puts the line 0.06 km from a real pincode.
+ * 1. The first boundary is BAND_1_MAX_KM = 15. Raja's spec is "below 15 km
+ *    → ₹15"; 15.7 was an undocumented deviation, removed 29 Sep 2026.
+ *
+ *    What 15.7 bought, and what moving to 15 gives up: measured against the
+ *    live pincode set, band 1 tops out at 530051 (14.94 km) and band 2 opens
+ *    at 530047 (16.43 km) — a 1.49 km gap with no pincode in it. 15.7 sat in
+ *    the middle of that gap with ~0.75 km of clearance either side. 15 sits
+ *    just 0.06 km above 530051, so ~60 m of upward drift in Google's driving
+ *    distance re-prices that pincode from ₹15 to ₹25 on its own. No pincode
+ *    changes band TODAY — the ladder is unchanged for every live address —
+ *    but the margin that made it drift-proof is gone. If 530051 starts
+ *    quoting ₹25, this is why; the fix is a pincode-level override, not
+ *    nudging the boundary back, which would re-open the spec deviation.
  *
  * 2. Distance is compared RAW — no Math.ceil. The old flat fee could round
  *    up harmlessly because every distance mapped to the same ₹12. With a
@@ -42,6 +48,12 @@
  * charged) all call this — shown == charged by construction.
  */
 export const MAX_DELIVERY_KM = 30;
+
+/** Top of band 1: below this many km the fee is ₹15. Deliberately NOT
+ *  exported — this module is imported by client components, and every value
+ *  exported from here ships in the browser bundle. Nothing outside this file
+ *  needs the boundary; callers ask computeDeliveryFee for a fee. */
+const BAND_1_MAX_KM = 15;
 
 /** Top band. Also what an ADMIN OVERRIDE charges on an address that is out
  *  of range or whose distance could not be measured: those are the longest
@@ -86,9 +98,9 @@ export function computeDeliveryFee(distanceKm: number): {
     return { serviceable: false, feeInr: 0 };
   }
   // Ascending, first match wins. Band 1's bound is STRICT (`<`) and band 2's
-  // is inclusive (`<=`), which is what puts exactly 15.7 km in band 2 —
-  // matching the ruling "km < 15.7 → ₹15, 15.7 ≤ km ≤ 25 → ₹25".
-  if (distanceKm < 15.7) return { serviceable: true, feeInr: 15 };
+  // is inclusive (`<=`), which is what puts exactly 15.0 km in band 2 —
+  // matching the ruling "km < 15 → ₹15, 15 ≤ km ≤ 25 → ₹25".
+  if (distanceKm < BAND_1_MAX_KM) return { serviceable: true, feeInr: 15 };
   if (distanceKm <= 25) return { serviceable: true, feeInr: 25 };
   if (distanceKm <= MAX_DELIVERY_KM) {
     return { serviceable: true, feeInr: DELIVERY_FEE_TOP_BAND_INR };
