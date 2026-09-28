@@ -11,7 +11,8 @@
 //
 // NO FALLBACK FEE — still true, and one-time orders now agree.
 // This file used to note a deliberate DIFFERENCE: a one-time order fell
-// back to a flat DELIVERY_FEE_INR when the distance couldn't be resolved.
+// back to a flat DELIVERY_FEE_INR — a ₹12 constant, since DELETED — when
+// the distance couldn't be resolved.
 // That hole is closed — order-checkout.ts and both mobile routes now refuse
 // with `distance_unserviceable` instead of charging a guess, which under a
 // banded fee would have been a guess at the CHEAPEST band. The reasoning

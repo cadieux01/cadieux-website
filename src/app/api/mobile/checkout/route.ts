@@ -298,8 +298,9 @@ export async function POST(req: NextRequest) {
   }
 
   // An UNMEASURABLE distance refuses. This used to fall through to a flat
-  // DELIVERY_FEE_INR, which was fine while every distance cost the same ₹12
-  // — the fallback WAS the price. Under the banded fee it is the CHEAPEST
+  // DELIVERY_FEE_INR (a ₹12 constant, since DELETED), which was fine while
+  // every distance cost that same ₹12 — the fallback WAS the price. Under
+  // the banded fee it is the CHEAPEST
   // band, so any failure to resolve distance (an uncacheable pincode, a
   // Google outage, a missing API key) bought a 30 km delivery at the 15 km
   // fare and skipped the serviceability gate on the way past. Because the

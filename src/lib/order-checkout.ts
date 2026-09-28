@@ -362,8 +362,9 @@ export async function prepareOneTimeOrder(
 
     if (distanceKm === null || !Number.isFinite(distanceKm)) {
       // AN UNMEASURABLE DISTANCE NOW REFUSES. It used to fall through to a
-      // flat DELIVERY_FEE_INR, which was defensible when every distance cost
-      // the same ₹12: the fallback WAS the price. Under a ladder it is the
+      // flat DELIVERY_FEE_INR (a ₹12 constant, since DELETED), which was
+      // defensible when every distance cost that same ₹12: the fallback WAS
+      // the price. Under a ladder it is the
       // CHEAPEST band, so anything that stops the distance resolving — an
       // uncacheable pincode, a Google outage, a missing API key — became a
       // way to buy a 30 km delivery for the 15 km fare, and it skipped the
