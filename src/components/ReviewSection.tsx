@@ -49,7 +49,8 @@ type Props = {
 const PRODUCT_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "General feedback" },
   { value: "multigrain", label: "Multigrain" },
-  { value: "plain", label: "Plain" },
+  { value: "high-protein", label: "Protein Bread" },
+  { value: "burger-bun", label: "Protein Burger Bun" },
 ];
 
 function formatDate(iso: string) {

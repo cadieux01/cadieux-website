@@ -135,7 +135,12 @@ ALTER TABLE subscription_deliveries ENABLE ROW LEVEL SECURITY;
 -- Reviews (per-product or general feedback)
 CREATE TABLE reviews (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_slug  TEXT,                       -- 'multigrain' | 'plain' | NULL (general feedback)
+  -- Must match the INTERNAL slugs in lib/product-slugs.ts, which is what the
+  -- PDP passes to /api/reviews — NOT the public URL slug. 'plain' was never a
+  -- real product slug: reviews written under it were orphaned (no PDP queries
+  -- it) until they were backfilled to 'high-protein'. Keep this list in sync
+  -- with PRODUCT_OPTIONS in components/ReviewSection.tsx.
+  product_slug  TEXT,                       -- 'multigrain' | 'high-protein' | 'burger-bun' | NULL (general feedback)
   author_name   TEXT NOT NULL,
   rating        SMALLINT,                   -- 1..5; NULL allowed for general feedback
   body          TEXT NOT NULL,
