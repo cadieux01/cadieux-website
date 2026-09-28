@@ -372,6 +372,28 @@ export async function prepareOneTimeOrder(
       // subscription path has always had (quoteSubscriptionDeliveryFee
       // blocks with `location_required`); the two are now aligned.
       //
+      // WHAT THE BAND IS MEASURED ON. The km handed to computeDeliveryFee
+      // is RAW DRIVING distance from Google Distance Matrix
+      // (`mode=driving`) — not straight-line, and not rounded before
+      // banding. It is the MINIMUM over the FOUR active pickup_locations
+      // rows, not the distance to one fixed origin: distanceMatrix.ts
+      // sends every active pickup as a destination and takes `Math.min`
+      // (:100). Adding or archiving a pickup point therefore silently
+      // re-prices every address near it. Caveat: if the Matrix call fails
+      // the code falls back to HAVERSINE (:120-127), which IS
+      // straight-line and always <= the driving figure, so that fallback
+      // can only ever under-charge.
+      //
+      // THE GUARD ABOVE MUST NOT BE REMOVED, AND MUST NOT BE SOFTENED
+      // INTO A GEOCODE FALLBACK. service_areas coordinates are POISONED:
+      // 18 distinct pincodes share the single point 17.7343219 /
+      // 83.3129841, and they are not neighbours — the set includes 500004
+      // (Hyderabad, ~620 km) and 531151 (Araku, ~115 km). Resolving an
+      // unmeasurable address by reaching for those coordinates returns a
+      // Vizag-local distance for an address 500 km away, bills it at the
+      // Rs15 band, and skips the serviceability gate. Refusing is the
+      // only correct behaviour.
+      //
       // The code reported is `distance_unserviceable`, NOT a new one, and
       // that is deliberate: the checkout page routes that code back to the
       // address step and shows this sentence, while an unrecognised code
