@@ -18,7 +18,6 @@ import {
   hasSandwichItems,
   SANDWICH_CHECKOUT_BLOCK_MESSAGE,
 } from "@/lib/sandwich-checkout-guard";
-import { DELIVERY_FEE_INR } from "@/lib/order-validation";
 // Interpolated into every "we don't deliver beyond N km" message below, so
 // re-pricing deliveryFee.ts can never leave the customer reading a cutoff
 // we no longer honour. These strings said a hardcoded "20 km" through the
@@ -374,8 +373,24 @@ export default function CheckoutPage() {
 
   // Reactive fee + total — update immediately when quote arrives. Pickup
   // forces ₹0 (server enforces the same in prepareOneTimeOrder).
-  const deliveryFee  = isPickup ? 0 : (deliveryQuote?.feeInr  ?? DELIVERY_FEE_INR);
-  const grandTotal   = total + deliveryFee;
+  //
+  // NO NUMERIC FALLBACK. This used to read `?? DELIVERY_FEE_INR`, which was
+  // defensible while every delivery cost that same ₹12: the placeholder WAS
+  // the real price, so showing it early was at worst premature. Under the
+  // distance ladder it is a figure no band charges, rendered beside a real
+  // subtotal — and `grandTotal` carries it into the order-placed SMS and
+  // WhatsApp message, so the customer keeps the wrong number.
+  //
+  // `null` means "not priced yet". Every render site below shows "…" for it.
+  // A quote can be non-null and STILL hold `feeInr: null` — that is the
+  // no-coordinates response from /api/delivery-quote — so the summary gate
+  // tests the FEE, not merely the presence of a quote.
+  const deliveryFee: number | null = isPickup
+    ? 0
+    : (deliveryQuote?.feeInr ?? null);
+  // Safe because `showSummary` blocks both render and checkout until the fee
+  // is a real number; the coalesce only keeps the arithmetic well-typed.
+  const grandTotal   = total + (deliveryFee ?? 0);
   const distanceUnserviceable = !isPickup && deliveryQuote?.serviceable === false;
 
   // Render the order summary only after the user has confirmed their
@@ -384,7 +399,7 @@ export default function CheckoutPage() {
   // of the standalone out-of-range warning rendered above. Pickup skips the
   // quote gate entirely — subtotal is the total, no distance involved.
   const showSummary = addressConfirmed && (
-    isPickup || (deliveryQuote !== null && !distanceUnserviceable)
+    isPickup || (deliveryQuote !== null && !distanceUnserviceable && deliveryFee !== null)
   );
 
   // Pincode serviceability
@@ -1844,7 +1859,7 @@ export default function CheckoutPage() {
                 )}
               </span>
               <span style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", opacity: quoteLoading ? 0.5 : 1 }}>
-                {quoteLoading ? "…" : `₹${deliveryFee}`}
+                {quoteLoading || deliveryFee === null ? "…" : `₹${deliveryFee}`}
               </span>
             </div>
             <div
@@ -2253,7 +2268,7 @@ export default function CheckoutPage() {
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                 <span style={{ fontSize: 14, fontWeight: 500, letterSpacing: "0.3em", textTransform: "uppercase", color: "#024628" }}>
-                  Subtotal ₹{total} · Delivery {quoteLoading ? "…" : `₹${deliveryFee}`}
+                  Subtotal ₹{total} · Delivery {quoteLoading || deliveryFee === null ? "…" : `₹${deliveryFee}`}
                   {deliveryQuote?.distanceKm !== null && deliveryQuote?.distanceKm !== undefined && (
                     <span style={{ color: "#024628" }}>
                       {" "}({deliveryQuote.distanceKm} km)
@@ -2941,7 +2956,9 @@ function SavedCustomerOtpBlock(props: {
 /* ── Payment review card + Turnstile ────────────────────────────────── */
 function PaymentReview(props: {
   grandTotal: number;
-  deliveryFee: number;
+  /** null until the distance quote lands — render "…", never a placeholder
+   *  figure. See the note on `deliveryFee` in the parent component. */
+  deliveryFee: number | null;
   customerName: string;
   customerPhone: string;
   fullAddress: string;
@@ -2984,9 +3001,11 @@ function PaymentReview(props: {
         <p style={{ margin: "4px 0 0", fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 300, color: "#024628" }}>
           ₹{grandTotal}
         </p>
-        <p style={{ margin: "4px 0 12px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.04em" }}>
-          Includes ₹{deliveryFee} delivery
-        </p>
+        {deliveryFee !== null && (
+          <p style={{ margin: "4px 0 12px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.04em" }}>
+            Includes ₹{deliveryFee} delivery
+          </p>
+        )}
         <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "#024628", letterSpacing: "0.03em" }}>
           {customerName} · +91 {customerPhone.replace(/\D/g, "")}
         </p>

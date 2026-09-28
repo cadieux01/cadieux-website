@@ -24,7 +24,16 @@ import {
   type AvailabilityRow,
 } from "@/lib/product-availability";
 
-export const DELIVERY_FEE_INR = 12;
+// DELIVERY_FEE_INR (the flat ₹12) is DELETED. Nothing computes a delivery
+// fee from a constant any more — every path goes through
+// computeDeliveryFee(distanceKm) in @/lib/deliveryFee, and a distance we
+// cannot measure REFUSES rather than falling back to a number.
+//
+// It is deleted rather than left unused on purpose. A dead ₹12 sitting in
+// reach is how the fallback comes back: the next person who needs a default
+// finds a plausible-looking constant and uses it, and under a banded fee
+// that is a price no band charges, paid by the addresses we understand
+// least. If you are here looking for a fallback fee: there isn't one.
 
 export type ClientOrderItem = {
   product_id: string;
