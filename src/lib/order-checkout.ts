@@ -17,7 +17,6 @@ import {
   normalizePhone,
 } from "@/lib/phone-cookie";
 import {
-  DELIVERY_FEE_INR,
   enforceDeliveryFloor,
   reconcileWebPrices,
   validateWebOrderItemsShape,
@@ -29,7 +28,11 @@ import {
 } from "@/lib/order-delivery";
 import { isIsoDate, validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
-import { computeDeliveryFee, DELIVERY_FEE_FLAT_INR } from "@/lib/deliveryFee";
+import {
+  computeDeliveryFee,
+  DELIVERY_FEE_TOP_BAND_INR,
+  MAX_DELIVERY_KM,
+} from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 
@@ -79,15 +82,15 @@ export type PrepareResult =
 /** Options for admin-only overrides. Public callers pass nothing / undefined
  *  and get the exact same behaviour they always had. Only the admin manual-
  *  entry endpoint (POST /api/admin/orders) sets `skipServiceability`, and
- *  it only bypasses the pincode + >20km gates — every other gate (price,
- *  date, slot, item shape, phone-verification) is unchanged. */
+ *  it only bypasses the pincode + out-of-range gates — every other gate
+ *  (price, date, slot, item shape, phone-verification) is unchanged. */
 export type PrepareOptions = {
   /** When true, skip BOTH the `pincode_unserviceable` and
-   *  `distance_unserviceable` rejections. The fee is still computed from
-   *  the real driving distance when it falls within the fee table; when
-   *  the address is beyond the 20 km limit, the flat ₹12 fee still
-   *  applies — there is no distance ladder to extrapolate any more.
-   *  Admin-only. */
+   *  `distance_unserviceable` rejections — including the one for a distance
+   *  that could not be measured at all. The fee is still computed from the
+   *  real driving distance whenever there IS one; when the address is out of
+   *  range or unmeasurable, the TOP band applies, on the grounds that an
+   *  override is being used for a long or awkward run. Admin-only. */
   skipServiceability?: boolean;
   /** When true, accept ANY valid yyyy-mm-dd delivery date — past or
    *  future — and skip the 12 h booking-lead gate. Set ONLY by the full-admin
@@ -332,23 +335,63 @@ export async function prepareOneTimeOrder(
     };
   }
 
-  // Server-authoritative distance-based delivery fee. Pickup orders never
+  // Server-authoritative distance-banded delivery fee. Pickup orders never
   // pay a delivery fee — the customer is coming to the stall.
   const orderLat = isPickup ? null : parseCoord(body.latitude);
   const orderLng = isPickup ? null : parseCoord(body.longitude);
-  let deliveryFee = isPickup ? 0 : DELIVERY_FEE_INR;
+  let deliveryFee = 0;
   let distanceKm: number | null = null;
 
-  if (!isPickup && (await hasActivePickups())) {
-    if (orderLat !== null && orderLng !== null) {
-      distanceKm = await getDrivingDistanceKm(orderLat, orderLng);
-    } else if (pinFromAddress) {
-      const centroid = await geocodePincode(pinFromAddress);
-      if (centroid) {
-        distanceKm = await getDrivingDistanceKm(centroid.latitude, centroid.longitude);
+  if (!isPickup) {
+    // No active pickup_locations means there is no origin to measure from,
+    // so nothing downstream can produce a distance.
+    if (await hasActivePickups()) {
+      if (orderLat !== null && orderLng !== null) {
+        distanceKm = await getDrivingDistanceKm(orderLat, orderLng);
+      } else if (pinFromAddress) {
+        const centroid = await geocodePincode(pinFromAddress);
+        if (centroid) {
+          distanceKm = await getDrivingDistanceKm(centroid.latitude, centroid.longitude);
+        }
       }
+    } else {
+      console.error(
+        "[checkout] no active pickup_locations — cannot price a delivery",
+      );
     }
-    if (distanceKm !== null) {
+
+    if (distanceKm === null || !Number.isFinite(distanceKm)) {
+      // AN UNMEASURABLE DISTANCE NOW REFUSES. It used to fall through to a
+      // flat DELIVERY_FEE_INR, which was defensible when every distance cost
+      // the same ₹12: the fallback WAS the price. Under a ladder it is the
+      // CHEAPEST band, so anything that stops the distance resolving — an
+      // uncacheable pincode, a Google outage, a missing API key — became a
+      // way to buy a 30 km delivery for the 15 km fare, and it skipped the
+      // serviceability gate on the way past. This is the behaviour the
+      // subscription path has always had (quoteSubscriptionDeliveryFee
+      // blocks with `location_required`); the two are now aligned.
+      //
+      // The code reported is `distance_unserviceable`, NOT a new one, and
+      // that is deliberate: the checkout page routes that code back to the
+      // address step and shows this sentence, while an unrecognised code
+      // falls into an else-branch that tells the customer "Online payment
+      // unavailable, please use Cash on Delivery" — advice that would send
+      // them to a COD path failing on the very same gate. Reusing the code
+      // keeps the customer-facing behaviour correct without editing the
+      // checkout page.
+      if (!opts.skipServiceability) {
+        return {
+          ok: false,
+          status: 400,
+          body: {
+            error:
+              "We couldn't work out the delivery distance for this address. Please check the pincode, or contact us and we'll set this up for you.",
+            code: "distance_unserviceable",
+          },
+        };
+      }
+      deliveryFee = DELIVERY_FEE_TOP_BAND_INR;
+    } else {
       const feeResult = computeDeliveryFee(distanceKm);
       if (!feeResult.serviceable) {
         if (!opts.skipServiceability) {
@@ -356,16 +399,16 @@ export async function prepareOneTimeOrder(
             ok: false,
             status: 400,
             body: {
-              error: "We don't deliver beyond 20 km yet. Please check our service area.",
+              error: `We don't deliver beyond ${MAX_DELIVERY_KM} km yet. Please check our service area.`,
               code: "distance_unserviceable",
             },
           };
         }
-        // Admin override on an out-of-range address. The fee is flat, so
-        // there is no longer a distance slope to extrapolate — the customer
-        // pays the same ₹12 everyone else pays. Serviceability is still
-        // refused for everybody except this explicit admin path.
-        deliveryFee = DELIVERY_FEE_FLAT_INR;
+        // Admin override on an out-of-range address. Charge the TOP band,
+        // not the cheapest: this is the longest run the rider makes.
+        // Serviceability is still refused for everybody except this
+        // explicit admin path.
+        deliveryFee = DELIVERY_FEE_TOP_BAND_INR;
       } else {
         deliveryFee = feeResult.feeInr;
       }

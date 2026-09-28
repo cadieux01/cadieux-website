@@ -145,6 +145,105 @@ export type PincodeGeocode = {
   longitude: number;
 };
 
+type ServiceAreaCandidate = {
+  pincode: string;
+  area_name: string;
+  latitude: number;
+  longitude: number;
+  added_at: string;
+};
+
+/**
+ * Last-resort centroid for a pincode, read from `service_areas` when Google
+ * returns ZERO_RESULTS (or errors, or no API key is configured). Admin has
+ * already activated these areas and geocoded them, so the coordinate exists
+ * even when Google won't resolve the bare postal code — 530077 KURMANA PALEM
+ * is the live example: active, coordinates present, absent from the cache,
+ * and therefore unpriceable until now.
+ *
+ * ── WHY THE SHARED-COORDINATE GUARD IS NOT OPTIONAL ──────────────────────
+ * These rows were written by `geocodeArea()`, which geocodes an AREA NAME
+ * anchored on "Visakhapatnam" — the exact pattern `geocodePincode` below was
+ * rewritten to stop using, because Google answers an unresolvable name with
+ * a generic city-centre point. That is not theoretical here: on prod, 18
+ * active rows share the single coordinate 17.7343219 / 83.3129841, a spot
+ * 1.54 km from the nearest origin. Those 18 span 18 DIFFERENT pincodes and
+ * include `500004` (Hyderabad, ~500 km away) and `531151` (Araku, ~100 km
+ * inland). Reading this table unfiltered would price Hyderabad as a ₹15
+ * local delivery and re-open the out-of-area hole that the Rourkela
+ * subscription (pincode 769008) originally exposed.
+ *
+ * So: a coordinate recorded against more than one distinct pincode is
+ * REJECTED. A genuine centroid belongs to exactly one pincode; a Google
+ * fallback point gets stamped on every row that failed. This single rule
+ * drops all 18 poisoned rows and keeps the two real ones (530077 at
+ * 15.05 km, 530015 at 8.18 km). Coordinates duplicated WITHIN one pincode
+ * (530015 has two such rows) are fine and still resolve — the test is
+ * `count(distinct pincode) > 1`, not `count(*) > 1`.
+ *
+ * Returns null rather than guessing. Under the banded fee, a wrong
+ * coordinate is a wrong PRICE, and the cheapest band is the likeliest
+ * wrong answer.
+ */
+async function geocodeFromServiceAreas(
+  pincode: string,
+): Promise<PincodeGeocode | null> {
+  const { data, error } = await supabaseAdmin
+    .from("service_areas")
+    .select("pincode, area_name, latitude, longitude, added_at")
+    .eq("pincode", pincode)
+    .eq("is_active", true)
+    .not("latitude", "is", null)
+    .not("longitude", "is", null);
+  if (error) {
+    console.warn("[geocode] service_areas fallback failed:", error.message);
+    return null;
+  }
+
+  // Tie-break, explicit because 32 live pincodes have more than one usable
+  // row: prefer the catch-all 'General' row, then the OLDEST by added_at,
+  // then area_name alphabetically. 530047 has two rows 3.7 km apart and is
+  // resolved by the 'General' preference; 531163 is the one pincode with
+  // several rows and no 'General', and is resolved by added_at.
+  const candidates = ((data ?? []) as ServiceAreaCandidate[]).sort((a, b) => {
+    const aGeneral = a.area_name === "General" ? 0 : 1;
+    const bGeneral = b.area_name === "General" ? 0 : 1;
+    if (aGeneral !== bGeneral) return aGeneral - bGeneral;
+    const byAdded = a.added_at.localeCompare(b.added_at);
+    if (byAdded !== 0) return byAdded;
+    return a.area_name.localeCompare(b.area_name);
+  });
+
+  for (const row of candidates) {
+    // Is this coordinate claimed by any OTHER pincode? One hit is enough to
+    // condemn it. Runs on the cache-miss path only, over ≤3 candidates.
+    const { data: collision, error: collisionErr } = await supabaseAdmin
+      .from("service_areas")
+      .select("pincode")
+      .eq("latitude", row.latitude)
+      .eq("longitude", row.longitude)
+      .neq("pincode", pincode)
+      .limit(1);
+    if (collisionErr) {
+      console.warn(
+        "[geocode] shared-coordinate check failed:",
+        collisionErr.message,
+      );
+      return null; // cannot prove the coordinate is clean → do not use it
+    }
+    if (collision && collision.length > 0) {
+      console.warn(
+        `[geocode] service_areas row ${pincode}/${row.area_name} rejected — ` +
+          `coordinate also recorded for pincode ${collision[0].pincode}`,
+      );
+      continue;
+    }
+    return { latitude: row.latitude, longitude: row.longitude };
+  }
+
+  return null;
+}
+
 /** Geocode a customer pincode. Caches forever in pincode_geocache. */
 export async function geocodePincode(
   pincode: string,
@@ -167,16 +266,24 @@ export async function geocodePincode(
   // Vizag city centre for any non-Vizag pincode, so Delhi/Mumbai/Hyderabad
   // pincodes looked ~1km from a Vizag area and were wrongly serviceable.
   // With components=postal_code:<pin>|country:IN Google returns the true
-  // centroid of that pincode, or ZERO_RESULTS (→ null → not serviceable)
-  // when the pincode doesn't exist.
+  // centroid of that pincode, or ZERO_RESULTS when the pincode doesn't
+  // exist — which now falls through to the service_areas check below
+  // instead of straight to null.
   const result = await callGoogle({
     components: `country:IN|postal_code:${pincode}`,
   });
-  if (!result?.geometry?.location) return null;
-  const out = {
-    latitude: result.geometry.location.lat,
-    longitude: result.geometry.location.lng,
-  };
+
+  // Google couldn't resolve it (ZERO_RESULTS, an HTTP/network failure, or no
+  // API key). Before giving up, check whether admin has already geocoded an
+  // active area on this pincode — see geocodeFromServiceAreas for why that
+  // read is guarded rather than trusted.
+  const out = result?.geometry?.location
+    ? {
+        latitude: result.geometry.location.lat,
+        longitude: result.geometry.location.lng,
+      }
+    : await geocodeFromServiceAreas(pincode);
+  if (!out) return null;
 
   // Persist cache. Don't block the caller if this fails.
   void supabaseAdmin
