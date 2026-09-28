@@ -19,6 +19,11 @@ import {
   SANDWICH_CHECKOUT_BLOCK_MESSAGE,
 } from "@/lib/sandwich-checkout-guard";
 import { DELIVERY_FEE_INR } from "@/lib/order-validation";
+// Interpolated into every "we don't deliver beyond N km" message below, so
+// re-pricing deliveryFee.ts can never leave the customer reading a cutoff
+// we no longer honour. These strings said a hardcoded "20 km" through the
+// 20 → 30 km change.
+import { MAX_DELIVERY_KM } from "@/lib/deliveryFee";
 import {
   formatSlot12,
   formatDeliveryDate,
@@ -376,7 +381,7 @@ export default function CheckoutPage() {
   // Render the order summary only after the user has confirmed their
   // address (Continue pressed) AND a real distance-based quote is in
   // hand. `distanceUnserviceable` short-circuits the summary in favour
-  // of the standalone ">20 km" warning rendered above. Pickup skips the
+  // of the standalone out-of-range warning rendered above. Pickup skips the
   // quote gate entirely — subtotal is the total, no distance involved.
   const showSummary = addressConfirmed && (
     isPickup || (deliveryQuote !== null && !distanceUnserviceable)
@@ -983,7 +988,7 @@ export default function CheckoutPage() {
       if (!otpVerified) { setError("Please verify your phone number to continue."); return; }
       if (pinStatus.state === "checking") { setError("Checking pincode availability…"); return; }
       if (pinStatus.state === "unserviceable") { setError("We don't deliver to this pincode yet."); return; }
-      if (distanceUnserviceable) { setError("We don't deliver beyond 20 km yet. Please check our service area."); return; }
+      if (distanceUnserviceable) { setError(`We don't deliver beyond ${MAX_DELIVERY_KM} km yet. Please check our service area.`); return; }
       setAddressConfirmed(true);
       setStep("delivery");
       return;
@@ -1002,7 +1007,7 @@ export default function CheckoutPage() {
     if (pincode.replace(/\D/g, "").length !== 6) { setError("Enter a valid 6-digit pincode."); return; }
     if (pinStatus.state === "checking") { setError("Checking pincode availability…"); return; }
     if (pinStatus.state === "unserviceable") { setError("We don't deliver to this pincode yet."); return; }
-    if (distanceUnserviceable) { setError("We don't deliver beyond 20 km yet. Please check our service area."); return; }
+    if (distanceUnserviceable) { setError(`We don't deliver beyond ${MAX_DELIVERY_KM} km yet. Please check our service area.`); return; }
 
     const fullAddress = `[${effectiveLabel}] ${addressLine.trim()}, ${area.trim()}, ${city.trim()} - ${pincode.trim()}`;
     setSubmitting(true);
@@ -1221,7 +1226,7 @@ export default function CheckoutPage() {
       return;
     }
     if (distanceUnserviceable) {
-      setError("We don't deliver beyond 20 km yet. Please check our service area.");
+      setError(`We don't deliver beyond ${MAX_DELIVERY_KM} km yet. Please check our service area.`);
       setStep("address");
       return;
     }
@@ -1303,7 +1308,7 @@ export default function CheckoutPage() {
       return;
     }
     if (distanceUnserviceable) {
-      setError("We don't deliver beyond 20 km yet. Please check our service area.");
+      setError(`We don't deliver beyond ${MAX_DELIVERY_KM} km yet. Please check our service area.`);
       setStep("address");
       return;
     }
@@ -1380,7 +1385,7 @@ export default function CheckoutPage() {
         if (!res.ok) {
           const errData = await res.json().catch(() => ({})) as { error?: string; code?: string };
           if (errData.code === "distance_unserviceable") {
-            setError(errData.error ?? "We don't deliver beyond 20 km yet.");
+            setError(errData.error ?? `We don't deliver beyond ${MAX_DELIVERY_KM} km yet.`);
             setStep("address");
           } else if (errData.code === "pincode_unserviceable") {
             setUnserviceableAtPayment(true);
@@ -1765,8 +1770,8 @@ export default function CheckoutPage() {
             it renders on ALL 3 steps. Returning customers with a saved
             address auto-skip the address step (setStep("payment") at the
             OTP-verified branch), so a toggle nested inside address never
-            rendered for them. Rendering here (below H1, above the >20 km
-            warning) means every customer — new or returning, on address /
+            rendered for them. Rendering here (below H1, above the
+            out-of-range warning) means every customer — new or returning, on address /
             delivery / payment — can switch Deliver ↔ Pickup. Any toggle
             snaps setStep("address") so the customer lands at the entry
             point of the chosen mode (pick a stall for pickup, confirm
@@ -1782,7 +1787,7 @@ export default function CheckoutPage() {
           }}
         />
 
-        {/* Standalone >20 km warning — surfaces independent of the
+        {/* Standalone out-of-range warning — surfaces independent of the
             summary so the customer sees why we can't deliver even
             before they've pressed Continue. */}
         {step === "address" && distanceUnserviceable && (
@@ -1795,7 +1800,7 @@ export default function CheckoutPage() {
               color: "var(--warning-on-light)", letterSpacing: "0.03em", lineHeight: 1.5,
             }}
           >
-            We don&apos;t deliver beyond 20 km yet. Please check our delivery area or choose a different address.
+            We don&apos;t deliver beyond {MAX_DELIVERY_KM} km yet. Please check our delivery area or choose a different address.
           </div>
         )}
 

@@ -30,7 +30,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey } from "@/lib/phone-cookie";
 import {
-  DELIVERY_FEE_INR,
   enforceDeliveryFloor,
   reconcilePrices,
   toLocal10,
@@ -43,7 +42,7 @@ import {
 } from "@/lib/order-delivery";
 import { validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
-import { computeDeliveryFee } from "@/lib/deliveryFee";
+import { computeDeliveryFee, MAX_DELIVERY_KM } from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 import { getPreorderMode } from "@/lib/preorderMode";
@@ -279,7 +278,7 @@ export async function POST(req: NextRequest) {
     customerId = newCust.id;
   }
 
-  // 7. Server-authoritative distance-based delivery fee.
+  // 7. Server-authoritative distance-banded delivery fee.
   const subtotal = reconciled.total;
   const rawAddr =
     (raw as { delivery_address?: Record<string, unknown> })?.delivery_address ??
@@ -287,7 +286,6 @@ export async function POST(req: NextRequest) {
   const orderLat = parseCoord(rawAddr.latitude);
   const orderLng = parseCoord(rawAddr.longitude);
 
-  let deliveryFee = DELIVERY_FEE_INR;
   let distanceKm: number | null = null;
 
   if (await hasActivePickups()) {
@@ -302,22 +300,40 @@ export async function POST(req: NextRequest) {
         );
       }
     }
-    if (distanceKm !== null) {
-      const feeResult = computeDeliveryFee(distanceKm);
-      if (!feeResult.serviceable) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "We don't deliver beyond 20 km yet. Please check our service area.",
-            code: "distance_unserviceable",
-          },
-          { status: 400 },
-        );
-      }
-      deliveryFee = feeResult.feeInr;
-    }
+  } else {
+    // No origin to measure from, so nothing below can produce a distance.
+    console.error(
+      "[mobile/create-order] no active pickup_locations — cannot price a delivery",
+    );
   }
+
+  // An UNMEASURABLE distance refuses — same reasoning as /api/mobile/checkout
+  // and prepareOneTimeOrder. It matters MORE on this route than on the COD
+  // one: the fee is folded into the Razorpay `amount` below, so a fallback
+  // fee is money actually captured at the wrong price, not just a wrong row.
+  if (distanceKm === null || !Number.isFinite(distanceKm)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "We couldn't work out the delivery distance for this address. Please check the pincode, or contact us and we'll set this up for you.",
+        code: "distance_unserviceable",
+      },
+      { status: 400 },
+    );
+  }
+  const feeResult = computeDeliveryFee(distanceKm);
+  if (!feeResult.serviceable) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `We don't deliver beyond ${MAX_DELIVERY_KM} km yet. Please check our service area.`,
+        code: "distance_unserviceable",
+      },
+      { status: 400 },
+    );
+  }
+  const deliveryFee = feeResult.feeInr;
 
   const grandTotal = subtotal + deliveryFee;
   const amount = Math.round(grandTotal * 100); // paise, integer

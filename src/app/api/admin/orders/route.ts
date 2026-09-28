@@ -122,9 +122,11 @@ export async function GET(req: NextRequest) {
 // null/blank, so an existing customer's saved profile is safe.
 //
 // Serviceability override (`serviceabilityOverride: true`): skips ONLY
-// the pincode + >20km gates in prepareOneTimeOrder. Every other gate —
-// price, slot shape, item shape, phone-match — stays hard. See
-// PrepareOptions.skipServiceability in src/lib/order-checkout.ts.
+// the pincode + out-of-range gates in prepareOneTimeOrder, and prices an
+// out-of-range or unmeasurable address at the TOP delivery band rather
+// than refusing it. Every other gate — price, slot shape, item shape,
+// phone-match — stays hard. See PrepareOptions.skipServiceability in
+// src/lib/order-checkout.ts.
 //
 // Back-dating: full-admin callers also get PrepareOptions.allowAnyDeliveryDate,
 // so a delivery date in the past (and a slot inside the 12 h lead) is accepted

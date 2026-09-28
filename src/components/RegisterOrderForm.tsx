@@ -26,6 +26,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DateCalendar } from "@/components/subscription-setup/DateCalendar";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatINR } from "@/lib/admin-formatting";
+// Interpolated into the override checkbox label, so re-pricing
+// deliveryFee.ts can't leave an operator reading a cutoff we don't honour.
+import { MAX_DELIVERY_KM } from "@/lib/deliveryFee";
 import {
   teamOrderFetch,
   TeamOrderFetchError,
@@ -744,10 +747,10 @@ export function RegisterOrderForm({
                   />
                 </label>
                 {/* Serviceability override is admin-only — it bypasses the
-                    pincode + 20 km checks. Team members should not have
-                    that override; hidden here AND rejected server-side
-                    (POST /api/admin/orders discards the flag when the
-                    caller is a team_order token). */}
+                    pincode + distance checks and charges the TOP band.
+                    Team members should not have that override; hidden here
+                    AND rejected server-side (POST /api/admin/orders discards
+                    the flag when the caller is a team_order token). */}
                 {!isTeam && (
                   <label
                     style={{
@@ -766,7 +769,7 @@ export function RegisterOrderForm({
                     />
                     <span>
                       Override delivery range (register anyway — bypasses
-                      pincode + 20 km checks)
+                      pincode + {MAX_DELIVERY_KM} km checks)
                     </span>
                   </label>
                 )}

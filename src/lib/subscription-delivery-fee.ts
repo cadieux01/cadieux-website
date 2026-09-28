@@ -6,16 +6,22 @@
 // holes for all three creation paths (website checkout, mobile, admin).
 //
 // The fee itself comes from the SHARED `computeDeliveryFee` in
-// @/lib/deliveryFee — the exact same flat fee one-time orders pay.
-// There is deliberately no second fee calculation anywhere in here.
+// @/lib/deliveryFee — the same distance band a one-time order to the same
+// address pays. There is deliberately no second fee calculation in here.
 //
-// DIFFERENCE FROM ONE-TIME ORDERS — deliberate, do not "fix":
-// a one-time order falls back to DELIVERY_FEE_INR when the distance can't
-// be resolved, because it still has to charge something. A subscription
-// multiplies the fee by the delivery count and charges it UP FRONT, so
-// falling back would bill N deliveries on a guess — and, worse, would let
-// an out-of-area address through unpriced. We block instead and ask the
-// customer for a location. Never add a fallback fee here.
+// NO FALLBACK FEE — still true, and one-time orders now agree.
+// This file used to note a deliberate DIFFERENCE: a one-time order fell
+// back to a flat DELIVERY_FEE_INR when the distance couldn't be resolved.
+// That hole is closed — order-checkout.ts and both mobile routes now refuse
+// with `distance_unserviceable` instead of charging a guess, which under a
+// banded fee would have been a guess at the CHEAPEST band. The reasoning
+// that always applied here applies there too: an unmeasurable distance is
+// also an ungated one, so a fallback fee lets an out-of-area address through
+// unpriced. Never add a fallback fee here either.
+//
+// The one place a fallback still exists is an ADMIN override
+// (`skipServiceability`), which charges the TOP band — the honest default
+// for the long runs an override is used for.
 //
 // Distance input is the pincode centroid only. The wizards don't collect
 // GPS today; subscriptions.latitude/longitude exist so it can be threaded
@@ -79,9 +85,8 @@ export async function quoteSubscriptionDeliveryFee(
   const pin = typeof pincode === "string" ? pincode.trim() : "";
   if (!/^\d{6}$/.test(pin)) return block("location_required");
 
-  // No pickups configured means there is no origin to measure from. A
-  // one-time order would quietly fall back to DELIVERY_FEE_INR; a
-  // subscription must not.
+  // No pickups configured means there is no origin to measure from, so
+  // there is no distance and nothing to band. Block.
   if (!(await hasActivePickups())) {
     console.error(
       "[subscription-fee] no active pickup_locations — cannot price a subscription",

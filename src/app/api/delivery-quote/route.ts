@@ -9,7 +9,7 @@
 //
 // Response shapes:
 //   200  { serviceable: true,  feeInr: number, distanceKm: number }
-//   200  { serviceable: false, feeInr: 0,      distanceKm: number }   > 20 km
+//   200  { serviceable: false, feeInr: 0,      distanceKm: number }   out of range
 //   200  { serviceable: null,  feeInr: null,   distanceKm: null,
 //          message: "..." }                                             no coords
 //   503  { error: "..." }                                               no active pickups
@@ -75,10 +75,11 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Serviceability is decided off the RAW distance; only the returned
-  // display value is rounded, to 2 decimals. The fee itself is flat, so
-  // rounding can no longer change what a customer is charged — but the
-  // 20 km cutoff is still evaluated on the raw value, never the display one.
+  // Both the BAND and the serviceability cutoff are decided off the RAW
+  // distance; only the returned display value is rounded, to 2 decimals.
+  // Pass the rounded value in and an address at 15.696 km would round to
+  // 15.7 and jump a band, so the order of these two lines is load-bearing:
+  // compute first, round second.
   const { serviceable, feeInr } = computeDeliveryFee(distanceKm);
   return NextResponse.json({
     serviceable,
