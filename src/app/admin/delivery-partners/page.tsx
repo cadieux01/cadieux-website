@@ -437,7 +437,7 @@ function EditorModal({
             type="tel"
             value={editor.phone}
             onChange={(e) => onChange({ ...editor, phone: e.target.value })}
-            placeholder="9989153747 or +91 9989153747"
+            placeholder="9876543210 or +91 9876543210"
             style={inputStyle}
           />
           <span style={{ color: FADED, fontSize: "1rem", marginTop: 4 }}>

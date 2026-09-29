@@ -9,6 +9,7 @@ import PWAServiceWorker from "@/components/PWAServiceWorker";
 import AndroidInstallPrompt from "@/components/AndroidInstallPrompt";
 import IOSInstallHint from "@/components/IOSInstallHint";
 import FloatingCartButton from "@/components/FloatingCartButton";
+import WhatsAppButton from "@/components/WhatsAppButton";
 import { CartProvider } from "@/context/CartContext";
 import { getActiveProducts } from "@/lib/products";
 import { getSandwichKitchenState } from "@/lib/sandwich-kitchen";
@@ -167,7 +168,7 @@ export default async function RootLayout({
     name: "Cadieux",
     url: "https://www.cadieux.in",
     logo: "https://www.cadieux.in/icons/icon-512.png",
-    telephone: "+91 99891 53747",
+    telephone: "+91 70934 03747",
     sameAs: ["https://www.instagram.com/CadieuxIndia"],
     foundingLocation: {
       "@type": "City",
@@ -183,7 +184,7 @@ export default async function RootLayout({
     "@type": "LocalBusiness",
     name: "Cadieux",
     url: "https://www.cadieux.in",
-    telephone: "+91 99891 53747",
+    telephone: "+91 70934 03747",
     address: {
       "@type": "PostalAddress",
       streetAddress: "D.No. 13/18, Plot 78, PM Palem Main Road, Revenue Ward 4, PM Palem",
@@ -217,6 +218,7 @@ export default async function RootLayout({
           <AndroidInstallPrompt />
           <IOSInstallHint />
           {children}
+          <WhatsAppButton />
           <FloatingCartButton />
         </CartProvider>
         {/* GA4 loaded exactly once via next/script `lazyOnload`. Unlike

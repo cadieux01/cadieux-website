@@ -31,7 +31,6 @@ import ReviewSection from "@/components/ReviewSection";
 import BackLink from "@/components/BackLink";
 import { ShareButton } from "@/components/ShareButton";
 import {
-  PRODUCT_REPORT_CATEGORIES,
   PRODUCT_REPORT_CATEGORY_LABEL,
   type ProductReport,
 } from "@/lib/product-reports";
@@ -1595,41 +1594,55 @@ function Section({ label, title, children }: { label: string; title: string; chi
   );
 }
 
+// Every non-archived report for the product, in ONE flat grid of three.
+//
+// This used to group by category, which quietly re-sorted the list: rows
+// came out of `getProductReports` in (sort_order, uploaded_at) order and
+// the grouping then shuffled them into FSSAI → Nutrition → … → Other.
+// With `sort_order` currently 0 on every row, category order WAS the
+// order. A flat grid keeps the sequence the query asked for, so setting
+// sort_order in the admin is the only thing that moves a card. The
+// category is still shown, as an eyebrow inside each card, so nothing
+// is lost by dropping the headings.
+//
+// `minmax(0, 1fr)` rather than `1fr`: a grid track's default minimum is
+// `auto`, so one long unbroken report_name would push the track wider
+// than its share and the whole section would scroll sideways on a phone.
 function ReportsList({ reports }: { reports: ProductReport[] }) {
-  // Group by the canonical category order so FSSAI shows above Other.
-  const grouped = PRODUCT_REPORT_CATEGORIES.map((cat) => ({
-    category: cat,
-    rows: reports.filter((r) => r.category === cat),
-  })).filter((g) => g.rows.length > 0);
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
-      {grouped.map((group) => (
-        <div key={group.category}>
-          <div
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 14,
-              fontWeight: 500,
-              letterSpacing: "0.4em",
-              textTransform: "uppercase",
-              color: "#024628",
-              marginBottom: 12,
-            }}
-          >
-            {PRODUCT_REPORT_CATEGORY_LABEL[group.category]}
-          </div>
-          <ul
-            style={{
-              listStyle: "none",
-              padding: 0,
-              margin: 0,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-              gap: 12,
-            }}
-          >
-            {group.rows.map((r) => (
+    <>
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. As a child React
+          HTML-escapes the text on the server and does not on the client, so
+          a single apostrophe anywhere in here (there is one below) renders
+          as `&#x27;` server-side, mismatches on hydration, and React throws
+          away the server HTML for the WHOLE document and re-renders it.
+          Measured — it is not theoretical. This is also why the JSON-LD
+          blocks in shop/[slug]/page.tsx are written the same way. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        .cdx-reports-grid {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+        /* Two per row on tablets, one on phones — the 260px card floor
+           the old auto-fill layout used is wider than a 375px viewport
+           minus the PDP's side padding. */
+        @media (max-width: 900px) {
+          .cdx-reports-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 520px) {
+          .cdx-reports-grid { grid-template-columns: minmax(0, 1fr); }
+        }
+      `,
+        }}
+      />
+      <ul className="cdx-reports-grid">
+            {reports.map((r) => (
               <li key={r.id}>
                 <a
                   href={r.file_url}
@@ -1637,13 +1650,31 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                   rel="noreferrer"
                   style={{
                     display: "block",
+                    height: "100%",
+                    boxSizing: "border-box",
                     padding: "14px 16px",
                     border: "1px solid rgba(2,70,40,0.25)",
                     background: "transparent",
                     textDecoration: "none",
                     color: "#024628",
+                    // A report_number is one long unbroken token; without
+                    // this it is the thing that widens the track.
+                    overflowWrap: "anywhere",
                   }}
                 >
+                  <div
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: 14,
+                      fontWeight: 500,
+                      letterSpacing: "0.3em",
+                      textTransform: "uppercase",
+                      color: "rgba(2,70,40,0.65)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    {PRODUCT_REPORT_CATEGORY_LABEL[r.category]}
+                  </div>
                   {r.report_number ? (
                     <div
                       style={{
@@ -1695,10 +1726,8 @@ function ReportsList({ reports }: { reports: ProductReport[] }) {
                 </a>
               </li>
             ))}
-          </ul>
-        </div>
-      ))}
-    </div>
+      </ul>
+    </>
   );
 }
 

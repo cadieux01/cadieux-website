@@ -47,7 +47,7 @@ export const BOOKING_LEAD_MINUTES = 720;
 export const SELF_EDIT_CUTOFF_MINUTES = 840;
 
 /** Customer-facing number for sub-cutoff edits. */
-export const ADMIN_PHONE = "+91 99891 53747";
+export const ADMIN_PHONE = "+91 70934 03747";
 
 /** Human-readable timezone used in calculations. */
 export const IST_TZ = "Asia/Kolkata";

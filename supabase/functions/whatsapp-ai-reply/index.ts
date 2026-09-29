@@ -91,8 +91,8 @@ const HANDOFF_TOKEN = "[[HANDOFF]]";
 // is pending legal review. If the bot is pressed for the exact bakehouse or
 // registered address, hand off rather than answer.
 const SUPPORT_EMAIL = "support@cadieux.in";
-const SUPPORT_PHONE_HUMAN = "+91 99891 53747";
-const SUPPORT_PHONE_DIAL = "+919989153747";
+const SUPPORT_PHONE_HUMAN = "+91 70934 03747";
+const SUPPORT_PHONE_DIAL = "+917093403747";
 const REGISTERED_ADDRESS = "D.no. 13/18, Plot 78, Visakhapatnam, Andhra Pradesh 530041, India";
 
 // ── system prompt ───────────────────────────────────────────────────────────

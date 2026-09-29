@@ -57,6 +57,36 @@ export const PRODUCT_REPORT_CATEGORIES: ProductReportCategory[] = [
   "other",
 ];
 
+// ── Borrowed reports ────────────────────────────────────────────────
+//
+// Some products are made from the SAME dough as another and are covered by
+// that product's lab work — the burger bun is protein bread in a different
+// shape, so the protein bread's aflatoxin / microbiology / chemical
+// analysis are the bun's too. Rather than copy the rows, the borrower's
+// PDP reads the SOURCE product's reports.
+//
+// Copying was the other option and it is the wrong one. This table already
+// shows what copies do: `sort_order` is 0 on all six live rows, and the two
+// multigrain files still sit under a `high-protein/` storage prefix. Two
+// rows for one physical PDF means every re-upload, rename, summary tweak or
+// archive has to be done twice, and the day it is done once they disagree
+// with no way to tell which is current.
+//
+// Adding a product that borrows: ONE line below, keyed and valued by
+// INTERNAL slug (public.products.slug). A product absent from this map
+// shows its own reports, so nothing here needs touching for a product
+// with its own lab work.
+const REPORT_SOURCE_BY_SLUG: Record<string, string> = {
+  "burger-bun": "high-protein",
+  // "protein-pizza-base": "high-protein",
+};
+
+/** Internal slug whose reports a product's PDP should display. Identity
+ *  for any product not in the borrow map. */
+export function reportSourceSlug(internalSlug: string): string {
+  return REPORT_SOURCE_BY_SLUG[internalSlug] ?? internalSlug;
+}
+
 const supabaseAnon = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

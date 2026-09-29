@@ -29,7 +29,7 @@ import {
   resolvePdpGallery,
 } from "@/lib/products";
 import { parseWeightGrams, proteinPerLoafGrams } from "@/lib/stat-tiles";
-import { getProductReports } from "@/lib/product-reports";
+import { getProductReports, reportSourceSlug } from "@/lib/product-reports";
 import { getPageContent, pickProductTitle, pickString } from "@/lib/content";
 import { resolveInternalSlug } from "@/lib/product-slugs";
 
@@ -208,7 +208,16 @@ export default async function ProductDetailPage({
     notFound();
   }
 
-  const reports = productRow ? await getProductReports(productRow.id) : [];
+  // Reports may be BORROWED from another product (burger bun → protein
+  // bread; see REPORT_SOURCE_BY_SLUG). `reportSourceSlug` is identity for
+  // everything else, so the common case is still this product's own row
+  // and costs no extra query.
+  const reportsSlug = reportSourceSlug(internalSlug);
+  const reportsRow =
+    reportsSlug === internalSlug
+      ? productRow
+      : await getProductBySlug(reportsSlug);
+  const reports = reportsRow ? await getProductReports(reportsRow.id) : [];
 
   // Resolve PDP strings (with critical fallbacks per internal slug) here
   // so the client doesn't have to import lib/content (server-only Supabase).

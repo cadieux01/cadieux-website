@@ -6,6 +6,12 @@ import BackLink from "@/components/BackLink";
 
 const GRAIN = "url(/grain.svg)";
 
+// Internal slugs this index does NOT list. The burger bun has no lab work
+// of its own — it borrows the protein bread's (REPORT_SOURCE_BY_SLUG in
+// lib/product-reports), and listing it here would offer the same documents
+// under a second heading.
+const HIDDEN_FROM_REPORTS_INDEX = new Set(["burger-bun"]);
+
 export default function ReportsPage() {
   const router = useRouter();
   return (
@@ -22,7 +28,7 @@ export default function ReportsPage() {
           Independent test reports for each loaf
         </p>
 
-        {PRODUCTS.map((p) => (
+        {PRODUCTS.filter((p) => !HIDDEN_FROM_REPORTS_INDEX.has(p.slug)).map((p) => (
           <button
             key={p.slug}
             onClick={() => router.push(`/shop/${p.slug}/reports`)}

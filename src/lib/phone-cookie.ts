@@ -144,7 +144,7 @@ export function isValidIndianMobile(raw: string | null | undefined): boolean {
 }
 
 /** Mask all but the last 4 digits of a phone for safe logging.
- *  "+919989153747" → "+91*******3747", "9876543210" → "******3210" */
+ *  "+919876543210" → "+91*******3210", "9876543210" → "******3210" */
 export function maskPhone(raw: string | null | undefined): string {
   if (!raw) return "";
   const s = String(raw);

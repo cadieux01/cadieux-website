@@ -628,7 +628,7 @@ export function RegisterOrderForm({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 onBlur={() => void lookupCustomer()}
-                placeholder="9989153747"
+                placeholder="9876543210"
                 style={input}
                 maxLength={13}
               />
