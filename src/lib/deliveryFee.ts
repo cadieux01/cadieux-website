@@ -4,8 +4,8 @@
  * TWO BANDS, by measured distance:
  *
  *        km < 5     → ₹15
- *      5 ≤ km ≤ 30  → ₹30
- *          km > 30  → not serviceable
+ *      5 ≤ km ≤ 50  → ₹30
+ *          km > 50  → not serviceable
  *
  * Pickup is ₹0 and never reaches this function — prepareOneTimeOrder short-
  * circuits before any distance is measured.
@@ -16,18 +16,15 @@
  * 1. The boundary is BAND_1_MAX_KM = 5 and it is STRICT, so exactly 5.00 km
  *    pays ₹30. "Below 5 km" is the spec; `<` is what implements it.
  *
- * 2. The serviceability cutoff SURVIVES at MAX_DELIVERY_KM = 30. The two
- *    bands describe what we charge INSIDE the service area, not whether an
- *    address is in it. Dropping the cutoff would make every address on
- *    earth serviceable for ₹30 — and the poisoned-geocode rows make that
- *    concrete rather than theoretical: 18 distinct pincodes (including
- *    Hyderabad's 500004) resolve to one Vizag city-centre coordinate, so a
- *    Hyderabad order would measure ~8 km and be accepted. `geocode.ts`
- *    rejects those coordinates, and this cutoff is the second layer.
+ * 2. The serviceability cutoff SURVIVES, now at MAX_DELIVERY_KM = 50. The
+ *    two bands describe what we charge INSIDE the service area, not whether
+ *    an address is in it. Dropping the cutoff would make every address on
+ *    earth serviceable for ₹30, so it stays — see the constant below for why
+ *    50 specifically, and why it is an interim number.
  *
  * 3. Distance is compared RAW — no Math.ceil. Rounding up is a price rise:
- *    4.2 km would be billed as 5, and a serviceable 29.4 km would round to
- *    30 while an out-of-range 30.1 rounds to 31. Bands are tested against
+ *    4.2 km would be billed as 5, and a serviceable 49.4 km would round to
+ *    50 while an out-of-range 50.1 rounds to 51. Bands are tested against
  *    what was actually measured.
  *
  * A non-finite or negative distance lands on `serviceable: false`. That is
@@ -50,7 +47,30 @@
  * the single fixed P.M. Palem kitchen, not the nearest active pickup
  * location. See `lib/distanceMatrix.ts`.
  */
-export const MAX_DELIVERY_KM = 30;
+/** INTERIM VALUE, raised 30 → 50 on 30 Sep 2026 to stop a live incident. NOT a
+ *  considered service radius — do not cite it as one.
+ *
+ *  WHAT IT IS FOR: moving the pricing origin to the P.M. Palem kitchen pushed
+ *  the far side of Visakhapatnam past a 30 km DRIVING cutoff, and real
+ *  addresses inside the city were being refused at checkout — 530046 measured
+ *  31.15 km, 530026 30.86 km, and 530012 cleared by only 320 m. Raja's ruling
+ *  is deliver everywhere, with anything outside Vizag district moved to COD
+ *  once that flow exists. 50 km is the smallest round number that covers the
+ *  whole city with real headroom (the worst measured address gains ~19 km of
+ *  margin) while still refusing genuinely distant destinations: Kakinada is
+ *  ~142 km and Hyderabad ~517 km, both far outside it.
+ *
+ *  WHY NOT REMOVE IT: until pincode-based out-of-city routing exists, no limit
+ *  means a Hyderabad address is accepted at ₹30 with payment taken ONLINE.
+ *  This is the second layer, not the first — `geocode.ts`'s poisoned-coordinate
+ *  guard is what actually stops a Hyderabad PINCODE, because the 18 rows
+ *  sharing one Vizag city-centre coordinate resolve to ~7.86 km and sail
+ *  through any distance test. Raising this number does not weaken that guard
+ *  and does not depend on it.
+ *
+ *  RETIRE THIS when out-of-city COD ships: the cutoff should then become a
+ *  routing decision (deliver / COD / refuse), not one global kilometre bound. */
+export const MAX_DELIVERY_KM = 50;
 
 /** Top of band 1: below this many km the fee is ₹15. Deliberately NOT
  *  exported — this module is imported by client components, and every value
@@ -120,16 +140,22 @@ export function computeDeliveryFee(distanceKm: number): {
 // instead of in a customer's bill.
 //
 // Every BOUNDARY is pinned, not just the middles — both sides of 5 and of
-// 30 — because a boundary is the only thing a band edit can move silently.
+// 50 — because a boundary is the only thing a band edit can move silently.
 // `null` means "refused" (serviceable: false); it is not a ₹0 price.
 //
 // 15.0 is in the list even though it is nowhere near a boundary: it was the
 // old ladder's first boundary, so it is exactly the number a half-finished
 // revert would put back. It must read ₹30 now.
 //
-// 30.01 is not in Raja's six but is pinned anyway — the >30 km refusal is
-// the only thing keeping a poisoned Hyderabad coordinate out, and a list
-// that stops at 30.0 would let the cutoff be deleted in silence.
+// 30.01 is the LIVE INCIDENT, pinned as a regression test. Under the old
+// 30 km cutoff it was refused, and that refusal is what turned away real
+// Visakhapatnam addresses (530046 measured 31.15 km driving). It must be
+// SERVICEABLE now. If this row ever reads "refused" again, the cutoff has
+// been reverted and customers are being turned away.
+//
+// 50.01 guards the other end: the cutoff still has to refuse something, or a
+// Hyderabad address is accepted at ₹30 with payment taken online. A list that
+// stopped at 50.0 would let the cutoff be deleted in silence.
 //
 // NOT exported, for the same reason BAND_1_MAX_KM is not: this module is
 // imported by client components, so anything exported here can ship in the
@@ -139,7 +165,9 @@ const DELIVERY_FEE_EXAMPLES: ReadonlyArray<readonly [number, number | null]> = [
   [5.0, 30],
   [15.0, 30],
   [30.0, 30],
-  [30.01, null],
+  [30.01, 30],
+  [50.0, 30],
+  [50.01, null],
   [NaN, null],
   [-1, null],
 ];
