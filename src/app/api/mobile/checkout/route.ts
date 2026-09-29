@@ -30,7 +30,7 @@ import {
 import { validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import { computeDeliveryFee, MAX_DELIVERY_KM } from "@/lib/deliveryFee";
-import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
+import { getDrivingDistanceKm, hasPricingOrigin } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 import { internalJsonHeaders } from "@/lib/internal-secret";
 import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
@@ -278,7 +278,7 @@ export async function POST(req: NextRequest) {
   // Compute distance-banded delivery fee (server-authoritative).
   let distanceKm: number | null = null;
 
-  if (await hasActivePickups()) {
+  if (hasPricingOrigin()) {
     if (orderLat !== null && orderLng !== null) {
       distanceKm = await getDrivingDistanceKm(orderLat, orderLng);
     } else if (pincode) {
@@ -293,7 +293,7 @@ export async function POST(req: NextRequest) {
   } else {
     // No origin to measure from, so nothing below can produce a distance.
     console.error(
-      "[mobile/checkout] no active pickup_locations — cannot price a delivery",
+      "[mobile/checkout] no pricing origin — cannot price a delivery",
     );
   }
 

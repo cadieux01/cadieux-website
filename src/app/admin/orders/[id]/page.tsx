@@ -440,7 +440,7 @@ export default function AdminOrderDetailPage({
                   trip. A customer order with an unmeasurable distance is
                   refused outright, so the only way a null reaches this screen
                   is an ADMIN OVERRIDE (order-checkout.ts:405/:415), which
-                  charges DELIVERY_FEE_TOP_BAND_INR — ₹32 on a distance nobody
+                  charges DELIVERY_FEE_TOP_BAND_INR — ₹30 on a distance nobody
                   established. DASH renders that identically to a field that
                   was simply never filled in, which hides it. */}
               <KeyVal

@@ -50,7 +50,7 @@
 
 import { computeDeliveryFee, MAX_DELIVERY_KM } from "@/lib/deliveryFee";
 import { geocodePincode } from "@/lib/geocode";
-import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
+import { getDrivingDistanceKm, hasPricingOrigin } from "@/lib/distanceMatrix";
 
 /** Why a subscription could not be priced. Both are hard blocks. */
 export type SubscriptionFeeErrorCode =
@@ -93,7 +93,7 @@ function block(code: SubscriptionFeeErrorCode): SubscriptionFeeQuote {
  *
  * Blocks (never guesses) when:
  *   • the pincode is missing or not 6 digits
- *   • no active pickup locations are configured
+ *   • no pricing origin is configured
  *   • the pincode can't be geocoded
  *   • the driving distance can't be resolved
  *   • the address is out of range (computeDeliveryFee → serviceable:false).
@@ -106,11 +106,12 @@ export async function quoteSubscriptionDeliveryFee(
   const pin = typeof pincode === "string" ? pincode.trim() : "";
   if (!/^\d{6}$/.test(pin)) return block("location_required");
 
-  // No pickups configured means there is no origin to measure from, so
-  // there is no distance and nothing to band. Block.
-  if (!(await hasActivePickups())) {
+  // The pricing origin is the fixed P.M. Palem kitchen, so this never
+  // fires now. Kept so the "no origin ⇒ block, never guess" rule stays
+  // written down at the call site.
+  if (!hasPricingOrigin()) {
     console.error(
-      "[subscription-fee] no active pickup_locations — cannot price a subscription",
+      "[subscription-fee] no pricing origin — cannot price a subscription",
     );
     return block("location_required");
   }

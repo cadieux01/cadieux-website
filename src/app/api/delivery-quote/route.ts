@@ -2,7 +2,7 @@
 // GET /api/delivery-quote?pincode=  (fallback when no GPS)
 //
 // Returns a delivery fee quote based on driving distance from the
-// customer to the NEAREST active pickup_location.
+// P.M. Palem kitchen to the customer.
 // Used by the checkout UI to show the fee BEFORE the order is placed.
 // The server independently re-computes the same fee at place_order time —
 // the client MUST NOT pass back this fee; the server is authoritative.
@@ -12,12 +12,12 @@
 //   200  { serviceable: false, feeInr: 0,      distanceKm: number }   out of range
 //   200  { serviceable: null,  feeInr: null,   distanceKm: null,
 //          message: "..." }                                             no coords
-//   503  { error: "..." }                                               no active pickups
+//   503  { error: "..." }                                               no pricing origin
 
 import { NextRequest, NextResponse } from "next/server";
 
 import { computeDeliveryFee } from "@/lib/deliveryFee";
-import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
+import { getDrivingDistanceKm, hasPricingOrigin } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 
 export const dynamic = "force-dynamic";
@@ -28,13 +28,13 @@ export async function GET(req: NextRequest) {
   const rawLng = searchParams.get("lng");
   const pincode = (searchParams.get("pincode") ?? "").replace(/\D/g, "");
 
-  if (!(await hasActivePickups())) {
+  // Unreachable while the pricing origin is a constant (lib/distanceMatrix).
+  // Left in place so the quote route and the place-order path keep the same
+  // shape — if the origin ever becomes configurable again, this is where the
+  // quote refuses rather than guesses.
+  if (!hasPricingOrigin()) {
     return NextResponse.json(
-      {
-        error:
-          "Delivery fee calculation is not yet configured. " +
-          "Add at least one active pickup location in /admin/locations.",
-      },
+      { error: "Delivery fee calculation is not yet configured." },
       { status: 503 },
     );
   }

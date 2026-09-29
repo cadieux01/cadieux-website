@@ -1,40 +1,39 @@
 /**
  * Delivery fee logic (server-authoritative).
  *
- * THREE BANDS, by measured distance:
+ * TWO BANDS, by measured distance:
  *
- *        km < 15     → ₹15
- *     15 ≤ km ≤ 25   → ₹25
- *     25 < km ≤ 30   → ₹32
- *          km > 30   → not serviceable
+ *        km < 5     → ₹15
+ *      5 ≤ km ≤ 30  → ₹30
+ *          km > 30  → not serviceable
  *
- * This replaces the flat ₹12-at-any-distance fee. Two deliberate details:
+ * Pickup is ₹0 and never reaches this function — prepareOneTimeOrder short-
+ * circuits before any distance is measured.
  *
- * 1. The first boundary is BAND_1_MAX_KM = 15. Raja's spec is "below 15 km
- *    → ₹15"; 15.7 was an undocumented deviation, removed 29 Sep 2026.
+ * This replaces the three-band 15/25/32 ladder (Raja, 29 Sep 2026). Three
+ * deliberate details:
  *
- *    What 15.7 bought, and what moving to 15 gives up: measured against the
- *    live pincode set, band 1 tops out at 530051 (14.94 km) and band 2 opens
- *    at 530047 (16.43 km) — a 1.49 km gap with no pincode in it. 15.7 sat in
- *    the middle of that gap with ~0.75 km of clearance either side. 15 sits
- *    just 0.06 km above 530051, so ~60 m of upward drift in Google's driving
- *    distance re-prices that pincode from ₹15 to ₹25 on its own. No pincode
- *    changes band TODAY — the ladder is unchanged for every live address —
- *    but the margin that made it drift-proof is gone. If 530051 starts
- *    quoting ₹25, this is why; the fix is a pincode-level override, not
- *    nudging the boundary back, which would re-open the spec deviation.
+ * 1. The boundary is BAND_1_MAX_KM = 5 and it is STRICT, so exactly 5.00 km
+ *    pays ₹30. "Below 5 km" is the spec; `<` is what implements it.
  *
- * 2. Distance is compared RAW — no Math.ceil. The old flat fee could round
- *    up harmlessly because every distance mapped to the same ₹12. With a
- *    ladder, rounding up is a price rise: 14.2 km would be billed as 15,
- *    and at the top end a serviceable 29.4 km would round to 30 while an
- *    out-of-range 30.1 rounds to 31. Bands are tested against what was
- *    actually measured.
+ * 2. The serviceability cutoff SURVIVES at MAX_DELIVERY_KM = 30. The two
+ *    bands describe what we charge INSIDE the service area, not whether an
+ *    address is in it. Dropping the cutoff would make every address on
+ *    earth serviceable for ₹30 — and the poisoned-geocode rows make that
+ *    concrete rather than theoretical: 18 distinct pincodes (including
+ *    Hyderabad's 500004) resolve to one Vizag city-centre coordinate, so a
+ *    Hyderabad order would measure ~8 km and be accepted. `geocode.ts`
+ *    rejects those coordinates, and this cutoff is the second layer.
+ *
+ * 3. Distance is compared RAW — no Math.ceil. Rounding up is a price rise:
+ *    4.2 km would be billed as 5, and a serviceable 29.4 km would round to
+ *    30 while an out-of-range 30.1 rounds to 31. Bands are tested against
+ *    what was actually measured.
  *
  * A non-finite or negative distance lands on `serviceable: false`. That is
  * the single most important property in this file: callers must never be
- * able to price off a distance we could not measure, because under a ladder
- * the fallback would be the CHEAPEST band. Every comparison below is a
+ * able to price off a distance we could not measure, because under a banded
+ * fee the fallback would be the CHEAPEST band. Every comparison below is a
  * positive test against an upper bound, so NaN fails all of them rather
  * than passing one.
  *
@@ -46,6 +45,10 @@
  * source of truth: /api/delivery-quote (fee shown to customer) AND
  * prepareOneTimeOrder + /api/mobile/checkout|create-order (fee actually
  * charged) all call this — shown == charged by construction.
+ *
+ * WHAT THE DISTANCE IS MEASURED FROM changed in the same window: it is now
+ * the single fixed P.M. Palem kitchen, not the nearest active pickup
+ * location. See `lib/distanceMatrix.ts`.
  */
 export const MAX_DELIVERY_KM = 30;
 
@@ -53,13 +56,13 @@ export const MAX_DELIVERY_KM = 30;
  *  exported — this module is imported by client components, and every value
  *  exported from here ships in the browser bundle. Nothing outside this file
  *  needs the boundary; callers ask computeDeliveryFee for a fee. */
-const BAND_1_MAX_KM = 15;
+const BAND_1_MAX_KM = 5;
 
 /** Top band. Also what an ADMIN OVERRIDE charges on an address that is out
  *  of range or whose distance could not be measured: those are the longest
- *  runs the rider makes, so the ladder's ceiling is the honest default and
- *  the cheapest band would be exactly the wrong guess. */
-export const DELIVERY_FEE_TOP_BAND_INR = 32;
+ *  runs the rider makes, so the ceiling is the honest default and the
+ *  cheaper band would be exactly the wrong guess. */
+export const DELIVERY_FEE_TOP_BAND_INR = 30;
 
 /** How the delivery fee is apportioned when ONE payment produces TWO orders
  *  (mixed cart → OLF bread row + OLW sandwich row, per the OLF/OLW split
@@ -79,10 +82,12 @@ export const DELIVERY_FEE_TOP_BAND_INR = 32;
  *                  the call site rather than a bare constant; it is not a
  *                  mode to go back to without a reason.
  *
- *  Both rows must send delivery_fee EXPLICITLY. public.orders.delivery_fee
- *  is NOT NULL DEFAULT 50 — omit the key and the row silently takes ₹50,
- *  above even the top band this file charges. Pickup groups send 0 on both
- *  rows.
+ *  Both rows must send delivery_fee EXPLICITLY. Since the 29 Sep 2026
+ *  migration the column is NULLABLE with no default — it used to be
+ *  NOT NULL DEFAULT 50, which silently charged ₹50 on an omitted key. The
+ *  failure mode is now quieter, not gone: omit the key and the row stores
+ *  NULL, which reads as "no fee recorded" on the admin screens and in any
+ *  revenue sum. Send the number. Pickup groups send 0 on both rows.
  *
  *  Read server-side only; a constant, not a DB flag, so a change is a
  *  deploy-visible audit event rather than a silent runtime flip. */
@@ -98,10 +103,9 @@ export function computeDeliveryFee(distanceKm: number): {
     return { serviceable: false, feeInr: 0 };
   }
   // Ascending, first match wins. Band 1's bound is STRICT (`<`) and band 2's
-  // is inclusive (`<=`), which is what puts exactly 15.0 km in band 2 —
-  // matching the ruling "km < 15 → ₹15, 15 ≤ km ≤ 25 → ₹25".
+  // is inclusive (`<=`), which is what puts exactly 5.0 km in band 2 —
+  // matching the ruling "below 5 km → ₹15, 5 km and above → ₹30".
   if (distanceKm < BAND_1_MAX_KM) return { serviceable: true, feeInr: 15 };
-  if (distanceKm <= 25) return { serviceable: true, feeInr: 25 };
   if (distanceKm <= MAX_DELIVERY_KM) {
     return { serviceable: true, feeInr: DELIVERY_FEE_TOP_BAND_INR };
   }
@@ -115,19 +119,26 @@ export function computeDeliveryFee(distanceKm: number): {
 // that drifts: change a constant above and you find out here, immediately,
 // instead of in a customer's bill.
 //
-// Every BOUNDARY is pinned, not just the middles — both sides of 15, 25 and
+// Every BOUNDARY is pinned, not just the middles — both sides of 5 and of
 // 30 — because a boundary is the only thing a band edit can move silently.
 // `null` means "refused" (serviceable: false); it is not a ₹0 price.
+//
+// 15.0 is in the list even though it is nowhere near a boundary: it was the
+// old ladder's first boundary, so it is exactly the number a half-finished
+// revert would put back. It must read ₹30 now.
+//
+// 30.01 is not in Raja's six but is pinned anyway — the >30 km refusal is
+// the only thing keeping a poisoned Hyderabad coordinate out, and a list
+// that stops at 30.0 would let the cutoff be deleted in silence.
 //
 // NOT exported, for the same reason BAND_1_MAX_KM is not: this module is
 // imported by client components, so anything exported here can ship in the
 // browser bundle.
 const DELIVERY_FEE_EXAMPLES: ReadonlyArray<readonly [number, number | null]> = [
-  [14.99, 15],
-  [15.0, 25],
-  [25.0, 25],
-  [25.01, 32],
-  [30.0, 32],
+  [4.99, 15],
+  [5.0, 30],
+  [15.0, 30],
+  [30.0, 30],
   [30.01, null],
   [NaN, null],
   [-1, null],
@@ -152,7 +163,7 @@ if (process.env.NODE_ENV !== "production") {
     if (actual !== expected) {
       const show = (v: number | null) => (v === null ? "refused" : `₹${v}`);
       throw new Error(
-        `[deliveryFee] ladder broken: ${km} km should be ${show(expected)}, got ${show(actual)}`,
+        `[deliveryFee] bands broken: ${km} km should be ${show(expected)}, got ${show(actual)}`,
       );
     }
   }

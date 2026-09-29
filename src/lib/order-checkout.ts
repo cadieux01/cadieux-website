@@ -33,7 +33,7 @@ import {
   DELIVERY_FEE_TOP_BAND_INR,
   MAX_DELIVERY_KM,
 } from "@/lib/deliveryFee";
-import { getDrivingDistanceKm, hasActivePickups } from "@/lib/distanceMatrix";
+import { getDrivingDistanceKm, hasPricingOrigin } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
 
 /** Parses a value as a finite number, returning null for absent/invalid. */
@@ -343,9 +343,10 @@ export async function prepareOneTimeOrder(
   let distanceKm: number | null = null;
 
   if (!isPickup) {
-    // No active pickup_locations means there is no origin to measure from,
-    // so nothing downstream can produce a distance.
-    if (await hasActivePickups()) {
+    // The pricing origin is the fixed P.M. Palem kitchen, so this is now
+    // always true. Kept as a branch rather than re-indenting the checkout
+    // path for no behaviour change.
+    if (hasPricingOrigin()) {
       if (orderLat !== null && orderLng !== null) {
         distanceKm = await getDrivingDistanceKm(orderLat, orderLng);
       } else if (pinFromAddress) {
@@ -356,7 +357,7 @@ export async function prepareOneTimeOrder(
       }
     } else {
       console.error(
-        "[checkout] no active pickup_locations — cannot price a delivery",
+        "[checkout] no pricing origin configured — cannot price a delivery",
       );
     }
 

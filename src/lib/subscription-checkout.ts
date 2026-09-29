@@ -106,7 +106,7 @@ export type MultiVariantSubscriptionInsertCtx = {
   razorpayOrderId?: string | null;
   /** PER-DELIVERY delivery fee (from the shared computeDeliveryFee). */
   deliveryFeeInr: number;
-  /** Driving km to the nearest pickup, for auditing serviceability. */
+  /** Driving km from the P.M. Palem kitchen, for auditing serviceability. */
   distanceKm: number | null;
 };
 

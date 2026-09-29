@@ -45,10 +45,9 @@ export async function POST(
     );
   }
 
-  // Driving distance to the nearest configured pickup. Returns null if
-  // no pickups are configured or the Distance Matrix call falls through
-  // to its haversine fallback which itself returned nothing usable —
-  // the UI just hides the distance line in that case.
+  // Driving distance from the fixed P.M. Palem kitchen. Returns null only
+  // if both the Distance Matrix call and its haversine fallback returned
+  // nothing usable — the UI just hides the distance line in that case.
   const distance_km = await getDrivingDistanceKm(
     coords.latitude,
     coords.longitude,
