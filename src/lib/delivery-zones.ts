@@ -135,6 +135,38 @@ const LOCALITY_ALIASES: Record<string, string> = {
   "pothinamallayya palem": "P.M.palem",
 };
 
+/**
+ * The area names a human picks from, per numbered zone — the 36 localities
+ * in `ZONE_DEFS`, read straight off the map rather than retyped.
+ *
+ * Added for the partner deliveries board, which offers an area picker under
+ * each zone. It is DERIVED, never a second list: adding a locality to
+ * `ZONE_DEFS` puts it in the picker with no other edit, which is the whole
+ * point of "EDIT ONE PLACE" at the top of this file. It is deliberately NOT
+ * sourced from `service_areas` — that table is a different catalogue (118
+ * rows) and offering its names would list areas this resolver cannot match.
+ *
+ * Aliases are deliberately EXCLUDED. `LOCALITY_ALIASES` exists so a drifting
+ * checkout spelling still resolves; surfacing "Madhurawada" and "Madhurwada"
+ * as two pickable areas would imply they are two places and split one zone's
+ * list in two. The resolver folds them together, so picking the canonical
+ * name matches rows written either way.
+ *
+ * `unzoned` and `pickup` are absent BY CONSTRUCTION, not by omission — a row
+ * is unzoned precisely because nothing in this map matched it, so there is no
+ * area name to offer. A caller must say that rather than render an empty menu.
+ */
+export const ZONE_AREAS: Readonly<Record<NumberedZone, readonly string[]>> =
+  Object.freeze(
+    ZONE_DEFS.reduce(
+      (acc, def) => {
+        acc[def.key] = Object.freeze([...def.localities]);
+        return acc;
+      },
+      {} as Record<NumberedZone, readonly string[]>,
+    ),
+  );
+
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
@@ -153,18 +185,30 @@ function escapeRegex(s: string): string {
 
 /** Precompiled `(zoneKey, regex)` pairs for locality matching.
  *  Word-ish boundaries: any non-alphanumeric on either side (or start/end).
- *  Handles periods in "P.M.palem" and spaces in "Sagar nagar" alike. */
+ *  Handles periods in "P.M.palem" and spaces in "Sagar nagar" alike.
+ *
+ *  The same pass fills `AREA_MATCHERS` below — canonical area name to every
+ *  regex that names it. One pass, so the area picker and the resolver cannot
+ *  drift into matching different text for the same name. */
+const AREA_MATCHERS: Map<string, RegExp[]> = new Map();
+
 const LOCALITY_MATCHERS: { key: ZoneKey; re: RegExp }[] = (() => {
   const out: { key: ZoneKey; re: RegExp }[] = [];
-  const push = (key: ZoneKey, name: string) => {
+  /** @param area the CANONICAL name this spelling belongs to; equals `name`
+   *  except for aliases, which fold onto the canonical entry. */
+  const push = (key: ZoneKey, name: string, area: string) => {
     const re = new RegExp(
       `(?:^|[^a-z0-9])${escapeRegex(name.toLowerCase())}(?=[^a-z0-9]|$)`,
       "i",
     );
     out.push({ key, re });
+    const areaKey = area.toLowerCase();
+    const list = AREA_MATCHERS.get(areaKey);
+    if (list) list.push(re);
+    else AREA_MATCHERS.set(areaKey, [re]);
   };
   for (const def of ZONE_DEFS) {
-    for (const name of def.localities) push(def.key, name);
+    for (const name of def.localities) push(def.key, name, name);
   }
   // Aliases fold to the SAME zone as their canonical target. Look up the
   // zone at build time so a bad alias (canonical missing from the map)
@@ -178,10 +222,38 @@ const LOCALITY_MATCHERS: { key: ZoneKey; re: RegExp }[] = (() => {
         `[delivery-zones] alias '${alias}' → '${canonical}' has no zone`,
       );
     }
-    push(owner.key, alias);
+    push(owner.key, alias, canonical);
   }
   return out;
 })();
+
+/**
+ * Does this address text name this area?
+ *
+ * The area picker on the partner deliveries board needs to ask a question the
+ * zone resolver does not answer: a row's ZONE can come from a pincode, a
+ * learned rule or a row override, none of which name a locality. So area is a
+ * separate, text-only test — and it lives here, next to the matchers, because
+ * a second regex built at a call site is exactly how a picker starts showing
+ * a different set from the one the resolver zoned.
+ *
+ * Matching an alias counts: a row written "Madhurawada" IS in Madhurwada, and
+ * the picker only ever offers the canonical name (see `ZONE_AREAS`).
+ *
+ * An address that matches NOTHING is not an error — the row is still in its
+ * zone, it simply has no area name. Callers must account for those rows
+ * rather than let them fall off the board.
+ */
+export function addressMatchesArea(
+  address: string | null | undefined,
+  area: string,
+): boolean {
+  const text = (address ?? "").trim();
+  if (!text) return false;
+  const res = AREA_MATCHERS.get(area.trim().toLowerCase());
+  if (!res) return false;
+  return res.some((re) => re.test(text));
+}
 
 const PICKUP_HINTS = /(^\s*pick\s*up\b)|(\bdark\s*store\b)/i;
 

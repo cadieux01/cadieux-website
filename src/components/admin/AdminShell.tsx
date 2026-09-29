@@ -108,6 +108,11 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/orders", label: "Orders" },
       { href: "/admin/subscriptions", label: "Subscriptions" },
       { href: "/admin/subscriptions/plans", label: "Subscription Plans" },
+      // The routing view: today's deliveries grouped by zone, then area.
+      // Sits next to Orders because it answers the question the orders
+      // board cannot — "what does one person drive, in what order" — off
+      // the same rows and the SAME zone resolver, so the two never disagree.
+      { href: "/admin/deliveries", label: "Online / Deliveries" },
       { href: "/admin/requests", label: "Requests" },
       { href: "/admin/delivery-partners", label: "Delivery Partners" },
     ],

@@ -171,3 +171,119 @@ export function subscriptionDatesForBasis(
 ): (string | null | undefined)[] {
   return basis === "delivery" ? s.delivery_dates ?? [] : [s.created_at];
 }
+
+// ---------------------------------------------------------------------------
+// Optional range — OPT-IN. The single day above remains the default.
+//
+// Read the header of this file first: From+To was REMOVED from these boards on
+// purpose, because every question asked on them is asked about ONE day, and a
+// range brought four kinds of ambiguity to answer a question nobody had. None
+// of that is retracted. The orders and subscriptions boards pass no selection
+// type at all and keep exactly today's behaviour — `matchesDay` and
+// `matchesAnyDay` are untouched and still the only thing those boards call.
+//
+// What changed is that a caller appeared with the question a range does answer:
+// a delivery partner planning a run across several days. That screen opts in.
+// The four ambiguities are closed here rather than reintroduced:
+//   • which end is which — named `from`/`to`, never positional;
+//   • a reversed pair    — normalised once here, not at each call site;
+//   • a half-filled pair — an open end means unbounded on that side, stated;
+//   • a preset label contradicting the boxes — there are no presets.
+//
+// If a third caller wants this, make it opt in too. Do NOT flip the default:
+// the moment the kitchen sheet can span days it can disagree with the screen
+// again, which is the 60-orders-vs-9 failure the header records.
+// ---------------------------------------------------------------------------
+
+/** A single day, or a bounded / half-open range. */
+export type DaySelection =
+  | { mode: "day"; day: string | null }
+  | { mode: "range"; from: string | null; to: string | null };
+
+/** The selection that shows every row. */
+export const ALL_DAYS: DaySelection = { mode: "day", day: null };
+
+/** Narrow an untrusted `?from=`/`?to=` pair exactly as `parseDayParam`
+ *  narrows a single date: anything that is not a real YYYY-MM-DD becomes an
+ *  OPEN end — never an error, never silently "today". */
+export function parseRangeParams(
+  rawFrom: string | null | undefined,
+  rawTo: string | null | undefined,
+): { from: string | null; to: string | null } {
+  return { from: parseDayParam(rawFrom), to: parseDayParam(rawTo) };
+}
+
+/**
+ * Put a range the right way round.
+ *
+ * A reversed pair is the operator's likeliest slip and was the old control's
+ * worst behaviour: it matched nothing, which looks identical to a real day
+ * with no deliveries. Swapping is the only reading that is never wrong —
+ * both ends were chosen deliberately, only their order was not.
+ */
+export function normaliseRange(
+  from: string | null,
+  to: string | null,
+): { from: string | null; to: string | null } {
+  if (from && to && from > to) return { from: to, to: from };
+  return { from, to };
+}
+
+/** Does one date value satisfy the selection? Mirrors `matchesDay` in day
+ *  mode, so switching modes cannot change what the day case means. */
+export function matchesSelection(
+  value: string | null | undefined,
+  sel: DaySelection,
+): boolean {
+  if (sel.mode === "day") return matchesDay(value, sel.day);
+  const { from, to } = normaliseRange(sel.from, sel.to);
+  if (!from && !to) return true;
+  const d = toIstDay(value);
+  // A row with no date drops out as soon as a bound is set — the same rule
+  // matchesDay applies: nothing to deliver inside a window you can't place
+  // it in. Comparison is lexicographic, which is exact for YYYY-MM-DD.
+  if (!d) return false;
+  if (from && d < from) return false;
+  if (to && d > to) return false;
+  return true;
+}
+
+/** The subscriptions form: a plan matches if ANY of its dates does. */
+export function matchesAnySelection(
+  values: readonly (string | null | undefined)[] | null | undefined,
+  sel: DaySelection,
+): boolean {
+  if (sel.mode === "day") return matchesAnyDay(values, sel.day);
+  return (values ?? []).some((v) => matchesSelection(v, sel));
+}
+
+/**
+ * Every IST day the selection admits, for bucketing per-date maps such as
+ * `loaf_counts_by_date`.
+ *
+ * Returns null when the selection is unbounded on either side — the caller
+ * must then take every key rather than try to enumerate an open interval.
+ */
+export function selectionDays(sel: DaySelection): string[] | null {
+  if (sel.mode === "day") return sel.day ? [sel.day] : null;
+  const { from, to } = normaliseRange(sel.from, sel.to);
+  if (!from || !to) return null;
+
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const [ty, tm, td] = to.split("-").map(Number);
+  const cur = new Date(Date.UTC(fy, fm - 1, fd));
+  const end = Date.UTC(ty, tm - 1, td);
+
+  // UTC throughout and only the same fields are read back out, so this
+  // cannot shift a day — the same reason isRealYmd's round-trip is safe.
+  // The iteration cap is a guard against a pathological span, not a limit
+  // anyone should hit: a year of routing is 365.
+  const out: string[] = [];
+  for (let i = 0; cur.getTime() <= end && i < 400; i += 1) {
+    out.push(
+      `${cur.getUTCFullYear()}-${String(cur.getUTCMonth() + 1).padStart(2, "0")}-${String(cur.getUTCDate()).padStart(2, "0")}`,
+    );
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return out;
+}
