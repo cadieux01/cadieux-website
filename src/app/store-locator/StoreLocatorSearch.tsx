@@ -177,7 +177,14 @@ export default function StoreLocatorSearch({ areas }: { areas: AreaRef[] }) {
         </div>
       )}
 
-      <style>{`
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. A text child is
+          HTML-escaped on the server and not on the client, so the first
+          ' " & < > added below — in a selector OR in a comment — throws away
+          the server HTML for the WHOLE document on hydration, not just this
+          node. See src/app/admin/layout.tsx. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         input::placeholder { color: rgba(251,243,212,0.4); }
         input:focus { border-color: rgba(${GOLD},0.85) !important; }
         .cdx-area-option:hover { background: rgba(${GOLD},0.08) !important; }
@@ -186,7 +193,9 @@ export default function StoreLocatorSearch({ areas }: { areas: AreaRef[] }) {
         .cdx-area-dropdown::-webkit-scrollbar-track { background: transparent; }
         .cdx-area-dropdown::-webkit-scrollbar-thumb { background: rgba(${GOLD},0.4); border-radius: 3px; }
         .cdx-area-dropdown { scrollbar-width: thin; scrollbar-color: rgba(${GOLD},0.4) transparent; }
-      `}</style>
+      `,
+        }}
+      />
     </div>
   );
 }

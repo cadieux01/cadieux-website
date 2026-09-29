@@ -301,7 +301,14 @@ export function DateCalendar({
         />
       )}
 
-      <style>{`
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. A text child is
+          HTML-escaped on the server and not on the client, so the first
+          ' " & < > added below — in a selector OR in a comment — throws away
+          the server HTML for the WHOLE document on hydration, not just this
+          node. See src/app/admin/layout.tsx. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         @keyframes cdx-fade-in {
           from { opacity: 0; transform: translateY(2px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -310,7 +317,9 @@ export function DateCalendar({
           from { opacity: 0; transform: scale(0.98); }
           to   { opacity: 1; transform: scale(1); }
         }
-      `}</style>
+      `,
+        }}
+      />
     </div>
   );
 }

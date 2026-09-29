@@ -76,9 +76,18 @@ export default function Nav({ showSandwich = false }: { showSandwich?: boolean }
 
   return (
     <>
-      <style>{`
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. A text child is
+          HTML-escaped on the server and not on the client, so the first
+          ' " & < > added below — in a selector OR in a comment — throws away
+          the server HTML for the WHOLE document on hydration, not just this
+          node. See src/app/admin/layout.tsx. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         input::placeholder { color: rgba(67,105,178,0.5); }
-      `}</style>
+      `,
+        }}
+      />
 
       {/* ── Hamburger button (home only) ── */}
       {isHome && (

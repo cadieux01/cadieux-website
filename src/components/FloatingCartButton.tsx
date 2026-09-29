@@ -51,7 +51,14 @@ export default function FloatingCartButton() {
 
   return (
     <>
-      <style>{`
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. A text child is
+          HTML-escaped on the server and not on the client, so the first
+          ' " & < > added below — in a selector OR in a comment — throws away
+          the server HTML for the WHOLE document on hydration, not just this
+          node. See src/app/admin/layout.tsx. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         @keyframes cdx-fcb-pulse {
           0%   { transform: scale(1); box-shadow: 0 12px 28px rgba(0,0,0,0.4), 0 0 0 0 rgba(2,70,40,0.45); }
           40%  { transform: scale(1.12); box-shadow: 0 14px 32px rgba(0,0,0,0.45), 0 0 0 12px rgba(2,70,40,0); }
@@ -61,7 +68,9 @@ export default function FloatingCartButton() {
           from { opacity: 0; transform: translateY(8px) scale(0.9); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
-      `}</style>
+      `,
+        }}
+      />
       <Link
         href="/cart"
         id={FLOATING_CART_ID}

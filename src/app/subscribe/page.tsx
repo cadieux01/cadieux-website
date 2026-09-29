@@ -572,7 +572,14 @@ export default async function SubscribeLandingPage() {
         </p>
       </div>
 
-      <style>{`
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. A text child is
+          HTML-escaped on the server and not on the client, so the first
+          ' " & < > added below — in a selector OR in a comment — throws away
+          the server HTML for the WHOLE document on hydration, not just this
+          node. See src/app/admin/layout.tsx. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .cdx-area-chip:hover {
           background: rgba(2,70,40,0.06) !important;
           border-color: rgba(2,70,40,0.55) !important;
@@ -594,7 +601,9 @@ export default async function SubscribeLandingPage() {
           border-color: rgba(${GOLD},0.85) !important;
           color: #FBF3D4 !important;
         }
-      `}</style>
+      `,
+        }}
+      />
     </div>
   );
 }

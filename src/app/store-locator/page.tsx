@@ -360,7 +360,14 @@ export default async function StoreLocatorPage() {
         )}
       </div>
 
-      <style>{`
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. A text child is
+          HTML-escaped on the server and not on the client, so the first
+          ' " & < > added below — in a selector OR in a comment — throws away
+          the server HTML for the WHOLE document on hydration, not just this
+          node. See src/app/admin/layout.tsx. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .cdx-locator-btn:hover {
           background: rgba(${GOLD},0.1) !important;
           border-color: rgba(${GOLD},0.85) !important;
@@ -370,7 +377,9 @@ export default async function StoreLocatorPage() {
           outline: 2px solid rgba(${GOLD},0.9);
           outline-offset: 2px;
         }
-      `}</style>
+      `,
+        }}
+      />
     </div>
   );
 }

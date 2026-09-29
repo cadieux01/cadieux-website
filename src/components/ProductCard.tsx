@@ -110,7 +110,14 @@ export default function ProductCard({
 
   return (
     <div style={{ perspective: 1200, width: "min(320px, 85vw)", flexShrink: 0, scrollSnapAlign: "center" }}>
-      <style>{`
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. A text child is
+          HTML-escaped on the server and not on the client, so the first
+          ' " & < > added below — in a selector OR in a comment — throws away
+          the server HTML for the WHOLE document on hydration, not just this
+          node. See src/app/admin/layout.tsx. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         @keyframes pc-slideUp {
           from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -131,7 +138,9 @@ export default function ProductCard({
           from { transform: translateX(-100%); }
           to   { transform: translateX(220%); }
         }
-      `}</style>
+      `,
+        }}
+      />
 
       <div
         ref={cardRef}

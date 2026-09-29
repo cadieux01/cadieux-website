@@ -1673,10 +1673,19 @@ export default function CheckoutPage() {
           Razorpay customer, so pay the DNS + TLS cost here rather than
           inside the Pay tap. */}
       <link rel="preconnect" href={RAZORPAY_ORIGIN} crossOrigin="anonymous" />
-      <style>{`
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. A text child is
+          HTML-escaped on the server and not on the client, so the first
+          ' " & < > added below — in a selector OR in a comment — throws away
+          the server HTML for the WHOLE document on hydration, not just this
+          node. See src/app/admin/layout.tsx. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         input::placeholder { color: rgba(2,70,40,0.6); }
         select::-ms-expand { display: none; }
-      `}</style>
+      `,
+        }}
+      />
 
       {/* Grain — soft ash texture, no dark charcoal wash */}
       <div style={{ position: "fixed", inset: 0, backgroundImage: GRAIN, opacity: 0.04, pointerEvents: "none", zIndex: 0 }} />
