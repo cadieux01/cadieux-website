@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { PRODUCTS } from "@/lib/data";
+import { toUrlSlug } from "@/lib/product-slugs";
 import BackLink from "@/components/BackLink";
 
 const GRAIN = "url(/grain.svg)";
@@ -31,7 +32,10 @@ export default function ReportsPage() {
         {PRODUCTS.filter((p) => !HIDDEN_FROM_REPORTS_INDEX.has(p.slug)).map((p) => (
           <button
             key={p.slug}
-            onClick={() => router.push(`/shop/${p.slug}/reports`)}
+            // PRODUCTS[].slug is the INTERNAL slug; /shop/[slug] resolves a
+            // URL slug. Pushing the internal one sent every product except
+            // burger-bun (the only slug that maps to itself) to notFound().
+            onClick={() => router.push(`/shop/${toUrlSlug(p.slug)}/reports`)}
             style={{
               background: "none", border: "none", cursor: "pointer", padding: "18px 0",
               textAlign: "left", borderBottom: "1px solid rgba(2,70,40,0.2)",
