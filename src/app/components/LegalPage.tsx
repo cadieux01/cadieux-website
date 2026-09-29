@@ -30,7 +30,18 @@ export default function LegalPage({ title, html, children }: Props) {
         {children}
       </div>
 
-      <style>{`
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. As a child React
+          HTML-escapes the text on the server and does not on the client, so
+          the 16 apostrophes in the [data-custom-class='…'] selectors below
+          render as &#x27; server-side, mismatch on hydration, and React throws
+          away the server HTML for the WHOLE document and re-renders it. That
+          hits all six pages built on this component — /shipping, /terms,
+          /refunds, /cookies, /privacy-policy, /delete-account. Measured, not
+          theoretical. Same reason src/app/admin/layout.tsx and the JSON-LD
+          blocks in shop/[slug]/page.tsx are written this way. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .legal-page {
           min-height: 100vh;
           padding: 4rem 1.5rem 6rem;
@@ -190,7 +201,9 @@ export default function LegalPage({ title, html, children }: Props) {
             margin-bottom: 1.75rem;
           }
         }
-      `}</style>
+      `,
+        }}
+      />
     </main>
   );
 }

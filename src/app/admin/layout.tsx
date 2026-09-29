@@ -21,7 +21,18 @@ const nunito = Nunito({
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className={nunito.variable}>
-      <style>{`
+      {/* dangerouslySetInnerHTML, not a `{`...`}` child. As a child React
+          HTML-escapes the text on the server and does not on the client, so
+          the apostrophes in 'Nunito', the double quotes in [type="checkbox"]
+          and the <body> in the comments below all render as &#x27; &quot;
+          &lt; server-side, mismatch on hydration, and React throws away the
+          server HTML for the WHOLE document and re-renders it — on EVERY
+          /admin/* page, because this is the admin layout. Measured, not
+          theoretical. Same reason src/app/components/LegalPage.tsx and the
+          JSON-LD blocks in shop/[slug]/page.tsx are written this way. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .admin-nunito-scope,
         .admin-nunito-scope * {
           font-family: var(--font-admin), 'Nunito', sans-serif !important;
@@ -101,7 +112,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         .admin-nunito-scope input[type="radio"] {
           accent-color: #FBF3D4;
         }
-      `}</style>
+      `,
+        }}
+      />
       <div className="admin-nunito-scope">{children}</div>
     </div>
   );

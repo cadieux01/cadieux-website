@@ -1120,8 +1120,19 @@ function StatusTracker({
           Below 430px the five delivery labels cannot fit side by side —
           "CONFIRMED" alone needs ~99px of min-content and each of five
           cells only gets ~65px at 375px — so the row is turned into a
-          vertical timeline instead of being shrunk into unreadable type. */}
-      <style>{`
+          vertical timeline instead of being shrunk into unreadable type.
+
+          dangerouslySetInnerHTML, not a `{`...`}` child. As a child React
+          HTML-escapes the text on the server and does not on the client, so
+          the apostrophes in the CSS COMMENTS further down ("the row's top
+          edge") render as &#x27; server-side, mismatch on hydration, and React
+          throws away the server HTML for the WHOLE document and re-renders it.
+          A comment is enough to do it — the character does not have to be in a
+          selector. Same reason src/app/admin/layout.tsx and
+          src/app/components/LegalPage.tsx are written this way. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .cdx-otrack {
           display: grid;
           grid-template-columns: repeat(var(--cdx-otrack-count), 1fr);
@@ -1186,7 +1197,9 @@ function StatusTracker({
           }
           .cdx-otrack-label { text-align: left; padding-top: 1px; }
         }
-      `}</style>
+      `,
+        }}
+      />
 
       <div
         className="cdx-otrack"
