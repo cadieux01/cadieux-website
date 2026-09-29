@@ -61,9 +61,17 @@ export async function getDrivingDistanceKm(
 ): Promise<number | null> {
   const pickups = await getActiveLocations();
   if (pickups.length === 0) {
+    // There is NO flat fee to fall back to — that constant was deleted when
+    // the ladder shipped. Returning null here means the distance is
+    // UNMEASURABLE, and every caller refuses the address rather than pricing
+    // it (order-checkout.ts, both mobile routes, subscription-delivery-fee).
+    // Said plainly because the old wording read as a standing invitation to
+    // re-add a fallback fee, which under a banded ladder would charge the
+    // CHEAPEST band for an address of unknown distance and skip the
+    // serviceability gate on the way past.
     console.warn(
-      "[distanceMatrix] no active pickup_locations — " +
-      "distance-based delivery fee disabled; falling back to flat fee.",
+      "[distanceMatrix] no active pickup_locations — cannot measure a " +
+      "distance; callers will refuse this address (no fee is guessed).",
     );
     return null;
   }
