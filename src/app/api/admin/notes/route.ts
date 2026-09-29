@@ -30,6 +30,7 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import {
   normalizeAuthor,
   normalizeKind,
+  normalizeStopDate,
   validateBody,
   type OrderNoteRow,
 } from "@/lib/order-notes";
@@ -119,7 +120,9 @@ export async function GET(req: NextRequest) {
     const column = batch.kind === "order" ? "order_id" : "subscription_id";
     const { data, error } = await supabaseAdmin
       .from("order_notes")
-      .select("id, order_id, subscription_id, kind, body, author, created_at")
+      .select(
+        "id, order_id, subscription_id, kind, body, author, created_at, stop_date",
+      )
       .in(column, batch.ids)
       // Oldest first so the caller reading top→bottom sees the note
       // trail in the order it was written. The single-owner variant
@@ -156,7 +159,9 @@ export async function GET(req: NextRequest) {
   const column = owner.kind === "order" ? "order_id" : "subscription_id";
   const { data, error } = await supabaseAdmin
     .from("order_notes")
-    .select("id, order_id, subscription_id, kind, body, author, created_at")
+    .select(
+      "id, order_id, subscription_id, kind, body, author, created_at, stop_date",
+    )
     .eq(column, owner.id)
     .order("created_at", { ascending: false });
   if (error) {
@@ -181,6 +186,12 @@ export async function POST(req: NextRequest) {
   }
   const kind = normalizeKind(body.kind);
   const author = normalizeAuthor(body.author);
+  // Absent → null → a note about the parent, which is what every caller
+  // before the delivery board meant. Only that board sends a date.
+  const stopDateCheck = normalizeStopDate(body.stop_date);
+  if ("error" in stopDateCheck) {
+    return NextResponse.json({ error: stopDateCheck.error }, { status: 400 });
+  }
 
   // Confirm the parent row exists before we write — a caller with a
   // stale/typo id would otherwise leave an orphan visible to nothing (the
@@ -209,12 +220,15 @@ export async function POST(req: NextRequest) {
     kind,
     body: bodyCheck.body,
     author,
+    stop_date: stopDateCheck.stop_date,
   };
 
   const { data: inserted, error: insErr } = await supabaseAdmin
     .from("order_notes")
     .insert(insertRow)
-    .select("id, order_id, subscription_id, kind, body, author, created_at")
+    .select(
+      "id, order_id, subscription_id, kind, body, author, created_at, stop_date",
+    )
     .single();
   if (insErr || !inserted) {
     console.error("[admin/notes POST insert]", insErr?.message);

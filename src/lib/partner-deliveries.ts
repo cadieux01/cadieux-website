@@ -13,11 +13,12 @@
 // /admin/subscriptions already pass. If this board re-derived zones the
 // two would disagree and the partner would drive the wrong list.
 //
-// Stages 2 and 3 (zone assignment, notes) are not built here, but nothing
-// below designs them out: `zoneSource` is carried so a row override can be
-// shown as provenance, `orderId`/`subscriptionId` are kept so an override
-// can be written against the right parent, and `note` is on the row type
-// already, always null for now.
+// NOTES ARE NOT A FIELD ON A ROW. A row is rebuilt from scratch on every
+// rules refetch, and a subscription row is MANY stops, so a `note` string
+// hanging off it would be both stale and ambiguous. Notes live in
+// public.order_notes keyed by (parent id, stop_date) and are fetched by the
+// board; what this module contributes is `rowStopDate`, the one function
+// that says which day a row's note belongs to.
 
 import {
   flattenSubscriptionAddress,
@@ -70,8 +71,6 @@ export type DeliveryRow = {
   /** date -> slug -> loaves. Subscriptions only; null for orders, whose
    *  single date makes `counts` already per-date. */
   countsByDate: Record<string, Record<string, number>> | null;
-  /** Stage 3. Rendered as an empty cell today, deliberately. */
-  note: string | null;
   /** Lowercased haystack for the search box, built once per row. */
   haystack: string;
 };
@@ -154,7 +153,6 @@ export function orderToDeliveryRow(
     dates: day ? [day] : [],
     counts: sumCounts(o.items),
     countsByDate: null,
-    note: null,
     haystack: haystackOf([ref, o.public_ref, name, phone, address]),
   };
 }
@@ -201,7 +199,6 @@ export function subscriptionToDeliveryRow(
     dates: s.delivery_dates ?? [],
     counts: s.loaf_counts ?? {},
     countsByDate: s.loaf_counts_by_date ?? null,
-    note: null,
     haystack: haystackOf([ref, name, phone, address]),
   };
 }
@@ -326,6 +323,33 @@ export function sortByKitchenDistance(
     if (da !== db) return da - db;
     return a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0;
   });
+}
+
+/**
+ * The ONE IST day a note written on this row is about, or null when that
+ * question has no single answer.
+ *
+ * An order is one stop on one day, so it is that day whatever the filter
+ * says. A subscription is many stops: while the board is showing eight of
+ * them at once there is no day a new note belongs to, and picking one —
+ * the first, the nearest, today — would file a field note against a stop
+ * the operator was not looking at. That is the exact failure
+ * `order_notes.stop_date` exists to prevent, so this returns null and the
+ * caller refuses to write rather than guessing.
+ *
+ * The days compared are the ones the row is LISTED under, i.e. `dates`,
+ * which for a subscription is the server-built `delivery_dates`
+ * (`scheduled_date ?? delivery_date`). Keying off anything else would file
+ * the note under a day whose row is shown somewhere else.
+ */
+export function rowStopDate(
+  row: DeliveryRow,
+  sel: DaySelection,
+): string | null {
+  if (row.dates.length === 0) return null;
+  if (row.source === "orders") return row.dates[0];
+  const matched = row.dates.filter((d) => matchesSelection(d, sel));
+  return matched.length === 1 ? matched[0] : null;
 }
 
 /** slug -> loaves across a set of rows, for the product totals strip. */

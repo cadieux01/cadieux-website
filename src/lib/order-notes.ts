@@ -37,6 +37,10 @@ export type OrderNoteRow = {
   created_at: string;
   customer_visible?: boolean;
   meta?: unknown;
+  /** IST calendar day this note is about, or null when it is about the
+   *  parent as a whole. Optional here because the pre-existing callers
+   *  select an explicit column list that does not name it. */
+  stop_date?: string | null;
 };
 
 export type OwnerRef =
@@ -109,6 +113,26 @@ export function normalizeAuthor(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim().slice(0, 60);
   return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * A stop's IST calendar day, or null for a note about the parent as a whole.
+ *
+ * Returns an error rather than silently coercing: a malformed date that fell
+ * through as null would file a per-stop note against the whole plan, which is
+ * the one failure this column exists to prevent — and it would look like a
+ * success. Absent/null is the explicit "about the parent" case and is fine.
+ */
+export function normalizeStopDate(
+  raw: unknown,
+): { stop_date: string | null } | { error: string } {
+  if (raw === undefined || raw === null || raw === "") {
+    return { stop_date: null };
+  }
+  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return { error: "stop_date must be YYYY-MM-DD." };
+  }
+  return { stop_date: raw };
 }
 
 export function normalizeKind(raw: unknown): NoteKind {

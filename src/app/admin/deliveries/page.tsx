@@ -29,8 +29,28 @@
 // can never match.
 //
 // STAGE 2 (zone assignment) is live: long-press or double-tap a row to pin
-// it to a zone. STAGE 3 (notes) is not built — the Note column exists and
-// renders empty.
+// it to a zone. STAGE 3a (text notes) is live: tap the Note cell to write
+// one.
+//
+// NOTES ARE PER STOP, AND THAT IS THE WHOLE DESIGN. They are written to
+// public.order_notes — the store the orders and subscriptions boards
+// already use, which carries the XOR parent (order_id or subscription_id)
+// this board needs to keep ONE code path across its two row kinds — with a
+// `stop_date` naming the day. An order is one stop on one day, so its note
+// is unambiguous. A subscription is many stops, so a note with no date
+// would render on every future drop for that customer: yesterday's "nobody
+// home, left with the guard" greeting the partner for the rest of the
+// plan. Writing is therefore refused unless the current filter resolves the
+// row to exactly ONE day (see rowStopDate); the cell says so rather than
+// guessing a date.
+//
+// subscription_deliveries.admin_notes was NOT reused. Both customer
+// self-edit routes append to it, it is returned to the customer verbatim
+// by a select("*"), the admin subscriptions board greps it for the literal
+// "[user edit" to raise a badge, and the admin PATCH overwrites it whole.
+// A partner's field note in there would be published to the customer, able
+// to forge that badge, and one admin save away from destroying the
+// customer's reschedule history.
 //
 // TWO GESTURES, TWO DIFFERENT WRITES. Keep them straight.
 //
@@ -58,11 +78,20 @@
 // this order or any other. It only moves which list the row appears in.
 //
 // ATTRIBUTION IS NOT AVAILABLE. This admin surface has no per-user
-// accounts — audit_log.actor is always null here — so an assignment cannot
-// be attributed to a person. The override row records WHAT changed and
-// WHEN (zone + updated_at) and the popover says plainly that "who" is not
-// recorded. No `actor` is sent, so the route's own "admin" default stands
-// as the placeholder it is; nothing in this file renders it as a name.
+// accounts — audit_log.actor is always null here — so neither an assignment
+// nor a note can be attributed to a person. The override row records WHAT
+// changed and WHEN (zone + updated_at) and the popover says plainly that
+// "who" is not recorded. No `actor` is sent, so the route's own "admin"
+// default stands as the placeholder it is; nothing in this file renders it
+// as a name. Notes are the same: no `author` is sent, so order_notes.author
+// stays NULL, and the cell shows the text and the time and says who wrote
+// it is not recorded. An author box here would collect a name nothing
+// verifies, which is worse than an honest blank.
+//
+// NOTES ARE APPEND-ONLY, because /api/admin/notes is: it has no PATCH and
+// no DELETE, by design. "Edit" prefills the box with the latest note and
+// Save writes a NEW row; the cell renders the newest and says how many
+// earlier ones are kept. Nothing this board does can destroy a note.
 
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -101,10 +130,12 @@ import {
 } from "@/lib/delivery-zones";
 import { buildRuleSet, type ZoneRowOverrideRow } from "@/lib/zone-rules";
 import { mapsLinkFor } from "@/lib/order-share-message";
+import { NOTE_BODY_MAX, type OrderNoteRow } from "@/lib/order-notes";
 import {
   kitchenDistanceKm,
   orderToDeliveryRow,
   rowMatchesSelection,
+  rowStopDate,
   sortByKitchenDistance,
   subscriptionToDeliveryRow,
   totalsForRows,
@@ -151,6 +182,9 @@ type AreaNaming = {
   stops: readonly DeliveryRow[];
   onSaved: () => void;
 };
+
+/** The id cap /api/admin/notes enforces on a batched *_ids query. */
+const NOTES_BATCH = 250;
 
 export default function DeliveriesPage() {
   return (
@@ -538,6 +572,86 @@ function DeliveriesPageInner() {
     );
   }, [assignRow, overrideRows]);
 
+  // ---- notes --------------------------------------------------------------
+
+  // Keyed by PARENT id (order or subscription), holding every note that
+  // parent has. The per-stop narrowing happens at render, against
+  // rowStopDate — keeping the raw rows here means the same fetch serves a
+  // subscription whichever of its days the board is showing.
+  const [notesByParent, setNotesByParent] = useState<
+    Record<string, OrderNoteRow[]>
+  >({});
+
+  // Only the rows on screen. The board can hold a few thousand rows across
+  // all zones and none of their notes matter until a group is picked.
+  // Joined into a string so the effect below re-runs on the CONTENT of the
+  // list rather than on the array identity, which changes every render.
+  const visibleParentKey = useMemo(
+    () =>
+      visibleRows
+        .map((r) => r.orderId ?? r.subscriptionId ?? "")
+        .filter(Boolean)
+        .join(","),
+    [visibleRows],
+  );
+
+  useEffect(() => {
+    const ids = visibleParentKey ? visibleParentKey.split(",") : [];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const param = source === "orders" ? "order_ids" : "subscription_ids";
+      const merged: Record<string, OrderNoteRow[]> = {};
+      // /api/admin/notes caps a batch at 250 ids and 400s above it, so a
+      // big zone is chunked rather than silently returning no notes.
+      for (let i = 0; i < ids.length; i += NOTES_BATCH) {
+        const chunk = ids.slice(i, i + NOTES_BATCH);
+        try {
+          const res = await adminFetch<{
+            notesByOwnerId: Record<string, OrderNoteRow[]>;
+          }>(`/api/admin/notes?${param}=${chunk.join(",")}`);
+          Object.assign(merged, res.notesByOwnerId ?? {});
+        } catch {
+          // Notes are an overlay on a routing list. A failure here leaves
+          // the cells empty; it must not take the stops down with it.
+        }
+      }
+      if (!cancelled) setNotesByParent((prev) => ({ ...prev, ...merged }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleParentKey, source]);
+
+  // Append one note. No `author` — see the attribution note in the header.
+  // The row returned by the POST is merged in rather than refetched: the
+  // endpoint returns the inserted row, so a refetch would be a second round
+  // trip to learn what we were just told.
+  const saveNote = useCallback(
+    async (row: DeliveryRow, stopDate: string, body: string) => {
+      const parentId = row.orderId ?? row.subscriptionId;
+      if (!parentId) return;
+      const res = await adminFetch<{ note: OrderNoteRow }>(
+        "/api/admin/notes",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...(row.orderId
+              ? { order_id: row.orderId }
+              : { subscription_id: row.subscriptionId }),
+            body,
+            stop_date: stopDate,
+          }),
+        },
+      );
+      setNotesByParent((prev) => ({
+        ...prev,
+        [parentId]: [...(prev[parentId] ?? []), res.note],
+      }));
+    },
+    [],
+  );
+
   return (
     <AdminShell
       title="Online / Deliveries"
@@ -911,7 +1025,8 @@ function DeliveriesPageInner() {
               }}
             >
               Long-press or double-tap a stop — or tap its zone pill — to pin
-              it to a zone. Pins apply to that stop only.
+              it to a zone. Pins apply to that stop only. Tap a Note to write
+              one; notes are kept against that day&apos;s stop.
               {visibleRows.length > 0 ? (
                 <>
                   {" "}
@@ -929,8 +1044,11 @@ function DeliveriesPageInner() {
             ) : (
               <DeliveryTable
                 rows={visibleRows}
+                sel={applied}
+                notesByParent={notesByParent}
                 onAssign={openAssign}
                 naming={naming}
+                onSaveNote={saveNote}
               />
             )}
           </section>
@@ -1006,14 +1124,26 @@ const COLUMNS = [
   "Note",
 ] as const;
 
+type SaveNote = (
+  row: DeliveryRow,
+  stopDate: string,
+  body: string,
+) => Promise<void>;
+
 function DeliveryTable({
   rows,
+  sel,
+  notesByParent,
   onAssign,
   naming,
+  onSaveNote,
 }: {
   rows: readonly DeliveryRow[];
+  sel: DaySelection;
+  notesByParent: Record<string, OrderNoteRow[]>;
   onAssign: (row: DeliveryRow, rect: DOMRect) => void;
   naming: AreaNaming;
+  onSaveNote: SaveNote;
 }) {
   return (
     <table
@@ -1064,8 +1194,11 @@ function DeliveryTable({
           <DeliveryTableRow
             key={r.key}
             row={r}
+            stopDate={rowStopDate(r, sel)}
+            notes={notesByParent[r.orderId ?? r.subscriptionId ?? ""] ?? EMPTY_NOTES}
             onAssign={onAssign}
             naming={naming}
+            onSaveNote={onSaveNote}
           />
         ))}
       </tbody>
@@ -1079,14 +1212,24 @@ const LONG_PRESS_MS = 500;
 /** A press that travels further than this is a scroll, not a press. */
 const LONG_PRESS_SLOP_PX = 10;
 
+/** Shared empty array — a fresh `[]` per render would change the prop
+ *  identity on every row that has no notes yet. */
+const EMPTY_NOTES: readonly OrderNoteRow[] = [];
+
 function DeliveryTableRow({
   row: r,
+  stopDate,
+  notes,
   onAssign,
   naming,
+  onSaveNote,
 }: {
   row: DeliveryRow;
+  stopDate: string | null;
+  notes: readonly OrderNoteRow[];
   onAssign: (row: DeliveryRow, rect: DOMRect) => void;
   naming: AreaNaming;
+  onSaveNote: SaveNote;
 }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
@@ -1101,13 +1244,20 @@ function DeliveryTableRow({
   useEffect(() => cancel, [cancel]);
 
   // The row already contains real links and buttons — the phone number,
-  // WhatsApp, Map, Share, and the Add-to-List box. A press that lands on one
-  // of those belongs to it. `input` and `form` are in the list because the
-  // area-name box is neither an <a> nor a <button>, and without them a long
-  // press while typing would open the zone popover over the dialog.
+  // WhatsApp, Map, Share, the Add-to-List box and the note box. A press that
+  // lands on one of those belongs to it.
+  //
+  // The list is a UNION and every entry earns its place, because each text
+  // field on this row is a different element type and neither is an <a> or a
+  // <button>. `input`/`form`/`label` keep a long press while typing an area
+  // name from opening the zone popover over the dialog; `textarea` does the
+  // same for the note box, where resting a finger for half a second — or
+  // double-clicking to select a word — would otherwise pop the zone menu over
+  // the words being typed. Dropping either half silently breaks that half's
+  // text entry, so this selector must only ever grow.
   const onInteractiveTarget = (e: { target: EventTarget | null }) =>
     e.target instanceof Element &&
-    e.target.closest("a,button,input,form,label") !== null;
+    e.target.closest("a,button,input,form,label,textarea") !== null;
 
   return (
     <tr
@@ -1180,12 +1330,192 @@ function DeliveryTableRow({
       </Cell>
       <Cell label="Payment">{r.paymentMode}</Cell>
       <Cell label="Total">{formatINR(r.totalInr)}</Cell>
-      {/* Stage 3. The column is here so the table it lands in is the
-          table that shipped, not a seventh column added later. */}
       <Cell label="Note">
-        <span style={{ color: FAINT }}>{r.note ?? ""}</span>
+        <NoteCell
+          row={r}
+          stopDate={stopDate}
+          notes={notes}
+          onSaveNote={onSaveNote}
+        />
       </Cell>
     </tr>
+  );
+}
+
+/**
+ * The Note cell: what is written about THIS stop, and the box to write more.
+ *
+ * `stopDate` is the day the note binds to, from rowStopDate — null when the
+ * current filter spans more than one of a subscription's stops. In that
+ * state the cell reads and writes NOTHING and says why: showing a note
+ * without knowing which stop it is about is how a plan-level note ends up
+ * greeting the partner on every future drop.
+ */
+function NoteCell({
+  row,
+  stopDate,
+  notes,
+  onSaveNote,
+}: {
+  row: DeliveryRow;
+  stopDate: string | null;
+  notes: readonly OrderNoteRow[];
+  onSaveNote: SaveNote;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // An order is one stop on one day, so a note carrying NO stop_date — which
+  // is every note /admin/orders has ever written about it — is still a note
+  // about this stop, and is shown. A subscription's is not: a plan-level
+  // note belongs to the plan, and rendering it here would put it on all
+  // eight stops, which is precisely what stop_date exists to prevent.
+  const stopNotes = useMemo(() => {
+    if (!stopDate) return EMPTY_NOTES;
+    return notes.filter((n) =>
+      row.source === "orders"
+        ? n.stop_date === stopDate || n.stop_date == null
+        : n.stop_date === stopDate,
+    );
+  }, [notes, row.source, stopDate]);
+
+  // Oldest-first from the batch endpoint, and the POST appends, so the last
+  // entry is the newest.
+  const latest = stopNotes.length > 0 ? stopNotes[stopNotes.length - 1] : null;
+
+  if (!stopDate) {
+    return (
+      <span style={{ color: FAINT, fontSize: "0.7rem", lineHeight: 1.45 }}>
+        {row.dates.length === 0
+          ? "No delivery day yet — nothing to note against."
+          : `${row.dates.length} stops in view — pick one day to read or write its note.`}
+      </span>
+    );
+  }
+  // Re-bound so the closures below carry the narrowed type.
+  const day = stopDate;
+
+  const save = async () => {
+    const body = draft.trim();
+    if (!body) {
+      setError("Write something first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await onSaveNote(row, day, body);
+      setEditing(false);
+      setDraft("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, NOTE_BODY_MAX))}
+          rows={3}
+          autoFocus
+          aria-label={`Note for ${row.ref} on ${day}`}
+          style={{
+            width: "100%",
+            minWidth: 0,
+            resize: "vertical",
+            padding: "0.4rem",
+            border: `1px solid ${BORDER}`,
+            background: "transparent",
+            color: CREAM,
+            fontFamily: "var(--font-body)",
+            fontSize: "0.8rem",
+            lineHeight: 1.4,
+          }}
+        />
+        <div
+          style={{
+            display: "flex",
+            gap: "0.35rem",
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={busy}
+            style={{ ...miniAction, opacity: busy ? 0.6 : 1 }}
+          >
+            {busy ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(false);
+              setError(null);
+            }}
+            style={miniAction}
+          >
+            Cancel
+          </button>
+          <span style={{ color: FAINT, fontSize: "0.65rem" }}>
+            {draft.trim().length}/{NOTE_BODY_MAX}
+          </span>
+        </div>
+        {error ? (
+          <span style={{ color: "#EF4444", fontSize: "0.68rem", lineHeight: 1.4 }}>
+            {error}
+          </span>
+        ) : null}
+        {/* Both facts an operator needs before pressing Save: which day this
+            lands on, and that Save adds rather than overwrites. */}
+        <span style={{ color: FAINT, fontSize: "0.65rem", lineHeight: 1.45 }}>
+          Kept against {day}. Saving adds to the trail — earlier notes are
+          never replaced.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+      {latest ? (
+        <>
+          <span style={{ wordBreak: "break-word", lineHeight: 1.45 }}>
+            {latest.body}
+          </span>
+          {/* WHAT and WHEN only. There is no per-user account behind this
+              board, so `author` is written NULL and there is nothing
+              truthful to put in a "by" slot. */}
+          <span style={{ color: FAINT, fontSize: "0.65rem", lineHeight: 1.45 }}>
+            {formatStamp(latest.created_at)} · who wrote it is not recorded
+            {stopNotes.length > 1
+              ? ` · ${stopNotes.length - 1} earlier kept`
+              : ""}
+          </span>
+        </>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          // Prefilled with the latest note so a correction is a small edit,
+          // not a retype. It still SAVES AS A NEW ROW — the endpoint has no
+          // PATCH — which is why the edit view says so.
+          setDraft(latest?.body ?? "");
+          setError(null);
+          setEditing(true);
+        }}
+        style={{ ...miniAction, alignSelf: "flex-start" }}
+      >
+        {latest ? "Edit" : "Add note"}
+      </button>
+    </div>
   );
 }
 
