@@ -27,6 +27,9 @@ import {
   type ZoneSource,
 } from "@/lib/delivery-zones";
 import { matchesSelection, toIstDay, type DaySelection } from "@/lib/day-filter";
+// @/lib/haversine, NOT @/lib/geocode — geocode pulls in the Supabase admin
+// client, and this module is imported by a client component.
+import { haversineKm } from "@/lib/haversine";
 import { itemQty, itemSlug } from "@/lib/order-items";
 import { formatOrderNumber, formatSubscriptionNumber } from "@/lib/order-number";
 import type { AdminOrderRow, AdminSubscriptionRow } from "@/lib/admin-shared";
@@ -266,6 +269,63 @@ export function rowCountsForSelection(
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// DRIVING ORDER
+//
+// The kitchen. Same coordinate lib/deliveryFee prices from (PRICING_ORIGIN,
+// P.M. Palem) — restated here rather than imported because that module is
+// server-side and this one is read by a client component.
+export const KITCHEN = { latitude: 17.7955894, longitude: 83.3500975 } as const;
+
+/** Straight-line km from the kitchen, or null when the row has no usable pin.
+ *
+ *  NOT `orders.distance_km`: that column holds the RETIRED nearest-pickup
+ *  measure — distance to whichever of the three pickup locations was closest,
+ *  which is not distance from this kitchen and is not comparable row to row.
+ *  It is not projected onto DeliveryRow at all, and must not be.
+ *
+ *  (0,0) is rejected with the nulls: it is the null island, written by an
+ *  older client that defaulted the field rather than omitting it, and it
+ *  would sort ~2000 km away — last instead of unknown. Same test the Map
+ *  action uses to decide pin vs search. */
+export function kitchenDistanceKm(row: DeliveryRow): number | null {
+  const { latitude: lat, longitude: lng } = row;
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat === 0 && lng === 0) return null;
+  return haversineKm(KITCHEN, { latitude: lat, longitude: lng });
+}
+
+/** Stops in driving order: nearest to the kitchen first.
+ *
+ *  Rows with no pin sort LAST, not first — an unknown distance is not zero,
+ *  and putting them at the top would hand the rider a list whose first stops
+ *  are the ones nobody can place. They keep their own order among themselves
+ *  (by ref), so the tail is a stable list rather than a shuffle.
+ *
+ *  Ties break on `ref`, which is unique per row, so the comparator is a total
+ *  order and the output cannot depend on the input order or on sort
+ *  stability. Same rows in, same sequence out, every render.
+ *
+ *  Straight-line, not driving distance: a driving matrix would be one API
+ *  call per stop per render. Over a city this size the ordering is a routing
+ *  AID, not a route. */
+export function sortByKitchenDistance(
+  rows: readonly DeliveryRow[],
+): DeliveryRow[] {
+  const km = new Map<string, number | null>();
+  for (const r of rows) km.set(r.key, kitchenDistanceKm(r));
+  return [...rows].sort((a, b) => {
+    const da = km.get(a.key) ?? null;
+    const db = km.get(b.key) ?? null;
+    if (da === null && db === null) return a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    if (da !== db) return da - db;
+    return a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0;
+  });
 }
 
 /** slug -> loaves across a set of rows, for the product totals strip. */

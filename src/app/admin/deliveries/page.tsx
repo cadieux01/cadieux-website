@@ -32,16 +32,24 @@
 // it to a zone. STAGE 3 (notes) is not built — the Note column exists and
 // renders empty.
 //
-// WHAT AN ASSIGNMENT WRITES, AND WHY IT IS A ROW OVERRIDE AND NOT A RULE.
-// It writes one `delivery_zone_row_overrides` row, which is step 2 of
-// resolveZoneWithSource — ahead of every rule, always honoured, scoped to a
-// single order or subscription id. A learned LOCALITY rule was the obvious
-// alternative and it is a trap: step 4 of the resolver iterates the
-// BUILT-IN locality tokens in ZONE_DEFS and only then asks whether a rule
-// exists for that name, so a rule naming a locality that isn't already in
-// ZONE_DEFS is written, stored, and never fires. The partner would assign a
-// zone, see a success, and the address would stay unzoned forever. The
-// override has no such dependency on the built-in vocabulary.
+// TWO GESTURES, TWO DIFFERENT WRITES. Keep them straight.
+//
+//   Long-press / zone pill  -> `delivery_zone_row_overrides`. Step 2 of the
+//     resolver. Pins ONE order or subscription. Teaches nothing. Use it when
+//     the address is unusable and only this stop is wrong.
+//
+//   "Add to List" on the address -> `delivery_zone_rules` (key_type
+//     'locality'). Step 4. Names an AREA and points every future address
+//     containing that name at this stop's zone. The far more powerful
+//     gesture, which is why the dialog shows the match count before saving.
+//
+// Add to List used to be impossible, and the reason is worth keeping: step 4
+// iterated the BUILT-IN locality tokens in ZONE_DEFS and then asked whether a
+// rule existed for each hit, so a rule naming a locality outside ZONE_DEFS
+// was written, listed in the panel, and never fired. The resolver now drives
+// that step from the RULES and tests each rule's name against the address
+// (see the step-4 comment in lib/delivery-zones), which is what makes this
+// feature real rather than a success message over a no-op.
 //
 // WHY THIS IS SAFE TO PUT IN A PARTNER'S HANDS: grepping "zone"
 // (case-insensitive) in src/lib/order-checkout.ts returns ZERO matches —
@@ -82,6 +90,8 @@ import {
 } from "@/lib/day-filter";
 import {
   addressMatchesArea,
+  localityNameMatchesAddress,
+  normaliseLocalityKey,
   ZONE_AREAS,
   ZONE_LABELS,
   EMPTY_RULE_SET,
@@ -92,8 +102,10 @@ import {
 import { buildRuleSet, type ZoneRowOverrideRow } from "@/lib/zone-rules";
 import { mapsLinkFor } from "@/lib/order-share-message";
 import {
+  kitchenDistanceKm,
   orderToDeliveryRow,
   rowMatchesSelection,
+  sortByKitchenDistance,
   subscriptionToDeliveryRow,
   totalsForRows,
   type DeliveryRow,
@@ -127,6 +139,18 @@ type Pick = { zone: ZoneKey; area: string | null };
  *  Offered explicitly because the alternative is rows that are counted in
  *  the zone badge and then unreachable in every menu under it. */
 const NO_AREA = "\u0000none";
+
+/** What "Add to List" needs, threaded from the page down to the button. */
+type AreaNaming = {
+  /** Normalised keys that already have a locality rule — the "already
+   *  exists" guard. Keys, not raw inputs: "P.M. Palem" and "pm palem"
+   *  normalise to the same rule and only one of them can be written. */
+  takenKeys: ReadonlySet<string>;
+  /** Every row loaded for this source — the population the match count is
+   *  measured against. */
+  stops: readonly DeliveryRow[];
+  onSaved: () => void;
+};
 
 export default function DeliveriesPage() {
   return (
@@ -356,21 +380,53 @@ function DeliveriesPageInner() {
     return out;
   }, [inScope]);
 
+  // Nearest the kitchen first, unpinned stops last, ties on ref. The sort is
+  // applied here — once, over the picked group — so the table renders in
+  // driving order and every count below it still counts the same rows.
   const visibleRows = useMemo(() => {
     if (!pick) return [];
     const inZone = inScope.filter((r) => r.zone === pick.zone);
-    if (!pick.area) return inZone;
+    if (!pick.area) return sortByKitchenDistance(inZone);
     if (pick.area === NO_AREA) {
       const areas =
         pick.zone === "unzoned"
           ? []
           : ZONE_AREAS[pick.zone as NumberedZone] ?? [];
-      return inZone.filter(
-        (r) => !areas.some((a) => addressMatchesArea(r.address, a)),
+      return sortByKitchenDistance(
+        inZone.filter(
+          (r) => !areas.some((a) => addressMatchesArea(r.address, a)),
+        ),
       );
     }
-    return inZone.filter((r) => addressMatchesArea(r.address, pick.area!));
+    return sortByKitchenDistance(
+      inZone.filter((r) => addressMatchesArea(r.address, pick.area!)),
+    );
   }, [inScope, pick]);
+
+  /** How many of the stops on screen can actually be ordered. Stated rather
+   *  than hidden: most addresses are free text with no pin, so the tail of
+   *  every list is unsorted and the rider needs to know that the ordering
+   *  stops being meaningful partway down. */
+  const pinnedCount = useMemo(
+    () => visibleRows.filter((r) => kitchenDistanceKm(r) !== null).length,
+    [visibleRows],
+  );
+
+  /** Everything "Add to List" needs, bundled so the three components between
+   *  here and the button pass one prop instead of four.
+   *
+   *  `stops` is EVERY row loaded for this source, not the filtered set. The
+   *  count in the dialog is the only warning an operator gets before a name
+   *  like "nagar" takes half the city, and counting it against one day's
+   *  stops would make the broadest names look the safest. */
+  const naming = useMemo<AreaNaming>(
+    () => ({
+      takenKeys: new Set(rules.locality.keys()),
+      stops: allRows,
+      onSaved: () => void loadRules(),
+    }),
+    [rules, allRows, loadRules],
+  );
 
   // The strip counts exactly what is on screen: the whole filtered set
   // until a group is picked, that group once one is.
@@ -856,13 +912,26 @@ function DeliveriesPageInner() {
             >
               Long-press or double-tap a stop — or tap its zone pill — to pin
               it to a zone. Pins apply to that stop only.
+              {visibleRows.length > 0 ? (
+                <>
+                  {" "}
+                  Ordered nearest the kitchen first, straight-line —{" "}
+                  {pinnedCount} of {visibleRows.length} stop
+                  {visibleRows.length === 1 ? " has" : "s have"} a map pin; the
+                  rest have no location and are listed last, by order ID.
+                </>
+              ) : null}
             </p>
             {visibleRows.length === 0 ? (
               <p style={{ ...emptyMenuStyle, padding: "0.75rem 0" }}>
                 Nothing here for this date and search.
               </p>
             ) : (
-              <DeliveryTable rows={visibleRows} onAssign={openAssign} />
+              <DeliveryTable
+                rows={visibleRows}
+                onAssign={openAssign}
+                naming={naming}
+              />
             )}
           </section>
         ) : (
@@ -882,13 +951,11 @@ function DeliveriesPageInner() {
       </div>
 
       {/* ruleKey is hardcoded null, which forces the popover into ROW-PIN
-          mode. That is deliberate and is the whole safety property of this
-          screen: rule mode would write a delivery_zone_rules row, and a
-          locality rule for a name outside ZONE_DEFS never fires (see the
-          module header). Per-order only — assigning one stop cannot re-zone
-          another address that merely looks similar. If a whole locality
-          genuinely needs moving, that is a rules decision for /admin/orders,
-          not something this board should infer from one stop. */}
+          mode. Still deliberate: this gesture must stay per-stop. Pinning
+          one address cannot re-zone another that merely looks similar, and
+          an operator long-pressing a row is fixing THAT row. Naming an area
+          is now possible and is a separate, explicit gesture on the address
+          with its own match count — see "Add to List". */}
       {assignRow ? (
         <ZoneAssignPopover
           open
@@ -942,9 +1009,11 @@ const COLUMNS = [
 function DeliveryTable({
   rows,
   onAssign,
+  naming,
 }: {
   rows: readonly DeliveryRow[];
   onAssign: (row: DeliveryRow, rect: DOMRect) => void;
+  naming: AreaNaming;
 }) {
   return (
     <table
@@ -992,7 +1061,12 @@ function DeliveryTable({
       </thead>
       <tbody className="block md:table-row-group">
         {rows.map((r) => (
-          <DeliveryTableRow key={r.key} row={r} onAssign={onAssign} />
+          <DeliveryTableRow
+            key={r.key}
+            row={r}
+            onAssign={onAssign}
+            naming={naming}
+          />
         ))}
       </tbody>
     </table>
@@ -1008,9 +1082,11 @@ const LONG_PRESS_SLOP_PX = 10;
 function DeliveryTableRow({
   row: r,
   onAssign,
+  naming,
 }: {
   row: DeliveryRow;
   onAssign: (row: DeliveryRow, rect: DOMRect) => void;
+  naming: AreaNaming;
 }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
@@ -1025,9 +1101,13 @@ function DeliveryTableRow({
   useEffect(() => cancel, [cancel]);
 
   // The row already contains real links and buttons — the phone number,
-  // WhatsApp, Map, Share. A press that lands on one of those belongs to it.
+  // WhatsApp, Map, Share, and the Add-to-List box. A press that lands on one
+  // of those belongs to it. `input` and `form` are in the list because the
+  // area-name box is neither an <a> nor a <button>, and without them a long
+  // press while typing would open the zone popover over the dialog.
   const onInteractiveTarget = (e: { target: EventTarget | null }) =>
-    e.target instanceof Element && e.target.closest("a,button") !== null;
+    e.target instanceof Element &&
+    e.target.closest("a,button,input,form,label") !== null;
 
   return (
     <tr
@@ -1082,7 +1162,7 @@ function DeliveryTableRow({
         <div style={{ wordBreak: "break-word", lineHeight: 1.45 }}>
           {r.address || "—"}
         </div>
-        {r.address ? <AddressActions row={r} /> : null}
+        {r.address ? <AddressActions row={r} naming={naming} /> : null}
       </Cell>
       <Cell label="Zone">
         {/* Same popover, reachable by a plain tap and by the keyboard. The
@@ -1169,8 +1249,15 @@ function PhoneActions({ row }: { row: DeliveryRow }) {
   );
 }
 
-function AddressActions({ row }: { row: DeliveryRow }) {
+function AddressActions({
+  row,
+  naming,
+}: {
+  row: DeliveryRow;
+  naming: AreaNaming;
+}) {
   const [shared, setShared] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const hasPin =
     typeof row.latitude === "number" &&
     typeof row.longitude === "number" &&
@@ -1202,17 +1289,211 @@ function AddressActions({ row }: { row: DeliveryRow }) {
     }
   }
 
+  // A rule's zone column is CHECK (zone in zone1..zone4), so there is no
+  // rule to write for a stop that is unzoned — and `pickup` is siphoned off
+  // at step 1 before any rule is consulted, so naming its area would change
+  // nothing. In both cases the action is offered and refuses with the
+  // reason, rather than silently disappearing from some rows.
+  const nameable = row.zone !== "unzoned" && row.zone !== "pickup";
+
   return (
-    <div style={{ marginTop: "0.25rem", display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-      <a href={url} target="_blank" rel="noopener noreferrer" style={miniAction}>
-        {hasPin ? "Map (pin)" : "Map (search)"}
-      </a>
-      <button type="button" onClick={share} style={miniAction}>
-        {shared ?? "Share"}
-      </button>
-    </div>
+    <>
+      <div style={{ marginTop: "0.25rem", display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+        <a href={url} target="_blank" rel="noopener noreferrer" style={miniAction}>
+          {hasPin ? "Map (pin)" : "Map (search)"}
+        </a>
+        <button type="button" onClick={share} style={miniAction}>
+          {shared ?? "Share"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setListOpen((v) => !v)}
+          style={miniAction}
+          aria-expanded={listOpen}
+        >
+          Add to List
+        </button>
+      </div>
+      {listOpen ? (
+        nameable ? (
+          <AddToListForm
+            zone={row.zone as NumberedZone}
+            naming={naming}
+            onClose={() => setListOpen(false)}
+          />
+        ) : (
+          <p style={addToListNote}>
+            {row.zone === "pickup"
+              ? "This is a pickup — it never goes through a zone, so naming its area would change nothing."
+              : "This stop has no zone yet. Pin it to one first (long-press the row), then name the area."}{" "}
+            <button
+              type="button"
+              onClick={() => setListOpen(false)}
+              style={miniAction}
+            >
+              Close
+            </button>
+          </p>
+        )
+      ) : null}
+    </>
   );
 }
+
+/** Name an area and point it at a zone.
+ *
+ *  Writes a LOCALITY RULE — `delivery_zone_rules`, step 4 of the resolver —
+ *  not a row override. That is the difference between this and the
+ *  long-press: the override pins one stop, this teaches every future order
+ *  whose address contains the name. It is the more powerful gesture and the
+ *  harder one to undo, which is what the count below the box is for. */
+function AddToListForm({
+  zone,
+  naming,
+  onClose,
+}: {
+  zone: NumberedZone;
+  naming: AreaNaming;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const trimmed = name.trim();
+  const key = normaliseLocalityKey(trimmed);
+
+  // Length is checked on the NORMALISED key, not the raw box: "a.b" is three
+  // characters typed and two of substance, and it is the key that does the
+  // matching. Three is the floor because two-letter fragments match inside
+  // most Telugu place names.
+  const tooShort = trimmed.length > 0 && key.length < 3;
+  const taken = key.length >= 3 && naming.takenKeys.has(key);
+
+  /** How many loaded stops this name would take, and how many of those are
+   *  somewhere else today. The second number is the alarm: a name that only
+   *  matches stops already in this zone changes nothing, while one that
+   *  matches stops in other zones MOVES them the moment it is saved.
+   *
+   *  Counted with localityNameMatchesAddress — the resolver's own predicate.
+   *  A substring test would be wrong in the direction that matters: it would
+   *  count "Nagarampalem" as a hit for "nagar" and so overstate the very
+   *  number the operator is reading to decide whether to stop. */
+  const preview = useMemo(() => {
+    if (key.length < 3) return null;
+    let matched = 0;
+    let elsewhere = 0;
+    for (const s of naming.stops) {
+      if (!localityNameMatchesAddress(trimmed, s.address)) continue;
+      matched++;
+      if (s.zone !== zone) elsewhere++;
+    }
+    return { matched, elsewhere, total: naming.stops.length };
+  }, [key, trimmed, naming.stops, zone]);
+
+  const blocked = key.length < 3 || taken || saving;
+
+  async function save() {
+    if (blocked) return;
+    setSaving(true);
+    setError(null);
+    try {
+      // key_input only — the server normalises it into key_value with the
+      // same function this preview used, so the rule that gets written is
+      // the rule that was counted.
+      await adminFetch("/api/admin/zone-rules", {
+        method: "POST",
+        body: JSON.stringify({
+          key_type: "locality",
+          key_input: trimmed,
+          zone,
+        }),
+      });
+      naming.onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+      style={{
+        marginTop: "0.4rem",
+        padding: "0.5rem",
+        border: `1px solid ${BORDER}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.35rem",
+      }}
+    >
+      <label style={{ ...sectionLabel, fontSize: "0.62rem" }}>
+        Area name → {ZONE_LABELS[zone]}
+      </label>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        maxLength={120}
+        autoFocus
+        placeholder="e.g. Kapuluppada"
+        style={{
+          padding: "0.35rem 0.4rem",
+          border: `1px solid ${BORDER}`,
+          background: "transparent",
+          color: CREAM,
+          fontFamily: "var(--font-body)",
+          fontSize: "0.8rem",
+          minWidth: 0,
+        }}
+      />
+      <p style={addToListNote}>
+        {tooShort
+          ? "Too short — use at least 3 letters."
+          : taken
+            ? `"${trimmed}" is already on the list. Change it from the rules panel on /admin/orders.`
+            : preview
+              ? `Matches ${preview.matched} of ${preview.total} loaded stop${
+                  preview.total === 1 ? "" : "s"
+                }${
+                  preview.elsewhere > 0
+                    ? ` — ${preview.elsewhere} of them ${
+                        preview.elsewhere === 1 ? "is" : "are"
+                      } in another zone today and will move to ${ZONE_LABELS[zone]}.`
+                    : ", all already in this zone."
+                }`
+              : "Every future address containing this name goes to this zone."}
+      </p>
+      {error ? (
+        <p style={{ ...addToListNote, color: "#EF4444" }}>{error}</p>
+      ) : null}
+      <div style={{ display: "flex", gap: "0.35rem" }}>
+        <button
+          type="submit"
+          disabled={blocked}
+          style={{ ...miniAction, opacity: blocked ? 0.4 : 1 }}
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button type="button" onClick={onClose} style={miniAction}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+const addToListNote: React.CSSProperties = {
+  margin: 0,
+  color: MUTED,
+  fontFamily: "var(--font-body)",
+  fontSize: "0.68rem",
+  lineHeight: 1.45,
+};
 
 // ---------------------------------------------------------------------------
 // Small helpers + shared styles

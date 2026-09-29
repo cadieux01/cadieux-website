@@ -498,21 +498,32 @@ export function resolveZoneWithSource(
     }
   }
 
-  // 4. Rule by locality. Iterate the built-in matchers (same tokenisation
-  // as the built-in map) and, for each hit, check whether a rule has been
-  // learned for that locality name. First hit wins.
-  if (address) {
-    for (const { name } of LOCALITY_TOKENS) {
-      if (name.re.test(address)) {
-        const key = normaliseLocalityKey(name.canonical);
-        const z = rules.locality.get(key);
-        if (z) {
-          return {
-            zone: z,
-            source: "rule_locality",
-            matchedKey: { type: "locality", value: key },
-          };
-        }
+  // 4. Rule by locality. Iterate the RULES and test each rule's name against
+  // the address — NOT the other way round.
+  //
+  // This used to iterate LOCALITY_TOKENS (the built-in names) and ask whether
+  // a rule existed for each hit. That made a rule for any name NOT already in
+  // ZONE_DEFS unreachable: the loop never produced its key, so the map was
+  // never queried with it. The row inserted fine, the panel listed it, and it
+  // matched nothing, forever. Driving the loop from the rules is what lets an
+  // operator name an area the built-in map has never heard of.
+  //
+  // Order is by key length descending (ties alphabetical) so the MOST
+  // SPECIFIC name wins: a rule on "madhurawada" must beat a rule on "madhur"
+  // on an address containing both. Map insertion order would make the answer
+  // depend on the order the rows came back from Postgres.
+  if (address && rules.locality.size > 0) {
+    // Array.from, not [...]: this file compiles under the repo's ES5-ish
+    // target, where spreading a Map iterator needs downlevelIteration.
+    for (const key of Array.from(rules.locality.keys()).sort(
+      (a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0),
+    )) {
+      if (localityKeyMatches(key, address)) {
+        return {
+          zone: rules.locality.get(key)!,
+          source: "rule_locality",
+          matchedKey: { type: "locality", value: key },
+        };
       }
     }
   }
@@ -588,6 +599,81 @@ const LOCALITY_TOKENS: LocalityToken[] = (() => {
   }
   return out;
 })();
+
+// ---- locality-rule matching ----------------------------------------------
+
+/** Every BUILT-IN spelling that normalises to a given key, as a matcher.
+ *
+ *  A rule is stored on the NORMALISED key ("madhurwada"), but the addresses
+ *  it has always matched include the alias spellings ("Madhurawada"). Step 4
+ *  used to get that for free by testing the built-in regexes first. Now that
+ *  it drives off the rules, it has to look those spellings up — otherwise
+ *  re-pointing an existing locality would quietly stop matching half the
+ *  addresses it matched yesterday.
+ *
+ *  Keys with no built-in spellings (the whole point of "Add to List") simply
+ *  aren't in here, and fall through to the generic matcher below. */
+const SPELLINGS_BY_KEY: Map<string, RegExp[]> = (() => {
+  const out = new Map<string, RegExp[]>();
+  const add = (spelling: string) => {
+    // normaliseLocalityKey folds aliases, so an alias and its canonical both
+    // land on the same key — which is exactly what we want.
+    const key = normaliseLocalityKey(spelling);
+    if (!key) return;
+    const re = new RegExp(
+      `(?:^|[^a-z0-9])${escapeRegex(spelling.toLowerCase())}(?=[^a-z0-9]|$)`,
+      "i",
+    );
+    const list = out.get(key);
+    if (list) list.push(re);
+    else out.set(key, [re]);
+  };
+  for (const def of ZONE_DEFS) for (const name of def.localities) add(name);
+  for (const alias of Object.keys(LOCALITY_ALIASES)) add(alias);
+  return out;
+})();
+
+/** Matcher for a normalised key that has no built-in spelling.
+ *
+ *  The key has had its punctuation flattened to single spaces, so matching it
+ *  literally would fail on the very text it came from: the key "p m palem"
+ *  must still match "P.M.palem". Each space therefore becomes a run of
+ *  non-alphanumerics, and the whole thing keeps the boundary semantics used
+ *  everywhere else in this file — any non-alphanumeric (or string edge) on
+ *  either side, NOT \b, which would not survive the periods and spaces. */
+const GENERIC_MATCHER_CACHE = new Map<string, RegExp>();
+
+function genericLocalityMatcher(key: string): RegExp {
+  const hit = GENERIC_MATCHER_CACHE.get(key);
+  if (hit) return hit;
+  const body = key.split(" ").map(escapeRegex).join("[^a-z0-9]+");
+  const re = new RegExp(`(?:^|[^a-z0-9])${body}(?=[^a-z0-9]|$)`, "i");
+  GENERIC_MATCHER_CACHE.set(key, re);
+  return re;
+}
+
+/** Does this address name the locality this rule is stored under? */
+function localityKeyMatches(key: string, address: string): boolean {
+  const builtIn = SPELLINGS_BY_KEY.get(key);
+  if (builtIn?.some((re) => re.test(address))) return true;
+  return genericLocalityMatcher(key).test(address);
+}
+
+/** Would a locality rule named `raw` match this address?
+ *
+ *  Exported so a UI can preview a rule BEFORE writing it using the exact
+ *  predicate step 4 will use. Do not count matches with a substring test:
+ *  `includes("nagar")` also hits "Nagarampalem", so the preview would claim
+ *  more stops than the rule takes — the one number the operator is relying on
+ *  to spot an over-broad name would be the number that is wrong. */
+export function localityNameMatchesAddress(
+  raw: string | null | undefined,
+  address: string | null | undefined,
+): boolean {
+  const key = normaliseLocalityKey(raw);
+  if (!key || !address) return false;
+  return localityKeyMatches(key, address);
+}
 
 // ---- rule-key chooser ----------------------------------------------------
 
