@@ -435,12 +435,20 @@ export default function AdminOrderDetailPage({
                   repeated here. */}
               <KeyVal k="Delivery date" v={formatDate(order.delivery_date)} />
               <KeyVal k="Delivery slot" v={show(slot)} />
+              {/* Not DASH. A missing distance is not a missing field — it is
+                  the one case where the fee was NOT banded off a measured
+                  trip. A customer order with an unmeasurable distance is
+                  refused outright, so the only way a null reaches this screen
+                  is an ADMIN OVERRIDE (order-checkout.ts:405/:415), which
+                  charges DELIVERY_FEE_TOP_BAND_INR — ₹32 on a distance nobody
+                  established. DASH renders that identically to a field that
+                  was simply never filled in, which hides it. */}
               <KeyVal
                 k="Distance"
                 v={
                   typeof order.distance_km === "number"
                     ? `${order.distance_km.toFixed(1)} km`
-                    : DASH
+                    : "distance unknown"
                 }
               />
               <div style={rowWrap}>
