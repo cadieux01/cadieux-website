@@ -77,9 +77,16 @@ export async function GET(req: NextRequest) {
 
   // Both the BAND and the serviceability cutoff are decided off the RAW
   // distance; only the returned display value is rounded, to 2 decimals.
-  // Pass the rounded value in and an address at 15.696 km would round to
-  // 15.7 and jump a band, so the order of these two lines is load-bearing:
-  // compute first, round second.
+  // The order of these two lines is load-bearing: compute first, round
+  // second. Feeding the rounded value into computeDeliveryFee costs money in
+  // both directions, because every band edge is a boundary rounding can cross:
+  //
+  //   14.996 km → displays 15.00 → billed ₹25 instead of ₹15 (over by ₹10;
+  //               band 1's bound is strict, so 15.00 is band 2)
+  //   30.004 km → displays 30.00 → ACCEPTED instead of refused, and the
+  //               serviceability gate is the one that must not be guessable
+  //
+  // The display number is for the customer's eyes; the raw one is the price.
   const { serviceable, feeInr } = computeDeliveryFee(distanceKm);
   return NextResponse.json({
     serviceable,
