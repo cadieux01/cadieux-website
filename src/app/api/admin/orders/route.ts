@@ -265,6 +265,10 @@ export async function POST(req: NextRequest) {
     status,
     payment_method: "cod",
     payment_status: isPaid ? "paid" : "pending",
+    // This route IS the offline channel: an operator typing in an order that
+    // was taken over the phone / in person. Independent of payment_status —
+    // an offline order can be paid (cash collected) or not.
+    source: "offline",
   };
   if (isPaid) {
     insertRow.paid_at = new Date().toISOString();

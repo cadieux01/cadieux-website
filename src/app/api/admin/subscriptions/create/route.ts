@@ -511,6 +511,9 @@ export async function POST(req: NextRequest) {
     paymentStatus,
     deliveryFeeInr: feePerDelivery,
     distanceKm,
+    // This route IS the offline channel. Independent of paymentStatus above:
+    // an offline plan can be paid (cash collected up front) or unpaid.
+    source: "offline",
   });
 
   const write = await insertMultiVariantSubscription(

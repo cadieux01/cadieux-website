@@ -180,6 +180,9 @@ export async function POST(req: NextRequest) {
       payment_method: "razorpay",
       payment_status: "created",
       razorpay_order_id: rzp.id,
+      // Stamped HERE, not inside orderInsertColumns — see the note in
+      // /api/checkout. The helper is shared with the admin register route.
+      source: "web",
     })
     .select("id, order_number, public_ref")
     .single();

@@ -147,6 +147,8 @@ import {
   subscriptionStatusRank,
 } from "@/lib/admin-shared";
 import { isOrphanedPayment } from "@/lib/subscription-visibility";
+import { isPaidStatus } from "@/lib/payment-label";
+import { isOfflineSource } from "@/lib/order-source";
 import { NoteIconButton } from "@/components/admin/NoteIconButton";
 import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
@@ -1495,6 +1497,25 @@ function SubscriptionsPageInner() {
                 // stays enabled, because the payment is good and the bread
                 // is owed, which is the whole reason it needs chasing.
                 const paidUnconfirmed = isPaidUnconfirmed(s);
+                // TWO INDEPENDENT FLAGS. They cross freely and neither may
+                // be derived from the other:
+                //
+                //   unpaid  — money has not arrived. Read from PAYMENT STATE
+                //             ONLY, via the same isPaidStatus the bake plan
+                //             uses (bake-plan-lines.ts:378), so the board and
+                //             the 04:45 email cannot disagree about which
+                //             plans are not to be baked.
+                //   offline — an operator typed this plan in. Read from
+                //             `source`, and ONLY from an explicit 'offline':
+                //             every row written before 2026-09-30 has source
+                //             NULL, which means UNKNOWN, not 'web'.
+                //
+                // Driving the red off `offline` instead would leave OLS10 —
+                // a WEB plan, unpaid, ₹1,440, active since 5 September —
+                // completely unmarked, which is the exact bug this pair
+                // exists to stop.
+                const unpaid = !isPaidStatus(s.payment_status);
+                const offline = isOfflineSource(s.source);
                 // The badge is ONE delivery's loaves — that date's stops when
                 // a delivery-date filter is on, otherwise this plan's next
                 // delivery. It is the number to bake, so it needs no "per
@@ -1595,9 +1616,18 @@ function SubscriptionsPageInner() {
                       // striping already owns the background, and an amber
                       // wash over alternating greys reads as two different
                       // ambers.
-                      boxShadow: paidUnconfirmed
-                        ? "inset 3px 0 0 0 #F59E0B"
-                        : undefined,
+                      //
+                      // Red beats amber, and the two cannot both be true
+                      // anyway — isPaidUnconfirmed requires isPaidStatus, so
+                      // a row is either unpaid or paid-unconfirmed, never
+                      // both. The `offline` flag deliberately does NOT touch
+                      // this rule: origin is not a problem, so it gets a
+                      // badge and no colour on the row.
+                      boxShadow: unpaid
+                        ? `inset 3px 0 0 0 ${DANGER}`
+                        : paidUnconfirmed
+                          ? "inset 3px 0 0 0 #F59E0B"
+                          : undefined,
                     }}
                   >
                     <td style={td} data-label="Select">
@@ -1620,6 +1650,31 @@ function SubscriptionsPageInner() {
                         {formatSubscriptionNumber(s)}
                         {isSubscriptionFulfilled(s) ? <FulfilledTick /> : null}
                       </span>
+                      {/* Where the plan came from, not how it is doing —
+                          so it sits with the reference, in cream, and is
+                          never filtered on. An offline plan is a NORMAL
+                          plan: it must stay in every list, every count and
+                          every bake total, just labelled. Absent when
+                          `source` is NULL, because 60 plans predate the
+                          column and NULL means unknown, not web. */}
+                      {offline && (
+                        <div
+                          style={{
+                            marginTop: 4,
+                            display: "inline-block",
+                            padding: "1px 6px",
+                            border: `1px solid ${BORDER_SUBTLE}`,
+                            color: TEXT_MUTED,
+                            fontSize: "0.75rem",
+                            letterSpacing: "0.1em",
+                            textTransform: "uppercase",
+                            borderRadius: 3,
+                          }}
+                          title="Entered by hand from a phone or in-person order, not placed by the customer online. Says nothing about payment — an offline plan can be paid or unpaid."
+                        >
+                          Offline
+                        </div>
+                      )}
                     </td>
                     <td style={td} data-label="Customer">
                       <Link
@@ -1833,6 +1888,29 @@ function SubscriptionsPageInner() {
                       <div style={{ marginTop: 4 }}>
                         <StatusBadge status={s.status} />
                       </div>
+                      {/* The exact phrase the 04:45 bake plan prints
+                          (bake-plan.ts:420/:454), not a second wording for
+                          the same fact: Sunny reads both surfaces on the
+                          same morning, and two phrases for one condition is
+                          how one of them gets read as a different one. */}
+                      {unpaid && (
+                        <div
+                          style={{
+                            marginTop: 4,
+                            display: "inline-block",
+                            padding: "1px 6px",
+                            border: `1px solid ${DANGER_BORDER}`,
+                            color: DANGER,
+                            fontSize: "0.75rem",
+                            letterSpacing: "0.1em",
+                            textTransform: "uppercase",
+                            borderRadius: 3,
+                          }}
+                          title="Subscriptions are prepaid. No payment has arrived on this plan — chase it; bake only if Sunny says so."
+                        >
+                          Unpaid — do not bake
+                        </div>
+                      )}
                       {/* The left rule says a row is special; this says WHICH
                           special. "Pending confirmation" alone reads as "no
                           hurry" and on a paid plan it is the opposite. */}

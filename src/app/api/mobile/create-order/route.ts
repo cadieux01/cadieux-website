@@ -390,6 +390,7 @@ export async function POST(req: NextRequest) {
       // Pre-order stamp: only when the site-wide toggle was ON at request
       // time. Normal orders leave the column untouched (default false).
       ...(preorderMode ? { is_preorder: true } : {}),
+      source: "app",
     })
     .select("id")
     .single();

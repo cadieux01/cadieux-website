@@ -432,6 +432,10 @@ export async function POST(req: NextRequest) {
         status: "pending",
         payment_method: "cod",
         payment_status: "pending",
+        // Stamped HERE, not inside orderInsertColumns — the helper is shared
+        // with /api/admin/orders, so a 'web' in there would label every
+        // operator-entered order as a customer web order.
+        source: "web",
       })
       .select("id, order_number, public_ref")
       .single();
@@ -944,6 +948,7 @@ export async function POST(req: NextRequest) {
         razorpayOrderId: rzp.order.id,
         deliveryFeeInr: feePerDelivery,
         distanceKm,
+        source: "web",
       });
       const write = await insertMultiVariantSubscription(
         supabaseAdmin,
@@ -1172,6 +1177,7 @@ export async function POST(req: NextRequest) {
         razorpay_order_id: rzpLegacy.order.id,
         delivery_fee_inr: feePerDelivery,
         distance_km: distanceKm,
+        source: "web",
       })
       .select("id")
       .single();

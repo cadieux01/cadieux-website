@@ -22,6 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { DayKey } from "@/lib/subscription-dates";
+import type { OrderSource } from "@/lib/order-source";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -108,6 +109,12 @@ export type MultiVariantSubscriptionInsertCtx = {
   deliveryFeeInr: number;
   /** Driving km from the P.M. Palem kitchen, for auditing serviceability. */
   distanceKm: number | null;
+  /** Which channel created this plan. REQUIRED, and deliberately has no
+   *  default here: this builder is shared by the public checkout and the
+   *  admin register form, so a default would silently label operator-entered
+   *  plans as customer ones. Being required means a new caller cannot compile
+   *  without deciding. */
+  source: OrderSource;
 };
 
 // ── Insert-row builder ──────────────────────────────────────────────
@@ -146,6 +153,7 @@ export function buildMultiVariantSubscriptionInsert(
     razorpayOrderId,
     deliveryFeeInr,
     distanceKm,
+    source,
   } = ctx;
 
   return {
@@ -180,6 +188,7 @@ export function buildMultiVariantSubscriptionInsert(
     total_amount: serverAmount,
     payment_status: paymentStatus,
     payment_method: paymentMethod,
+    source,
     razorpay_order_id: razorpayOrderId ?? null,
     delivery_fee_inr: deliveryFeeInr,
     distance_km: distanceKm,

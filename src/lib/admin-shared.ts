@@ -307,6 +307,10 @@ export type AdminSubscriptionRow = {
   payment_status: string;
   status: string;
   created_at: string;
+  /** 'web' | 'app' | 'offline', or null for anything written before the
+   *  column existed. NULL means UNKNOWN, not 'web' — test for 'offline'
+   *  explicitly via isOfflineSource(). */
+  source?: string | null;
   // Plan timing fields are surfaced by the subscription drawer; the
   // server returns them via SELECT *, but they may be null/absent on
   // legacy rows.

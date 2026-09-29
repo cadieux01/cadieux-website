@@ -963,6 +963,7 @@ async function handleMultiVariant(
       razorpay_order_id: rzp.order.id,
       delivery_fee_inr: feePerDelivery,
       distance_km: distanceKm,
+      source: "app",
     })
     // subscription_number (OLS<n>) is assigned by a BEFORE-INSERT trigger, so
     // it is already populated on the returned row. The app shows it as the
@@ -1434,6 +1435,7 @@ export async function POST(req: NextRequest) {
       razorpay_order_id: rzpLegacy.order.id,
       delivery_fee_inr: feePerDelivery,
       distance_km: distanceKm,
+      source: "app",
     })
     // See the multi-variant path above: OLS<n> is trigger-assigned, so it
     // comes back on the inserted row with no extra round trip.
