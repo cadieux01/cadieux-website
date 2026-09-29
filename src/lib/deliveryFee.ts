@@ -107,3 +107,53 @@ export function computeDeliveryFee(distanceKm: number): {
   }
   return { serviceable: false, feeInr: 0 };
 }
+
+// ── Executable statement of intent ──────────────────────────────────
+// The worked examples the ladder was agreed on, checked at module load in
+// dev. They are here rather than in a test file because the repo has no test
+// runner, and a pricing rule with no executable statement of intent is a rule
+// that drifts: change a constant above and you find out here, immediately,
+// instead of in a customer's bill.
+//
+// Every BOUNDARY is pinned, not just the middles — both sides of 15, 25 and
+// 30 — because a boundary is the only thing a band edit can move silently.
+// `null` means "refused" (serviceable: false); it is not a ₹0 price.
+//
+// NOT exported, for the same reason BAND_1_MAX_KM is not: this module is
+// imported by client components, so anything exported here can ship in the
+// browser bundle.
+const DELIVERY_FEE_EXAMPLES: ReadonlyArray<readonly [number, number | null]> = [
+  [14.99, 15],
+  [15.0, 25],
+  [25.0, 25],
+  [25.01, 32],
+  [30.0, 32],
+  [30.01, null],
+  [NaN, null],
+  [-1, null],
+];
+
+// DEV ONLY — must never throw in production.
+//
+// This runs at MODULE LOAD, and the module is on the checkout path. A throw
+// here in production would not be a failed price check, it would be a dead
+// checkout for every customer: the import fails, the route 500s, and nobody
+// can buy anything. A pricing bug that overcharges is recoverable; a
+// storefront that cannot take orders is not. So the loud failure is bought
+// only where it is free — in dev, where a human is watching.
+//
+// Next inlines process.env.NODE_ENV at build time, so in a production build
+// this whole block is dead code and is eliminated from both the server output
+// and the client bundle.
+if (process.env.NODE_ENV !== "production") {
+  for (const [km, expected] of DELIVERY_FEE_EXAMPLES) {
+    const { serviceable, feeInr } = computeDeliveryFee(km);
+    const actual = serviceable ? feeInr : null;
+    if (actual !== expected) {
+      const show = (v: number | null) => (v === null ? "refused" : `₹${v}`);
+      throw new Error(
+        `[deliveryFee] ladder broken: ${km} km should be ${show(expected)}, got ${show(actual)}`,
+      );
+    }
+  }
+}
