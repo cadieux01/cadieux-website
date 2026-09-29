@@ -1,6 +1,6 @@
 "use client";
 
-// Online / Deliveries — the routing view. STAGE 1: read-only.
+// Online / Deliveries — the routing view.
 //
 // The question this board answers is the one /admin/orders cannot: "what
 // does ONE person drive, in what order". Orders and subscriptions are two
@@ -28,10 +28,33 @@
 // is a different catalogue of 118 rows and would offer areas this resolver
 // can never match.
 //
-// STAGES 2 AND 3 (zone assignment, notes) are not built. Nothing here
-// designs them out: the Note column exists and renders empty, zone
-// provenance is carried on every row, and the parent ids an override would
-// be written against are on DeliveryRow already.
+// STAGE 2 (zone assignment) is live: long-press or double-tap a row to pin
+// it to a zone. STAGE 3 (notes) is not built — the Note column exists and
+// renders empty.
+//
+// WHAT AN ASSIGNMENT WRITES, AND WHY IT IS A ROW OVERRIDE AND NOT A RULE.
+// It writes one `delivery_zone_row_overrides` row, which is step 2 of
+// resolveZoneWithSource — ahead of every rule, always honoured, scoped to a
+// single order or subscription id. A learned LOCALITY rule was the obvious
+// alternative and it is a trap: step 4 of the resolver iterates the
+// BUILT-IN locality tokens in ZONE_DEFS and only then asks whether a rule
+// exists for that name, so a rule naming a locality that isn't already in
+// ZONE_DEFS is written, stored, and never fires. The partner would assign a
+// zone, see a success, and the address would stay unzoned forever. The
+// override has no such dependency on the built-in vocabulary.
+//
+// WHY THIS IS SAFE TO PUT IN A PARTNER'S HANDS: grepping "zone"
+// (case-insensitive) in src/lib/order-checkout.ts returns ZERO matches —
+// pricing is computed from distance in lib/deliveryFee.ts and never reads a
+// zone. Re-zoning therefore cannot change what any customer is charged, on
+// this order or any other. It only moves which list the row appears in.
+//
+// ATTRIBUTION IS NOT AVAILABLE. This admin surface has no per-user
+// accounts — audit_log.actor is always null here — so an assignment cannot
+// be attributed to a person. The override row records WHAT changed and
+// WHEN (zone + updated_at) and the popover says plainly that "who" is not
+// recorded. No `actor` is sent, so the route's own "admin" default stands
+// as the placeholder it is; nothing in this file renders it as a name.
 
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -39,11 +62,13 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { DayFilter } from "@/components/admin/DayFilter";
+import { ZoneAssignPopover } from "@/components/admin/ZoneAssignPopover";
 import { ZoneBadge } from "@/components/admin/ZoneBadge";
 import { adminFetch } from "@/lib/admin-client";
 import { useUrlWriteback } from "@/lib/admin-url-state";
@@ -64,7 +89,7 @@ import {
   type ZoneKey,
   type ZoneRuleSet,
 } from "@/lib/delivery-zones";
-import { buildRuleSet } from "@/lib/zone-rules";
+import { buildRuleSet, type ZoneRowOverrideRow } from "@/lib/zone-rules";
 import { mapsLinkFor } from "@/lib/order-share-message";
 import {
   orderToDeliveryRow,
@@ -181,6 +206,10 @@ function DeliveriesPageInner() {
   const [orders, setOrders] = useState<AdminOrderRow[] | null>(null);
   const [subs, setSubs] = useState<AdminSubscriptionRow[] | null>(null);
   const [rules, setRules] = useState<ZoneRuleSet>(EMPTY_RULE_SET);
+  // The raw override rows are kept alongside the derived rule set purely so
+  // an already-pinned row can offer "Remove pin" — that needs the override's
+  // id, and the ZoneRuleSet only carries id -> zone.
+  const [overrideRows, setOverrideRows] = useState<ZoneRowOverrideRow[]>([]);
   const [catalogue, setCatalogue] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -190,27 +219,28 @@ function DeliveriesPageInner() {
   // Rules first and always: a board that renders before they land shows
   // built-in zones for rows that have an override, which is the one way
   // this screen can silently disagree with /admin/orders.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetchAllRules();
-        if (!cancelled) {
-          setRules(
-            res.rules.length + res.overrides.length === 0
-              ? EMPTY_RULE_SET
-              : buildRuleSet(res.rules, res.overrides),
-          );
-        }
-      } catch {
-        // Built-in map only. The board still routes; it just cannot honour
-        // learned rules, which is strictly better than not rendering.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  // Also re-run after an assignment: the popover's onChanged calls this, so
+  // the new override is read back from the server rather than patched into
+  // local state. A local patch is a second implementation of step 2 of the
+  // resolver, and the whole point of this board is that there is only one.
+  const loadRules = useCallback(async () => {
+    try {
+      const res = await fetchAllRules();
+      setOverrideRows(res.overrides ?? []);
+      setRules(
+        res.rules.length + res.overrides.length === 0
+          ? EMPTY_RULE_SET
+          : buildRuleSet(res.rules, res.overrides),
+      );
+    } catch {
+      // Built-in map only. The board still routes; it just cannot honour
+      // learned rules, which is strictly better than not rendering.
+    }
   }, []);
+
+  useEffect(() => {
+    void loadRules();
+  }, [loadRules]);
 
   // The product list for the totals strip. Read from the products table
   // (this feed is `select id, name from products`), never hardcoded — a
@@ -419,10 +449,43 @@ function DeliveriesPageInner() {
     setPick({ zone, area });
   }, []);
 
+  // ---- assignment ---------------------------------------------------------
+
+  // Keyed by DeliveryRow.key, not by the row object: the row is rebuilt from
+  // scratch every time the rules refetch, so holding the object would leave
+  // the popover describing the zone the row had BEFORE the write it just made.
+  const [assignKey, setAssignKey] = useState<string | null>(null);
+  const [assignRect, setAssignRect] = useState<DOMRect | null>(null);
+
+  const openAssign = useCallback((row: DeliveryRow, rect: DOMRect) => {
+    // Pickups are siphoned at step 1 of the resolver, ahead of the override
+    // step, so an override written against one could never fire — the
+    // popover would report a success that changes nothing.
+    if (row.zone === "pickup") return;
+    setAssignKey(row.key);
+    setAssignRect(rect);
+  }, []);
+
+  const assignRow = useMemo(
+    () => (assignKey ? allRows.find((r) => r.key === assignKey) ?? null : null),
+    [assignKey, allRows],
+  );
+
+  const assignOverride = useMemo(() => {
+    if (!assignRow || assignRow.zoneSource !== "row_override") return null;
+    return (
+      overrideRows.find((o) =>
+        assignRow.orderId
+          ? o.order_id === assignRow.orderId
+          : o.subscription_id === assignRow.subscriptionId,
+      ) ?? null
+    );
+  }, [assignRow, overrideRows]);
+
   return (
     <AdminShell
       title="Online / Deliveries"
-      subtitle="Today's stops, grouped by zone then area. Read-only."
+      subtitle="Today's stops, grouped by zone then area. Long-press a stop to pin its zone."
     >
       <div
         style={{
@@ -780,12 +843,26 @@ function DeliveriesPageInner() {
               {pick.area ? ` · ${areaLabel(pick.area)}` : ""} —{" "}
               {visibleRows.length} stop{visibleRows.length === 1 ? "" : "s"}
             </div>
+            {/* The gesture is invisible otherwise. The zone pill is the
+                keyboard/assistive route to the same popover. */}
+            <p
+              style={{
+                margin: "0.35rem 0 0",
+                color: FAINT,
+                fontFamily: "var(--font-body)",
+                fontSize: "0.7rem",
+                letterSpacing: "0.04em",
+              }}
+            >
+              Long-press or double-tap a stop — or tap its zone pill — to pin
+              it to a zone. Pins apply to that stop only.
+            </p>
             {visibleRows.length === 0 ? (
               <p style={{ ...emptyMenuStyle, padding: "0.75rem 0" }}>
                 Nothing here for this date and search.
               </p>
             ) : (
-              <DeliveryTable rows={visibleRows} />
+              <DeliveryTable rows={visibleRows} onAssign={openAssign} />
             )}
           </section>
         ) : (
@@ -803,6 +880,47 @@ function DeliveriesPageInner() {
           </p>
         )}
       </div>
+
+      {/* ruleKey is hardcoded null, which forces the popover into ROW-PIN
+          mode. That is deliberate and is the whole safety property of this
+          screen: rule mode would write a delivery_zone_rules row, and a
+          locality rule for a name outside ZONE_DEFS never fires (see the
+          module header). Per-order only — assigning one stop cannot re-zone
+          another address that merely looks similar. If a whole locality
+          genuinely needs moving, that is a rules decision for /admin/orders,
+          not something this board should infer from one stop. */}
+      {assignRow ? (
+        <ZoneAssignPopover
+          open
+          onClose={() => setAssignKey(null)}
+          currentZone={assignRow.zone}
+          resolution={{ zone: assignRow.zone, source: assignRow.zoneSource }}
+          target={
+            assignRow.orderId
+              ? { kind: "order", id: assignRow.orderId }
+              : { kind: "subscription", id: assignRow.subscriptionId! }
+          }
+          ruleKey={null}
+          existingOverrideId={assignOverride?.id ?? null}
+          onChanged={() => void loadRules()}
+          anchorRect={assignRect}
+          rowPinNote={
+            <>
+              Pins {assignRow.ref} to a zone. This stop only — no other
+              address moves, and nothing is learned for future orders.
+              {assignOverride ? (
+                <>
+                  {" "}
+                  Currently pinned, last changed{" "}
+                  {formatStamp(assignOverride.updated_at)}. Who made that
+                  change is not recorded — this admin has no per-user
+                  accounts.
+                </>
+              ) : null}
+            </>
+          }
+        />
+      ) : null}
     </AdminShell>
   );
 }
@@ -821,7 +939,13 @@ const COLUMNS = [
   "Note",
 ] as const;
 
-function DeliveryTable({ rows }: { rows: readonly DeliveryRow[] }) {
+function DeliveryTable({
+  rows,
+  onAssign,
+}: {
+  rows: readonly DeliveryRow[];
+  onAssign: (row: DeliveryRow, rect: DOMRect) => void;
+}) {
   return (
     <table
       style={{
@@ -868,40 +992,120 @@ function DeliveryTable({ rows }: { rows: readonly DeliveryRow[] }) {
       </thead>
       <tbody className="block md:table-row-group">
         {rows.map((r) => (
-          <tr
-            key={r.key}
-            className="block md:table-row"
-            style={{ borderTop: `1px solid ${BORDER}` }}
-          >
-            <Cell label="Order ID">
-              <span style={{ letterSpacing: "0.06em" }}>{r.ref}</span>
-            </Cell>
-            <Cell label="Customer">
-              <div style={{ wordBreak: "break-word" }}>
-                {r.customerName ?? "—"}
-              </div>
-              {r.phone ? <PhoneActions row={r} /> : null}
-            </Cell>
-            <Cell label="Address">
-              <div style={{ wordBreak: "break-word", lineHeight: 1.45 }}>
-                {r.address || "—"}
-              </div>
-              {r.address ? <AddressActions row={r} /> : null}
-            </Cell>
-            <Cell label="Zone">
-              <ZoneBadge zone={r.zone} source={r.zoneSource} compact />
-            </Cell>
-            <Cell label="Payment">{r.paymentMode}</Cell>
-            <Cell label="Total">{formatINR(r.totalInr)}</Cell>
-            {/* Stage 3. The column is here so the table it lands in is the
-                table that shipped, not a seventh column added later. */}
-            <Cell label="Note">
-              <span style={{ color: FAINT }}>{r.note ?? ""}</span>
-            </Cell>
-          </tr>
+          <DeliveryTableRow key={r.key} row={r} onAssign={onAssign} />
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** Long-press delay. 500ms is the platform convention for a context press
+ *  on both iOS and Android; shorter fires while the rider is still scrolling. */
+const LONG_PRESS_MS = 500;
+/** A press that travels further than this is a scroll, not a press. */
+const LONG_PRESS_SLOP_PX = 10;
+
+function DeliveryTableRow({
+  row: r,
+  onAssign,
+}: {
+  row: DeliveryRow;
+  onAssign: (row: DeliveryRow, rect: DOMRect) => void;
+}) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const fired = useRef(false);
+
+  const cancel = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    start.current = null;
+  }, []);
+
+  useEffect(() => cancel, [cancel]);
+
+  // The row already contains real links and buttons — the phone number,
+  // WhatsApp, Map, Share. A press that lands on one of those belongs to it.
+  const onInteractiveTarget = (e: { target: EventTarget | null }) =>
+    e.target instanceof Element && e.target.closest("a,button") !== null;
+
+  return (
+    <tr
+      className="block md:table-row"
+      style={{
+        borderTop: `1px solid ${BORDER}`,
+        // Suppresses the iOS "copy / look up" callout that a long press
+        // would otherwise raise on top of the popover.
+        WebkitTouchCallout: "none",
+      }}
+      onPointerDown={(e) => {
+        if (onInteractiveTarget(e)) return;
+        fired.current = false;
+        start.current = { x: e.clientX, y: e.clientY };
+        const rect = e.currentTarget.getBoundingClientRect();
+        timer.current = setTimeout(() => {
+          fired.current = true;
+          onAssign(r, rect);
+        }, LONG_PRESS_MS);
+      }}
+      onPointerMove={(e) => {
+        const s = start.current;
+        if (!s) return;
+        if (
+          Math.abs(e.clientX - s.x) > LONG_PRESS_SLOP_PX ||
+          Math.abs(e.clientY - s.y) > LONG_PRESS_SLOP_PX
+        ) {
+          cancel();
+        }
+      }}
+      onPointerUp={cancel}
+      onPointerCancel={cancel}
+      onPointerLeave={cancel}
+      onContextMenu={(e) => {
+        // Android raises the native context menu at the same moment the
+        // long press completes; without this it covers the popover.
+        if (fired.current) e.preventDefault();
+      }}
+      onDoubleClick={(e) => {
+        if (onInteractiveTarget(e)) return;
+        onAssign(r, e.currentTarget.getBoundingClientRect());
+      }}
+    >
+      <Cell label="Order ID">
+        <span style={{ letterSpacing: "0.06em" }}>{r.ref}</span>
+      </Cell>
+      <Cell label="Customer">
+        <div style={{ wordBreak: "break-word" }}>{r.customerName ?? "—"}</div>
+        {r.phone ? <PhoneActions row={r} /> : null}
+      </Cell>
+      <Cell label="Address">
+        <div style={{ wordBreak: "break-word", lineHeight: 1.45 }}>
+          {r.address || "—"}
+        </div>
+        {r.address ? <AddressActions row={r} /> : null}
+      </Cell>
+      <Cell label="Zone">
+        {/* Same popover, reachable by a plain tap and by the keyboard. The
+            gesture is the phone affordance; this is the accessible one, and
+            it is how /admin/orders already opens it. */}
+        <ZoneBadge
+          zone={r.zone}
+          source={r.zoneSource}
+          compact
+          onClick={(e) => {
+            e.stopPropagation();
+            onAssign(r, (e.currentTarget as HTMLElement).getBoundingClientRect());
+          }}
+        />
+      </Cell>
+      <Cell label="Payment">{r.paymentMode}</Cell>
+      <Cell label="Total">{formatINR(r.totalInr)}</Cell>
+      {/* Stage 3. The column is here so the table it lands in is the
+          table that shipped, not a seventh column added later. */}
+      <Cell label="Note">
+        <span style={{ color: FAINT }}>{r.note ?? ""}</span>
+      </Cell>
+    </tr>
   );
 }
 
@@ -1016,6 +1220,23 @@ function AddressActions({ row }: { row: DeliveryRow }) {
 
 function areaLabel(area: string): string {
   return area === NO_AREA ? "No area named" : area;
+}
+
+/** WHEN a pin was last changed, in IST. Deliberately the only provenance
+ *  this board shows: the override row's `created_by` is a placeholder the
+ *  API route writes, not a person, and rendering it would imply an
+ *  attribution that does not exist on this admin surface. */
+function formatStamp(iso: string | null | undefined): string {
+  if (!iso) return "at an unknown time";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "at an unknown time";
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function describeSelection(sel: DaySelection): string {

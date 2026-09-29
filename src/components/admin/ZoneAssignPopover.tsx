@@ -62,6 +62,7 @@ export function ZoneAssignPopover({
   existingOverrideId,
   onChanged,
   anchorRect,
+  rowPinNote,
 }: {
   open: boolean;
   onClose: () => void;
@@ -73,6 +74,12 @@ export function ZoneAssignPopover({
   existingOverrideId?: string | null;
   onChanged: () => void;
   anchorRect: DOMRect | null;
+  /** Replaces the default row-pin explanation. The orders board only ever
+   *  reaches row-pin mode when the address has no key, so the default
+   *  sentence is true there. A caller that forces row-pin mode for a
+   *  different reason (the deliveries board pins per-order on purpose, key
+   *  or no key) must say why, or the popover states a reason that is false. */
+  rowPinNote?: React.ReactNode;
 }) {
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [pending, setPending] = useState<NumberedZone | "clear" | null>(null);
@@ -230,7 +237,9 @@ export function ZoneAssignPopover({
             </span>
           </>
         ) : (
-          <>This address has no pincode, so this applies to this order only and nothing is learned.</>
+          rowPinNote ?? (
+            <>This address has no pincode, so this applies to this order only and nothing is learned.</>
+          )
         )}
       </div>
 
