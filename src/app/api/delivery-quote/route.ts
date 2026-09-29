@@ -81,8 +81,8 @@ export async function GET(req: NextRequest) {
   // second. Feeding the rounded value into computeDeliveryFee costs money in
   // both directions, because every band edge is a boundary rounding can cross:
   //
-  //   14.996 km → displays 15.00 → billed ₹25 instead of ₹15 (over by ₹10;
-  //               band 1's bound is strict, so 15.00 is band 2)
+  //   4.996 km  → displays 5.00 → billed ₹30 instead of ₹15 (over by ₹15;
+  //               band 1's bound is strict, so 5.00 is band 2)
   //   30.004 km → displays 30.00 → ACCEPTED instead of refused, and the
   //               serviceability gate is the one that must not be guessable
   //

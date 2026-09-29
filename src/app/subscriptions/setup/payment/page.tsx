@@ -453,9 +453,10 @@ export default function PaymentPage() {
               </div>
             ))}
           </div>
-          {/* Delivery fee — charged on EVERY delivery, the same flat fee
-              as a one-time order. Shown per-delivery and as a total so the
-              customer can see exactly what the up-front figure is made of. */}
+          {/* Delivery fee — charged on EVERY delivery, banded by distance
+              exactly as a one-time order is. Shown per-delivery and as a
+              total so the customer can see exactly what the up-front figure
+              is made of. */}
           <div
             style={{
               display: "flex",
