@@ -109,7 +109,6 @@ import {
   countLines,
   countPlan,
   countsByDateFromRecord,
-  countsFromRecord,
   longCountText,
   nameHintFor,
   totalLoaves,
@@ -774,10 +773,12 @@ function SubscriptionsPageInner() {
   // moves these numbers with the rows. Nothing here re-reads the raw list,
   // which is the only way the bar and the table can be guaranteed to agree.
   //
-  // `loaf_counts` is summed server-side across each plan's non-cancelled
-  // deliveries (see the enrich branch of /api/admin/subscriptions). Rows
-  // fetched without ?enrich=1 have none, and countsFromRecord returns an
-  // empty map for them rather than guessing.
+  // The source is `loaf_counts_by_date` — date → slug → loaves, built in the
+  // enrich branch of /api/admin/subscriptions and already excluding cancelled
+  // stops. Its sibling `loaf_counts` (the whole-plan sum) is deliberately NOT
+  // read here any more; see the note on `countsBySub`. Rows fetched without
+  // ?enrich=1 carry neither, and countsByDateFromRecord returns an empty map
+  // for them rather than guessing.
   const nameHint = useMemo(() => nameHintFor(filtered), [filtered]);
 
   // Is the summary scoped to ONE date?
@@ -798,15 +799,33 @@ function SubscriptionsPageInner() {
   // independently they can drift, and the screen shows a total that none of
   // the visible rows add up to. Deriving both from this map makes that
   // unrepresentable rather than merely unlikely.
+  //
+  // NEITHER BRANCH IS THE WHOLE PLAN ANY MORE. The badge answers one
+  // question — "how many do I bake for this customer's next delivery" — and
+  // a lifetime total cannot answer it. OLS52 read `P 2 M 2` on the row while
+  // opening it showed 1 Protein + 1 Multigrain per delivery: both numbers
+  // were right, and the one on the board was right about something nobody
+  // was asking. A bake figure that is silently a multi-week sum is the
+  // dangerous kind of wrong, because it is plausible.
+  //
+  //   date selected  that date's stops (unchanged).
+  //   all dates      the row's OWN next delivery, which is a different
+  //                  calendar day for almost every row. Per-row that is
+  //                  exactly right; SUMMED it is meaningless, which is why
+  //                  the bar refuses to print a total here — see `summary`.
   const countsBySub = useMemo(() => {
     const out = new Map<string, LoafCounts>();
     for (const s of filtered) {
+      const byDate = countsByDateFromRecord(s.loaf_counts_by_date);
+      // `next_delivery` is the earliest non-terminal stop, already derived
+      // server-side (admin-subscription-derive.ts) and the same field the
+      // share message uses — so the badge and the rider's message cannot
+      // disagree about which delivery is next. Null once every stop is
+      // delivered or cancelled: an empty map, not a fallback to the plan.
+      const key = dateScoped ? day : s.next_delivery?.date ?? null;
       out.set(
         s.id,
-        dateScoped
-          ? countsByDateFromRecord(s.loaf_counts_by_date).get(day) ??
-            (new Map() as LoafCounts)
-          : countsFromRecord(s.loaf_counts),
+        (key ? byDate.get(key) : undefined) ?? (new Map() as LoafCounts),
       );
     }
     return out;
@@ -820,7 +839,24 @@ function SubscriptionsPageInner() {
   // date, and only a plan with a non-cancelled stop on it qualifies.
   // `filtered.length` is the row count, which is the right number for the
   // unscoped sentence and would merely be a plausible one here.
+  // The summary bar. `counts` IS NULL WITHOUT A DATE, on purpose.
+  //
+  // A total is only a bake figure when every row it sums lands on the same
+  // day. With a date selected that holds. On "All dates" each row now
+  // contributes its own next delivery, and those are different calendar days
+  // — so a sum would be loaves nobody bakes in one session, printed in the
+  // same type, same place, same units as the figure that IS a bake total.
+  // The operator has no way to tell the two apart, and the plausible one is
+  // the one that gets acted on.
+  //
+  // Returning null rather than a number the caller may choose to hide makes
+  // the refusal structural: there is nothing to accidentally render.
   const summary = useMemo(() => {
+    if (!dateScoped) {
+      // `subs` keeps its long-standing unscoped meaning: every row in the
+      // filter, including rows fetched without ?enrich=1 that carry no counts.
+      return { counts: null, subs: filtered.length };
+    }
     const counts: LoafCounts = new Map();
     let subs = 0;
     for (const s of filtered) {
@@ -828,14 +864,12 @@ function SubscriptionsPageInner() {
       if (c.size > 0) subs += 1;
       addCounts(counts, c);
     }
-    // Unscoped keeps its long-standing meaning: every row in the filter,
-    // including any that carry no counts (rows fetched without ?enrich=1).
-    return { counts, subs: dateScoped ? subs : filtered.length };
+    return { counts, subs };
   }, [filtered, countsBySub, dateScoped]);
 
   const filteredCounts = summary.counts;
   const filteredLines = useMemo(
-    () => countLines(filteredCounts, nameHint),
+    () => (filteredCounts ? countLines(filteredCounts, nameHint) : []),
     [filteredCounts, nameHint],
   );
 
@@ -1314,15 +1348,22 @@ function SubscriptionsPageInner() {
               the legacy column would show Multigrain 31 / Plain 12 where
               the truth is 31 / 21.
 
-              WITH A DATE SELECTED these become THAT DATE's stops, summed
-              from loaf_counts_by_date instead of the whole-plan
-              loaf_counts. A date-filtered board showing lifetime totals
-              answered a question nobody had asked: on 23 Sep it read
-              P 3 / M 22 / 25 loaves, which is what those four plans come to
-              over their whole runs, when six loaves were going out. Both
-              maps are bucketed by `scheduled_date ?? delivery_date`, the
-              same precedence the day filter matches rows on. */}
-          <CountMarkers lines={filteredLines} />
+              THESE EXIST ONLY WITH A DATE SELECTED. They are that date's
+              stops, summed from loaf_counts_by_date. A date-filtered board
+              showing lifetime totals answered a question nobody had asked:
+              on 23 Sep it read P 3 / M 22 / 25 loaves, which is what those
+              four plans come to over their whole runs, when six loaves were
+              going out. The map is bucketed by
+              `scheduled_date ?? delivery_date`, the same precedence the day
+              filter matches rows on.
+
+              On "All dates" there are NO markers, because there is no
+              single-day population to count. Each row's badge shows its own
+              next delivery and those fall on different days; a sum of them
+              would look exactly like a bake total. See `summary`. */}
+          {filteredLines.length > 0 ? (
+            <CountMarkers lines={filteredLines} />
+          ) : null}
           <span style={{ marginLeft: "auto", color: cream(0.85) }}>
             {filtered.reduce(
               (n, s) => (isSubscriptionFulfilled(s) ? n + 1 : n),
@@ -1333,7 +1374,14 @@ function SubscriptionsPageInner() {
           {/* WHAT THE NUMBERS COVER, on screen. A loaf total means nothing
               without its population, and this board's filters change that
               population constantly. Spelled out rather than left to be
-              inferred from the chips. */}
+              inferred from the chips.
+
+              The unscoped sentence used to read "every non-cancelled
+              delivery, whole plan, not per week". That described the old
+              whole-plan badge and is now false twice over: the badge is a
+              single delivery, and there is no total above this line at all.
+              A subtitle describing behaviour the board no longer has is the
+              stale comment, on screen, where an operator acts on it. */}
           <span
             style={{
               flexBasis: "100%",
@@ -1341,17 +1389,20 @@ function SubscriptionsPageInner() {
               fontSize: 12,
             }}
           >
-            {totalLoaves(filteredCounts)} loaves across {summary.subs}{" "}
-            subscription{summary.subs === 1 ? "" : "s"}{" "}
-            {dateScoped ? (
+            {dateScoped && filteredCounts ? (
               <>
-                delivering on {formatDate(day)} — that date&rsquo;s stops
-                only, cancelled excluded. Not the whole plan.
+                {totalLoaves(filteredCounts)} loaves across {summary.subs}{" "}
+                subscription{summary.subs === 1 ? "" : "s"} delivering on{" "}
+                {formatDate(day)} — that date&rsquo;s stops only, cancelled
+                excluded. This is the bake total for that day.
               </>
             ) : (
               <>
-                in this filter — every non-cancelled delivery, whole plan, not
-                per week.
+                No bake total across all dates — {summary.subs} subscription
+                {summary.subs === 1 ? "" : "s"} in this filter, and each
+                one&rsquo;s next delivery falls on a different day, so there is
+                nothing meaningful to add up. Each row shows what to bake for
+                its own next delivery. Pick a date for that day&rsquo;s total.
               </>
             )}
           </span>
@@ -1410,12 +1461,10 @@ function SubscriptionsPageInner() {
                 // stays enabled, because the payment is good and the bread
                 // is owed, which is the whole reason it needs chasing.
                 const paidUnconfirmed = isPaidUnconfirmed(s);
-                // Two different totals, deliberately: the markers show the
-                // scope the SUMMARY BAR is showing — whole plan normally,
-                // that date's stops only when a delivery-date filter is on —
-                // while the tooltip adds what goes in one bag. Showing only
-                // the per-delivery figure is how a 5-week plan reads as 2
-                // loaves.
+                // The badge is ONE delivery's loaves — that date's stops when
+                // a delivery-date filter is on, otherwise this plan's next
+                // delivery. It is the number to bake, so it needs no "per
+                // delivery" gloss; it already is one.
                 //
                 // Read from countsBySub, NOT from s.loaf_counts directly.
                 // The bar is the sum of these rows; if the row re-derived its
@@ -1425,18 +1474,25 @@ function SubscriptionsPageInner() {
                 const rowCounts =
                   countsBySub.get(s.id) ?? (new Map() as LoafCounts);
                 const rowLines = countLines(rowCounts, nameHint);
-                const perDelivery = longCountText(
+                // The plan's standing per-delivery template. Normally equal to
+                // the badge, so it is shown ONLY when it differs — which means
+                // this particular stop was edited away from the plan, and that
+                // is worth saying. Printing it when identical taught the
+                // operator to ignore the tooltip.
+                const planPerDelivery = longCountText(
                   countLines(countPlan(s), nameHint),
                 );
+                const badgeText = longCountText(rowLines);
+                const whichDelivery = dateScoped
+                  ? `delivering on ${formatDate(day)}`
+                  : s.next_delivery?.date
+                    ? `for the next delivery, ${formatDate(s.next_delivery.date)}`
+                    : "for the next delivery";
                 const rowCountTitle = [
-                  rowLines.length > 0
-                    ? `${longCountText(rowLines)} ${
-                        dateScoped
-                          ? `delivering on ${formatDate(day)}`
-                          : "across all non-cancelled deliveries"
-                      }`
+                  rowLines.length > 0 ? `${badgeText} ${whichDelivery}` : null,
+                  planPerDelivery && planPerDelivery !== badgeText
+                    ? `plan is ${planPerDelivery} per delivery`
                     : null,
-                  perDelivery ? `${perDelivery} per delivery` : null,
                 ]
                   .filter(Boolean)
                   .join(" · ");
