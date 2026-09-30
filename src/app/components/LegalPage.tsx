@@ -3,8 +3,17 @@ import Link from "next/link";
 // Shared chrome for Termly-generated legal documents.
 // - Reads pre-cleaned HTML at build time and injects via dangerouslySetInnerHTML.
 // - Overrides Termly's hard-coded Arial / hex colours with Cadieux brand fonts
-//   (DM Sans headings + body) and cream-on-walnut palette.
+//   (DM Sans headings + body) and the ink-on-ash palette.
 // - Layout: ~800 px max-width column, generous padding, "Back to Home" link.
+//
+// PALETTE HISTORY, because it explains every contrast bug found in this file:
+// this component was written for a DARK walnut background, where cream type
+// and silver body copy were correct. The site later flipped its background to
+// ash (--color-silver #c0c8ce) and the type colours were never re-done, so
+// silver text landed on a silver page (1.00:1) and cream headings on it at
+// 1.52:1. Both are now ink #024628. Hierarchy is carried by size, weight,
+// letter-spacing and case — not by lightness — which is what it should have
+// been on a light ground anyway.
 type Props = {
   title: string;
   html: string;
@@ -45,7 +54,7 @@ export default function LegalPage({ title, html, children }: Props) {
         .legal-page {
           min-height: 100vh;
           padding: 4rem 1.5rem 6rem;
-          color: var(--color-cream);
+          color: #024628;
         }
         .legal-page__inner {
           max-width: 800px;
@@ -63,14 +72,14 @@ export default function LegalPage({ title, html, children }: Props) {
              the page background, so "← Back to Home" was invisible on all six
              legal pages — including /delete-account, where it is the only way
              out. Kept muted (a tint of the ink) because it is chrome, not
-             prose; the cream :hover below still lifts it on interaction. */
+             prose; :hover below brings it to full strength. */
           color: rgba(2,70,40,0.75);
           text-decoration: none;
           margin-bottom: 3rem;
           transition: color 200ms ease;
         }
         .legal-page__back:hover {
-          color: var(--color-cream);
+          color: #024628;
         }
         .legal-page__title {
           font-family: var(--font-heading);
@@ -78,7 +87,7 @@ export default function LegalPage({ title, html, children }: Props) {
           font-size: clamp(2.4rem, 5vw, 3.6rem);
           letter-spacing: 0.06em;
           text-transform: uppercase;
-          color: var(--color-cream);
+          color: #024628;
           margin: 0 0 2.5rem;
           line-height: 1.1;
         }
@@ -96,7 +105,7 @@ export default function LegalPage({ title, html, children }: Props) {
         .legal-page__body h1 {
           font-family: var(--font-heading) !important;
           font-weight: 300 !important;
-          color: var(--color-cream) !important;
+          color: #024628 !important;
           letter-spacing: 0.04em !important;
         }
         /* Termly's original H1 sits at the top of each doc — we render our own
@@ -124,7 +133,7 @@ export default function LegalPage({ title, html, children }: Props) {
           font-family: var(--font-heading) !important;
           font-weight: 400 !important;
           font-size: clamp(1.5rem, 3vw, 1.9rem) !important;
-          color: var(--color-cream) !important;
+          color: #024628 !important;
           letter-spacing: 0.04em !important;
           margin: 2.5rem 0 1rem !important;
           line-height: 1.25 !important;
@@ -135,7 +144,7 @@ export default function LegalPage({ title, html, children }: Props) {
           font-family: var(--font-heading) !important;
           font-weight: 400 !important;
           font-size: 1.25rem !important;
-          color: var(--color-cream) !important;
+          color: #024628 !important;
           letter-spacing: 0.03em !important;
           margin: 1.75rem 0 0.75rem !important;
           line-height: 1.3 !important;
@@ -163,7 +172,7 @@ export default function LegalPage({ title, html, children }: Props) {
         }
         .legal-page__body strong,
         .legal-page__body b {
-          color: var(--color-cream) !important;
+          color: #024628 !important;
           font-weight: 500 !important;
         }
         .legal-page__body [data-custom-class='link'],
@@ -175,8 +184,11 @@ export default function LegalPage({ title, html, children }: Props) {
           text-underline-offset: 0.2em;
           word-break: break-word;
         }
+        /* Hover used to LIGHTEN to cream, which was the right move on the dark
+           walnut ground this component was designed for. On ash it has to
+           darken instead, or hovering a link makes it harder to read. */
         .legal-page__body a:hover {
-          color: var(--color-cream) !important;
+          color: #013222 !important;
         }
         .legal-page__body ul,
         .legal-page__body ol {
@@ -200,7 +212,7 @@ export default function LegalPage({ title, html, children }: Props) {
         }
         .legal-page__body th {
           background: rgba(2,70,40,0.25) !important;
-          color: var(--color-cream) !important;
+          color: #024628 !important;
           font-weight: 500 !important;
         }
         .legal-page__body hr {

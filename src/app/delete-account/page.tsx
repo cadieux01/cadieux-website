@@ -85,7 +85,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
         fontWeight: 400,
         fontSize: "clamp(1.4rem, 2.5vw, 1.75rem)",
         letterSpacing: "0.04em",
-        color: "var(--color-cream)",
+        color: "#024628",
         margin: "2.5rem 0 0.75rem",
         lineHeight: 1.2,
       }}
@@ -181,7 +181,7 @@ export default function DeleteAccountPage() {
         <a
           href={`mailto:${CONTACT}`}
           style={{
-            color: "var(--color-cream)",
+            color: "#024628",
             textDecoration: "underline",
             textUnderlineOffset: "3px",
           }}

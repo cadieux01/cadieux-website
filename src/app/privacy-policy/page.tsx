@@ -48,7 +48,7 @@ export default function PrivacyPolicyPage() {
             fontWeight: 400,
             fontSize: "clamp(1.5rem, 3vw, 1.9rem)",
             letterSpacing: "0.04em",
-            color: "var(--color-cream)",
+            color: "#024628",
             margin: "0 0 1rem",
           }}
         >
@@ -66,7 +66,7 @@ export default function PrivacyPolicyPage() {
           }}
         >
           In accordance with the{" "}
-          <strong style={{ color: "var(--color-cream)", fontWeight: 500 }}>
+          <strong style={{ color: "#024628", fontWeight: 500 }}>
             Digital Personal Data Protection Act, 2023
           </strong>{" "}
           (DPDP Act), you have the right to access, correct, update, or request
@@ -99,7 +99,7 @@ export default function PrivacyPolicyPage() {
             margin: "0 0 1rem",
           }}
         >
-          <strong style={{ color: "var(--color-cream)", fontWeight: 500 }}>
+          <strong style={{ color: "#024628", fontWeight: 500 }}>
             Sunny Raj
           </strong>
           <br />
