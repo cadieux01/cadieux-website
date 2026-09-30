@@ -105,10 +105,7 @@ import {
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { DayFilter } from "@/components/admin/DayFilter";
-import {
-  NUMBERED_ZONES,
-  ZoneAssignPopover,
-} from "@/components/admin/ZoneAssignPopover";
+import { ZoneAssignPopover } from "@/components/admin/ZoneAssignPopover";
 import { ZoneBadge } from "@/components/admin/ZoneBadge";
 import { adminFetch } from "@/lib/admin-client";
 import { useUrlWriteback } from "@/lib/admin-url-state";
@@ -131,11 +128,7 @@ import {
   type ZoneKey,
   type ZoneRuleSet,
 } from "@/lib/delivery-zones";
-import {
-  buildRuleSet,
-  isNumberedZone,
-  type ZoneRowOverrideRow,
-} from "@/lib/zone-rules";
+import { buildRuleSet, type ZoneRowOverrideRow } from "@/lib/zone-rules";
 import { mapsLinkFor } from "@/lib/order-share-message";
 import { NOTE_BODY_MAX, type OrderNoteRow } from "@/lib/order-notes";
 import {
@@ -180,17 +173,10 @@ const NO_AREA = "\u0000none";
 
 /** What "Add to List" needs, threaded from the page down to the button. */
 type AreaNaming = {
-  /** Every locality rule that already exists, normalised key → the zone it
-   *  currently points at.
-   *
-   *  THE ZONE, not just the key. `delivery_zone_rules` is UNIQUE on
-   *  (key_type, key_value) and the POST route upserts, so writing a name
-   *  that is already on the list REPLACES its zone. The form has to be able
-   *  to say which zone it would be replacing, by name, before it does it —
-   *  a set of keys can only say "taken", which is not enough to decide
-   *  with. Keys, not raw inputs: "P.M. Palem" and "pm palem" normalise to
-   *  the same rule and only one of them can exist. */
-  localityZones: ReadonlyMap<string, NumberedZone>;
+  /** Normalised keys that already have a locality rule — the "already
+   *  exists" guard. Keys, not raw inputs: "P.M. Palem" and "pm palem"
+   *  normalise to the same rule and only one of them can be written. */
+  takenKeys: ReadonlySet<string>;
   /** Every row loaded for this source — the population the match count is
    *  measured against. */
   stops: readonly DeliveryRow[];
@@ -469,7 +455,7 @@ function DeliveriesPageInner() {
    *  stops would make the broadest names look the safest. */
   const naming = useMemo<AreaNaming>(
     () => ({
-      localityZones: rules.locality,
+      takenKeys: new Set(rules.locality.keys()),
       stops: allRows,
       onSaved: () => void loadRules(),
     }),
@@ -1633,19 +1619,12 @@ function AddressActions({
     }
   }
 
-  // `pickup` is siphoned off at step 1, before any rule is consulted, so a
-  // locality rule for a pickup address would be written and never read. The
-  // action is still offered and refuses with the reason, rather than
-  // disappearing from some rows with no explanation.
-  //
-  // UNZONED IS NOW ALLOWED. It used to be refused alongside pickup, on the
-  // grounds that the form inherited the row's zone and an unzoned row has
-  // none to inherit. That was a property of the old form, not of the data:
-  // the zone is now chosen, and an unzoned stop is precisely the one whose
-  // area most needs naming — refusing it sent the operator to pin the row
-  // first, which teaches the resolver nothing about the next order on that
-  // street.
-  const nameable = row.zone !== "pickup";
+  // A rule's zone column is CHECK (zone in zone1..zone4), so there is no
+  // rule to write for a stop that is unzoned — and `pickup` is siphoned off
+  // at step 1 before any rule is consulted, so naming its area would change
+  // nothing. In both cases the action is offered and refuses with the
+  // reason, rather than silently disappearing from some rows.
+  const nameable = row.zone !== "unzoned" && row.zone !== "pickup";
 
   return (
     <>
@@ -1668,14 +1647,15 @@ function AddressActions({
       {listOpen ? (
         nameable ? (
           <AddToListForm
-            rowZone={row.zone}
+            zone={row.zone as NumberedZone}
             naming={naming}
             onClose={() => setListOpen(false)}
           />
         ) : (
           <p style={addToListNote}>
-            This is a pickup — it never goes through a zone, so naming its
-            area would change nothing.{" "}
+            {row.zone === "pickup"
+              ? "This is a pickup — it never goes through a zone, so naming its area would change nothing."
+              : "This stop has no zone yet. Pin it to one first (long-press the row), then name the area."}{" "}
             <button
               type="button"
               onClick={() => setListOpen(false)}
@@ -1696,32 +1676,17 @@ function AddressActions({
  *  not a row override. That is the difference between this and the
  *  long-press: the override pins one stop, this teaches every future order
  *  whose address contains the name. It is the more powerful gesture and the
- *  harder one to undo, which is what the count below the box is for.
- *
- *  THE ZONE IS CHOSEN, NOT INHERITED. It used to be whatever zone the row
- *  under the button happened to be in, which meant naming an area from a
- *  stop that was itself sitting in the wrong zone taught the resolver that
- *  wrong zone — with nothing on screen ever having said which zone was
- *  being written. The row's zone is still the SEED, because it is the best
- *  guess and usually right; the difference is that it is now a visible
- *  starting point the operator can change rather than a value smuggled in
- *  from the row. */
+ *  harder one to undo, which is what the count below the box is for. */
 function AddToListForm({
-  rowZone,
+  zone,
   naming,
   onClose,
 }: {
-  /** The stop's own zone. Seeds the chooser and marks which button is this
-   *  row's current answer. May be `unzoned`, in which case there is nothing
-   *  to seed and Save stays locked until a zone is picked. */
-  rowZone: ZoneKey;
+  zone: NumberedZone;
   naming: AreaNaming;
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
-  const [zone, setZone] = useState<NumberedZone | null>(
-    isNumberedZone(rowZone) ? rowZone : null,
-  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1733,33 +1698,7 @@ function AddToListForm({
   // matching. Three is the floor because two-letter fragments match inside
   // most Telugu place names.
   const tooShort = trimmed.length > 0 && key.length < 3;
-
-  /** The rule this save would REPLACE, if one exists. `delivery_zone_rules`
-   *  is UNIQUE on (key_type, key_value) and the POST upserts, so a name
-   *  already on the list does not fail and does not create a second rule —
-   *  it overwrites the zone of the first. */
-  const existingZone =
-    key.length >= 3 ? naming.localityZones.get(key) ?? null : null;
-
-  /** The one case that has to be interrupted: the name already exists and
-   *  points at a DIFFERENT zone. Saving would re-route every address
-   *  containing it, and — without this — would do so with nothing on screen
-   *  having said a rule was there at all. The operator would be looking at
-   *  one Zone 3 stop while every Vishalakshi order left Zone 1.
-   *
-   *  An existing rule pointing at the SAME zone is not interrupted: the
-   *  write is a no-op on the only column anyone would notice, and a prompt
-   *  there would be a prompt with no decision in it. */
-  const conflict =
-    existingZone !== null && zone !== null && existingZone !== zone;
-
-  /** The confirmation is bound to the exact (name, zone) pair it was given
-   *  for, so changing either lapses it. Otherwise a tick meant for "move
-   *  Vishalakshi to Zone 3" would still be sitting there authorising
-   *  whatever the boxes said by the time Save was pressed. */
-  const confirmToken = `${key}\u0000${zone ?? ""}`;
-  const [confirmedFor, setConfirmedFor] = useState<string | null>(null);
-  const confirmed = confirmedFor === confirmToken;
+  const taken = key.length >= 3 && naming.takenKeys.has(key);
 
   /** How many loaded stops this name would take, and how many of those are
    *  somewhere else today. The second number is the alarm: a name that only
@@ -1777,16 +1716,15 @@ function AddToListForm({
     for (const s of naming.stops) {
       if (!localityNameMatchesAddress(trimmed, s.address)) continue;
       matched++;
-      if (zone !== null && s.zone !== zone) elsewhere++;
+      if (s.zone !== zone) elsewhere++;
     }
     return { matched, elsewhere, total: naming.stops.length };
   }, [key, trimmed, naming.stops, zone]);
 
-  const blocked =
-    zone === null || key.length < 3 || saving || (conflict && !confirmed);
+  const blocked = key.length < 3 || taken || saving;
 
   async function save() {
-    if (blocked || zone === null) return;
+    if (blocked) return;
     setSaving(true);
     setError(null);
     try {
@@ -1825,7 +1763,7 @@ function AddToListForm({
       }}
     >
       <label style={{ ...sectionLabel, fontSize: "0.62rem" }}>
-        Area name
+        Area name → {ZONE_LABELS[zone]}
       </label>
       <input
         value={name}
@@ -1843,89 +1781,23 @@ function AddToListForm({
           minWidth: 0,
         }}
       />
-      {/* The zone this name will point at. Same four buttons, same array
-          and the same two-column shape as ZoneAssignPopover, because they
-          are the same decision reached by a different route — an operator
-          who has learned one should not have to learn the other. */}
-      <div
-        role="group"
-        aria-label="Zone this area belongs to"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "0.3rem",
-        }}
-      >
-        {NUMBERED_ZONES.map((z) => {
-          const isRowZone = z === rowZone;
-          const isChosen = z === zone;
-          return (
-            <button
-              key={z}
-              type="button"
-              onClick={() => setZone(z)}
-              aria-pressed={isChosen}
-              style={{
-                ...miniAction,
-                justifyContent: "space-between",
-                padding: "0.25rem 0.4rem",
-                border: `1px solid ${isChosen ? CREAM : BORDER}`,
-                background: isRowZone ? "rgba(251,243,212,0.06)" : "transparent",
-              }}
-            >
-              {ZONE_LABELS[z]}
-              {isRowZone ? " · this stop" : ""}
-            </button>
-          );
-        })}
-      </div>
       <p style={addToListNote}>
         {tooShort
           ? "Too short — use at least 3 letters."
-          : zone === null
-            ? "This stop has no zone yet, so there is nothing to start from — pick the zone this area belongs to."
+          : taken
+            ? `"${trimmed}" is already on the list. Change it from the rules panel on /admin/orders.`
             : preview
-              ? preview.matched === 0
-                ? `Matches none of the ${preview.total} loaded stop${
-                    preview.total === 1 ? "" : "s"
-                  }. Nothing on screen moves — the rule only applies to future addresses containing this name.`
-                : `Matches ${preview.matched} of ${preview.total} loaded stop${
-                    preview.total === 1 ? "" : "s"
-                  }${
-                    preview.elsewhere > 0
-                      ? ` — ${preview.elsewhere} of them ${
-                          preview.elsewhere === 1 ? "is" : "are"
-                        } in another zone today and will move to ${ZONE_LABELS[zone]}.`
-                      : `, all already in ${ZONE_LABELS[zone]}.`
-                  }`
-              : "Every future address containing this name goes to the zone above."}
+              ? `Matches ${preview.matched} of ${preview.total} loaded stop${
+                  preview.total === 1 ? "" : "s"
+                }${
+                  preview.elsewhere > 0
+                    ? ` — ${preview.elsewhere} of them ${
+                        preview.elsewhere === 1 ? "is" : "are"
+                      } in another zone today and will move to ${ZONE_LABELS[zone]}.`
+                    : ", all already in this zone."
+                }`
+              : "Every future address containing this name goes to this zone."}
       </p>
-      {conflict && existingZone && zone ? (
-        <label
-          style={{
-            ...addToListNote,
-            display: "flex",
-            gap: "0.4rem",
-            alignItems: "flex-start",
-            color: "#F59E0B",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={confirmed}
-            onChange={(e) =>
-              setConfirmedFor(e.target.checked ? confirmToken : null)
-            }
-            style={{ marginTop: "0.15rem" }}
-          />
-          <span>
-            &ldquo;{trimmed}&rdquo; is already on the list, pointing at{" "}
-            {ZONE_LABELS[existingZone]}. Saving REPLACES that — every address
-            containing this name moves to {ZONE_LABELS[zone]}, not just the
-            stops loaded here. Tick to confirm you mean to move it.
-          </span>
-        </label>
-      ) : null}
       {error ? (
         <p style={{ ...addToListNote, color: "#EF4444" }}>{error}</p>
       ) : null}
@@ -1958,11 +1830,7 @@ const addToListNote: React.CSSProperties = {
 // ---------------------------------------------------------------------------
 
 function areaLabel(area: string): string {
-  // "No area named" read as a statement about the WORLD — as though these
-  // stops were somewhere nameless. They are not: the board simply has no
-  // name on file for them, which is a gap in the list and the thing "Add to
-  // List" exists to close.
-  return area === NO_AREA ? "No name given" : area;
+  return area === NO_AREA ? "No area named" : area;
 }
 
 /** WHEN a pin was last changed, in IST. Deliberately the only provenance
