@@ -48,8 +48,17 @@ const TIMELINE =
 const CONTACT = "support@cadieux.in";
 // ────────────────────────────────────────────────────────────────────────
 
-// Re-usable prose styles (injected once via <style> in the parent
-// LegalPage component, so we only need inline where we diverge from it).
+// Re-usable prose styles. NOTE these are inline BECAUSE LegalPage's
+// <style> block cannot reach them: this page's content is passed as
+// `children`, which renders as a SIBLING of `.legal-page__body`, so no
+// `.legal-page__body …` selector applies. That is why the silver-on-silver
+// bug fixed in LegalPage had to be fixed a second time here.
+//
+// #024628 (the ink the legal links use), not a silver. Every colour below
+// used to be a tint of rgba(192,200,206,…) — the SAME value as the page
+// background (--color-silver #c0c8ce, globals.css:121) — so this page, the
+// account-deletion URL Google reviews for the Play Store, rendered its
+// entire body at a contrast ratio of 1.0.
 function Para({ children }: { children: React.ReactNode }) {
   return (
     <p
@@ -57,7 +66,7 @@ function Para({ children }: { children: React.ReactNode }) {
         fontFamily: "var(--font-body)",
         fontWeight: 300,
         fontSize: "1rem",
-        color: "rgba(192,200,206,0.82)",
+        color: "#024628",
         lineHeight: 1.75,
         letterSpacing: "0.01em",
         margin: "0 0 1rem",
@@ -95,7 +104,7 @@ function BulletList({ items }: { items: string[] }) {
         fontFamily: "var(--font-body)",
         fontWeight: 300,
         fontSize: "1rem",
-        color: "rgba(192,200,206,0.82)",
+        color: "#024628",
         lineHeight: 1.75,
         letterSpacing: "0.01em",
       }}
@@ -120,7 +129,10 @@ export default function DeleteAccountPage() {
           fontSize: "0.875rem",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
-          color: "rgba(192,200,206,0.45)",
+          // Matches the "Last updated" subtitle on the Termly pages
+          // (LegalPage's [data-custom-class='subtitle']): a step lighter
+          // than the body, but a tint of the ink rather than of the page.
+          color: "rgba(2,70,40,0.75)",
           margin: "-0.5rem 0 2.5rem",
         }}
       >
@@ -147,7 +159,7 @@ export default function DeleteAccountPage() {
               fontFamily: "var(--font-body)",
               fontWeight: 500,
               fontSize: "1rem",
-              color: "rgba(192,200,206,0.9)",
+              color: "#024628",
               letterSpacing: "0.02em",
               margin: "0 0 0.2rem",
             }}

@@ -25,7 +25,15 @@ export default function PrivacyPolicyPage() {
     <LegalPage title="Privacy Policy" html={html}>
       {/* Anchor section appended after the Termly body. References the DPDP
           Act, 2023 and our designated grievance contact, satisfying India's
-          Section 10 requirement for a published data-request route. */}
+          Section 10 requirement for a published data-request route.
+
+          Colours are inline BECAUSE LegalPage's <style> block cannot reach
+          them: this renders as `children`, a SIBLING of `.legal-page__body`,
+          so no `.legal-page__body …` selector applies. That is why fixing
+          LegalPage left this block at rgba(192,200,206,0.82) — the SAME value
+          as the page background (--color-silver #c0c8ce) — and the whole DPDP
+          notice stayed at a contrast ratio of 1.0 after the rest of the page
+          was legible. Body copy is #024628, the ink the links already use. */}
       <section
         id="data-requests"
         style={{
@@ -50,7 +58,7 @@ export default function PrivacyPolicyPage() {
           style={{
             fontFamily: "var(--font-body)",
             fontWeight: 300,
-            color: "rgba(192,200,206,0.82)",
+            color: "#024628",
             fontSize: "1rem",
             lineHeight: 1.75,
             letterSpacing: "0.01em",
@@ -70,7 +78,7 @@ export default function PrivacyPolicyPage() {
           style={{
             fontFamily: "var(--font-body)",
             fontWeight: 300,
-            color: "rgba(192,200,206,0.82)",
+            color: "#024628",
             fontSize: "1rem",
             lineHeight: 1.75,
             letterSpacing: "0.01em",
@@ -84,7 +92,7 @@ export default function PrivacyPolicyPage() {
           style={{
             fontFamily: "var(--font-body)",
             fontWeight: 300,
-            color: "rgba(192,200,206,0.82)",
+            color: "#024628",
             fontSize: "1rem",
             lineHeight: 1.75,
             letterSpacing: "0.01em",
@@ -114,7 +122,7 @@ export default function PrivacyPolicyPage() {
           style={{
             fontFamily: "var(--font-body)",
             fontWeight: 300,
-            color: "rgba(192,200,206,0.82)",
+            color: "#024628",
             fontSize: "1rem",
             lineHeight: 1.75,
             letterSpacing: "0.01em",
