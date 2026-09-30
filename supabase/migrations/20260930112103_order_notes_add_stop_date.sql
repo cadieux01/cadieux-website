@@ -1,12 +1,17 @@
--- NOT APPLIED. Written 2026-09-30, deliberately left unapplied.
+-- APPLIED 2026-09-30 to Cadieux-Website (prod) as ledger version
+-- 20260930112103. Written under the prefix 20260930120000 and renamed to the
+-- minted version afterwards.
 --
 -- Migrations in this repo are applied BY HAND through the Supabase
--- Management API, which mints its OWN ledger version at apply time. The
--- prefix above is when this file was written, not when it ran. After it is
--- applied, ask for the real ledger version and `git mv` this file to it,
--- content unchanged — otherwise `supabase db push` still believes it is
--- pending and tries to re-run it. Every statement below is guarded, so a
--- re-run is a no-op, but the filename must still be corrected.
+-- Management API, which mints its OWN ledger version at apply time — the
+-- prefix a file is written under is when it was written, not when it ran.
+-- Leaving the written prefix in place means `supabase db push` still believes
+-- the file is pending and tries to re-run it. Every statement below is
+-- guarded, so a re-run is a no-op, but the filename is corrected regardless.
+--
+-- Verified after apply: stop_date is `date`, is_nullable YES, no default, the
+-- comment below is attached, and all 198 pre-existing rows read NULL — i.e.
+-- every note written before this column still means "about the parent".
 --
 -- ---------------------------------------------------------------------------
 -- WHY THIS COLUMN, AND WHY NOT A NEW TABLE
