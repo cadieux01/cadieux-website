@@ -113,6 +113,10 @@ const NAV_GROUPS: NavGroup[] = [
       // the same rows and the SAME zone resolver, so the two never disagree.
       { href: "/admin/deliveries", label: "Online / Deliveries" },
       { href: "/admin/requests", label: "Requests" },
+      // Captured money nobody has decided about yet. Under Operations
+      // because it is a queue of today's work, not a report — every row is
+      // a real payment sitting unreconciled until a person answers it.
+      { href: "/admin/payment-exceptions", label: "Payment Exceptions" },
       // "Delivery Partners" read as a list of deliveries; this is a roster
       // of people. Route unchanged — renaming the path would break every
       // bookmark and the links held in OrderShareButton.
