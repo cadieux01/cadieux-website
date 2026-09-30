@@ -272,7 +272,7 @@ export function PartnerShareButton({
           )}
           {!partnersLoading && !partnersError && partners.length === 0 && (
             <div style={{ padding: "6px 8px", color: FADED, fontStyle: "italic" }}>
-              No partners yet. Add one in Delivery Partners.
+              No partners yet. Add one in Partner Members.
             </div>
           )}
 
