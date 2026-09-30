@@ -232,6 +232,13 @@ export async function POST(req: NextRequest) {
         .limit(1)
         .maybeSingle();
       if (subErr) {
+        // Same reasoning as the orders lookup above, and it matters more here:
+        // this is the LAST rung before "unattributed". An outage answering this
+        // query would otherwise manufacture exceptions out of perfectly
+        // attributable subscription payments — 37 of them on prod today. The
+        // table holds judgements this system refused to make; an outage is not
+        // a judgement, and a worklist that fills with outages is an error log,
+        // which is the thing nobody reads.
         console.error(
           "[razorpay-webhook] subscription fetch failed:",
           subErr.message,
