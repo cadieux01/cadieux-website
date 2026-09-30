@@ -10,6 +10,11 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // scripts/*.ts are run by `node --env-file=.env.local scripts/x.ts`, and
+    // node's type stripping needs the real filename in the import. Safe here
+    // because noEmit is true — nothing is compiled, so nothing can emit a
+    // specifier that a bundler would then fail to resolve.
+    "allowImportingTsExtensions": true,
     "jsx": "preserve",
     "incremental": true,
     "plugins": [{ "name": "next" }],
