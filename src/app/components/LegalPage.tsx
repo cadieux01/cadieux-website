@@ -101,7 +101,12 @@ export default function LegalPage({ title, html, children }: Props) {
         .legal-page__body [data-custom-class='subtitle'],
         .legal-page__body [data-custom-class='subtitle'] * {
           font-family: var(--font-body) !important;
-          color: rgba(192,200,206,0.6) !important;
+          /* Same silver-on-silver bug as the body rule below, and this one
+             hid the "Last updated" date — the single line a reader checks
+             to find out whether the terms they are reading are current.
+             Kept a step lighter than the body so it still reads as a
+             subtitle, but it is now a tint of the ink, not of the page. */
+          color: rgba(2,70,40,0.75) !important;
           font-size: 0.875rem !important;
           font-weight: 500 !important;
           letter-spacing: 0.15em !important;
@@ -137,7 +142,15 @@ export default function LegalPage({ title, html, children }: Props) {
         .legal-page__body th {
           font-family: var(--font-body) !important;
           font-weight: 300 !important;
-          color: rgba(192,200,206,0.82) !important;
+          /* #024628, not a silver. These pages are laid out on the site's
+             silver background (--color-silver, #c0c8ce in globals.css), and
+             this declaration used to read rgba(192,200,206,0.82) — the SAME
+             colour, at a contrast ratio of 1.0. Every word of the shipping,
+             refund and returns terms was painted in the background. It was
+             not noticed because <strong> and links carry their own colours
+             below, so headings and figures stayed legible and the pages
+             looked merely sparse rather than blank. */
+          color: #024628 !important;
           font-size: 0.95rem !important;
           line-height: 1.75 !important;
           letter-spacing: 0.01em !important;
