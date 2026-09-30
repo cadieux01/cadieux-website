@@ -107,14 +107,16 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/orders", label: "Orders" },
       { href: "/admin/subscriptions", label: "Subscriptions" },
-      { href: "/admin/subscriptions/plans", label: "Subscription Plans" },
       // The routing view: today's deliveries grouped by zone, then area.
       // Sits next to Orders because it answers the question the orders
       // board cannot — "what does one person drive, in what order" — off
       // the same rows and the SAME zone resolver, so the two never disagree.
       { href: "/admin/deliveries", label: "Online / Deliveries" },
       { href: "/admin/requests", label: "Requests" },
-      { href: "/admin/delivery-partners", label: "Delivery Partners" },
+      // "Delivery Partners" read as a list of deliveries; this is a roster
+      // of people. Route unchanged — renaming the path would break every
+      // bookmark and the links held in OrderShareButton.
+      { href: "/admin/delivery-partners", label: "Partner Members" },
     ],
   },
   {
@@ -125,6 +127,11 @@ const NAV_GROUPS: NavGroup[] = [
       // It sits beside Products because it is a catalogue editor, not
       // an order surface — sandwiches are ordered elsewhere.
       { href: "/admin/sandwiches", label: "Sandwiches" },
+      // Plans are a PRICE LIST, not live work: editing one changes what a
+      // future subscriber can buy, it does not touch a single running plan.
+      // Under Operations it sat between Subscriptions and Deliveries, where
+      // every neighbour was a today-queue, and got opened by mistake.
+      { href: "/admin/subscriptions/plans", label: "Subscription Plans" },
       { href: "/admin/locations", label: "Store Locator" },
       { href: "/admin/service-areas", label: "Areas We Serve" },
     ],
