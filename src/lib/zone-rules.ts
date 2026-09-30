@@ -46,10 +46,28 @@ export type ZoneRowOverrideRow = {
   updated_at: string;
 };
 
-const NUMBERED: readonly NumberedZone[] = ["zone1", "zone2", "zone3", "zone4"];
+/** The four numbered zones, in display order.
+ *
+ *  Exported because a zone PICKER and the zone VALIDATOR must read the same
+ *  array: `isNumberedZone` below is what /api/admin/zone-rules checks a POST
+ *  against, so any UI that offers a zone from this list cannot offer one the
+ *  API will reject. /admin/deliveries' "Add to List" chooser imports it for
+ *  exactly that reason.
+ *
+ *  Not derived from ZONE_DEFS on purpose: ZONE_DEFS is the built-in
+ *  address->zone map, while this is the set of zones a RULE may point at,
+ *  and the authority on the latter is the `delivery_zone_rules_zone_check`
+ *  constraint in Postgres. Widening this without widening that writes rows
+ *  the database refuses. */
+export const NUMBERED_ZONES: readonly NumberedZone[] = [
+  "zone1",
+  "zone2",
+  "zone3",
+  "zone4",
+];
 
 export function isNumberedZone(v: unknown): v is NumberedZone {
-  return typeof v === "string" && (NUMBERED as readonly string[]).includes(v);
+  return typeof v === "string" && (NUMBERED_ZONES as readonly string[]).includes(v);
 }
 
 // ---- fetch --------------------------------------------------------------
