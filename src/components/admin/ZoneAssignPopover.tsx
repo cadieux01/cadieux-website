@@ -37,7 +37,21 @@ import {
   type PreviewResponse,
 } from "@/lib/zone-rules-client";
 
-const NUMBERED_ZONES: NumberedZone[] = ["zone1", "zone2", "zone3", "zone4"];
+/** The four zones a rule or a pin may point at — `unzoned` and `pickup` are
+ *  states, not destinations, and `delivery_zone_rules.zone` is CHECK-ed to
+ *  these four.
+ *
+ *  EXPORTED so the deliveries board's "Add to List" chooser offers the same
+ *  four from the same array. A second literal would be a second place to
+ *  update if a zone is ever added, and the two lists would disagree silently
+ *  — the chooser would offer a zone no rule can hold, or hide one that
+ *  exists. */
+export const NUMBERED_ZONES: readonly NumberedZone[] = [
+  "zone1",
+  "zone2",
+  "zone3",
+  "zone4",
+];
 
 export type ZoneAssignTarget =
   | { kind: "order"; id: string }
