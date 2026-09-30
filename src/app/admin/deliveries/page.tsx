@@ -104,7 +104,7 @@ import {
 } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
-import { DayFilter } from "@/components/admin/DayFilter";
+import DateSpanPicker from "@/components/admin/DateSpanPicker";
 import { ZoneAssignPopover } from "@/components/admin/ZoneAssignPopover";
 import { ZoneBadge } from "@/components/admin/ZoneBadge";
 import { adminFetch } from "@/lib/admin-client";
@@ -112,7 +112,6 @@ import { useUrlWriteback } from "@/lib/admin-url-state";
 import { formatINR } from "@/lib/admin-formatting";
 import type { AdminOrderRow, AdminSubscriptionRow } from "@/lib/admin-shared";
 import {
-  ALL_DAYS,
   parseDayParam,
   parseRangeParams,
   type DaySelection,
@@ -144,7 +143,6 @@ import {
 } from "@/lib/partner-deliveries";
 import { productDisplayName, productNameMap } from "@/lib/product-names";
 import { fetchAllRules } from "@/lib/zone-rules-client";
-import { todayIst } from "@/lib/delivery-slots";
 import { telHref, whatsAppHrefWithText } from "@/lib/phone-utils";
 
 const CREAM = "#FBF3D4";
@@ -215,12 +213,17 @@ function parseUrlInitial(sp: URLSearchParams) {
     sp.get("src") === "subscriptions" ? "subscriptions" : "orders";
   const isRange = sp.get("mode") === "range";
   const { from, to } = parseRangeParams(sp.get("from"), sp.get("to"));
-  // A link that carries no date at all opens on TODAY, not on everything.
-  // This is a routing board: the default question is "what am I driving
-  // now". `Clear` is how the operator asks for everything, and once they
-  // have, `date=` is written as the empty string so the link round-trips.
-  const rawDate = sp.get("date");
-  const day = rawDate === null ? todayIst() : parseDayParam(rawDate);
+  // NOTHING IS SELECTED unless the link says so. This used to open on TODAY
+  // when `date=` was absent, on the reasoning that a routing board's default
+  // question is "what am I driving now" — and that reasoning is retracted.
+  // A pre-filled date is a filter the operator did not set and did not see
+  // themselves set, so a stop booked for tomorrow is simply missing from the
+  // board with no indication that anything was excluded. Worse, the default
+  // had to be encoded as an EMPTY `date=` to distinguish "cleared" from
+  // "never chose", which made an absent param and a blank one mean opposite
+  // things in a URL an operator might well hand-edit. Absent and blank now
+  // both mean all dates, because that is what they look like they mean.
+  const day = parseDayParam(sp.get("date"));
   const sel: DaySelection = isRange
     ? { mode: "range", from, to }
     : { mode: "day", day };
@@ -249,12 +252,12 @@ function DeliveriesPageInner() {
   );
 
   const [source, setSource] = useState<DeliverySource>(urlInit.src);
-  // `applied` is what the board filters on. `draft` is what the date
-  // control shows. They differ only between an edit and Confirm — see the
-  // Confirm button for why the date is the one control that does not apply
-  // as you type.
+  // What the board filters on. There is no `draft` beside it any more: the
+  // date control holds its own, hands it over on Confirm and throws it away
+  // on any other dismissal, so the page only ever sees applied selections.
+  // That is why there is no longer a "Not applied yet" state to render here —
+  // an unapplied selection cannot exist outside the open calendar.
   const [applied, setApplied] = useState<DaySelection>(urlInit.sel);
-  const [draft, setDraft] = useState<DaySelection>(urlInit.sel);
   const [query, setQuery] = useState(urlInit.q);
   const [pick, setPick] = useState<Pick | null>(urlInit.pick);
   const [openZone, setOpenZone] = useState<ZoneKey | null>(
@@ -508,10 +511,11 @@ function DeliveriesPageInner() {
       sp.set("mode", "range");
       if (applied.from) sp.set("from", applied.from);
       if (applied.to) sp.set("to", applied.to);
-    } else {
-      // Written even when empty — absent means "no date was chosen", which
-      // opens on today, and that is NOT what Clear asked for.
-      sp.set("date", applied.day ?? "");
+    } else if (applied.day) {
+      // Omitted when there is no day, rather than written blank. Nothing
+      // hangs on the difference any more — parseUrlInitial reads absent and
+      // blank identically — so the shorter link is the honest one.
+      sp.set("date", applied.day);
     }
     if (query.trim()) sp.set("q", query.trim());
     if (pick) {
@@ -524,18 +528,6 @@ function DeliveriesPageInner() {
   useUrlWriteback("/admin/deliveries", qs);
 
   // ---- actions ------------------------------------------------------------
-
-  const clearDates = useCallback(() => {
-    setDraft(ALL_DAYS);
-    setApplied(ALL_DAYS);
-  }, []);
-
-  const confirmDates = useCallback(() => setApplied(draft), [draft]);
-
-  const pendingDate = useMemo(
-    () => JSON.stringify(draft) !== JSON.stringify(applied),
-    [draft, applied],
-  );
 
   const choose = useCallback((zone: ZoneKey, area: string | null) => {
     setPick({ zone, area });
@@ -680,69 +672,40 @@ function DeliveriesPageInner() {
               alignItems: "flex-end",
             }}
           >
-            <DayFilter
-              idPrefix="deliveries"
-              // No basis selector: a subscription's days come from its
-              // delivery stops and there is no order-date axis to offer.
-              day={draft.mode === "day" ? draft.day : null}
-              onDayChange={(day) => setDraft({ mode: "day", day })}
-              mode={draft.mode}
-              onModeChange={(mode) =>
-                setDraft(
-                  mode === "range"
-                    ? { mode: "range", from: null, to: null }
-                    : { mode: "day", day: null },
-                )
-              }
-              range={
-                draft.mode === "range"
-                  ? { from: draft.from, to: draft.to }
-                  : { from: null, to: null }
-              }
-              onRangeChange={(r) => setDraft({ mode: "range", ...r })}
-              // This board owns Clear, next to Confirm, because here
-              // clearing is an APPLY — see the pair below.
-              showClear={false}
-            />
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "0.5rem",
-              marginTop: "0.75rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <button type="button" onClick={clearDates} style={ghostButton}>
-              Clear
-            </button>
-            {/* The date is the only control that waits for a confirm. It is
-                the one an operator edits in two or three steps (mode, then
-                From, then To), and re-filtering between those steps shows
-                lists nobody asked for. */}
-            <button
-              type="button"
-              onClick={confirmDates}
+            {/* One control for the whole date question. No basis selector —
+                a subscription's days come from its delivery stops and there
+                is no order-date axis to offer — and no span selector either:
+                one date or two is inferred from the taps. Clear and Confirm
+                are inside the calendar, so there is nothing to render here
+                when it is shut. */}
+            <div
               style={{
-                ...ghostButton,
-                borderColor: pendingDate ? CREAM : BORDER,
-                color: pendingDate ? CREAM : MUTED,
+                display: "inline-flex",
+                flexDirection: "column",
+                gap: "0.25rem",
+                flex: "1 1 220px",
+                minWidth: 0,
               }}
             >
-              Confirm
-            </button>
-            <span
-              style={{
-                alignSelf: "center",
-                fontFamily: "var(--font-body)",
-                fontSize: "0.72rem",
-                letterSpacing: "0.08em",
-                color: pendingDate ? CREAM : MUTED,
-              }}
-            >
-              {pendingDate ? "Not applied yet" : describeSelection(applied)}
-            </span>
+              <label
+                htmlFor="deliveries-span"
+                style={{
+                  color: MUTED,
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Dates
+              </label>
+              <DateSpanPicker
+                id="deliveries-span"
+                value={applied}
+                onApply={setApplied}
+                ariaLabel="Filter by one date or a range"
+              />
+            </div>
           </div>
 
           <div
@@ -1854,12 +1817,6 @@ function formatStamp(iso: string | null | undefined): string {
   });
 }
 
-function describeSelection(sel: DaySelection): string {
-  if (sel.mode === "day") return sel.day ? sel.day : "All dates";
-  if (!sel.from && !sel.to) return "All dates";
-  return `${sel.from ?? "any"} → ${sel.to ?? "any"}`;
-}
-
 const panelStyle: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   padding: "0.75rem",
@@ -1872,18 +1829,6 @@ const sectionLabel: React.CSSProperties = {
   fontSize: "0.7rem",
   letterSpacing: "0.15em",
   textTransform: "uppercase",
-};
-
-const ghostButton: React.CSSProperties = {
-  padding: "0.45rem 0.9rem",
-  border: `1px solid ${BORDER}`,
-  background: "transparent",
-  color: CREAM,
-  fontFamily: "var(--font-body)",
-  fontSize: "0.72rem",
-  letterSpacing: "0.12em",
-  textTransform: "uppercase",
-  cursor: "pointer",
 };
 
 const emptyMenuStyle: React.CSSProperties = {
