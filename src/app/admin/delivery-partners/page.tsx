@@ -164,7 +164,7 @@ export default function DeliveryPartnersPage() {
 
   return (
     <AdminShell
-      title="Delivery Partners"
+      title="Partner Members"
       subtitle="Riders the /admin/orders Share button can dispatch to via WhatsApp."
       actions={
         <button
