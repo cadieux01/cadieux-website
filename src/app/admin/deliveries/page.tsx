@@ -414,7 +414,7 @@ function DeliveriesPageInner() {
     return out;
   }, [inScope]);
 
-  // Nearest the kitchen first, unpinned stops last, ties on ref. The sort is
+  // Nearest the kitchen first, unplaceable stops last, ties on ref. The sort is
   // applied here — once, over the picked group — so the table renders in
   // driving order and every count below it still counts the same rows.
   const visibleRows = useMemo(() => {
@@ -437,11 +437,13 @@ function DeliveriesPageInner() {
     );
   }, [inScope, pick]);
 
-  /** How many of the stops on screen can actually be ordered. Stated rather
-   *  than hidden: most addresses are free text with no pin, so the tail of
-   *  every list is unsorted and the rider needs to know that the ordering
-   *  stops being meaningful partway down. */
-  const pinnedCount = useMemo(
+  /** How many of the stops on screen can actually be ordered — a map pin OR
+   *  the road distance stored when the order was priced. Stated rather than
+   *  hidden: the tail of every list is unsorted and the rider needs to know
+   *  that the ordering stops being meaningful partway down. NOT a count of
+   *  map pins; most of these have no pin, which is why the Map action on
+   *  them is still a search. */
+  const placeableCount = useMemo(
     () => visibleRows.filter((r) => kitchenDistanceKm(r) !== null).length,
     [visibleRows],
   );
@@ -1030,10 +1032,12 @@ function DeliveriesPageInner() {
               {visibleRows.length > 0 ? (
                 <>
                   {" "}
-                  Ordered nearest the kitchen first, straight-line —{" "}
-                  {pinnedCount} of {visibleRows.length} stop
-                  {visibleRows.length === 1 ? " has" : "s have"} a map pin; the
-                  rest have no location and are listed last, by order ID.
+                  Ordered nearest the kitchen first —{" "}
+                  {placeableCount} of {visibleRows.length} stop
+                  {visibleRows.length === 1 ? " has" : "s have"} a known
+                  distance (straight-line from a map pin, or the road distance
+                  the order was priced on); the rest have no location and are
+                  listed last, by order ID.
                 </>
               ) : null}
             </p>

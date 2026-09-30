@@ -22,13 +22,16 @@
 //
 // WHAT THE BAND IS MEASURED ON. The km handed to computeDeliveryFee is RAW
 // DRIVING distance from Google Distance Matrix (`mode=driving`) — not
-// straight-line, and not rounded before banding. It is the MINIMUM over the
-// FOUR active pickup_locations rows, not the distance to one fixed origin:
-// distanceMatrix.ts sends every active pickup as a destination and takes
-// `Math.min` (:100). Adding or archiving a pickup point therefore silently
-// re-prices every address near it. Caveat: if the Matrix call fails the code
-// falls back to HAVERSINE (:120-127), which IS straight-line and always <=
-// the driving figure, so that fallback can only ever under-charge.
+// straight-line, and not rounded before banding. It is measured from ONE
+// FIXED ORIGIN, the hardcoded PRICING_ORIGIN constant in distanceMatrix.ts
+// (:43) — the P.M. Palem kitchen. NOT from pickup_locations: that coupling (a
+// `Math.min` over every active pickup row, which re-priced every nearby
+// address whenever an operator added or archived a pickup point) was removed
+// on 29 Sep 2026, and the note at quoteSubscriptionDeliveryFee's
+// hasPricingOrigin check has said so since. Caveat: if the Matrix
+// call fails the code falls back to HAVERSINE (:151-154), which IS
+// straight-line and always <= the driving figure, so that fallback can only
+// ever under-charge.
 //
 // THE UNMEASURABLE-DISTANCE REFUSAL MUST NOT BE REMOVED, AND MUST NOT BE
 // SOFTENED INTO A GEOCODE FALLBACK — here or in the two order paths.

@@ -33,7 +33,11 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, order_number, public_ref, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, order_kind, customers(id, full_name, phone, city)"
+      // distance_km is here for /admin/deliveries' driving-order sort, which
+      // falls back to it for the ~2 in 3 orders that have no GPS pin. One
+      // float per row; see partner-deliveries.ts for why only post-cutover
+      // rows are usable.
+      "id, order_number, public_ref, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, order_kind, customers(id, full_name, phone, city)"
     )
     .order("created_at", { ascending: false });
 

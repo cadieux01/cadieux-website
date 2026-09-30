@@ -59,6 +59,11 @@ export type DeliveryRow = {
    *  everywhere else, which is why the Map action is a SEARCH by default. */
   latitude: number | null;
   longitude: number | null;
+  /** Road km from the kitchen, for the sort ONLY — and only when it is
+   *  comparable to other rows'. See `comparableStoredDistanceKm` for why
+   *  that is a narrower set than "rows with a distance_km". Never a map
+   *  pin: it is a distance, not a position. */
+  storedDistanceKm: number | null;
   zone: ZoneKey;
   zoneSource: ZoneSource;
   paymentMode: string;
@@ -87,6 +92,55 @@ function sumCounts(items: AdminOrderRow["items"]): Record<string, number> {
     out[slug] = (out[slug] ?? 0) + qty;
   }
   return out;
+}
+
+/** THE PRICING-ORIGIN CUTOVER.
+ *
+ *  `orders.distance_km` IS TWO DIFFERENT MEASURES UNDER ONE NAME, and
+ *  nothing in the schema says so — no second column, no flag, no comment on
+ *  the column, and both halves are plain positive floats in the same range.
+ *  The only thing that distinguishes them is `created_at`:
+ *
+ *    BEFORE  distance to whichever ACTIVE pickup_location was nearest, as a
+ *            `Math.min` over every active row. Not distance from this
+ *            kitchen, and not comparable row to row — the set of pickup
+ *            points it minimised over changed whenever an operator added or
+ *            archived one, so two rows measured the same address against
+ *            different origins.
+ *    AFTER   distance from the single fixed PRICING_ORIGIN (the P.M. Palem
+ *            kitchen, distanceMatrix.ts:43). Comparable row to row, and the
+ *            same origin KITCHEN below restates.
+ *
+ *  DO NOT TRY TO TELL THEM APART BY `delivery_fee`. Banded-looking fees
+ *  (Rs15, Rs25) appear in prod about three hours BEFORE the origin was
+ *  fixed — the fee ladder (a213e9f) and the single origin (e0cd57c) shipped
+ *  two weeks apart, so a row can be banded and still measured to the
+ *  nearest pickup. `created_at` is the only discriminator.
+ *
+ *  The boundary is the commit that landed the constant — e0cd57c,
+ *  "feat(delivery): two bands (<5km Rs15, else Rs30) priced from the P.M.
+ *  Palem kitchen", committed 2026-09-30 00:21:16 +0530. Not a hand-typed
+ *  date: if the origin moves again, `git log -S PRICING_ORIGIN` finds the
+ *  next one. The earliest delivery order after that commit is 7 h later, so
+ *  no row was written in the commit-to-deploy gap and the commit time can
+ *  stand in for the deploy.
+ *
+ *  Anything OLDER is discarded rather than trusted. It is a real number that
+ *  someone really paid a fee on; it is just not an answer to "how far from
+ *  the kitchen", and sorting a rider's list by it would be confidently
+ *  wrong instead of honestly blank. */
+export const PRICING_ORIGIN_CUTOVER_MS = Date.parse("2026-09-29T18:51:16Z");
+
+/** `distance_km` if it is comparable to other rows' (see above), else null. */
+function comparableStoredDistanceKm(
+  distanceKm: number | null | undefined,
+  createdAt: string | null | undefined,
+): number | null {
+  if (typeof distanceKm !== "number") return null;
+  if (!Number.isFinite(distanceKm) || distanceKm < 0) return null;
+  const written = createdAt ? Date.parse(createdAt) : NaN;
+  if (!Number.isFinite(written)) return null;
+  return written >= PRICING_ORIGIN_CUTOVER_MS ? distanceKm : null;
 }
 
 function haystackOf(parts: (string | null | undefined)[]): string {
@@ -143,6 +197,7 @@ export function orderToDeliveryRow(
     address,
     latitude: o.latitude ?? null,
     longitude: o.longitude ?? null,
+    storedDistanceKm: comparableStoredDistanceKm(o.distance_km, o.created_at),
     zone,
     zoneSource: source,
     paymentMode: paymentModeOf(o.payment_method, o.payment_status),
@@ -190,6 +245,12 @@ export function subscriptionToDeliveryRow(
     address,
     latitude: s.latitude ?? null,
     longitude: s.longitude ?? null,
+    // Subscriptions have a `distance_km` too, and the same cutover applies to
+    // it — but it is ALWAYS a pincode centroid (quoteSubscriptionDeliveryFee
+    // takes a pincode and nothing else), so it is one number per pincode and
+    // sorts every stop in an area to the same place. Left out until that is
+    // worth deciding on its own; this board's subscription rows sort by ref.
+    storedDistanceKm: null,
     zone,
     zoneSource: source,
     paymentMode: paymentModeOf(s.payment_method, s.payment_status),
@@ -276,39 +337,78 @@ export function rowCountsForSelection(
 // server-side and this one is read by a client component.
 export const KITCHEN = { latitude: 17.7955894, longitude: 83.3500975 } as const;
 
-/** Straight-line km from the kitchen, or null when the row has no usable pin.
+/** Straight-line km -> road km, for SORTING ONLY (see kitchenDistanceKm).
  *
- *  NOT `orders.distance_km`: that column holds the RETIRED nearest-pickup
- *  measure — distance to whichever of the three pickup locations was closest,
- *  which is not distance from this kitchen and is not comparable row to row.
- *  It is not projected onto DeliveryRow at all, and must not be.
+ *  Measured on the Vizag corridor: the road:straight-line ratio runs
+ *  1.36–1.48x. 1.4 sits in that range; it is not derived from anything finer
+ *  and should not be quoted as if it were. Where it is wrong it is wrong by
+ *  a few per cent, against the ~40% error of not scaling at all.
+ *
+ *  Checked against the only two prod rows that hold BOTH numbers (a pin and
+ *  a post-cutover road distance for the same address): ratios 1.438 and
+ *  1.461, so 1.4 is at the LOW end and a scaled pin still sorts ~3% early.
+ *  Two rows is not a sample; it is a sanity check that the factor is the
+ *  right shape and not inverted.
+ *
+ *  Deliberately NOT exported. Nothing outside this module should be able to
+ *  multiply a distance by it — the moment this appears in a fee, a stored
+ *  column or a number on screen, it has stopped being a sort key. */
+const DETOUR_FACTOR = 1.4;
+
+/** Km from the kitchen, or null when the row cannot be placed at all.
+ *
+ *  A PIN WINS OVER THE STORED NUMBER, for a reason that is not obvious:
+ *  `orders.distance_km` on an address-typed order was measured to the
+ *  PINCODE CENTROID, not to the address (order-checkout.ts:353-356). The
+ *  pin is the actual doorstep. Where both exist, the pin is the better
+ *  answer even though it is the cruder metric.
  *
  *  (0,0) is rejected with the nulls: it is the null island, written by an
  *  older client that defaulted the field rather than omitting it, and it
  *  would sort ~2000 km away — last instead of unknown. Same test the Map
- *  action uses to decide pin vs search. */
+ *  action uses to decide pin vs search.
+ *
+ *  THE TWO INPUTS ARE IN DIFFERENT UNITS AND MUST BE RECONCILED. A pin gives
+ *  STRAIGHT-LINE km; `distance_km` is ROAD km. Left raw, a pinned stop sorts
+ *  up to ~45% early — a 10 km pin is ~14 km of driving and would jump ahead
+ *  of a genuine 12 km stop. That is not a rounding difference, it is a
+ *  wrong list. So pin distances are scaled by DETOUR_FACTOR below.
+ *
+ *  WHAT THE SCALING DOES AND DOES NOT CLAIM. It makes the two numbers
+ *  COMPARABLE, not accurate. A scaled pin is not a road distance and must
+ *  never be shown as one, stored, or used to price anything — it exists so
+ *  that one comparator can order two populations of rows. A sort needs
+ *  comparable; pretending it needs accuracy is how a fudge factor gets
+ *  quoted back as a measurement. */
 export function kitchenDistanceKm(row: DeliveryRow): number | null {
   const { latitude: lat, longitude: lng } = row;
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (lat === 0 && lng === 0) return null;
-  return haversineKm(KITCHEN, { latitude: lat, longitude: lng });
+  const pinned =
+    typeof lat === "number" &&
+    typeof lng === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    !(lat === 0 && lng === 0);
+  if (pinned) {
+    return haversineKm(KITCHEN, { latitude: lat, longitude: lng }) * DETOUR_FACTOR;
+  }
+  return row.storedDistanceKm;
 }
 
 /** Stops in driving order: nearest to the kitchen first.
  *
- *  Rows with no pin sort LAST, not first — an unknown distance is not zero,
- *  and putting them at the top would hand the rider a list whose first stops
- *  are the ones nobody can place. They keep their own order among themselves
- *  (by ref), so the tail is a stable list rather than a shuffle.
+ *  Rows with NO distance at all sort LAST, not first — an unknown distance is
+ *  not zero, and putting them at the top would hand the rider a list whose
+ *  first stops are the ones nobody can place. They keep their own order among
+ *  themselves (by ref), so the tail is a stable list rather than a shuffle.
  *
  *  Ties break on `ref`, which is unique per row, so the comparator is a total
  *  order and the output cannot depend on the input order or on sort
  *  stability. Same rows in, same sequence out, every render.
  *
- *  Straight-line, not driving distance: a driving matrix would be one API
- *  call per stop per render. Over a city this size the ordering is a routing
- *  AID, not a route. */
+ *  Nothing here measures anything live: a driving matrix would be one API
+ *  call per stop per render. It sorts on a pin's straight-line distance or on
+ *  a road distance already stored at pricing time. Over a city this size the
+ *  ordering is a routing AID, not a route. */
 export function sortByKitchenDistance(
   rows: readonly DeliveryRow[],
 ): DeliveryRow[] {

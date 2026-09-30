@@ -140,7 +140,11 @@ export type AdminOrderRow = {
    *  once the new build is live. Null for everything before. */
   latitude?: number | null;
   longitude?: number | null;
-  /** Road distance used to price the delivery fee. Single-order GET only. */
+  /** Road distance used to price the delivery fee. Projected by the
+   *  single-order GET and by the list route (/admin/deliveries sorts on it).
+   *  TWO MEASURES UNDER ONE NAME, split at the pricing-origin cutover —
+   *  don't compare rows across it. See PRICING_ORIGIN_CUTOVER_MS in
+   *  lib/partner-deliveries. */
   distance_km?: number | null;
   /** 'delivery' | 'pickup'. Legacy rows may be null → treat as delivery. */
   fulfillment_type?: string | null;
