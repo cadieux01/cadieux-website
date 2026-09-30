@@ -5,18 +5,17 @@
 // client-supplied total_amount). Pure functions, no I/O — the caller
 // is responsible for fetching products and customer rows.
 
-// Delivery fee used when the driving distance cannot be resolved at all
-// (no active pickup origin, or a pincode that won't geocode). Equal to the
-// flat DELIVERY_FEE_FLAT_INR in @/lib/deliveryFee by design: the fee no
-// longer varies with distance, so a customer we failed to measure must pay
-// the same ₹12 as everyone else rather than a punitive guess. Mirrors the
-// "Standard delivery — ₹12" line in the Shipping Policy, and is the source
-// of truth for both /api/checkout and /api/mobile/checkout so the stored
-// orders.total_amount and the payment-gateway charge always agree.
+// THE SOURCE OF TRUTH FOR THE DELIVERY FEE IS @/lib/deliveryFee — its
+// computeDeliveryFee(distanceKm) and nothing else. This file holds no fee
+// of its own and no fallback for one; when the driving distance cannot be
+// resolved (no active pickup origin, or a pincode that won't geocode) the
+// order REFUSES. /api/checkout, /api/mobile/checkout and
+// @/lib/subscription-delivery-fee all go through that one function, which
+// is why orders.total_amount and the payment-gateway charge agree.
 //
-// Subscriptions deliberately have NO such fallback — an unmeasurable
-// address hard-blocks there, because the fee is multiplied by the delivery
-// count and charged up front. See @/lib/subscription-delivery-fee.
+// Do not take a figure from the Shipping Policy page. It is copy written
+// for customers, it lags the code, and it does not carry the band
+// boundaries the quote is computed from. Read deliveryFee.ts.
 import {
   cartFloor,
   preorderFloorError,
