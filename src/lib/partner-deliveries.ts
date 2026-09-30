@@ -345,10 +345,12 @@ export const KITCHEN = { latitude: 17.7955894, longitude: 83.3500975 } as const;
  *  a few per cent, against the ~40% error of not scaling at all.
  *
  *  Checked against the only two prod rows that hold BOTH numbers (a pin and
- *  a post-cutover road distance for the same address): ratios 1.438 and
- *  1.461, so 1.4 is at the LOW end and a scaled pin still sorts ~3% early.
- *  Two rows is not a sample; it is a sanity check that the factor is the
- *  right shape and not inverted.
+ *  a post-cutover road distance for the same address): OLF417 28.534 road /
+ *  19.842 straight = 1.438, OLF421 12.092 / 8.277 = 1.461. So 1.4 is at the
+ *  LOW end, and scaling those two pins lands them 2.6% and 4.2% BELOW their
+ *  own road distance — a scaled pin still sorts slightly early. Two rows is
+ *  not a sample; it is a sanity check that the factor is the right shape and
+ *  not inverted.
  *
  *  Deliberately NOT exported. Nothing outside this module should be able to
  *  multiply a distance by it — the moment this appears in a fee, a stored
