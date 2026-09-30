@@ -58,7 +58,13 @@ export default function LegalPage({ title, html, children }: Props) {
           font-weight: 500;
           letter-spacing: 0.3em;
           text-transform: uppercase;
-          color: rgba(192,200,206,0.75);
+          /* The third silver-on-silver declaration, found by grepping rather
+             than by looking: rgba(192,200,206,0.75) is --color-silver #c0c8ce,
+             the page background, so "← Back to Home" was invisible on all six
+             legal pages — including /delete-account, where it is the only way
+             out. Kept muted (a tint of the ink) because it is chrome, not
+             prose; the cream :hover below still lifts it on interaction. */
+          color: rgba(2,70,40,0.75);
           text-decoration: none;
           margin-bottom: 3rem;
           transition: color 200ms ease;
