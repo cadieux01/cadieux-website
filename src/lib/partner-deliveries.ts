@@ -128,7 +128,17 @@ function sumCounts(items: AdminOrderRow["items"]): Record<string, number> {
  *  Anything OLDER is discarded rather than trusted. It is a real number that
  *  someone really paid a fee on; it is just not an answer to "how far from
  *  the kitchen", and sorting a rider's list by it would be confidently
- *  wrong instead of honestly blank. */
+ *  wrong instead of honestly blank.
+ *
+ *  ONE IMPOSSIBLE ROW, if the above reads like caution rather than fact.
+ *  OLF410 (2026-09-29 17:12 UTC, ~1.7 h before the cutover) stores
+ *  distance_km = 1.749 while its own pin is 5.948 km from this kitchen in a
+ *  straight line — a road distance under a THIRD of the crow-flight it
+ *  supposedly spans. No road does that. The number is sound; it is just
+ *  answering a different question. Across all pre-cutover pinned rows the
+ *  road:straight ratio scatters from 0.003 to 6.5, where post-cutover it is
+ *  1.438-1.461 (see DETOUR_FACTOR). That scatter IS the two-measures
+ *  problem, and it is why these rows sort blank rather than wrong. */
 export const PRICING_ORIGIN_CUTOVER_MS = Date.parse("2026-09-29T18:51:16Z");
 
 /** `distance_km` if it is comparable to other rows' (see above), else null. */
