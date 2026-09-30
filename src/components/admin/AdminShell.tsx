@@ -120,6 +120,10 @@ const NAV_GROUPS: NavGroup[] = [
       // because that board is where a wrong zone is noticed.
       { href: "/admin/zone-rules", label: "Zone Rules" },
       { href: "/admin/requests", label: "Requests" },
+      // Captured money nobody has decided about yet. Under Operations
+      // because it is a queue of today's work, not a report — every row is
+      // a real payment sitting unreconciled until a person answers it.
+      { href: "/admin/payment-exceptions", label: "Payment Exceptions" },
       { href: "/admin/delivery-partners", label: "Delivery Partners" },
     ],
   },
