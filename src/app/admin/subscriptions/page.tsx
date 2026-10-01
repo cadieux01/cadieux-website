@@ -1390,12 +1390,35 @@ function SubscriptionsPageInner() {
             }}
           >
             {dateScoped && filteredCounts ? (
-              <>
-                {totalLoaves(filteredCounts)} loaves across {summary.subs}{" "}
-                subscription{summary.subs === 1 ? "" : "s"} delivering on{" "}
-                {formatDate(day)} — that date&rsquo;s stops only, cancelled
-                excluded. This is the bake total for that day.
-              </>
+              /* "0 loaves" WAS THE WRONG ANSWER HERE. `totalLoaves` of an
+                 empty map is 0, so when a date's rows carried no counts this
+                 line read "0 loaves across 0 subscriptions delivering on
+                 5 Oct — ... This is the bake total for that day." A zero in
+                 the same type, place and units as a real bake total is a
+                 bakeable-looking number for a day with no baking, asserted
+                 with the authority of "this IS the bake total" — when in fact
+                 nobody knows the figure, because the counts never arrived.
+
+                 There is NO `filtered.length === 0` branch here on purpose:
+                 the whole section is gated on `filtered.length > 0` (see the
+                 condition above), so a day with no stops at all never reaches
+                 this line. It is answered by the Placeholder below instead. */
+              summary.subs === 0 ? (
+                <>
+                  {filtered.length} subscription
+                  {filtered.length === 1 ? "" : "s"} on {formatDate(day)}, but
+                  none of them arrived with loaf counts — so the bake figure
+                  for that day is unknown, not zero. Reload the board; if it
+                  stays empty the counts are missing upstream.
+                </>
+              ) : (
+                <>
+                  {totalLoaves(filteredCounts)} loaves across {summary.subs}{" "}
+                  subscription{summary.subs === 1 ? "" : "s"} delivering on{" "}
+                  {formatDate(day)} — that date&rsquo;s stops only, cancelled
+                  excluded. This is the bake total for that day.
+                </>
+              )
             ) : (
               <>
                 No bake total across all dates — {summary.subs} subscription
@@ -1412,7 +1435,18 @@ function SubscriptionsPageInner() {
       {loading ? (
         <Placeholder>Loading subscriptions…</Placeholder>
       ) : filtered.length === 0 ? (
-        <Placeholder>No subscriptions match the filter.</Placeholder>
+        /* THE EMPTY DAY IS ANSWERED HERE, not in the summary bar — the bar is
+           gated on `filtered.length > 0` and never renders in this state.
+           With a date on, "No subscriptions match the filter" is true but
+           evasive: the operator picked a day to find out whether there is a
+           bake, and the answer is no. Saying so in the same words the summary
+           would have used keeps the two readings consistent, and names the
+           day so a stale filter cannot be mistaken for an empty bakery. */
+        <Placeholder>
+          {dateScoped
+            ? `Nothing delivers on ${formatDate(day)} — no subscription has a stop that day, so there is no bake for it.`
+            : "No subscriptions match the filter."}
+        </Placeholder>
       ) : (
         <div
           style={{
@@ -1474,6 +1508,36 @@ function SubscriptionsPageInner() {
                 const rowCounts =
                   countsBySub.get(s.id) ?? (new Map() as LoafCounts);
                 const rowLines = countLines(rowCounts, nameHint);
+                // WHICH delivery this row's badge is about — the same
+                // expression `countsBySub` keys on, so the cell and the
+                // number in it cannot describe different deliveries.
+                const rowDeliveryDate = dateScoped
+                  ? day
+                  : s.next_delivery?.date ?? null;
+                // WHY the badge is empty, because it is not one situation.
+                // CountMarkers renders NOTHING for an empty line list, so
+                // without this the cell is literally blank — and a blank cell
+                // beside a populated one reads as a figure that failed to
+                // load, not as "there is nothing to bake". This is not rare:
+                // 49 of 64 plans on prod have no next delivery (all 10
+                // cancelled, 37 of 40 completed, 1 active, 1 pending), and
+                // they are all on the DEFAULT view, because an empty status
+                // filter means every status — see matchesSubscriptionFilter.
+                //
+                // The two causes must never share a sentence:
+                //   "none"     every stop is delivered or cancelled. Nothing
+                //              to bake, and that is this plan's final answer.
+                //   "unknown"  a delivery date exists but carries no loaves —
+                //              a row fetched without ?enrich=1. The number is
+                //              UNKNOWN, not zero. Printing zero here would
+                //              invent a bake figure for a delivery that has
+                //              a real one.
+                const rowEmpty: "none" | "unknown" | null =
+                  rowLines.length > 0
+                    ? null
+                    : rowDeliveryDate
+                      ? "unknown"
+                      : "none";
                 // The plan's standing per-delivery template. Normally equal to
                 // the badge, so it is shown ONLY when it differs — which means
                 // this particular stop was edited away from the plan, and that
@@ -1489,7 +1553,14 @@ function SubscriptionsPageInner() {
                     ? `for the next delivery, ${formatDate(s.next_delivery.date)}`
                     : "for the next delivery";
                 const rowCountTitle = [
-                  rowLines.length > 0 ? `${badgeText} ${whichDelivery}` : null,
+                  rowLines.length > 0
+                    ? `${badgeText} ${whichDelivery}`
+                    : rowEmpty === "none"
+                      ? "No delivery left on this plan — every stop is " +
+                        "delivered or cancelled, so there is nothing to bake"
+                      : `Loaf count not loaded for ${
+                          rowDeliveryDate ? formatDate(rowDeliveryDate) : "this delivery"
+                        } — unknown, not zero`,
                   planPerDelivery && planPerDelivery !== badgeText
                     ? `plan is ${planPerDelivery} per delivery`
                     : null,
@@ -1592,11 +1663,18 @@ function SubscriptionsPageInner() {
                       {/* One line naming the variants and the cadence —
                           "Multigrain 1, Plain 1 — every week on Sunday". */}
                       <div>{describeSubscriptionPlan(s)}</div>
-                      {/* Lifetime loaves for THIS plan, and which days it
-                          goes out. The markers carry the whole-plan figure
-                          because that is what the bar above totals; the
-                          per-delivery figure is one hover away rather than
-                          a second set of numbers competing with it. */}
+                      {/* ONE delivery's loaves — that date's stops with a
+                          date filter on, otherwise this plan's next delivery
+                          — and which days it goes out.
+
+                          This said "lifetime loaves for THIS plan ... the
+                          markers carry the whole-plan figure because that is
+                          what the bar above totals". That stopped being true
+                          when the badge became a single delivery, and the bar
+                          no longer prints a total across all dates at all. A
+                          comment describing behaviour the board has not had
+                          for two commits is the stale comment sitting where
+                          the next person reads it. */}
                       <div
                         style={{
                           marginTop: 6,
@@ -1607,7 +1685,27 @@ function SubscriptionsPageInner() {
                         }}
                         title={rowCountTitle}
                       >
-                        <CountMarkers lines={rowLines} size={15} gap={8} />
+                        {/* WORDS, not an absent element. See `rowEmpty`:
+                            CountMarkers draws nothing for an empty list, so
+                            the alternative here is a blank cell, and a blank
+                            cell is read as a load that failed. Neither string
+                            contains a digit, so neither can be misread as a
+                            quantity. */}
+                        {rowLines.length > 0 ? (
+                          <CountMarkers lines={rowLines} size={15} gap={8} />
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontStyle: "italic",
+                              color: cream(0.5),
+                            }}
+                          >
+                            {rowEmpty === "none"
+                              ? "No next delivery — nothing to bake"
+                              : "Loaf count not loaded"}
+                          </span>
+                        )}
                         <DayDotRow days={subscriptionDays(s)} />
                       </div>
                       <div style={{ marginTop: 4 }}>
