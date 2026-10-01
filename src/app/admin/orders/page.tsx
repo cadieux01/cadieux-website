@@ -1281,6 +1281,10 @@ function OrdersPageInner() {
                 // `call` param because note bodies can contain commas.
                 status: encodeStatusParam(statusSel),
                 ...(callSel.length > 0 ? { call: callSel } : {}),
+                // The zone group was MISSING here while the print page has
+                // always read ?zone (see print/page.tsx) — so printing from
+                // a zone-filtered screen handed the kitchen every zone.
+                ...(zoneSel.length > 0 ? { zone: encodeZoneParam(zoneSel) } : {}),
                 ...(repeatOnly ? { repeat: "1" } : {}),
                 q: query,
                 sort,
