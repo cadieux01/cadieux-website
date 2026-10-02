@@ -249,7 +249,12 @@ export default function ZoneRulesPage() {
                           </div>
                         ) : null}
                       </td>
-                      <td style={td}>{ZONE_LABELS[r.zone]}</td>
+                      {/* Fall back to the raw key. This cell renders the row
+                          as it came off the API, NOT a resolved zone, so a
+                          zone the code does not know prints as nothing — and
+                          an empty cell is indistinguishable from a cleared
+                          rule. Printing "zone5" names the problem instead. */}
+                      <td style={td}>{ZONE_LABELS[r.zone] ?? r.zone}</td>
                       <td style={td}>{r.created_by}</td>
                       <td style={td}>{formatDate(r.created_at)}</td>
                       <td style={td}>{formatDate(r.updated_at)}</td>
@@ -331,7 +336,8 @@ export default function ZoneRulesPage() {
                           "—"
                         )}
                       </td>
-                      <td style={td}>{ZONE_LABELS[o.zone]}</td>
+                      {/* Same fallback as the rules table above. */}
+                      <td style={td}>{ZONE_LABELS[o.zone] ?? o.zone}</td>
                       <td style={td}>{o.created_by}</td>
                       <td style={td}>{formatDate(o.created_at)}</td>
                       <td style={td}>{formatDate(o.updated_at)}</td>

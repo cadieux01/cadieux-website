@@ -25,6 +25,16 @@ const COLOR_BY_ZONE: Record<ZoneKey, { fg: string; border: string }> = {
   pickup: { fg: "#FBF3D4", border: "rgba(251,243,212,0.6)" },
 };
 
+// A zone the code does not know about must not take down the board. The map
+// above is keyed on the ZoneKey union, so an unknown key is a type error at
+// every call site the compiler can see — but this badge also renders zones
+// that arrive as DATA (a rule row written against a widened Postgres CHECK),
+// and there `COLOR_BY_ZONE[zone].fg` is an undefined dereference on a live
+// admin screen. Degrade to the unzoned styling instead: the label below falls
+// back to the raw key, so the operator sees "zone5" in a plain pill rather
+// than an error boundary where the orders table used to be.
+const FALLBACK_COLORS = COLOR_BY_ZONE.unzoned;
+
 function isProvenanceSource(source: ZoneSource | undefined): boolean {
   return (
     source === "row_override" ||
@@ -49,7 +59,8 @@ export function ZoneBadge({
   onClick?: (e: React.MouseEvent<HTMLElement>) => void;
 }) {
   if (!zone) return null;
-  const colors = COLOR_BY_ZONE[zone];
+  const colors = COLOR_BY_ZONE[zone] ?? FALLBACK_COLORS;
+  const label = ZONE_LABELS[zone] ?? zone;
   const showDot = isProvenanceSource(source);
   const interactive = typeof onClick === "function" && zone !== "pickup";
   // Content is the same shape whether it's a span or a button — CSS reset
@@ -70,7 +81,7 @@ export function ZoneBadge({
           }}
         />
       ) : null}
-      {ZONE_LABELS[zone]}
+      {label}
     </>
   );
   const style: React.CSSProperties = {
@@ -98,7 +109,7 @@ export function ZoneBadge({
       className="inline-flex items-center uppercase"
       onClick={onClick}
       style={style}
-      aria-label={`Zone: ${ZONE_LABELS[zone]}. Click to change.`}
+      aria-label={`Zone: ${label}. Click to change.`}
     >
       {inner}
     </button>

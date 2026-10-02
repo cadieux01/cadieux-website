@@ -113,12 +113,37 @@ export function buildRuleSet(
     rowBySubscription: new Map(),
   };
   for (const r of rules) {
-    if (!isNumberedZone(r.zone)) continue;
+    if (!isNumberedZone(r.zone)) {
+      // The database accepted this row and the resolver is about to ignore it.
+      // That combination is the worst outcome available: the rule is listed in
+      // the panel, nobody was told anything, and the addresses it names keep
+      // resolving as if it did not exist. It happens when the zone CHECK is
+      // widened without widening NUMBERED_ZONES. Say so.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[zones] IGNORING rule ${r.id}: zone "${r.zone}" is not in NUMBERED_ZONES, ` +
+          `so ${r.key_type} "${r.key_value}" will not resolve. The database ` +
+          `permits this zone and the code does not — widen NUMBERED_ZONES, ` +
+          `ZoneKey, ZONE_KEYS and ZONE_LABELS together.`,
+      );
+      continue;
+    }
     if (r.key_type === "pincode") set.pincode.set(r.key_value, r.zone);
     else if (r.key_type === "locality") set.locality.set(r.key_value, r.zone);
   }
   for (const o of overrides) {
-    if (!isNumberedZone(o.zone)) continue;
+    if (!isNumberedZone(o.zone)) {
+      // Same failure, one row rather than a rule. Named by parent so the row
+      // can be found: a pin that does nothing looks identical to no pin.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[zones] IGNORING row pin ${o.id}: zone "${o.zone}" is not in ` +
+          `NUMBERED_ZONES, so ${
+            o.order_id ? `order ${o.order_id}` : `subscription ${o.subscription_id}`
+          } keeps its resolved zone.`,
+      );
+      continue;
+    }
     if (o.order_id) set.rowByOrder.set(o.order_id, o.zone);
     if (o.subscription_id) set.rowBySubscription.set(o.subscription_id, o.zone);
   }
