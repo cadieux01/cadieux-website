@@ -51,6 +51,7 @@ export function PartnerShareButton({
   buttonStyle,
   buttonLabel = "Share",
   blockedReason,
+  footer,
 }: {
   /** Fully composed text the wa.me / clipboard actions send verbatim, or
    *  several labelled ones to choose between (first = default). */
@@ -72,6 +73,19 @@ export function PartnerShareButton({
    * sentence someone can open and disagree with.
    */
   blockedReason?: string | null;
+  /**
+   * Extra rows beneath "Copy message" — e.g. a Print link, for a caller
+   * whose thing can also leave the building on paper.
+   *
+   * Optional and additive: every existing caller passes nothing and renders
+   * exactly as before. It is a slot rather than a `printHref` prop because
+   * what else a caller can do with its message is the caller's business,
+   * and this component deliberately knows nothing about what it is sharing.
+   *
+   * NOT rendered when `blockedReason` is set. A row that must not be
+   * dispatched must not offer a way out on paper either.
+   */
+  footer?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -353,6 +367,7 @@ export function PartnerShareButton({
                 </a>
               ))
             )}
+            {footer}
           </div>
             </>
           )}
@@ -378,3 +393,8 @@ const menuItemStyle: React.CSSProperties = {
   textAlign: "left",
   width: "100%",
 };
+
+/** The same style, for `footer` rows. A Print link that is visibly a
+ *  different kind of thing from the WhatsApp rows above it reads as a
+ *  rendering fault, so the slot does not get to invent its own look. */
+export const shareMenuItemStyle: React.CSSProperties = menuItemStyle;

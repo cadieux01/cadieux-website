@@ -126,6 +126,7 @@ import type { RetentionSummary } from "@/lib/customer-history";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isOrderFulfilled } from "@/lib/order-fulfillment";
 import { FulfilledTick } from "@/components/admin/FulfilledTick";
+import { ShareListButton } from "@/components/admin/ShareListButton";
 import { composeShareRun, isShareable } from "@/lib/order-share-message";
 import { deliverShareText } from "@/lib/share-delivery";
 import { CALL_PRESETS } from "@/lib/admin-call-updates";
@@ -693,9 +694,36 @@ function OrdersPageInner() {
   // /admin/subscriptions. stateToSearch stays here because the params are
   // this board's own; everything downstream of the string is identical on
   // both boards and lives in admin-url-state.
-  useUrlWriteback(
-    "/admin/orders",
-    stateToSearch({ filter, query, sort, basis, day }),
+  // Hoisted out of the useUrlWriteback() call because the Share control
+  // hands the SAME string to the run sheet. One string, so the sheet is cut
+  // from the URL the operator is looking at rather than from a second query
+  // object assembled nearby — which is how the Print link came to be
+  // missing ?zone.
+  const urlSearch = useMemo(
+    () => stateToSearch({ filter, query, sort, basis, day }),
+    [filter, query, sort, basis, day],
+  );
+  useUrlWriteback("/admin/orders", urlSearch);
+
+  // The active filter in words, for the Share dialog and the run sheet's
+  // header. Every group is spelled with the SAME label the dropdown shows
+  // it under — including the payment bucket, so a sheet cut by "Awaiting"
+  // whose Payment column reads COD states both and the deliberate
+  // divergence (see payment-label.ts) is legible rather than looking broken.
+  //
+  // Distinct from `filterLabel` further down, which is the DROPDOWN's own
+  // button text ("Pending +2 (43)") — abbreviated on purpose to fit a chip.
+  // A sheet that walks out of the building spells every group out.
+  const sliceLabel = useMemo(
+    () =>
+      [
+        ...statusSel.map((s) => formatStatusLabel(s)),
+        ...callSel,
+        ...zoneSel.map((z) => ZONE_LABELS[z]),
+        ...paySel.map((p) => PAYMENT_VIEW_LABELS[p]),
+        ...(repeatOnly ? ["Repeat customers"] : []),
+      ].join(", ") || "all",
+    [statusSel, callSel, zoneSel, paySel, repeatOnly],
   );
   useScrollRestore(SCROLL_KEY, !loading);
 
@@ -1375,6 +1403,24 @@ function OrdersPageInner() {
           >
             Print orders
           </Link>
+          {/* The run sheet leaving the building — WhatsApp to a partner, or
+              on paper. Separate from "Print orders" above, which is the
+              KITCHEN's packing list (zone → date → slot, items, loaf
+              subtotals); this is the seven fields a rider reads at a door.
+              It shares the board's filter rather than asking again, and is
+              handed `urlSearch` so the sheet is cut from the URL on screen. */}
+          <ShareListButton
+            orders={filtered}
+            basis={basis}
+            day={day}
+            filterLabel={sliceLabel}
+            query={query}
+            search={urlSearch}
+            partners={partners}
+            partnersLoading={partnersLoading}
+            partnersError={partnersError}
+            buttonStyle={chipNeutral}
+          />
           <button
             type="button"
             onClick={() => exportCsv(filtered, productNames)}
