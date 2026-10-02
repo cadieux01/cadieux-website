@@ -37,7 +37,10 @@ export async function GET(req: NextRequest) {
       // falls back to it for the ~2 in 3 orders that have no GPS pin. One
       // float per row; see partner-deliveries.ts for why only post-cutover
       // rows are usable.
-      "id, order_number, public_ref, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, order_kind, customers(id, full_name, phone, city)"
+      // status_updated_at + paid_at + cod_settled_method are projected for the
+      // COD settlement control: it must SHOW the paid_at it is about to write
+      // (for a delivered order that is status_updated_at) before saving.
+      "id, order_number, public_ref, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, status_updated_at, paid_at, cod_settled_method, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, order_kind, customers(id, full_name, phone, city)"
     )
     .order("created_at", { ascending: false });
 

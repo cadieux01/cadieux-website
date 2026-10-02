@@ -130,6 +130,10 @@ export type AdminOrderRow = {
   status: string | null;
   payment_method?: string | null;
   payment_status?: string | null;
+  /** How a COD order's cash actually arrived: 'cash' | 'upi' | 'cash_upi'.
+   *  Null on every online order and on any COD order not yet recorded.
+   *  Independent of payment_status — see lib/cod-settlement. */
+  cod_settled_method?: string | null;
   delivery_address: string | null;
   delivery_date: string | null;
   delivery_slot: string | null;
@@ -159,10 +163,16 @@ export type AdminOrderRow = {
   } | null;
   /** Payment, refund and lifecycle-timestamp columns. Projected by the
    *  single-order GET only (/api/admin/orders/[id]) — the list route
-   *  leaves them undefined to keep its payload small. */
+   *  leaves them undefined to keep its payload small. EXCEPT paid_at and
+   *  status_updated_at, which the list route does project: the COD
+   *  settlement control shows the paid_at it is about to write, and on a
+   *  delivered row that is status_updated_at. */
   razorpay_order_id?: string | null;
   razorpay_payment_id?: string | null;
   paid_at?: string | null;
+  /** Moment of the most recent status change. On a row whose status is
+   *  'delivered' this IS the delivered moment — see settlementPaidAt in
+   *  lib/cod-settlement, which backdates paid_at to it. */
   status_updated_at?: string | null;
   cancelled_at?: string | null;
   cancellation_reason?: string | null;

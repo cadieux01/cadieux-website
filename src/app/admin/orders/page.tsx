@@ -137,6 +137,12 @@ import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { NoteIconButton } from "@/components/admin/NoteIconButton";
 import { NotePanel } from "@/components/admin/NotePanel";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
+import {
+  CodSettleButton,
+  CodSettleDialog,
+  CodSettledChip,
+} from "@/components/admin/CodSettleDialog";
+import { canSettleCod } from "@/lib/cod-settlement";
 
 type SortKey = "created_desc" | "delivery_asc";
 
@@ -730,6 +736,7 @@ function OrdersPageInner() {
   const [editing, setEditing] = useState<AdminOrderRow | null>(null);
   const [orderEditing, setOrderEditing] = useState<AdminOrderRow | null>(null);
   const [scheduling, setScheduling] = useState<AdminOrderRow | null>(null);
+  const [settling, setSettling] = useState<AdminOrderRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const showNotice = useCallback((m: string) => {
     setNotice(m);
@@ -1649,6 +1656,22 @@ function OrdersPageInner() {
         />
       ) : null}
 
+      {settling ? (
+        <CodSettleDialog
+          order={settling}
+          onCancel={() => setSettling(null)}
+          onSaved={() => {
+            const label = formatOrderNumber(settling);
+            setSettling(null);
+            showNotice(`Cash recorded for ${label} — marked paid.`);
+            // Full reload rather than a local patch: the route decides
+            // payment_status and paid_at, so the row must come back from the
+            // server rather than being guessed at here.
+            void load();
+          }}
+        />
+      ) : null}
+
       {noteOwner ? (
         <NotePanel
           owner={noteOwner}
@@ -2047,6 +2070,14 @@ function OrdersPageInner() {
                           >
                             Mark {next}
                           </button>
+                        ) : null}
+                        {canSettleCod(o) ? (
+                          <CodSettleButton
+                            disabled={busy}
+                            onClick={() => setSettling(o)}
+                          />
+                        ) : o.cod_settled_method ? (
+                          <CodSettledChip method={o.cod_settled_method} />
                         ) : null}
                         {isShareable(o) ? (
                           <OrderShareButton

@@ -7,6 +7,15 @@ import { canAutoRefund } from "@/lib/order-cancellation";
 import { issueRazorpayRefund } from "@/lib/razorpay-refund";
 import { computeOrderState } from "@/lib/order-state";
 import { notifyPreorderScheduled } from "@/lib/preorder-notify";
+import { isPaidStatus } from "@/lib/payment-label";
+import {
+  canSettleCod,
+  codMethodLabel,
+  isCodSettledMethod,
+  settlementPaidAt,
+  type CodSettledMethod,
+  type PaidAtSource,
+} from "@/lib/cod-settlement";
 
 // New canonical stages + legacy values that pre-date the
 // order-status-stages migration. The migration normalises existing
@@ -89,7 +98,7 @@ export async function GET(
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, order_number, public_ref, customer_id, total_amount, delivery_fee, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, razorpay_order_id, razorpay_payment_id, paid_at, status_updated_at, cancelled_at, cancellation_reason, refund_status, refund_id, refunded_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, customers(id, full_name, phone, email, city)",
+      "id, order_number, public_ref, customer_id, total_amount, delivery_fee, status, payment_method, payment_status, cod_settled_method, delivery_address, delivery_date, delivery_slot, items, created_at, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, razorpay_order_id, razorpay_payment_id, paid_at, status_updated_at, cancelled_at, cancellation_reason, refund_status, refund_id, refunded_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, customers(id, full_name, phone, email, city)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -144,7 +153,9 @@ export async function PATCH(
   // value still has to be one of the three canonical windows.
   const { data: before } = await supabaseAdmin
     .from("orders")
-    .select("status, delivery_date, delivery_slot, is_preorder")
+    .select(
+      "status, delivery_date, delivery_slot, is_preorder, payment_method, payment_status, status_updated_at",
+    )
     .eq("id", params.id)
     .maybeSingle();
 
@@ -207,6 +218,57 @@ export async function PATCH(
     }
   }
 
+  // Record how a COD order's cash arrived. ONE ACTION: this also moves
+  // payment_status to 'paid' and stamps paid_at, because there is no other
+  // admin paid-transition for an order to pair it with.
+  //
+  // What this deliberately does NOT copy from the four Razorpay writers:
+  //   • razorpay_payment_id — no such payment exists. Writing one would be a
+  //     lie in the money column AND would make canAutoRefund() true, so a
+  //     later cancel would ask Razorpay to refund a payment it never took.
+  //     Cash is refunded as cash; the gate must stay shut.
+  //   • payment_method='razorpay' — must keep reading 'cod'.
+  //   • queueOrderNotification(id,'paid') — that email goes to
+  //     ORDER_ALERT_EMAIL (admin@cadieux.in), not the customer, and its stated
+  //     purpose is to stop someone being sent to collect cash on an order that
+  //     is already settled. Here the person who would be sent is the person who
+  //     just collected, so the alert is noise. Note it would NOT self-suppress:
+  //     prepareMessage() re-checks payment_status==='paid', which now passes.
+  //   • the payment_group_id fan-out — measured 0 COD orders carry a
+  //     payment_group_id. A cash collection is one door, one row.
+  let settlementPaidAtSource: PaidAtSource | null = null;
+  if (body.cod_settled_method !== undefined) {
+    if (!isCodSettledMethod(body.cod_settled_method)) {
+      return NextResponse.json(
+        { error: "Invalid cod_settled_method" },
+        { status: 400 },
+      );
+    }
+    if (!before) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+    // Re-check server-side. The button is already hidden for these rows, but
+    // a non-COD or already-paid order must never be settleable by a crafted
+    // request — that is how an online order loses its Razorpay attribution.
+    if (!canSettleCod(before)) {
+      return NextResponse.json(
+        {
+          error: isPaidStatus(before.payment_status)
+            ? "Order is already paid"
+            : "Not a COD order",
+        },
+        { status: 409 },
+      );
+    }
+    const decision = settlementPaidAt(before, new Date().toISOString());
+    settlementPaidAtSource = decision.source;
+    update.cod_settled_method = body.cod_settled_method;
+    update.payment_status = "paid";
+    // null on a delivered row with no status_updated_at: record the collection
+    // without inventing a date. Never fills in now() as a stand-in.
+    update.paid_at = decision.iso;
+  }
+
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
@@ -231,18 +293,35 @@ export async function PATCH(
     update.scheduled_delivery_date_at = new Date().toISOString();
   }
 
-  const { data: updated, error } = await supabaseAdmin
-    .from("orders")
-    .update(update)
-    .eq("id", params.id)
-    .select(
-      "id, customer_id, order_number, public_ref, status, payment_status, razorpay_payment_id, refund_status, refund_id, total_amount",
-    )
+  const RETURNING =
+    "id, customer_id, order_number, public_ref, status, payment_status, razorpay_payment_id, refund_status, refund_id, total_amount, paid_at, cod_settled_method";
+
+  // On a settlement the write is a compare-and-swap: only flip a row that is
+  // still unpaid, so two taps on the same order cannot overwrite the first
+  // collection's method or re-date its paid_at. The guard is scoped to this
+  // path — applying .neq("payment_status","paid") to every PATCH would stop
+  // an admin editing the address of an order that is legitimately paid.
+  const writer = supabaseAdmin.from("orders").update(update).eq("id", params.id);
+  const { data: updated, error } = await (settlementPaidAtSource
+    ? writer.neq("payment_status", "paid")
+    : writer
+  )
+    .select(RETURNING)
     .maybeSingle();
 
   if (error) {
     console.error("[admin/orders update]", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Settlement only: no row came back, so the compare-and-swap lost — someone
+  // else recorded this collection first. Report it rather than 200-ing on a
+  // write that did not happen.
+  if (settlementPaidAtSource && !updated) {
+    return NextResponse.json(
+      { error: "Order was already settled by someone else" },
+      { status: 409 },
+    );
   }
 
   // Auto-refund on admin cancel — PAID orders only. Same paid-only gate + DB
@@ -327,7 +406,16 @@ export async function PATCH(
   // edits — these are the ones admins make from phone-call requests
   // and the audit-log page needs to surface clearly.
   let context: string;
-  if (schedulingChanged) {
+  if (settlementPaidAtSource) {
+    const m = update.cod_settled_method as CodSettledMethod;
+    context =
+      `COD settled by ${codMethodLabel(m)}` +
+      (settlementPaidAtSource === "delivered"
+        ? ` — paid_at backdated to the delivered time`
+        : settlementPaidAtSource === "unknown"
+          ? ` — no delivered time on the row, paid_at left empty`
+          : ``);
+  } else if (schedulingChanged) {
     const finalDate = (update.delivery_date ?? before?.delivery_date ?? null) as string | null;
     const finalSlot = (update.delivery_slot ?? before?.delivery_slot ?? null) as string | null;
     const slotLabel = finalSlot ? formatSlotForDisplay(finalSlot) : "—";
@@ -346,6 +434,9 @@ export async function PATCH(
         ? "cancel"
         : "status_change"
       : "update",
+    // 'update' rather than a new audit_entity/audit_action enum value — both
+    // are Postgres enums and adding a member is a second migration. The meta
+    // below names the event unambiguously.
     targetId: params.id,
     targetLabel: `#${params.id.slice(0, 8)}`,
     context,
@@ -359,6 +450,15 @@ export async function PATCH(
         : {}),
       ...(slotChanged
         ? { delivery_slot_before: before?.delivery_slot ?? null, delivery_slot_after: update.delivery_slot ?? null }
+        : {}),
+      ...(settlementPaidAtSource
+        ? {
+            cod_settled_method: update.cod_settled_method,
+            payment_status_before: before?.payment_status ?? null,
+            payment_status_after: "paid",
+            paid_at_written: update.paid_at ?? null,
+            paid_at_source: settlementPaidAtSource,
+          }
         : {}),
     },
   });

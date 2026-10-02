@@ -9,8 +9,9 @@
 //
 // Data comes from the admin-gated GET /api/admin/orders/[id] — the same
 // endpoint the print receipt uses — so nothing here is exposed
-// unauthenticated. This page NEVER writes: no status changes, no edits.
-// All mutations still live on the list page and its modals.
+// unauthenticated. The page writes only through modals shared with the list
+// (the edit panel, and "Record cash" on a COD order); status changes still
+// live on the list page.
 //
 // Styling reuses the existing admin palette (gold hairlines on near-black,
 // cream text) — see /admin/customers/[id] for the same Card/KeyVal idiom.
@@ -36,6 +37,11 @@ import { isShareable } from "@/lib/order-share-message";
 import { buildRuleSet } from "@/lib/zone-rules";
 import { fetchAllRules } from "@/lib/zone-rules-client";
 import { EditOrderPanel } from "@/components/admin/EditOrderPanel";
+import {
+  CodSettleButton,
+  CodSettleDialog,
+} from "@/components/admin/CodSettleDialog";
+import { canSettleCod, codMethodDisplay } from "@/lib/cod-settlement";
 import { OrderShareButton } from "@/components/admin/OrderShareButton";
 import type { ShareablePartner } from "@/components/admin/PartnerShareButton";
 
@@ -90,6 +96,8 @@ export default function AdminOrderDetailPage({
   const [missing, setMissing] = useState(false);
   // Holds the order while the shared edit panel is open. Null = closed.
   const [editingOrder, setEditingOrder] = useState<AdminOrderRow | null>(null);
+  // Holds the order while the "Record cash" dialog is open. Null = closed.
+  const [settling, setSettling] = useState<AdminOrderRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -515,7 +523,18 @@ export default function AdminOrderDetailPage({
         </section>
 
         {/* 5 · PAYMENT ------------------------------------------------- */}
-        <Block title="Payment">
+        {/* The one write in this block. Gated on canSettleCod() — COD and
+            not yet paid — with no date restriction, because the backlog it
+            exists for runs back to 30 August. Same component the list
+            mounts, so both surfaces show the same date before saving. */}
+        <Block
+          title="Payment"
+          action={
+            canSettleCod(order) ? (
+              <CodSettleButton onClick={() => setSettling(order)} />
+            ) : null
+          }
+        >
           <KeyVal
             k="Method"
             v={
@@ -525,6 +544,12 @@ export default function AdminOrderDetailPage({
             }
           />
           <KeyVal k="Status" v={humanise(order.payment_status)} />
+          {order.cod_settled_method ? (
+            <KeyVal
+              k="Cash arrived as"
+              v={codMethodDisplay(order.cod_settled_method)}
+            />
+          ) : null}
           <KeyVal k="Razorpay order id" v={show(order.razorpay_order_id)} />
           <KeyVal k="Razorpay payment id" v={show(order.razorpay_payment_id)} />
           <KeyVal k="Paid at" v={formatDateTime(order.paid_at)} />
@@ -611,6 +636,21 @@ export default function AdminOrderDetailPage({
           onSaved={(msg) => {
             setEditingOrder(null);
             setNotice(msg);
+            void load();
+          }}
+        />
+      ) : null}
+
+      {/* Recording the cash also moves payment_status to 'paid', so re-fetch
+          rather than patch local state — the badge, Paid at and the method
+          row all come from the same response. */}
+      {settling ? (
+        <CodSettleDialog
+          order={settling}
+          onCancel={() => setSettling(null)}
+          onSaved={() => {
+            setSettling(null);
+            setNotice("Cash recorded — marked paid.");
             void load();
           }}
         />
