@@ -611,7 +611,12 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   whiteSpace: "nowrap",
                 }}
               >
-                {subPct > 0 ? `Subscribe & save ${subPct}%` : "Subscribe & save"}
+                {/* The two branches are NOT interchangeable, so do not collapse
+                    them into one string. The else-branch serves products whose
+                    subscription price equals MRP (subPct === 0) — on those the
+                    word "save" is a claim the price does not support. Only the
+                    discounted branch may promise a saving. */}
+                {subPct > 0 ? `Subscribe & save ${subPct}%` : "Subscribe weekly"}
               </div>
             )}
           </div>
