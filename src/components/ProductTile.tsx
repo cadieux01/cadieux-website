@@ -101,14 +101,23 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
   );
   const inCartQty = cartIndex >= 0 ? cart[cartIndex].qty : 0;
 
-  // Only advertise the subscribe price when it's a real, cheaper number.
-  // A missing / zero / not-actually-lower figure renders nothing rather than
-  // a misleading "save" line.
+  // Two separate questions, previously conflated into one.
+  //
+  // showSubscribe = IS there a subscription to offer. A plan priced AT the
+  // one-time price is a real plan: burger-bun is subscribable at 0% discount.
+  // The old `< price` test here meant the tile hid the offer entirely for any
+  // such product, while its PDP (gated on products.is_subscription_plan)
+  // showed it — the grid and the product page disagreed.
+  //
+  // showSubscribeSaving = is there a SAVING to advertise. Still strictly
+  // cheaper, so nothing ever renders "₹69 / ₹69" or claims a discount that
+  // isn't there.
   const showSubscribe =
     typeof subscribePrice === "number" &&
     Number.isFinite(subscribePrice) &&
     subscribePrice > 0 &&
-    subscribePrice < price;
+    subscribePrice <= price;
+  const showSubscribeSaving = showSubscribe && subscribePrice! < price;
   const subPct =
     typeof subscribeDiscountPct === "number" && Number.isFinite(subscribeDiscountPct)
       ? Math.round(subscribeDiscountPct)
@@ -118,7 +127,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
   // never from an MRP the customer isn't being shown. Mirrors the price line
   // above it: one figure, or the same "/" pair when a subscribe price shows.
   const oneTimePerG = costPerGramProtein(price, proteinPerLoafG);
-  const subscribePerG = showSubscribe
+  const subscribePerG = showSubscribeSaving
     ? costPerGramProtein(subscribePrice!, proteinPerLoafG)
     : null;
 
@@ -543,7 +552,7 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               }}
             >
               <span>₹{price}</span>
-              {showSubscribe && (
+              {showSubscribeSaving && (
                 /* The cheaper subscribe figure rides beside the one-time price
                    rather than under it, so the row keeps its single-line
                    height and the Add button never shifts. Emphasis is static:
