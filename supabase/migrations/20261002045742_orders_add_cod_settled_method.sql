@@ -1,9 +1,14 @@
 -- How a COD order's money physically arrived at the door.
 --
--- NOT YET APPLIED. Raja approves migrations. After it is applied, run
--- list_migrations, rename this file to the version Supabase actually minted
--- and replace this line with that version — the written prefix has differed
--- from the minted one every time so far.
+-- APPLIED TO PRODUCTION. Ledger version: 20261002045742.
+-- Renamed from the written prefix 20261002061500 to match the minted ledger
+-- version. `supabase db push` keys on the FILENAME: a prefix absent from
+-- supabase_migrations.schema_migrations is treated as unapplied and re-run,
+-- and this one would then fail on a duplicate column. Third drift in three
+-- migrations — the filename is something someone typed beforehand, the
+-- ledger is what actually ran.
+-- Post-apply state verified by Raja: column present, nullable, CHECK
+-- (cash|upi|cash_upi) intact, comment attached, 435 rows, 0 with a value.
 --
 -- WHY A NEW COLUMN AND NOT payment_status.
 -- Seven consumers compare payment_status with a strict `=== "paid"`:
