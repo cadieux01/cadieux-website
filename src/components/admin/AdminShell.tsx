@@ -113,6 +113,12 @@ const NAV_GROUPS: NavGroup[] = [
       // board cannot — "what does one person drive, in what order" — off
       // the same rows and the SAME zone resolver, so the two never disagree.
       { href: "/admin/deliveries", label: "Online / Deliveries" },
+      // The rules behind the zone every board above shows. It existed as a
+      // page before it existed as a link, so the only way in was typing the
+      // URL — which means the overrides and rules an operator had already
+      // saved were effectively unreviewable. Sits directly under Deliveries
+      // because that board is where a wrong zone is noticed.
+      { href: "/admin/zone-rules", label: "Zone Rules" },
       { href: "/admin/requests", label: "Requests" },
       { href: "/admin/delivery-partners", label: "Delivery Partners" },
     ],
