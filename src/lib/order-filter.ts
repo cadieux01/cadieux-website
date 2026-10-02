@@ -13,12 +13,18 @@
 //   • statuses are OR'd together      → Pending OR Confirmed OR Preparing
 //   • call updates are OR'd together  → "Did not lift" OR "Call back later"
 //   • zones are OR'd together         → Zone 1 OR Zone 4 OR Pickup
+//   • payments are OR'd together      → Paid OR Awaiting
 //   • "repeat customers only" is a single flag
 //   • the groups are AND'd            → Pending AND "Did not lift" AND repeat AND Zone 2
 // An EMPTY group means "no constraint from this group", which is why
 // "All statuses" is simply the empty status list rather than a magic value.
 
 import type { ZoneKey } from "@/lib/delivery-zones";
+import {
+  isPaymentView,
+  paymentView,
+  type PaymentView,
+} from "@/lib/payment-label";
 
 /** The fields the predicate reads. Structural so both AdminOrderRow and the
  *  print view's row type satisfy it without a cast. `zone` is derived (never
@@ -31,6 +37,13 @@ export type FilterableOrder = {
   /** 1-based ordinal of this order for its customer; see
    *  src/lib/customer-history.ts. 2+ = they had ordered before. */
   repeat_seq?: number | null;
+  /** The two stored payment columns. Read ONLY through paymentView() — the
+   *  bucket an operator filters by must be the bucket the badge prints, and
+   *  there is one function that decides it. Both optional so print's lean
+   *  row type stays satisfiable; absent means `unknown`, which no live row
+   *  is and which the menu therefore does not offer. */
+  payment_status?: string | null;
+  payment_method?: string | null;
   /** Resolved zone for this row. See src/lib/delivery-zones.ts. Optional
    *  so print's lean row type does not have to carry it when print never
    *  filters by zone — an absent zone under an active zone filter simply
@@ -45,6 +58,12 @@ export const CALL_PREFIX = "call:";
  *  Kept in the same flat selection as statuses and calls so the dropdown, the
  *  URL and the print view all stay on one representation. */
 export const ZONE_PREFIX = "zone:";
+
+/** Marks a filter value as a payment bucket (e.g. "pay:paid", "pay:awaiting").
+ *  The bucket names are PAYMENT_VIEWS in @/lib/payment-label — the same four
+ *  the badge in the table prints, so the menu can never offer a word the rows
+ *  do not use. */
+export const PAY_PREFIX = "pay:";
 
 /** The one value in the "repeat customers only" group. Kept in the same
  *  flat selection as statuses and calls so the dropdown, the URL and the
@@ -67,20 +86,29 @@ export const REPEAT_ONLY = "repeat:only";
 export const ALL_VALUE = "all";
 
 /**
- * Split a flat selection (what the dropdown holds) into its four groups.
- * `"call:…"` → calls; `"zone:…"` → zones; `"repeat:only"` → repeatOnly flag;
- * `"all"` is dropped (an empty status list already means "all"); everything
- * else → statuses.
+ * Split a flat selection (what the dropdown holds) into its five groups.
+ * `"call:…"` → calls; `"zone:…"` → zones; `"pay:…"` → payments;
+ * `"repeat:only"` → repeatOnly flag; `"all"` is dropped (an empty status list
+ * already means "all"); everything else → statuses.
+ *
+ * A `pay:` value that is not a known bucket is DROPPED, unlike a zone, which
+ * is cast. The difference is deliberate: an unrecognised payment bucket would
+ * match no row and silently empty the table, whereas dropping it degrades to
+ * "no payment constraint" — the state the operator sees described as "All
+ * statuses". Failing open is right here because the group is additive; a
+ * stale link is far likelier than a hostile one on an admin board.
  */
 export function splitFilterValues(values: readonly string[]): {
   statuses: string[];
   calls: string[];
   zones: ZoneKey[];
+  payments: PaymentView[];
   repeatOnly: boolean;
 } {
   const statuses: string[] = [];
   const calls: string[] = [];
   const zones: ZoneKey[] = [];
+  const payments: PaymentView[] = [];
   let repeatOnly = false;
   for (const v of values) {
     if (v === ALL_VALUE) continue;
@@ -88,9 +116,12 @@ export function splitFilterValues(values: readonly string[]): {
     else if (v.startsWith(CALL_PREFIX)) calls.push(v.slice(CALL_PREFIX.length));
     else if (v.startsWith(ZONE_PREFIX))
       zones.push(v.slice(ZONE_PREFIX.length) as ZoneKey);
-    else statuses.push(v);
+    else if (v.startsWith(PAY_PREFIX)) {
+      const p = v.slice(PAY_PREFIX.length);
+      if (isPaymentView(p)) payments.push(p);
+    } else statuses.push(v);
   }
-  return { statuses, calls, zones, repeatOnly };
+  return { statuses, calls, zones, payments, repeatOnly };
 }
 
 /**
@@ -107,6 +138,7 @@ export function matchesOrderFilter(
   calls: readonly string[],
   repeatOnly = false,
   zones: readonly ZoneKey[] = [],
+  payments: readonly PaymentView[] = [],
 ): boolean {
   // A repeat order is one where the SAME phone has an earlier
   // non-cancelled order. Cancelled rows carry no repeat_seq at all, so
@@ -131,6 +163,12 @@ export function matchesOrderFilter(
     // (which is itself a real zone with its own key). Failing closed keeps
     // that mistake visible instead of silently over-including rows.
     if (!o.zone || !zones.includes(o.zone)) return false;
+  }
+  if (payments.length > 0) {
+    // Derived, not stored — like zone. paymentView() is the only thing
+    // allowed to decide which bucket a row is in, so the filter, the badge
+    // in the table and the badge on the sheet cannot drift apart.
+    if (!payments.includes(paymentView(o))) return false;
   }
   return true;
 }
@@ -177,4 +215,22 @@ export function decodeZoneParam(raw: string | null): ZoneKey[] {
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter((s): s is ZoneKey => VALID_ZONE_KEYS.includes(s));
+}
+
+// Payment param — comma-separated PaymentView values ("paid,awaiting"), on
+// its own `pay` param for the same reason zones got one: the groups are
+// orthogonal and a link that narrows payment should read plainly. The
+// vocabulary is validated against PAYMENT_VIEWS rather than a copy of it
+// here, so appending a bucket there is the only edit a new bucket needs.
+
+export function encodePayParam(payments: readonly PaymentView[]): string {
+  return payments.length === 0 ? "" : payments.join(",");
+}
+
+export function decodePayParam(raw: string | null): PaymentView[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(isPaymentView);
 }

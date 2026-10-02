@@ -1,3 +1,31 @@
+// Payment, said two different ways on purpose.
+//
+// THE CONTRACT BETWEEN THE TWO FUNCTIONS IN THIS FILE. They are not two
+// spellings of one fact and must not be consolidated:
+//
+//   paymentLabel()  is THE RIDER'S INSTRUCTION. Binary — PAID or COD.
+//                   Reads STATUS ONLY, never method. `paid*` by PREFIX.
+//                   The question it answers is "do I take money at this
+//                   door", and that has exactly two answers.
+//
+//   paymentView()   is THE ADMIN'S DIAGNOSIS. Four outcomes — Paid,
+//                   Failed, COD, Awaiting. It DOES read method, because
+//                   the office question is "what happened to this
+//                   payment attempt", which method is half the answer to.
+//
+// THEY DISAGREE, DELIBERATELY, ON ONE BUCKET. A `razorpay` + `created`
+// row (34 of them live as of 2026-10-01) reads "Awaiting" on the board
+// and "COD" on the rider's sheet. Both are correct: an attempt was
+// started and never completed, so the office wants it visible as
+// unresolved — and no money has arrived, so the rider must collect.
+// Anyone who "unifies" these two functions reintroduces the bug that
+// sent a rider to a door with nothing to collect against.
+//
+// The one thing they are NOT allowed to disagree about is whether the
+// money arrived: both route that through isPaidStatus().
+//
+// ─────────────────────────────────────────────────────────────────────
+//
 // The payment word. Two values, and only two:
 //
 //   PAID  — the money is in. Collect nothing.
@@ -85,4 +113,81 @@ export function paymentLabel(p: PaymentFacts): string {
   return typeof due === "number" && Number.isFinite(due) && due > 0
     ? `COD ${rupees(due)}`
     : "COD";
+}
+
+/* ------------------------------------------------------------------ *
+ * THE ADMIN'S DIAGNOSIS
+ *
+ * Moved here from a private PaymentBadge inside /admin/orders/page.tsx.
+ * It moved because it stopped being presentation the moment payment
+ * became a FILTER: the badge the operator reads and the group they
+ * filter by have to be the same four buckets, or the menu offers a word
+ * the table never prints. One function decides both.
+ *
+ * Colour stays in the component. The outcome is the shared fact; cream
+ * and amber are the orders board's business.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The four live buckets, plus `unknown` for a row carrying neither
+ * method nor status.
+ *
+ * ORDER IS THE MENU ORDER — operator order, settled first.
+ *
+ * APPENDING A FIFTH IS THE WHOLE EXTENSION POINT. Add the value here,
+ * a label in PAYMENT_VIEW_LABELS, and a branch in paymentView(); the
+ * URL codec, the filter group and the dropdown all derive from this
+ * array and need no edit. (A `cod_settled_method` column is landing
+ * separately — when it does, this is where its bucket goes.)
+ */
+export const PAYMENT_VIEWS = [
+  "paid",
+  "cod",
+  "awaiting",
+  "failed",
+  "unknown",
+] as const;
+
+export type PaymentView = (typeof PAYMENT_VIEWS)[number];
+
+export function isPaymentView(v: unknown): v is PaymentView {
+  return typeof v === "string" && (PAYMENT_VIEWS as readonly string[]).includes(v);
+}
+
+/** What the operator sees — in the badge and in the filter menu, the same
+ *  word in both. `unknown` prints the em dash the badge always printed. */
+export const PAYMENT_VIEW_LABELS: Record<PaymentView, string> = {
+  paid: "Paid",
+  cod: "COD",
+  awaiting: "Awaiting",
+  failed: "Failed",
+  unknown: "—",
+};
+
+/**
+ * Which bucket this order's payment sits in.
+ *
+ * `unknown` (neither field set) is a real outcome and still a valid
+ * filter value, but it is NOT offered in the dropdown — no order has
+ * ever carried it. Same treatment as `pending_payment` and `picked_up`
+ * in the status group: reachable from a URL, not worth a menu line.
+ */
+export function paymentView(p: {
+  payment_method?: string | null;
+  payment_status?: string | null;
+}): PaymentView {
+  const m = (p.payment_method ?? "").trim().toLowerCase();
+  const s = (p.payment_status ?? "").trim().toLowerCase();
+
+  // Prefix-matched, exactly as paymentLabel does it. The badge used to
+  // test `s === "paid"`, which would have shown "Awaiting" on a
+  // `paid_orphaned` row whose money HAD arrived. No order row has ever
+  // carried one (the orphan sweeper is subscriptions-only), so this
+  // changes nothing live — but "has the money arrived" must not have two
+  // answers in one file.
+  if (isPaidStatus(s)) return "paid";
+  if (s === "failed") return "failed";
+  if (m === "cod") return "cod";
+  if (!m && !s) return "unknown";
+  return "awaiting";
 }

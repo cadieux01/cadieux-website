@@ -37,7 +37,12 @@ import { formatSlotForDisplay } from "@/lib/delivery-slots";
 import { AdminOrderItemSnapshot, AdminOrderRow } from "@/lib/admin-shared";
 import type { OrderNoteRow } from "@/lib/order-notes";
 import { formatOrderNumber } from "@/lib/order-number";
-import { decodeZoneParam, matchesOrderFilter } from "@/lib/order-filter";
+import {
+  decodePayParam,
+  decodeZoneParam,
+  matchesOrderFilter,
+} from "@/lib/order-filter";
+import { PAYMENT_VIEW_LABELS } from "@/lib/payment-label";
 import { decodeStatusParam } from "@/lib/filter-menu";
 import {
   matchesDay,
@@ -103,11 +108,17 @@ function PrintOrdersPageInner() {
   // same map, same resolver.
   const zoneRaw = params.get("zone");
   const zones = useMemo(() => decodeZoneParam(zoneRaw), [zoneRaw]);
+  // Fifth filter group, carried as ?pay=paid,awaiting. Like zone it is
+  // DERIVED at read time (paymentView over the two stored columns), so the
+  // sheet and the screen cannot disagree — same function, same buckets.
+  const payRaw = params.get("pay");
+  const payments = useMemo(() => decodePayParam(payRaw), [payRaw]);
   const filterLabel =
     [
       ...statuses,
       ...calls,
       ...zones.map((z) => ZONE_LABELS[z]),
+      ...payments.map((p) => PAYMENT_VIEW_LABELS[p]),
       ...(repeatOnly ? ["repeat customers"] : []),
     ].join(", ") || "all";
   const q = params.get("q") ?? "";
@@ -232,7 +243,16 @@ function PrintOrdersPageInner() {
       // everything (back-compat for older bookmarks / entry points).
       if (!matchesDay(orderDateForBasis(o, basis), day)) return false;
       const withZone = { ...o, zone: zoneOf.get(o.id) };
-      if (!matchesOrderFilter(withZone, statuses, calls, repeatOnly, zones))
+      if (
+        !matchesOrderFilter(
+          withZone,
+          statuses,
+          calls,
+          repeatOnly,
+          zones,
+          payments,
+        )
+      )
         return false;
       if (!search) return true;
       const name = (o.customers?.full_name ?? "").toLowerCase();
@@ -243,7 +263,7 @@ function PrintOrdersPageInner() {
     // a link that changes only ?basis re-renders this component WITHOUT
     // remounting it; omitting it here left the memo serving rows cut on
     // the previous column while the header above already said the new one.
-  }, [orders, statuses, calls, repeatOnly, zones, q, day, basis, zoneOf]);
+  }, [orders, statuses, calls, repeatOnly, zones, payments, q, day, basis, zoneOf]);
 
   // Group: zone → delivery_date → delivery_slot → orders[]. Zone is the
   // OUTERMOST grouping so each rider carries a run in one section and the

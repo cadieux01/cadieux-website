@@ -71,13 +71,22 @@ import MultiSelect from "@/components/ui/MultiSelect";
 import {
   ALL_VALUE,
   CALL_PREFIX,
+  PAY_PREFIX,
   REPEAT_ONLY,
   ZONE_PREFIX,
+  decodePayParam,
   decodeZoneParam,
+  encodePayParam,
   encodeZoneParam,
   matchesOrderFilter,
   splitFilterValues,
 } from "@/lib/order-filter";
+import {
+  PAYMENT_VIEWS,
+  PAYMENT_VIEW_LABELS,
+  paymentView,
+  type PaymentView,
+} from "@/lib/payment-label";
 import { decodeStatusParam, encodeStatusParam } from "@/lib/filter-menu";
 import {
   useScrollRestore,
@@ -186,6 +195,10 @@ function parseUrlInitial(sp: URLSearchParams): UrlInitial {
   // `status` param so a link that scopes to a zone reads plainly and one
   // group can be changed without touching the other.
   const zones = decodeZoneParam(sp.get("zone"));
+  // Payment buckets on their own `pay` param, same shape as `zone`. The
+  // bucket names come from PAYMENT_VIEWS, so this param and the badge in
+  // the table speak one vocabulary.
+  const payments = decodePayParam(sp.get("pay"));
   // "Repeat customers only" is a single flag, so it rides its own `repeat=1`
   // param rather than being smuggled into `status`. Same spelling the print
   // link uses, so one encoding serves the screen, the URL and the sheet.
@@ -193,6 +206,7 @@ function parseUrlInitial(sp: URLSearchParams): UrlInitial {
     ...statuses,
     ...calls.map((c) => `${CALL_PREFIX}${c}`),
     ...zones.map((z) => `${ZONE_PREFIX}${z}`),
+    ...payments.map((p) => `${PAY_PREFIX}${p}`),
     ...(sp.get("repeat") === "1" ? [REPEAT_ONLY] : []),
   ];
 
@@ -229,10 +243,13 @@ function stateToSearch(s: {
   day: string | null;
 }): string {
   const params = new URLSearchParams();
-  const { statuses, calls, zones, repeatOnly } = splitFilterValues(s.filter);
+  const { statuses, calls, zones, payments, repeatOnly } = splitFilterValues(
+    s.filter,
+  );
   if (statuses.length > 0) params.set("status", encodeStatusParam(statuses));
   for (const c of calls) params.append("call", c);
   if (zones.length > 0) params.set("zone", encodeZoneParam(zones));
+  if (payments.length > 0) params.set("pay", encodePayParam(payments));
   if (repeatOnly) params.set("repeat", "1");
   if (s.query.trim()) params.set("q", s.query);
   if (s.sort !== DEFAULT_SORT) params.set("sort", s.sort);
@@ -401,8 +418,9 @@ function OrdersPageInner() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Multi-select. Holds status keys ("confirmed"), the legacy "expired"
-  // value and call-update filters encoded as "call:<body>", mixed in one
-  // flat list; splitFilterValues sorts them into their two groups.
+  // value, and the prefixed groups — "call:<body>", "zone:<key>",
+  // "pay:<bucket>", "repeat:only" — mixed in ONE flat list;
+  // splitFilterValues sorts them into their five groups.
   //
   // EMPTY MEANS "ALL STATUSES". There is no "all" member — representing it
   // as a value would create two encodings of the same state ([] and ["all"])
@@ -413,6 +431,7 @@ function OrdersPageInner() {
     statuses: statusSel,
     calls: callSel,
     zones: zoneSel,
+    payments: paySel,
     repeatOnly,
   } = useMemo(() => splitFilterValues(filter), [filter]);
   // Owner of the currently-open NotePanel (order id + display label).
@@ -733,11 +752,21 @@ function OrdersPageInner() {
       const kind = (o.order_kind ?? "bread") as "bread" | "sandwich";
       if (kind !== kindTab) return false;
       if (!matchesDay(orderDateForBasis(o, basis), day)) return false;
-      // Statuses OR'd, call updates OR'd, zones OR'd, the groups AND'd.
-      // Shared with the print view so the packing list can't disagree with
-      // the screen it was printed from — see src/lib/order-filter.ts.
+      // Statuses OR'd, call updates OR'd, zones OR'd, payment buckets OR'd,
+      // the groups AND'd. Shared with the print view so the packing list
+      // can't disagree with the screen it was printed from — see
+      // src/lib/order-filter.ts.
       const withZone = { ...o, zone: zoneOf.get(o.id) };
-      if (!matchesOrderFilter(withZone, statusSel, callSel, repeatOnly, zoneSel))
+      if (
+        !matchesOrderFilter(
+          withZone,
+          statusSel,
+          callSel,
+          repeatOnly,
+          zoneSel,
+          paySel,
+        )
+      )
         return false;
       // Name, phone and BOTH references. The customer knows public_ref
       // ("CX-7K4M2P"); order_number ("OLF43", legacy "CDX-00006") is what
@@ -779,7 +808,7 @@ function OrdersPageInner() {
         if (rankCmp !== 0) return rankCmp;
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [orders, statusSel, callSel, zoneSel, repeatOnly, query, sort, day, rankOf, basis, zoneOf, kindTab]);
+  }, [orders, statusSel, callSel, zoneSel, paySel, repeatOnly, query, sort, day, rankOf, basis, zoneOf, kindTab]);
 
   // A restored id is only meaningful if the row is still there — an order
   // can have been cancelled, or the filters can have moved on, while the
@@ -814,6 +843,11 @@ function OrdersPageInner() {
       if ((o.repeat_seq ?? 0) >= 2) c.repeat = (c.repeat ?? 0) + 1;
       const z = zoneOf.get(o.id);
       if (z) c[`zone_${z}`] = (c[`zone_${z}`] ?? 0) + 1;
+      // Payment buckets partition the rows exactly the way the zone buckets
+      // do — paymentView() returns exactly one for every row — so these
+      // counts sum to `all` too.
+      const pv = paymentView(o);
+      c[`pay_${pv}`] = (c[`pay_${pv}`] ?? 0) + 1;
     }
     return c;
   }, [orders, day, basis, zoneOf]);
@@ -834,6 +868,20 @@ function OrdersPageInner() {
       // eslint-disable-next-line no-console
       console.warn(
         `[zones] invariant broken: zone sum ${sum} !== on-day ${counts.all}`,
+      );
+    }
+    // Same invariant, same reasoning, for the payment buckets: paymentView()
+    // returns exactly one bucket per row, so these must partition too. It
+    // would break the moment a fifth bucket is added without a branch in
+    // paymentView, which is precisely when someone wants to know.
+    const paySum = PAYMENT_VIEWS.reduce(
+      (n, k) => n + (counts[`pay_${k}`] ?? 0),
+      0,
+    );
+    if (paySum !== (counts.all ?? 0)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[payment] invariant broken: bucket sum ${paySum} !== on-day ${counts.all}`,
       );
     }
   }, [counts]);
@@ -928,6 +976,24 @@ function OrdersPageInner() {
         label: `${ZONE_LABELS[zk]} (${zc})`,
       });
     }
+    // Payment — its own group, AND'd with the rest. Every bucket with rows
+    // is listed, plus any ticked bucket at zero (same rule as statuses and
+    // zones, so narrowing the day never hides the filter that is emptying
+    // the table). `unknown` has no live rows and so never appears unless a
+    // URL put it in the selection; it stays a valid value either way.
+    opts.push({
+      value: "__sep_pay",
+      label: "── Payment ──",
+      disabled: true,
+    });
+    for (const pv of PAYMENT_VIEWS) {
+      const pc = counts[`pay_${pv}`] ?? 0;
+      if (pc === 0 && !paySel.includes(pv)) continue;
+      opts.push({
+        value: `${PAY_PREFIX}${pv}`,
+        label: `${PAYMENT_VIEW_LABELS[pv]} (${pc})`,
+      });
+    }
     // Repeat customers — its own one-entry group, AND'd with the rest.
     // Always listed (unlike the data-derived call bodies) so "how many of
     // these are returning customers?" is answerable even when the answer
@@ -949,7 +1015,7 @@ function OrdersPageInner() {
       opts.push({ value: CLEAR_ALL, label: "Clear all", action: true });
     }
     return opts;
-  }, [counts, callBodies, statusSel, callSel, zoneSel, filter.length]);
+  }, [counts, callBodies, statusSel, callSel, zoneSel, paySel, filter.length]);
 
   // Trigger label. One selected → "Pending (27)". Two or more → name the
   // first and count the rest → "Pending +2 (43)".
@@ -989,17 +1055,24 @@ function OrdersPageInner() {
   //     means "all". No special case needed, and none is wanted: a special
   //     case would give "all" a second encoding.
   const toggleFilter = useCallback((value: string) => {
-    if (
-      value === "__sep_call" ||
-      value === "__sep_repeat" ||
-      value === "__sep_zone"
-    )
-      return;
+    if (value.startsWith("__sep_")) return;
     clearRankPins();
     setFilter((curr) => {
       if (value === CLEAR_ALL) return [];
+      // Keep every NON-status group. Zones were added to the menu without
+      // being added here, so "All statuses" was silently dropping a zone
+      // selection — the operator widened the statuses and lost the zone they
+      // had narrowed to, with no indication why the table changed. Listing
+      // the prefixes to KEEP (rather than the statuses to drop) is what
+      // makes a new group safe by default; payment is the first to benefit.
       if (value === ALL_VALUE)
-        return curr.filter((v) => v.startsWith(CALL_PREFIX) || v === REPEAT_ONLY);
+        return curr.filter(
+          (v) =>
+            v.startsWith(CALL_PREFIX) ||
+            v.startsWith(ZONE_PREFIX) ||
+            v.startsWith(PAY_PREFIX) ||
+            v === REPEAT_ONLY,
+        );
       return curr.includes(value)
         ? curr.filter((v) => v !== value)
         : [...curr, value];
@@ -1285,6 +1358,7 @@ function OrdersPageInner() {
                 // always read ?zone (see print/page.tsx) — so printing from
                 // a zone-filtered screen handed the kitchen every zone.
                 ...(zoneSel.length > 0 ? { zone: encodeZoneParam(zoneSel) } : {}),
+                ...(paySel.length > 0 ? { pay: encodePayParam(paySel) } : {}),
                 ...(repeatOnly ? { repeat: "1" } : {}),
                 q: query,
                 sort,
@@ -2622,8 +2696,23 @@ function Placeholder({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Payment status pill for the orders table. Paid = green, COD = grey,
-// Failed = red, anything else (razorpay created/pending) = amber.
+// Payment status pill for the orders table. Failed = red, everything else
+// cream at varying weight.
+//
+// WHICH BUCKET a row is in is NOT decided here any more — paymentView() in
+// @/lib/payment-label decides it, because the operator now FILTERS by these
+// buckets and a menu offering a word the table never prints is worse than no
+// menu. What stays here is the colour, which is this board's business and
+// nothing else's. See the contract at the top of payment-label.ts for why
+// this reads method while the rider's label does not.
+const PAYMENT_BADGE_COLORS: Record<PaymentView, { color: string; bg: string }> = {
+  paid: { color: "rgb(251,243,212)", bg: "rgba(251,243,212,0.12)" },
+  failed: { color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
+  cod: { color: "rgba(251,243,212,0.85)", bg: "rgba(251,243,212,0.1)" },
+  unknown: { color: "rgba(251,243,212,0.5)", bg: "transparent" },
+  awaiting: { color: "rgb(251,243,212)", bg: "rgba(251,243,212,0.12)" },
+};
+
 function PaymentBadge({
   method,
   status,
@@ -2631,33 +2720,9 @@ function PaymentBadge({
   method?: string | null;
   status?: string | null;
 }) {
-  const m = (method ?? "").toLowerCase();
-  const s = (status ?? "").toLowerCase();
-
-  let label: string;
-  let color: string;
-  let bg: string;
-  if (s === "paid") {
-    label = "Paid";
-    color = "rgb(251,243,212)";
-    bg = "rgba(251,243,212,0.12)";
-  } else if (s === "failed") {
-    label = "Failed";
-    color = "#EF4444";
-    bg = "rgba(239,68,68,0.12)";
-  } else if (m === "cod") {
-    label = "COD";
-    color = "rgba(251,243,212,0.85)";
-    bg = "rgba(251,243,212,0.1)";
-  } else if (!m && !s) {
-    label = "—";
-    color = "rgba(251,243,212,0.5)";
-    bg = "transparent";
-  } else {
-    label = "Awaiting";
-    color = "rgb(251,243,212)";
-    bg = "rgba(251,243,212,0.12)";
-  }
+  const view = paymentView({ payment_method: method, payment_status: status });
+  const label = PAYMENT_VIEW_LABELS[view];
+  const { color, bg } = PAYMENT_BADGE_COLORS[view];
 
   return (
     <span
