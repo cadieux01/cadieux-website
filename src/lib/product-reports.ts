@@ -78,7 +78,15 @@ export const PRODUCT_REPORT_CATEGORIES: ProductReportCategory[] = [
 // with its own lab work.
 const REPORT_SOURCE_BY_SLUG: Record<string, string> = {
   "burger-bun": "high-protein",
-  // "protein-pizza-base": "high-protein",
+  // Protein Pizza Base is the protein bread dough rolled flat, so the same
+  // aflatoxin / microbiology / chemical analysis covers it.
+  //
+  // The placeholder that sat here was keyed `protein-pizza-base`, written
+  // before the slug was settled. The row is `pizza-base` (products.id and
+  // products.slug both), and this map is keyed by the INTERNAL slug — the
+  // old spelling would have matched nothing and the PDP would have shown an
+  // empty reports section with no error.
+  "pizza-base": "high-protein",
 };
 
 /** Internal slug whose reports a product's PDP should display. Identity

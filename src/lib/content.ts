@@ -110,6 +110,7 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   "pdp.name::multigrain": "Multigrain Protein Bread",
   "pdp.name::high-protein": "Protein Bread",
   "pdp.name::burger-bun": "Protein Burger Bun",
+  "pdp.name::pizza-base": "Protein Pizza Base",
   // No "Plain Edition" / "Multigrain Edition" eyebrow any more. The two
   // loaves are "Protein Bread" and "Multigrain Protein Bread" — the edition
   // word was a second way of saying the variant, and with "Plain" gone from
@@ -122,6 +123,14 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   // migration that creates the row. No content_strings row exists for this
   // product yet, so these fallbacks are what actually renders.
   "pdp.subtitle::burger-bun": "Pack of 2 · 90 g each · 180 g net",
+  "pdp.tag::pizza-base": "Pizza Base",
+  // Figure-free on purpose. The bun's subtitle carries its weights because
+  // that is the only place a pack size could go; this product's 140 g is on
+  // the products row and in the stat tiles, so repeating it here would be a
+  // second copy of a food-label figure — the thing this file and PRODUCTS
+  // both refuse to keep. Kept identical to PRODUCTS[].subtitle so the two
+  // bundled copies cannot drift into two different sentences.
+  "pdp.subtitle::pizza-base": "Our protein dough, shaped and par-baked for the oven.",
   // H1 fallback per product. The client reads pickString("pdp.title", slug)
   // for the on-page <h1>, and it is ALSO the Product JSON-LD `name`, the
   // position-3 breadcrumb label and the share label — so this one string is
@@ -132,7 +141,10 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   "pdp.title::multigrain": "Cadieux Multigrain Protein Bread",
   "pdp.title::high-protein": "Cadieux Protein Bread",
   "pdp.title::burger-bun": "Cadieux Protein Burger Bun",
+  "pdp.title::pizza-base": "Cadieux Protein Pizza Base",
   "pdp.description::burger-bun": "High-protein burger bun. No maida.",
+  "pdp.description::pizza-base":
+    "High-protein pizza base — the same dough as our Protein Bread, shaped and par-baked. No maida.",
   "pdp.description::multigrain":
     "Our multigrain loaf is the full expression of Cadieux: ancient grains, seeds, and protein, slow-fermented and baked to hold structure.",
   "pdp.description::high-protein":
@@ -147,12 +159,16 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
     "Cadieux Protein Bread — Baked in Visakhapatnam",
   "pdp.seo.title::burger-bun":
     "Cadieux Protein Burger Bun — Baked in Visakhapatnam",
+  "pdp.seo.title::pizza-base":
+    "Cadieux Protein Pizza Base — Baked in Visakhapatnam",
   "pdp.seo.description::multigrain":
     "Cadieux Multigrain Protein Bread. Slow-fermented, lab-tested, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
   "pdp.seo.description::high-protein":
     "Cadieux Protein Bread. Clean sandwich slices, slow-fermented and lab-tested, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
   "pdp.seo.description::burger-bun":
     "Cadieux Protein Burger Bun. Pack of two, no maida, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
+  "pdp.seo.description::pizza-base":
+    "Cadieux Protein Pizza Base. Our protein dough, par-baked and ready for the oven. No maida. Baked fresh in Visakhapatnam, delivered across Vizag.",
 };
 
 function fallbackFor(key: string, productId: string | null | undefined): string | undefined {

@@ -32,16 +32,24 @@ import type { ProductSlug } from "@/lib/data";
 // next.config.js and deliberately does NOT appear below: keeping it here as
 // a second live URL would serve the same page on two paths and split the
 // ranking signal, which is the thing the 301 exists to prevent.
+// `pizza-base` also maps to ITSELF, following the bun: it is a brand-new
+// product with no indexed URL to preserve, and the bun settled the keyword
+// question already — it is named "Protein Burger Bun" and is served at
+// /shop/burger-bun, with the "Protein" keyword carried by the H1, title tag
+// and JSON-LD rather than the path. Doing the same here keeps one slug in
+// both roles, which is what the paragraph above asks for.
 const URL_TO_INTERNAL: Record<string, ProductSlug> = {
   "protein-bread": "high-protein",
   "multigrain-protein-bread": "multigrain",
   "burger-bun": "burger-bun",
+  "pizza-base": "pizza-base",
 };
 
 const INTERNAL_TO_URL: Record<ProductSlug, string> = {
   "high-protein": "protein-bread",
   "multigrain": "multigrain-protein-bread",
   "burger-bun": "burger-bun",
+  "pizza-base": "pizza-base",
 };
 
 // Resolve a URL slug (from the [slug] route param or a Link target)

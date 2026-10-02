@@ -26,7 +26,7 @@ const SITE_URL = "https://www.cadieux.in";
 // render — a missing entry leaves that tile with no name, tag or stat strip.
 // The grid itself is driven by the bundled PRODUCTS array filtered against
 // live availability (see ShopListClient), not by this list.
-const SLUGS = ["multigrain", "high-protein", "burger-bun"] as const;
+const SLUGS = ["multigrain", "high-protein", "burger-bun", "pizza-base"] as const;
 
 export const metadata: Metadata = {
   title: "Shop Protein Bread & Burger Buns | Cadieux",

@@ -44,6 +44,7 @@ export const PRODUCT_NAMES: ProductNameMap = {
   "high-protein": "Protein Bread",
   multigrain: "Multigrain Protein Bread",
   "burger-bun": "Protein Burger Bun",
+  "pizza-base": "Protein Pizza Base",
 };
 
 /**

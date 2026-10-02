@@ -146,7 +146,12 @@ export default function ShopListClient({
             color: "#024628",
             maxWidth: 520,
           }}>
-            Two clean, high-protein loaves and a protein burger bun. Slow-fermented and lab-tested, with no artificial preservatives, baked fresh in Vizag and delivered across Andhra Pradesh. Pick one to see photos, ingredients, and reports.
+            {/* Deliberately counts nothing. This read "Two clean, high-protein
+                loaves and a protein burger bun" and was a sentence that had to
+                be rewritten every time the catalogue changed — it was already
+                false on the page the moment a fourth tile rendered. The grid
+                below is the inventory; this paragraph is the promise. */}
+            Clean, high-protein baking — loaves, buns and bases. Slow-fermented and lab-tested, with no artificial preservatives, baked fresh in Vizag and delivered across Andhra Pradesh. Pick one to see photos, ingredients, and reports.
           </p>
 
           <div data-stagger className="cdx-tab-group" style={{ marginBottom: 28 }} role="tablist">

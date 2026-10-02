@@ -140,7 +140,7 @@ CREATE TABLE reviews (
   -- real product slug: reviews written under it were orphaned (no PDP queries
   -- it) until they were backfilled to 'high-protein'. Keep this list in sync
   -- with PRODUCT_OPTIONS in components/ReviewSection.tsx.
-  product_slug  TEXT,                       -- 'multigrain' | 'high-protein' | 'burger-bun' | NULL (general feedback)
+  product_slug  TEXT,                       -- 'multigrain' | 'high-protein' | 'burger-bun' | 'pizza-base' | NULL (general feedback)
   author_name   TEXT NOT NULL,
   rating        SMALLINT,                   -- 1..5; NULL allowed for general feedback
   body          TEXT NOT NULL,

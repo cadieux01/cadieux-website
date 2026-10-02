@@ -97,9 +97,25 @@ export const PRODUCTS = [
     subtitle: "Pack of 2 · 90 g each · 180 g net",
     desc: "High-protein burger bun. No maida.",
   },
+  // APPENDED for the same reason as the bun — see the note above it.
+  //
+  // No net weight here, deliberately. The 140 g is a food-label figure and
+  // lives only on the products row, per this file's header. The bun's
+  // subtitle is the one exception and it predates that rule.
+  {
+    slug: "pizza-base",
+    name: "Protein Pizza Base",
+    tag: "Pizza Base",
+    title: "Pizza Base",
+    tags: ["Pizza Base", "No Maida"],
+    price: 69,
+    protein: "High protein content",
+    subtitle: "Our protein dough, shaped and par-baked for the oven.",
+    desc: "High-protein pizza base — the same dough as our Protein Bread, shaped and par-baked. No maida.",
+  },
 ];
 
-export type ProductSlug = "multigrain" | "high-protein" | "burger-bun";
+export type ProductSlug = "multigrain" | "high-protein" | "burger-bun" | "pizza-base";
 
 /** The noun the per-unit nutrition panel is counting, per product.
  *
@@ -135,6 +151,11 @@ export const PRODUCT_UNIT: Record<
   multigrain: { unit: "slice", units: "slices", container: "loaf", countIsApprox: true, showContainerCount: true },
   "high-protein": { unit: "slice", units: "slices", container: "loaf", countIsApprox: true, showContainerCount: true },
   "burger-bun": { unit: "bun", units: "buns", container: "pack", countIsApprox: false, showContainerCount: false },
+  // Sold as one base, so the count is exact and `showContainerCount` stays
+  // off for the bun's reason: "(1 base per pack)" directly above the numbers
+  // reads as though the values describe the pack, and here it also states a
+  // count nobody was wondering about.
+  "pizza-base": { unit: "base", units: "bases", container: "pack", countIsApprox: false, showContainerCount: false },
 };
 
 export type ProductMedia = {
@@ -220,6 +241,25 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
     // products row, in the free-text ingredients/allergens columns the PDP
     // label panel prints. This bundled array is the structured grid, which is
     // sourced from product_ingredients and is empty for this product.
+    ingredients: [],
+    testReports: [],
+  },
+  "pizza-base": {
+    description: [
+      "Protein Pizza Base is our Protein Bread dough in a different shape — rolled flat, par-baked, and ready for the oven.",
+      "Same slow ferment, same clean ingredient list. It goes in with your toppings and finishes crisp at the edge, soft under the sauce.",
+      "High in protein. No maida.",
+    ],
+    // Empty for the same reason as the loaves and the bun: the gallery comes
+    // from products.image_url / gallery_urls.
+    media: [],
+    // Same dough as Protein Bread, so the signed-off declaration is that
+    // product's and lives on the products row's free-text ingredients /
+    // allergens columns, exactly as the bun's does. This structured grid is
+    // sourced from product_ingredients and is empty for this product.
+    //
+    // The LAB REPORTS are borrowed explicitly instead — see
+    // REPORT_SOURCE_BY_SLUG in lib/product-reports.
     ingredients: [],
     testReports: [],
   },
