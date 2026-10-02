@@ -11,7 +11,13 @@ import {
   todayIst,
 } from "./delivery-slots";
 
-export type ProductSlug = "multigrain" | "high-protein";
+// Deliberately independent of the `ProductSlug` union in lib/data.ts: that one
+// is the catalogue's, this one is the wizard's. Kept in step by hand.
+export type ProductSlug =
+  | "multigrain"
+  | "high-protein"
+  | "burger-bun"
+  | "pizza-base";
 
 export type WizardProduct = {
   slug: ProductSlug;
@@ -45,36 +51,57 @@ export type WizardProduct = {
  *  surface as a `price_mismatch` error rather than an undercharge.
  *
  *  `title` and `blurb` are wizard-only display strings (shorter than the
- *  catalogue name, with brand copy). The public API reuses these by
- *  slug — adding a new slug here is required for the wizard to surface
- *  that product even after it lands in the DB. */
+ *  catalogue name, with brand copy). The public API reuses these by slug
+ *  via FALLBACK_META, but ONLY to fill a blank `subscription_title` /
+ *  `subscription_blurb` on a DB row. A product does NOT need an entry here
+ *  to reach the wizard — fetchSubscriptionPlans below iterates the live
+ *  list, so a slug absent from this array still surfaces. Keep it at the
+ *  seeded pair: an entry with no DB row behind it would be served to the
+ *  wizard as a real, orderable plan.
+ *
+ *  Prices here must track the live `products` rows. They are only ever
+ *  shown on the outage path, but there a stale figure misquotes the
+ *  per-delivery bill. Last reconciled 2026-10-02 against
+ *  GET /api/subscription-plans. */
 export const SETUP_PRODUCTS: WizardProduct[] = [
   {
     slug: "multigrain",
     name: "Multigrain Protein Bread",
     title: "Multigrain Protein Bread",
-    price: 135,
+    price: 144,
     blurb: "Ancient grains, seeds, whey protein.",
-    mrp_inr: 150,
+    mrp_inr: 160,
     subscription_discount_pct: 10,
-    subscription_savings_inr: 15,
+    subscription_savings_inr: 16,
   },
   {
     slug: "high-protein",
     name: "Protein Bread",
     title: "Protein Bread",
-    price: 107.1,
+    price: 108,
     blurb: "Soft sandwich slices, clean build.",
-    mrp_inr: 119,
+    mrp_inr: 120,
     subscription_discount_pct: 10,
-    subscription_savings_inr: 11.9,
+    subscription_savings_inr: 12,
   },
 ];
 
-/** Fetch the live wizard catalogue from /api/subscription-plans, merging
- *  DB-driven prices over the SETUP_PRODUCTS fallback. On any error (offline,
- *  500, malformed JSON, empty list) returns SETUP_PRODUCTS unchanged so the
- *  wizard always has something to render.
+/** Fetch the live wizard catalogue from /api/subscription-plans. On any
+ *  error (offline, 500, malformed JSON, empty list) returns SETUP_PRODUCTS
+ *  so the wizard always has something to render.
+ *
+ *  THE LIVE LIST IS THE OUTER LOOP. It used to be SETUP_PRODUCTS, which made
+ *  that hardcoded array an allowlist rather than a fallback: a product the
+ *  admin had flagged `is_subscription_plan` was dropped on the fully healthy
+ *  path unless someone also added it here. That is how burger-bun shipped
+ *  subscribable on its PDP and invisible in the wizard. Iterating the live
+ *  list means neither too few entries (drops real plans) nor too many
+ *  (invents plans with no DB row) is possible.
+ *
+ *  SETUP_PRODUCTS is still spread UNDER each live row, so the seeded pair
+ *  keeps its wizard-only title/blurb if the API ever omits one. A live slug
+ *  with no fallback entry stands on the API payload alone — every field
+ *  WizardProduct requires is in the DTO, so there is nothing to fill in.
  *
  *  Call from a useEffect on the client; the response is HTTP-cached and
  *  the underlying Supabase query is server-cached (60s, tag-busted on
@@ -85,11 +112,9 @@ export async function fetchSubscriptionPlans(): Promise<WizardProduct[]> {
     if (!r.ok) return SETUP_PRODUCTS;
     const data = (await r.json()) as { plans?: WizardProduct[] };
     if (!Array.isArray(data.plans) || data.plans.length === 0) return SETUP_PRODUCTS;
-    // Merge: for each fallback slug, prefer the live row if present, else
-    // keep the fallback. Preserves order from SETUP_PRODUCTS so the picker
-    // layout is stable when the API briefly returns a subset.
-    const bySlug = new Map(data.plans.map((p) => [p.slug, p]));
-    return SETUP_PRODUCTS.map((fb) => bySlug.get(fb.slug) ?? fb);
+    // Order comes from the API (products.sort_order), not from this file.
+    const fallbackBySlug = new Map(SETUP_PRODUCTS.map((p) => [p.slug, p]));
+    return data.plans.map((p) => ({ ...fallbackBySlug.get(p.slug), ...p }));
   } catch {
     return SETUP_PRODUCTS;
   }
