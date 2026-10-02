@@ -13,7 +13,7 @@
 // by settlementPaidAt() — the SAME function the PATCH route calls — so what is
 // displayed is what is stored.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime } from "@/lib/admin-formatting";
@@ -50,13 +50,32 @@ export function CodSettleDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // THE SINGLE-FLIGHT GUARD, AND WHY IT IS A REF.
+  // `saving` state cannot do this job. React batches events fired inside one
+  // tick and re-renders afterwards, so every click in that tick reads the same
+  // stale `saving === false` and sails past the check — `disabled={saving}` is
+  // stale for the same reason. Measured: three synchronous clicks sent three
+  // PATCHes. A ref mutates immediately, so the 2nd and 3rd clicks see `true`
+  // on the very next statement.
+  //
+  // The money was never at risk — the route's compare-and-swap matches zero
+  // rows once the first write lands, so the extra requests are declined in
+  // Postgres. What they produced was a LIE: both came back 409 and the handler
+  // below says "someone else recorded this collection first" when it was the
+  // same admin, half a second earlier. A phantom colleague is worse than a
+  // slow button, which is why this is fixed here rather than by softening the
+  // 409 copy — that message is correct, and is kept exactly as it was for the
+  // genuine two-admin race it was written for.
+  const inFlight = useRef(false);
+
   // Computed once per render from the row as loaded. `nowIso` is only read
   // when the order is NOT delivered, so a re-render drifting by a few
   // milliseconds cannot change a backdated value.
   const decision = settlementPaidAt(order, new Date().toISOString());
 
   const save = async () => {
-    if (!method || saving) return;
+    if (!method || inFlight.current) return;
+    inFlight.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -64,6 +83,9 @@ export function CodSettleDialog({
         method: "PATCH",
         body: JSON.stringify({ cod_settled_method: method }),
       });
+      // Deliberately NOT releasing inFlight on success: onSaved() unmounts
+      // this dialog, and a collection that has been recorded must never be
+      // re-sent from a click that was already queued.
       onSaved();
     } catch (e) {
       // The route answers 409 when the compare-and-swap loses, i.e. someone
@@ -77,6 +99,9 @@ export function CodSettleDialog({
             : "Could not record the payment.",
       );
       setSaving(false);
+      // Released only on failure, so the admin can correct and retry — the
+      // request demonstrably did not settle the order.
+      inFlight.current = false;
     }
   };
 
