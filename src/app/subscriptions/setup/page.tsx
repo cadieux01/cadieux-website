@@ -707,9 +707,12 @@ function Step2Dates({
         from now so your loaf comes straight from the oven.
       </p>
       <p style={{ color: FADED, fontSize: 14, marginTop: 0, marginBottom: 18 }}>
+        {/* No discount figure here: the rule is the rule whatever the plan
+            costs, and this component is not passed the selected plan, so it
+            cannot tell a 10% loaf from a 0% bun. Naming a saving that some
+            plans do not have would be false for those. */}
         A subscription needs {MIN_SUBSCRIPTION_DAYS_PER_WEEK}+ delivery days
-        per week (that&apos;s how the 10% subscription price applies). For a
-        single day, place a one-time order instead.
+        per week. For a single day, place a one-time order instead.
       </p>
       {needsMoreWeekdays ? (
         <p
