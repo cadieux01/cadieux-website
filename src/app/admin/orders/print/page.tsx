@@ -294,8 +294,27 @@ function PrintOrdersPageInner() {
       slotMap.set(slotKey, list);
     }
     const sortKey = (k: string) => (k === "__no_date__" ? "\uFFFF" : k);
-    // Fixed zone order + only zones present in the filtered slice.
-    return ZONE_KEYS.filter((z) => zoneMap.has(z)).map((zone) => {
+    // ORDERED BY ZONE_KEYS, BUT DRIVEN BY THE MAP. Every zone that has rows
+    // gets a section; one that ZONE_KEYS does not list is appended at the
+    // end rather than dropped.
+    //
+    // This was `ZONE_KEYS.filter((z) => zoneMap.has(z))`, which silently
+    // omitted any zone missing from that array. NOTHING IS MISSING TODAY —
+    // ZONE_KEYS holds all six ZoneKey members, verified — so this changes no
+    // current output and is not a bug fix. It is swapped because of the shape
+    // of the failure it would eventually have: the rows stay in `filtered`,
+    // so the header keeps counting them, and the section just does not
+    // print. A packing list that loses a rider's stops while still showing
+    // the right total is the worst thing this page can do, and the form that
+    // cannot do it costs three lines.
+    const rank = (z: ZoneKey) => {
+      const i = ZONE_KEYS.indexOf(z);
+      return i === -1 ? ZONE_KEYS.length : i;
+    };
+    const zonesWithRows = Array.from(zoneMap.keys()).sort(
+      (a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0),
+    );
+    return zonesWithRows.map((zone) => {
       const dateMap = zoneMap.get(zone)!;
       const dates = Array.from(dateMap.entries())
         .sort(([a], [b]) => sortKey(a).localeCompare(sortKey(b)))
