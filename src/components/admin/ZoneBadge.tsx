@@ -25,14 +25,19 @@ const COLOR_BY_ZONE: Record<ZoneKey, { fg: string; border: string }> = {
   pickup: { fg: "#FBF3D4", border: "rgba(251,243,212,0.6)" },
 };
 
-// A zone the code does not know about must not take down the board. The map
-// above is keyed on the ZoneKey union, so an unknown key is a type error at
-// every call site the compiler can see — but this badge also renders zones
-// that arrive as DATA (a rule row written against a widened Postgres CHECK),
-// and there `COLOR_BY_ZONE[zone].fg` is an undefined dereference on a live
-// admin screen. Degrade to the unzoned styling instead: the label below falls
-// back to the raw key, so the operator sees "zone5" in a plain pill rather
-// than an error boundary where the orders table used to be.
+// A zone the code does not know about must not take down the board.
+//
+// Scope, stated honestly: this guards a LATENT path, not a reachable one. All
+// three call sites pass resolver output, and the resolver cannot emit an
+// unknown zone — isNumberedZone drops it inside buildRuleSet before it ever
+// reaches a Map. So `COLOR_BY_ZONE[zone].fg` on a missing key is a real throw
+// on a direct call and unreachable in production today. It becomes reachable
+// the moment anything hands this badge a zone straight off a DB row (a rule
+// written against a widened Postgres CHECK) instead of out of the resolver.
+//
+// Degrade to the unzoned styling instead: the label below falls back to the
+// raw key, so the operator would see "zone5" in a plain pill rather than an
+// error boundary where the orders table used to be.
 const FALLBACK_COLORS = COLOR_BY_ZONE.unzoned;
 
 function isProvenanceSource(source: ZoneSource | undefined): boolean {
