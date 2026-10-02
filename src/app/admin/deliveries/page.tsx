@@ -127,6 +127,7 @@ import {
   localityNameMatchesAddress,
   normaliseLocalityKey,
   ZONE_AREAS,
+  ZONE_KEYS,
   ZONE_LABELS,
   EMPTY_RULE_SET,
   type NumberedZone,
@@ -160,15 +161,16 @@ const MUTED = "rgba(251,243,212,0.65)";
 const FAINT = "rgba(251,243,212,0.45)";
 const BORDER = "rgba(251,243,212,0.25)";
 
-/** The five groups the board offers, in driving order. `pickup` is
- *  deliberately absent — see the pickup note rendered under the totals. */
-const PICKABLE_ZONES: readonly ZoneKey[] = [
-  "zone1",
-  "zone2",
-  "zone3",
-  "zone4",
-  "unzoned",
-];
+/** The groups the board offers, in driving order. `pickup` is deliberately
+ *  absent — see the pickup note rendered under the totals.
+ *
+ *  Derived from ZONE_KEYS by SUBTRACTION rather than retyped, so a new zone
+ *  appears on this board the moment it exists. The old hand-written copy
+ *  would have omitted it, and omission here is invisible: the zone simply
+ *  never shows in the picker and `?zone=` for it falls back to null. */
+const PICKABLE_ZONES: readonly ZoneKey[] = ZONE_KEYS.filter(
+  (z) => z !== "pickup",
+);
 
 /** A group selection. `area: null` means the whole zone. */
 type Pick = { zone: ZoneKey; area: string | null };

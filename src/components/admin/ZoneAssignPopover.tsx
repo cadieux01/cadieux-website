@@ -28,6 +28,7 @@ import {
   type ZoneResolution,
   type ZoneSource,
 } from "@/lib/delivery-zones";
+import { NUMBERED_ZONES } from "@/lib/zone-rules";
 import {
   deleteRowOverride,
   deleteRule,
@@ -36,8 +37,6 @@ import {
   upsertRule,
   type PreviewResponse,
 } from "@/lib/zone-rules-client";
-
-const NUMBERED_ZONES: NumberedZone[] = ["zone1", "zone2", "zone3", "zone4"];
 
 export type ZoneAssignTarget =
   | { kind: "order"; id: string }

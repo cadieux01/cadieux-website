@@ -18,6 +18,7 @@ import {
   normaliseLocalityKey,
   normalisePincodeKey,
   resolveZoneWithSource,
+  ZONE_KEYS,
   type NumberedZone,
   type ZoneKey,
   type ZoneRuleSet,
@@ -128,14 +129,15 @@ export function buildRuleSet(
 
 export type ZoneCountsByKey = Record<ZoneKey, number>;
 
-const EMPTY_COUNTS = (): ZoneCountsByKey => ({
-  zone1: 0,
-  zone2: 0,
-  zone3: 0,
-  zone4: 0,
-  unzoned: 0,
-  pickup: 0,
-});
+// Built from ZONE_KEYS rather than written out. A hand-listed key missing from
+// here is NOT a type error at the call sites below — `before[b.zone] += 1` on
+// an absent key is `undefined + 1`, so the preview reports NaN into the
+// operator's blast-radius dialog.
+const EMPTY_COUNTS = (): ZoneCountsByKey =>
+  ZONE_KEYS.reduce((acc, k) => {
+    acc[k] = 0;
+    return acc;
+  }, {} as ZoneCountsByKey);
 
 /**
  * Global blast-radius preview. Scans all orders + subscriptions with the

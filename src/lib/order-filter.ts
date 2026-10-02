@@ -19,7 +19,7 @@
 // An EMPTY group means "no constraint from this group", which is why
 // "All statuses" is simply the empty status list rather than a magic value.
 
-import type { ZoneKey } from "@/lib/delivery-zones";
+import { ZONE_KEYS, type ZoneKey } from "@/lib/delivery-zones";
 import {
   isPaymentView,
   paymentView,
@@ -196,14 +196,11 @@ export function matchesOrderFilter(
 // so the same shape as `status` is safe. Kept on its own param so a status
 // selection and a zone selection stay orthogonal in the URL.
 
-const VALID_ZONE_KEYS: readonly string[] = [
-  "zone1",
-  "zone2",
-  "zone3",
-  "zone4",
-  "unzoned",
-  "pickup",
-];
+// Derived, not retyped. This was a hand-written duplicate of ZONE_KEYS, and a
+// duplicate that falls behind is worse than no check: a key missing here is
+// silently STRIPPED from the URL, so the board loads with a filter the link
+// asked for and the screen never mentions it.
+const VALID_ZONE_KEYS: readonly string[] = ZONE_KEYS;
 
 export function encodeZoneParam(zones: readonly ZoneKey[]): string {
   return zones.length === 0 ? "" : zones.join(",");

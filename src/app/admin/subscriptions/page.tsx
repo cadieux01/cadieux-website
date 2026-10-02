@@ -665,14 +665,14 @@ function SubscriptionsPageInner() {
   // shape for parity with the orders board even though subscriptions
   // never resolve to it — the count will simply always be zero.
   const zoneCounts = useMemo(() => {
-    const c: Record<ZoneKey, number> = {
-      zone1: 0,
-      zone2: 0,
-      zone3: 0,
-      zone4: 0,
-      unzoned: 0,
-      pickup: 0,
-    };
+    // Built from ZONE_KEYS, not written out: the dev invariant below sums over
+    // ZONE_KEYS, so a key present there but missing here reads as undefined and
+    // the sum goes NaN — which compares unequal to everything and fires the
+    // warning for the wrong reason.
+    const c = ZONE_KEYS.reduce((acc, k) => {
+      acc[k] = 0;
+      return acc;
+    }, {} as Record<ZoneKey, number>);
     for (const s of onDay) {
       const z = zoneOf.get(s.id);
       if (z) c[z]++;
