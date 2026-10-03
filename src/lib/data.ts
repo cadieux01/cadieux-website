@@ -113,9 +113,51 @@ export const PRODUCTS = [
     subtitle: "Our protein dough, shaped and par-baked for the oven.",
     desc: "High-protein pizza base — the same dough as our Protein Bread, shaped and par-baked. No maida.",
   },
+  // APPENDED, indices 4 and 5 — same reason as the bun and the pizza base.
+  // The existing four MUST keep indices 0-3 because a saved cart line
+  // persists a `productIndex` into this array.
+  //
+  // These two are the MULTIGRAIN formulation, not the protein bread one: the
+  // dough is the multigrain loaf's, so the name leads with "Multigrain" and
+  // the lab reports borrow multigrain's (see REPORT_SOURCE_BY_SLUG in
+  // lib/product-reports). Nothing here states a weight — 180 g and 140 g are
+  // food-label figures and live only on the products row, per this file's
+  // header.
+  {
+    slug: "multigrain-bun",
+    name: "Multigrain Protein Burger Bun",
+    tag: "Burger Bun",
+    title: "Multigrain Burger Bun",
+    tags: ["Multi Grains", "No Maida"],
+    price: 129,
+    protein: "High protein content",
+    subtitle: "Our multigrain dough, shaped into buns.",
+    desc: "High-protein burger bun on our multigrain dough — ancient grains and seeds. No maida.",
+  },
+  {
+    slug: "multigrain-pizza-base",
+    name: "Multigrain Protein Pizza Base",
+    tag: "Pizza Base",
+    title: "Multigrain Pizza Base",
+    tags: ["Multi Grains", "No Maida"],
+    price: 99,
+    protein: "High protein content",
+    subtitle: "Our multigrain dough, shaped and par-baked for the oven.",
+    desc: "High-protein pizza base on our multigrain dough — ancient grains and seeds, shaped and par-baked. No maida.",
+  },
 ];
 
-export type ProductSlug = "multigrain" | "high-protein" | "burger-bun" | "pizza-base";
+export type ProductSlug =
+  | "multigrain"
+  | "high-protein"
+  | "burger-bun"
+  | "pizza-base"
+  // Widened deliberately, and widened FIRST. This union is hand-written, and
+  // every type-required map below is keyed on it — so adding a member here
+  // turns a missing PRODUCT_DETAILS / PRODUCT_UNIT / INTERNAL_TO_URL entry
+  // from a production 404 into a compile error.
+  | "multigrain-bun"
+  | "multigrain-pizza-base";
 
 /** The noun the per-unit nutrition panel is counting, per product.
  *
@@ -156,6 +198,11 @@ export const PRODUCT_UNIT: Record<
   // reads as though the values describe the pack, and here it also states a
   // count nobody was wondering about.
   "pizza-base": { unit: "base", units: "bases", container: "pack", countIsApprox: false, showContainerCount: false },
+  // Same nouns as their plain counterparts — the formulation changed, the
+  // thing being counted did not. Printing "slices" on either of these would
+  // be the labelling error this map exists to prevent.
+  "multigrain-bun": { unit: "bun", units: "buns", container: "pack", countIsApprox: false, showContainerCount: false },
+  "multigrain-pizza-base": { unit: "base", units: "bases", container: "pack", countIsApprox: false, showContainerCount: false },
 };
 
 export type ProductMedia = {
@@ -260,6 +307,39 @@ export const PRODUCT_DETAILS: Record<ProductSlug, ProductDetail> = {
     //
     // The LAB REPORTS are borrowed explicitly instead — see
     // REPORT_SOURCE_BY_SLUG in lib/product-reports.
+    ingredients: [],
+    testReports: [],
+  },
+  // REQUIRED, not optional. ProductDetailClient 404s on `!product || !detail`,
+  // so a products row with no entry here is a live URL that returns 404.
+  "multigrain-bun": {
+    description: [
+      "Multigrain Protein Burger Bun is our multigrain dough in a different shape — ancient grains and seeds, proofed and baked as buns.",
+      "Same slow ferment, same clean ingredient list. Soft enough to press, strong enough to hold a filling.",
+      "High in protein. No maida.",
+    ],
+    // Empty for the same reason as the loaves, the bun and the pizza base:
+    // the gallery comes from products.image_url / gallery_urls.
+    media: [],
+    // The multigrain formulation's declaration is on the products row's
+    // free-text ingredients / allergens columns (8 ingredient rows cloned
+    // from `multigrain`, allergens including sesame and whey). This
+    // structured grid is sourced from product_ingredients and is empty here.
+    //
+    // The LAB REPORTS are borrowed from MULTIGRAIN — different dough from the
+    // plain bun, so different reports. See REPORT_SOURCE_BY_SLUG.
+    ingredients: [],
+    testReports: [],
+  },
+  "multigrain-pizza-base": {
+    description: [
+      "Multigrain Protein Pizza Base is our multigrain dough rolled flat, par-baked, and ready for the oven.",
+      "Ancient grains and seeds under the sauce. It finishes crisp at the edge and keeps its structure under topping.",
+      "High in protein. No maida.",
+    ],
+    media: [],
+    // Same sourcing note as the multigrain bun above, and the same borrowed
+    // reports — multigrain's, not the protein bread's.
     ingredients: [],
     testReports: [],
   },

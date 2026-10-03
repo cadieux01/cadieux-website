@@ -52,6 +52,8 @@ const PRODUCT_OPTIONS: { value: string; label: string }[] = [
   { value: "high-protein", label: "Protein Bread" },
   { value: "burger-bun", label: "Protein Burger Bun" },
   { value: "pizza-base", label: "Protein Pizza Base" },
+  { value: "multigrain-bun", label: "Multigrain Protein Burger Bun" },
+  { value: "multigrain-pizza-base", label: "Multigrain Protein Pizza Base" },
 ];
 
 function formatDate(iso: string) {

@@ -111,6 +111,8 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   "pdp.name::high-protein": "Protein Bread",
   "pdp.name::burger-bun": "Protein Burger Bun",
   "pdp.name::pizza-base": "Protein Pizza Base",
+  "pdp.name::multigrain-bun": "Multigrain Protein Burger Bun",
+  "pdp.name::multigrain-pizza-base": "Multigrain Protein Pizza Base",
   // No "Plain Edition" / "Multigrain Edition" eyebrow any more. The two
   // loaves are "Protein Bread" and "Multigrain Protein Bread" — the edition
   // word was a second way of saying the variant, and with "Plain" gone from
@@ -131,6 +133,15 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   // both refuse to keep. Kept identical to PRODUCTS[].subtitle so the two
   // bundled copies cannot drift into two different sentences.
   "pdp.subtitle::pizza-base": "Our protein dough, shaped and par-baked for the oven.",
+  "pdp.tag::multigrain-bun": "Burger Bun",
+  "pdp.tag::multigrain-pizza-base": "Pizza Base",
+  // Figure-free for the same reason as the pizza base above, and NOT shaped
+  // like the burger bun's: 180 g / 140 g are on the products rows, and the
+  // bun's weight-bearing subtitle is the one pre-rule exception, not the
+  // pattern to copy. Both kept identical to PRODUCTS[].subtitle.
+  "pdp.subtitle::multigrain-bun": "Our multigrain dough, shaped into buns.",
+  "pdp.subtitle::multigrain-pizza-base":
+    "Our multigrain dough, shaped and par-baked for the oven.",
   // H1 fallback per product. The client reads pickString("pdp.title", slug)
   // for the on-page <h1>, and it is ALSO the Product JSON-LD `name`, the
   // position-3 breadcrumb label and the share label — so this one string is
@@ -142,6 +153,8 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
   "pdp.title::high-protein": "Cadieux Protein Bread",
   "pdp.title::burger-bun": "Cadieux Protein Burger Bun",
   "pdp.title::pizza-base": "Cadieux Protein Pizza Base",
+  "pdp.title::multigrain-bun": "Cadieux Multigrain Protein Burger Bun",
+  "pdp.title::multigrain-pizza-base": "Cadieux Multigrain Protein Pizza Base",
   "pdp.description::burger-bun": "High-protein burger bun. No maida.",
   "pdp.description::pizza-base":
     "High-protein pizza base — the same dough as our Protein Bread, shaped and par-baked. No maida.",
@@ -149,6 +162,10 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
     "Our multigrain loaf is the full expression of Cadieux: ancient grains, seeds, and protein, slow-fermented and baked to hold structure.",
   "pdp.description::high-protein":
     "Clean sandwich bread built for protein without the fuss. Soft slices, no compromise.",
+  "pdp.description::multigrain-bun":
+    "High-protein burger bun on our multigrain dough — ancient grains and seeds. No maida.",
+  "pdp.description::multigrain-pizza-base":
+    "High-protein pizza base on our multigrain dough — ancient grains and seeds, shaped and par-baked. No maida.",
   // SEO fallbacks per product — under Google's 60-char title / 155-char
   // description windows, city-anchored (Visakhapatnam is the primary
   // delivery market), keyword-forward. No nutrition figures until the
@@ -161,6 +178,16 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
     "Cadieux Protein Burger Bun — Baked in Visakhapatnam",
   "pdp.seo.title::pizza-base":
     "Cadieux Protein Pizza Base — Baked in Visakhapatnam",
+  // These two run 62 characters, two over the window the comment above
+  // states — the name itself is longer, and neither keyword is droppable
+  // ("Multigrain" is the formulation, "Protein" is the category). Said
+  // plainly rather than quietly: brand and both keywords sit inside the
+  // first 37 characters, so a truncation costs only the city tail, which
+  // the meta description below repeats in full.
+  "pdp.seo.title::multigrain-bun":
+    "Cadieux Multigrain Protein Burger Bun — Baked in Visakhapatnam",
+  "pdp.seo.title::multigrain-pizza-base":
+    "Cadieux Multigrain Protein Pizza Base — Baked in Visakhapatnam",
   "pdp.seo.description::multigrain":
     "Cadieux Multigrain Protein Bread. Slow-fermented, lab-tested, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
   "pdp.seo.description::high-protein":
@@ -169,6 +196,10 @@ const CRITICAL_FALLBACKS: Record<string, string> = {
     "Cadieux Protein Burger Bun. Pack of two, no maida, baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
   "pdp.seo.description::pizza-base":
     "Cadieux Protein Pizza Base. Our protein dough, par-baked and ready for the oven. No maida. Baked fresh in Visakhapatnam, delivered across Vizag.",
+  "pdp.seo.description::multigrain-bun":
+    "Cadieux Multigrain Protein Burger Bun. Ancient grains and seeds, no maida. Baked fresh daily in Visakhapatnam. Fresh delivery across Vizag.",
+  "pdp.seo.description::multigrain-pizza-base":
+    "Cadieux Multigrain Protein Pizza Base. Our multigrain dough, par-baked for the oven. No maida. Baked fresh in Visakhapatnam, delivered across Vizag.",
 };
 
 function fallbackFor(key: string, productId: string | null | undefined): string | undefined {

@@ -7,14 +7,20 @@ import BackLink from "@/components/BackLink";
 
 const GRAIN = "url(/grain.svg)";
 
-// Internal slugs this index does NOT list. Neither the burger bun nor the
-// pizza base has lab work of its own — both borrow the protein bread's
-// (REPORT_SOURCE_BY_SLUG in lib/product-reports), and listing them here
-// would offer the same documents under a second and third heading.
+// Internal slugs this index does NOT list. None of the four shapes below has
+// lab work of its own — each borrows a loaf's (REPORT_SOURCE_BY_SLUG in
+// lib/product-reports): the bun and the pizza base borrow the protein
+// bread's, the two multigrain shapes borrow the multigrain loaf's. Listing
+// them here would offer the same documents under a second heading each.
 //
 // Their own /shop/<slug>/reports pages still work and still show the
 // borrowed documents; this only stops the index repeating them.
-const HIDDEN_FROM_REPORTS_INDEX = new Set(["burger-bun", "pizza-base"]);
+const HIDDEN_FROM_REPORTS_INDEX = new Set([
+  "burger-bun",
+  "pizza-base",
+  "multigrain-bun",
+  "multigrain-pizza-base",
+]);
 
 export default function ReportsPage() {
   const router = useRouter();

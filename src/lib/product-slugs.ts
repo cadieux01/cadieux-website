@@ -38,11 +38,24 @@ import type { ProductSlug } from "@/lib/data";
 // /shop/burger-bun, with the "Protein" keyword carried by the H1, title tag
 // and JSON-LD rather than the path. Doing the same here keeps one slug in
 // both roles, which is what the paragraph above asks for.
+// `multigrain-bun` and `multigrain-pizza-base` likewise map to THEMSELVES,
+// and here there is a second reason beyond "no indexed URL to preserve": the
+// mobile app builds share links from the DB slug, and the DB slug for these
+// rows is exactly `multigrain-bun` / `multigrain-pizza-base`. Giving them a
+// different URL slug would mean every app-shared link lands on a path this
+// map does not know, which is a 404 — not a redirect.
+//
+// Note they are NOT `multigrain-protein-bun`: the loaf's URL slug is
+// `multigrain-protein-bread` only because Prompts 4+5 renamed it for SEO
+// after its internal key had already spread. These are new, so the pair
+// stays identical.
 const URL_TO_INTERNAL: Record<string, ProductSlug> = {
   "protein-bread": "high-protein",
   "multigrain-protein-bread": "multigrain",
   "burger-bun": "burger-bun",
   "pizza-base": "pizza-base",
+  "multigrain-bun": "multigrain-bun",
+  "multigrain-pizza-base": "multigrain-pizza-base",
 };
 
 const INTERNAL_TO_URL: Record<ProductSlug, string> = {
@@ -50,6 +63,8 @@ const INTERNAL_TO_URL: Record<ProductSlug, string> = {
   "multigrain": "multigrain-protein-bread",
   "burger-bun": "burger-bun",
   "pizza-base": "pizza-base",
+  "multigrain-bun": "multigrain-bun",
+  "multigrain-pizza-base": "multigrain-pizza-base",
 };
 
 // Resolve a URL slug (from the [slug] route param or a Link target)

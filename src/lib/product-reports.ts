@@ -87,6 +87,15 @@ const REPORT_SOURCE_BY_SLUG: Record<string, string> = {
   // old spelling would have matched nothing and the PDP would have shown an
   // empty reports section with no error.
   "pizza-base": "high-protein",
+  // The two multigrain shapes borrow MULTIGRAIN's reports, not the protein
+  // bread's. The borrow is a statement about the DOUGH, and theirs is the
+  // multigrain loaf's — ancient grains and seeds, sesame and whey among the
+  // allergens. Pointing them at `high-protein` like the two rows above would
+  // publish an analysis of a different formulation under their name, which is
+  // worse than publishing none: the reports section would look populated and
+  // be wrong.
+  "multigrain-bun": "multigrain",
+  "multigrain-pizza-base": "multigrain",
 };
 
 /** Internal slug whose reports a product's PDP should display. Identity
