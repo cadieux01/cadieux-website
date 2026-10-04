@@ -1,8 +1,19 @@
 // One dot per unit, under the OLF number on every order row.
 //
-// Green = Protein Bread, red = Multigrain, yellow = Burger bun. Two of the
-// plain loaf + two multigrain reads as two green dots and two red dots, so
-// the operator sees the bag contents without opening the order.
+// One hue per product, six of them — green Protein Bread, red Multigrain,
+// yellow Burger Bun, blue Pizza Base, violet Multigrain Bun, plum Multigrain
+// Pizza Base. Two of the plain loaf + two multigrain reads as two green dots
+// and two red dots, so the operator sees the bag contents without opening
+// the order. (This list is a reader's convenience and is NOT the registry —
+// PRODUCT_TONES in ProductMarker is. If they ever disagree, that file wins.)
+//
+// COLOUR IS THE ONLY CHANNEL HERE. There is no letter on a 9px circle, so a
+// pair of hues that collide collide with nothing to fall back on. Two pairs
+// do, in greyscale: yellow/plum and blue/violet. On screen they are clearly
+// different and that is the case this component is for. A browser print of
+// the orders board is the case it is NOT for — see the greyscale note in
+// ProductMarker. The run sheet at /admin/orders/print is unaffected; it
+// prints item names as text and never calls this.
 //
 // COLOUR IS NOT DECIDED HERE. The palette and the slug→tone registry live
 // in ProductMarker (PRODUCT_TONES / TONE_COLOURS) and this file imports
