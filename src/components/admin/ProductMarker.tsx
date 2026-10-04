@@ -1,11 +1,14 @@
-// Coloured square + letter, naming a product at a glance.
+// Coloured pill + two-letter code, naming a product at a glance.
 //
 // Built generic — (kind, label, tone) — because the same marker is wanted
 // for other axes later (veg / non-veg on the sandwich board). Nothing here
 // knows about bread; the bread mapping lives in PRODUCT_TONES below and is
 // the only part that would change.
 //
-// TONES. Protein Bread green, Multigrain RED, Burger bun yellow.
+// TONES. Protein Bread green, Multigrain RED, Burger bun yellow, Pizza Base
+// blue, Multigrain Bun violet, Multigrain Pizza Base plum — six products,
+// six hues, one per product. Sunny's call 2026-10-03: colour means PRODUCT,
+// not form, so Multigrain Bread keeps the red it has always had.
 //
 // THE PALETTE IS SUNNY'S, DECIDED 2026-09-22, and it overrules what this
 // file used to argue. The original objection is kept verbatim because it is
@@ -37,18 +40,77 @@ import type { CSSProperties } from "react";
 import { DAY_LABEL } from "@/lib/subscription-ui";
 import type { CountLine } from "@/lib/subscription-counts";
 
-export type MarkerTone = "green" | "red" | "yellow" | "neutral";
+export type MarkerTone =
+  | "green"
+  | "red"
+  | "yellow"
+  | "blue"
+  | "violet"
+  | "plum"
+  | "neutral";
 
+// Adding a member here and forgetting its fill is a COMPILE ERROR, not a
+// hollow marker in production: TONE_COLOURS is the only exhaustive
+// Record<MarkerTone, …> in the codebase, so tsc refuses the build until the
+// colour exists. That is the one safety property this file has; keep it.
 export const TONE_COLOURS: Record<MarkerTone, { bg: string; fg: string }> = {
-  // Near-black ink on the three saturated fills. Yellow especially needs a
-  // dark letter — cream on #F2C037 is under 2:1 and unreadable at 16px.
+  // Near-black ink on every saturated fill. Yellow especially needs a dark
+  // letter — cream on #F2C037 is under 2:1 and unreadable at 16px. All six
+  // product fills clear 4.5:1 against #0F1A18, so the letter colour is the
+  // same on all of them and never has to be reasoned about per tone.
   green: { bg: "#3FBF6A", fg: "#0F1A18" },
   // NOT #EF4444 (destructive). See the header.
   red: { bg: "#D6453F", fg: "#0F1A18" },
   yellow: { bg: "#F2C037", fg: "#0F1A18" },
+  // THE THREE HUES ADDED 2026-10-03, measured not eyeballed. Each figure is
+  // WCAG contrast against the admin page INK (#1D1D1F) / against the letter:
+  //
+  //   blue   #4C8DF6  5.17:1 / 5.46:1   pizza-base
+  //   violet #B382F5  5.95:1 / 6.29:1   multigrain-bun
+  //   plum   #E6A7C7  8.59:1 / 9.07:1   multigrain-pizza-base
+  //
+  // Why not a darker, truer plum: a dark plum CANNOT clear 4.5:1 on a
+  // near-black page. Measured — eggplant #614051 is 1.89:1, Tailwind
+  // purple-700 #7E22CE is 2.41:1, and even purple-500 #A855F7 misses at
+  // 4.25:1. On this background "plum" has to mean a light plum or nothing.
+  //
+  // GREYSCALE: SIX HUES DO NOT SEPARATE ON PAPER. This is the honest version
+  // of a claim an earlier draft of this comment got wrong — it said these
+  // were "the best greyscale placement available for the print sheet", which
+  // overstated a palette chosen for the screen. Six hues that each clear
+  // 4.5:1 on a near-black ground are all light, so they crowd the top of the
+  // grey ramp and two pairs genuinely collide. Measured, 8-bit BT.601 luma
+  // (what a mono printer approximates) and WCAG luminance ratio:
+  //
+  //   red 112 | blue 134 | green 143 | violet 158 | plum 189 | yellow 191
+  //
+  //   yellow / plum   grey 191 vs 189 — 2 levels apart, ratio 1.154
+  //   blue   / violet grey 134 vs 158, but WCAG ratio 1.152
+  //   blue   / green  grey 134 vs 143 — 9 levels, ratio 1.447
+  //
+  // Those are the two closest pairs and they are NOT separable in greyscale.
+  // Sunny accepted yellow/plum knowingly. What this means in practice: the
+  // run sheet at /admin/orders/print prints item names as TEXT, not colour,
+  // so a mono print of the sheet is unaffected. A browser-printed ORDERS
+  // BOARD is where the collision lands, because LoafDots there is colour
+  // only. If that ever becomes the operator's paper workflow, the dots need a
+  // non-colour channel (shape), not a nudged hue — a cream ring was measured
+  // at 1.53:1 against the yellow fill and does not work.
+  //
+  // Why this blue and this violet out of the candidates: both models were
+  // ranked over 3 blues x 5 violets and #4C8DF6 + #B382F5 is the only pair
+  // whose worst collision on BOTH models is the accepted yellow/plum one.
+  // #60A5FA + #A672F3 put green and violet 1 grey level apart; #5799F8 +
+  // #A672F3 put blue and violet at the SAME grey level. Do not nudge either
+  // for taste without re-running both models; one model alone will mislead.
+  blue: { bg: "#4C8DF6", fg: "#0F1A18" },
+  violet: { bg: "#B382F5", fg: "#0F1A18" },
+  plum: { bg: "#E6A7C7", fg: "#0F1A18" },
   // A product we have no tone for: hollow, never a guessed colour. An
   // unknown bread silently rendering as Protein Bread is exactly the class
-  // of bug this whole branch exists to remove.
+  // of bug this whole branch exists to remove. With all six catalogue slugs
+  // registered below, nothing in the catalogue reaches this any more — it is
+  // the guard for the seventh product, not a state the boards show today.
   neutral: { bg: "transparent", fg: "#FBF3D4" },
 };
 
@@ -60,26 +122,44 @@ export const PRODUCT_TONES: Record<string, MarkerTone> = {
   "high-protein": "green",
   multigrain: "red",
   "burger-bun": "yellow",
+  "pizza-base": "blue",
+  "multigrain-bun": "violet",
+  "multigrain-pizza-base": "plum",
 };
 
-/** slug → the letter in the square. FIXED per product, never derived from
- *  the name.
+/** slug → the code in the pill. FIXED per product, never derived from the
+ *  name.
  *
  *  Deriving it was the bug: the square read `name.charAt(0)`, so when
  *  `products.name` for the bun was "Whole wheat protein Burger Bun" the
  *  marker said **W**, and it would have changed again on the next rename —
  *  an identifier the operator has learned by sight must not move when
- *  marketing copy does. P / M / B are the letters Sunny already says out
- *  loud. Registered alongside PRODUCT_TONES so a new product is still one
- *  edit to this file.
+ *  marketing copy does.
+ *
+ *  WHY TWO LETTERS NOW. At three products the first letters were P / M / B
+ *  and distinct. At six they would be P, M, B, P, M, M — the Pizza Base and
+ *  Protein Bread would both read **P**, and three different products would
+ *  all read **M**. A single letter stopped disambiguating anything the day
+ *  the catalogue reached six, so the code is two letters: the GRAIN then the
+ *  FORM.
+ *
+ *    grain   P = protein (plain)      M = multigrain
+ *    form    L = loaf   B = bun   Z = pizza base
+ *
+ *  Reading them as a grid is the point — ML and MZ are visibly the same
+ *  family, and the second letter answers "which shape" without a tooltip.
  *
  *  A slug with no entry falls back to the name's first letter, which is the
  *  old behaviour and the only thing available for a product this file has
- *  never heard of. */
+ *  never heard of. All six catalogue slugs are registered, so nothing ships
+ *  on that fallback today. */
 export const PRODUCT_INITIALS: Record<string, string> = {
-  "high-protein": "P",
-  multigrain: "M",
-  "burger-bun": "B",
+  "high-protein": "PL",
+  multigrain: "ML",
+  "burger-bun": "PB",
+  "pizza-base": "PZ",
+  "multigrain-bun": "MB",
+  "multigrain-pizza-base": "MZ",
 };
 
 // NAMES ARE NOT DECIDED HERE EITHER. This file used to carry a
@@ -88,7 +168,7 @@ export const PRODUCT_INITIALS: Record<string, string> = {
 // catalogue, so renaming a product in /admin left the admin boards saying
 // something the shop no longer said. Callers resolve slug → name through
 // productDisplayName() in @/lib/product-names, which reads the live
-// catalogue. This file owns colour and the one-letter code — neither of
+// catalogue. This file owns colour and the two-letter code — neither of
 // which is a name.
 
 export function toneForProduct(slug: string): MarkerTone {
@@ -102,11 +182,11 @@ export function initialForProduct(slug: string): string | undefined {
 /**
  * One marker. `label` is the full catalogue name ("Multigrain Protein
  * Bread") — the title attribute and the screen-reader label carry the whole
- * thing, so the letter is never the only way to tell them apart. Colour is
- * the primary signal; the letter is the tie-breaker and the tooltip is the
+ * thing, so the code is never the only way to tell them apart. Colour is
+ * the primary signal; the code is the tie-breaker and the tooltip is the
  * answer.
  *
- * `initial` is the fixed per-product letter (see PRODUCT_INITIALS). It is a
+ * `initial` is the fixed per-product code (see PRODUCT_INITIALS). It is a
  * separate prop rather than something derived from `label` precisely so a
  * name change cannot move it.
  */
@@ -120,22 +200,33 @@ export function ProductMarker({
 }: {
   label: string;
   tone: MarkerTone;
-  /** Rendered beside the square when given. Omit for a bare marker. */
+  /** Rendered beside the pill when given. Omit for a bare marker. */
   count?: number;
   /** Overrides the default "<label> <count>" tooltip. */
   title?: string;
-  /** Letter in the square. Defaults to the label's first letter for a
-   *  product with no registered code. */
+  /** Code in the pill. Defaults to the label's first letter for a product
+   *  with no registered code. */
   initial?: string;
   size?: number;
 }) {
   const { bg, fg } = TONE_COLOURS[tone];
   const text =
     title ?? (typeof count === "number" ? `${label} ${count}` : label);
-  const square: CSSProperties = {
-    width: size,
+  // A PILL, NOT A SQUARE. Two characters do not fit a square at these sizes:
+  // `size` is the height and the font is 0.68 of it, so the tightest call site
+  // (size={14}, subscriptions/[id]) has a 10px font and ~12px of glyph to put
+  // in 14px of box. The height and the font size are both left exactly as they
+  // were and the box is widened instead — shrinking the text to fit was the
+  // alternative and it makes a 10px font into an 7px one, which is the
+  // operator's problem, not the layout's.
+  //
+  // `minWidth: size` keeps a one-character fallback code rendering as the
+  // original square rather than a narrow sliver.
+  const pill: CSSProperties = {
+    minWidth: size,
     height: size,
-    borderRadius: 3,
+    padding: "0 4px",
+    borderRadius: size / 2,
     background: bg,
     color: fg,
     border: tone === "neutral" ? "1px solid rgba(251,243,212,0.6)" : "none",
@@ -145,7 +236,12 @@ export function ProductMarker({
     fontSize: Math.round(size * 0.68),
     fontWeight: 600,
     lineHeight: 1,
+    // 0.02em of tracking, so the two letters read as a code rather than as a
+    // ligature at 10px. Not negative — tightening them is compression by
+    // another name.
+    letterSpacing: "0.02em",
     flexShrink: 0,
+    boxSizing: "border-box",
   };
   return (
     <span
@@ -157,7 +253,7 @@ export function ProductMarker({
         fontFamily: "var(--font-body)",
       }}
     >
-      <span aria-hidden style={square}>
+      <span aria-hidden style={pill}>
         {(initial ?? label.charAt(0)).toUpperCase()}
       </span>
       {typeof count === "number" ? (
