@@ -27,6 +27,7 @@ import {
   SELF_EDIT_BLOCKED_MESSAGE,
   canSelfEdit,
   isValidSlotValue,
+  meetsLeadTime,
   validateBookingSlot,
 } from "@/lib/delivery-slots";
 import { dayKeyForIsoDate } from "@/lib/subscription-dates";
@@ -199,11 +200,30 @@ export async function POST(
   const finalDate = scheduledDate ?? oldDate;
   const finalSlot = scheduledSlot ?? oldSlot;
 
-  // Re-validate the NEW slot against the 12 h 10 m booking rule — a
-  // self-edit can't shove the delivery into the placement window.
-  if (finalSlot) {
-    const gate = validateBookingSlot(finalDate, finalSlot);
+  // Re-validate against the 12 h booking rule — a self-edit can't shove the
+  // delivery into the placement window. Split on whether the slot is actually
+  // CHANGING, matching the web sibling and orders/[id]/change-request.
+  //
+  // Running the full gate over `scheduledSlot ?? oldSlot` re-judged a slot the
+  // customer had not touched: once a window is paused, a pure DATE change was
+  // rejected with "Morning delivery is paused" — an error naming a field the
+  // request did not carry. The app renders that string verbatim, so it was the
+  // whole explanation an app customer got for a date edit.
+  const slotChanges = scheduledSlot != null && scheduledSlot !== oldSlot;
+  if (slotChanges) {
+    // Choosing a slot → full gate, so a paused window is correctly refused.
+    const gate = validateBookingSlot(finalDate, scheduledSlot);
     if (gate) return fail(gate.status, gate.error, gate.code);
+  } else if (finalSlot) {
+    // Keeping the slot → lead time only, against the new date. The pause
+    // governs what may be newly CHOSEN, not what a customer already holds.
+    if (!meetsLeadTime(finalDate, finalSlot)) {
+      return fail(
+        400,
+        "That delivery slot is too soon — orders need 12 hours to bake and ship.",
+        "slot_too_soon",
+      );
+    }
   }
 
   // Product-availability floor. A self-edit can't move a delivery to

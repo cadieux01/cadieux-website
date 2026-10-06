@@ -5,9 +5,11 @@
 // (UI surfaces the message; this route still 400s with self_edit_cutoff
 // as a defense in depth).
 //
-// On a successful save we also re-validate the NEW slot against the
-// 12 h 10 m booking rule via validateBookingSlot — a customer can't
-// reschedule into the placement window.
+// On a successful save we also re-validate against the 12 h booking rule
+// — a customer can't reschedule into the placement window. The gate is
+// split on whether the slot is actually CHANGING: a new slot gets the full
+// validateBookingSlot (so a paused window is refused), while a slot the
+// customer is keeping gets the lead-time check alone.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -23,6 +25,7 @@ import {
   SELF_EDIT_BLOCKED_MESSAGE,
   canSelfEdit,
   isValidSlotValue,
+  meetsLeadTime,
   validateBookingSlot,
 } from "@/lib/delivery-slots";
 import { dayKeyForIsoDate } from "@/lib/subscription-dates";
@@ -170,18 +173,49 @@ export async function PATCH(
     );
   }
 
-  // 9. Re-validate the NEW slot against the 12 h 10 m booking rule —
-  //    a self-edit can't shove the delivery into the placement window.
+  // 9. Re-validate against the 12 h booking rule — a self-edit can't shove
+  //    the delivery into the placement window.
+  //
+  //    Which gate runs depends on whether the customer is actually CHANGING
+  //    the slot, the same split orders/[id]/change-request already makes.
+  //    This used to run the full validateBookingSlot over `newSlot ?? oldSlot`
+  //    unconditionally, which re-judged a slot the customer had not touched
+  //    against today's booking rules. Once a window is paused that is a 400 on
+  //    a pure DATE change: the stored slot is handed to a gate that rejects
+  //    paused values, so moving a Tuesday delivery to Wednesday failed with
+  //    "Morning delivery is paused" — an error about a field the request did
+  //    not contain. Same shape for a legacy bare "HH:MM" row, which
+  //    isValidSlotValue refuses by design.
   const oldDate = delivery.scheduled_date;
   const oldSlot = delivery.scheduled_time_slot;
   const finalDate = newDate ?? oldDate;
   const finalSlot = newSlot ?? oldSlot;
-  if (finalSlot) {
-    const gate = validateBookingSlot(finalDate, finalSlot);
+  const slotChanges = newSlot != null && newSlot !== oldSlot;
+  if (slotChanges) {
+    // Choosing a slot → full gate. newSlot passed isValidSlotValue at step 5,
+    // so this is where a paused window is correctly refused: the customer is
+    // asking for it now, and must be told it is closed.
+    const gate = validateBookingSlot(finalDate, newSlot);
     if (gate) {
       return NextResponse.json(
         { error: gate.error, code: gate.code },
         { status: gate.status }
+      );
+    }
+  } else if (finalSlot) {
+    // Keeping the slot → lead time ONLY, measured against the new date.
+    // meetsLeadTime reads the start of either shape (range or legacy bare
+    // "HH:MM") and says nothing about the pause, so a customer already
+    // sitting in a paused window can still move the date. They keep what
+    // they were given; the pause governs what may be newly CHOSEN.
+    if (!meetsLeadTime(finalDate, finalSlot)) {
+      return NextResponse.json(
+        {
+          error:
+            "That delivery slot is too soon — orders need 12 hours to bake and ship.",
+          code: "slot_too_soon",
+        },
+        { status: 400 }
       );
     }
   }
