@@ -183,6 +183,16 @@ export function RegisterOrderForm({
   // 12 h lead. The server enforces the same split via
   // PrepareOptions.allowAnyDeliveryDate — this is UI, not the gate.
   const canBackdate = authMode === "admin";
+  // Slot values offered on the SUBSCRIPTION path. Full admin registers
+  // deliveries that have often already happened, so every window stays
+  // available there — the same deliberate bypass as the one-time `slots`
+  // list below. Team-PIN mode gets the open windows only (TIME_SLOTS drops
+  // paused ones), because the server refuses a paused slot and the default
+  // here is the first entry in the list.
+  const subSlotValues = useMemo(
+    () => (canBackdate ? SLOTS.map((s) => s.value) : TIME_SLOTS),
+    [canBackdate],
+  );
   const dates = useMemo(() => nextDeliveryDates(7), []);
   const [deliveryDate, setDeliveryDate] = useState<string>(dates[0] ?? "");
   const slots = useMemo(
@@ -206,7 +216,7 @@ export function RegisterOrderForm({
   // ── SUBSCRIPTION: per-date calendar + per-date slots ───────────────
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [slotByDate, setSlotByDate] = useState<Record<string, string>>({});
-  const [bulkSlot, setBulkSlot] = useState<string>(TIME_SLOTS[0] ?? "");
+  const [bulkSlot, setBulkSlot] = useState<string>(subSlotValues[0] ?? "");
   const [subStatus, setSubStatus] = useState<
     "active" | "pending_confirmation"
   >("active");
@@ -242,13 +252,13 @@ export function RegisterOrderForm({
     setItems([{ slug: "", qty: "1" }]);
     setSelectedDates([]);
     setSlotByDate({});
-    setBulkSlot(TIME_SLOTS[0] ?? "");
+    setBulkSlot(subSlotValues[0] ?? "");
     setSubStatus("active");
     setPayment("cod");
     setStatus("pending");
     setServiceabilityOverride(false);
     setDeliveryDate(dates[0] ?? "");
-  }, [dates]);
+  }, [dates, subSlotValues]);
 
   // ── Mode-switch cleanup ────────────────────────────────────────────
   const switchMode = useCallback(
@@ -265,11 +275,11 @@ export function RegisterOrderForm({
       } else {
         setSelectedDates([]);
         setSlotByDate({});
-        setBulkSlot(TIME_SLOTS[0] ?? "");
+        setBulkSlot(subSlotValues[0] ?? "");
         setSubStatus("active");
       }
     },
-    [orderType, dates, firstEnabledSlot],
+    [orderType, dates, firstEnabledSlot, subSlotValues],
   );
 
   // ── Customer prefill on phone-blur ─────────────────────────────────
@@ -967,7 +977,7 @@ export function RegisterOrderForm({
                       onChange={(e) => setBulkSlot(e.target.value)}
                       style={{ ...input, maxWidth: 200 }}
                     >
-                      {TIME_SLOTS.map((s) => (
+                      {subSlotValues.map((s) => (
                         <option key={s} value={s}>
                           {formatSlot(s)}
                         </option>
@@ -1018,7 +1028,7 @@ export function RegisterOrderForm({
                           style={input}
                         >
                           <option value="">— choose slot —</option>
-                          {TIME_SLOTS.map((s) => (
+                          {subSlotValues.map((s) => (
                             <option key={s} value={s}>
                               {formatSlot(s)}
                             </option>

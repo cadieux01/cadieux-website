@@ -8,6 +8,7 @@ import {
   formatSlotForDisplay,
   isBookable,
   isIsoDate,
+  isSlotPaused,
   todayIst,
 } from "./delivery-slots";
 
@@ -120,11 +121,23 @@ export async function fetchSubscriptionPlans(): Promise<WizardProduct[]> {
   }
 }
 
-/** Canonical slot VALUES for the three fixed delivery windows.
- *  Exactly: "06:00-10:00" (Morning), "10:00-14:00" (Midday),
- *  "16:00-21:00" (Evening). Legacy "HH:MM" or old-range values are still
- *  rendered correctly by `formatSlot()` but are NOT valid for new writes. */
-export const TIME_SLOTS: string[] = SLOTS.map((s) => s.value);
+/** Slot VALUES a customer may be OFFERED for a new subscription delivery:
+ *  the canonical windows minus the paused ones.
+ *
+ *  This derived from SLOTS alone and so carried no pause, which made the
+ *  wizard's "set same time for all" selector — and the register form's
+ *  subscription slot dropdowns, whose default is `TIME_SLOTS[0]` — offer a
+ *  window the server would refuse. The per-date selector got it right
+ *  because it goes through `bookableSlots`; this list is the same idea for
+ *  the paths that have no date in hand yet.
+ *
+ *  NOT a validity test: legacy "HH:MM" and paused canonical values still
+ *  store and still render via `formatSlot()`. `isValidSlotValue` in
+ *  delivery-slots.ts remains the pause-blind check the admin edit routes
+ *  use, so existing orders on a paused window stay editable. */
+export const TIME_SLOTS: string[] = SLOTS.filter(
+  (s) => !isSlotPaused(s.value),
+).map((s) => s.value);
 
 /** Pretty label for ANY stored slot value. Delegates to the unified
  *  `formatSlotForDisplay` in delivery-slots.ts. */

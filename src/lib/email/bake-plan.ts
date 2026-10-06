@@ -24,6 +24,7 @@ export type { BakeItem, BakePlanLine } from "@/lib/bake-plan-lines";
 
 import type { BakeItem, BakePlanLine } from "@/lib/bake-plan-lines";
 import { productDisplayName } from "@/lib/product-names";
+import { SLOTS } from "@/lib/delivery-slots";
 
 /** "2 × Multigrain Protein Bread". The one place this string is built.
  *
@@ -71,18 +72,27 @@ export interface StaleDeliveryLine {
  * The three canonical delivery windows the site actually books today. Any
  * order stored with a bare "HH:MM" or NULL is legacy or pickup and lands
  * in one of the other sections — never wedged into a canonical bucket by
- * a best-guess mapping. See @/lib/delivery-slots for the authoritative
- * definition of the same three windows on the customer side.
+ * a best-guess mapping.
+ *
+ * DERIVED from @/lib/delivery-slots, not a fourth hand-written copy of the
+ * same three windows. It used to repeat the hours here, so changing a
+ * window on the customer side left this plan printing the old ones — the
+ * plan is what the kitchen loads the van by, so it is the worst place for
+ * a stale hour. The window is `rangeLabel` minus the period name, which
+ * the header already prints beside it.
+ *
+ * PAUSED windows stay in this list: a paused slot takes no NEW bookings
+ * but the orders already on it still have to be baked and loaded.
  */
 const DELIVERY_SLOTS: {
   value: string;
   label: string;
   windowLabel: string;
-}[] = [
-  { value: "06:00-10:00", label: "Morning", windowLabel: "6 – 10 AM" },
-  { value: "10:00-14:00", label: "Midday", windowLabel: "10 AM – 2 PM" },
-  { value: "16:00-21:00", label: "Evening", windowLabel: "4 – 9 PM" },
-];
+}[] = SLOTS.map((s) => ({
+  value: s.value,
+  label: s.label,
+  windowLabel: s.rangeLabel.split("·").pop()?.trim() ?? s.rangeLabel,
+}));
 
 /**
  * One rendered section of the email. `groupSlotValue` is the canonical

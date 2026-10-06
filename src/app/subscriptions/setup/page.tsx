@@ -872,10 +872,11 @@ function Step3Slots({
             onChange={setBulkSlot}
             ariaLabel="Set same slot for all deliveries"
             placeholder="— pick a slot —"
+            // TIME_SLOTS now excludes paused windows, so there is nothing
+            // here to grey out — this list is only ever offerable values.
             options={TIME_SLOTS.map((s) => ({
               value: s,
-              label: `${formatSlot(s)}${isSlotPaused(s) ? " — paused" : ""}`,
-              disabled: isSlotPaused(s),
+              label: formatSlot(s),
             }))}
           />
         </div>
