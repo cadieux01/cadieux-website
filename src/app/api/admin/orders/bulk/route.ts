@@ -6,6 +6,7 @@ import {
   CONFIRM_OVERRIDE_FIELD,
   confirmNeedsPaymentOverride,
   confirmOverrideMessage,
+  isRiderBoundStatus,
 } from "@/lib/order-confirm-guard";
 
 // Bulk status transition. Mirrors the single-order PATCH endpoint's
@@ -17,12 +18,16 @@ import {
 //   { orderIds: string[], action: "confirm" | "dispatch" | "deliver" | "cancel",
 //     allow_unpaid_confirm?: true }
 //
-// allow_unpaid_confirm overrides the unpaid-online-payment refusal on
-// action:"confirm" — see @/lib/order-confirm-guard. It is all-or-nothing for the
-// batch, which is deliberate: an override is a statement about a specific
-// customer conversation, and one blanket flag covering 200 orders is not that.
-// The honest way to override in bulk is to confirm the blocked ones one at a time
-// from the board, where the refusal names the order.
+// allow_unpaid_confirm overrides the unpaid-online-payment refusal on the three
+// rider-bound actions — confirm, prepare and dispatch. See
+// @/lib/order-confirm-guard. It is all-or-nothing for the batch, which is
+// deliberate: an override is a statement about a specific customer conversation,
+// and one blanket flag covering 200 orders is not that. The honest way to override
+// in bulk is to move the blocked ones one at a time from the board, where the
+// refusal names the order.
+//
+// action:"deliver" is never refused. It records the delivery and notes in
+// audit_log that the online payment was still unpaid when it went out.
 //
 // Response shape:
 //   { succeeded: string[], failed: { id: string; error: string }[] }
@@ -68,27 +73,34 @@ export async function POST(req: NextRequest) {
   const succeeded: string[] = [];
   const failed: { id: string; error: string }[] = [];
 
-  // The same unpaid-online-confirm refusal the single-order PATCH applies. The
-  // admin board no longer offers bulk confirm (only cancel is still bulkable —
-  // see runBulk in src/app/admin/orders/page.tsx), but this route still ACCEPTS
-  // action:"confirm", and an endpoint that is reachable is an endpoint that will
-  // be reached. Guarding only the UI path would leave the hole open for the next
-  // caller.
+  // The same unpaid-online refusal the single-order PATCH applies, on the same
+  // three rider-bound arrows. The admin board no longer offers bulk confirm (only
+  // cancel is still bulkable — see runBulk in src/app/admin/orders/page.tsx), but
+  // this route still ACCEPTS every action, and an endpoint that is reachable is an
+  // endpoint that will be reached. Guarding only the UI path would leave the hole
+  // open for the next caller.
+  //
+  // The pre-read also runs for action:"deliver", where nothing is blocked — it is
+  // only how we learn which rows to annotate as unpaid-at-delivery below.
   //
   // Read in ONE select rather than per row: the loop below already costs a write
   // per id, and this must not double the round trips. Ids missing here fall
   // through to the loop and fail there with "Order not found", which is the
   // answer they already gave.
-  const unpaidBlocked = new Map<string, string>();
-  if (nextStatus === "confirmed" && body[CONFIRM_OVERRIDE_FIELD] !== true) {
+  const gated = isRiderBoundStatus(nextStatus);
+  const unpaidMessage = new Map<string, string>();
+  const unpaidOnArrival = new Map<string, string | null>();
+  if (gated || nextStatus === "delivered") {
     const { data: rows, error: readErr } = await supabaseAdmin
       .from("orders")
       .select("id, order_number, status, payment_method, payment_status")
       .in("id", ids);
     if (readErr) {
-      // Cannot prove these are safe to confirm, so confirm none of them. Failing
-      // the batch is recoverable; confirming blind is what this guard exists to
-      // stop.
+      // Cannot prove these are safe to move, so move none of them. Failing the
+      // batch is recoverable; moving blind is what this guard exists to stop.
+      // On action:"deliver" nothing would have been blocked anyway, but a delivery
+      // recorded with its payment state unknown is exactly the silent row this
+      // whole change is about, so that batch fails too.
       console.error("[admin/orders bulk] payment pre-read failed:", readErr.message);
       return NextResponse.json(
         { error: `Could not check payment state: ${readErr.message}` },
@@ -96,14 +108,17 @@ export async function POST(req: NextRequest) {
       );
     }
     for (const row of rows ?? []) {
-      if (row.status !== "confirmed" && confirmNeedsPaymentOverride(row)) {
-        unpaidBlocked.set(row.id, confirmOverrideMessage(row));
+      if (row.status === nextStatus || !confirmNeedsPaymentOverride(row)) continue;
+      unpaidOnArrival.set(row.id, row.payment_status ?? null);
+      if (gated) {
+        unpaidMessage.set(row.id, confirmOverrideMessage(row, nextStatus));
       }
     }
   }
+  const overrideUsed = gated && body[CONFIRM_OVERRIDE_FIELD] === true;
 
   for (const id of ids) {
-    const blocked = unpaidBlocked.get(id);
+    const blocked = overrideUsed ? undefined : unpaidMessage.get(id);
     if (blocked) {
       failed.push({ id, error: blocked });
       continue;
@@ -129,15 +144,30 @@ export async function POST(req: NextRequest) {
       targetLabel: `#${data.id.slice(0, 8)}`,
       context:
         `Bulk ${action} → ${nextStatus} for order ${data.id.slice(0, 8)}` +
-        (nextStatus === "confirmed" && body[CONFIRM_OVERRIDE_FIELD] === true
-          ? ` — unpaid-online confirm override was set for this batch`
+        // Only say "override" on the rows it actually applied to. The old wording
+        // claimed it for every row in the batch, including the already-paid ones
+        // the guard was never going to stop.
+        (overrideUsed && unpaidOnArrival.has(id)
+          ? ` — MOVED TOWARDS DELIVERY OVER AN UNPAID ONLINE PAYMENT (${unpaidOnArrival.get(id) ?? "—"}); override was set for this batch`
+          : ``) +
+        (nextStatus === "delivered" && unpaidOnArrival.has(id)
+          ? ` — DELIVERED WITH THE ONLINE PAYMENT STILL UNPAID (${unpaidOnArrival.get(id) ?? "—"}); no cash recorded against it`
           : ``),
       meta: {
         bulk: true,
         action,
         status_after: nextStatus,
-        ...(nextStatus === "confirmed" && body[CONFIRM_OVERRIDE_FIELD] === true
-          ? { unpaid_online_confirm_override: true }
+        ...(overrideUsed && unpaidOnArrival.has(id)
+          ? {
+              unpaid_online_confirm_override: true,
+              payment_status_at_confirm: unpaidOnArrival.get(id) ?? null,
+            }
+          : {}),
+        ...(nextStatus === "delivered" && unpaidOnArrival.has(id)
+          ? {
+              unpaid_at_delivery: true,
+              payment_status_at_delivery: unpaidOnArrival.get(id) ?? null,
+            }
           : {}),
       },
     });

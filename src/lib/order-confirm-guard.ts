@@ -30,10 +30,19 @@
 // Overriding is a perfectly ordinary thing to do: ring the customer, agree cash on
 // delivery, override, and the rider's "COD ₹340" is then exactly right.
 //
-// CONFIRM ONLY. This guards the ENTRY to the pipeline, not every forward
-// transition. Refusing `delivered` on an order already at the door would be
-// refusing to record something that has physically happened, which is worse than
-// the problem.
+// EVERY TRANSITION THAT CAN PUT A RIDER ON THE ROAD, NOT JUST `confirmed`. The
+// first cut of this guard covered the confirm arrow alone, which was not a guard:
+// the status control is a dropdown, so an operator who hits the refusal can pick
+// `preparing` or `out_for_delivery` instead and reach the same place. Prod proves
+// the walk-around is the normal route, not a clever one — 10 unpaid online orders
+// (₹2,374) are sitting at confirmed/preparing/out_for_delivery right now and every
+// one of them got there without anyone being asked. So all three arrows refuse.
+//
+// EXCEPT `delivered`, WHICH IS NEVER REFUSED. Refusing to record a delivery that
+// has physically happened would make the board lie, and a lying board is how these
+// rows got past everyone in the first place. `delivered` instead writes an audit
+// entry saying the order was unpaid when it was delivered: no refusal, no dialog,
+// just the record. See the `unpaid_at_delivery` branch in the two admin routes.
 
 /** Methods where the money was supposed to arrive before delivery. */
 const ONLINE_METHODS = new Set(["razorpay"]);
@@ -76,6 +85,28 @@ export function confirmNeedsPaymentOverride(
   );
 }
 
+/**
+ * Target statuses that are refused on an unpaid online order.
+ *
+ * These are the transitions that put the order on a rider's sheet. `delivered` is
+ * deliberately NOT here (see the header): it is recorded, then annotated.
+ * `cancelled` is not here either — cancelling an unpaid order is the right answer,
+ * never something to argue with.
+ *
+ * Canonical values only. Both routes normalise the legacy `dispatched` alias to
+ * `out_for_delivery` BEFORE this is consulted, so there is no alias to carry here.
+ */
+const RIDER_BOUND_STATUSES = new Set([
+  "confirmed",
+  "preparing",
+  "out_for_delivery",
+]);
+
+/** True iff moving an order INTO this status should be gated. */
+export function isRiderBoundStatus(status: string | null | undefined): boolean {
+  return RIDER_BOUND_STATUSES.has((status ?? "").trim().toLowerCase());
+}
+
 /** The request field that carries the override. One name, both routes. */
 export const CONFIRM_OVERRIDE_FIELD = "allow_unpaid_confirm";
 
@@ -89,6 +120,12 @@ export const CONFIRM_OVERRIDE_CODE = "unpaid_online_confirm";
  */
 export function confirmOverrideMessage(
   order: ConfirmPaymentFacts & { order_number?: string | null },
+  /**
+   * The status being moved to. Only changes the verb — the hazard, and therefore
+   * the rest of the sentence, is identical for all three. Defaults to `confirmed`
+   * so the common call reads plainly.
+   */
+  nextStatus: string = "confirmed",
 ): string {
   const status = (order.payment_status ?? "").trim().toLowerCase();
   const which = order.order_number ? `${order.order_number}: ` : "";
@@ -98,10 +135,16 @@ export function confirmOverrideMessage(
       : status === "failed"
         ? "this online payment failed"
         : "this online payment was started but never completed";
+  const act =
+    nextStatus === "preparing"
+      ? "Moving it to preparing"
+      : nextStatus === "out_for_delivery"
+        ? "Sending it out for delivery"
+        : "Confirming it";
   return (
-    `${which}${state}, so no money has arrived. Confirming it puts the order ` +
+    `${which}${state}, so no money has arrived. ${act} puts the order ` +
     `on the rider's sheet as "COD" and a rider will ask for cash the customer ` +
-    `has not agreed to pay. Check with the customer first — then confirm again ` +
-    `to go ahead on cash on delivery.`
+    `has not agreed to pay. Check with the customer first — then repeat the same ` +
+    `change to go ahead on cash on delivery.`
   );
 }

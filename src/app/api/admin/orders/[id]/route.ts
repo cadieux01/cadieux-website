@@ -13,6 +13,7 @@ import {
   CONFIRM_OVERRIDE_FIELD,
   confirmNeedsPaymentOverride,
   confirmOverrideMessage,
+  isRiderBoundStatus,
 } from "@/lib/order-confirm-guard";
 import {
   canSettleCod,
@@ -184,36 +185,49 @@ export async function PATCH(
     }
   }
 
-  // Confirming an order whose online payment never completed takes an explicit
-  // override — see @/lib/order-confirm-guard for the 15 deliveries that went out
-  // against a payment that never happened. The refusal is 409 + a code the board
-  // keys on; the override is a field on the next request, so the operator has to
-  // restate the intent rather than click through a warning.
+  // Moving an order whose online payment never completed towards a rider takes an
+  // explicit override — see @/lib/order-confirm-guard for the deliveries that went
+  // out against a payment that never happened. The refusal is 409 + a code the
+  // board keys on; the override is a field on the next request, so the operator
+  // has to restate the intent rather than click through a warning.
   //
-  // Scoped to the confirm transition only, and skipped when the row is ALREADY
-  // confirmed or beyond: re-sending `confirmed` on a row that is already
-  // confirmed changes nothing and must not start asking questions.
-  if (
-    update.status === "confirmed" &&
-    before &&
-    before.status !== "confirmed" &&
-    confirmNeedsPaymentOverride(before) &&
-    body[CONFIRM_OVERRIDE_FIELD] !== true
-  ) {
+  // All three rider-bound arrows are gated, not just `confirmed`: the status
+  // control is a dropdown, and a guard you can step around by choosing a different
+  // value is not a guard. `delivered` is NOT gated — it is annotated instead, in
+  // the audit block below.
+  //
+  // `update.status` is already past STATUS_ALIAS here, so `dispatched` arrives as
+  // `out_for_delivery`. Skipped when the row is ALREADY at the target status:
+  // re-sending the value a row already holds changes nothing and must not start
+  // asking questions.
+  const riderBoundMove =
+    typeof update.status === "string" &&
+    isRiderBoundStatus(update.status) &&
+    !!before &&
+    before.status !== update.status &&
+    confirmNeedsPaymentOverride(before);
+
+  if (riderBoundMove && body[CONFIRM_OVERRIDE_FIELD] !== true) {
     return NextResponse.json(
       {
-        error: confirmOverrideMessage(before),
+        error: confirmOverrideMessage(before!, update.status as string),
         code: CONFIRM_OVERRIDE_CODE,
-        payment_status: before.payment_status ?? null,
+        payment_status: before!.payment_status ?? null,
       },
       { status: 409 },
     );
   }
   const confirmOverrideUsed =
-    update.status === "confirmed" &&
+    riderBoundMove && body[CONFIRM_OVERRIDE_FIELD] === true;
+
+  // `delivered` on an unpaid online order: never refused, always recorded. The
+  // bread is already in the customer's hands, so the only useful thing left is an
+  // honest trace of the fact that it went out against money that never arrived.
+  const unpaidAtDelivery =
+    update.status === "delivered" &&
     !!before &&
-    confirmNeedsPaymentOverride(before) &&
-    body[CONFIRM_OVERRIDE_FIELD] === true;
+    before.status !== "delivered" &&
+    confirmNeedsPaymentOverride(before);
 
   if (typeof body.delivery_address === "string") {
     const addr = body.delivery_address.trim();
@@ -463,7 +477,12 @@ export async function PATCH(
       // The whole point of the override is that it leaves a trace. Say it in the
       // line a person reads on the audit page, not only in meta.
       (confirmOverrideUsed
-        ? ` — CONFIRMED OVER AN UNPAID ONLINE PAYMENT (${before?.payment_status ?? "—"}); rider will collect cash`
+        ? ` — MOVED TOWARDS DELIVERY OVER AN UNPAID ONLINE PAYMENT (${before?.payment_status ?? "—"}); rider will collect cash`
+        : ``) +
+      // Not a refusal and not an override — a delivery that happened on an order
+      // whose online payment never arrived. Recorded so it is findable later.
+      (unpaidAtDelivery
+        ? ` — DELIVERED WITH THE ONLINE PAYMENT STILL UNPAID (${before?.payment_status ?? "—"}); no cash recorded against it`
         : ``);
   } else {
     context = `Updated order ${params.id.slice(0, 8)}`;
@@ -493,6 +512,13 @@ export async function PATCH(
             unpaid_online_confirm_override: true,
             payment_method_at_confirm: before?.payment_method ?? null,
             payment_status_at_confirm: before?.payment_status ?? null,
+          }
+        : {}),
+      ...(unpaidAtDelivery
+        ? {
+            unpaid_at_delivery: true,
+            payment_method_at_delivery: before?.payment_method ?? null,
+            payment_status_at_delivery: before?.payment_status ?? null,
           }
         : {}),
       ...(dateChanged

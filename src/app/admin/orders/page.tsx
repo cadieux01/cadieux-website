@@ -1262,10 +1262,14 @@ function OrdersPageInner() {
           body: JSON.stringify({ status: next }),
         });
       } catch (e) {
-        // The unpaid-online confirm guard. The server refuses the first attempt
-        // and names the problem; the operator either backs out or restates the
-        // intent, and the retry carries the override — which the route records in
-        // audit_log. See @/lib/order-confirm-guard.
+        // The unpaid-online guard. The server refuses the first attempt and names
+        // the problem; the operator either backs out or restates the intent, and
+        // the retry carries the override — which the route records in audit_log.
+        // See @/lib/order-confirm-guard.
+        //
+        // Status-agnostic on purpose: the same code comes back for confirmed,
+        // preparing and out_for_delivery, and the server's message already names
+        // which move is being refused, so this needs no per-status branch.
         //
         // confirm() rather than a bespoke modal because the refusal has to be
         // read before anything happens, and this is the one place in this flow
@@ -1275,7 +1279,7 @@ function OrdersPageInner() {
           !(
             e instanceof AdminFetchError &&
             e.code === "unpaid_online_confirm" &&
-            window.confirm(`${e.message}\n\nConfirm as cash on delivery?`)
+            window.confirm(`${e.message}\n\nGo ahead on cash on delivery?`)
           )
         ) {
           throw e;

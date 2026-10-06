@@ -68,6 +68,31 @@ export function computeOrderState(
   if (PENDINGISH_STATUSES.has(status)) {
     const createdMs = order.created_at ? Date.parse(order.created_at) : NaN;
     // Unparseable date → be conservative: never claim it's a live delivery.
+    //
+    // CAUTION FOR ANYONE FEEDING THIS FUNCTION BY HAND. That conservative answer
+    // is indistinguishable from a genuinely expired order: both come back
+    // "expired", with no throw and no log. So a date-handling bug in a caller
+    // looks exactly like a real result. It cost a 13x undercount once.
+    //
+    // Production is fine — PostgREST (every supabase-js caller here) returns
+    // `2026-10-04T06:12:33.91+00:00`, which parses. The hazard is verification
+    // harnesses, and the shape that bites is NOT what you would guess. Measured on
+    // node v25.8.2:
+    //
+    //   "2026-10-04 06:12:33.91+00"     → PARSES   (psql/MCP raw output is fine;
+    //                                               V8's lenient non-ISO path
+    //                                               accepts a 2-digit offset)
+    //   "2026-10-04T06:12:33.91+00"     → NaN      (adding `T` demands strict
+    //                                               ISO-8601, where the offset
+    //                                               must be ±HH:MM or Z)
+    //   "2026-10-04 06:12:33.91"        → PARSES AS LOCAL TIME — silently shifts
+    //                                     by the machine's offset (5.5 h on IST)
+    //
+    // So the bug is the HALF-NORMALISATION: `.replace(" ", "T")` turns a working
+    // string into NaN, and stripping the offset instead turns it into the wrong
+    // instant. Convert the offset too (`+00` → `Z`) or leave the string alone, and
+    // assert `Number.isFinite(Date.parse(x))` before trusting any answer.
+    // scripts/abandonable-check.ts pins all three and exits non-zero.
     if (!Number.isFinite(createdMs)) return "expired";
     const ageMs = nowMs - createdMs;
     return ageMs > ORDER_EXPIRY_MS ? "expired" : "pending";
