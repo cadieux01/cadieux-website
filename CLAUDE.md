@@ -58,3 +58,38 @@ an auth gate or a dead server. Dev bundles are `eval-source-map`, so a CSP
 without `'unsafe-eval'` kills them silently. Fixed upstream, but if a worktree
 predates that fix this is the first thing to check. It is **not** a bundle-size
 problem; `next build && next start` is a workaround, not an explanation.
+
+## Comparing a worktree against `main`: two traps that both return a confident wrong answer
+
+There are ~130 sibling worktrees under `/Users/sunnyraj/cadieux-*`, most of them
+far behind `origin/main`. Both of these produced a wrong answer that looked right:
+
+**1. `git diff origin/main..HEAD` on a branch that is BEHIND reads upstream's
+changes as the branch's own.** The diff is symmetric about the two endpoints; it
+does not know which side you think is "yours". The tell is an impossible pair:
+`rev-list --count origin/main..HEAD` = 0 (nothing ahead) while
+`diff --name-only origin/main..HEAD` lists files. That is the **reverse** diff —
+what you are reading is what main did after this branch stopped. Always anchor on
+the merge base:
+
+```sh
+mb=$(git merge-base origin/main HEAD)
+git rev-list --count "$mb"..HEAD     # really ahead by
+git diff --name-only "$mb"..HEAD     # really changed by this branch
+git rev-list --count "$mb"..origin/main   # how stale this branch is
+```
+
+**2. `git merge-tree` against a stale branch reports branch-vs-main, not
+branch-vs-you.** It uses the real merge base, so for a branch 362 commits behind
+you get a 20-file conflict list that has almost nothing to do with your change.
+A merge verdict is only meaningful when the other branch's merge base IS the
+current `origin/main` — check that first, and refuse to give a verdict otherwise
+rather than reporting the noise.
+
+The test itself is non-destructive and touches no working tree, so it is safe to
+run against someone else's in-progress worktree:
+
+```sh
+git fetch /Users/sunnyraj/<other-worktree> HEAD
+git merge-tree --write-tree --name-only HEAD FETCH_HEAD
+```

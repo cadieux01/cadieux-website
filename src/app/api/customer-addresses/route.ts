@@ -124,6 +124,17 @@ export async function GET(request: NextRequest) {
   // AUTH GATE. Without proof the caller controls this phone we return an
   // empty book — the address list (incl. GPS coords) was previously
   // readable for ANY phone typed into the query string.
+  //
+  // LOGGED, NOT FIXED: this answers an UNAUTHENTICATED caller with
+  // 200 { addresses: [] }, i.e. it reports a stranger's account as empty
+  // rather than as unreadable. That is the same defect fixed on /api/checkout
+  // and /api/subscriptions (which now return 401 + reason), and it is worse
+  // here, because a verified customer whose cookie has merely EXPIRED sees
+  // their saved addresses vanish and will re-type them — silently creating
+  // duplicate rows against MAX_ADDRESSES. Not changed in the branch that
+  // found it: every caller of this route treats `addresses: []` as a real
+  // answer today, so the 401 has to land with those callers' retry/verify
+  // handling, exactly as the orders list did.
   if (!verifiedCallerPhone(request, phone)) {
     return NextResponse.json({ addresses: [] });
   }
@@ -167,6 +178,14 @@ export async function GET(request: NextRequest) {
 }
 
 // POST: create a new address. Mobile-parity validation.
+//
+// LOGGED, NOT FIXED: unlike the GET above and the PATCH/DELETE in ./[id], this
+// handler has NO route-level rate limiter. Its only cap is the edge limiter in
+// middleware.ts — which fails OPEN by design, so during an Upstash outage
+// address creation is uncapped (bounded only by MAX_ADDRESSES per customer).
+// Not added here: this is a write path, and putting a limiter in front of a
+// write is a decision about what to reject, not a latency fix. Belongs with
+// the customer-addresses PATCH/DELETE limiter review.
 export async function POST(request: NextRequest) {
   const rawPhone = request.nextUrl.searchParams.get("phone");
   if (!rawPhone) {

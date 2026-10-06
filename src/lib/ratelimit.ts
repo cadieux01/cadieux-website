@@ -284,10 +284,16 @@ export const RATE_LIMIT_BUDGET_MS = 1500;
  *
  * The one real side effect is in Redis, not here: the sliding-window counter
  * still increments whenever the call eventually lands. A request we admitted
- * on a timeout is therefore admitted AND counted. That is deliberate — it
- * keeps the window honest rather than handing abusers free requests — but it
- * means that after a slow spell a window can already be spent, and genuine
- * traffic may meet a 429 it did not earn.
+ * on a timeout is therefore admitted AND counted.
+ *
+ * DO NOT "FIX" THAT. It is the accepted trade: admitted-and-counted keeps the
+ * window honest, and the cost is that after a slow spell a window can already
+ * be spent, so some genuine traffic meets a 429 it did not earn. The
+ * alternative — not counting a timed-out request — hands an attacker a free
+ * request for every call it can make slow, which is the wrong way round.
+ * Cancelling the in-flight `limit()` is not available either: the counter is
+ * incremented server-side in Redis, so by the time we give up waiting the
+ * token is already spent.
  */
 export async function allowedOrFailOpen(
   limiter: Ratelimit,

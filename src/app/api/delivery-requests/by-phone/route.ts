@@ -52,6 +52,14 @@ export async function GET(req: NextRequest) {
     .in("status", ["pending", "serviceable"])
     .order("created_at", { ascending: false })
     .limit(1);
+  // LOGGED, NOT FIXED: this answers a FAILED QUERY with 200 { request: null },
+  // which the /cart banner cannot tell apart from "this customer has no open
+  // request" — so a Postgres error silently re-prompts a customer who already
+  // asked us to deliver to their area. Same bug class as the one removed from
+  // /api/checkout and /api/subscriptions (an empty result standing in for an
+  // error). Left alone deliberately: it is outside the scope of the branch
+  // that found it, and changing it means touching the /cart banner's states
+  // too. Fix it with that UI, not on its own.
   if (error) {
     console.warn("[delivery-requests by-phone] lookup failed:", error.message);
     return NextResponse.json({ request: null });
