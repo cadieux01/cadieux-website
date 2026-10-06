@@ -254,9 +254,12 @@ export async function POST(req: NextRequest) {
   // demand, so it is proven there rather than waited for here.
   const outcome = classifyRazorpayEvent(event, parent);
 
-  // EVERY PATH BELOW RETURNS 200. The systemic case is the one that matters:
-  // if something is wrong with every event, a 5xx cascade loses the lot behind
-  // Razorpay's retry limit, whereas 200 plus a row keeps each one recorded.
+  // EVERY PATH BELOW RETURNS 200 WITH ONE EXCEPTION. The systemic case is the
+  // one that matters: if something is wrong with every event, a 5xx cascade
+  // loses the lot behind Razorpay's retry limit, whereas 200 plus a row keeps
+  // each one recorded. The exception is a mark_paid UPDATE that errors — see
+  // that branch; there is no row to fall back on when the database is the thing
+  // refusing, so the retry is all that is left.
   switch (outcome.branch) {
     // Nothing to reconcile, and nothing was at stake.
     case "ignored":
@@ -278,6 +281,17 @@ export async function POST(req: NextRequest) {
     // rows sharing a payment_group_id. Marking one row (paid or failed) must
     // flip its sibling in the same UPDATE. Rows outside a split have
     // payment_group_id = NULL and fall through to the by-id path unchanged.
+    // BOTH BRANCHES BELOW USED TO `await` THEIR UPDATE AND DISCARD THE RESULT,
+    // so a write that failed was reported to Razorpay as a success and left no
+    // trace anywhere. That is not a hypothetical: `payment_status='failed'` can
+    // ONLY be written at mark_failed, and in 292 razorpay orders on prod it has
+    // never been written once.
+    //
+    // A third payment_exceptions reason would be the natural home for these, but
+    // `payment_exceptions_reason_check` restricts the column to
+    // ('unattributed','amount_mismatch') and this change ships without a
+    // migration. So the signal is carried by the response instead, and the two
+    // branches answer differently because the stakes differ.
     case "mark_failed": {
       // Only reachable when the ladder resolved this to one of our orders,
       // which is the same condition that set orderRow.
@@ -286,9 +300,21 @@ export async function POST(req: NextRequest) {
         .from("orders")
         .update({ payment_status: "failed" })
         .neq("payment_status", "paid");
-      await (row.payment_group_id
+      const { error: failErr } = await (row.payment_group_id
         ? q.eq("payment_group_id", row.payment_group_id)
         : q.eq("id", row.id));
+
+      if (failErr) {
+        // NO MONEY MOVED, so this is still acked with a 200: a retry storm
+        // during a database outage would cost more than the bookkeeping does.
+        // The row stays at `created`, which the daily orders sweep will settle
+        // against Razorpay anyway (@/lib/cron/sweep-abandoned-orders).
+        console.error(
+          `[razorpay-webhook] mark_failed update FAILED for order=${row.id}:`,
+          failErr.message,
+        );
+        return NextResponse.json({ ok: false, code: "mark_failed_update_failed" });
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -302,9 +328,31 @@ export async function POST(req: NextRequest) {
           paid_at: new Date().toISOString(),
         })
         .neq("payment_status", "paid");
-      await (row.payment_group_id
+      const { error: paidErr } = await (row.payment_group_id
         ? q.eq("payment_group_id", row.payment_group_id)
         : q.eq("id", row.id));
+
+      if (paidErr) {
+        // THE ONE PLACE IN THIS FILE THAT ANSWERS 5xx ON PURPOSE. Razorpay has
+        // the customer's money and we failed to write it down; a retry is the
+        // only thing that can still fix that, and the file's usual "200 plus a
+        // durable row" is not available here — if the database would not take
+        // this UPDATE it will not take an exception row either.
+        //
+        // The notification is deliberately NOT fired: it re-reads the order and
+        // would announce as paid a row that is not, and because it is deduped on
+        // (order, event) it would also consume the slot the successful retry
+        // needs.
+        console.error(
+          `[razorpay-webhook] mark_paid update FAILED for order=${row.id} ` +
+            `payment=${payment?.id ?? "(none)"} — asking Razorpay to retry:`,
+          paidErr.message,
+        );
+        return NextResponse.json(
+          { ok: false, code: "mark_paid_update_failed" },
+          { status: 500 },
+        );
+      }
 
       // Money has arrived — alert now. Races /api/verify-payment for the same
       // payment; UNIQUE(order_id, event) on order_notifications_sent decides
