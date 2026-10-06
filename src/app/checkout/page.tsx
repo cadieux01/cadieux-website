@@ -522,15 +522,21 @@ export default function CheckoutPage() {
     fetch(`/api/checkout?phone=${encodeURIComponent(saved)}&slim=1`)
       .then((r) => r.json())
       .then((d) => {
-        // Server-side trust signal for skipping OTP. Two acceptance paths,
-        // mirroring the place_order/place_subscription gate on the API:
-        //   1. `phone_verified` — valid 30-min cookie / mobile bearer
-        //      (just-issued OTP this session).
-        //   2. `d.customer` present — a saved customer record exists for
-        //      this number. Customer rows are only created post-OTP, so
-        //      their existence is a longer-lived proof of past
-        //      verification: returning buyers whose 30-min cookie has
-        //      expired can still proceed without redoing the OTP step.
+        // Server-side trust signal for skipping OTP. ONE live acceptance
+        // path, not the two this comment used to describe:
+        //   1. `phone_verified` — valid cookie (PHONE_COOKIE_TTL_MS, not
+        //      the 30 minutes claimed here before) or mobile bearer.
+        //   2. `d.customer` present — DEAD. The intent was that a saved
+        //      customer row is longer-lived proof of a past OTP, letting a
+        //      returning buyer with an expired cookie skip the step. But
+        //      /api/checkout returns `customer: null` BEFORE it ever looks
+        //      the customer up when the phone isn't verified, so `d.customer`
+        //      cannot be set while `phone_verified` is false. That branch
+        //      has never widened anything. It now also arrives as a 401.
+        //      Left in place rather than removed: the mandatory login gate
+        //      is rewriting this gate wholesale, and deciding whether a
+        //      saved row should re-grant trust is its call, not a
+        //      drive-by's.
         if (d.phone_verified || d.customer) {
           setOtpVerified(true);
           try {

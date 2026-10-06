@@ -27,10 +27,15 @@ export async function GET(req: NextRequest) {
   const phoneNorm = normalizePhone(phoneRaw);
 
   // AUTH GATE. Same reasoning as /api/subscriptions — proof of phone
-  // control required before returning any subscription history.
+  // control required before returning any subscription history, and 401
+  // rather than an empty 200 so an expired session is distinguishable
+  // from a customer who has genuinely never subscribed.
   const verified = getVerifiedPhone(req);
   if (!verified || normalizePhone(verified.phone) !== phoneNorm) {
-    return NextResponse.json({ subscriptions: [] });
+    return NextResponse.json(
+      { subscriptions: [], reason: "phone_not_verified" },
+      { status: 401 },
+    );
   }
 
   const last10 = phoneRaw.replace(/\D/g, "").slice(-10);

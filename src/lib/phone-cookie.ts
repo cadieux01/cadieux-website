@@ -8,9 +8,18 @@ export const PHONE_COOKIE_NAME = "cdx_phone_verified";
 // re-prompted for OTP on routine actions (Edit delivery date/time, Pay
 // Now, address changes). Ownership is still enforced by the HMAC in
 // every request — this is only a session length, not a trust widening.
-// Each successful WRITE endpoint (see rollPhoneCookieOnWebRequest below)
-// also re-issues the cookie with a fresh 7-day expiry, so a customer
-// who keeps using the site rolls forward indefinitely.
+//
+// ROLLING, BUT ONLY FROM THE PATHS THAT CALL THE HELPER. Every endpoint
+// that calls rollPhoneCookieOnWebRequest below re-issues the cookie with
+// a fresh expiry. For a long time that was the WRITE endpoints only,
+// which made the old wording here ("a customer who keeps using the site
+// rolls forward indefinitely") true only of customers who keep BUYING:
+// someone who logged in, checked an order, and came back a week later to
+// check it again touched no write path, so their session died on a fixed
+// clock while they were actively using the site. The GET on
+// /api/checkout now rolls too, which covers the order-history read. Any
+// NEW read path that a customer can live on needs the same call — the
+// helper does not fire by itself.
 export const PHONE_COOKIE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — web cookie
 export const MOBILE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — mobile bearer
 
@@ -36,7 +45,8 @@ export function verifyPhoneCookie(value: string | undefined): { phone: string; e
 /**
  * Resolves the verified phone for a request from EITHER:
  *   1. `Authorization: Bearer <token>` (mobile, 30-day HMAC token)
- *   2. `cdx_phone_verified` cookie (web, 30-min HMAC cookie)
+ *   2. `cdx_phone_verified` cookie (web, 7-day HMAC cookie —
+ *      PHONE_COOKIE_TTL_MS, not the 30 minutes this line used to claim)
  *
  * Both formats use the exact same signer (`signPhoneCookie`), so a token
  * is just a long-lived cookie value transported over a header. Behaviour
@@ -64,9 +74,10 @@ export function getVerifiedPhone(
 }
 
 /**
- * Rolling session helper. Call at the very end of a SUCCESSFUL web write
- * response to re-issue `cdx_phone_verified` with a fresh 7-day expiry, so
- * an actively-using customer never gets re-prompted for OTP.
+ * Rolling session helper. Call at the very end of any SUCCESSFUL web
+ * response — write OR authenticated read — to re-issue
+ * `cdx_phone_verified` with a fresh PHONE_COOKIE_TTL_MS expiry, so an
+ * actively-using customer never gets re-prompted for OTP.
  *
  * No-op when:
  *   - request had no cookie (mobile bearer only, or unauth) — mobile

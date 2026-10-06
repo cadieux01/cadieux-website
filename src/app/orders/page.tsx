@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BackLink from "@/components/BackLink";
 
@@ -81,6 +81,17 @@ export default function OrdersPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [phoneMissing, setPhoneMissing] = useState(false);
+  // "verify" = the server refused us (401, session expired or never verified).
+  // "failed" = the request itself did not produce an answer.
+  // Both used to be indistinguishable from "this customer has no orders":
+  // the 401 arrived as a 200 with no `orders` key, and a thrown fetch was
+  // swallowed by `catch { /* ignore */ }`. Either way `rows` stayed [] and
+  // the page said "No orders yet" — to 279 of 536 customers in the 401 case,
+  // every one of whom had a history sitting in the database.
+  const [error, setError] = useState<"verify" | "failed" | null>(null);
+  // Same guard as orders/[id]/page.tsx: once a load has succeeded, a failing
+  // background poll must not replace a good list with an error screen.
+  const loadedOnceRef = useRef(false);
 
   const fetchOrders = useCallback(async (showLoading: boolean) => {
     const phone = typeof window !== "undefined" ? localStorage.getItem("cadieux_phone") : null;
@@ -88,10 +99,26 @@ export default function OrdersPage() {
     setPhoneMissing(false);
     if (showLoading) setLoading(true);
     try {
-      const r = await fetch(`/api/checkout?phone=${encodeURIComponent(phone)}`, { cache: "no-store" });
+      const r = await fetch(`/api/checkout?phone=${encodeURIComponent(phone)}`, {
+        cache: "no-store",
+        credentials: "include",
+      });
+      // Mirrors orders/[id]/page.tsx:183.
+      if (r.status === 401) {
+        if (!loadedOnceRef.current) setError("verify");
+        return;
+      }
+      if (!r.ok) {
+        if (!loadedOnceRef.current) setError("failed");
+        return;
+      }
       const d = await r.json();
       setRows(buildRows(d.orders ?? [], d.subscriptions ?? []));
-    } catch { /* ignore */ }
+      setError(null);
+      loadedOnceRef.current = true;
+    } catch {
+      if (!loadedOnceRef.current) setError("failed");
+    }
     finally { if (showLoading) setLoading(false); }
   }, []);
 
@@ -138,7 +165,19 @@ export default function OrdersPage() {
         {phoneMissing && (
           <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(2,70,40,0.7)", lineHeight: 1.7 }}>Place an order from the cart first — we look up your orders by phone number.</p>
         )}
-        {!loading && !phoneMissing && rows.length === 0 && (
+        {!loading && !phoneMissing && error === "verify" && (
+          <SessionExpiredNotice onRetry={() => fetchOrders(true)} />
+        )}
+        {!loading && !phoneMissing && error === "failed" && (
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(2,70,40,0.7)", lineHeight: 1.7 }}>
+            We couldn’t load your orders just now. This is a connection problem,
+            not a missing history — press Refresh above to try again.
+          </p>
+        )}
+        {/* The genuine empty list. Reachable ONLY when the server answered and
+            said so: not when it refused us (error === "verify") and not when
+            the request failed (error === "failed"). */}
+        {!loading && !phoneMissing && !error && rows.length === 0 && (
           <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(2,70,40,0.7)", lineHeight: 1.7 }}>No orders yet. Add something to your cart to get started.</p>
         )}
 
@@ -146,6 +185,40 @@ export default function OrdersPage() {
           <OrderRow key={row.id} row={row} number={rows.length - i} />
         ))}
       </div>
+    </div>
+  );
+}
+
+/* PLACEHOLDER — OWNED BY THE MANDATORY LOGIN GATE, NOT BY THIS PAGE.
+ *
+ * Deliberately one small self-contained component with a single prop so the
+ * login-gate work can delete it and drop its own screen in at the one call
+ * site above. Do not grow it.
+ *
+ * It does NOT link anywhere, and that is not an oversight: as of 2026-10-06
+ * the only OTP entry on web lives inside /checkout and /subscriptions/setup/
+ * checkout, and /checkout bounces an empty cart straight to /cart — so a
+ * "verify now" button from here would be a dead end for exactly the customer
+ * who needs it. Retry is the only honest action until the gate exists.
+ * (orders/[id]/page.tsx:463 sends people HERE for the same reason, so this
+ * page cannot send them back there.) */
+function SessionExpiredNotice({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div>
+      <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.3em", textTransform: "uppercase", color: "#991B1B" }}>
+        Session expired
+      </p>
+      <p style={{ margin: "0 0 20px", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 200, color: "rgba(2,70,40,0.7)", lineHeight: 1.7 }}>
+        Your orders are safe — we just can’t show them until we know it’s you.
+        For your security we ask for your phone number again from time to time.
+        Verify it at checkout, or try again if you’ve just done so in another tab.
+      </p>
+      <button
+        onClick={onRetry}
+        style={{ height: 48, padding: "0 28px", background: "#f59e0b", border: "none", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628", WebkitTapHighlightColor: "transparent" }}
+      >
+        Try again
+      </button>
     </div>
   );
 }

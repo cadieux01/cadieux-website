@@ -30,9 +30,16 @@ export async function GET(req: NextRequest) {
   // AUTH GATE. Only a caller who has proven control of this phone (signed
   // cookie / Bearer) may read its subscriptions — a bare query param used
   // to return full sub rows (name, address, city, pincode) for anyone.
+  //
+  // 401, not 200: an expired cookie is not "you have no plans". Body shape
+  // is unchanged so existing callers that read `j.subscriptions ?? []`
+  // behave exactly as before; the status is there for the ones that look.
   const verified = getVerifiedPhone(req);
   if (!verified || normalizePhone(verified.phone) !== phoneNorm) {
-    return NextResponse.json({ subscriptions: [] });
+    return NextResponse.json(
+      { subscriptions: [], reason: "phone_not_verified" },
+      { status: 401 },
+    );
   }
 
   // Match against either normalized or raw stored phone (subscriptions stored

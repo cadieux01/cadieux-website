@@ -5,6 +5,7 @@ import {
   isValidIndianMobile,
   normalizePhone,
   maskPhone,
+  rollPhoneCookieOnWebRequest,
   signPhoneCookie,
   PHONE_COOKIE_NAME,
   PHONE_COOKIE_TTL_MS,
@@ -104,6 +105,23 @@ async function defaultBookAddress(customerId: string): Promise<string> {
   return `[${data.label}] ${data.line1}, ${data.area}, ${data.city} - ${data.pincode}`;
 }
 
+/** Re-issues `cdx_phone_verified` with a fresh expiry on a SUCCESSFUL read.
+ *
+ *  `rollPhoneCookieOnWebRequest` already existed but was wired only into
+ *  write routes, which made the comment on PHONE_COOKIE_TTL_MS ("a customer
+ *  who keeps using the site rolls forward indefinitely") true only of
+ *  customers who keep BUYING. Someone who logs in, checks their order and
+ *  comes back next week to check it again touched no write path at all, so
+ *  their cookie aged out on a fixed 7-day clock while they were actively
+ *  using the site. This is the read half of that roll.
+ *
+ *  No-op for mobile (bearer, no cookie) and for an already-invalid cookie —
+ *  see the helper. Returns the same response for a one-line return site. */
+function rolled(req: NextRequest, res: NextResponse): NextResponse {
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
+}
+
 export async function GET(req: NextRequest) {
   // IP rate limit regardless of outcome — a bare phone in the query
   // string used to hand back a customer's name + address, so this
@@ -130,11 +148,23 @@ export async function GET(req: NextRequest) {
   // Without a match we return NO customer data (never someone else's
   // name / address / order history) — the checkout page degrades to the
   // manual-entry / re-OTP path instead of prefilling.
+  //
+  // THE STATUS CODE IS 401, NOT 200, AND THAT IS THE WHOLE POINT.
+  // This branch used to answer 200 with no `orders` key, so /orders ran
+  // `buildRows(d.orders ?? [], …)` and rendered "No orders yet. Add
+  // something to your cart to get started." to a customer with a full
+  // history whose cookie had simply aged out. `localStorage.cadieux_phone`
+  // never expires while this cookie does, so the page could not tell the
+  // two apart from the body alone. 401 is the discriminator; `reason` is
+  // for humans reading logs, not for branching on.
   const verified = getVerifiedPhone(req);
   const phone_verified =
     !!verified && normalizePhone(verified.phone) === normalizePhone(phone);
   if (!phone_verified) {
-    return NextResponse.json({ customer: null, phone_verified: false });
+    return NextResponse.json(
+      { customer: null, phone_verified: false, reason: "phone_not_verified" },
+      { status: 401 },
+    );
   }
 
   const { data: customer } = await supabaseAdmin
@@ -143,7 +173,22 @@ export async function GET(req: NextRequest) {
     .eq("phone", phone)
     .maybeSingle();
 
-  if (!customer) return NextResponse.json({ customer: null, phone_verified });
+  // Verified, but no `customers` row — so this phone genuinely has no
+  // history. `orders` / `subscriptions` are sent as EXPLICIT empty arrays
+  // rather than omitted, so the list page's empty state rests on a real
+  // answer from the server instead of on `d.orders ?? []` papering over a
+  // missing key. Session is valid, so roll it like any other read.
+  if (!customer) {
+    return rolled(
+      req,
+      NextResponse.json({
+        customer: null,
+        orders: [],
+        subscriptions: [],
+        phone_verified,
+      }),
+    );
+  }
 
   // Forensic trail: a verified caller pulled their own customer + address
   // record. Best-effort (never awaited, never throws to the caller).
@@ -180,10 +225,13 @@ export async function GET(req: NextRequest) {
       ? lastAddress
       : (await defaultBookAddress(customer.id)) || lastAddress;
 
-    return NextResponse.json({
-      customer: { ...customer, delivery_address },
-      phone_verified,
-    });
+    return rolled(
+      req,
+      NextResponse.json({
+        customer: { ...customer, delivery_address },
+        phone_verified,
+      }),
+    );
   }
 
   // Full payload (used by /orders list page). Run orders + subscriptions
@@ -226,12 +274,15 @@ export async function GET(req: NextRequest) {
     ? lastAddress
     : (await defaultBookAddress(customer.id)) || lastAddress;
 
-  return NextResponse.json({
-    customer: { ...customer, delivery_address },
-    orders: orders ?? [],
-    subscriptions: subscriptions ?? [],
-    phone_verified,
-  });
+  return rolled(
+    req,
+    NextResponse.json({
+      customer: { ...customer, delivery_address },
+      orders: orders ?? [],
+      subscriptions: subscriptions ?? [],
+      phone_verified,
+    }),
+  );
 }
 
 export async function POST(req: NextRequest) {
