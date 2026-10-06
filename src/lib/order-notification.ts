@@ -20,7 +20,10 @@
 // means the email body is identical no matter who triggered it, and it cannot
 // render a value that was never committed.
 //
-// COVERAGE: this is wired into the 7 routes that exist today (3 create, 4 pay).
+// COVERAGE: this is wired into the 7 routes that exist today (3 create, 4 pay),
+// plus the daily orders sweep (@/lib/cron/sweep-abandoned-orders), which fires
+// 'paid' for an order Razorpay had the money for while nothing here had noticed.
+// The Postgres send-once guard is what makes a cron a safe caller.
 // It is NOT a structural guarantee — a future route, a raw SQL insert or a
 // Supabase dashboard edit bypasses it. The structural version is an AFTER
 // INSERT / AFTER UPDATE trigger on public.orders, which was considered and

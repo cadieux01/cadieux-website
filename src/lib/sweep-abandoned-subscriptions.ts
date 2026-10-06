@@ -57,6 +57,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Resend } from "resend";
 
+// Was private to this file until the orders sweeper needed the identical
+// question answered. See @/lib/razorpay-order-state.
+import { fetchRazorpayOrderPaidState } from "@/lib/razorpay-order-state";
+
 /**
  * How long an unpaid shell is given before it's written off.
  *
@@ -105,73 +109,6 @@ export type SweepResult = {
   /** Present only on failure. The caller continues regardless. */
   error?: string;
 };
-
-/**
- * GET https://api.razorpay.com/v1/orders/{id}
- *
- * Returns:
- *   { paid: true, amountPaise }   — Razorpay says the order was paid
- *   { paid: false }               — Razorpay says the order was not paid
- *   { paid: null }                — network / auth / 5xx; sweeper must NOT act on this row
- */
-async function fetchRazorpayOrderPaidState(
-  razorpayOrderId: string,
-): Promise<{ paid: true; amountPaise: number } | { paid: false } | { paid: null; reason: string }> {
-  const key = process.env.RAZORPAY_KEY_ID;
-  const secret = process.env.RAZORPAY_KEY_SECRET;
-  if (!key || !secret) return { paid: null, reason: "razorpay_credentials_missing" };
-
-  const auth = Buffer.from(`${key}:${secret}`).toString("base64");
-  let res: Response;
-  try {
-    res = await fetch(
-      `https://api.razorpay.com/v1/orders/${encodeURIComponent(razorpayOrderId)}`,
-      {
-        method: "GET",
-        headers: { Authorization: `Basic ${auth}` },
-        // Razorpay is normally fast; a slow response here shouldn't stall
-        // the whole cron. AbortSignal.timeout is Node 18+, safe on Vercel.
-        signal: AbortSignal.timeout(15_000),
-      },
-    );
-  } catch (e) {
-    return { paid: null, reason: e instanceof Error ? e.message : String(e) };
-  }
-
-  // 404 from Razorpay: the id we stored doesn't exist there. Treat as
-  // "confirmed never paid" so it can be abandoned — the alternative is
-  // holding a phantom order in limbo forever.
-  if (res.status === 404) return { paid: false };
-  if (!res.ok) return { paid: null, reason: `razorpay_http_${res.status}` };
-
-  const body = (await res.json().catch(() => null)) as
-    | { status?: string; amount?: number; amount_paid?: number }
-    | null;
-  if (!body || typeof body.status !== "string") {
-    return { paid: null, reason: "razorpay_bad_response" };
-  }
-
-  // Authoritative signal is status='paid'. amount_paid>=amount catches a
-  // corner case where a partial-capture flow ever left status behind, but
-  // status is the source of truth in the current API.
-  const isPaid =
-    body.status === "paid" ||
-    (typeof body.amount === "number" &&
-      typeof body.amount_paid === "number" &&
-      body.amount > 0 &&
-      body.amount_paid >= body.amount);
-
-  if (!isPaid) return { paid: false };
-  return {
-    paid: true,
-    amountPaise:
-      typeof body.amount_paid === "number" && body.amount_paid > 0
-        ? body.amount_paid
-        : typeof body.amount === "number"
-          ? body.amount
-          : 0,
-  };
-}
 
 /** Send the alert email listing rows this sweep reconciled. Never throws. */
 async function sendReconciledAlert(

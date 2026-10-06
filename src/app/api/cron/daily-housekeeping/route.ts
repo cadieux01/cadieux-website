@@ -24,6 +24,16 @@
 //   6. ORPHANED — surface subscriptions where a payment landed AFTER the row
 //                 was swept, so we hold money against nothing (READ-ONLY;
 //                 refund-vs-reinstate is Sunny's decision)
+//   7. ORDERS    — the same sweep as phase 1, for ORDERS, which never had one.
+//                 Asks Razorpay about unpaid online orders: marks paid the ones
+//                 it has the money for, writes off the ones nobody can pay any
+//                 more, and refuses to touch the rest.
+//
+// PHASE 7 IS LAST ON PURPOSE. It is the only phase that makes a row of outbound
+// HTTP calls (one Razorpay probe per candidate) and so the only one that can
+// plausibly run into maxDuration. Putting it after the email phases means an
+// overrun costs bookkeeping that resumes tomorrow, not the digest. It carries
+// its own wall-clock budget as well.
 //
 // One failing phase must NEVER abort the others. The response body reports
 // each phase separately (a top-level `error` on any phase means that phase
@@ -47,6 +57,7 @@ import { runAbandonedPaymentsDigest } from "@/lib/cron/abandoned-payments-digest
 import { runSubscriptionReminders } from "@/lib/cron/subscription-reminders-phase";
 import { loadStaleDeliveries } from "@/lib/cron/stale-deliveries";
 import { loadOrphanedPayments } from "@/lib/cron/orphaned-payments";
+import { sweepAbandonedOrders } from "@/lib/cron/sweep-abandoned-orders";
 // FROM_EMAIL / ALERT_EMAILS live in their own module because the orphaned-
 // payment guard sends from a request path too. Two copies of that env parsing
 // would drift silently the first time ABANDONED_ALERT_EMAIL is set.
@@ -220,6 +231,30 @@ export async function GET(req: NextRequest) {
     orphaned = { count: 0, totalHeldInr: 0, rows: [], error: message };
   }
 
+  // ── Phase 7: orders sweep ──────────────────────────────────────────────
+  // Orders have been missing what phase 1 does for subscriptions since the
+  // online flow shipped: 46 rows, ₹11,088, 5 Sep → 5 Oct 2026, never touched by
+  // anything automatic. Writes only the payment columns, refuses to write off
+  // anything that reached `confirmed` or beyond, and carries its own time budget
+  // so a slow Razorpay cannot eat the run.
+  let ordersSweep;
+  try {
+    ordersSweep = await sweepAbandonedOrders(supabaseAdmin);
+  } catch (e) {
+    const message = errMessage(e);
+    console.error("[cron/daily-housekeeping:orders-sweep] threw:", message);
+    ordersSweep = {
+      checked: 0,
+      reconciled: 0,
+      abandoned: 0,
+      heldForReview: 0,
+      skipped: 0,
+      truncated: false,
+      cutoff: "",
+      error: message,
+    };
+  }
+
   return NextResponse.json({
     sweep,
     digest,
@@ -227,5 +262,6 @@ export async function GET(req: NextRequest) {
     stale,
     alerts,
     orphaned,
+    ordersSweep,
   });
 }
