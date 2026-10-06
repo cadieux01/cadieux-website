@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { notifyCustomer } from "@/lib/push";
+import {
+  CONFIRM_OVERRIDE_FIELD,
+  confirmNeedsPaymentOverride,
+  confirmOverrideMessage,
+} from "@/lib/order-confirm-guard";
 
 // Bulk status transition. Mirrors the single-order PATCH endpoint's
 // validation and push side-effects, but processes a list and returns
@@ -9,7 +14,15 @@ import { notifyCustomer } from "@/lib/push";
 // rather than aborting on the first failure.
 //
 // Body shape:
-//   { orderIds: string[], action: "confirm" | "dispatch" | "deliver" | "cancel" }
+//   { orderIds: string[], action: "confirm" | "dispatch" | "deliver" | "cancel",
+//     allow_unpaid_confirm?: true }
+//
+// allow_unpaid_confirm overrides the unpaid-online-payment refusal on
+// action:"confirm" — see @/lib/order-confirm-guard. It is all-or-nothing for the
+// batch, which is deliberate: an override is a statement about a specific
+// customer conversation, and one blanket flag covering 200 orders is not that.
+// The honest way to override in bulk is to confirm the blocked ones one at a time
+// from the board, where the refusal names the order.
 //
 // Response shape:
 //   { succeeded: string[], failed: { id: string; error: string }[] }
@@ -55,7 +68,46 @@ export async function POST(req: NextRequest) {
   const succeeded: string[] = [];
   const failed: { id: string; error: string }[] = [];
 
+  // The same unpaid-online-confirm refusal the single-order PATCH applies. The
+  // admin board no longer offers bulk confirm (only cancel is still bulkable —
+  // see runBulk in src/app/admin/orders/page.tsx), but this route still ACCEPTS
+  // action:"confirm", and an endpoint that is reachable is an endpoint that will
+  // be reached. Guarding only the UI path would leave the hole open for the next
+  // caller.
+  //
+  // Read in ONE select rather than per row: the loop below already costs a write
+  // per id, and this must not double the round trips. Ids missing here fall
+  // through to the loop and fail there with "Order not found", which is the
+  // answer they already gave.
+  const unpaidBlocked = new Map<string, string>();
+  if (nextStatus === "confirmed" && body[CONFIRM_OVERRIDE_FIELD] !== true) {
+    const { data: rows, error: readErr } = await supabaseAdmin
+      .from("orders")
+      .select("id, order_number, status, payment_method, payment_status")
+      .in("id", ids);
+    if (readErr) {
+      // Cannot prove these are safe to confirm, so confirm none of them. Failing
+      // the batch is recoverable; confirming blind is what this guard exists to
+      // stop.
+      console.error("[admin/orders bulk] payment pre-read failed:", readErr.message);
+      return NextResponse.json(
+        { error: `Could not check payment state: ${readErr.message}` },
+        { status: 500 },
+      );
+    }
+    for (const row of rows ?? []) {
+      if (row.status !== "confirmed" && confirmNeedsPaymentOverride(row)) {
+        unpaidBlocked.set(row.id, confirmOverrideMessage(row));
+      }
+    }
+  }
+
   for (const id of ids) {
+    const blocked = unpaidBlocked.get(id);
+    if (blocked) {
+      failed.push({ id, error: blocked });
+      continue;
+    }
     const { data, error } = await supabaseAdmin
       .from("orders")
       .update({ status: nextStatus, status_updated_at: new Date().toISOString() })
@@ -75,8 +127,19 @@ export async function POST(req: NextRequest) {
       action: nextStatus === "cancelled" ? "cancel" : "status_change",
       targetId: data.id,
       targetLabel: `#${data.id.slice(0, 8)}`,
-      context: `Bulk ${action} → ${nextStatus} for order ${data.id.slice(0, 8)}`,
-      meta: { bulk: true, action, status_after: nextStatus },
+      context:
+        `Bulk ${action} → ${nextStatus} for order ${data.id.slice(0, 8)}` +
+        (nextStatus === "confirmed" && body[CONFIRM_OVERRIDE_FIELD] === true
+          ? ` — unpaid-online confirm override was set for this batch`
+          : ``),
+      meta: {
+        bulk: true,
+        action,
+        status_after: nextStatus,
+        ...(nextStatus === "confirmed" && body[CONFIRM_OVERRIDE_FIELD] === true
+          ? { unpaid_online_confirm_override: true }
+          : {}),
+      },
     });
 
     // Fire-and-forget push, identical to single-order PATCH semantics.

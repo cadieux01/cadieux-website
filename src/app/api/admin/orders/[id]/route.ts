@@ -9,6 +9,12 @@ import { computeOrderState } from "@/lib/order-state";
 import { notifyPreorderScheduled } from "@/lib/preorder-notify";
 import { isPaidStatus } from "@/lib/payment-label";
 import {
+  CONFIRM_OVERRIDE_CODE,
+  CONFIRM_OVERRIDE_FIELD,
+  confirmNeedsPaymentOverride,
+  confirmOverrideMessage,
+} from "@/lib/order-confirm-guard";
+import {
   canSettleCod,
   codMethodLabel,
   isCodSettledMethod,
@@ -154,7 +160,7 @@ export async function PATCH(
   const { data: before } = await supabaseAdmin
     .from("orders")
     .select(
-      "status, delivery_date, delivery_slot, is_preorder, payment_method, payment_status, status_updated_at",
+      "order_number, status, delivery_date, delivery_slot, is_preorder, payment_method, payment_status, status_updated_at",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -177,6 +183,37 @@ export async function PATCH(
       update.picked_up_at = update.status_updated_at;
     }
   }
+
+  // Confirming an order whose online payment never completed takes an explicit
+  // override — see @/lib/order-confirm-guard for the 15 deliveries that went out
+  // against a payment that never happened. The refusal is 409 + a code the board
+  // keys on; the override is a field on the next request, so the operator has to
+  // restate the intent rather than click through a warning.
+  //
+  // Scoped to the confirm transition only, and skipped when the row is ALREADY
+  // confirmed or beyond: re-sending `confirmed` on a row that is already
+  // confirmed changes nothing and must not start asking questions.
+  if (
+    update.status === "confirmed" &&
+    before &&
+    before.status !== "confirmed" &&
+    confirmNeedsPaymentOverride(before) &&
+    body[CONFIRM_OVERRIDE_FIELD] !== true
+  ) {
+    return NextResponse.json(
+      {
+        error: confirmOverrideMessage(before),
+        code: CONFIRM_OVERRIDE_CODE,
+        payment_status: before.payment_status ?? null,
+      },
+      { status: 409 },
+    );
+  }
+  const confirmOverrideUsed =
+    update.status === "confirmed" &&
+    !!before &&
+    confirmNeedsPaymentOverride(before) &&
+    body[CONFIRM_OVERRIDE_FIELD] === true;
 
   if (typeof body.delivery_address === "string") {
     const addr = body.delivery_address.trim();
@@ -421,7 +458,13 @@ export async function PATCH(
     const slotLabel = finalSlot ? formatSlotForDisplay(finalSlot) : "—";
     context = `Admin changed delivery to ${finalDate ?? "—"} ${slotLabel}`;
   } else if (statusChanged) {
-    context = `Order status changed from "${before?.status ?? "—"}" to "${update.status as string}"`;
+    context =
+      `Order status changed from "${before?.status ?? "—"}" to "${update.status as string}"` +
+      // The whole point of the override is that it leaves a trace. Say it in the
+      // line a person reads on the audit page, not only in meta.
+      (confirmOverrideUsed
+        ? ` — CONFIRMED OVER AN UNPAID ONLINE PAYMENT (${before?.payment_status ?? "—"}); rider will collect cash`
+        : ``);
   } else {
     context = `Updated order ${params.id.slice(0, 8)}`;
   }
@@ -444,6 +487,13 @@ export async function PATCH(
       fields: Object.keys(update),
       ...(statusChanged
         ? { status_before: before?.status ?? null, status_after: update.status }
+        : {}),
+      ...(confirmOverrideUsed
+        ? {
+            unpaid_online_confirm_override: true,
+            payment_method_at_confirm: before?.payment_method ?? null,
+            payment_status_at_confirm: before?.payment_status ?? null,
+          }
         : {}),
       ...(dateChanged
         ? { delivery_date_before: before?.delivery_date ?? null, delivery_date_after: update.delivery_date ?? null }

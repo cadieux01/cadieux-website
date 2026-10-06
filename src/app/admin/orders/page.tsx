@@ -1256,10 +1256,35 @@ function OrdersPageInner() {
       curr.map((o) => (o.id === order.id ? { ...o, status: next } : o)),
     );
     try {
-      await adminFetch(`/api/admin/orders/${order.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: next }),
-      });
+      try {
+        await adminFetch(`/api/admin/orders/${order.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: next }),
+        });
+      } catch (e) {
+        // The unpaid-online confirm guard. The server refuses the first attempt
+        // and names the problem; the operator either backs out or restates the
+        // intent, and the retry carries the override — which the route records in
+        // audit_log. See @/lib/order-confirm-guard.
+        //
+        // confirm() rather than a bespoke modal because the refusal has to be
+        // read before anything happens, and this is the one place in this flow
+        // that already blocks on the operator (the catch below alerts). A prettier
+        // dialog that defaults to "yes" would be the warning this replaces.
+        if (
+          !(
+            e instanceof AdminFetchError &&
+            e.code === "unpaid_online_confirm" &&
+            window.confirm(`${e.message}\n\nConfirm as cash on delivery?`)
+          )
+        ) {
+          throw e;
+        }
+        await adminFetch(`/api/admin/orders/${order.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: next, allow_unpaid_confirm: true }),
+        });
+      }
       // Mirror legacy: SMS + WhatsApp on every status change we have
       // copy for. Both are fire-and-forget; failures surface in a toast
       // but never roll back the status update.

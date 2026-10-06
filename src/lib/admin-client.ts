@@ -129,7 +129,20 @@ function waitForAdminToken(timeoutMs = 10000): Promise<void> {
 }
 
 export class AdminFetchError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(
+    public readonly status: number,
+    message: string,
+    /**
+     * The `code` field of the error body, when the route sent one.
+     *
+     * Added because a caller sometimes has to tell two refusals with the SAME
+     * status apart: /api/admin/orders/[id] answers 409 both for "already settled
+     * by someone else" (nothing more to do) and for the unpaid-online confirm
+     * guard (offer the override). Matching on the message text would break the
+     * moment someone rewords the copy.
+     */
+    public readonly code: string | null = null,
+  ) {
     super(message);
     this.name = "AdminFetchError";
   }
@@ -184,7 +197,11 @@ export async function adminFetch<T = unknown>(
     if (res.status === 401) {
       clearAdminAuthAndSignal();
     }
-    throw new AdminFetchError(res.status, message);
+    const code =
+      json && typeof json === "object" && "code" in json
+        ? String((json as { code: unknown }).code)
+        : null;
+    throw new AdminFetchError(res.status, message, code);
   }
   return (json as T) ?? (undefined as unknown as T);
 }

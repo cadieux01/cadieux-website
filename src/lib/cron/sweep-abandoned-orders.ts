@@ -29,27 +29,15 @@
 //               any more. Writes payment_status='abandoned' so the state is
 //               explicit instead of merely stale.
 //
-// WHO MAY BE ABANDONED — read this before widening it.
-// 24 of the 46 reached `confirmed` or beyond, 15 of them `delivered`, and
-// cod_settled_method is NULL on every one: bread went out against a payment that
-// never completed and no cash was ever recorded. Whether money was collected at
-// those doors is not a fact this cron can derive, and writing `abandoned` on them
-// would state "nothing is owed here" on the exact rows where something probably
-// is. So the abandon branch refuses anything that moved past pending, forever,
-// and those rows stay for a person. Only two shapes qualify:
+// WHO MAY BE ABANDONED — the rule, the prod evidence behind it and the reason it
+// is NOT the subscriptions sweeper's 120 minutes all live with the predicate, in
+// @/lib/order-abandonable. Read that before widening it; it is the decision that
+// says money stopped being owed. Walk it with:
 //
-//   • status='cancelled' — dead by a human's decision; nothing to collect.
-//   • status pending/placed AND older than ORDER_EXPIRY_MS — computeOrderState
-//     already calls these `expired`, and every customer surface already refuses
-//     them, so writing them off removes nothing a customer could still do.
+//   node scripts/abandonable-check.ts
 //
-// WHY NOT 120 MINUTES FOR THE ABANDON BRANCH, like subscriptions use.
-// Because /api/orders/[id]/pay now lets a customer finish an abandoned Razorpay
-// checkout (see @/lib/order-payable), and that resume path stays open for the
-// full 7-day expiry window. Writing the row off at 120 minutes would close a door
-// the commit before this one deliberately opened. 120 minutes is still the
-// MINIMUM AGE for looking at a row at all, which is what stops this racing a
-// customer who is mid-UPI-PIN.
+// The 120 minutes below is a different question — the minimum age for LOOKING at
+// a row — and stays here.
 //
 // IT NEVER DELETES AND IT NEVER TOUCHES `status`. Cancelling an order is a
 // human's call; this only ever writes the payment columns. An abandoned row is
@@ -64,6 +52,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fetchRazorpayOrderPaidState } from "@/lib/razorpay-order-state";
 import { ORDER_EXPIRY_MS } from "@/lib/order-state";
+// The who-may-be-written-off rule lives in its own module so it can be walked
+// through directly by scripts/abandonable-check.ts. It decides whether money
+// stops being owed, which is too consequential to be only reachable by running
+// the whole cron against Razorpay.
+import { mayAbandon } from "@/lib/order-abandonable";
 import { queueOrderNotification } from "@/lib/order-notification";
 
 const LOG = "[cron/daily-housekeeping:orders-sweep]";
@@ -102,9 +95,6 @@ const BATCH_LIMIT = 25;
  */
 const BUDGET_MS = 20_000;
 
-/** Statuses the abandon branch may write off. Everything else is a person's. */
-const ABANDONABLE_PENDING_STATUSES = new Set(["pending", "placed"]);
-
 export type OrderSweepResult = {
   /** Rows asked about at Razorpay this run. */
   checked: number;
@@ -135,18 +125,6 @@ type Candidate = {
   razorpay_order_id: string | null;
   created_at: string | null;
 };
-
-/** Can this row be written off, given Razorpay has confirmed it was never paid? */
-function mayAbandon(row: Candidate, nowMs: number): boolean {
-  const status = (row.status ?? "").trim().toLowerCase();
-  if (status === "cancelled") return true;
-  if (!ABANDONABLE_PENDING_STATUSES.has(status)) return false;
-  const createdMs = row.created_at ? Date.parse(row.created_at) : NaN;
-  // An unparseable created_at cannot be shown to be past the resume window, so
-  // it is not written off. Leaving a row alone is always the recoverable error.
-  if (!Number.isFinite(createdMs)) return false;
-  return nowMs - createdMs > ORDER_EXPIRY_MS;
-}
 
 export async function sweepAbandonedOrders(
   supabase: SupabaseClient,
@@ -262,7 +240,7 @@ export async function sweepAbandonedOrders(
       }
 
       // state.paid === false → confirmed never paid.
-      if (mayAbandon(row, startedMs)) {
+      if (mayAbandon(row, startedMs, ORDER_EXPIRY_MS)) {
         toAbandon.push(row.id);
       } else {
         heldForReview++;
