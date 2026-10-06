@@ -166,7 +166,11 @@ export const SLOTS: Slot[] = [
     label: "Evening",
     startValue: "16:00",
     endValue: "21:00",
-    rangeLabel: "Evening · 4 – 9 PM",
+    // Not a range. Orders go out FROM 4 pm and the team tells the customer
+    // when it is actually coming, often sooner — so the label must not
+    // promise an end time. `endValue` stays 21:00 because that is the
+    // stored window the lead-time and self-edit maths are computed from.
+    rangeLabel: "Evening · from 4 pm",
   },
 ];
 
@@ -186,16 +190,22 @@ export function generateSlots(): Slot[] {
 // slot dropdowns. Un-pausing is deleting one string from this array.
 
 /** Slot values closed to new customer bookings. */
-export const PAUSED_SLOTS: readonly string[] = ["06:00-10:00"];
+export const PAUSED_SLOTS: readonly string[] = ["06:00-10:00", "10:00-14:00"];
 
 /** Shown in the picker and returned verbatim by the server gate.
  *
  *  The Android app cannot be changed without a Play release, and its
  *  error handler renders an unrecognised `code` by printing the server's
  *  `error` string — so this sentence is what an app customer actually
- *  reads. It must be finished copy, not a diagnostic. */
+ *  reads. It must be finished copy, not a diagnostic.
+ *
+ *  Deliberately names NO window. It used to say "Morning", which was
+ *  already the wrong sentence the moment a second window was paused, and
+ *  a shipped Android build would have kept printing it. Phrased so it
+ *  also reads correctly with " Please pick another time." appended, which
+ *  is what orders/[id]/change-request does. */
 export const PAUSED_SLOT_MESSAGE =
-  "Morning delivery is paused — we're short of delivery partners.";
+  "That delivery time is paused — we're short of delivery partners.";
 
 /** True iff this slot value is currently closed to new bookings. */
 export function isSlotPaused(slotValue: string | null | undefined): boolean {
@@ -287,6 +297,21 @@ export function bookableSlots(
     disabled: !isBookable(dateIso, s.value, now),
     paused: isSlotPaused(s.value),
   }));
+}
+
+/** The only bookable slot for `date`, or null when there are 0 or 2+.
+ *
+ *  Pickers use this to decide between a chooser and a statement: offering a
+ *  dropdown with one item asks the customer to make a decision that has
+ *  already been made for them. Derived, not hardcoded to the evening slot,
+ *  so un-pausing a window turns the statement back into a chooser with no
+ *  further edit. */
+export function soleBookableSlot(
+  dateIso: string,
+  now: Date = new Date(),
+): Slot | null {
+  const open = SLOTS.filter((s) => isBookable(dateIso, s.value, now));
+  return open.length === 1 ? open[0] : null;
 }
 
 /** True iff `date` has at least one bookable slot from `now`. */

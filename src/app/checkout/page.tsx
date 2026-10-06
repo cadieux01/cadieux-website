@@ -29,6 +29,7 @@ import {
 } from "@/lib/order-delivery";
 import {
   bookableSlots,
+  soleBookableSlot,
   PAUSED_SLOT_MESSAGE,
   nextDeliveryDateWindow,
 } from "@/lib/delivery-slots";
@@ -331,6 +332,14 @@ export default function CheckoutPage() {
       (s) => s.value === deliverySlot && !s.disabled,
     );
     if (!stillOk) setDeliverySlot("");
+  }, [deliveryDate, deliverySlot]);
+
+  // When only one slot is open for the picked date there is no choice to
+  // make, so select it rather than blocking submit on a decision the
+  // customer cannot influence. SlotPicker renders it as a statement.
+  useEffect(() => {
+    const sole = soleBookableSlot(deliveryDate, new Date());
+    if (sole && deliverySlot !== sole.value) setDeliverySlot(sole.value);
   }, [deliveryDate, deliverySlot]);
 
   // GPS coordinates captured from location or autocomplete
@@ -3711,6 +3720,7 @@ function SlotPicker({
   // naturally as the user sits on the page; bookableSlots is pure.
   const slots = bookableSlots(deliveryDate, new Date());
   const allDisabled = slots.length === 0 || slots.every((s) => s.disabled);
+  const sole = soleBookableSlot(deliveryDate, new Date());
 
   if (allDisabled) {
     return (
@@ -3728,6 +3738,32 @@ function SlotPicker({
         role="status"
       >
         No slots available for this date — please choose another day.
+      </div>
+    );
+  }
+
+  // Exactly one slot open → there is nothing to choose. State it instead of
+  // rendering a one-item dropdown. The parent pre-selects it (see the
+  // sole-slot effect), so this is a read-out of what will be submitted.
+  if (sole) {
+    return (
+      <div style={{ display: "block" }}>
+        <span style={labelSt}>Time slot</span>
+        <div
+          style={{
+            padding: "14px 16px",
+            borderRadius: "var(--card-radius)",
+            border: "1px solid #024628",
+            background: "var(--surface-paper)",
+            color: "#024628",
+            fontSize: 16,
+            lineHeight: 1.5,
+            letterSpacing: "0.02em",
+          }}
+          role="status"
+        >
+          {sole.rangeLabel}
+        </div>
       </div>
     );
   }

@@ -26,6 +26,8 @@ import {
 import {
   bookableSlots,
   isSlotPaused,
+  soleBookableSlot,
+  SLOTS,
   PAUSED_SLOTS,
   PAUSED_SLOT_MESSAGE,
 } from "@/lib/delivery-slots";
@@ -781,6 +783,30 @@ function Step3Slots({
   // bookableSlots is pure so this is cheap to recompute.
   const now = new Date();
 
+  // Windows open to new bookings at all, independent of any date. With one
+  // left there is nothing to choose: the step states the slot instead of
+  // offering it, and "set same time for all" has nothing to set.
+  const openSlots = SLOTS.filter((s) => !isSlotPaused(s.value));
+  const singleWindow = openSlots.length === 1 ? openSlots[0] : null;
+
+  // Pre-select wherever the date has exactly one bookable slot, so the step
+  // cannot block Continue on a decision the customer cannot influence.
+  useEffect(() => {
+    const next: Record<string, string> = { ...state.slotByDate };
+    let changed = false;
+    rows.forEach((r) => {
+      const sole = soleBookableSlot(r.date_iso, now);
+      if (sole && next[r.date_iso] !== sole.value) {
+        next[r.date_iso] = sole.value;
+        changed = true;
+      }
+    });
+    if (changed) onChange(next);
+    // `now` is a fresh Date each render and would re-fire forever; the dates
+    // and the stored picks are what actually decide the pre-selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, state.slotByDate]);
+
   function setSlot(dateIso: string, slot: string) {
     onChange({ ...state.slotByDate, [dateIso]: slot });
   }
@@ -801,15 +827,21 @@ function Step3Slots({
 
   return (
     <section>
-      <StepTitle>Pick a time slot for each delivery</StepTitle>
+      <StepTitle>
+        {singleWindow ? "Your delivery time" : "Pick a time slot for each delivery"}
+      </StepTitle>
+      {/* Derived from the open windows, so this sentence cannot keep naming
+          hours that are no longer bookable. */}
       <p style={{ color: FADED, fontSize: 16, marginTop: -6, marginBottom: 6 }}>
-        Three delivery windows: Morning (6 – 10 AM), Midday (10 AM – 2 PM), Evening (4 – 9 PM).
+        {singleWindow
+          ? `Deliveries go out ${singleWindow.rangeLabel.split("·").pop()?.trim()} — we'll message you when yours is on the way.`
+          : `Delivery windows: ${openSlots.map((s) => s.rangeLabel).join(", ")}.`}
       </p>
       <p style={{ color: FADED, fontSize: 16, marginTop: 0, marginBottom: 18 }}>
-        We bake fresh for you — please pick a delivery time at least 12 hours
+        We bake fresh for you — every delivery needs to be at least 12 hours
         from now so your loaf comes straight from the oven.
       </p>
-      {PAUSED_SLOTS.length > 0 ? (
+      {PAUSED_SLOTS.length > 0 && !singleWindow ? (
         <p
           style={{ color: "#024628", fontSize: 16, marginTop: -8, marginBottom: 18 }}
           role="status"
@@ -818,6 +850,8 @@ function Step3Slots({
         </p>
       ) : null}
 
+      {/* Nothing to set when one window is all there is. */}
+      {singleWindow ? null : (
       <div
         style={{
           padding: 14,
@@ -864,12 +898,14 @@ function Step3Slots({
           Apply
         </button>
       </div>
+      )}
 
       <div style={{ display: "grid", gap: 10 }}>
         {rows.map((r) => {
           const slot = state.slotByDate[r.date_iso] ?? "";
           const daySlots = bookableSlots(r.date_iso, now);
           const allDisabled = daySlots.length === 0 || daySlots.every((s) => s.disabled);
+          const sole = soleBookableSlot(r.date_iso, now);
           return (
             <div
               key={r.date_iso}
@@ -901,6 +937,21 @@ function Step3Slots({
                   role="status"
                 >
                   No slots available for this date — please choose another day.
+                </div>
+              ) : sole ? (
+                // One option is not a choice — state it. The effect above has
+                // already written it into slotByDate.
+                <div
+                  style={{
+                    minWidth: 170,
+                    fontSize: 16,
+                    color: "#024628",
+                    letterSpacing: "0.02em",
+                    lineHeight: 1.4,
+                  }}
+                  role="status"
+                >
+                  {formatSlot(sole.value)}
                 </div>
               ) : (
                 <div style={{ minWidth: 170 }}>
