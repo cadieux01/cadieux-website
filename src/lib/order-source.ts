@@ -18,6 +18,23 @@
 // on source. Keying red on source would leave OLS10 (a web subscription,
 // unpaid, ₹1,440, active since 5 September) invisible, which is the exact bug
 // this pair of flags exists to stop.
+//
+// ONE CREATION PATH IS NOT COVERED BY THE TYPE SYSTEM: the Postgres function
+// `admin_create_split_orders`, which inserts the OLF/OLW pair for a sandwich
+// order. It builds its INSERT dynamically —
+//
+//     insert into public.orders (<payload keys ∩ orders columns>)
+//     select ... from jsonb_populate_record(null::public.orders, $1)
+//
+// — so it needs no migration to carry `source`, and equally it will never
+// warn you that it is missing. WHOEVER WIRES THE SANDWICH CHECKOUT MUST PUT
+// `source` IN BOTH PAYLOADS; the RPC copies it only if it is there, and a
+// TypeScript caller gets no compile error for leaving it out because the
+// payload crosses into SQL as jsonb.
+//
+// Dormant as of 2026-10-06, which is why this is a note and not a fix:
+// `payment_group_id` is non-null on 0 of 658 orders and the RPC has no caller
+// in the repo. The split has never run in production.
 
 export type OrderSource = "web" | "app" | "offline";
 
