@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
-import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 import { isHiddenSubscription } from "@/lib/subscription-visibility";
 
 const supabaseAdmin = createClient(
@@ -27,7 +27,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { deliveryId: string } }
 ) {
-  const { success: notRateLimited } = await apiRateLimit.limit(getClientIP(req));
+  // Fail open, deadlined — own Postgres only, and polled every 10s. See
+  // /api/subscriptions/[id].
+  const notRateLimited = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
   if (!notRateLimited) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }

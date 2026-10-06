@@ -30,7 +30,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, maskPhone } from "@/lib/phone-cookie";
-import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 import { recordAuditEvent } from "@/lib/audit-log";
 
 const supabase = createClient(
@@ -96,7 +96,16 @@ function normalizePhone(raw: string): string {
 
 // GET: list all saved addresses for the caller's phone, default first.
 export async function GET(request: NextRequest) {
-  const { success: notRateLimited } = await apiRateLimit.limit(
+  // Fail open, deadlined — GET only. This reads `addresses` from our own
+  // Postgres: nothing billed, nothing written.
+  //
+  // The PATCH/DELETE in ./[id] are writes and are deliberately left on the
+  // bare `.limit()` — loosening a limiter in front of a write is a separate
+  // decision from fixing a read. (The POST below has no route-level limiter
+  // at all and leans entirely on the edge limiter in middleware.ts; that is
+  // noted, not changed here, for the same reason.)
+  const notRateLimited = await allowedOrFailOpen(
+    apiRateLimit,
     getClientIP(request),
   );
   if (!notRateLimited) {

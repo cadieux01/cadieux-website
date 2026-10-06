@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { isHiddenSubscription } from "@/lib/subscription-visibility";
-import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,7 +27,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { success: notRateLimited } = await apiRateLimit.limit(getClientIP(req));
+  // Fail open, deadlined. This handler reads only our own Postgres — no
+  // billed third-party call, no write — so an unreachable limiter must not
+  // cost the customer their tracking page. The deadline matters especially
+  // here: the page polls this route every 10s.
+  const notRateLimited = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
   if (!notRateLimited) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }

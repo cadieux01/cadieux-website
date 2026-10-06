@@ -237,23 +237,92 @@ export const adminWhatsappSendRateLimit = new Ratelimit({
 });
 
 /**
- * `limit()` that never throws.
+ * How long we are willing to wait for a verdict from Upstash.
+ *
+ * WHY A BUDGET AT ALL: catching the throw is not enough. The Upstash SDK
+ * retries internally before it gives up, and that retry budget was measured
+ * here at ~4.3s (`ERR_INVALID_URL` on a missing URL, "fetch failed" on an
+ * unreachable host). Worse, the limiter runs TWICE on every /api request —
+ * once in middleware.ts, which matches `/api/:path*`, and again in the route
+ * handler — so the stalls are additive: a route whose own handler logged
+ * 4.32s answered the client in 8.62s. Fail-open without a deadline turns an
+ * Upstash outage into an 8.6s wait for a correct answer instead of an 8.6s
+ * wait for a 500. Better, but not acceptable.
+ *
+ * WHY 1500ms: it has to be far enough above a healthy round trip that it
+ * never fires in normal operation, and small enough that 2x it is not itself
+ * a broken-looking page. A same-region Upstash REST call is tens of ms, so
+ * 1500ms is one to two orders of magnitude of headroom. I do NOT have a
+ * production p99 for this limiter to quote — there are no Upstash credentials
+ * in this checkout — so treat the number as a margin, not a measurement, and
+ * revisit it if real p99 data ever says otherwise.
+ *   - Lower (say 500ms) risks a false timeout on a cold container's first
+ *     TLS handshake to Upstash. That fails OPEN, i.e. it would silently
+ *     disable rate limiting on the first request of every new container —
+ *     exactly the request shape that dominates while scaling up. That is the
+ *     failure I least want to buy.
+ *   - Higher (say 3s) is still inside the SDK's own ~4.3s retry budget, but
+ *     2x3s = 6s at the client, which is not a meaningful improvement.
+ * 2 x 1500ms = 3.0s worst case, against the 8.6s measured today.
+ */
+export const RATE_LIMIT_BUDGET_MS = 1500;
+
+/**
+ * `limit()` that never throws AND never blocks longer than the budget.
  *
  * Upstash is a network dependency. On the create paths a thrown error would
  * become a 500 and take checkout down for everyone, which is a far worse
  * outcome than letting abuse through for the duration of the outage — so an
- * unreachable limiter fails OPEN and logs.
+ * unreachable OR slow limiter fails OPEN and logs.
+ *
+ * WHAT A LATE VERDICT DOES TO THE REQUEST: nothing. `Promise.race` subscribes
+ * to both promises, so when the limiter settles after the deadline has
+ * already won, the value is discarded — and a late *rejection* is still
+ * observed by race's own handler, so it cannot surface as an
+ * unhandledRejection and kill the function. The response has long since been
+ * sent.
+ *
+ * The one real side effect is in Redis, not here: the sliding-window counter
+ * still increments whenever the call eventually lands. A request we admitted
+ * on a timeout is therefore admitted AND counted. That is deliberate — it
+ * keeps the window honest rather than handing abusers free requests — but it
+ * means that after a slow spell a window can already be spent, and genuine
+ * traffic may meet a 429 it did not earn.
  */
 export async function allowedOrFailOpen(
   limiter: Ratelimit,
-  key: string
+  key: string,
+  budgetMs: number = RATE_LIMIT_BUDGET_MS
 ): Promise<boolean> {
+  // Sentinel rather than `undefined`/`false`, so a real verdict of `false`
+  // (legitimately rate limited) can never be mistaken for a timeout.
+  const TIMED_OUT = Symbol("rate-limit-timeout");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
   try {
-    const { success } = await limiter.limit(key);
-    return success;
+    const verdict = await Promise.race([
+      limiter.limit(key).then(({ success }) => success),
+      new Promise<typeof TIMED_OUT>((resolve) => {
+        timer = setTimeout(() => resolve(TIMED_OUT), budgetMs);
+      }),
+    ]);
+
+    if (verdict === TIMED_OUT) {
+      console.error(
+        `⚠️  rate-limit check exceeded ${budgetMs}ms, allowing request:`,
+        key
+      );
+      return true;
+    }
+    return verdict;
   } catch (err) {
     console.error("⚠️  rate-limit check failed, allowing request:", key, err);
     return true;
+  } finally {
+    // Required, not tidiness: a live timer keeps the event loop busy and can
+    // delay a serverless container's freeze for the rest of the budget on
+    // every single request.
+    clearTimeout(timer);
   }
 }
 

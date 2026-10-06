@@ -17,10 +17,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getActiveLocations } from "@/lib/pickup-locations";
-import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
 export async function GET(req: NextRequest) {
-  const { success: ok } = await apiRateLimit.limit(getClientIP(req));
+  // Fail open, deadlined. getActiveLocations() is an unstable_cache'd read of
+  // our own `pickup_locations` table — no Google call despite the geocoding
+  // this directory's coordinates came from, and no write. The billed geocoder
+  // lives behind /api/service-areas/check, not here, which is why these two
+  // neighbouring routes are classified differently.
+  const ok = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
   if (!ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded" },

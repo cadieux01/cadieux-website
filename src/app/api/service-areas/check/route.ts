@@ -19,6 +19,18 @@ import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
 import { resolveServiceability } from "@/lib/service-areas";
 
 export async function GET(req: NextRequest) {
+  // DO NOT WRAP THIS IN allowedOrFailOpen. Every other public read route in
+  // this app fails open, and this one must not.
+  //
+  // resolveServiceability() -> geocodePincode() (lib/service-areas.ts) ends in
+  // a BILLED Google Geocoding call on a cache miss, plus a fire-and-forget
+  // upsert into pincode_geocache. Worse, the cache is only written when
+  // Google resolves the pincode: a well-formed but non-existent 6-digit
+  // string returns ZERO_RESULTS, falls through to null and caches NOTHING, so
+  // it is re-billed on every single request. Failing this route open during
+  // an Upstash outage would leave the limiter — the only control in front of
+  // that spend — switched off against a 900,000-value enumerable keyspace.
+  // An outage here converts a 500 into a bill, so it stays fail-CLOSED.
   const { success: ok } = await apiRateLimit.limit(getClientIP(req));
   if (!ok) {
     return NextResponse.json(

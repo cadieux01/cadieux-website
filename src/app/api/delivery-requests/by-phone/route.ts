@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/admin-auth";
-import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
 type Row = {
   id: string;
@@ -26,7 +26,10 @@ function normalizePhoneDigits(raw: string | null): string | null {
 }
 
 export async function GET(req: NextRequest) {
-  const { success: ok } = await apiRateLimit.limit(getClientIP(req));
+  // Fail open, deadlined — reads delivery_requests out of our own Postgres,
+  // nothing billed and nothing written. This sits on /cart, so a stall here
+  // is a stall in front of buying.
+  const ok = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
   if (!ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded" },
