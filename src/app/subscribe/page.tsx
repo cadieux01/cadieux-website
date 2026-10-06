@@ -77,14 +77,14 @@ function fmtMoney(n: number): string {
 export const metadata: Metadata = {
   title: "Protein Bread Subscription in Visakhapatnam | Cadieux",
   description:
-    "Save 10% on every loaf with a Cadieux subscription. Pick your dates, pick your slot, delivered fresh across Visakhapatnam.",
+    "Save 10% on every loaf with a Cadieux subscription. Pick your dates — delivered fresh across Visakhapatnam, evenings from 4 pm.",
   alternates: { canonical: "/subscribe" },
   openGraph: {
     type: "website",
     url: `${SITE_URL}/subscribe`,
     title: "Protein Bread Subscription in Visakhapatnam | Cadieux",
     description:
-      "Save 10% on every loaf with a Cadieux subscription. Pick your dates, pick your slot, delivered fresh across Visakhapatnam.",
+      "Save 10% on every loaf with a Cadieux subscription. Pick your dates — delivered fresh across Visakhapatnam, evenings from 4 pm.",
     // The Cadieux logo. This used to point at /og-cover.jpg, a file that has
     // never existed in public/ — it 404'd, so scrapers ignored it and went
     // back to picking an image out of the page themselves.
@@ -101,7 +101,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Protein Bread Subscription in Visakhapatnam | Cadieux",
     description:
-      "Save 10% on every loaf with a Cadieux subscription. Pick your dates, pick your slot, delivered fresh across Visakhapatnam.",
+      "Save 10% on every loaf with a Cadieux subscription. Pick your dates — delivered fresh across Visakhapatnam, evenings from 4 pm.",
   },
 };
 
@@ -716,7 +716,7 @@ function PlanCard({ plan }: { plan: SubscriptionPlanDTO }) {
 const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "How does the subscription work?",
-    a: "You pick your loaves, your dates and a delivery slot for each date in one flow. Every plan runs on the dates you selected — there is no auto-renewal and no surprise deliveries.",
+    a: "You pick your loaves and your dates in one flow. Every delivery goes out in the evening, from 4 PM. Every plan runs on the dates you selected — there is no auto-renewal and no surprise deliveries.",
   },
   {
     q: "What is the minimum?",
@@ -724,7 +724,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "Can I edit, pause, or cancel a plan?",
-    a: "Yes. Each delivery on a plan can be rescheduled, moved to a different slot, or cancelled up to twelve hours before the slot. Whole plans can be cancelled from your account.",
+    a: "Yes. Each delivery on a plan can be moved to a different date or cancelled up to twelve hours beforehand. Whole plans can be cancelled from your account.",
   },
   {
     q: "When do you deliver?",

@@ -24,7 +24,7 @@ export const PDP_FAQS: PdpFaq[] = [
   },
   {
     q: "How is it delivered?",
-    a: "Orders need at least 12 hours' notice, so most orders arrive the next day. Pick your delivery day and time slot at checkout.",
+    a: "Orders need at least 12 hours' notice, so most orders arrive the next day. Pick your delivery day at checkout — deliveries go out from 4 PM and we'll message you when yours is on the way.",
   },
   {
     q: "How long does the bread stay fresh?",
