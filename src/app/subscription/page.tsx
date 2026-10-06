@@ -127,12 +127,13 @@ export default function SubscriptionHubPage() {
         if (cancelled) return;
         const active = Array.isArray(aJ.subscriptions) ? aJ.subscriptions.length : 0;
         const past = Array.isArray(pJ.subscriptions) ? pJ.subscriptions.length : 0;
-        // Never cache a count that came from an unverified read. Both routes
-        // now answer 401 on an expired session, and a zero from that is not
-        // this customer's plan count — caching it would keep showing "No
-        // active plans yet." for the rest of the tab session even after they
-        // re-verify. The captions still render 0, as they did before.
-        if (aRes.status !== 401 && pRes.status !== 401) {
+        // Never cache a count that did not come from a successful read. 401 is
+        // an expired session and 500 is a failed query; a zero from either is
+        // not this customer's plan count, and caching it would keep showing
+        // "No active plans yet." for the rest of the tab session even after
+        // they re-verify or the database recovers. The captions still render
+        // 0, as they did before.
+        if (aRes.ok && pRes.ok) {
           writeCachedCounts(phone, active, past);
         }
         setData({ kind: "ready", active, past });

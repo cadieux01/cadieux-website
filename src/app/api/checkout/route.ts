@@ -126,7 +126,16 @@ export async function GET(req: NextRequest) {
   // IP rate limit regardless of outcome — a bare phone in the query
   // string used to hand back a customer's name + address, so this
   // endpoint was trivially enumerable. Cap the enumeration rate first.
-  const { success: notRateLimited } = await apiRateLimit.limit(getClientIP(req));
+  //
+  // FAIL OPEN. This was a bare `apiRateLimit.limit()`, and Upstash is a
+  // network dependency: when it is unreachable the SDK retries and then
+  // THROWS, which in a route handler is a 500. Measured against an
+  // unreachable limiter, this route answered 500 after 8.6s — so an
+  // Upstash outage did not degrade order history, it removed it, and the
+  // customer got a spinner for nine seconds followed by nothing they
+  // could act on. The POST half of this same file has used
+  // allowedOrFailOpen since it was written; the GET half never did.
+  const notRateLimited = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
   if (!notRateLimited) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }

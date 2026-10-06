@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone, maskPhone } from "@/lib/phone-cookie";
-import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
+import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
@@ -16,7 +16,9 @@ const supabaseAdmin = createClient(
 // badges to differentiate. Live tracking still happens on /api/subscriptions
 // which filters to non-finished rows for the active dashboard.
 export async function GET(req: NextRequest) {
-  const { success: notRateLimited } = await apiRateLimit.limit(getClientIP(req));
+  // Fail open — see the note on /api/checkout's GET. A bare `.limit()`
+  // throws when Upstash is unreachable, which makes a read route 500.
+  const notRateLimited = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
   if (!notRateLimited) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
@@ -62,9 +64,14 @@ export async function GET(req: NextRequest) {
     .not("payment_status", "in", HIDDEN_SUBSCRIPTION_FILTER)
     .order("created_at", { ascending: false });
 
+  // See /api/subscriptions — a query failure gets a 500, not an empty list
+  // dressed up as a complete answer.
   if (error) {
     console.error("[subscriptions past]", error.message);
-    return NextResponse.json({ subscriptions: [] });
+    return NextResponse.json(
+      { subscriptions: [], reason: "query_failed" },
+      { status: 500 },
+    );
   }
 
   if (!subs || subs.length === 0) {
