@@ -1,19 +1,21 @@
 // POST /api/orders/[id]/pay
 //
-// "Pay Now": lets the verified-phone customer who owns a COD order convert it
-// to an online (Razorpay) payment. This route creates a Razorpay order for the
-// existing order's CURRENT total and stamps the razorpay_order_id on the SAME
-// row — it does NOT create a new order and does NOT mark the order paid. The
-// paid flip happens only after a verified signature in
-// /api/orders/[id]/pay/verify (mirrors the /api/create-order → /api/verify-payment
-// split used by the checkout flow).
+// "Pay Now": lets the verified-phone customer who owns an UNPAID order pay it
+// online. This route creates a Razorpay order for the existing order's CURRENT
+// total and stamps the razorpay_order_id on the SAME row — it does NOT create a
+// new order and does NOT mark the order paid. The paid flip happens only after a
+// verified signature in /api/orders/[id]/pay/verify (mirrors the
+// /api/create-order → /api/verify-payment split used by the checkout flow).
 //
 // Auth: cookie-based via getVerifiedPhone(req). The order must belong to the
 // verified phone's customer, otherwise 404 (don't leak unrelated orders).
 //
-// Guard: only COD orders that are not already paid and not cancelled can be
-// paid. The amount sent to Razorpay is read from the DB row on the server; the
-// client cannot influence it.
+// Guard: not already paid, not cancelled, and payable per isPayableOnline().
+// This route used to refuse everything whose payment_method was not `cod`, and
+// that one check was the whole reason a dismissed Razorpay window could never be
+// finished — src/lib/order-payable.ts now owns the rule, so the customer's button
+// and this gate cannot disagree. The amount sent to Razorpay is read from the DB
+// row on the server; the client cannot influence it.
 //
 // REUSE, DON'T RE-MINT. This route used to create a fresh Razorpay order on
 // every press and overwrite orders.razorpay_order_id unconditionally. Two
@@ -35,6 +37,7 @@ import {
 } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 import { razorpayOrderIsReusable } from "@/lib/razorpay-order-reuse";
+import { isPayableOnline } from "@/lib/order-payable";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -95,8 +98,7 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Guard: only COD, not-already-paid, not-cancelled orders are payable.
-  const method = (order.payment_method ?? "").toLowerCase();
+  // Guard: not-already-paid, not-cancelled, and payable per order-payable.ts.
   const payStatus = (order.payment_status ?? "").toLowerCase();
   const status = (order.status ?? "").toLowerCase();
   if (payStatus === "paid") {
@@ -105,9 +107,14 @@ export async function POST(
       { status: 409 },
     );
   }
-  if (method !== "cod") {
+  if (!isPayableOnline(order)) {
     return NextResponse.json(
-      { error: "Order is not a Cash-on-Delivery order", code: "not_cod" },
+      {
+        error:
+          "This order can no longer be paid online. Please message us on " +
+          "WhatsApp and we'll sort it out.",
+        code: "not_payable",
+      },
       { status: 409 },
     );
   }

@@ -28,6 +28,7 @@ import {
 } from "@/lib/delivery-slots";
 import { trackPurchase } from "@/lib/analytics";
 import { formatOrderNumber } from "@/lib/order-number";
+import { isPayableOnline } from "@/lib/order-payable";
 import BackLink from "@/components/BackLink";
 import { composeCustomerShareMessage } from "@/lib/order-share-customer";
 
@@ -262,10 +263,13 @@ export default function OrderDetailPage() {
     }
   }, [order]);
 
-  // "Pay Now" — convert a COD order to a paid Razorpay order without
-  // creating a new order. Mirrors the checkout page's payOnline() flow:
-  // create a Razorpay order for the existing order id, open the gateway,
-  // verify server-side, then refresh so the row flips to "Paid".
+  // "Pay Now" — pay an existing unpaid order online without creating a new
+  // one. Mirrors the checkout page's payOnline() flow: create (or reuse) a
+  // Razorpay order for this order id, open the gateway, verify server-side,
+  // then refresh so the row flips to "Paid". Works for a COD order the
+  // customer decided to pay online AND for a Razorpay checkout they abandoned
+  // — the route hands the still-live Razorpay window straight back rather than
+  // minting a second one (see razorpay-order-reuse.ts).
   const payNow = useCallback(async () => {
     if (!id || paying) return;
     setPayError(null);
@@ -890,12 +894,18 @@ export default function OrderDetailPage() {
                 </span>
               </div>
 
-              {/* Pay Now — only for unpaid COD orders that aren't cancelled
-                  or expired, and never while a delivery change-request is
-                  pending. Expired = server-computed (>7d unpaid pending);
-                  see src/lib/order-state.ts. */}
-              {(order.payment_method ?? "").toLowerCase() === "cod" &&
-                (order.payment_status ?? "").toLowerCase() !== "paid" &&
+              {/* Pay Now — for any unpaid order we will still take money on
+                  that isn't cancelled or expired, and never while a delivery
+                  change-request is pending. Expired = server-computed (>7d
+                  unpaid pending); see src/lib/order-state.ts.
+
+                  This used to read `payment_method === "cod"`, which hid the
+                  button on exactly the orders that most needed it: a Razorpay
+                  checkout the customer opened and never finished still sits at
+                  `razorpay` + `created`, with no way back in. isPayableOnline()
+                  is the same rule /api/orders/[id]/pay enforces, so the button
+                  and the route cannot disagree. */}
+              {isPayableOnline(order) &&
                 !isCancelled(order.status) &&
                 order.computed_state !== "expired" &&
                 !changeRequest && (
