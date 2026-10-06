@@ -74,10 +74,16 @@ export function computeOrderState(
     // "expired", with no throw and no log. So a date-handling bug in a caller
     // looks exactly like a real result. It cost a 13x undercount once.
     //
-    // Production is fine — PostgREST (every supabase-js caller here) returns
-    // `2026-10-04T06:12:33.91+00:00`, which parses. The hazard is verification
-    // harnesses, and the shape that bites is NOT what you would guess. Measured on
-    // node v25.8.2:
+    // THERE IS NO PRODUCTION BUG HERE TO FIND — do not go hunting for one. Every
+    // caller in the app reaches this function through supabase-js, and PostgREST
+    // serialises timestamps as `2026-10-04T06:12:33.91+00:00`, which parses. The
+    // only other way in is a NULL created_at, and prod has 0 of those across all
+    // 675 orders (the column is nullable, defaulted `now()`, so this is a measured
+    // fact rather than a guarantee — but no real row reaches this line today).
+    //
+    // The hazard is OUR OWN verification code, and the blame does not sit with
+    // Postgres: the shape that bites is one a harness CREATES by half-normalising a
+    // string that already worked. Measured on node v25.8.2:
     //
     //   "2026-10-04 06:12:33.91+00"     → PARSES   (psql/MCP raw output is fine;
     //                                               V8's lenient non-ISO path

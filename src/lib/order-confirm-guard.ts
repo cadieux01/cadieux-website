@@ -43,6 +43,33 @@
 // rows got past everyone in the first place. `delivered` instead writes an audit
 // entry saying the order was unpaid when it was delivered: no refusal, no dialog,
 // just the record. See the `unpaid_at_delivery` branch in the two admin routes.
+//
+// THE GUARD ASKS ONCE PER ARROW, AND THAT REPETITION IS DELIBERATE. An order
+// overridden at `confirmed` will be refused again at `preparing`, and again at
+// `out_for_delivery`. This looks like a bug and is not one, so do not "fix" it.
+//
+// The alternative — gate only entry to the pipeline, so one override at `confirmed`
+// clears the rest — was considered and rejected. It would mean a single click
+// silently authorising dispatch two steps and possibly two operators later, on an
+// order where the customer still has not paid. Dispatch is the step that actually
+// costs a rider a trip and puts a cash demand in front of a customer, so being
+// asked again at dispatch is the feature, not the friction.
+//
+// The repetition is cheap, and that was counted rather than estimated. Of the 49
+// unpaid online orders on prod, only 9 can still meet this guard at all: 1 has not
+// entered the pipeline yet, and 8 sit at `confirmed` and will be asked again on
+// their way to preparing or dispatch. The other 40 are past it or dead — 2 are
+// already out_for_delivery with no rider-bound arrow left, 16 are delivered (which
+// is never refused), and 22 are cancelled. So the whole cost of re-asking is on the
+// order of a dozen extra clicks a month across the business.
+//
+// WHY NOT JUST REMEMBER THE OVERRIDE. Because nothing on the row can hold that
+// fact. It would need a column — `unpaid_confirm_authorised_at` or similar — and
+// that is a migration, which is a heavier and less reversible change than the
+// clicks it saves. audit_log already records every override, but it is an
+// append-only history read by humans, not a flag this predicate can branch on. So
+// the state is intentionally not carried: re-asking is the cost of staying
+// migration-free, and it was weighed, not overlooked.
 
 /** Methods where the money was supposed to arrive before delivery. */
 const ONLINE_METHODS = new Set(["razorpay"]);
