@@ -45,10 +45,14 @@ import { isPaidStatus } from "@/lib/payment-label";
 // —" would silently break the bake plan for that row. Pickup orders can
 // carry a null slot and are handled by their own flow; this panel is
 // scoped to the delivery-editing case.
-// Paused windows are shown for clarity (existing rows still display them)
-// but disabled at the picker level so an operator can't move a delivery
-// INTO one. Legacy Morning rows read fine; on edit the operator must
-// choose Midday or Evening.
+// Paused windows are LABELLED but NOT disabled. A pause stops customers
+// booking a window; it does not stop an operator administering the rows
+// already on it. Disabling them here stranded live work — paused slots
+// carry future deliveries plus older rows still waiting to be closed out,
+// and an operator must be able to touch every one of them. The server
+// agrees: all admin routes gate on isValidSlotValue (membership in SLOTS),
+// which is pause-blind, so the API accepts all three values and the
+// dropdown was the only thing refusing them.
 //
 // Derived from SLOTS + PAUSED_SLOTS in @/lib/delivery-slots — the SAME
 // list the customer pickers and the server gate read, so un-pausing is one
@@ -59,7 +63,6 @@ const CANONICAL_SLOTS: Array<{ value: string; label: string; disabled?: boolean 
     label: `${s.startValue}–${s.endValue} · ${s.label}${
       isSlotPaused(s.value) ? " — paused" : ""
     }`,
-    disabled: isSlotPaused(s.value),
   }));
 
 // Multigrain floor: read from `products.available_from` at panel-open

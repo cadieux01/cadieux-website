@@ -29,10 +29,11 @@ const INK = "#024628";
 const BORDER = "rgba(251,243,212,0.25)";
 const TEXT_MUTED = "rgba(251,243,212,0.65)";
 
-// Paused windows are shown for clarity (existing rows still display them)
-// but disabled at the picker level so an operator can't move a delivery
-// INTO one. Legacy Morning rows read fine; on edit the operator must
-// choose Midday or Evening.
+// Paused windows are LABELLED but NOT disabled. A pause stops customers
+// booking a window; it does not stop an operator administering the rows
+// already on it. The server gates on isValidSlotValue (membership in
+// SLOTS), which is pause-blind, so the API accepts all three values and
+// the dropdown was the only thing refusing them.
 //
 // Derived from SLOTS + PAUSED_SLOTS in @/lib/delivery-slots — the SAME
 // list the customer pickers and the server gate read.
@@ -42,7 +43,6 @@ const CANONICAL_SLOTS: Array<{ value: string; label: string; disabled?: boolean 
     label: `${s.startValue}–${s.endValue} · ${s.label}${
       isSlotPaused(s.value) ? " — paused" : ""
     }`,
-    disabled: isSlotPaused(s.value),
   }));
 
 type AvailabilityEntry = {

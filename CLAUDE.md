@@ -233,3 +233,34 @@ argument from reading the source. Run it with
   server HMRs, you re-run the same cases against the unguarded code, then
   `git stash pop`. Limit the stash to explicit paths — worktrees here are
   shared between windows.
+
+## Dev server: a symlinked `node_modules` gives you two copies of React
+
+Worktrees are often set up by symlinking `node_modules` in from a sibling
+worktree. `tsc` and `next build` both **succeed** that way, so it looks fine —
+but `next dev` resolves React through the symlink target, i.e. outside the
+project root, and the app ends up with two React copies. Every page renders
+blank and the server log shows:
+
+```
+Warning: Invalid hook call... more than one copy of React in the same app
+TypeError: Cannot read properties of null (reading 'useContext')
+  at usePathname (.../<other-worktree>/node_modules/next/dist/client/components/navigation.js)
+  at ErrorBoundary (...)
+```
+
+Two things make this easy to misread:
+
+- The route itself compiles and returns 200 (`GET /checkout 200`). It is the
+  root layout that dies, so the failure looks like a bad page edit.
+- A green `next build` is **not** evidence the preview will render. The two
+  disagree, and only `dev` is affected.
+
+Check `ls -l node_modules` before debugging anything else. Fix:
+
+```
+mv node_modules node_modules.symlink.bak && npm ci    # ~8s, 210 packages
+```
+
+then restart the dev server. Observed 2026-10-06 in `cadieux-evening-slot`,
+whose `node_modules` pointed at `cadieux-zones`.

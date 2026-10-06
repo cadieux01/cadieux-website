@@ -57,8 +57,11 @@ const CADIEUX_PHONE_DIAL = ADMIN_PHONE.replace(/\s/g, "");
 // Citywide delivery-window fact. Same sentence used on /delivery/[area]
 // so the two SEO surfaces state one identical delivery promise. If slot
 // hours change, edit both this file and delivery/[area]/page.tsx.
+//
+// No end time is promised: deliveries go out from 4 pm and the team tells
+// the customer when theirs is actually coming, sometimes sooner.
 const DELIVERY_WINDOW_TEXT =
-  "Fresh delivery daily in three windows IST: Morning 6 – 10 AM, Midday 10 AM – 2 PM, Evening 4 – 9 PM.";
+  "Fresh delivery daily, evenings from 4 PM IST — we'll message you when yours is on the way.";
 
 // Rupee formatter — drops decimals for whole numbers so "₹120" stays
 // clean and "₹143.10" keeps its paisa. Mirrors the wizard's fmtMoney.
@@ -227,7 +230,7 @@ export default async function SubscribeLandingPage() {
             {[
               "Pick your loaves — one loaf per delivery is enough, and you can mix multigrain and plain in any ratio.",
               "Pick your dates — no fixed weekly cycle. Choose the days that fit your week.",
-              "Pick a window — Morning (6 – 10 AM), Midday (10 AM – 2 PM), or Evening (4 – 9 PM) IST.",
+              "Pick your delivery time — evenings, from 4 PM IST. We'll message you when yours is on the way.",
               "We bake to order — every delivery leaves the kitchen the same day it reaches you. Twelve hours' notice keeps the loaf oven-fresh.",
             ].map((line, i) => (
               <li
@@ -725,7 +728,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "When do you deliver?",
-    a: "Every day of the week, in three delivery windows IST: Morning (6 – 10 AM), Midday (10 AM – 2 PM), and Evening (4 – 9 PM).",
+    a: "Every day of the week. Deliveries go out from 4 PM IST and we'll message you when yours is on the way — sometimes it arrives sooner.",
   },
   {
     q: "Where do you deliver?",

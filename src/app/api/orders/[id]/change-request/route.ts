@@ -27,11 +27,9 @@ import {
 import { toLocal10 } from "@/lib/order-validation";
 import {
   isIsoDate,
-  isSlotPaused,
   isValidSlotValue,
   meetsLeadTime,
   validateBookingSlot,
-  PAUSED_SLOT_MESSAGE,
 } from "@/lib/delivery-slots";
 
 const supabaseAdmin = createClient(
@@ -205,24 +203,19 @@ export async function POST(
       );
     }
     const storedSlot = order.delivery_slot ?? "";
-    // Pause first, in its own words. This is the branch where the customer
-    // keeps the slot they already hold and moves only the date, so a paused
-    // stored slot is reachable from live orders — and moving one to a new
-    // date does not help, because a paused window has no delivery partners
-    // on any date. A single `isBookable` check would fail these orders with
-    // "too soon" (the pause is folded into isBookable), sending the customer
-    // to pick later and later dates that can never satisfy it.
-    if (isSlotPaused(storedSlot)) {
-      return NextResponse.json(
-        {
-          error: `${PAUSED_SLOT_MESSAGE} Please pick another time.`,
-          code: "slot_paused",
-        },
-        { status: 400 },
-      );
-    }
-    // Lead time only — the pause is already answered above, so the two
-    // failures can never borrow each other's message.
+    // Lead time ONLY. Deliberately no pause check: the customer is not
+    // choosing this slot, they already hold it, and refusing the request
+    // would strand every order sitting on a paused window — they could not
+    // even move the date. Pausing a slot stops NEW bookings; it does not
+    // revoke one already made. `validateBookingSlot` above still refuses a
+    // paused slot when the customer actually picks one, so this is not a
+    // hole. Same shape as the subscription self-edit routes; the two
+    // self-edit paths must give the same answer.
+    //
+    // `meetsLeadTime` is used rather than `isBookable` precisely because
+    // isBookable folds in the pause and would fail these with "too soon",
+    // sending the customer to pick later and later dates that can never
+    // satisfy it.
     if (!meetsLeadTime(effDate, storedSlot)) {
       return NextResponse.json(
         {
