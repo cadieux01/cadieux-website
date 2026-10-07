@@ -86,6 +86,44 @@ A merge verdict is only meaningful when the other branch's merge base IS the
 current `origin/main` — check that first, and refuse to give a verdict otherwise
 rather than reporting the noise.
 
+The failure is not in running the tool, it is in reading it: the output is
+indistinguishable from two windows genuinely designing the same file differently.
+It got out of this repo once, through two people: a conflict list was reported as
+"contested files" and then repeated onward to a third party before anyone checked
+the direction. The branch was `+530 / -3,426` against `origin/main`, every file
+it was "contesting" already had a newer version on `main`, and merging it would
+have **deleted eight files `main` has**. Nobody mis-ran the tool; both readers
+took its output at face value without asking what it meant.
+
+So a conflict against a branch you have not placed relative to `main` is a
+**staleness artefact until proven otherwise**. Before reporting any collision:
+
+```sh
+git diff --stat origin/main <branch>          # heavy on '-' ⇒ BEHIND, not ahead
+git diff --diff-filter=D --name-only origin/main <branch>   # files main has, it lacks
+```
+
+A `+530 / -3,426` shape means the branch is a stale snapshot. Then check whether
+its substance already landed, file by file, rather than trusting the branch name
+or the commit subjects:
+
+```sh
+git cat-file -e origin/main:<path> && echo "already on main"
+```
+
+Two specific traps inside this one:
+
+- **A long `origin/main..<branch>` log does not mean the work is unmerged.**
+  Cherry-picked or rebased commits keep their content but change their SHAs, so
+  they still list. Compare *trees*, not commit counts.
+- **A reverted tip.** If the last commit is a `Revert "…"` of the branch's own
+  earlier commit, that pair is net zero — don't count it as pending work.
+
+And if the branch added a migration, the table may already exist on prod
+(migrations here are applied by hand, ahead of merges). Confirm with the Supabase
+MCP before calling anything orphaned — `to_regclass('public.<table>')` plus a
+`git grep` for a writer on `origin/main` settles it in one minute.
+
 The test itself is non-destructive and touches no working tree, so it is safe to
 run against someone else's in-progress worktree:
 
