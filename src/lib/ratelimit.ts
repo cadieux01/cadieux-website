@@ -106,7 +106,45 @@ export const mobileReviewRateLimit = new Ratelimit({
   prefix: "ratelimit:reviews:mobile",
 });
 
-// General API: 30 requests per IP per minute (DDoS protection)
+/**
+ * General API: 30 requests per IP per minute (DDoS protection).
+ *
+ * RUN THIS ONCE PER REQUEST. `src/middleware.ts` has `matcher: "/api/:path*"`
+ * and already calls `allowedOrFailOpen(apiRateLimit, getClientIP(request))` in
+ * front of every non-admin API route. A handler that calls it again on the
+ * same IP key is NOT a second control — it is this control run twice, against
+ * the same `ratelimit:api` prefix, the same key and the same 30/min window.
+ *
+ * That was the live state of eight read GETs and it cost two things:
+ *
+ *   - Two Redis round-trips per request instead of one, on the happy path.
+ *     Measured against a counting stand-in for the Upstash REST endpoint: one
+ *     GET /api/locations produced two EVALSHA calls on the byte-identical
+ *     bucket key, 14 ms apart.
+ *   - Half the intended ceiling. slidingWindowLimitScript (shipped in
+ *     @upstash/ratelimit v2.0.8) ends in `INCRBY currentKey, incrementBy` with
+ *     incrementBy defaulting to 1, once per `limit()` call — so two calls
+ *     spend two tokens and the real cap was 15/min, not 30. Nothing documented
+ *     that and nobody chose it.
+ *
+ * So: do not add a handler-level `apiRateLimit` call keyed on IP to any route
+ * under `/api/`. Three deliberate exceptions exist, and all three are there for
+ * their FAILURE MODE rather than for a second budget — middleware fails open,
+ * a bare `.limit()` fails closed, and these are the paths where failing open
+ * costs money or lets a write through:
+ *
+ *   - /api/service-areas/check   (billed Google geocode behind it)
+ *   - /api/delivery-quote        (same, plus a billed Distance Matrix call)
+ *   - /api/customer-addresses/[id] PATCH+DELETE, /api/delivery-requests POST
+ *                                (writes)
+ *
+ * Adding a fourth needs the same justification written next to it: not "this
+ * route should be rate limited" (it already is), but "failing open here is
+ * worse than failing closed, because ___".
+ *
+ * Routes under /api/admin/* are skipped by middleware entirely, so they are
+ * not covered by the edge call and this note does not apply to them.
+ */
 export const apiRateLimit = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(30, "1 m"),

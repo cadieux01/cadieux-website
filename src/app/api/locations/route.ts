@@ -14,24 +14,24 @@
 // unstable_cache with the "pickup-locations" tag, which admin writes
 // invalidate on every change).
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { getActiveLocations } from "@/lib/pickup-locations";
-import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
-export async function GET(req: NextRequest) {
-  // Fail open, deadlined. getActiveLocations() is an unstable_cache'd read of
-  // our own `pickup_locations` table — no Google call despite the geocoding
-  // this directory's coordinates came from, and no write. The billed geocoder
-  // lives behind /api/service-areas/check, not here, which is why these two
-  // neighbouring routes are classified differently.
-  const ok = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
-  if (!ok) {
-    return NextResponse.json(
-      { error: "Rate limit exceeded" },
-      { status: 429 },
-    );
-  }
+export async function GET() {
+  // NO route-level rate limit here, deliberately. middleware.ts matches
+  // `/api/:path*` and already applies apiRateLimit to this request on the same
+  // IP key and the same bucket, so a call here was the same control run twice:
+  // two Redis round-trips and two tokens off a 30/min budget. See the RUN THIS
+  // ONCE note on apiRateLimit in lib/ratelimit.ts before re-adding it.
+  //
+  // Nothing on this route needs a fail-CLOSED limiter either, which is what
+  // the exceptions keep theirs for. getActiveLocations() is an
+  // unstable_cache'd read of our own `pickup_locations` table — no Google call
+  // despite the geocoding this directory's coordinates came from, and no
+  // write. The billed geocoder lives behind /api/service-areas/check and
+  // /api/delivery-quote, not here, which is why this route and its neighbours
+  // are treated differently.
 
   const rows = await getActiveLocations();
   const locations = rows.map((r) => ({

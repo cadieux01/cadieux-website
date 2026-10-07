@@ -30,7 +30,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, maskPhone } from "@/lib/phone-cookie";
-import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 import { recordAuditEvent } from "@/lib/audit-log";
 
 const supabase = createClient(
@@ -96,21 +95,16 @@ function normalizePhone(raw: string): string {
 
 // GET: list all saved addresses for the caller's phone, default first.
 export async function GET(request: NextRequest) {
-  // Fail open, deadlined — GET only. This reads `addresses` from our own
-  // Postgres: nothing billed, nothing written.
+  // NO route-level rate limit here, deliberately. middleware.ts matches
+  // `/api/:path*` and already applies apiRateLimit to this request on the same
+  // IP key and the same bucket, so a call here was the same control run twice:
+  // two Redis round-trips and two tokens off a 30/min budget. See the RUN THIS
+  // ONCE note on apiRateLimit in lib/ratelimit.ts before re-adding it.
   //
-  // The PATCH/DELETE in ./[id] are writes and are deliberately left on the
-  // bare `.limit()` — loosening a limiter in front of a write is a separate
-  // decision from fixing a read. (The POST below has no route-level limiter
-  // at all and leans entirely on the edge limiter in middleware.ts; that is
-  // noted, not changed here, for the same reason.)
-  const notRateLimited = await allowedOrFailOpen(
-    apiRateLimit,
-    getClientIP(request),
-  );
-  if (!notRateLimited) {
-    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
-  }
+  // The PATCH/DELETE in ./[id] DO keep a route-level bare `.limit()`, and that
+  // is not an oversight: they are writes, so failing closed on a limiter
+  // outage is the safer side, and the edge call fails open. Same control, but
+  // kept for its failure mode rather than for a second budget.
 
   const rawPhone = request.nextUrl.searchParams.get("phone");
   if (!rawPhone) {

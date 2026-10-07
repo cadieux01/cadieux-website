@@ -6,7 +6,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/admin-auth";
-import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
 type Row = {
   id: string;
@@ -26,16 +25,15 @@ function normalizePhoneDigits(raw: string | null): string | null {
 }
 
 export async function GET(req: NextRequest) {
-  // Fail open, deadlined — reads delivery_requests out of our own Postgres,
-  // nothing billed and nothing written. This sits on /cart, so a stall here
-  // is a stall in front of buying.
-  const ok = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
-  if (!ok) {
-    return NextResponse.json(
-      { error: "Rate limit exceeded" },
-      { status: 429 },
-    );
-  }
+  // NO route-level rate limit here, deliberately. middleware.ts matches
+  // `/api/:path*` and already applies apiRateLimit to this request on the same
+  // IP key and the same bucket, so a call here was the same control run twice:
+  // two Redis round-trips and two tokens off a 30/min budget. This route sits
+  // on /cart, so that was a stall and a halved budget directly in front of
+  // buying. See the RUN THIS ONCE note on apiRateLimit in lib/ratelimit.ts.
+  //
+  // The sibling POST in ../route.ts keeps its bare `.limit()`: it is a write,
+  // so failing closed is the safer side there and the edge call fails open.
 
   const phone = normalizePhoneDigits(req.nextUrl.searchParams.get("phone"));
   if (!phone) {

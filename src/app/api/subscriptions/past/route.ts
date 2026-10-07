@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone, maskPhone } from "@/lib/phone-cookie";
-import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
@@ -16,12 +15,11 @@ const supabaseAdmin = createClient(
 // badges to differentiate. Live tracking still happens on /api/subscriptions
 // which filters to non-finished rows for the active dashboard.
 export async function GET(req: NextRequest) {
-  // Fail open — see the note on /api/checkout's GET. A bare `.limit()`
-  // throws when Upstash is unreachable, which makes a read route 500.
-  const notRateLimited = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
-  if (!notRateLimited) {
-    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
-  }
+  // NO route-level rate limit here, deliberately. middleware.ts matches
+  // `/api/:path*` and already applies apiRateLimit to this request on the same
+  // IP key and the same bucket, so a call here was the same control run twice:
+  // two Redis round-trips and two tokens off a 30/min budget. See the RUN THIS
+  // ONCE note on apiRateLimit in lib/ratelimit.ts before re-adding it.
 
   const phoneRaw = req.nextUrl.searchParams.get("phone");
   if (!phoneRaw) return NextResponse.json({ subscriptions: [] });

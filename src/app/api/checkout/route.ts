@@ -12,7 +12,6 @@ import {
 } from "@/lib/phone-cookie";
 import {
   allowedOrFailOpen,
-  apiRateLimit,
   getClientIP,
   ORDER_PHONE_LIMIT_MESSAGE,
   orderPhoneRateLimit,
@@ -123,22 +122,23 @@ function rolled(req: NextRequest, res: NextResponse): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
-  // IP rate limit regardless of outcome — a bare phone in the query
-  // string used to hand back a customer's name + address, so this
-  // endpoint was trivially enumerable. Cap the enumeration rate first.
+  // NO route-level rate limit here, deliberately. This GET IS rate limited —
+  // middleware.ts matches `/api/:path*` and applies apiRateLimit on the same
+  // IP key and the same bucket before this handler runs. The call that used to
+  // sit here was therefore the same control run twice: two Redis round-trips
+  // and two tokens off a 30/min budget. See the RUN THIS ONCE note on
+  // apiRateLimit in lib/ratelimit.ts before re-adding it.
   //
-  // FAIL OPEN. This was a bare `apiRateLimit.limit()`, and Upstash is a
-  // network dependency: when it is unreachable the SDK retries and then
-  // THROWS, which in a route handler is a 500. Measured against an
-  // unreachable limiter, this route answered 500 after 8.6s — so an
-  // Upstash outage did not degrade order history, it removed it, and the
-  // customer got a spinner for nine seconds followed by nothing they
-  // could act on. The POST half of this same file has used
-  // allowedOrFailOpen since it was written; the GET half never did.
-  const notRateLimited = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
-  if (!notRateLimited) {
-    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
-  }
+  // The enumeration concern that put a limiter here is real and is NOT
+  // weakened by this: a bare phone in the query string used to hand back a
+  // customer's name + address. Two things answer it now — the edge limiter
+  // still caps the rate, and the AUTH GATE below means an unverified caller
+  // gets a 401 rather than anybody's record. Rate limiting was never the thing
+  // protecting that data.
+  //
+  // The POST half of this file keeps its own limiters, and they are DIFFERENT
+  // controls, not this one: orderRateLimit / orderPhoneRateLimit on separate
+  // prefixes, one of them keyed on phone rather than IP.
 
   const phone = req.nextUrl.searchParams.get("phone");
   if (!phone) return NextResponse.json({ customer: null, phone_verified: false });

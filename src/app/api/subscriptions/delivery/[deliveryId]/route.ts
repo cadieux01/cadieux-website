@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
-import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 import { isHiddenSubscription } from "@/lib/subscription-visibility";
 
 const supabaseAdmin = createClient(
@@ -27,12 +26,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { deliveryId: string } }
 ) {
-  // Fail open, deadlined — own Postgres only, and polled every 10s. See
-  // /api/subscriptions/[id].
-  const notRateLimited = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
-  if (!notRateLimited) {
-    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
-  }
+  // NO route-level rate limit here, deliberately — the edge limiter in
+  // middleware.ts already applies apiRateLimit on the same IP key and the same
+  // bucket, and this route is polled every 10s. See /api/subscriptions/[id]
+  // and the RUN THIS ONCE note on apiRateLimit in lib/ratelimit.ts.
 
   const { deliveryId } = params;
 

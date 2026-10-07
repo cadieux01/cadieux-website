@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { isHiddenSubscription } from "@/lib/subscription-visibility";
-import { allowedOrFailOpen, apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,14 +26,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  // Fail open, deadlined. This handler reads only our own Postgres — no
-  // billed third-party call, no write — so an unreachable limiter must not
-  // cost the customer their tracking page. The deadline matters especially
-  // here: the page polls this route every 10s.
-  const notRateLimited = await allowedOrFailOpen(apiRateLimit, getClientIP(req));
-  if (!notRateLimited) {
-    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
-  }
+  // NO route-level rate limit here, deliberately. middleware.ts matches
+  // `/api/:path*` and already applies apiRateLimit to this request on the same
+  // IP key and the same bucket, so a call here was the same control run twice:
+  // two Redis round-trips and two tokens off a 30/min budget. That cost landed
+  // hardest on this route, which the tracking page polls every 10s. See the
+  // RUN THIS ONCE note on apiRateLimit in lib/ratelimit.ts before re-adding it.
 
   const { id } = params;
 
