@@ -14,12 +14,11 @@
 //     re-validate here in case the API is hit directly.
 
 import { NextRequest, NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { geocodeArea } from "@/lib/geocode";
-import { SERVICE_AREAS_TAG, normalizePincode } from "@/lib/service-areas";
+import { invalidateServiceAreas, normalizePincode } from "@/lib/service-areas";
 
 const DELAY_MS = 150;
 const DEFAULT_AREA = "Vizag";
@@ -176,7 +175,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: upsertErr.message }, { status: 500 });
   }
 
-  revalidateTag(SERVICE_AREAS_TAG);
+  await invalidateServiceAreas(rows.map((r) => r.pincode));
 
   const summary = {
     added: rows.length,

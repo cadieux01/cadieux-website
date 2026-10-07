@@ -5,11 +5,10 @@
 // 50-pincode bulk action stays a single round-trip.
 
 import { NextRequest, NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { SERVICE_AREAS_TAG, normalizePincode } from "@/lib/service-areas";
+import { invalidateServiceAreas, normalizePincode } from "@/lib/service-areas";
 
 type BulkBody = {
   action?: unknown;
@@ -69,7 +68,10 @@ export async function POST(req: NextRequest) {
   );
   const failedPincodes = pincodes.filter((p) => !updatedPincodes.includes(p));
 
-  revalidateTag(SERVICE_AREAS_TAG);
+  // Every pincode the operator asked for, not just the ones that matched a
+  // row. A requested-but-unmatched pincode is exactly the case where someone
+  // is about to add it, and dropping a key that was not there costs nothing.
+  await invalidateServiceAreas(pincodes);
 
   void recordAuditEvent({
     req,

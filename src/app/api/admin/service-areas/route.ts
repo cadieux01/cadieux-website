@@ -4,12 +4,11 @@
 // proximity auto-approve can use them.
 
 import { NextRequest, NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { geocodeArea } from "@/lib/geocode";
-import { SERVICE_AREAS_TAG, normalizePincode } from "@/lib/service-areas";
+import { invalidateServiceAreas, normalizePincode } from "@/lib/service-areas";
 
 export async function GET(req: NextRequest) {
   if (!isAdmin(req)) {
@@ -90,7 +89,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  revalidateTag(SERVICE_AREAS_TAG);
+  await invalidateServiceAreas(rows.map((r) => r.pincode));
 
   const geocodedCount = rows.filter((r) => r.latitude !== null).length;
 

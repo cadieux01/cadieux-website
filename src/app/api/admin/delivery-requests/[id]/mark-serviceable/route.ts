@@ -10,12 +10,11 @@
 //   4. Records an audit event.
 
 import { NextRequest, NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { internalJsonHeaders } from "@/lib/internal-secret";
-import { SERVICE_AREAS_TAG } from "@/lib/service-areas";
+import { invalidateServiceAreas } from "@/lib/service-areas";
 
 async function sendWhatsApp(req: NextRequest, phone: string, message: string) {
   try {
@@ -82,7 +81,11 @@ export async function POST(
     console.error("[delivery-requests] service_areas upsert failed:", upsertErr.message);
     return NextResponse.json({ error: upsertErr.message }, { status: 500 });
   }
-  revalidateTag(SERVICE_AREAS_TAG);
+  // Drops any cached "no such pincode" verdict as well as the tagged read
+  // cache. This route is the one an operator uses to answer a customer who
+  // asked us to deliver to their area, so a stale negative here would keep
+  // refusing the exact person we just said yes to.
+  await invalidateServiceAreas([pincode]);
 
   // Update the request row.
   const { error: updateErr } = await supabaseAdmin

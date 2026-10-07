@@ -12,6 +12,7 @@
 //   200  { serviceable: false, feeInr: 0,      distanceKm: number }   out of range
 //   200  { serviceable: null,  feeInr: null,   distanceKm: null,
 //          message: "..." }                                             no coords
+//   429  { error: "..." }                                               rate limited
 //   503  { error: "..." }                                               no pricing origin
 
 import { NextRequest, NextResponse } from "next/server";
@@ -19,10 +20,47 @@ import { NextRequest, NextResponse } from "next/server";
 import { computeDeliveryFee } from "@/lib/deliveryFee";
 import { getDrivingDistanceKm, hasPricingOrigin } from "@/lib/distanceMatrix";
 import { geocodePincode } from "@/lib/geocode";
+import { apiRateLimit, getClientIP } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  // DO NOT WRAP THIS IN allowedOrFailOpen, and do not delete it as a duplicate
+  // of the edge limiter. It is neither.
+  //
+  // Yes, middleware.ts already applies apiRateLimit on this same bucket and
+  // key, and on any other read route that would make this a redundant second
+  // call — see the RUN THIS ONCE note in lib/ratelimit.ts. This route is one of
+  // the three exceptions, and it is here for the FAILURE MODE, not for a
+  // second budget: the edge call fails OPEN by design, and failing open in
+  // front of this handler costs real money.
+  //
+  // Both branches below reach a BILLED Google API with no spending cap in
+  // front of them:
+  //   * ?lat&lng  -> getDrivingDistanceKm (Distance Matrix), which has NO
+  //                  cache at all (lib/distanceMatrix.ts uses
+  //                  `cache: "no-store"`) over an unbounded coordinate space.
+  //   * ?pincode  -> geocodePincode (Geocoding), then Distance Matrix on top.
+  //
+  // This route was PUBLIC, UNAUTHENTICATED and had NO route-level limiter at
+  // all — measured at one limiter call per request against a counting stub,
+  // versus two on its neighbours — so with Upstash unreachable the edge
+  // limiter failed open and this was the cheapest path in the app to an
+  // unbounded Google bill. Strictly cheaper than /api/service-areas/check,
+  // which at least fails closed.
+  //
+  // A bare `.limit()` throws when Upstash is unreachable, which 500s the
+  // request. That is the intended behaviour here: the customer loses a fee
+  // preview and retries, and nobody is billed. An outage must not become an
+  // invoice.
+  const { success: notRateLimited } = await apiRateLimit.limit(getClientIP(req));
+  if (!notRateLimited) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Please slow down." },
+      { status: 429 },
+    );
+  }
+
   const { searchParams } = req.nextUrl;
   const rawLat = searchParams.get("lat");
   const rawLng = searchParams.get("lng");

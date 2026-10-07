@@ -1,14 +1,45 @@
 // Live serviceability helper. Reads service_areas via the service-role
 // client, cached by Next's data cache under the "service-areas" tag.
-// Every admin write to service_areas calls revalidateTag("service-areas")
+// Every admin write to service_areas calls invalidateServiceAreas() below
 // so the public /api/service-areas/check picks up changes immediately.
 
-import { unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 
 import { supabaseAdmin } from "@/lib/admin-auth";
-import { geocodePincode, haversineKm } from "@/lib/geocode";
+import {
+  dropNegativeGeocodes,
+  geocodePincode,
+  haversineKm,
+} from "@/lib/geocode";
 
 export const SERVICE_AREAS_TAG = "service-areas";
+
+/**
+ * The one way to publish a service_areas write.
+ *
+ * Two caches go stale on an admin write and they have to go stale together:
+ *
+ *   1. Next's data cache, tagged SERVICE_AREAS_TAG (the reads below).
+ *   2. The negative geocode cache in lib/geocode.ts. geocodePincode's fallback
+ *      leg reads service_areas, so activating an area can make a pincode
+ *      resolvable that Google alone could not — and a stale negative would go
+ *      on telling that customer "we don't deliver there" after we started to.
+ *
+ * Every admin write already called revalidateTag(SERVICE_AREAS_TAG), at eight
+ * sites, which is the only reason this could be centralised cheaply. Those
+ * calls were replaced with this function so the pair cannot drift apart: the
+ * next write path added gets both, or neither, rather than quietly getting one.
+ *
+ * Pass every pincode the write touched. Over-invalidating is free — the cost of
+ * an unnecessary drop is one re-geocode — so deactivations and deletes call
+ * this too rather than reasoning about which direction the change went.
+ */
+export async function invalidateServiceAreas(
+  pincodes: readonly string[],
+): Promise<void> {
+  revalidateTag(SERVICE_AREAS_TAG);
+  await dropNegativeGeocodes(pincodes);
+}
 
 // Customers within this many km of an active area are auto-approved
 // even if their pincode isn't explicitly in service_areas.

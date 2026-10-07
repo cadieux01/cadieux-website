@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { SERVICE_AREAS_TAG, normalizePincode } from "@/lib/service-areas";
+import { invalidateServiceAreas, normalizePincode } from "@/lib/service-areas";
 
 export async function POST(
   req: NextRequest,
@@ -27,7 +26,7 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  revalidateTag(SERVICE_AREAS_TAG);
+  await invalidateServiceAreas([pincode]);
 
   void recordAuditEvent({
     req,

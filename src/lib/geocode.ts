@@ -12,7 +12,102 @@
 // Places + Geocoding enabled on the GCP project. When no key is set we
 // return null silently so the rest of the flow degrades gracefully.
 
+import { Redis } from "@upstash/redis";
+
 import { supabaseAdmin } from "@/lib/admin-auth";
+
+// ---------------------------------------------------------------------------
+// NEGATIVE GEOCODE CACHE
+//
+// pincode_geocache only ever held SUCCESSES: geocodePincode returned early on
+// a null result, so a well-formed but non-existent 6-digit pincode resolved to
+// nothing, cached nothing, and was re-sent to a BILLED Google Geocoding call on
+// every single request. Verified against prod: 625 rows, zero of them negative.
+// Across a 900k-pincode keyspace that is an unbounded bill for a fixed, tiny
+// set of real answers.
+//
+// Why Redis and not a column: pincode_geocache declares
+// `latitude/longitude double precision NOT NULL` (sql/service-areas-geocoding.sql),
+// so there is no nullable column to put a sentinel in and Postgres rejects a
+// null-coordinate row outright. A `not_found boolean` flag — or dropping those
+// NOT NULLs — is a migration, and this change ships without one. Upstash is
+// already a hard dependency of every API request via the rate limiter, so this
+// adds no new service, no new env var and no new failure mode.
+//
+// The sentinel resolves to NULL, never to coordinates. That is deliberate and
+// load-bearing — see the note above negativeHit() in geocodePincode.
+// ---------------------------------------------------------------------------
+
+/** 7 days. See NEGATIVE_TTL_SECONDS for why this is a backstop, not the
+ *  invalidation story. */
+export const NEGATIVE_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+const negativeRedis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+function negativeKey(pincode: string): string {
+  return `geocache:neg:${pincode}`;
+}
+
+/**
+ * Has this pincode already been proven not to exist?
+ *
+ * Fails OPEN (returns false, i.e. "no cached negative") on any Redis problem.
+ * A broken negative cache must never invent a serviceability answer; the worst
+ * it may do is let the request fall through to the behaviour we had before.
+ */
+async function hasNegative(pincode: string): Promise<boolean> {
+  try {
+    return (await negativeRedis.exists(negativeKey(pincode))) === 1;
+  } catch (e) {
+    console.warn("[geocode] negative-cache read failed:", String(e));
+    return false;
+  }
+}
+
+/** Record that Google authoritatively has no such pincode. Never blocks the
+ *  caller, never throws. */
+function rememberNegative(pincode: string): void {
+  void negativeRedis
+    .set(negativeKey(pincode), Date.now(), { ex: NEGATIVE_TTL_SECONDS })
+    .catch((e: unknown) =>
+      console.warn("[geocode] negative-cache write failed:", String(e)),
+    );
+}
+
+/**
+ * Drop the cached "no such pincode" verdicts for these pincodes.
+ *
+ * Call this whenever `service_areas` changes, because geocodePincode's fallback
+ * leg (geocodeFromServiceAreas) reads that table — so admin activating an area
+ * can make a pincode resolvable that Google alone could not, and a stale
+ * negative would keep answering "we don't deliver there" after we started to.
+ * The TTL above is only a backstop for the case nobody thought to invalidate.
+ *
+ * Wired into invalidateServiceAreas() in lib/service-areas.ts, which replaced
+ * the bare revalidateTag(SERVICE_AREAS_TAG) calls precisely so these two
+ * invalidations cannot drift apart.
+ */
+export async function dropNegativeGeocodes(
+  pincodes: readonly string[],
+): Promise<void> {
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  for (const p of pincodes) {
+    if (!/^\d{6}$/.test(p) || seen.has(p)) continue;
+    seen.add(p);
+    keys.push(negativeKey(p));
+  }
+  if (keys.length === 0) return;
+  try {
+    await negativeRedis.del(...keys);
+  } catch (e) {
+    // Non-fatal: the TTL still expires the stale verdict within a week.
+    console.warn("[geocode] negative-cache invalidation failed:", String(e));
+  }
+}
 
 function getApiKey(): string | null {
   return (
@@ -47,13 +142,35 @@ function pickComponent(
   return hit?.long_name ?? null;
 }
 
+/**
+ * Why this is a three-way result and not `T | null`.
+ *
+ * The negative cache may only record an answer Google is AUTHORITATIVE about.
+ * ZERO_RESULTS means "there is no such postal code in India" — a fact, stable
+ * enough to cache. Everything else that used to collapse into the same `null`
+ * is a statement about US, not about the pincode: a missing API key, an HTTP
+ * error, a thrown fetch, OVER_QUERY_LIMIT, REQUEST_DENIED.
+ *
+ * Caching those as negatives is how a cost fix becomes an outage: one Google
+ * blip, or a deploy that forgets GOOGLE_MAPS_API_KEY, and we would persist
+ * "unserviceable" for seven days for every pincode a customer happened to try
+ * during it — and keep serving it long after Google recovered. `unavailable`
+ * exists so that path writes nothing.
+ */
+type GoogleGeocodeOutcome =
+  | { kind: "ok"; result: GoogleGeocodeResult }
+  /** Google answered, authoritatively, that no such place exists. */
+  | { kind: "zero_results" }
+  /** We could not get an answer. Says nothing about the pincode. */
+  | { kind: "unavailable"; detail: string };
+
 async function callGoogle(
   params: { address?: string; components?: string },
-): Promise<GoogleGeocodeResult | null> {
+): Promise<GoogleGeocodeOutcome> {
   const key = getApiKey();
   if (!key) {
     console.warn("[geocode] no Google Maps API key in env — skipping");
-    return null;
+    return { kind: "unavailable", detail: "no_api_key" };
   }
   const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
   if (params.address) url.searchParams.set("address", params.address);
@@ -64,19 +181,22 @@ async function callGoogle(
     const r = await fetch(url, { cache: "no-store" });
     if (!r.ok) {
       console.warn("[geocode] HTTP", r.status);
-      return null;
+      return { kind: "unavailable", detail: `http_${r.status}` };
     }
     const json = (await r.json()) as GoogleGeocodeResponse;
-    if (json.status !== "OK" || !json.results?.length) {
-      if (json.status !== "ZERO_RESULTS") {
-        console.warn("[geocode] status:", json.status);
-      }
-      return null;
+    if (json.status === "ZERO_RESULTS") {
+      return { kind: "zero_results" };
     }
-    return json.results[0];
+    if (json.status !== "OK" || !json.results?.length) {
+      console.warn("[geocode] status:", json.status);
+      // Includes OVER_QUERY_LIMIT / REQUEST_DENIED / INVALID_REQUEST, and the
+      // odd OK-with-empty-results. None of these are facts about the pincode.
+      return { kind: "unavailable", detail: json.status || "empty_results" };
+    }
+    return { kind: "ok", result: json.results[0] };
   } catch (e) {
     console.warn("[geocode] fetch failed:", String(e));
-    return null;
+    return { kind: "unavailable", detail: "fetch_failed" };
   }
 }
 
@@ -95,8 +215,12 @@ export async function geocodeArea(
   if (pincode) parts.push(pincode);
   parts.push("Visakhapatnam", "India");
   const address = parts.filter(Boolean).join(", ");
-  const result = await callGoogle({ address });
-  if (!result?.geometry?.location) return null;
+  // Unchanged behaviour: anything that is not a usable result is still null.
+  // Only geocodePincode needs to tell the failure kinds apart.
+  const outcome = await callGoogle({ address });
+  if (outcome.kind !== "ok") return null;
+  const { result } = outcome;
+  if (!result.geometry?.location) return null;
   return {
     latitude: result.geometry.location.lat,
     longitude: result.geometry.location.lng,
@@ -244,7 +368,13 @@ async function geocodeFromServiceAreas(
   return null;
 }
 
-/** Geocode a customer pincode. Caches forever in pincode_geocache. */
+/**
+ * Geocode a customer pincode.
+ *
+ * Successes cache forever in pincode_geocache. Authoritative failures cache for
+ * NEGATIVE_TTL_SECONDS in Redis — see the NEGATIVE GEOCODE CACHE block at the
+ * top of this file.
+ */
 export async function geocodePincode(
   pincode: string,
 ): Promise<PincodeGeocode | null> {
@@ -260,6 +390,28 @@ export async function geocodePincode(
     return { latitude: cached.latitude, longitude: cached.longitude };
   }
 
+  // Negative cache hit → return NULL, exactly as this function already did
+  // for an unresolvable pincode. We are skipping a billed call, not answering
+  // the serviceability question differently.
+  //
+  // THE SENTINEL MUST NEVER BE COORDINATES. A (0,0) or similar in-band marker
+  // would satisfy the `typeof === "number"` guard above, be handed back as a
+  // real centroid, and then be fed to getDrivingDistanceKm — a SECOND billed
+  // Google API — producing a distance from the Gulf of Guinea and a delivery
+  // fee computed off it. That this is not hypothetical is visible at
+  // api/delivery-quote/route.ts:51, which already guards
+  // `!(lat === 0 && lng === 0)` on its GPS input: somebody has been bitten by
+  // a (0,0) coordinate on this exact path before.
+  //
+  // Returning null keeps every downstream consumer on the path it already
+  // takes for "we could not locate this": resolveServiceability() maps null to
+  // { serviceable: false, reason: "no_match" }, and the three fee consumers
+  // (lib/order-checkout.ts, api/delivery-quote, lib/subscription-delivery-fee)
+  // all treat a null centroid as a refusal rather than a free delivery.
+  if (await hasNegative(pincode)) {
+    return null;
+  }
+
   // Cache miss → call Google. Resolve the EXACT postal code anywhere in
   // India via the components filter — never anchor the query to a city.
   // Anchoring on "Visakhapatnam" used to make Google fall back to the
@@ -269,7 +421,7 @@ export async function geocodePincode(
   // centroid of that pincode, or ZERO_RESULTS when the pincode doesn't
   // exist — which now falls through to the service_areas check below
   // instead of straight to null.
-  const result = await callGoogle({
+  const outcome = await callGoogle({
     components: `country:IN|postal_code:${pincode}`,
   });
 
@@ -277,13 +429,32 @@ export async function geocodePincode(
   // API key). Before giving up, check whether admin has already geocoded an
   // active area on this pincode — see geocodeFromServiceAreas for why that
   // read is guarded rather than trusted.
-  const out = result?.geometry?.location
-    ? {
-        latitude: result.geometry.location.lat,
-        longitude: result.geometry.location.lng,
-      }
-    : await geocodeFromServiceAreas(pincode);
-  if (!out) return null;
+  const out =
+    outcome.kind === "ok" && outcome.result.geometry?.location
+      ? {
+          latitude: outcome.result.geometry.location.lat,
+          longitude: outcome.result.geometry.location.lng,
+        }
+      : await geocodeFromServiceAreas(pincode);
+
+  if (!out) {
+    // Only now do we know enough to cache a negative, and only for one of the
+    // two reasons we can be here. BOTH conditions are required:
+    //
+    //   1. Google said ZERO_RESULTS — an authoritative "no such Indian postal
+    //      code", not an outage, a bad key or a quota wall. An `unavailable`
+    //      outcome writes nothing and is simply re-tried next request, which
+    //      is the pre-existing behaviour.
+    //   2. geocodeFromServiceAreas also found nothing, so no active admin area
+    //      can locate it either. If it had, we would not be in this branch.
+    //
+    // Condition 2 is why dropNegativeGeocodes exists: a later admin write can
+    // change that second answer, and the cached verdict has to go with it.
+    if (outcome.kind === "zero_results") {
+      rememberNegative(pincode);
+    }
+    return null;
+  }
 
   // Persist cache. Don't block the caller if this fails.
   void supabaseAdmin

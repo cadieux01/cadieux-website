@@ -20,12 +20,11 @@
 //     resolve.
 
 import { NextRequest, NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { geocodeArea } from "@/lib/geocode";
-import { SERVICE_AREAS_TAG } from "@/lib/service-areas";
+import { invalidateServiceAreas } from "@/lib/service-areas";
 
 const DELAY_MS = 150;
 
@@ -96,7 +95,13 @@ export async function POST(req: NextRequest) {
   }
 
   if (geocoded > 0) {
-    revalidateTag(SERVICE_AREAS_TAG);
+    // The sharpest case for dropping negatives. This route gives COORDINATES
+    // to rows that had none, and coordinates are exactly what geocodePincode's
+    // service_areas fallback requires — so a pincode that was cached negative
+    // (Google ZERO_RESULTS, no usable admin row) can start resolving the
+    // instant this finishes. Over-invalidate across every row processed rather
+    // than tracking which individual updates landed.
+    await invalidateServiceAreas(rows.map((r) => r.pincode));
   }
 
   const summary = {
