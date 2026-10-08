@@ -363,7 +363,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
           <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, color: "#024628", fontWeight: 500 }}>
             {avgRating.toFixed(1)}
           </div>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(2,70,40,0.65)" }}>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(2,70,40,0.65)" }}>
             {reviews.length} review{reviews.length === 1 ? "" : "s"}
           </div>
         </div>
@@ -371,7 +371,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
 
       {/* Submission form */}
       <form onSubmit={submitReview} style={formStyle}>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.4em", textTransform: "uppercase", color: "#024628", marginBottom: 14 }}>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: "#024628", marginBottom: 14 }}>
           {scope === "product" ? "Leave a review" : "Share your feedback"}
         </div>
         <div style={{ display: "grid", gap: 10 }}>
@@ -393,7 +393,7 @@ export default function ReviewSection({ productSlug, scope }: Props) {
           )}
           {(scope === "product" || slugChoice) && (
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(2,70,40,0.7)" }}>
                 Rating
               </span>
               <Stars rating={rating} size={20} onChange={setRating} />
@@ -600,7 +600,7 @@ const btnPrimary: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: 14,
   fontWeight: 500,
-  letterSpacing: "0.3em",
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
   cursor: "pointer",
 };
@@ -624,7 +624,7 @@ const dateStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: 14,
   fontWeight: 500,
-  letterSpacing: "0.2em",
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
   color: "rgba(2,70,40,0.6)",
 };
@@ -642,7 +642,7 @@ const pillStyle: React.CSSProperties = {
   fontFamily: "var(--font-body)",
   fontSize: 14,
   fontWeight: 500,
-  letterSpacing: "0.25em",
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
   color: "#024628",
   border: "1px solid #024628",

@@ -141,7 +141,7 @@ export default function Nav({ showSandwich = false }: { showSandwich?: boolean }
           padding: "calc(100px + env(safe-area-inset-top)) calc(28px + env(safe-area-inset-right)) 24px calc(28px + env(safe-area-inset-left))",
           flexShrink: 0,
         }}>
-          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.5em", textTransform: "uppercase", color: "#024628" }}>Menu</p>
+          <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: "#024628" }}>Menu</p>
         </div>
 
         {/* Scrollable nav body — everything below the sticky header.
@@ -199,7 +199,7 @@ export default function Nav({ showSandwich = false }: { showSandwich?: boolean }
               fontFamily: "var(--font-body)",
               fontSize: 14,
               fontWeight: 500,
-              letterSpacing: "0.4em",
+              letterSpacing: "0.06em",
               textTransform: "uppercase",
               color: "rgba(2,70,40,0.6)",
               flexShrink: 0,
