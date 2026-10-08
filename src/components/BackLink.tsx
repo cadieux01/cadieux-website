@@ -125,7 +125,7 @@ export default function BackLink({
         fontFamily: "var(--font-body)",
         fontSize: 14,
         fontWeight: 500,
-        letterSpacing: "0.35em",
+        letterSpacing: "0.06em",
         textTransform: "uppercase",
         color,
         textDecoration: "none",
