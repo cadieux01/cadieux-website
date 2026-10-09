@@ -903,7 +903,18 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               the closing CTA so the seam is invisible. */}
           <footer style={{
             background: "#024628",
-            padding: "56px 28px 80px",
+            // Bottom padding clears the fixed WhatsApp FAB, which overlaps the
+            // last footer rows once scrolled to the end of the document. The
+            // FAB sits at bottom calc(max(24px, safe-area + 20px) + 68px) and
+            // is 48px tall, so its TOP edge is that same base + 116px above the
+            // viewport bottom. Mirroring the expression (rather than hard-coding
+            // the 140px it evaluates to here) keeps the clearance correct on a
+            // notched device, where the inset pushes the FAB up to 170px.
+            // The +14 on top of 116 (68 lift + 48 height) is one row of this
+            // footer's own `gap`, so the last line clears the button by a real
+            // margin instead of abutting it exactly. Also clears the cart FAB
+            // and the mute toggle, both of which sit lower than this button.
+            padding: "56px 28px calc(max(24px, env(safe-area-inset-bottom) + 20px) + 130px)",
             display: "flex", justifyContent: "center",
             position: "relative",
             zIndex: 3,
