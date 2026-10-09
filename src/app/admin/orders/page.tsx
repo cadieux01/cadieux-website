@@ -41,6 +41,7 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ZoneBadge } from "@/components/admin/ZoneBadge";
 import { adminAuthHeaders, adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
+import { resolveExportScope } from "@/lib/export-scope";
 import { itemQty, itemSlug } from "@/lib/order-items";
 import {
   PRODUCT_NAMES,
@@ -441,6 +442,128 @@ function AdminLoading() {
 // `[role="option"]`/`[role="combobox"]` cover the custom Select widget.
 const ROW_INTERACTIVE_SELECTOR =
   'a, button, input, select, textarea, label, [role="button"], [role="combobox"], [role="listbox"], [role="option"]';
+
+// Zone resolution for an arbitrary row set.
+//
+// Lifted out of the board's useMemo because the CSV export has to resolve
+// zones for rows the board has never held — it re-fetches the unbounded
+// table — and a zone filter must mean the same thing on screen and in the
+// file. Pure: same rows + same rules in, same map out.
+function resolveZonesFor(
+  rows: AdminOrderRow[],
+  rules: ZoneRuleSet,
+): Map<string, ZoneResolution> {
+  const m = new Map<string, ZoneResolution>();
+  for (const o of rows) {
+    m.set(
+      o.id,
+      resolveZoneWithSource(
+        {
+          address: o.delivery_address,
+          isPickup: o.fulfillment_type === "pickup",
+          orderId: o.id,
+        },
+        rules,
+      ),
+    );
+  }
+  return m;
+}
+
+/** Everything the board narrows and orders by. Grouped into one object so
+ *  the screen and the export are provably passing the same criteria —
+ *  adding a filter that only one of them honours now requires adding a
+ *  field here, which does not compile until both are updated. */
+type BoardCriteria = {
+  kindTab: "bread" | "sandwich";
+  basis: DateBasis;
+  day: string | null;
+  statusSel: readonly string[];
+  callSel: readonly string[];
+  zoneSel: readonly ZoneKey[];
+  paySel: readonly PaymentView[];
+  repeatOnly: boolean;
+  query: string;
+  sort: SortKey;
+};
+
+// The board's filter + sort, as a pure function of (rows, zones, criteria).
+//
+// Was inline in the `filtered` useMemo. It is out here so the export can
+// apply IDENTICAL narrowing to the unbounded fetch; when this was
+// duplicated the export was free to drift from the screen it was taken
+// from, which is the same class of bug the shared order-filter module
+// already exists to prevent.
+function selectBoardRows(
+  rows: AdminOrderRow[],
+  zoneOf: Map<string, ZoneKey>,
+  rankOf: (o: AdminOrderRow) => number,
+  c: BoardCriteria,
+): AdminOrderRow[] {
+  const kept = rows.filter((o) => {
+    // Bread / Sandwiches tab. NULL is grandfathered as 'bread' — every
+    // row predating the sandwich migration lacks the column and must
+    // still show up under Bread.
+    const kind = (o.order_kind ?? "bread") as "bread" | "sandwich";
+    if (kind !== c.kindTab) return false;
+    if (!matchesDay(orderDateForBasis(o, c.basis), c.day)) return false;
+    // Statuses OR'd, call updates OR'd, zones OR'd, payment buckets OR'd,
+    // the groups AND'd. Shared with the print view so the packing list
+    // can't disagree with the screen it was printed from — see
+    // src/lib/order-filter.ts.
+    const withZone = { ...o, zone: zoneOf.get(o.id) };
+    if (
+      !matchesOrderFilter(
+        withZone,
+        c.statusSel,
+        c.callSel,
+        c.repeatOnly,
+        c.zoneSel,
+        c.paySel,
+      )
+    )
+      return false;
+    // Name, phone and BOTH references. The customer knows public_ref
+    // ("CX-7K4M2P"); order_number ("OLF43", legacy "CDX-00006") is what
+    // is on the bag. Shared with the subscriptions board so one typed
+    // phone number behaves the same on either — see admin-search.ts.
+    return matchesAdminQuery(c.query, [
+      o.customers?.full_name,
+      o.customers?.phone,
+      o.public_ref,
+      o.order_number,
+    ]);
+  });
+
+  return kept.sort((a, b) => {
+    if (c.sort === "delivery_asc") {
+      // Packing list — stays in pure delivery order. Status grouping is
+      // deliberately NOT applied here; it would break the run order.
+      // delivery_date is YYYY-MM-DD (lex-sortable). Rows that
+      // predate the migration fall back to created_at so they
+      // still appear at a stable position in the queue.
+      const aKey = a.delivery_date ?? a.created_at.slice(0, 10);
+      const bKey = b.delivery_date ?? b.created_at.slice(0, 10);
+      const cmp = aKey.localeCompare(bKey);
+      if (cmp !== 0) return cmp;
+      // Tie-break by slot then created_at so packing groups stay
+      // contiguous within a day.
+      const aSlot = a.delivery_slot ?? "";
+      const bSlot = b.delivery_slot ?? "";
+      const slotCmp = aSlot.localeCompare(bSlot);
+      if (slotCmp !== 0) return slotCmp;
+      return a.created_at.localeCompare(b.created_at);
+    }
+    // "Newest first" = status group first, newest-first inside each
+    // group, so delivered and cancelled orders stop pushing live work
+    // down the page. Display only — no status is written. See
+    // orderStatusRank in lib/admin-shared for the group order. A pinned
+    // rank keeps a just-edited row in place (see rankPins).
+    const rankCmp = rankOf(a) - rankOf(b);
+    if (rankCmp !== 0) return rankCmp;
+    return b.created_at.localeCompare(a.created_at);
+  });
+}
 
 function OrdersPageInner() {
   const router = useRouter();
@@ -902,94 +1025,83 @@ function OrdersPageInner() {
   // it. Kept in a parallel map so the ZoneBadge can render a provenance dot
   // for row-overrides and learned rules, and the popover can decide RULE
   // mode vs ROW-PIN mode from the same resolution.
-  const zoneResOf = useMemo(() => {
-    const m = new Map<string, ZoneResolution>();
-    for (const o of orders) {
-      m.set(
-        o.id,
-        resolveZoneWithSource(
-          {
-            address: o.delivery_address,
-            isPickup: o.fulfillment_type === "pickup",
-            orderId: o.id,
-          },
-          zoneRules,
-        ),
-      );
-    }
-    return m;
-  }, [orders, zoneRules]);
+  const zoneResOf = useMemo(
+    () => resolveZonesFor(orders, zoneRules),
+    [orders, zoneRules],
+  );
   const zoneOf = useMemo(() => {
     const m = new Map<string, ZoneKey>();
     zoneResOf.forEach((r, id) => m.set(id, r.zone));
     return m;
   }, [zoneResOf]);
 
-  const filtered = useMemo(() => {
-    const rows = orders.filter((o) => {
-      // Bread / Sandwiches tab. NULL is grandfathered as 'bread' — every
-      // row predating the sandwich migration lacks the column and must
-      // still show up under Bread.
-      const kind = (o.order_kind ?? "bread") as "bread" | "sandwich";
-      if (kind !== kindTab) return false;
-      if (!matchesDay(orderDateForBasis(o, basis), day)) return false;
-      // Statuses OR'd, call updates OR'd, zones OR'd, payment buckets OR'd,
-      // the groups AND'd. Shared with the print view so the packing list
-      // can't disagree with the screen it was printed from — see
-      // src/lib/order-filter.ts.
-      const withZone = { ...o, zone: zoneOf.get(o.id) };
-      if (
-        !matchesOrderFilter(
-          withZone,
-          statusSel,
-          callSel,
-          repeatOnly,
-          zoneSel,
-          paySel,
-        )
-      )
-        return false;
-      // Name, phone and BOTH references. The customer knows public_ref
-      // ("CX-7K4M2P"); order_number ("OLF43", legacy "CDX-00006") is what
-      // is on the bag. Shared with the subscriptions board so one typed
-      // phone number behaves the same on either — see admin-search.ts.
-      return matchesAdminQuery(query, [
-        o.customers?.full_name,
-        o.customers?.phone,
-        o.public_ref,
-        o.order_number,
-      ]);
-    });
+  // One object, consumed by the screen AND by the CSV export. See
+  // BoardCriteria — the export re-applies exactly this to the unbounded
+  // fetch, so "what is on screen" and "what is in the file" cannot drift.
+  const criteria: BoardCriteria = useMemo(
+    () => ({
+      kindTab,
+      basis,
+      day,
+      statusSel,
+      callSel,
+      zoneSel,
+      paySel,
+      repeatOnly,
+      query,
+      sort,
+    }),
+    [kindTab, basis, day, statusSel, callSel, zoneSel, paySel, repeatOnly, query, sort],
+  );
 
-    return rows.sort((a, b) => {
-        if (sort === "delivery_asc") {
-          // Packing list — stays in pure delivery order. Status grouping is
-          // deliberately NOT applied here; it would break the run order.
-          // delivery_date is YYYY-MM-DD (lex-sortable). Rows that
-          // predate the migration fall back to created_at so they
-          // still appear at a stable position in the queue.
-          const aKey = a.delivery_date ?? a.created_at.slice(0, 10);
-          const bKey = b.delivery_date ?? b.created_at.slice(0, 10);
-          const cmp = aKey.localeCompare(bKey);
-          if (cmp !== 0) return cmp;
-          // Tie-break by slot then created_at so packing groups stay
-          // contiguous within a day.
-          const aSlot = a.delivery_slot ?? "";
-          const bSlot = b.delivery_slot ?? "";
-          const slotCmp = aSlot.localeCompare(bSlot);
-          if (slotCmp !== 0) return slotCmp;
-          return a.created_at.localeCompare(b.created_at);
-        }
-        // "Newest first" = status group first, newest-first inside each
-        // group, so delivered and cancelled orders stop pushing live work
-        // down the page. Display only — no status is written. See
-        // orderStatusRank in lib/admin-shared for the group order. A pinned
-        // rank keeps a just-edited row in place (see rankPins).
-        const rankCmp = rankOf(a) - rankOf(b);
-        if (rankCmp !== 0) return rankCmp;
-        return b.created_at.localeCompare(a.created_at);
+  const filtered = useMemo(
+    () => selectBoardRows(orders, zoneOf, rankOf, criteria),
+    [orders, zoneOf, rankOf, criteria],
+  );
+
+  // Export.
+  //
+  // `filtered` is the BOARD's rows, and the board is bounded — so it is
+  // the wrong input for a file. When the response said it was a slice we
+  // re-fetch ?all=1 and re-apply `criteria` to that, which is why the
+  // filter and sort live in selectBoardRows rather than in the useMemo
+  // above. A failure downloads nothing and says so; a 250-row file that
+  // should have held 718 is indistinguishable from a quiet quarter.
+  const [exporting, setExporting] = useState(false);
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    setError(null);
+    try {
+      const scope = await resolveExportScope<AdminOrderRow>({
+        loaded: filtered,
+        total: totalOrders,
+        truncated,
+        label: "orders",
+        fetchAll: async () => {
+          const res = await adminFetch<{ orders: AdminOrderRow[] }>(
+            "/api/admin/orders?all=1",
+          );
+          return res.orders ?? [];
+        },
+        applyFilters: (rows) => {
+          const zones = new Map<string, ZoneKey>();
+          resolveZonesFor(rows, zoneRules).forEach((r, id) =>
+            zones.set(id, r.zone),
+          );
+          return selectBoardRows(rows, zones, rankOf, criteria);
+        },
       });
-  }, [orders, statusSel, callSel, zoneSel, paySel, repeatOnly, query, sort, day, rankOf, basis, zoneOf, kindTab]);
+      exportCsv(scope.rows, totalOrders, scope.note, productNames);
+    } catch (e) {
+      setError(
+        e instanceof AdminFetchError
+          ? `Export failed (${e.message}). Nothing was downloaded.`
+          : "Export failed — nothing was downloaded. Try again.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }, [filtered, totalOrders, truncated, zoneRules, rankOf, criteria, productNames]);
 
   // A restored id is only meaningful if the row is still there — an order
   // can have been cancelled, or the filters can have moved on, while the
@@ -1651,12 +1763,16 @@ function OrdersPageInner() {
           />
           <button
             type="button"
-            onClick={() => exportCsv(filtered, productNames)}
+            onClick={() => void handleExport()}
             className="uppercase"
-            style={chipNeutral}
-            disabled={filtered.length === 0}
+            style={{
+              ...chipNeutral,
+              cursor: exporting ? "wait" : "pointer",
+              opacity: exporting ? 0.6 : 1,
+            }}
+            disabled={exporting || (filtered.length === 0 && !truncated)}
           >
-            Export CSV
+            {exporting ? "EXPORTING…" : "Export CSV"}
           </button>
           <button
             type="button"
@@ -3075,7 +3191,26 @@ function productColumns(rows: AdminOrderRow[], names?: ProductNameMap) {
   }));
 }
 
-function exportCsv(rows: AdminOrderRow[], names?: ProductNameMap): void {
+/**
+ * `total` is the server-side count of ALL orders and `scopeNote` the
+ * sentence from resolveExportScope. Both are required, not optional: the
+ * file has to be able to answer "is this everything?" on its own, months
+ * later, in someone else's spreadsheet. It says so twice —
+ *
+ *   • in the FILENAME, which is the first thing the operator sees and the
+ *     only part that survives being mailed on as an attachment, and
+ *   • in a trailing "Export scope" column repeated on every row, which is
+ *     the only part that survives the file being renamed.
+ *
+ * Belt and braces, because the failure this replaces was silent: a
+ * 250-of-718 file with nothing anywhere admitting it.
+ */
+function exportCsv(
+  rows: AdminOrderRow[],
+  total: number,
+  scopeNote: string,
+  names?: ProductNameMap,
+): void {
   const csv = toCsv(rows, [
     { header: "Order", value: (o) => formatOrderNumber(o) },
     { header: "Order ID", value: (o) => o.id },
@@ -3090,11 +3225,14 @@ function exportCsv(rows: AdminOrderRow[], names?: ProductNameMap): void {
     },
     { header: "Delivery address", value: (o) => o.delivery_address ?? "" },
     { header: "Created", value: (o) => o.created_at },
+    { header: "Export scope", value: () => scopeNote },
     // Appended, never inserted: an existing sheet keyed on column
-    // position keeps working.
+    // position keeps working. This block stays LAST for that reason, so
+    // "Export scope" goes before it — put it after and every new product
+    // in the catalogue would shove the scope column one place right.
     ...productColumns(rows, names),
   ]);
-  downloadCsv(csvFilename("orders"), csv);
+  downloadCsv(csvFilename(`orders-${rows.length}-of-${total}`), csv);
 }
 
 function Placeholder({ children }: { children: React.ReactNode }) {
