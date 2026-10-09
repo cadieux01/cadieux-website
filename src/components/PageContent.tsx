@@ -114,11 +114,34 @@ export default function PageContent({ introActive = false }: { introActive?: boo
        shipped rIC in 16.4 and iOS is the primary surface here, so older
        WebKit falls back to a plain timer. Whichever fires, `started` makes
        this run exactly once. */
+    /* Pin the file the parse-time resource selection already chose.
+
+       load() does not resume the parse's choice — it re-runs the whole
+       selection algorithm over the same <source> list. Codec is stable
+       (canPlayType answers the same every time), but `media` is not: cross
+       the 720px boundary inside the idle window — a phone rotated to
+       landscape is 812px — and (max-width: 720px) stops matching, so the
+       deferred load takes the 1080p pair. 3,727,185 B instead of
+       1,814,271 B: +1,868 KB, for a device whose screen did not get any
+       bigger. Assigning currentSrc makes the deferral byte-identical to
+       what a non-deferred parse would have fetched.
+
+       Nothing is lost by dropping out of the <source> list: selection here
+       is decided by canPlayType up front, not by fetching and failing, so
+       there was never a second candidate to fall through to.
+
+       currentSrc is empty synchronously on insertion and populated on the
+       next task, so it is always set by the time this effect runs; the
+       guard keeps the old behaviour rather than a broken src in the event
+       that it somehow isn't. */
+    const pinnedSrc = v.currentSrc;
+
     let started = false;
     const startLoad = () => {
       if (started) return;
       started = true;
       v.preload = "auto";
+      if (pinnedSrc) v.src = pinnedSrc;
       v.load();
       markVideoStarted(v);
       play();
