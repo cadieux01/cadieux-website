@@ -256,22 +256,31 @@ with p as (
           (now() at time zone 'Asia/Kolkata')::date      as carve_through
 )
 select bucket, n from (
+  -- The three order buckets below carry the SAME pickup exclusion as the
+  -- snapshot and the UPDATE in section 2. The dry run exists so the operator
+  -- can compare it against what the move actually writes, so its predicate
+  -- must not diverge from the UPDATE's — otherwise the comparison is worthless
+  -- on the one day a pickup order is in scope. Three sites, kept in step.
+  --
   -- (a) off the paused morning / midday windows
   select 1 as ord, '(a) orders on 06:00-10:00' as bucket, count(*) as n
     from public.orders o, p
    where o.delivery_slot = '06:00-10:00' and o.delivery_date >= p.move_from
      and coalesce(o.status,'') not in ('cancelled','canceled','delivered')
+     and coalesce(o.fulfillment_type, '') <> 'pickup'
   union all
   select 2, '(a) orders on 10:00-14:00', count(*)
     from public.orders o, p
    where o.delivery_slot = '10:00-14:00' and o.delivery_date >= p.move_from
      and coalesce(o.status,'') not in ('cancelled','canceled','delivered')
+     and coalesce(o.fulfillment_type, '') <> 'pickup'
   -- (b) relabel: already on the OLD evening value
   union all
   select 3, '(b) orders on 16:00-21:00', count(*)
     from public.orders o, p
    where o.delivery_slot = '16:00-21:00' and o.delivery_date >= p.move_from
      and coalesce(o.status,'') not in ('cancelled','canceled','delivered')
+     and coalesce(o.fulfillment_type, '') <> 'pickup'
 
   union all
   select 4, '(a) deliveries, either column on 06:00-10:00 or 10:00-14:00', count(*)
@@ -328,7 +337,48 @@ rollback;
 -- One transaction: all three tables move together or not at all.
 -- Ends in ROLLBACK. Read the verify block, then swap the last two lines.
 -- ===========================================================================
-begin;
+-- ISOLATION: repeatable read, plus an explicit SHARE lock below.
+--
+-- REPEATABLE READ means every statement below — snapshot, the three UPDATEs
+-- and the verify block — sees ONE consistent view. Under the default READ
+-- COMMITTED each statement re-snapshots, so an order edited into scope
+-- between the snapshot and the UPDATE makes verify check 4 read "25 vs 24"
+-- and report FAIL on a move that was actually correct. Observed live: two
+-- admin edits at 22:38 and 22:39 on 9 Oct moved orders 7 Oct -> 12 Oct, +2
+-- in 18 minutes.
+--
+-- IF THIS TRANSACTION ABORTS with "could not serialize access due to
+-- concurrent update" (SQLSTATE 40001): someone edited one of the rows being
+-- moved. That is the CORRECT outcome — a clean abort, not a partial move.
+-- Nothing was written. Just run the whole section again.
+--
+-- The SHARE lock is what handles the other direction, which isolation level
+-- CANNOT: a row entering scope is a phantom, and under REPEATABLE READ alone
+-- the UPDATE would skip it with no error AND the verify block, on the same
+-- snapshot, would not see it either — committing a silent miss. The lock
+-- stops writers for the few ms the move takes, so that cannot arise.
+begin isolation level repeatable read;
+
+-- Both timeouts are bounded because the SHARE lock below stops ALL writers on
+-- public.orders — that includes CUSTOMERS placing orders on the website, not
+-- just the admin board. Fine for a few milliseconds, not fine if anything
+-- hangs.
+--   lock_timeout      we fail fast rather than queueing behind someone else's
+--                     long transaction. A 3 s wait that then aborts is far
+--                     better than an unbounded wait during which checkout is
+--                     already blocked behind us.
+--   statement_timeout a stuck statement cannot hold the orders table against
+--                     live checkout traffic indefinitely.
+-- SET LOCAL, so both revert at COMMIT/ROLLBACK and leak into nothing else.
+set local lock_timeout = '3s';
+set local statement_timeout = '30s';
+
+-- Blocks writers, allows readers: the admin board stays viewable while this
+-- runs. Conflicts with ROW EXCLUSIVE, so a concurrent admin edit or checkout
+-- waits (or hits lock_timeout) instead of interleaving with the move.
+lock table public.orders,
+           public.subscription_deliveries,
+           public.subscriptions in share mode;
 
 -- Run-time constants. The ONLY place a value is named. Nothing below contains
 -- a date literal or an order number.
@@ -342,10 +392,16 @@ select ((now() at time zone 'Asia/Kolkata')::date + 1)          as move_from,
 -- block compares against these rows, so its expectations cannot go stale the
 -- way a written-in number does.
 create temporary table _before on commit drop as
+-- orders.to_move MUST carry the same pickup exclusion as the UPDATE below.
+-- Verify check 4 asserts "orders now on target == orders.to_move"; if only the
+-- UPDATE excluded pickup, then on the first day a pickup order is in scope the
+-- snapshot would count it, the UPDATE would skip it, and the script would FAIL
+-- a correct run — on exactly the day the clause earns its keep.
 select 'orders.to_move' as k, count(*) as n
   from public.orders o, _p p
  where o.delivery_slot = any(p.legacy) and o.delivery_date >= p.move_from
    and coalesce(o.status,'') not in ('cancelled','canceled','delivered')
+   and coalesce(o.fulfillment_type, '') <> 'pickup'
 union all
 select 'orders.carveout', count(*)
   from public.orders o, _p p
@@ -372,12 +428,25 @@ select 'subs.to_move', count(*)
 
 -- ── 1 of 3: one-off orders ──────────────────────────────────────────────
 -- No updated_at column on this table; trg_audit_orders records before/after.
+--
+-- PICKUP IS EXCLUDED. A pickup order has no delivery window, but it can still
+-- be CARRYING one: checkout/page.tsx:1264-1265 sends delivery_date and
+-- delivery_slot unconditionally and order-checkout.ts:552-556 persists them,
+-- so choosing a slot and then toggling to Pickup leaves the slot behind.
+-- 10 of 145 pickup orders hold one today (8 x 10:00-14:00, 2 x 16:00-21:00,
+-- most recently OLF669 on 7 Oct). None is in scope right now, so this clause
+-- is a no-op as written — but one pickup order placed tomorrow WOULD be in
+-- scope, and without this the move would rewrite it into the 3-9 pm DELIVERY
+-- window and tell a collecting customer they are getting a delivery.
+-- `coalesce(..., '')` because the column is nullable and NULL <> 'pickup' is
+-- NULL, not true, which would silently drop every row that has no type set.
 update public.orders o
    set delivery_slot = p.target
   from _p p
  where o.delivery_slot = any(p.legacy)
    and o.delivery_date >= p.move_from
-   and coalesce(o.status,'') not in ('cancelled','canceled','delivered');
+   and coalesce(o.status,'') not in ('cancelled','canceled','delivered')
+   and coalesce(o.fulfillment_type, '') <> 'pickup';
 
 
 -- ── 2 of 3: subscription deliveries ─────────────────────────────────────
