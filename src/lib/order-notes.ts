@@ -202,8 +202,8 @@ export function formatDeliveryEditNote(before: {
  * Empty input → empty map. Never throws — a failure logs and returns
  * an empty map so the list endpoint stays online without notes.
  *
- * Fetches ALL note rows for the passed ids in one round trip and folds
- * them in memory; this keeps the shape flat and avoids one query per row.
+ * Fetches ALL note rows for the passed ids and folds them in memory; this
+ * keeps the shape flat and avoids one query per row.
  */
 export async function aggregateNotesFor(
   supabase: SupabaseClient,
@@ -215,20 +215,48 @@ export async function aggregateNotesFor(
 
   const column = which === "order" ? "order_id" : "subscription_id";
 
-  const { data, error } = await supabase
-    .from("order_notes")
-    .select(`id, ${column}, kind, body, author, created_at`)
-    .in(column, ids)
-    // Newest first, so the first row we see per owner IS the latest note
-    // (any kind), and the first kind='call' row IS the latest call.
-    .order("created_at", { ascending: false });
+  // Chunked because `in.(...)` goes in the URL, and a long URL is a hard
+  // failure, not a slow one. A uuid plus its comma is 37 bytes, and PostgREST
+  // echoes the whole query string back in a `content-location` response
+  // header. Node's fetch caps headers at 16 kB, so past ~430 ids the call
+  // threw UND_ERR_HEADERS_OVERFLOW (after ~9 s of retries), and past ~600 the
+  // gateway rejected the request outright with 400. Measured on production,
+  // 2026-10-09: 200 ids fine (7.4 kB), 400 overflow, 651 Bad Request.
+  //
+  // Because every error path here logs and returns an empty map, the orders
+  // board did not break — it quietly rendered with NO note icons, counts or
+  // last-call chips once the board passed ~430 orders. 200 per chunk keeps
+  // the URL near 7 kB with room to spare, and the chunks go out together.
+  //
+  // Chunks partition the ids, so all of one owner's notes land in exactly one
+  // chunk and the per-chunk ordering below is still enough for the fold.
+  const CHUNK = 200;
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    chunks.push(ids.slice(i, i + CHUNK));
+  }
 
-  if (error) {
-    console.error(`[order-notes aggregate ${which}]`, error.message);
+  const results = await Promise.all(
+    chunks.map((chunk) =>
+      supabase
+        .from("order_notes")
+        .select(`id, ${column}, kind, body, author, created_at`)
+        .in(column, chunk)
+        // Newest first, so the first row we see per owner IS the latest note
+        // (any kind), and the first kind='call' row IS the latest call.
+        .order("created_at", { ascending: false }),
+    ),
+  );
+
+  const failed = results.find((r) => r.error);
+  if (failed?.error) {
+    console.error(`[order-notes aggregate ${which}]`, failed.error.message);
     return out;
   }
 
-  for (const row of (data ?? []) as Array<{
+  const data = results.flatMap((r) => r.data ?? []);
+
+  for (const row of data as Array<{
     order_id?: string | null;
     subscription_id?: string | null;
     kind: string;
