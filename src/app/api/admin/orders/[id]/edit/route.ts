@@ -54,6 +54,7 @@ import { recordAuditEvent } from "@/lib/audit-log";
 import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/delivery-slots";
 import { getDrivingDistanceKm } from "@/lib/distanceMatrix";
 import { formatDate } from "@/lib/admin-formatting";
+import { formatOrderNumber } from "@/lib/order-number";
 import type { AdminOrderItemSnapshot } from "@/lib/admin-shared";
 
 // Client-supplied items are validated line-by-line, then re-emitted
@@ -467,7 +468,11 @@ export async function POST(
     entity: "order",
     action: "update",
     targetId: id,
-    targetLabel: `#${id.slice(0, 8)}`,
+    // OLF code, not a UUID slice. `before` is guaranteed non-null above.
+    targetLabel: formatOrderNumber({
+      id,
+      order_number: before.order_number,
+    }),
     context:
       summaryLines.length > 0
         ? `Admin edit: ${summaryLines.join(" · ")}`

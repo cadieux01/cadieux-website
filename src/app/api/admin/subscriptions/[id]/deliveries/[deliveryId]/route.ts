@@ -35,6 +35,7 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { formatSlotForDisplay, isValidSlotValue } from "@/lib/delivery-slots";
 import { formatDeliveryEditNote } from "@/lib/order-notes";
+import { formatSubscriptionNumber } from "@/lib/order-number";
 import { dayKeyForIsoDate } from "@/lib/subscription-dates";
 
 const ALLOWED_STATUSES = new Set([
@@ -198,23 +199,39 @@ export async function PATCH(
     (before?.scheduled_time_slot ?? null) !== (update.scheduled_time_slot ?? null);
   const schedulingChanged = dateChanged || slotChanged;
 
+  // `subscription_deliveries` has no number column of its own, but
+  // params.id IS the parent subscription — so name THAT, with the date
+  // picking out which of its deliveries this was. "Delivery 3f2a9c01"
+  // identified nothing to anybody reading the audit page.
+  const { data: subRow } = await supabaseAdmin
+    .from("subscriptions")
+    .select("subscription_number")
+    .eq("id", params.id)
+    .maybeSingle();
+  const subLabel = formatSubscriptionNumber({
+    id: params.id,
+    subscription_number: subRow?.subscription_number ?? null,
+  });
+  const labelDate =
+    (update.scheduled_date ??
+      before?.scheduled_date ??
+      before?.delivery_date ??
+      null) as string | null;
+  const deliveryLabel = `${subLabel} delivery${labelDate ? ` ${labelDate}` : ""}`;
+
   // Admin override: scheduling edits bypass both the 12 h 10 m booking
   // rule and the 14 h self-edit rule. We log the new date+slot so the
   // audit page surfaces it clearly.
   let context: string;
   if (schedulingChanged) {
-    const finalDate =
-      (update.scheduled_date ?? before?.scheduled_date ?? null) as string | null;
     const finalSlot =
       (update.scheduled_time_slot ?? before?.scheduled_time_slot ?? null) as string | null;
     const slotLabel = finalSlot ? formatSlotForDisplay(finalSlot) : "—";
-    context = `Admin changed delivery to ${finalDate ?? "—"} ${slotLabel}`;
+    context = `Admin changed ${subLabel} delivery to ${labelDate ?? "—"} ${slotLabel}`;
   } else if (statusChanged) {
-    context = `Delivery status: ${before?.status ?? "—"} → ${update.status as string}`;
+    context = `${deliveryLabel} status: ${before?.status ?? "—"} → ${update.status as string}`;
   } else {
-    // uuid slice, not an OLF/OLS code: subscription_deliveries has no number
-    // column, so there is no human code to switch to here.
-    context = `Updated delivery ${params.deliveryId.slice(0, 8)}`;
+    context = `Updated ${deliveryLabel}`;
   }
 
   void recordAuditEvent({
@@ -222,7 +239,7 @@ export async function PATCH(
     entity: "subscription_delivery",
     action: statusChanged ? "status_change" : "update",
     targetId: params.deliveryId,
-    targetLabel: `Delivery ${params.deliveryId.slice(0, 8)}`,
+    targetLabel: deliveryLabel,
     context,
     meta: {
       subscription_id: params.id,

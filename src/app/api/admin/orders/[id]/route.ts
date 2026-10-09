@@ -8,6 +8,7 @@ import { issueRazorpayRefund } from "@/lib/razorpay-refund";
 import { computeOrderState } from "@/lib/order-state";
 import { notifyPreorderScheduled } from "@/lib/preorder-notify";
 import { isPaidStatus } from "@/lib/payment-label";
+import { formatOrderNumber } from "@/lib/order-number";
 import {
   CONFIRM_OVERRIDE_CODE,
   CONFIRM_OVERRIDE_FIELD,
@@ -453,6 +454,13 @@ export async function PATCH(
     (before?.delivery_slot ?? null) !== (update.delivery_slot ?? null);
   const schedulingChanged = dateChanged || slotChanged;
 
+  // The OLF code, used for both the audit label and the context line
+  // below. `before` carries order_number for exactly this.
+  const orderLabel = formatOrderNumber({
+    id: params.id,
+    order_number: before?.order_number ?? null,
+  });
+
   // Build a human-readable context line that prioritises scheduling
   // edits — these are the ones admins make from phone-call requests
   // and the audit-log page needs to surface clearly.
@@ -485,7 +493,7 @@ export async function PATCH(
         ? ` — DELIVERED WITH THE ONLINE PAYMENT STILL UNPAID (${before?.payment_status ?? "—"}); no cash recorded against it`
         : ``);
   } else {
-    context = `Updated order ${params.id.slice(0, 8)}`;
+    context = `Updated order ${orderLabel}`;
   }
 
   void recordAuditEvent({
@@ -500,7 +508,11 @@ export async function PATCH(
     // are Postgres enums and adding a member is a second migration. The meta
     // below names the event unambiguously.
     targetId: params.id,
-    targetLabel: `#${params.id.slice(0, 8)}`,
+    // The OLF code, not a UUID slice. `targetLabel` is STORED, so this
+    // only improves rows written from here on; the old ones need the
+    // backfill in supabase/migrations/. `targetId` keeps the UUID, so
+    // nothing that joins on it is affected.
+    targetLabel: orderLabel,
     context,
     meta: {
       fields: Object.keys(update),

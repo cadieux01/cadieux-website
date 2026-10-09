@@ -34,6 +34,44 @@ export type CsvColumn<T> = {
   value: (row: T) => unknown;
 };
 
+/**
+ * A column the operator can tick or untick before downloading.
+ *
+ * `key` is the identity used for the saved choice and MUST be stable —
+ * it is deliberately not the header, because headers are display copy
+ * and get reworded. Rename a header freely; rename a key and every saved
+ * selection silently reverts to the defaults.
+ */
+export type CsvColumnSpec<T> = CsvColumn<T> & {
+  key: string;
+  /** Ticked when nobody has chosen for this board yet. */
+  defaultOn: boolean;
+  /** One line under the label, for columns whose presence is a decision
+   *  rather than a preference — e.g. the raw UUID. */
+  hint?: string;
+};
+
+/** The keys that make up a first-run export. */
+export function defaultColumnKeys<T>(
+  specs: readonly CsvColumnSpec<T>[],
+): string[] {
+  return specs.filter((s) => s.defaultOn).map((s) => s.key);
+}
+
+/**
+ * Narrow specs to the operator's choice, preserving SPEC order rather
+ * than tick order — the column layout of a file must not depend on which
+ * box someone happened to tick first.
+ */
+export function applyColumnChoice<T>(
+  specs: readonly CsvColumnSpec<T>[],
+  chosen: ReadonlySet<string>,
+): CsvColumn<T>[] {
+  return specs
+    .filter((s) => chosen.has(s.key))
+    .map(({ header, value }) => ({ header, value }));
+}
+
 export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
   const headerLine = columns.map((c) => escapeCell(c.header)).join(",");
   const lines = rows.map((r) =>

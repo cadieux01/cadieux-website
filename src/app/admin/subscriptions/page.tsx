@@ -103,7 +103,16 @@ import {
   cream,
 } from "@/components/admin/theme";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
-import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
+import { CsvColumnPicker } from "@/components/admin/CsvColumnPicker";
+import {
+  applyColumnChoice,
+  csvFilename,
+  downloadCsv,
+  toCsv,
+  type CsvColumn,
+  type CsvColumnSpec,
+} from "@/lib/admin-csv";
+import { exportScopeNote } from "@/lib/export-scope";
 import {
   addCounts,
   countLines,
@@ -1170,6 +1179,20 @@ function SubscriptionsPageInner() {
     }
   };
 
+  // Export.
+  //
+  // No re-fetch here, unlike the orders board: `load()` already pulls
+  // every subscription (see the comment there) so `subs.length` IS the
+  // server-side total and `filtered` cannot be a bounded slice of it.
+  // The scope sentence is still written into the file — a reader months
+  // later cannot tell which board a CSV came from.
+  const [pickingColumns, setPickingColumns] = useState(false);
+  const exportScope = exportScopeNote({
+    written: filtered.length,
+    total: subs.length,
+    label: "subscriptions",
+  });
+
   return (
     <AdminShell
       title="Subscriptions"
@@ -1178,7 +1201,7 @@ function SubscriptionsPageInner() {
         <>
           <button
             type="button"
-            onClick={() => exportSubsCsv(filtered)}
+            onClick={() => setPickingColumns(true)}
             disabled={filtered.length === 0}
             style={chipNeutral}
           >
@@ -2230,6 +2253,22 @@ function SubscriptionsPageInner() {
             );
           })()
         : null}
+      {pickingColumns ? (
+        <CsvColumnPicker<AdminSubscriptionRow>
+          board="subscriptions"
+          title="Columns to export"
+          // Only keys and headers are read here; the hint map and scope
+          // sentence are needed for the VALUES, which the download builds.
+          specs={subsColumnSpecs(new Map(), "")}
+          busy={false}
+          scopeHint={exportScope}
+          onCancel={() => setPickingColumns(false)}
+          onConfirm={(chosen) => {
+            exportSubsCsv(filtered, subs.length, exportScope, chosen);
+            setPickingColumns(false);
+          }}
+        />
+      ) : null}
     </AdminShell>
   );
 }
@@ -3013,13 +3052,116 @@ const drawerSelect: React.CSSProperties = {
  * Multigrain and shows Plain at zero. The grand total comes out right,
  * which is what made it survive.
  *
- * Replaced with: one readable `Items per delivery` string, then ONE NUMERIC
- * COLUMN PER PRODUCT so the export pivots correctly, then the combined
- * total under its own name. The per-product columns are derived from the
+ * Replaced with: one readable `Items per delivery` string, the combined
+ * total under its own name, and ONE NUMERIC COLUMN PER PRODUCT so the
+ * export pivots correctly. The per-product columns are derived from the
  * rows being exported, not hardcoded, so a third bread needs no code change
  * — and a slice with no subscriptions simply has no column.
  */
-function exportSubsCsv(rows: AdminSubscriptionRow[]): void {
+
+/** As on the orders board: one tick, many columns, because the products
+ *  are not known until the rows are in hand. */
+const SUB_PRODUCT_BLOCK_KEY = "product_per_delivery";
+
+function subsColumnSpecs(
+  hint: Map<string, string>,
+  scopeNote: string,
+): CsvColumnSpec<AdminSubscriptionRow>[] {
+  return [
+    {
+      key: "subscription",
+      header: "Subscription",
+      defaultOn: true,
+      value: (s) => formatSubscriptionNumber(s),
+    },
+    {
+      key: "subscription_id",
+      header: "Subscription ID",
+      defaultOn: false,
+      hint: "Full database UUID. Off by default — only needed for support lookups.",
+      value: (s) => s.id,
+    },
+    {
+      key: "customer",
+      header: "Customer",
+      defaultOn: true,
+      value: (s) => s.customer?.full_name ?? "",
+    },
+    {
+      key: "phone",
+      header: "Phone",
+      defaultOn: true,
+      value: (s) => s.customer?.phone ?? "",
+    },
+    {
+      key: "items",
+      header: "Items per delivery",
+      defaultOn: true,
+      value: (s) => longCountText(countLines(countPlan(s), hint)),
+    },
+    {
+      key: "loaves",
+      header: "Loaves per delivery",
+      defaultOn: true,
+      value: (s) => totalLoaves(countPlan(s)),
+    },
+    { key: "frequency", header: "Frequency", defaultOn: true, value: (s) => s.frequency },
+    {
+      key: "total_weeks",
+      header: "Total weeks",
+      defaultOn: true,
+      value: (s) => s.total_weeks,
+    },
+    { key: "status", header: "Status", defaultOn: true, value: (s) => s.status },
+    {
+      key: "payment_status",
+      header: "Payment status",
+      defaultOn: true,
+      value: (s) => s.payment_status,
+    },
+    {
+      key: "total_amount",
+      header: "Total amount",
+      defaultOn: true,
+      value: (s) => s.total_amount,
+    },
+    { key: "started", header: "Started", defaultOn: true, value: (s) => s.created_at },
+    {
+      key: "derived_end",
+      header: "Derived end",
+      defaultOn: true,
+      value: (s) => s.derived_end_date ?? "",
+    },
+    {
+      key: "remaining",
+      header: "Remaining deliveries",
+      defaultOn: true,
+      value: (s) => s.remaining_deliveries ?? "",
+    },
+    {
+      key: "scope",
+      header: "Export scope",
+      defaultOn: true,
+      hint: "What the file covers, repeated on every row — the only part that survives a rename.",
+      value: () => scopeNote,
+    },
+    {
+      key: SUB_PRODUCT_BLOCK_KEY,
+      header: "Per-product counts per delivery",
+      defaultOn: true,
+      hint: "One column per product, appended last.",
+      // Never called: exportSubsCsv swaps this entry for the real set.
+      value: () => "",
+    },
+  ];
+}
+
+function exportSubsCsv(
+  rows: AdminSubscriptionRow[],
+  total: number,
+  scopeNote: string,
+  chosen: ReadonlySet<string>,
+): void {
   const hint = nameHintFor(rows);
   const perRow = new Map<AdminSubscriptionRow, LoafCounts>();
   const union: LoafCounts = new Map();
@@ -3041,40 +3183,34 @@ function exportSubsCsv(rows: AdminSubscriptionRow[]): void {
     keysByLabel.set(line.label, keys);
   }
 
-  const productColumns = Array.from(keysByLabel.entries()).map(
-    ([label, keys]) => ({
-      header: `${label} per delivery`,
-      value: (s: AdminSubscriptionRow) => {
-        const counts = perRow.get(s);
-        return keys.reduce((n, k) => n + (counts?.get(k) ?? 0), 0);
-      },
-    }),
-  );
+  const productColumns: CsvColumn<AdminSubscriptionRow>[] = Array.from(
+    keysByLabel.entries(),
+  ).map(([label, keys]) => ({
+    header: `${label} per delivery`,
+    value: (s: AdminSubscriptionRow) => {
+      const counts = perRow.get(s);
+      return keys.reduce((n, k) => n + (counts?.get(k) ?? 0), 0);
+    },
+  }));
 
-  const csv = toCsv(rows, [
-    { header: "Subscription", value: (s) => formatSubscriptionNumber(s) },
-    { header: "Subscription ID", value: (s) => s.id },
-    { header: "Customer", value: (s) => s.customer?.full_name ?? "" },
-    { header: "Phone", value: (s) => s.customer?.phone ?? "" },
-    {
-      header: "Items per delivery",
-      value: (s) => longCountText(countLines(countPlan(s), hint)),
-    },
-    ...productColumns,
-    {
-      header: "Loaves per delivery",
-      value: (s) => totalLoaves(countPlan(s)),
-    },
-    { header: "Frequency", value: (s) => s.frequency },
-    { header: "Total weeks", value: (s) => s.total_weeks },
-    { header: "Status", value: (s) => s.status },
-    { header: "Payment status", value: (s) => s.payment_status },
-    { header: "Total amount", value: (s) => s.total_amount },
-    { header: "Started", value: (s) => s.created_at },
-    { header: "Derived end", value: (s) => s.derived_end_date ?? "" },
-    { header: "Remaining deliveries", value: (s) => s.remaining_deliveries ?? "" },
-  ]);
-  downloadCsv(csvFilename("subscriptions"), csv);
+  const specs = subsColumnSpecs(hint, scopeNote);
+  const columns: CsvColumn<AdminSubscriptionRow>[] = [
+    ...applyColumnChoice(
+      specs.filter((s) => s.key !== SUB_PRODUCT_BLOCK_KEY),
+      chosen,
+    ),
+    // MOVED from position 6 to last. These columns are derived from the
+    // exported rows, so their NUMBER varies between exports: inserted
+    // mid-list, adding a third bread silently shifted every column after
+    // it one place right and quietly broke any sheet keyed on position.
+    // Appending cannot do that.
+    ...(chosen.has(SUB_PRODUCT_BLOCK_KEY) ? productColumns : []),
+  ];
+
+  downloadCsv(
+    csvFilename(`subscriptions-${rows.length}-of-${total}`),
+    toCsv(rows, columns),
+  );
 }
 
 function Placeholder({ children }: { children: React.ReactNode }) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { formatSubscriptionNumber } from "@/lib/order-number";
 
 export async function PATCH(
   req: NextRequest,
@@ -20,7 +21,9 @@ export async function PATCH(
 
   const { data: cr } = await supabaseAdmin
     .from("subscription_change_requests")
-    .select("id, delivery_id, requested_date, requested_time_slot, status")
+    .select(
+      "id, subscription_id, delivery_id, requested_date, requested_time_slot, status",
+    )
     .eq("id", params.id)
     .maybeSingle();
   if (!cr) {
@@ -62,12 +65,31 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // `targetId` here is the change request's own id, which has no human
+  // code — so the label names the SUBSCRIPTION it affects instead. That
+  // is the thing an operator reading the audit page is looking for;
+  // "Request 3f2a9c01" identified nothing to anybody.
+  // subscription_change_requests.subscription_id is a direct FK to
+  // subscriptions, so this is one hop, not a walk via the delivery.
+  const { data: subRow } = cr.subscription_id
+    ? await supabaseAdmin
+        .from("subscriptions")
+        .select("subscription_number")
+        .eq("id", cr.subscription_id)
+        .maybeSingle()
+    : { data: null };
+
   void recordAuditEvent({
     req,
     entity: "change_request",
     action: "update",
     targetId: params.id,
-    targetLabel: `Request ${params.id.slice(0, 8)}`,
+    targetLabel: cr.subscription_id
+      ? `Request on ${formatSubscriptionNumber({
+          id: cr.subscription_id,
+          subscription_number: subRow?.subscription_number ?? null,
+        })}`
+      : `Request ${params.id.slice(0, 8)}`,
     context: `Change request ${action}d`,
     meta: {
       action,

@@ -21,6 +21,7 @@ import { recordAuditEvent } from "@/lib/audit-log";
 import { internalJsonHeaders } from "@/lib/internal-secret";
 import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
 import { maskPhone } from "@/lib/phone-cookie";
+import { formatOrderNumber } from "@/lib/order-number";
 import { queueOrderNotification } from "@/lib/order-notification";
 
 const SITE_URL =
@@ -498,7 +499,9 @@ export async function POST(req: NextRequest) {
     entity: "order",
     action: "create",
     targetId: order.id,
-    targetLabel: `#${order.id.slice(0, 8)}`,
+    // OLF code off the INSERT's RETURNING clause — the trigger has
+    // already assigned it by the time this row comes back.
+    targetLabel: formatOrderNumber(order),
     context: `${isTeam ? "[team-PIN] " : ""}Admin manually registered order for ${phoneLocal}${serviceabilityOverride ? " (serviceability override)" : ""}`,
     meta: {
       phone: phoneLocal,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { formatOrderNumber } from "@/lib/order-number";
 import { notifyCustomer } from "@/lib/push";
 import {
   CONFIRM_OVERRIDE_FIELD,
@@ -127,7 +128,9 @@ export async function POST(req: NextRequest) {
       .from("orders")
       .update({ status: nextStatus, status_updated_at: new Date().toISOString() })
       .eq("id", id)
-      .select("id, customer_id, status")
+      // `order_number` rides along on the UPDATE's RETURNING clause, so
+      // the audit label below costs no extra round trip.
+      .select("id, customer_id, status, order_number")
       .maybeSingle();
 
     if (error || !data) {
@@ -136,14 +139,16 @@ export async function POST(req: NextRequest) {
     }
     succeeded.push(data.id);
 
+    const label = formatOrderNumber(data);
+
     void recordAuditEvent({
       req,
       entity: "order",
       action: nextStatus === "cancelled" ? "cancel" : "status_change",
       targetId: data.id,
-      targetLabel: `#${data.id.slice(0, 8)}`,
+      targetLabel: label,
       context:
-        `Bulk ${action} → ${nextStatus} for order ${data.id.slice(0, 8)}` +
+        `Bulk ${action} → ${nextStatus} for order ${label}` +
         // Only say "override" on the rows it actually applied to. The old wording
         // claimed it for every row in the batch, including the already-paid ones
         // the guard was never going to stop.

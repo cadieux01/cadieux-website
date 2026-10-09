@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
+import { formatOrderNumber } from "@/lib/order-number";
 
 // PATCH /api/admin/order-change-requests/[id]
 //   body: { action: "approve" | "reject", admin_response?: string }
@@ -219,12 +220,26 @@ export async function PATCH(
       : cr.type === "address"
         ? "Address"
         : "Delivery";
+  // The OLF code for the audit label. A separate read rather than an
+  // embed on the `cr` select above because that select runs before the
+  // write and this is wanted only for display — and if it fails,
+  // formatOrderNumber falls back to the UUID slice, i.e. exactly the
+  // label this line used to produce unconditionally.
+  const { data: labelRow } = await supabaseAdmin
+    .from("orders")
+    .select("order_number")
+    .eq("id", cr.order_id)
+    .maybeSingle();
+
   void recordAuditEvent({
     req,
     entity: "delivery_request",
     action: "update",
     targetId: cr.order_id,
-    targetLabel: `#${cr.order_id.slice(0, 8)}`,
+    targetLabel: formatOrderNumber({
+      id: cr.order_id,
+      order_number: labelRow?.order_number ?? null,
+    }),
     context: `${typeLabel} change request ${action === "approve" ? "approved" : "rejected"}`,
     meta: {
       change_request_id: params.id,

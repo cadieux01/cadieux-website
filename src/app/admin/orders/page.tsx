@@ -32,6 +32,7 @@ import {
 } from "@/components/admin/ProductionCountStrip";
 import { DayFilter } from "@/components/admin/DayFilter";
 import { ContactActions } from "@/components/admin/ContactActions";
+import { CsvColumnPicker } from "@/components/admin/CsvColumnPicker";
 import { OrderLocationActions } from "@/components/admin/OrderLocationActions";
 import {
   OrderShareButton,
@@ -40,7 +41,14 @@ import {
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ZoneBadge } from "@/components/admin/ZoneBadge";
 import { adminAuthHeaders, adminFetch, AdminFetchError } from "@/lib/admin-client";
-import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
+import {
+  applyColumnChoice,
+  csvFilename,
+  downloadCsv,
+  toCsv,
+  type CsvColumn,
+  type CsvColumnSpec,
+} from "@/lib/admin-csv";
 import { resolveExportScope } from "@/lib/export-scope";
 import { itemQty, itemSlug } from "@/lib/order-items";
 import {
@@ -1068,7 +1076,9 @@ function OrdersPageInner() {
   // above. A failure downloads nothing and says so; a 250-row file that
   // should have held 718 is indistinguishable from a quiet quarter.
   const [exporting, setExporting] = useState(false);
-  const handleExport = useCallback(async () => {
+  const [pickingColumns, setPickingColumns] = useState(false);
+  const handleExport = useCallback(
+    async (chosen: Set<string>) => {
     setExporting(true);
     setError(null);
     try {
@@ -1091,8 +1101,12 @@ function OrdersPageInner() {
           return selectBoardRows(rows, zones, rankOf, criteria);
         },
       });
-      exportCsv(scope.rows, totalOrders, scope.note, productNames);
+      exportCsv(scope.rows, totalOrders, scope.note, chosen, productNames);
+      setPickingColumns(false);
     } catch (e) {
+      // The picker stays open on failure: closing it would leave the
+      // operator with no download, no file and no way back in except
+      // re-ticking everything.
       setError(
         e instanceof AdminFetchError
           ? `Export failed (${e.message}). Nothing was downloaded.`
@@ -1101,7 +1115,25 @@ function OrdersPageInner() {
     } finally {
       setExporting(false);
     }
-  }, [filtered, totalOrders, truncated, zoneRules, rankOf, criteria, productNames]);
+    },
+    [
+      filtered,
+      totalOrders,
+      truncated,
+      zoneRules,
+      rankOf,
+      criteria,
+      productNames,
+    ],
+  );
+
+  // Said BEFORE the download, not only inside the file. On a truncated
+  // board the count the operator can see on screen is NOT what the file
+  // will hold, so promising a number here would be a lie — name the
+  // re-fetch instead.
+  const exportScopeHint = truncated
+    ? `Covers every order matching the current filters, re-fetched in full — not just the ${filtered.length} the board is showing of ${totalOrders}.`
+    : `Covers ${filtered.length} of ${totalOrders} orders (current filters).`;
 
   // A restored id is only meaningful if the row is still there — an order
   // can have been cancelled, or the filters can have moved on, while the
@@ -1763,7 +1795,7 @@ function OrdersPageInner() {
           />
           <button
             type="button"
-            onClick={() => void handleExport()}
+            onClick={() => setPickingColumns(true)}
             className="uppercase"
             style={{
               ...chipNeutral,
@@ -2244,6 +2276,19 @@ function OrdersPageInner() {
             );
           })()
         : null}
+      {pickingColumns ? (
+        <CsvColumnPicker<AdminOrderRow>
+          board="orders"
+          title="Columns to export"
+          // The scope note is a column value, not a column choice, so any
+          // string does here — the picker only reads keys and headers.
+          specs={orderColumnSpecs("")}
+          busy={exporting}
+          scopeHint={exportScopeHint}
+          onCancel={() => setPickingColumns(false)}
+          onConfirm={(chosen) => void handleExport(chosen)}
+        />
+      ) : null}
     </AdminShell>
   );
 }
@@ -3191,6 +3236,104 @@ function productColumns(rows: AdminOrderRow[], names?: ProductNameMap) {
   }));
 }
 
+/** The per-product block is ONE tick in the picker but many columns in
+ *  the file, because the individual products are not known until the
+ *  rows are in hand — and on a truncated board that is only true AFTER
+ *  the unbounded fetch, which happens once the picker has closed. */
+const PRODUCT_BLOCK_KEY = "product_units";
+
+/**
+ * The columns the operator can tick, in file order.
+ *
+ * `scopeNote` is baked into a value function rather than passed to
+ * toCsv separately so that the scope column is pickable like any other
+ * — it is ticked by default and the hint says why leaving it on matters.
+ */
+function orderColumnSpecs(scopeNote: string): CsvColumnSpec<AdminOrderRow>[] {
+  return [
+    {
+      key: "order",
+      header: "Order",
+      defaultOn: true,
+      value: (o) => formatOrderNumber(o),
+    },
+    {
+      key: "order_id",
+      header: "Order ID",
+      defaultOn: false,
+      // Off by default from the day the picker landed: it sat in column
+      // 2 of every export, next to the OLF code, and read as a second
+      // order number. Kept available because support lookups and any
+      // hand-written SQL still need it.
+      hint: "Full database UUID. Off by default — only needed for support lookups.",
+      value: (o) => o.id,
+    },
+    {
+      key: "customer",
+      header: "Customer",
+      defaultOn: true,
+      value: (o) => o.customers?.full_name ?? "",
+    },
+    {
+      key: "phone",
+      header: "Phone",
+      defaultOn: true,
+      value: (o) => o.customers?.phone ?? "",
+    },
+    {
+      key: "total",
+      header: "Total",
+      defaultOn: true,
+      value: (o) => o.total_amount ?? 0,
+    },
+    {
+      key: "status",
+      header: "Status",
+      defaultOn: true,
+      value: (o) => o.status ?? "",
+    },
+    {
+      key: "delivery_date",
+      header: "Delivery date",
+      defaultOn: true,
+      value: (o) => o.delivery_date ?? "",
+    },
+    {
+      key: "delivery_slot",
+      header: "Delivery slot",
+      defaultOn: true,
+      value: (o) => formatSlotForDisplay(o.delivery_slot),
+    },
+    {
+      key: "delivery_address",
+      header: "Delivery address",
+      defaultOn: true,
+      value: (o) => o.delivery_address ?? "",
+    },
+    {
+      key: "created",
+      header: "Created",
+      defaultOn: true,
+      value: (o) => o.created_at,
+    },
+    {
+      key: "scope",
+      header: "Export scope",
+      defaultOn: true,
+      hint: "What the file covers, repeated on every row — the only part that survives a rename.",
+      value: () => scopeNote,
+    },
+    {
+      key: PRODUCT_BLOCK_KEY,
+      header: "Per-product unit counts",
+      defaultOn: true,
+      hint: "One column per product, appended last.",
+      // Never called: exportCsv swaps this entry for the real set.
+      value: () => "",
+    },
+  ];
+}
+
 /**
  * `total` is the server-side count of ALL orders and `scopeNote` the
  * sentence from resolveExportScope. Both are required, not optional: the
@@ -3199,8 +3342,8 @@ function productColumns(rows: AdminOrderRow[], names?: ProductNameMap) {
  *
  *   • in the FILENAME, which is the first thing the operator sees and the
  *     only part that survives being mailed on as an attachment, and
- *   • in a trailing "Export scope" column repeated on every row, which is
- *     the only part that survives the file being renamed.
+ *   • in an "Export scope" column repeated on every row, which is the
+ *     only part that survives the file being renamed.
  *
  * Belt and braces, because the failure this replaces was silent: a
  * 250-of-718 file with nothing anywhere admitting it.
@@ -3209,30 +3352,25 @@ function exportCsv(
   rows: AdminOrderRow[],
   total: number,
   scopeNote: string,
+  chosen: ReadonlySet<string>,
   names?: ProductNameMap,
 ): void {
-  const csv = toCsv(rows, [
-    { header: "Order", value: (o) => formatOrderNumber(o) },
-    { header: "Order ID", value: (o) => o.id },
-    { header: "Customer", value: (o) => o.customers?.full_name ?? "" },
-    { header: "Phone", value: (o) => o.customers?.phone ?? "" },
-    { header: "Total", value: (o) => o.total_amount ?? 0 },
-    { header: "Status", value: (o) => o.status ?? "" },
-    { header: "Delivery date", value: (o) => o.delivery_date ?? "" },
-    {
-      header: "Delivery slot",
-      value: (o) => formatSlotForDisplay(o.delivery_slot),
-    },
-    { header: "Delivery address", value: (o) => o.delivery_address ?? "" },
-    { header: "Created", value: (o) => o.created_at },
-    { header: "Export scope", value: () => scopeNote },
+  const specs = orderColumnSpecs(scopeNote);
+  const columns: CsvColumn<AdminOrderRow>[] = [
+    ...applyColumnChoice(
+      specs.filter((s) => s.key !== PRODUCT_BLOCK_KEY),
+      chosen,
+    ),
     // Appended, never inserted: an existing sheet keyed on column
-    // position keeps working. This block stays LAST for that reason, so
-    // "Export scope" goes before it — put it after and every new product
-    // in the catalogue would shove the scope column one place right.
-    ...productColumns(rows, names),
-  ]);
-  downloadCsv(csvFilename(`orders-${rows.length}-of-${total}`), csv);
+    // position keeps working. This block stays LAST for that reason —
+    // put it anywhere else and every new product in the catalogue would
+    // shove the columns after it one place right.
+    ...(chosen.has(PRODUCT_BLOCK_KEY) ? productColumns(rows, names) : []),
+  ];
+  downloadCsv(
+    csvFilename(`orders-${rows.length}-of-${total}`),
+    toCsv(rows, columns),
+  );
 }
 
 function Placeholder({ children }: { children: React.ReactNode }) {
