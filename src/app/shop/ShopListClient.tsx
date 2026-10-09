@@ -310,7 +310,7 @@ function SubscribePanel() {
 
         <p style={{ fontSize: 16, color: "#024628", lineHeight: 1.55, marginBottom: 18, maxWidth: 460 }}>
           Mix any combination of loaves — one loaf per delivery is enough.
-          Pick your dates in the next step. Deliveries go out from 4 PM.
+          Pick your dates in the next step. Deliveries go out from 3 PM.
         </p>
 
         <Link

@@ -58,10 +58,10 @@ const CADIEUX_PHONE_DIAL = ADMIN_PHONE.replace(/\s/g, "");
 // so the two SEO surfaces state one identical delivery promise. If slot
 // hours change, edit both this file and delivery/[area]/page.tsx.
 //
-// No end time is promised: deliveries go out from 4 pm and the team tells
+// No end time is promised: deliveries go out from 3 pm and the team tells
 // the customer when theirs is actually coming, sometimes sooner.
 const DELIVERY_WINDOW_TEXT =
-  "Fresh delivery daily, evenings from 4 PM IST — we'll message you when yours is on the way.";
+  "Fresh delivery daily, evenings from 3 PM IST — we'll message you when yours is on the way.";
 
 // Rupee formatter — drops decimals for whole numbers so "₹120" stays
 // clean and "₹143.10" keeps its paisa. Mirrors the wizard's fmtMoney.
@@ -77,14 +77,14 @@ function fmtMoney(n: number): string {
 export const metadata: Metadata = {
   title: "Protein Bread Subscription in Visakhapatnam | Cadieux",
   description:
-    "Save 10% on every loaf with a Cadieux subscription. Pick your dates — delivered fresh across Visakhapatnam, evenings from 4 pm.",
+    "Save 10% on every loaf with a Cadieux subscription. Pick your dates — delivered fresh across Visakhapatnam, evenings from 3 pm.",
   alternates: { canonical: "/subscribe" },
   openGraph: {
     type: "website",
     url: `${SITE_URL}/subscribe`,
     title: "Protein Bread Subscription in Visakhapatnam | Cadieux",
     description:
-      "Save 10% on every loaf with a Cadieux subscription. Pick your dates — delivered fresh across Visakhapatnam, evenings from 4 pm.",
+      "Save 10% on every loaf with a Cadieux subscription. Pick your dates — delivered fresh across Visakhapatnam, evenings from 3 pm.",
     // The Cadieux logo. This used to point at /og-cover.jpg, a file that has
     // never existed in public/ — it 404'd, so scrapers ignored it and went
     // back to picking an image out of the page themselves.
@@ -101,7 +101,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Protein Bread Subscription in Visakhapatnam | Cadieux",
     description:
-      "Save 10% on every loaf with a Cadieux subscription. Pick your dates — delivered fresh across Visakhapatnam, evenings from 4 pm.",
+      "Save 10% on every loaf with a Cadieux subscription. Pick your dates — delivered fresh across Visakhapatnam, evenings from 3 pm.",
   },
 };
 
@@ -230,7 +230,7 @@ export default async function SubscribeLandingPage() {
             {[
               "Pick your loaves — one loaf per delivery is enough, and you can mix multigrain and plain in any ratio.",
               "Pick your dates — no fixed weekly cycle. Choose the days that fit your week.",
-              "Pick your delivery time — evenings, from 4 PM IST. We'll message you when yours is on the way.",
+              "Pick your delivery time — evenings, from 3 PM IST. We'll message you when yours is on the way.",
               "We bake to order — every delivery leaves the kitchen the same day it reaches you. Twelve hours' notice keeps the loaf oven-fresh.",
             ].map((line, i) => (
               <li
@@ -716,7 +716,7 @@ function PlanCard({ plan }: { plan: SubscriptionPlanDTO }) {
 const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "How does the subscription work?",
-    a: "You pick your loaves and your dates in one flow. Every delivery goes out in the evening, from 4 PM. Every plan runs on the dates you selected — there is no auto-renewal and no surprise deliveries.",
+    a: "You pick your loaves and your dates in one flow. Every delivery goes out in the evening, from 3 PM. Every plan runs on the dates you selected — there is no auto-renewal and no surprise deliveries.",
   },
   {
     q: "What is the minimum?",
@@ -728,7 +728,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "When do you deliver?",
-    a: "Every day of the week. Deliveries go out from 4 PM IST and we'll message you when yours is on the way — sometimes it arrives sooner.",
+    a: "Every day of the week. Deliveries go out from 3 PM IST and we'll message you when yours is on the way — sometimes it arrives sooner.",
   },
   {
     q: "Where do you deliver?",
