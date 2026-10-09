@@ -13,6 +13,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { AdminFetchError } from "@/lib/admin-client";
 import {
+  formatOrderNumber,
+  formatSubscriptionNumber,
+} from "@/lib/order-number";
+import {
   ZONE_LABELS,
   normaliseLocalityKey,
   normalisePincodeKey,
@@ -316,20 +320,38 @@ export default function ZoneRulesPage() {
                           <>
                             order{" "}
                             <a
-                              href={`/admin/orders?query=${o.order_id}`}
+                              href={`/admin/orders?q=${encodeURIComponent(
+                                formatOrderNumber({
+                                  id: o.order_id,
+                                  order_number: o.orders?.order_number,
+                                }),
+                              )}`}
                               style={{ color: CREAM, textDecoration: "underline" }}
                             >
-                              {o.order_id.slice(0, 8)}
+                              {formatOrderNumber({
+                                id: o.order_id,
+                                order_number: o.orders?.order_number,
+                              })}
                             </a>
                           </>
                         ) : o.subscription_id ? (
                           <>
                             subscription{" "}
                             <a
-                              href={`/admin/subscriptions?query=${o.subscription_id}`}
+                              href={`/admin/subscriptions?q=${encodeURIComponent(
+                                formatSubscriptionNumber({
+                                  id: o.subscription_id,
+                                  subscription_number:
+                                    o.subscriptions?.subscription_number,
+                                }),
+                              )}`}
                               style={{ color: CREAM, textDecoration: "underline" }}
                             >
-                              {o.subscription_id.slice(0, 8)}
+                              {formatSubscriptionNumber({
+                                id: o.subscription_id,
+                                subscription_number:
+                                  o.subscriptions?.subscription_number,
+                              })}
                             </a>
                           </>
                         ) : (

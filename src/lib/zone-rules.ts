@@ -45,6 +45,15 @@ export type ZoneRowOverrideRow = {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** Joined for DISPLAY ONLY, and OPTIONAL on purpose.
+   *
+   *  This table stores only the FK, but the admin screen has to show the
+   *  OLF/OLS code — that is the string the orders board can actually search
+   *  on. /api/admin/zone-rules embeds these; `fetchZoneRules` below does
+   *  NOT, because the zone RESOLUTION path never renders a row and should
+   *  not pay for the join. */
+  orders?: { order_number: string | null } | null;
+  subscriptions?: { subscription_number: string | null } | null;
 };
 
 /** The four numbered zones, in display order.

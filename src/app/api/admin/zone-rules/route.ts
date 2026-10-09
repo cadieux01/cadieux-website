@@ -36,7 +36,11 @@ export async function GET(req: NextRequest) {
       .order("updated_at", { ascending: false }),
     supabaseAdmin
       .from("delivery_zone_row_overrides")
-      .select("id, order_id, subscription_id, zone, created_by, created_at, updated_at")
+      // The embeds are for the pins table's link text: this table holds only
+      // the FK, and a uuid is not something the orders board can search on.
+      .select(
+        "id, order_id, subscription_id, zone, created_by, created_at, updated_at, orders(order_number), subscriptions(subscription_number)",
+      )
       .order("updated_at", { ascending: false }),
   ]);
   if (rulesRes.error) {
@@ -49,7 +53,11 @@ export async function GET(req: NextRequest) {
   }
   return NextResponse.json({
     rules: (rulesRes.data ?? []) as ZoneRuleRow[],
-    overrides: (overridesRes.data ?? []) as ZoneRowOverrideRow[],
+    // Double cast because the untyped client widens a many-to-one embed to an
+    // array. At runtime PostgREST returns one object (or null) for a single-FK
+    // embed — same shape the admin orders list already relies on for
+    // customers(...). ZoneRowOverrideRow states that shape.
+    overrides: (overridesRes.data ?? []) as unknown as ZoneRowOverrideRow[],
   });
 }
 
