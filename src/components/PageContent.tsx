@@ -304,7 +304,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 textAlign: "center",
                 fontFamily: "var(--font-heading)",
                 fontSize: 18, fontWeight: 300,
-                letterSpacing: "0.45em", textTransform: "uppercase",
+                letterSpacing: "0.06em", textTransform: "uppercase",
                 color: "#FBF3D4",
                 pointerEvents: "none",
                 textShadow: "0 1px 12px rgba(0,0,0,0.5)",
@@ -348,7 +348,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 <p style={{
                   margin: "0 0 16px",
                   fontFamily: "var(--font-body)", fontSize: 14,
-                  fontWeight: 500, letterSpacing: "0.45em", textTransform: "uppercase",
+                  fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase",
                   color: "#FBF3D4", pointerEvents: "none",
                 }}>Cadieux</p>
                 {/* Primary hero heading. Rendered as an <h1> (the page's only
@@ -382,7 +382,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   alignSelf: "flex-start",
                   flexShrink: 0,
                   fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
-                  letterSpacing: "0.4em", textTransform: "uppercase",
+                  letterSpacing: "0.06em", textTransform: "uppercase",
                   color: "#FBF3D4", background: "#024628",
                   border: "none", padding: "10px 24px", cursor: "pointer",
                   WebkitTapHighlightColor: "transparent",
@@ -547,7 +547,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                             margin: "10px 0 0",
                             fontFamily: "var(--font-body)",
                             fontSize: 14, fontWeight: 500,
-                            letterSpacing: "0.18em", textTransform: "uppercase",
+                            letterSpacing: "0.06em", textTransform: "uppercase",
                             color: reached ? "#FFF8E0" : "rgba(251,243,212,0.32)",
                             lineHeight: 1.6,
                             textShadow: reached
@@ -798,7 +798,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 fontFamily: "var(--font-body)",
                 fontSize: 14,
                 fontWeight: 500,
-                letterSpacing: "0.3em",
+                letterSpacing: "0.06em",
                 textTransform: "uppercase",
                 color: "#024628",
               }}>
@@ -812,7 +812,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                   fontFamily: "var(--font-body)",
                   fontSize: 14,
                   fontWeight: 500,
-                  letterSpacing: "0.25em",
+                  letterSpacing: "0.06em",
                   textTransform: "uppercase",
                   color: "rgba(251,243,212,0.75)",
                   textDecoration: "none",
@@ -881,7 +881,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
             <p style={{
               position: "relative", zIndex: 3,
               margin: "20px 0 0", fontFamily: "var(--font-body)", fontSize: 14,
-              fontWeight: 500, letterSpacing: "0.45em", textTransform: "uppercase",
+              fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase",
               color: "#4369B2",
             }}>Same Bread. Better Built.</p>
 
@@ -889,7 +889,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               position: "relative", zIndex: 3,
               display: "block", width: "100%", maxWidth: 320, marginTop: 28,
               fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
-              letterSpacing: "0.4em", textTransform: "uppercase",
+              letterSpacing: "0.06em", textTransform: "uppercase",
               color: "#FBF3D4", background: "#024628",
               border: "none", padding: 18, cursor: "pointer",
               WebkitTapHighlightColor: "transparent",
@@ -920,7 +920,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 color: "rgba(251,243,212,0.6)",
                 maxWidth: 380,
               }}>
-                <span style={{ display: "block", fontSize: 14, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)", marginBottom: 6 }}>Manufactured at</span>
+                <span style={{ display: "block", fontSize: 14, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(200,144,58,0.65)", marginBottom: 6 }}>Manufactured at</span>
                 D.No. 13/18, Plot 78, PM Palem Main Road,<br />
                 Revenue Ward 4, PM Palem,<br />
                 Visakhapatnam, Andhra Pradesh 530041
@@ -932,7 +932,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 rel="noopener noreferrer"
                 style={{
                   fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
-                  letterSpacing: "0.3em", textTransform: "uppercase",
+                  letterSpacing: "0.06em", textTransform: "uppercase",
                   color: "#C8903A", textDecoration: "none",
                   borderBottom: "1px solid rgba(200,144,58,0.4)",
                   paddingBottom: 2,
@@ -956,7 +956,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               >
                 <span style={{
                   width: "100%",
-                  fontSize: 14, letterSpacing: "0.35em", textTransform: "uppercase",
+                  fontSize: 14, letterSpacing: "0.06em", textTransform: "uppercase",
                   color: "rgba(200,144,58,0.65)",
                   marginBottom: 4,
                 }}>Site</span>
@@ -973,7 +973,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                       fontFamily: "var(--font-body)",
                       fontSize: 14,
                       fontWeight: 500,
-                      letterSpacing: "0.18em",
+                      letterSpacing: "0.06em",
                       textTransform: "uppercase",
                       color: "rgba(251,243,212,0.55)",
                       textDecoration: "none",
@@ -1000,7 +1000,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
               >
                 <span style={{
                   width: "100%",
-                  fontSize: 14, letterSpacing: "0.35em", textTransform: "uppercase",
+                  fontSize: 14, letterSpacing: "0.06em", textTransform: "uppercase",
                   color: "rgba(200,144,58,0.65)",
                   marginBottom: 4,
                 }}>Legal</span>
@@ -1019,7 +1019,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                       fontFamily: "var(--font-body)",
                       fontSize: 14,
                       fontWeight: 500,
-                      letterSpacing: "0.18em",
+                      letterSpacing: "0.06em",
                       textTransform: "uppercase",
                       color: "rgba(251,243,212,0.55)",
                       textDecoration: "none",
@@ -1039,7 +1039,7 @@ export default function PageContent({ introActive = false }: { introActive?: boo
                 fontFamily: "var(--font-body)",
                 fontSize: 14,
                 fontWeight: 500,
-                letterSpacing: "0.35em",
+                letterSpacing: "0.06em",
                 textTransform: "uppercase",
                 color: "rgba(251,243,212,0.4)",
               }}>© {new Date().getFullYear()} Cadieux · Visakhapatnam</p>
