@@ -71,6 +71,7 @@ import {
   quoteSubscriptionDeliveryFee,
   computeSubscriptionTotal,
 } from "@/lib/subscription-delivery-fee";
+import { formatSubscriptionNumber } from "@/lib/order-number";
 
 // Client-supplied delivery row shape — mirrors /api/checkout's
 // ClientDelivery type (see route.ts:317-324). `slot` may be null when a
@@ -532,7 +533,10 @@ export async function POST(req: NextRequest) {
     entity: "subscription",
     action: "create",
     targetId: write.subscription_id,
-    targetLabel: `sub ${write.subscription_id.slice(0, 8)}`,
+    targetLabel: `sub ${formatSubscriptionNumber({
+      id: write.subscription_id,
+      subscription_number: write.subscription_number,
+    })}`,
     context: `${isTeam ? "[team-PIN] " : ""}Admin manually registered subscription for ${phoneLocal}`,
     meta: {
       phone: phoneLocal,
@@ -560,6 +564,8 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     subscription_id: write.subscription_id,
+    // The OLS code, for the confirmation banner. subscription_id stays.
+    subscription_number: write.subscription_number,
     customer_id: customerId,
     deliveries: write.deliveries,
     items: write.items,

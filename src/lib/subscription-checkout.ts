@@ -201,6 +201,10 @@ export type MultiVariantWriteResult =
   | {
       ok: true;
       subscription_id: string;
+      /** The OLS code, assigned by the DB on insert. Returned so a caller can
+       *  name the subscription to a person without a second read. Nullable
+       *  only because the column is: every live row has one. */
+      subscription_number: string | null;
       deliveries: number;
       items: number;
     }
@@ -248,7 +252,7 @@ export async function insertMultiVariantSubscription(
   const { data: sub, error: subErr } = await supabase
     .from("subscriptions")
     .insert(rowWithStartDate)
-    .select("id")
+    .select("id, subscription_number")
     .single();
 
   if (subErr || !sub) {
@@ -312,6 +316,7 @@ export async function insertMultiVariantSubscription(
   return {
     ok: true,
     subscription_id: sub.id,
+    subscription_number: sub.subscription_number ?? null,
     deliveries: deliveryRows.length,
     items: snapItems.length,
   };

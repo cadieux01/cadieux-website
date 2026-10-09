@@ -2765,6 +2765,7 @@ function productColumns(rows: AdminOrderRow[], names?: ProductNameMap) {
 
 function exportCsv(rows: AdminOrderRow[], names?: ProductNameMap): void {
   const csv = toCsv(rows, [
+    { header: "Order", value: (o) => formatOrderNumber(o) },
     { header: "Order ID", value: (o) => o.id },
     { header: "Customer", value: (o) => o.customers?.full_name ?? "" },
     { header: "Phone", value: (o) => o.customers?.phone ?? "" },

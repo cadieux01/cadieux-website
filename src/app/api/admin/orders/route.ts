@@ -363,6 +363,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     order_id: order.id,
+    // The OLF code, so the confirmation can name the order the way the rest
+    // of the admin does. order_id stays: callers key off it.
+    order_number: order.order_number,
     customer_id: customerId,
     total_amount: prepared.grandTotal,
     delivery_fee: prepared.deliveryFee,

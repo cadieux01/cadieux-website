@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey, maskPhone } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 import { internalJsonHeaders } from "@/lib/internal-secret";
+import { formatSubscriptionNumber } from "@/lib/order-number";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -75,7 +76,9 @@ export async function POST(
 
   const { data: sub } = await supabaseAdmin
     .from("subscriptions")
-    .select("id, status, bread_name, product_name")
+    // subscription_number is here for the cancellation WhatsApp below: it is
+    // the only code the customer can quote back at us.
+    .select("id, subscription_number, status, bread_name, product_name")
     .eq("id", params.id)
     .eq("customer_id", customer.id)
     .maybeSingle();
@@ -103,10 +106,9 @@ export async function POST(
     .not("status", "in", "(delivered,cancelled)");
 
   const productName = sub.product_name || sub.bread_name || "subscription";
-  const shortId = String(params.id).slice(0, 8).toUpperCase();
   const waMessage =
     `Hi ${customer.full_name || "there"}! Your Cadieux ${productName} subscription has been cancelled.\n\n` +
-    `Subscription ID: ${shortId}\n\n` +
+    `Subscription: ${formatSubscriptionNumber(sub)}\n\n` +
     `If this was a mistake, please contact us at support@cadieux.in.`;
   fireAndForget(
     fetch(`${SITE_URL}/api/send-whatsapp`, {

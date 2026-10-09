@@ -212,6 +212,8 @@ export async function PATCH(
   } else if (statusChanged) {
     context = `Delivery status: ${before?.status ?? "—"} → ${update.status as string}`;
   } else {
+    // uuid slice, not an OLF/OLS code: subscription_deliveries has no number
+    // column, so there is no human code to switch to here.
     context = `Updated delivery ${params.deliveryId.slice(0, 8)}`;
   }
 

@@ -78,6 +78,7 @@ type RecentOrder = {
 
 type RecentSub = {
   id: string;
+  subscription_number: string | null;
   total_amount: number | string | null;
   status: string | null;
   payment_status: string | null;
@@ -155,7 +156,7 @@ function buildMessage(
   }
   for (const s of subs.slice(0, MAX_LISTED)) {
     lines.push(
-      `subscription ${s.id.slice(0, 8).toUpperCase()} — Rs ${money(s.total_amount)} — ${s.status ?? "?"}/${s.payment_status ?? "?"} — ${istTime(s.created_at)}`,
+      `subscription ${s.subscription_number ?? s.id.slice(0, 8).toUpperCase()} — Rs ${money(s.total_amount)} — ${s.status ?? "?"}/${s.payment_status ?? "?"} — ${istTime(s.created_at)}`,
     );
   }
   const hidden = orders.length + subs.length - lines.length;
@@ -298,7 +299,9 @@ async function runBurstCheck(rawPhone: string): Promise<void> {
       .limit(50),
     supabaseAdmin
       .from("subscriptions")
-      .select("id, total_amount, status, payment_status, created_at")
+      .select(
+        "id, subscription_number, total_amount, status, payment_status, created_at",
+      )
       .in("customer_id", ids)
       .gte("created_at", cutoff)
       .order("created_at", { ascending: false })

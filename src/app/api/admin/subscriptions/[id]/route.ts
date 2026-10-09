@@ -6,6 +6,7 @@ import {
 } from "@/lib/admin-subscription-derive";
 import { matchSubscriptionCoordinates } from "@/lib/subscription-coordinates";
 import { recordAuditEvent, type AuditAction } from "@/lib/audit-log";
+import { formatSubscriptionNumber } from "@/lib/order-number";
 
 const ALLOWED_STATUSES = new Set([
   "pending_confirmation",
@@ -150,7 +151,9 @@ export async function PATCH(
 
   const { data: before } = await supabaseAdmin
     .from("subscriptions")
-    .select("status, payment_status, product_name")
+    // subscription_number is read for the audit label below — the OLS code is
+    // what an operator can search the board on.
+    .select("status, payment_status, product_name, subscription_number")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -218,13 +221,18 @@ export async function PATCH(
     action = update.payment_status === "refunded" ? "refund" : "status_change";
   }
 
+  const subLabel = formatSubscriptionNumber({
+    id: params.id,
+    subscription_number: before?.subscription_number,
+  });
+
   void recordAuditEvent({
     req,
     entity: "subscription",
     action,
     targetId: params.id,
-    targetLabel: before?.product_name ?? `#${params.id.slice(0, 8)}`,
-    context: `Subscription ${params.id.slice(0, 8)} → ${action}`,
+    targetLabel: before?.product_name ?? subLabel,
+    context: `Subscription ${subLabel} → ${action}`,
     meta: {
       fields: Object.keys(update).filter((k) => k !== "updated_at"),
       status_before: before?.status ?? null,

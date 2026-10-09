@@ -30,6 +30,10 @@ import { formatINR } from "@/lib/admin-formatting";
 // deliveryFee.ts can't leave an operator reading a cutoff we don't honour.
 import { MAX_DELIVERY_KM } from "@/lib/deliveryFee";
 import {
+  formatOrderNumber,
+  formatSubscriptionNumber,
+} from "@/lib/order-number";
+import {
   teamOrderFetch,
   TeamOrderFetchError,
 } from "@/lib/team-order-client";
@@ -432,11 +436,20 @@ export function RegisterOrderForm({
           payload.delivery_slot = deliverySlot;
         }
 
-        const res = await doFetch<{ ok: boolean; order_id: string }>(
-          "/api/admin/orders",
-          { method: "POST", body: JSON.stringify(payload) },
+        const res = await doFetch<{
+          ok: boolean;
+          order_id: string;
+          order_number?: string | null;
+        }>("/api/admin/orders", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setSubmitOk(
+          `Order registered (${formatOrderNumber({
+            id: res.order_id,
+            order_number: res.order_number,
+          })}).`,
         );
-        setSubmitOk(`Order registered (${res.order_id.slice(0, 8)}).`);
         if (isTeam) {
           // Reset for the next order but leave the success banner up
           // so the team member sees the confirmation.
@@ -494,13 +507,17 @@ export function RegisterOrderForm({
       const res = await doFetch<{
         ok: boolean;
         subscription_id: string;
+        subscription_number?: string | null;
         deliveries: number;
       }>("/api/admin/subscriptions/create", {
         method: "POST",
         body: JSON.stringify(payload),
       });
       setSubmitOk(
-        `Subscription registered (${res.subscription_id.slice(0, 8)}, ${res.deliveries} deliveries).`,
+        `Subscription registered (${formatSubscriptionNumber({
+          id: res.subscription_id,
+          subscription_number: res.subscription_number,
+        })}, ${res.deliveries} deliveries).`,
       );
       if (isTeam) resetForm();
       onSuccessSubscription?.(res.subscription_id, res.deliveries);
