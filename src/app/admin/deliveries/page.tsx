@@ -353,8 +353,11 @@ function DeliveriesPageInner() {
       setError(null);
       try {
         if (source === "orders") {
+          // ?all=1 — this board picks its own day out of the whole table
+          // client-side, so the list endpoint's bounded default window
+          // would quietly hide stops for any day outside it.
           const res = await adminFetch<{ orders: AdminOrderRow[] }>(
-            "/api/admin/orders",
+            "/api/admin/orders?all=1",
           );
           if (!cancelled) setOrders(res.orders ?? []);
         } else {

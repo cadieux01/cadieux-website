@@ -148,8 +148,10 @@ function PrintOrdersPageInner() {
 
   const load = useCallback(async () => {
     try {
+      // ?all=1 — the packing list slices the whole table client-side off the
+      // URL params, so it must not get the board's bounded default window.
       const res = await adminFetch<{ orders: AdminOrderRow[] }>(
-        "/api/admin/orders",
+        "/api/admin/orders?all=1",
       );
       setOrders(res.orders ?? []);
     } catch (e) {

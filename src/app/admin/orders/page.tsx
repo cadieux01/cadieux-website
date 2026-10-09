@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Suspense,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -307,6 +308,9 @@ const SELECTION_KEY = "admin:orders:selection";
 /** Menu command, not a filter value — never enters the selection. */
 const CLEAR_ALL = "__clear_all";
 
+/** Background refresh cadence. See the polling effect for why it is not 10s. */
+const POLL_MS = 120_000;
+
 const STATUS_FILTER_OPTIONS: readonly OrderFilterValue[] = [
   "all",
   "pending",
@@ -347,6 +351,40 @@ const NEXT_STATUS_PICKUP: Record<string, OrderStatus | null> = {
 /** Returns the next status this order should transition to, or null if it's
  *  already at a terminal stage. Branches on fulfillment_type; legacy rows
  *  with no value are treated as delivery. */
+/**
+ * Reuse the PREVIOUS row object wherever the incoming one is byte-identical.
+ *
+ * Without this, memo() on OrderRow buys almost nothing on the path that
+ * actually matters. Every Refresh and every poll tick parses fresh JSON, so
+ * all ~270 `o` props are brand-new object references and the shallow
+ * compare misses on every single row — even on a tick where not one field
+ * changed. Reconciling by id first means an unchanged row keeps its old
+ * reference, memo() skips it, and a tick costs the rows that moved instead
+ * of the whole table.
+ *
+ * Equality is JSON string equality. Both sides originate from the same
+ * endpoint's JSON so key order is stable, and the only way to be wrong is
+ * to call a row changed when it was not — which just re-renders it. The
+ * dangerous direction (calling a changed row unchanged) cannot happen.
+ *
+ * If NOTHING moved it hands back the original array, so `orders` keeps its
+ * identity and every memo downstream of it is skipped too.
+ */
+function reconcileRows(
+  prev: AdminOrderRow[],
+  next: AdminOrderRow[],
+): AdminOrderRow[] {
+  if (prev.length === 0) return next;
+  const byId = new Map(prev.map((r) => [r.id, [r, JSON.stringify(r)] as const]));
+  const out = next.map((r) => {
+    const hit = byId.get(r.id);
+    return hit && hit[1] === JSON.stringify(r) ? hit[0] : r;
+  });
+  const identical =
+    out.length === prev.length && out.every((r, i) => r === prev[i]);
+  return identical ? prev : out;
+}
+
 function nextStatusFor(order: AdminOrderRow): OrderStatus | null {
   const key = (order.status ?? "").toLowerCase();
   const map =
@@ -424,6 +462,22 @@ function OrdersPageInner() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // How many orders exist in total, and whether this response is a slice of
+  // them. The list endpoint is bounded (see its DEFAULT_LIMIT); these two
+  // fields are what stop that bound from being invisible.
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [truncated, setTruncated] = useState(false);
+  // All-time counts per order_kind, for the Bread / Sandwiches badges.
+  // They CANNOT be counted off `orders` any more — that is the bounded
+  // window, so the badge would read "Bread 267" while 715 exist, which an
+  // operator reads as orders having disappeared. Server-side, folded over
+  // the whole table. null until the first response.
+  const [kindCounts, setKindCounts] = useState<Record<string, number> | null>(
+    null,
+  );
+  // Operator asked for the whole table ("Load all"). Sticky for the session
+  // so a poll tick cannot silently drop them back to the window.
+  const [showAll, setShowAll] = useState(false);
   // Multi-select. Holds status keys ("confirmed"), the legacy "expired"
   // value, and the prefixed groups — "call:<body>", "zone:<key>",
   // "pay:<bucket>", "repeat:only" — mixed in ONE flat list;
@@ -448,7 +502,12 @@ function OrdersPageInner() {
     | null
   >(null);
   // Row id currently posting a call-preset (dropdown disables while
-  // in-flight so a fast double-click can't stack two rows).
+  // in-flight so a fast double-click can't stack two rows). The ref is the
+  // re-entrancy GUARD and the state is only for the disabled attribute:
+  // reading the state inside postCallNote would put it in that callback's
+  // dep array, changing its identity on every call and re-rendering all
+  // 270 memo()'d rows to disable one dropdown.
+  const callBusyRef = useRef(false);
   const [callBusyId, setCallBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState(urlInit.query);
   const [sort, setSort] = useState<SortKey>(urlInit.sort);
@@ -655,23 +714,83 @@ function OrdersPageInner() {
     };
   }, [basis, day, zoneRules]);
 
+  // The search box filters CLIENT-SIDE, over whatever rows are loaded — and
+  // the list endpoint is now bounded. So the needle has to reach the server
+  // as well, otherwise typing the name of a customer whose only order is
+  // older than the window returns nothing and looks like "no such customer".
+  // Debounced, so a keystroke is not a round trip; the live `query` keeps
+  // filtering the already-loaded rows with no wait at all.
+  const [serverQuery, setServerQuery] = useState(urlInit.query.trim());
+  useEffect(() => {
+    const t = setTimeout(() => setServerQuery(query.trim()), 350);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // Stops an out-of-order response from winning: with a debounced needle
+  // there can be two loads in flight, and the slower one is the stale one.
+  const loadSeq = useRef(0);
+
+  // True while a list fetch is in flight. Only used to tell "nothing
+  // matches" apart from "the answer has not arrived yet" — see the
+  // placeholder below the table.
+  const [fetching, setFetching] = useState(false);
+
+  // When the list last came back. The ref gates the poll (a ref, not state,
+  // so reading it cannot restart the interval); the state is what the
+  // header prints next to Refresh. With a 120s cadence the operator has to
+  // be able to see how old the board is.
+  const lastLoadAt = useRef(0);
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
+
   const load = useCallback(async () => {
     setError(null);
+    setFetching(true);
+    const seq = ++loadSeq.current;
+    const params = new URLSearchParams();
+    if (showAll) params.set("all", "1");
+    else if (serverQuery) params.set("q", serverQuery);
+    const qs = params.toString();
     try {
       const res = await adminFetch<{
         orders: AdminOrderRow[];
         retention?: RetentionSummary;
-      }>("/api/admin/orders");
-      setOrders(res.orders ?? []);
+        total_orders?: number;
+        kind_counts?: Record<string, number>;
+        truncated?: boolean;
+      }>(`/api/admin/orders${qs ? `?${qs}` : ""}`);
+      if (seq !== loadSeq.current) return;
+      // Reconcile rather than replace: see reconcileRows. A straight
+      // setOrders(res.orders) hands every row a brand-new object on every
+      // refetch, which makes memo()'s shallow compare miss on all of them.
+      setOrders((curr) => reconcileRows(curr, res.orders ?? []));
       setRetention(res.retention ?? null);
+      setTotalOrders(res.total_orders ?? res.orders?.length ?? 0);
+      setKindCounts(res.kind_counts ?? null);
+      setTruncated(res.truncated === true);
+      setLoadedAt(Date.now());
     } catch (e) {
+      if (seq !== loadSeq.current) return;
       if (e instanceof AdminFetchError) setError(e.message);
       else if (e instanceof Error) setError(e.message);
       else setError("Could not load orders.");
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) {
+        setLoading(false);
+        setFetching(false);
+        // The ATTEMPT time, not the success time — an endpoint that is
+        // failing must not get re-hit on every alt-tab.
+        lastLoadAt.current = Date.now();
+      }
     }
-  }, []);
+  }, [showAll, serverQuery]);
+
+  // The operator has typed something the loaded rows cannot answer yet:
+  // either the debounce has not elapsed or the search fetch is in flight.
+  // Without this, an order outside the default window shows "No orders
+  // match the current filters" for a beat before it appears — which is
+  // exactly the wrong answer to show about a customer who does exist.
+  const searchSettling =
+    query.trim().length > 0 && (query.trim() !== serverQuery || fetching);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -687,13 +806,40 @@ function OrdersPageInner() {
     void load();
   }, [load]);
 
-  // 10s polling — matches the legacy admin dashboard cadence. We keep
-  // this lightweight: the same /api/admin/orders endpoint is hit every
-  // tick (it's a small payload and the admin is one user). Cleared on
-  // unmount.
+  // POLLING — 120s, and only while the tab is visible. It was 10s,
+  // inherited from the legacy dashboard on the assumption (stated in the
+  // comment that used to be here) that this was "a small payload".
+  //
+  // It is not. Each tick refetches the whole list and rebuilds every row:
+  // measured 0.5–1.5s of BLOCKING main-thread work per tick, so a 10s
+  // interval spent a large fraction of every interval wedged, and the work
+  // pushed its own timer out — measured tick-to-tick was 14.0s against a
+  // 10s setInterval. It was also the bandwidth: at the old 888 kB a tick,
+  // 10s is ~320 MB/hour for every open tab, forever, including the tabs
+  // nobody is looking at.
+  //
+  // Nothing on this board needs 10s freshness. An order changes state when
+  // a human presses a button on this page (which refetches on its own) or
+  // minutes later in the kitchen. Refresh is the control for "right now",
+  // and the timestamp beside it says how stale the board is.
   useEffect(() => {
-    const t = setInterval(() => void load(), 10_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void load();
+    }, POLL_MS);
+    // Coming back to the tab refetches, so pausing while hidden never
+    // leaves a human reading data from however long they were away — but
+    // only if it is actually stale, or alt-tabbing becomes its own poll.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastLoadAt.current < POLL_MS) return;
+      void load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   // URL writeback + scroll restoration, both shared with
@@ -1121,20 +1267,14 @@ function OrdersPageInner() {
     [filter, statusSel],
   );
 
-  const advance = async (order: AdminOrderRow) => {
-    const next = nextStatusFor(order);
-    if (!next) return;
-    await patchStatus(order, next);
-  };
-
-  const toggleSelect = (id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelected((curr) => {
       const next = new Set(curr);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
+  }, [setSelected]);
 
   const masterChecked =
     filtered.length > 0 && filtered.every((o) => selected.has(o.id));
@@ -1240,7 +1380,10 @@ function OrdersPageInner() {
     }
   };
 
-  const patchStatus = async (order: AdminOrderRow, next: OrderStatus) => {
+  // useCallback is NOT decoration here: this is handed to a memo()'d row, so
+  // if its identity changed every render the memo would never hit and the
+  // whole of step 3 would be a no-op.
+  const patchStatus = useCallback(async (order: AdminOrderRow, next: OrderStatus) => {
     setBusyId(order.id);
     // Hold this row at its current sort rank so the badge changes under
     // the operator's cursor instead of the row jumping to another group.
@@ -1251,7 +1394,14 @@ function OrdersPageInner() {
       return next;
     });
     // Optimistic — flip the status locally and roll back on failure.
-    const prev = orders;
+    //
+    // The rollback reverses THIS ROW'S status rather than restoring a
+    // snapshot of the whole array. Two reasons: snapshotting meant closing
+    // over `orders`, which would have changed this callback's identity on
+    // every list change and killed the row memo; and restoring the whole
+    // array also discarded any unrelated row edit (a call note, another
+    // status) that landed during the await.
+    const prevStatus = order.status;
     setOrders((curr) =>
       curr.map((o) => (o.id === order.id ? { ...o, status: next } : o)),
     );
@@ -1321,7 +1471,11 @@ function OrdersPageInner() {
         }
       }
     } catch (e) {
-      setOrders(prev);
+      setOrders((curr) =>
+        curr.map((o) =>
+          o.id === order.id ? { ...o, status: prevStatus } : o,
+        ),
+      );
       if (e instanceof AdminFetchError) {
         alert(e.message);
       } else {
@@ -1330,15 +1484,28 @@ function OrdersPageInner() {
     } finally {
       setBusyId(null);
     }
-  };
+  }, [showNotice]);
+
+  // Declared AFTER patchStatus on purpose: it is in this callback's dep
+  // array, and a dep array is evaluated immediately, so declaring this
+  // first would read patchStatus before its initialiser (TDZ).
+  const advance = useCallback(
+    async (order: AdminOrderRow) => {
+      const next = nextStatusFor(order);
+      if (!next) return;
+      await patchStatus(order, next);
+    },
+    [patchStatus],
+  );
 
   // Append a call-preset note to a row. Purely additive — never edits
   // an earlier note, so a rapid double-click just stacks two rows in
   // the log. Optimistically bumps note_count + last_call_note on the
   // row so the operator sees the chip flip without waiting on the
   // list-endpoint re-poll.
-  const postCallNote = async (order: AdminOrderRow, body: string) => {
-    if (callBusyId) return;
+  const postCallNote = useCallback(async (order: AdminOrderRow, body: string) => {
+    if (callBusyRef.current) return;
+    callBusyRef.current = true;
     setCallBusyId(order.id);
     try {
       const author = ensureAdminFirstName();
@@ -1392,9 +1559,34 @@ function OrdersPageInner() {
             : "Failed to save call update.",
       );
     } finally {
+      callBusyRef.current = false;
       setCallBusyId(null);
     }
-  };
+  }, []);
+
+  // ── stable row callbacks ───────────────────────────────────────────────
+  // Everything OrderRow is handed has to keep its identity across renders
+  // or memo() cannot skip anything. These are the closures that used to be
+  // written inline in the tbody map, hoisted out verbatim.
+  const openOrder = useCallback(
+    (id: string) => {
+      // Stash scrollY so Back-to-orders can restore exactly this position.
+      // Read on mount, then cleared — see useScrollRestore above.
+      stashScrollY(SCROLL_KEY);
+      router.push(`/admin/orders/${id}`);
+    },
+    [router],
+  );
+  const assignZone = useCallback((orderId: string, anchorRect: DOMRect) => {
+    setAssignTarget({ orderId, anchorRect });
+  }, []);
+  const openNotes = useCallback((order: AdminOrderRow) => {
+    setNoteOwner({
+      kind: "order",
+      id: order.id,
+      label: formatOrderNumber(order),
+    });
+  }, []);
 
   return (
     <AdminShell
@@ -1479,6 +1671,26 @@ function OrdersPageInner() {
           >
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
+          {/* The board no longer refreshes every 10s, so it has to say when
+              it last did. Without this, "is this list current?" has no
+              answer on screen and Refresh is a guess. */}
+          {loadedAt ? (
+            <span
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "0.68rem",
+                letterSpacing: "0.08em",
+                color: "rgba(251,243,212,0.5)",
+                alignSelf: "center",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {new Date(loadedAt).toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          ) : null}
         </>
       }
     >
@@ -1494,9 +1706,10 @@ function OrdersPageInner() {
       >
         {(["bread", "sandwich"] as const).map((k) => {
           const on = kindTab === k;
-          const count = orders.filter(
-            (o) => ((o.order_kind ?? "bread") as string) === k,
-          ).length;
+          // All-time, from the server's lean pass — NOT orders.filter(...),
+          // which only sees the bounded window. No number at all until the
+          // true one has arrived: a wrong total is worse than none.
+          const count = kindCounts?.[k] ?? null;
           return (
             <button
               key={k}
@@ -1521,7 +1734,9 @@ function OrdersPageInner() {
               }}
             >
               {k === "bread" ? "Bread" : "Sandwiches"}
-              <span style={{ marginLeft: 8, opacity: 0.7 }}>{count}</span>
+              {count === null ? null : (
+                <span style={{ marginLeft: 8, opacity: 0.7 }}>{count}</span>
+              )}
             </button>
           );
         })}
@@ -1757,10 +1972,56 @@ function OrdersPageInner() {
           />
         )
       ) : null}
+      {/* The bound, stated. /api/admin/orders returns the most recent 250
+          orders plus every order still live plus every match for the search
+          box — not the whole table. An operator who needs the rest can say
+          so; what must never happen is the board showing a slice and
+          looking like it is showing everything. */}
+      {!loading && truncated && !showAll ? (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "0.75rem",
+            marginBottom: "0.75rem",
+            fontFamily: "var(--font-body)",
+            fontSize: "0.78rem",
+            color: "rgba(251,243,212,0.75)",
+          }}
+        >
+          <span>
+            Showing {orders.length} of {totalOrders} orders — the most recent,
+            plus everything still live
+            {serverQuery ? ", plus every search match" : ""}.
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="uppercase"
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: "0.7rem",
+              letterSpacing: "0.18em",
+              color: "#FBF3D4",
+              background: "transparent",
+              border: "1px solid rgba(251,243,212,0.3)",
+              padding: "0.3rem 0.7rem",
+              cursor: "pointer",
+            }}
+          >
+            Load all
+          </button>
+        </div>
+      ) : null}
       {loading ? (
         <Placeholder>Loading orders…</Placeholder>
       ) : filtered.length === 0 ? (
-        <Placeholder>No orders match the current filters.</Placeholder>
+        searchSettling ? (
+          <Placeholder>Searching all orders…</Placeholder>
+        ) : (
+          <Placeholder>No orders match the current filters.</Placeholder>
+        )
       ) : (
         <div
           style={{
@@ -1796,412 +2057,34 @@ function OrdersPageInner() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((o, i) => {
-                const next = nextStatusFor(o);
-                const busy = busyId === o.id;
-                return (
-                  <tr
-                    key={o.id}
-                    onClick={(e) => {
-                      // Row-wide navigation, minus the controls that own
-                      // their own click (checkbox, status Select, actions).
-                      if (
-                        (e.target as HTMLElement).closest(
-                          ROW_INTERACTIVE_SELECTOR,
-                        )
-                      ) {
-                        return;
-                      }
-                      if (window.getSelection()?.toString()) return;
-                      // Stash scrollY so Back-to-orders can restore
-                      // exactly this position. Read on mount, then
-                      // cleared — see useScrollRestore above.
-                      stashScrollY(SCROLL_KEY);
-                      router.push(`/admin/orders/${o.id}`);
-                    }}
-                    title="Open order detail"
-                    style={{
-                      cursor: "pointer",
-                      background:
-                        i % 2 === 0
-                          ? "rgba(251,243,212,0.025)"
-                          : "transparent",
-                    }}
-                  >
-                    <td style={td}>
-                      <input
-                        type="checkbox"
-                        aria-label={`Select order ${o.id}`}
-                        checked={selected.has(o.id)}
-                        onChange={() => toggleSelect(o.id)}
-                      />
-                    </td>
-                    <td style={td}>
-                      <span
-                        style={{
-                          fontFamily: "var(--font-body)",
-                          fontSize: "0.875rem",
-                          letterSpacing: "0.1em",
-                          color: "#FBF3D4",
-                        }}
-                        title={o.id}
-                      >
-                        {formatOrderNumber(o)}
-                        {isOrderFulfilled(o) ? <FulfilledTick /> : null}
-                      </span>
-                      <LoafDots items={o.items} names={productNames} />
-                    </td>
-                    <td style={td}>
-                      <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
-                        {o.customers?.full_name ?? "—"}
-                        <RepeatStar
-                          seq={o.repeat_seq}
-                          count={o.customer_order_count}
-                          firstAt={o.customer_first_order_at}
-                        />
-                      </div>
-                      {o.customers?.phone ? (
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <span
-                            style={{
-                              color: "rgba(251,243,212,0.85)",
-                              fontSize: "1rem",
-                              letterSpacing: "0.05em",
-                            }}
-                          >
-                            {o.customers.phone}
-                          </span>
-                          <ContactActions
-                            phone={o.customers.phone}
-                            customerName={o.customers.full_name}
-                            orderInfo={`order ${formatOrderNumber(o)}`}
-                          />
-                        </div>
-                      ) : null}
-                    </td>
-                    <td style={{ ...td, maxWidth: 240 }}>
-                      {/* Zone pill (also shows "Pickup" for pickup rows, so the
-                          old bespoke pickup badge is subsumed here). Zone is
-                          resolved from the address at read time via
-                          src/lib/delivery-zones.ts — no column, no migration. */}
-                      <div style={{ marginBottom: 4 }}>
-                        <ZoneBadge
-                          zone={zoneOf.get(o.id)}
-                          source={zoneResOf.get(o.id)?.source}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const rect = (
-                              e.currentTarget as HTMLElement
-                            ).getBoundingClientRect();
-                            setAssignTarget({ orderId: o.id, anchorRect: rect });
-                          }}
-                        />
-                      </div>
-                      <div
-                        style={{
-                          color: "#FBF3D4",
-                          fontSize: "1rem",
-                          lineHeight: 1.4,
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {o.delivery_address ?? "—"}
-                      </div>
-                      {o.fulfillment_type === "pickup" && o.pickup_location ? (
-                        <div
-                          style={{
-                            color: "rgba(251,243,212,0.85)",
-                            fontSize: "1rem",
-                            letterSpacing: "0.03em",
-                            marginTop: 2,
-                          }}
-                        >
-                          {o.pickup_location.name}
-                          {o.pickup_location.area ? ` · ${o.pickup_location.area}` : ""}
-                        </div>
-                      ) : o.customers?.city ? (
-                        <div
-                          style={{
-                            color: "rgba(251,243,212,0.65)",
-                            fontSize: "1rem",
-                            letterSpacing: "0.05em",
-                            marginTop: 2,
-                          }}
-                        >
-                          {o.customers.city}
-                        </div>
-                      ) : null}
-                      {o.fulfillment_type === "pickup" ? null : (
-                        <OrderLocationActions
-                          latitude={o.latitude}
-                          longitude={o.longitude}
-                          orderId={o.id}
-                          orderNumber={o.order_number}
-                        />
-                      )}
-                    </td>
-                    <td style={td}>
-                      <span style={{ color: "#FBF3D4", fontSize: "1rem" }}>
-                        {formatINR(o.total_amount)}
-                      </span>
-                    </td>
-                    <td style={td}>
-                      <PaymentBadge
-                        method={o.payment_method}
-                        status={o.payment_status}
-                      />
-                    </td>
-                    <td style={td}>
-                      <Select
-                        value={(o.status ?? "").toLowerCase()}
-                        disabled={busy}
-                        ariaLabel="Order status"
-                        style={statusSelect}
-                        onChange={(v) => {
-                          const next = v as OrderStatus;
-                          if (next === "cancelled") {
-                            if (!confirm("Cancel this order?")) return;
-                          }
-                          void patchStatus(o, next);
-                        }}
-                        options={[
-                          ...ORDER_STATUSES.map((s) => ({
-                            value: s,
-                            label: formatStatusLabel(s),
-                          })),
-                          ...(o.status &&
-                          !ORDER_STATUSES.includes(o.status as OrderStatus)
-                            ? [
-                                {
-                                  value: o.status,
-                                  label: formatStatusLabel(o.status),
-                                },
-                              ]
-                            : []),
-                        ]}
-                      />
-                      <div style={{ marginTop: 4 }}>
-                        {/* Show 'expired' badge for stale unpaid pending orders
-                            (>7d, per src/lib/order-state.ts). Stored orders.status
-                            is still 'pending' — computed_state is derived on read. */}
-                        <StatusBadge
-                          status={
-                            o.computed_state === "expired" ? "expired" : o.status
-                          }
-                        />
-                      </div>
-                      {/* Call-update dropdown — separate control from Status.
-                          Selecting a preset appends a kind='call' note; "Custom"
-                          opens the NotePanel with the panel's Kind pre-set. */}
-                      <div style={{ marginTop: 6 }}>
-                        <Select
-                          value=""
-                          disabled={callBusyId === o.id}
-                          ariaLabel="Log a call update"
-                          style={statusSelect}
-                          onChange={(v) => {
-                            if (!v) return;
-                            if (v === "__custom") {
-                              setNoteOwner({
-                                kind: "order",
-                                id: o.id,
-                                label: formatOrderNumber(o),
-                              });
-                              return;
-                            }
-                            void postCallNote(o, v);
-                          }}
-                          options={[
-                            { value: "", label: "Call update…" },
-                            ...CALL_PRESETS.map((p) => ({
-                              value: p,
-                              label: p,
-                            })),
-                            { value: "__custom", label: "Custom…" },
-                          ]}
-                        />
-                      </div>
-                      {/* The most recent note of ANY kind, so the operator
-                          sees "already contacted, said reschedule" without
-                          opening the panel. Shared with the subscriptions
-                          board — see LastNoteChip. */}
-                      <LastNoteChip note={o.last_note} />
-                    </td>
-                    <td style={td}>
-                      <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
-                        {o.delivery_date ? formatDate(o.delivery_date) : "—"}
-                      </div>
-                      {o.delivery_slot ? (
-                        <div
-                          style={{
-                            color: "rgba(251,243,212,0.65)",
-                            fontSize: "1rem",
-                            letterSpacing: "0.05em",
-                          }}
-                        >
-                          {/* Same formatter as the detail page and the CSV, so
-                              one order never reads three different ways.
-                              Legacy bare "07:30" rows become "7:30–8:00 AM";
-                              the sort above still compares the raw value. */}
-                          {formatSlotForDisplay(o.delivery_slot)}
-                        </div>
-                      ) : null}
-                      {o.is_preorder ? (
-                        <div
-                          style={{
-                            marginTop: 4,
-                            display: "inline-block",
-                            padding: "2px 6px",
-                            border: "1px solid rgba(251,243,212,0.5)",
-                            color: "#FBF3D4",
-                            fontSize: "0.875rem",
-                            letterSpacing: "0.18em",
-                            textTransform: "uppercase",
-                            borderRadius: 3,
-                          }}
-                        >
-                          {o.delivery_date ? "Pre-order · Scheduled" : "Pre-order · Unscheduled"}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td style={td}>
-                      <span
-                        style={{
-                          color: "rgba(251,243,212,0.7)",
-                          fontSize: "1rem",
-                        }}
-                      >
-                        {formatDateTime(o.created_at)}
-                      </span>
-                    </td>
-                    <td style={td}>
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <NoteIconButton
-                          count={o.note_count ?? 0}
-                          onClick={() =>
-                            setNoteOwner({
-                              kind: "order",
-                              id: o.id,
-                              label: formatOrderNumber(o),
-                            })
-                          }
-                        />
-                        {next ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void advance(o)}
-                            style={{
-                              ...buttonSm,
-                              opacity: busy ? 0.5 : 1,
-                            }}
-                          >
-                            Mark {next}
-                          </button>
-                        ) : null}
-                        {canSettleCod(o) ? (
-                          <CodSettleButton
-                            disabled={busy}
-                            onClick={() => setSettling(o)}
-                          />
-                        ) : o.cod_settled_method ? (
-                          <CodSettledChip method={o.cod_settled_method} />
-                        ) : null}
-                        {isShareable(o) ? (
-                          <OrderShareButton
-                            order={o}
-                            partners={partners}
-                            partnersLoading={partnersLoading}
-                            partnersError={partnersError}
-                            buttonStyle={{
-                              ...buttonSm,
-                              opacity: busy ? 0.5 : 1,
-                            }}
-                            rules={zoneRules}
-                          />
-                        ) : null}
-                        {o.is_preorder && !o.delivery_date ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => setScheduling(o)}
-                            style={{
-                              ...buttonSm,
-                              color: "#FBF3D4",
-                              borderColor: "rgba(251,243,212,0.6)",
-                              opacity: busy ? 0.5 : 1,
-                            }}
-                            title="Set delivery date and notify customer (SMS + WhatsApp)"
-                          >
-                            Schedule
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => setEditing(o)}
-                          style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
-                          title="Edit customer name/phone/city/address"
-                        >
-                          Customer
-                        </button>
-                        {/* Labelled for the job it is actually opened for.
-                            It read "Order", sat next to "Customer", and
-                            nothing on the face of it said "date" — that
-                            word appeared only in the title attr, which
-                            never renders on the touch devices this board
-                            is worked from, so the control was invisible in
-                            practice. The panel still edits items, fee,
-                            address and location; the tooltip carries those,
-                            the label carries the common case. */}
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => setOrderEditing(o)}
-                          style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
-                          title="Edit delivery date, slot, items, fee, address, location"
-                        >
-                          Edit date &amp; time
-                        </button>
-                        <Link
-                          href={`/admin/orders/${o.id}/print`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            ...buttonSm,
-                            textDecoration: "none",
-                            display: "inline-flex",
-                            alignItems: "center",
-                          }}
-                          title="Print single-order receipt"
-                        >
-                          Print
-                        </Link>
-                        {o.status !== "cancelled" && o.status !== "delivered" ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => {
-                              if (confirm("Cancel this order?")) {
-                                void patchStatus(o, "cancelled");
-                              }
-                            }}
-                            style={{
-                              ...buttonSm,
-                              color: "#EF4444",
-                              borderColor: "rgba(239,68,68,0.45)",
-                              opacity: busy ? 0.5 : 1,
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {filtered.map((o, i) => (
+                <OrderRow
+                  key={o.id}
+                  o={o}
+                  zebra={i % 2 === 0}
+                  busy={busyId === o.id}
+                  callBusy={callBusyId === o.id}
+                  checked={selected.has(o.id)}
+                  zone={zoneOf.get(o.id)}
+                  zoneSource={zoneResOf.get(o.id)?.source}
+                  productNames={productNames}
+                  partners={partners}
+                  partnersLoading={partnersLoading}
+                  partnersError={partnersError}
+                  zoneRules={zoneRules}
+                  onOpen={openOrder}
+                  onToggleSelect={toggleSelect}
+                  onAssignZone={assignZone}
+                  onPatchStatus={patchStatus}
+                  onCallNote={postCallNote}
+                  onOpenNotes={openNotes}
+                  onAdvance={advance}
+                  onSettleCod={setSettling}
+                  onSchedule={setScheduling}
+                  onEditCustomer={setEditing}
+                  onEditOrder={setOrderEditing}
+                />
+              ))}
             </tbody>
           </table>
         </div>
@@ -2268,6 +2151,435 @@ const ACTION_PAST: Record<BulkAction, string> = {
   copy: "copied",
   cancel: "cancelled",
 };
+
+/**
+ * ONE table row, memoised.
+ *
+ * WHY THIS EXISTS. The body below is 49 JSX tags. It used to be written
+ * inline in the tbody map inside OrdersPageInner, which meant every single
+ * state change on that component — a keystroke in the search box, a poll
+ * tick, opening a modal — rebuilt all of it for every visible order. At 715
+ * rows that is ~35,000 elements reconciled for data that had not changed.
+ *
+ * WHY IT IS AT MODULE LEVEL rather than in its own file: it reads ~20
+ * module-local helpers and style objects (td, buttonSm, statusSelect,
+ * nextStatusFor, formatOrderNumber, canSettleCod, isShareable, …). Moving
+ * it to a file would mean exporting all of those from page.tsx, which is a
+ * much bigger diff with no behavioural gain. What memo() needs is a stable
+ * component TYPE, and module level gives that.
+ *
+ * THE PROP RULE. memo() does a shallow compare, so every prop here is
+ * either a primitive, a value that only this row can change (`busy`,
+ * `checked`, `zone`), or a callback with a stable identity. Passing one
+ * inline arrow — `onOpen={() => …}` — from the caller silently reverts
+ * this whole change to a no-op, with no error and no visible symptom.
+ * `zebra` is a boolean and not the row index for the same reason: the
+ * index moves on every sort and filter, the parity usually does not.
+ */
+type OrderRowProps = {
+  o: AdminOrderRow;
+  zebra: boolean;
+  busy: boolean;
+  callBusy: boolean;
+  checked: boolean;
+  zone: ZoneKey | undefined;
+  zoneSource: ZoneResolution["source"] | undefined;
+  productNames: ProductNameMap;
+  partners: ShareablePartner[];
+  partnersLoading: boolean;
+  partnersError: string | null;
+  zoneRules: ZoneRuleSet;
+  onOpen: (id: string) => void;
+  onToggleSelect: (id: string) => void;
+  onAssignZone: (orderId: string, anchorRect: DOMRect) => void;
+  onPatchStatus: (order: AdminOrderRow, next: OrderStatus) => void;
+  onCallNote: (order: AdminOrderRow, body: string) => void;
+  onOpenNotes: (order: AdminOrderRow) => void;
+  onAdvance: (order: AdminOrderRow) => void;
+  onSettleCod: (order: AdminOrderRow) => void;
+  onSchedule: (order: AdminOrderRow) => void;
+  onEditCustomer: (order: AdminOrderRow) => void;
+  onEditOrder: (order: AdminOrderRow) => void;
+};
+
+const OrderRow = memo(function OrderRow({
+  o,
+  zebra,
+  busy,
+  callBusy,
+  checked,
+  zone,
+  zoneSource,
+  productNames,
+  partners,
+  partnersLoading,
+  partnersError,
+  zoneRules,
+  onOpen,
+  onToggleSelect,
+  onAssignZone,
+  onPatchStatus,
+  onCallNote,
+  onOpenNotes,
+  onAdvance,
+  onSettleCod,
+  onSchedule,
+  onEditCustomer,
+  onEditOrder,
+}: OrderRowProps) {
+  const next = nextStatusFor(o);
+  return (
+    <tr
+      onClick={(e) => {
+        // Row-wide navigation, minus the controls that own their own click
+        // (checkbox, status Select, actions).
+        if ((e.target as HTMLElement).closest(ROW_INTERACTIVE_SELECTOR)) {
+          return;
+        }
+        if (window.getSelection()?.toString()) return;
+        onOpen(o.id);
+      }}
+      title="Open order detail"
+      style={{
+        cursor: "pointer",
+        background: zebra ? "rgba(251,243,212,0.025)" : "transparent",
+      }}
+    >
+      <td style={td}>
+        <input
+          type="checkbox"
+          aria-label={`Select order ${o.id}`}
+          checked={checked}
+          onChange={() => onToggleSelect(o.id)}
+        />
+      </td>
+      <td style={td}>
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "0.875rem",
+            letterSpacing: "0.1em",
+            color: "#FBF3D4",
+          }}
+          title={o.id}
+        >
+          {formatOrderNumber(o)}
+          {isOrderFulfilled(o) ? <FulfilledTick /> : null}
+        </span>
+        <LoafDots items={o.items} names={productNames} />
+      </td>
+      <td style={td}>
+        <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
+          {o.customers?.full_name ?? "—"}
+          <RepeatStar
+            seq={o.repeat_seq}
+            count={o.customer_order_count}
+            firstAt={o.customer_first_order_at}
+          />
+        </div>
+        {o.customers?.phone ? (
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <span
+              style={{
+                color: "rgba(251,243,212,0.85)",
+                fontSize: "1rem",
+                letterSpacing: "0.05em",
+              }}
+            >
+              {o.customers.phone}
+            </span>
+            <ContactActions
+              phone={o.customers.phone}
+              customerName={o.customers.full_name}
+              orderInfo={`order ${formatOrderNumber(o)}`}
+            />
+          </div>
+        ) : null}
+      </td>
+      <td style={{ ...td, maxWidth: 240 }}>
+        {/* Zone pill (also shows "Pickup" for pickup rows, so the old
+            bespoke pickup badge is subsumed here). Zone is resolved from
+            the address at read time via src/lib/delivery-zones.ts — no
+            column, no migration. */}
+        <div style={{ marginBottom: 4 }}>
+          <ZoneBadge
+            zone={zone}
+            source={zoneSource}
+            onClick={(e) => {
+              e.stopPropagation();
+              const rect = (
+                e.currentTarget as HTMLElement
+              ).getBoundingClientRect();
+              onAssignZone(o.id, rect);
+            }}
+          />
+        </div>
+        <div
+          style={{
+            color: "#FBF3D4",
+            fontSize: "1rem",
+            lineHeight: 1.4,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {o.delivery_address ?? "—"}
+        </div>
+        {o.fulfillment_type === "pickup" && o.pickup_location ? (
+          <div
+            style={{
+              color: "rgba(251,243,212,0.85)",
+              fontSize: "1rem",
+              letterSpacing: "0.03em",
+              marginTop: 2,
+            }}
+          >
+            {o.pickup_location.name}
+            {o.pickup_location.area ? ` · ${o.pickup_location.area}` : ""}
+          </div>
+        ) : o.customers?.city ? (
+          <div
+            style={{
+              color: "rgba(251,243,212,0.65)",
+              fontSize: "1rem",
+              letterSpacing: "0.05em",
+              marginTop: 2,
+            }}
+          >
+            {o.customers.city}
+          </div>
+        ) : null}
+        {o.fulfillment_type === "pickup" ? null : (
+          <OrderLocationActions
+            latitude={o.latitude}
+            longitude={o.longitude}
+            orderId={o.id}
+            orderNumber={o.order_number}
+          />
+        )}
+      </td>
+      <td style={td}>
+        <span style={{ color: "#FBF3D4", fontSize: "1rem" }}>
+          {formatINR(o.total_amount)}
+        </span>
+      </td>
+      <td style={td}>
+        <PaymentBadge method={o.payment_method} status={o.payment_status} />
+      </td>
+      <td style={td}>
+        <Select
+          value={(o.status ?? "").toLowerCase()}
+          disabled={busy}
+          ariaLabel="Order status"
+          style={statusSelect}
+          onChange={(v) => {
+            const nextStatus = v as OrderStatus;
+            if (nextStatus === "cancelled") {
+              if (!confirm("Cancel this order?")) return;
+            }
+            onPatchStatus(o, nextStatus);
+          }}
+          options={[
+            ...ORDER_STATUSES.map((s) => ({
+              value: s,
+              label: formatStatusLabel(s),
+            })),
+            ...(o.status && !ORDER_STATUSES.includes(o.status as OrderStatus)
+              ? [{ value: o.status, label: formatStatusLabel(o.status) }]
+              : []),
+          ]}
+        />
+        <div style={{ marginTop: 4 }}>
+          {/* Show 'expired' badge for stale unpaid pending orders (>7d, per
+              src/lib/order-state.ts). Stored orders.status is still
+              'pending' — computed_state is derived on read. */}
+          <StatusBadge
+            status={o.computed_state === "expired" ? "expired" : o.status}
+          />
+        </div>
+        {/* Call-update dropdown — separate control from Status. Selecting a
+            preset appends a kind='call' note; "Custom" opens the NotePanel
+            with the panel's Kind pre-set. */}
+        <div style={{ marginTop: 6 }}>
+          <Select
+            value=""
+            disabled={callBusy}
+            ariaLabel="Log a call update"
+            style={statusSelect}
+            onChange={(v) => {
+              if (!v) return;
+              if (v === "__custom") {
+                onOpenNotes(o);
+                return;
+              }
+              onCallNote(o, v);
+            }}
+            options={[
+              { value: "", label: "Call update…" },
+              ...CALL_PRESETS.map((p) => ({ value: p, label: p })),
+              { value: "__custom", label: "Custom…" },
+            ]}
+          />
+        </div>
+        {/* The most recent note of ANY kind, so the operator sees "already
+            contacted, said reschedule" without opening the panel. Shared
+            with the subscriptions board — see LastNoteChip. */}
+        <LastNoteChip note={o.last_note} />
+      </td>
+      <td style={td}>
+        <div style={{ color: "#FBF3D4", fontSize: "1rem" }}>
+          {o.delivery_date ? formatDate(o.delivery_date) : "—"}
+        </div>
+        {o.delivery_slot ? (
+          <div
+            style={{
+              color: "rgba(251,243,212,0.65)",
+              fontSize: "1rem",
+              letterSpacing: "0.05em",
+            }}
+          >
+            {/* Same formatter as the detail page and the CSV, so one order
+                never reads three different ways. Legacy bare "07:30" rows
+                become "7:30–8:00 AM"; the sort still compares the raw
+                value. */}
+            {formatSlotForDisplay(o.delivery_slot)}
+          </div>
+        ) : null}
+        {o.is_preorder ? (
+          <div
+            style={{
+              marginTop: 4,
+              display: "inline-block",
+              padding: "2px 6px",
+              border: "1px solid rgba(251,243,212,0.5)",
+              color: "#FBF3D4",
+              fontSize: "0.875rem",
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              borderRadius: 3,
+            }}
+          >
+            {o.delivery_date
+              ? "Pre-order · Scheduled"
+              : "Pre-order · Unscheduled"}
+          </div>
+        ) : null}
+      </td>
+      <td style={td}>
+        <span style={{ color: "rgba(251,243,212,0.7)", fontSize: "1rem" }}>
+          {formatDateTime(o.created_at)}
+        </span>
+      </td>
+      <td style={td}>
+        <div className="flex flex-wrap gap-2 items-center">
+          <NoteIconButton
+            count={o.note_count ?? 0}
+            onClick={() => onOpenNotes(o)}
+          />
+          {next ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onAdvance(o)}
+              style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
+            >
+              Mark {next}
+            </button>
+          ) : null}
+          {canSettleCod(o) ? (
+            <CodSettleButton disabled={busy} onClick={() => onSettleCod(o)} />
+          ) : o.cod_settled_method ? (
+            <CodSettledChip method={o.cod_settled_method} />
+          ) : null}
+          {isShareable(o) ? (
+            <OrderShareButton
+              order={o}
+              partners={partners}
+              partnersLoading={partnersLoading}
+              partnersError={partnersError}
+              buttonStyle={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
+              rules={zoneRules}
+            />
+          ) : null}
+          {o.is_preorder && !o.delivery_date ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onSchedule(o)}
+              style={{
+                ...buttonSm,
+                color: "#FBF3D4",
+                borderColor: "rgba(251,243,212,0.6)",
+                opacity: busy ? 0.5 : 1,
+              }}
+              title="Set delivery date and notify customer (SMS + WhatsApp)"
+            >
+              Schedule
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onEditCustomer(o)}
+            style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
+            title="Edit customer name/phone/city/address"
+          >
+            Customer
+          </button>
+          {/* Labelled for the job it is actually opened for. It read
+              "Order", sat next to "Customer", and nothing on the face of it
+              said "date" — that word appeared only in the title attr, which
+              never renders on the touch devices this board is worked from,
+              so the control was invisible in practice. The panel still
+              edits items, fee, address and location; the tooltip carries
+              those, the label carries the common case. */}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onEditOrder(o)}
+            style={{ ...buttonSm, opacity: busy ? 0.5 : 1 }}
+            title="Edit delivery date, slot, items, fee, address, location"
+          >
+            Edit date &amp; time
+          </button>
+          <Link
+            href={`/admin/orders/${o.id}/print`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              ...buttonSm,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+            }}
+            title="Print single-order receipt"
+          >
+            Print
+          </Link>
+          {o.status !== "cancelled" && o.status !== "delivered" ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (confirm("Cancel this order?")) {
+                  onPatchStatus(o, "cancelled");
+                }
+              }}
+              style={{
+                ...buttonSm,
+                color: "#EF4444",
+                borderColor: "rgba(239,68,68,0.45)",
+                opacity: busy ? 0.5 : 1,
+              }}
+            >
+              Cancel
+            </button>
+          ) : null}
+        </div>
+      </td>
+    </tr>
+  );
+});
 
 function ConfirmModal({
   action,

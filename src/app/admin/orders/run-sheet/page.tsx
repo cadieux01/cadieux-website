@@ -117,8 +117,11 @@ function RunSheetPageInner() {
 
   const load = useCallback(async () => {
     try {
+      // ?all=1 — the run sheet is cut from the whole table client-side off
+      // the URL params, so the board's bounded default window would silently
+      // drop stops from the sheet.
       const res = await adminFetch<{ orders: AdminOrderRow[] }>(
-        "/api/admin/orders",
+        "/api/admin/orders?all=1",
       );
       setOrders(res.orders ?? []);
     } catch (e) {

@@ -10,6 +10,7 @@ import {
   computeRetention,
   type HistoryOrder,
 } from "@/lib/customer-history";
+import { matchesAdminQuery } from "@/lib/admin-search";
 import { aggregateNotesFor } from "@/lib/order-notes";
 import { computeOrderState } from "@/lib/order-state";
 import {
@@ -25,81 +26,258 @@ import { queueOrderNotification } from "@/lib/order-notification";
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://www.cadieux.in";
 
+// The full row projection the board renders from. ~1.2 kB of JSON per row,
+// which is why the default response is bounded: 715 rows was 888 kB on the
+// wire and ~35,000 React elements to rebuild.
+//
+// distance_km is here for /admin/deliveries' driving-order sort, which
+// falls back to it for the ~2 in 3 orders that have no GPS pin. One
+// float per row; see partner-deliveries.ts for why only post-cutover
+// rows are usable.
+// status_updated_at + paid_at + cod_settled_method are projected for the
+// COD settlement control: it must SHOW the paid_at it is about to write
+// (for a delivered order that is status_updated_at) before saving.
+const FULL_SELECT =
+  "id, order_number, public_ref, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, status_updated_at, paid_at, cod_settled_method, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, order_kind, customers(id, full_name, phone, city)";
+
+// The LEAN projection: every column needed to (a) fold the repeat-customer
+// index and the retention panel over the whole table, (b) answer the search
+// box, and (c) count the Bread / Sandwiches tabs. ~70 bytes a row, and it
+// NEVER crosses the wire — it exists only so that bounding the full
+// projection cannot change an answer.
+const LEAN_SELECT =
+  "id, status, payment_status, created_at, total_amount, order_number, public_ref, order_kind, customers(full_name, phone)";
+
+/** Rows returned by default, newest first. */
+const DEFAULT_LIMIT = 250;
+/** Hard ceiling on ?limit= so a hand-typed URL cannot ask for the world. */
+const MAX_LIMIT = 2000;
+/**
+ * Ceiling on rows pulled in from OUTSIDE the default window (live work of
+ * any age, plus search hits). Keeps the `id=in.(…)` URL well under the
+ * PostgREST request-line limit. Exceeding it sets `truncated`.
+ */
+const MAX_OUT_OF_WINDOW = 200;
+
+/** Only the columns this route reads off a FULL_SELECT row by name; the rest
+ *  ride through the index signature straight into the response. */
+type FullOrderRow = {
+  id: string;
+  created_at: string;
+  status?: string | null;
+  payment_status?: string | null;
+  pickup_location_id?: string | null;
+  [key: string]: unknown;
+};
+
+type LeanOrder = {
+  id: string;
+  status: string | null;
+  payment_status: string | null;
+  created_at: string;
+  total_amount: number | string | null;
+  order_number: string | null;
+  public_ref: string | null;
+  order_kind: string | null;
+  customers: { full_name: string | null; phone: string | null } | null;
+};
+
+/** created_at desc, id desc as a stable tie-break. Both the lean query and
+ *  the bounded full query order this way, so the window the lean pass
+ *  computes is byte-for-byte the window the full pass returns. */
+function newestFirst(a: FullOrderRow, b: FullOrderRow) {
+  return b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id);
+}
+
+/**
+ * GET /api/admin/orders
+ *
+ *   ?all=1     — every order, unbounded. Used by /admin/orders/print,
+ *                /admin/orders/run-sheet and /admin/deliveries, which each
+ *                slice the whole table client-side, and by the board's own
+ *                "Load all" control.
+ *   ?limit=N   — size of the default window (default 250, max 2000).
+ *   ?q=…       — SERVER-SIDE SEARCH. Without it, bounding the query would
+ *                silently stop the board's client-side search box from
+ *                finding anything older than the window. The match is run
+ *                with matchesAdminQuery — the very function the board
+ *                filters with — over the lean index, so the server and the
+ *                client cannot disagree about what "matches".
+ *
+ * The default response is the union of three sets, so that nothing the
+ * operator must act on can fall out of the window:
+ *   1. the newest `limit` orders,
+ *   2. every order still live (computed_state active | pending) at any age,
+ *   3. every order matching `q` at any age.
+ */
 export async function GET(req: NextRequest) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("orders")
-    .select(
-      // distance_km is here for /admin/deliveries' driving-order sort, which
-      // falls back to it for the ~2 in 3 orders that have no GPS pin. One
-      // float per row; see partner-deliveries.ts for why only post-cutover
-      // rows are usable.
-      // status_updated_at + paid_at + cod_settled_method are projected for the
-      // COD settlement control: it must SHOW the paid_at it is about to write
-      // (for a delivered order that is status_updated_at) before saving.
-      "id, order_number, public_ref, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, status_updated_at, paid_at, cod_settled_method, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, order_kind, customers(id, full_name, phone, city)"
-    )
-    .order("created_at", { ascending: false });
+  const params = req.nextUrl.searchParams;
+  const wantAll = params.get("all") === "1";
+  const q = (params.get("q") ?? "").trim();
+  const limitRaw = Number(params.get("limit"));
+  const limit =
+    Number.isFinite(limitRaw) && limitRaw > 0
+      ? Math.min(Math.trunc(limitRaw), MAX_LIMIT)
+      : DEFAULT_LIMIT;
 
-  if (error) {
-    console.error("[admin/orders list]", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const nowMs = Date.now();
+
+  // WAVE 1 — the lean full-table read, in parallel with the hydrated rows.
+  //
+  // `lean` is what keeps repeat_seq, customer_order_count,
+  // customer_first_order_at and the whole retention panel exact: they are
+  // folded over EVERY order, not over the window.
+  //
+  // The hydrated read alongside it does NOT depend on `lean`: with ?all=1
+  // it is the same unbounded set, and by default it is just "newest
+  // `limit`, same ORDER BY", which the window is BY DEFINITION the head of.
+  // Only the out-of-window top-up needs ids computed from `lean`, and that
+  // is wave 2. Awaiting these in sequence cost a whole Mumbai→Tokyo round
+  // trip for nothing. Both ORDER BY clauses are identical so the head of
+  // one is the head of the other.
+  const hydratedQuery = wantAll
+    ? supabaseAdmin
+        .from("orders")
+        .select(FULL_SELECT)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+    : supabaseAdmin
+        .from("orders")
+        .select(FULL_SELECT)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(limit);
+
+  const [leanRes, hydratedRes] = await Promise.all([
+    supabaseAdmin
+      .from("orders")
+      .select(LEAN_SELECT)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }),
+    hydratedQuery,
+  ]);
+
+  if (leanRes.error) {
+    console.error("[admin/orders list] lean", leanRes.error.message);
+    return NextResponse.json({ error: leanRes.error.message }, { status: 500 });
+  }
+  if (hydratedRes.error) {
+    console.error("[admin/orders list]", hydratedRes.error.message);
+    return NextResponse.json(
+      { error: hydratedRes.error.message },
+      { status: 500 },
+    );
+  }
+  const lean = (leanRes.data ?? []) as unknown as LeanOrder[];
+  const hydrated = (hydratedRes.data ?? []) as unknown as FullOrderRow[];
+
+  // WAVE 2 — top up the window with anything outside it the operator must
+  // still be able to see.
+  let rows: FullOrderRow[];
+  let truncated = false;
+
+  if (wantAll) {
+    rows = hydrated;
+  } else {
+    const inWindow = new Set(lean.slice(0, limit).map((r) => r.id));
+    const outside: string[] = [];
+    for (const r of lean) {
+      if (inWindow.has(r.id)) continue;
+      const state = computeOrderState(r, nowMs);
+      const live = state === "active" || state === "pending";
+      const hit =
+        q.length > 0 &&
+        matchesAdminQuery(q, [
+          r.customers?.full_name,
+          r.customers?.phone,
+          r.public_ref,
+          r.order_number,
+        ]);
+      if (live || hit) outside.push(r.id);
+    }
+    truncated = outside.length > MAX_OUT_OF_WINDOW;
+    // `lean` is newest-first, so the slice keeps the most recent hits.
+    const wanted = outside.slice(0, MAX_OUT_OF_WINDOW);
+
+    // Skipped entirely when nothing is outside the window — which is the
+    // common case on a quiet day, and makes the whole GET two waves.
+    let outsideRows: FullOrderRow[] = [];
+    if (wanted.length > 0) {
+      const { data, error } = await supabaseAdmin
+        .from("orders")
+        .select(FULL_SELECT)
+        .in("id", wanted);
+      if (error) {
+        console.error("[admin/orders list] outside", error.message);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      outsideRows = (data ?? []) as unknown as FullOrderRow[];
+    }
+    const merged = new Map<string, FullOrderRow>();
+    for (const r of [...hydrated, ...outsideRows]) {
+      merged.set(r.id, r);
+    }
+    rows = Array.from(merged.values()).sort(newestFirst);
   }
 
-  // Side-fetch pickup_locations for any order that references one. Done as a
-  // manual join (rather than a PostgREST embed) because there's no FK between
-  // orders.pickup_location_id and pickup_locations.id yet.
-  const rows = data ?? [];
+  // WAVE 3 — the two side-fetches, together. Both read only `rows` and
+  // neither reads the other's result, so awaiting them in sequence was one
+  // round trip of pure latency. On a board with no pickup orders the first
+  // is not a query at all.
+  //
+  // pickup_locations is a manual join (rather than a PostgREST embed)
+  // because there's no FK between orders.pickup_location_id and
+  // pickup_locations.id yet.
+  //
+  // Note aggregates come back in one round trip so the board can render the
+  // note icon (with count) and the last-call chip without a per-row lookup.
+  // Failure is swallowed inside aggregateNotesFor and returns an empty map,
+  // so the list still loads if the notes table is unreachable.
   const pickupIds = Array.from(
     new Set(
       rows
-        .map((r: { pickup_location_id?: string | null }) => r.pickup_location_id)
+        .map((r) => r.pickup_location_id)
         .filter((v): v is string => typeof v === "string" && v.length > 0),
     ),
   );
-  let pickupById: Record<string, { id: string; name: string; area: string; address: string }> = {};
-  if (pickupIds.length > 0) {
-    const { data: locs } = await supabaseAdmin
-      .from("pickup_locations")
-      .select("id, name, area, address")
-      .in("id", pickupIds);
-    for (const l of locs ?? []) {
-      pickupById[l.id] = l;
-    }
-  }
-  // Side-fetch note aggregates in one round trip so the board can render
-  // the note icon (with count) and the last-call chip without a per-row
-  // lookup. Failure is swallowed inside aggregateNotesFor and returns an
-  // empty map, so the list still loads if the notes table is unreachable.
-  const orderIds = rows
-    .map((r: { id?: string | null }) => r.id)
-    .filter((v): v is string => typeof v === "string" && v.length > 0);
-  const noteAgg = await aggregateNotesFor(supabaseAdmin, "order", orderIds);
+  const orderIds = rows.map((r) => r.id).filter((v) => v.length > 0);
 
-  // Repeat-customer history + the retention panel, folded ONCE over the
-  // rows we already have — keyed on customers.phone, cancelled orders
-  // excluded. This GET returns every order, so the history is complete
-  // without a second query and without one lookup per row.
-  const history = rows as HistoryOrder[];
-  const repeatIndex = buildRepeatIndex(history);
-  const retention = computeRetention(history);
+  const [pickupRes, noteAgg] = await Promise.all([
+    pickupIds.length > 0
+      ? supabaseAdmin
+          .from("pickup_locations")
+          .select("id, name, area, address")
+          .in("id", pickupIds)
+      : Promise.resolve({ data: [], error: null }),
+    aggregateNotesFor(supabaseAdmin, "order", orderIds),
+  ]);
+
+  const pickupById: Record<string, { id: string; name: string; area: string; address: string }> = {};
+  for (const l of pickupRes.data ?? []) {
+    pickupById[l.id] = l;
+  }
+
+  // Repeat-customer history + the retention panel, folded over the LEAN
+  // pass — keyed on customers.phone, cancelled orders excluded.
+  //
+  // IT MUST BE `lean`, NEVER `rows`. These are whole-table facts: an
+  // order's position in its customer's history, and the retention
+  // percentages. Folding them over the bounded `rows` would quietly
+  // restate a 4th order as a 1st and recompute the retention panel off a
+  // slice — wrong numbers with no error anywhere.
+  const repeatIndex = buildRepeatIndex(lean as unknown as HistoryOrder[]);
+  const retention = computeRetention(lean as unknown as HistoryOrder[]);
 
   // Attach computed_state on every row so admin filters / badges never need
   // to duplicate the classifier. See src/lib/order-state.ts (mirrors the
   // WhatsApp bot's classifyOrder — the single source of truth for "expired").
-  const nowMs = Date.now();
-  const enriched = rows.map((r: {
-    id?: string | null;
-    pickup_location_id?: string | null;
-    status?: string | null;
-    payment_status?: string | null;
-    created_at?: string | null;
-  }) => {
-    const agg = r.id ? noteAgg.get(r.id) : undefined;
-    const rep = r.id ? repeatIndex.get(r.id) : undefined;
+  const enriched = rows.map((r) => {
+    const agg = noteAgg.get(r.id);
+    const rep = repeatIndex.get(r.id);
     return {
       ...r,
       pickup_location: r.pickup_location_id ? pickupById[r.pickup_location_id] ?? null : null,
@@ -113,7 +291,29 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ orders: enriched, retention });
+  // The Bread / Sandwiches tab badges. Also folded over `lean`, and for the
+  // same reason as the history above: those badges are the operator's answer
+  // to "how many sandwich orders are there", and counting the bounded `rows`
+  // would print a number that shrinks as the window does. "Bread 267" when
+  // 715 exist reads as orders having vanished.
+  // order_kind is NULL on every pre-launch row and defaults to bread.
+  const kindCounts = { bread: 0, sandwich: 0 } as Record<string, number>;
+  for (const r of lean) {
+    const k = r.order_kind ?? "bread";
+    if (k in kindCounts) kindCounts[k] += 1;
+  }
+
+  // total_orders / truncated make the bound VISIBLE. A board that silently
+  // shows a slice of the table is the failure mode this endpoint used to
+  // avoid by returning everything; now the client is told, and offers a
+  // "Load all".
+  return NextResponse.json({
+    orders: enriched,
+    retention,
+    total_orders: lean.length,
+    kind_counts: kindCounts,
+    truncated: truncated || enriched.length < lean.length,
+  });
 }
 
 // POST /api/admin/orders — manual order entry ("Register New Order").
