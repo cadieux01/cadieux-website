@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone, normalizePhone, maskPhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  normalizePhone,
+  maskPhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
@@ -14,6 +19,22 @@ const supabaseAdmin = createClient(
 // Disable Next.js fetch/route caching here.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+/** Re-issues `cdx_phone_verified` with a fresh expiry on a SUCCESSFUL read.
+ *
+ *  Same shape as the helper in /api/checkout. This is the plans dashboard,
+ *  which a subscriber can live on for weeks without touching a single write
+ *  path — polling it every 10s did nothing to keep their session alive, so
+ *  the cookie aged out on a fixed clock under someone who was demonstrably
+ *  using the site. Rolling only on 2xx: a 401 must not resurrect a dead
+ *  cookie, and a 500 is not evidence of a successful read.
+ *
+ *  No-op for mobile (bearer, no cookie) and for an already-invalid cookie —
+ *  see the helper. Returns the same response for a one-line return site. */
+function rolled(req: NextRequest, res: NextResponse): NextResponse {
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
+}
 
 export async function GET(req: NextRequest) {
   // NO route-level rate limit here, deliberately. middleware.ts matches
@@ -70,7 +91,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (!subs || subs.length === 0) {
-    return NextResponse.json({ subscriptions: [] });
+    return rolled(req, NextResponse.json({ subscriptions: [] }));
   }
 
   void recordAuditEvent({
@@ -96,10 +117,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({
-    subscriptions: subs.map((s) => ({
-      ...s,
-      next_delivery_date: nextBySub.get(s.id) ?? null,
-    })),
-  });
+  return rolled(
+    req,
+    NextResponse.json({
+      subscriptions: subs.map((s) => ({
+        ...s,
+        next_delivery_date: nextBySub.get(s.id) ?? null,
+      })),
+    }),
+  );
 }

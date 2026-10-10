@@ -9,7 +9,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 import { computeOrderState } from "@/lib/order-state";
 
@@ -21,6 +24,22 @@ const supabaseAdmin = createClient(
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Re-issues `cdx_phone_verified` with a fresh expiry on a SUCCESSFUL read.
+ *
+ *  Same shape as the helper in /api/checkout. This is the order tracking
+ *  page: a customer who places one order and then checks on it for a week
+ *  issues nothing but GETs, so under the old write-only roll their session
+ *  expired while they were still watching the order. Rolling only on the
+ *  2xx: the 401 must not resurrect a dead cookie, and the 404s are the
+ *  "don't leak unrelated orders" responses, not successful reads.
+ *
+ *  No-op for mobile (bearer, no cookie) and for an already-invalid cookie —
+ *  see the helper. Returns the same response for a one-line return site. */
+function rolled(req: NextRequest, res: NextResponse): NextResponse {
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
+}
 
 export async function GET(
   req: NextRequest,
@@ -126,18 +145,21 @@ export async function GET(
   // tracker uses this to render the "expired" terminal state + hide Pay Now
   // on stale unpaid orders. See src/lib/order-state.ts.
   const computed_state = computeOrderState(order);
-  return NextResponse.json({
-    order: {
-      ...rest,
-      pickup_location: pickupLocation,
-      computed_state,
-      // The verified caller's own name and number, echoed back for the
-      // share message. Reached only after the ownership check above.
-      customer: {
-        full_name: customer.full_name ?? null,
-        phone: customer.phone ?? null,
+  return rolled(
+    req,
+    NextResponse.json({
+      order: {
+        ...rest,
+        pickup_location: pickupLocation,
+        computed_state,
+        // The verified caller's own name and number, echoed back for the
+        // share message. Reached only after the ownership check above.
+        customer: {
+          full_name: customer.full_name ?? null,
+          phone: customer.phone ?? null,
+        },
       },
-    },
-    change_request: pendingRequest ?? null,
-  });
+      change_request: pendingRequest ?? null,
+    }),
+  );
 }

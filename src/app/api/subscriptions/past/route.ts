@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedPhone, normalizePhone, maskPhone } from "@/lib/phone-cookie";
+import {
+  getVerifiedPhone,
+  normalizePhone,
+  maskPhone,
+  rollPhoneCookieOnWebRequest,
+} from "@/lib/phone-cookie";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
@@ -14,6 +19,22 @@ const supabaseAdmin = createClient(
 // completed, cancelled, etc.), most recent first. The page renders status
 // badges to differentiate. Live tracking still happens on /api/subscriptions
 // which filters to non-finished rows for the active dashboard.
+
+/** Re-issues `cdx_phone_verified` with a fresh expiry on a SUCCESSFUL read.
+ *
+ *  Same shape as the helper in /api/checkout. Subscription history is a
+ *  pure read — a customer looking back over finished plans never touches a
+ *  write path, which is exactly the case the old write-only roll missed.
+ *  Rolling only on 2xx: a 401 must not resurrect a dead cookie, and a 500
+ *  is not evidence of a successful read.
+ *
+ *  No-op for mobile (bearer, no cookie) and for an already-invalid cookie —
+ *  see the helper. Returns the same response for a one-line return site. */
+function rolled(req: NextRequest, res: NextResponse): NextResponse {
+  rollPhoneCookieOnWebRequest(req, res);
+  return res;
+}
+
 export async function GET(req: NextRequest) {
   // NO route-level rate limit here, deliberately. middleware.ts matches
   // `/api/:path*` and already applies apiRateLimit to this request on the same
@@ -73,7 +94,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (!subs || subs.length === 0) {
-    return NextResponse.json({ subscriptions: [] });
+    return rolled(req, NextResponse.json({ subscriptions: [] }));
   }
 
   void recordAuditEvent({
@@ -96,10 +117,13 @@ export async function GET(req: NextRequest) {
     countBySub.set(d.subscription_id, (countBySub.get(d.subscription_id) ?? 0) + 1);
   }
 
-  return NextResponse.json({
-    subscriptions: subs.map((s) => ({
-      ...s,
-      deliveries_count: countBySub.get(s.id) ?? s.total_weeks ?? 0,
-    })),
-  });
+  return rolled(
+    req,
+    NextResponse.json({
+      subscriptions: subs.map((s) => ({
+        ...s,
+        deliveries_count: countBySub.get(s.id) ?? s.total_weeks ?? 0,
+      })),
+    }),
+  );
 }
