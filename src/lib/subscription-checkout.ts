@@ -165,7 +165,12 @@ export function buildMultiVariantSubscriptionInsert(
     weeks,
     days: dayKeys,
     slot_mode,
-    slot: slot_mode === "same" ? slot : null,
+    // `slot` is deliberately NOT written. It is the dead column of the pair:
+    // this expression was `slot_mode === "same" ? slot : null`, and
+    // slot_mode='same' has been used 3 times ever — so it wrote NULL on
+    // every custom plan AND NULL on the three "same" ones too. `time_slot`
+    // below is the column that actually carries the plan-wide slot, and
+    // `slots_by_day` carries the per-day ones.
     slots_by_day: slot_mode === "custom" ? slots_by_day : null,
     total: serverAmount,
     customer_name,

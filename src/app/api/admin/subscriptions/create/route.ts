@@ -72,6 +72,7 @@ import {
   computeSubscriptionTotal,
 } from "@/lib/subscription-delivery-fee";
 import { formatSubscriptionNumber } from "@/lib/order-number";
+import { isValidSlotValue } from "@/lib/delivery-slots";
 
 // Client-supplied delivery row shape — mirrors /api/checkout's
 // ClientDelivery type (see route.ts:317-324). `slot` may be null when a
@@ -216,6 +217,42 @@ export async function POST(req: NextRequest) {
     body.slots_by_day && typeof body.slots_by_day === "object"
       ? (body.slots_by_day as Record<string, string>)
       : null;
+
+  // Slot-value gate. This route was the ONLY slot writer with no membership
+  // check: a non-empty string was accepted and stamped onto
+  // subscription_deliveries.slot + .scheduled_time_slot (below) and onto the
+  // parent's slot / slots_by_day. Every other write path gates on
+  // isValidSlotValue — /api/checkout:719-726, order-checkout.ts:244, the two
+  // admin order routes, the delivery-edit routes — so an arbitrary window
+  // could only ever enter the data from here.
+  //
+  // isValidSlotValue, NOT validateBookingSlot: admin must be able to re-book
+  // a PAUSED value by hand, which is the whole reason paused slots stay in
+  // SLOTS rather than being deleted. Same choice as
+  // admin/orders/[id]/edit:238 and admin/.../deliveries/[deliveryId]:73.
+  //
+  // All THREE intake points are checked, not just the two parent-row fields.
+  // Shape 1 (`deliveries[].slot`) is what the admin per-date calendar
+  // actually sends, and :321 below reads `d.slot` ahead of both of them —
+  // gating only `slot` + `slots_by_day` would leave the primary path open.
+  const badSlot = (v: unknown) => typeof v === "string" && v.length > 0 && !isValidSlotValue(v);
+  const offending =
+    (badSlot(slot) ? [slot as string] : [])
+      .concat(Object.values(slotsByDayIn ?? {}).filter(badSlot) as string[])
+      .concat(
+        (clientDeliveries ?? [])
+          .map((d) => d.slot)
+          .filter(badSlot) as string[],
+      );
+  if (offending.length > 0) {
+    return NextResponse.json(
+      {
+        error: `Invalid delivery slot: ${offending.filter((v, i) => offending.indexOf(v) === i).join(", ")}`,
+        code: "bad_slot",
+      },
+      { status: 400 },
+    );
+  }
 
   // For the legacy fallback path we still require an explicit single slot.
   if (
@@ -447,6 +484,11 @@ export async function POST(req: NextRequest) {
   //    the public checkout produces — no drift possible. slot_mode +
   //    slot + slots_by_day are propagated from the body so the parent
   //    row matches the customer wizard's shape verbatim.
+  //
+  //    `slot` below is still PASSED, but no longer STORED in the
+  //    subscriptions.slot column — the helper writes it only into
+  //    `time_slot`, which is the column the readers use. See
+  //    lib/subscription-checkout.ts.
   const deliveryAddressJson = {
     name: fullName,
     phone: phoneLocal,
@@ -544,6 +586,8 @@ export async function POST(req: NextRequest) {
       weeks,
       days: dayKeys,
       slot_mode: slotMode,
+      // audit_log.meta, not a column write: this records what the admin
+      // SUBMITTED, which is still true and still worth keeping.
       slot: slotMode === "same" ? slot : null,
       slots_by_day: slotMode === "custom" ? slotsByDayOut : null,
       items: snapItems.map((s) => ({

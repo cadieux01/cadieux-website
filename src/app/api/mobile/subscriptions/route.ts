@@ -936,7 +936,8 @@ async function handleMultiVariant(
       weeks: 0, // 0 marks calendar mode
       days: daysSorted,
       slot_mode: "same",
-      slot: null,
+      // `slot` dropped, not set to null: the column is dead and nothing
+      // writes it now. Behaviour is identical — this wrote NULL anyway.
       slots_by_day: null,
       total: serverAmount,
       customer_name: na.full_name,
@@ -1407,7 +1408,7 @@ export async function POST(req: NextRequest) {
       weeks: subRowWeeks,
       days: subRowDays,
       slot_mode: "same",
-      slot: null,
+      // `slot` dropped — see the calendar-mode insert above.
       slots_by_day: null,
       total: totalAmountInr,
       customer_name: body.full_name,

@@ -390,6 +390,10 @@ export type AdminSubscriptionRow = {
   days?: string[] | null;
   slots_by_day?: Record<string, string> | null;
   slot_mode?: string | null;
+  /** DEAD COLUMN. Still on the table, NULL on every row, and nothing reads
+   *  or writes it — `time_slot` carries the plan-wide slot and
+   *  `slots_by_day` the per-day ones. Declared only because the row shape
+   *  is real; do not reintroduce it into a read precedence. */
   slot?: string | null;
   /** Per-loaf price captured at signup. */
   bread_price?: number | null;

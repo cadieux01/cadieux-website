@@ -35,7 +35,9 @@ type PlanShape = Pick<
   days?: string[] | null;
   day_of_week?: string | null;
   slots_by_day?: Record<string, string> | null;
-  slot?: string | null;
+  // `subscriptions.slot` is NOT read here. It is a dead column: NULL on all
+  // 94 rows in production, and nothing writes it any more. The column itself
+  // stays — dropping it is a separate, irreversible decision.
   time_slot?: string | null;
 };
 
@@ -109,9 +111,16 @@ export function describeSubscriptionCadence(sub: PlanShape): string | null {
   return labels.length > 0 ? `every week on ${joinHuman(labels)}` : null;
 }
 
-/** The slot for one day, falling back to the plan-wide one. */
+/** The slot for one day, falling back to the plan-wide one.
+ *
+ *  `sub.slot` used to sit between these two, outranking `time_slot`. It was
+ *  removed with its writers: every row that ever went through the
+ *  `slot_mode='same'` path wrote NULL into it anyway, so the middle term
+ *  could only ever evaluate to NULL and fall through. Leaving the read in
+ *  place while the writes went away would have been a trap for whoever
+ *  backfilled the column next. */
 export function slotForDay(sub: PlanShape, day: string): string | null {
-  return sub.slots_by_day?.[day] ?? sub.slot ?? sub.time_slot ?? null;
+  return sub.slots_by_day?.[day] ?? sub.time_slot ?? null;
 }
 
 /**

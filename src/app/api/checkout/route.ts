@@ -1150,7 +1150,9 @@ export async function POST(req: NextRequest) {
         weeks,
         days: dayKeys,
         slot_mode,
-        slot: slot_mode === "same" ? slot : null,
+        // `slot` deliberately not written — dead column, NULL on all 94 rows.
+        // See lib/subscription-checkout.ts, which builds the multi-variant
+        // insert for this same table and drops it for the same reason.
         slots_by_day: slot_mode === "custom" ? slots_by_day : null,
         total: serverAmount,
         customer_name,
