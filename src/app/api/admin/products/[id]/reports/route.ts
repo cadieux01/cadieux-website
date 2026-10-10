@@ -99,75 +99,174 @@ export async function POST(
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  let form: FormData;
-  try {
-    form = await req.formData();
-  } catch {
-    return NextResponse.json(
-      { error: "Expected multipart/form-data" },
-      { status: 400 },
-    );
+  // TWO BODY SHAPES.
+  //
+  //   application/json  — the browser already PUT the PDF straight to
+  //     storage with a signed upload URL (POST /api/admin/uploads/signed-url)
+  //     and sends only metadata here. This is the path that works for a big
+  //     file: Vercel rejects a function request body over ~4.5 MB AT THE EDGE
+  //     before this handler runs, so MAX_BYTES below was never reachable from
+  //     the multipart path and a 10 MB report could not be uploaded at all.
+  //
+  //   multipart/form-data — the original path, kept so nothing breaks while
+  //     the new one proves itself. Same ~4.5 MB ceiling as before.
+  //
+  // Both end in the same insert, with the same PIN gate above and the same
+  // storage rollback if the insert fails.
+  const isJsonBody = (req.headers.get("content-type") ?? "").includes(
+    "application/json",
+  );
+
+  let reportName: string;
+  let reportNumber: string;
+  let summary: string;
+  let category: ProductReportCategory;
+  let sortOrder: number;
+  let path: string;
+  let fileName: string;
+  let fileMime: string;
+  let fileSize: number;
+
+  if (isJsonBody) {
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: "Expected JSON body" }, { status: 400 });
+    }
+    const str = (k: string) => String(body[k] ?? "").trim();
+    reportName = str("report_name");
+    reportNumber = str("report_number");
+    summary = str("summary");
+    category = (str("category") || "other") as ProductReportCategory;
+    sortOrder = Number.isFinite(Number(body.sort_order))
+      ? Number(body.sort_order)
+      : 0;
+
+    path = str("storage_path");
+    // Keep the per-product namespace the multipart path established, and
+    // refuse a row that would point at some other product's object.
+    if (!path || !path.startsWith(`${params.id}/`) || path.includes("..")) {
+      return NextResponse.json(
+        { error: "storage_path must sit under this product's folder" },
+        { status: 400 },
+      );
+    }
+
+    // Read size and mime from STORAGE, never from the request. After a
+    // signed-URL upload the client's claims are unverifiable, and these two
+    // numbers are shown to operators and used for the size check below.
+    const slash = path.lastIndexOf("/");
+    const dir = path.slice(0, slash);
+    const base = path.slice(slash + 1);
+    const { data: listed, error: listErr } = await supabaseAdmin.storage
+      .from(BUCKET)
+      .list(dir, { search: base, limit: 100 });
+    if (listErr) {
+      return NextResponse.json({ error: listErr.message }, { status: 500 });
+    }
+    const object = (listed ?? []).find((o) => o.name === base);
+    if (!object) {
+      return NextResponse.json(
+        { error: "That upload is not in storage — try uploading again." },
+        { status: 400 },
+      );
+    }
+    const meta = (object.metadata ?? {}) as {
+      size?: number;
+      mimetype?: string;
+    };
+    fileSize = typeof meta.size === "number" ? meta.size : 0;
+    fileMime = typeof meta.mimetype === "string" ? meta.mimetype : "";
+    fileName = str("file_name") || base;
+  } else {
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      return NextResponse.json(
+        { error: "Expected multipart/form-data" },
+        { status: 400 },
+      );
+    }
+
+    const file = form.get("file");
+    // Editable fields. report_name is the heading; title is kept for
+    // back-compat and defaults to report_name. report_number + summary
+    // are optional.
+    reportName = String(form.get("report_name") ?? "").trim();
+    reportNumber = String(form.get("report_number") ?? "").trim();
+    summary = String(form.get("summary") ?? "").trim();
+    category = String(form.get("category") ?? "other") as ProductReportCategory;
+    const sortRaw = form.get("sort_order");
+    sortOrder = Number.isFinite(Number(sortRaw)) ? Number(sortRaw) : 0;
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "Missing file" }, { status: 400 });
+    }
+    fileMime = file.type;
+    fileSize = file.size;
+
+    const ext = extFromName(file.name);
+    const stamp = Date.now();
+    const rand = Math.random().toString(36).slice(2, 10);
+    path = `${params.id}/${stamp}-${rand}.${ext}`;
+    fileName = file.name || `report.${ext}`;
+
+    if (fileMime !== "application/pdf") {
+      return NextResponse.json({ error: "File must be a PDF" }, { status: 400 });
+    }
+    if (fileSize > MAX_BYTES) {
+      return NextResponse.json(
+        { error: `File too large (${fileSize} bytes). Max ${MAX_BYTES}.` },
+        { status: 400 },
+      );
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { error: uploadErr } = await supabaseAdmin.storage
+      .from(BUCKET)
+      .upload(path, buffer, {
+        contentType: fileMime || "application/octet-stream",
+        cacheControl: "31536000",
+        upsert: false,
+      });
+    if (uploadErr) {
+      console.error("[admin/reports POST upload]", uploadErr.message);
+      return NextResponse.json({ error: uploadErr.message }, { status: 500 });
+    }
   }
 
-  const file = form.get("file");
-  // Editable fields. report_name is the heading; title is kept for
-  // back-compat and defaults to report_name. report_number + summary
-  // are optional.
-  const reportName = String(form.get("report_name") ?? "").trim();
-  const reportNumber = String(form.get("report_number") ?? "").trim();
-  const summary = String(form.get("summary") ?? "").trim();
-  const category = String(form.get("category") ?? "other") as ProductReportCategory;
-  const sortRaw = form.get("sort_order");
-  const sortOrder = Number.isFinite(Number(sortRaw)) ? Number(sortRaw) : 0;
-
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Missing file" }, { status: 400 });
+  // Shared validation. On the JSON path the object is already in storage, so
+  // a rejection here has to take it back out — otherwise a bad name or
+  // category leaves an orphan PDF behind.
+  async function rejectAndClean(
+    message: string,
+  ): Promise<NextResponse> {
+    if (isJsonBody) {
+      await supabaseAdmin.storage.from(BUCKET).remove([path]);
+    }
+    return NextResponse.json({ error: message }, { status: 400 });
   }
+
   if (!reportName) {
-    return NextResponse.json(
-      { error: "Report name is required" },
-      { status: 400 },
-    );
+    return rejectAndClean("Report name is required");
   }
   if (!PRODUCT_REPORT_CATEGORIES.includes(category)) {
-    return NextResponse.json(
-      { error: `Invalid category "${category}"` },
-      { status: 400 },
-    );
+    return rejectAndClean(`Invalid category "${category}"`);
   }
-  // Lab reports must be PDFs.
-  if (file.type !== "application/pdf") {
-    return NextResponse.json(
-      { error: "File must be a PDF" },
-      { status: 400 },
-    );
+  // Lab reports must be PDFs. On the JSON path this reads storage's own
+  // recorded mime, so it is a real check and not the client's word.
+  if (fileMime !== "application/pdf") {
+    return rejectAndClean("File must be a PDF");
   }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json(
-      { error: `File too large (${file.size} bytes). Max ${MAX_BYTES}.` },
-      { status: 400 },
+  if (fileSize > MAX_BYTES) {
+    return rejectAndClean(
+      `File too large (${fileSize} bytes). Max ${MAX_BYTES}.`,
     );
   }
 
   const title = reportName;
-  const ext = extFromName(file.name);
-  const stamp = Date.now();
-  const rand = Math.random().toString(36).slice(2, 10);
-  const path = `${params.id}/${stamp}-${rand}.${ext}`;
-  const contentType = file.type || "application/octet-stream";
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: uploadErr } = await supabaseAdmin.storage
-    .from(BUCKET)
-    .upload(path, buffer, {
-      contentType,
-      cacheControl: "31536000",
-      upsert: false,
-    });
-  if (uploadErr) {
-    console.error("[admin/reports POST upload]", uploadErr.message);
-    return NextResponse.json({ error: uploadErr.message }, { status: 500 });
-  }
 
   const { data: pub } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
   if (!pub?.publicUrl) {
@@ -189,9 +288,9 @@ export async function POST(
       summary: summary || null,
       category,
       file_url: pub.publicUrl,
-      file_name: file.name || `report.${ext}`,
-      mime_type: file.type || null,
-      file_size_bytes: file.size,
+      file_name: fileName,
+      mime_type: fileMime || null,
+      file_size_bytes: fileSize,
       storage_path: path,
       sort_order: sortOrder,
     })

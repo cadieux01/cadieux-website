@@ -6,8 +6,8 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
-import { adminAuthHeaders } from "@/lib/admin-client";
 import { AdminProductRow } from "@/lib/admin-shared";
+import { uploadViaSignedUrl } from "@/lib/admin-upload";
 import {
   CANONICAL_NUTRIENT_KEYS,
   canonicalNutrientValue,
@@ -615,22 +615,14 @@ function MediaUploader({
     try {
       for (let i = 0; i < files.length; i += 1) {
         setProgress({ i: i + 1, total: files.length });
-        const fd = new FormData();
-        fd.append("file", files[i]);
-        const res = await fetch("/api/admin/products/upload-image", {
-          method: "POST",
-          headers: adminAuthHeaders(),
-          credentials: "include",
-          body: fd,
+        // Direct to storage via a signed URL. The old multipart POST to
+        // /api/admin/products/upload-image went through a Vercel function,
+        // whose request body is capped at ~4.5 MB at the edge — so a large
+        // photo 413'd and a video never had a chance.
+        const uploaded = await uploadViaSignedUrl(files[i], {
+          bucket: "product-images",
         });
-        const json = (await res.json().catch(() => ({}))) as {
-          url?: string;
-          error?: string;
-        };
-        if (!res.ok || !json.url) {
-          throw new Error(json.error ?? `Upload failed (${res.status})`);
-        }
-        added.push(json.url);
+        added.push(uploaded.url);
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Upload failed");

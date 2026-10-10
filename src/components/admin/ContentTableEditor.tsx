@@ -16,7 +16,8 @@
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 
-import { adminFetch, AdminFetchError, adminAuthHeaders } from "@/lib/admin-client";
+import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import { uploadViaSignedUrl } from "@/lib/admin-upload";
 
 const CREAM = "#FBF3D4";
 const FADED = "rgba(251,243,212,0.6)";
@@ -616,25 +617,14 @@ function ImageUpload({
     setBusy(true);
     setUErr(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("prefix", "process-steps");
-      // Raw fetch (not adminFetch) so the browser sets the multipart
-      // boundary; still attach the admin bearer via adminAuthHeaders.
-      const res = await fetch("/api/admin/products/upload-image", {
-        method: "POST",
-        headers: adminAuthHeaders(),
-        credentials: "include",
-        body: fd,
+      // Bytes go straight to Supabase Storage via a signed URL; only the
+      // metadata passes through our function. The old multipart POST was
+      // capped at ~4.5 MB by Vercel before the handler ever ran.
+      const uploaded = await uploadViaSignedUrl(file, {
+        bucket: "product-images",
+        prefix: "process-steps",
       });
-      const json = (await res.json().catch(() => ({}))) as {
-        url?: string;
-        error?: string;
-      };
-      if (!res.ok || !json.url) {
-        throw new Error(json.error || "Upload failed");
-      }
-      onChange(json.url);
+      onChange(uploaded.url);
     } catch (err) {
       setUErr(err instanceof Error ? err.message : "Upload failed");
     } finally {

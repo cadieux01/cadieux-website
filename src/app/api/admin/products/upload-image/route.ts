@@ -4,10 +4,16 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { recordAuditEvent } from "@/lib/audit-log";
 
 const BUCKET = "product-images";
-// Bumped to 50 MB so short product videos (mp4/webm/mov) fit alongside
-// stills. Admin uploads are trusted (admin-only route) — the cap exists
-// to catch pathological uploads, not to enforce policy.
-const MAX_BYTES = 50 * 1024 * 1024; // 50 MB
+// DEAD LIMIT — this number has never been reached and cannot be. It was
+// bumped to 50 MB so short product videos (mp4/webm/mov) would fit, but
+// Vercel rejects any function request body over ~4.5 MB AT THE EDGE, before
+// this handler runs: measured on prod, 4,400,000 B reached our 401 and
+// 4,500,000 B came back 413 FUNCTION_PAYLOAD_TOO_LARGE. So the effective
+// cap on this route is the platform's ~4.5 MB and the video support it was
+// raised for has never worked. The working path is
+// POST /api/admin/uploads/signed-url + a direct PUT to storage; this route
+// stays only until that has carried real uploads, then it goes.
+const MAX_BYTES = 50 * 1024 * 1024; // 50 MiB — unenforceable here, see above
 // Product media = images AND videos. Bucket name is legacy ("product-images")
 // but the same bucket stores both; the frontend uses the file extension in
 // the returned URL to decide how to render each tile.
@@ -32,8 +38,10 @@ const EXT_BY_MIME: Record<string, string> = {
 //   multipart/form-data with a single `file` field. Validates mime + size,
 //   uploads to the `product-images` Supabase Storage bucket and returns
 //   the public URL. We deliberately don't depend on `sharp` (not in
-//   package.json) — the admin is trusted, so we accept the file as-is
-//   under the 5 MB cap.
+//   package.json) — the admin is trusted, so we accept the file as-is.
+//   LEGACY: only files under the platform's ~4.5 MB body cap ever get
+//   here at all; anything larger 413s at the edge. New uploads use the
+//   signed-URL path instead.
 export async function POST(req: NextRequest) {
   if (!isAdmin(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

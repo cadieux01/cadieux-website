@@ -2,17 +2,21 @@
 
 // Lab Reports & Certifications panel for the admin product detail page.
 // Loads, uploads, edits, archives, unarchives and deletes rows in the
-// product_reports table via /api/admin/products/[id]/reports. File
-// uploads use a raw fetch (not adminFetch) so the multipart Content-Type
-// boundary is set by the browser. Every mutation is gated by the security
+// product_reports table via /api/admin/products/[id]/reports. The PDF
+// itself no longer travels through that route: it goes straight to storage
+// with a signed upload URL (see lib/admin-upload.ts) because a Vercel
+// function request body is capped at ~4.5 MB at the edge, well under the
+// 10 MB a lab report is allowed. Every mutation is gated by the security
 // PIN — requirePin() is owned by the parent page and passed down; the
-// returned grant rides as the `x-pin-grant` header.
+// returned grant rides as the `x-pin-grant` header, on the signed-URL
+// request as well as on the metadata POST.
 
 import { useCallback, useEffect, useState } from "react";
 
 import Select from "@/components/ui/Select";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime } from "@/lib/admin-formatting";
+import { readAdminError, uploadViaSignedUrl } from "@/lib/admin-upload";
 import {
   PRODUCT_REPORT_CATEGORIES,
   PRODUCT_REPORT_CATEGORY_LABEL,
@@ -88,24 +92,34 @@ export function LabReportsSection({
     setAddBusy(true);
     setAddErr(null);
     try {
-      const fd = new FormData();
-      fd.append("file", addFile);
-      fd.append("report_name", addName.trim());
-      fd.append("report_number", addNumber.trim());
-      fd.append("summary", addSummary.trim());
-      fd.append("category", addCategory);
-      const res = await fetch(
-        `/api/admin/products/${productId}/reports`,
-        {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "x-pin-grant": grant },
-          body: fd,
+      // Two steps now. The PDF goes straight to Supabase Storage via a
+      // signed upload URL, then only the metadata is POSTed here as JSON.
+      // The old single multipart POST sent the PDF through a Vercel
+      // function, whose request body is capped at ~4.5 MB at the edge —
+      // the route's own 10 MB limit was never reachable.
+      const uploaded = await uploadViaSignedUrl(addFile, {
+        bucket: "product-reports",
+        prefix: productId,
+        pinGrant: grant,
+      });
+      const res = await fetch(`/api/admin/products/${productId}/reports`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "x-pin-grant": grant,
+          "Content-Type": "application/json",
         },
-      );
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
+        body: JSON.stringify({
+          report_name: addName.trim(),
+          report_number: addNumber.trim(),
+          summary: addSummary.trim(),
+          category: addCategory,
+          storage_path: uploaded.path,
+          file_name: addFile.name,
+        }),
+      });
       if (!res.ok) {
-        throw new Error(json.error ?? `Upload failed (${res.status})`);
+        throw new Error(await readAdminError(res, "Upload failed"));
       }
       setShowAdd(false);
       setAddName("");
