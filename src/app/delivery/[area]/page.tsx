@@ -69,11 +69,11 @@ const CADIEUX_PHONE_DIAL = ADMIN_PHONE.replace(/\s/g, "");
 // page reads as one story. Mirrors the copy in subscribe/page.tsx —
 // update BOTH files if slot hours change. No per-area override.
 //
-// No end time is promised: deliveries go out from 3 pm and the team tells
-// the customer when theirs is actually coming, sometimes sooner. Stating a
-// closing hour would be a commitment the run does not make.
+// A CLOSED range, 4 – 9 PM, matching the published window and the picker's
+// own label. An open-ended "from 4 pm" leaves the customer unable to plan
+// their evening, which is a worse promise than a closing hour we may beat.
 const DELIVERY_WINDOW_TEXT =
-  "Fresh delivery daily, evenings from 3 PM IST — we'll message you when yours is on the way.";
+  "Fresh delivery daily, evenings 4 – 9 PM IST — we'll message you when yours is on the way.";
 
 export async function generateStaticParams() {
   const groups = await getServiceAreaGroups();
@@ -97,7 +97,7 @@ export async function generateMetadata({
   // Meta description kept under 160 chars. Avoid duplicating "Fresh" —
   // the loaf is described as slow-fermented; delivery is described as
   // daily with the citywide window.
-  const description = `Slow-fermented protein bread delivered in ${name}. Daily evening delivery from 3 PM IST. Serving pincode ${group.pincodes.join(", ")}.`;
+  const description = `Slow-fermented protein bread delivered in ${name}. Daily evening delivery, 4 – 9 PM IST. Serving pincode ${group.pincodes.join(", ")}.`;
   return {
     title,
     description,

@@ -8,21 +8,24 @@
 //   - IST (Asia/Kolkata) date math regardless of server clock
 //
 // There is now ONE window open for booking:
-//   - "15:00-21:00"  Evening  from 3 PM          <- the only bookable slot
-// and three that exist only so stored rows keep working:
+//   - "16:00-21:00"  Evening  4 – 9 PM           <- the only bookable slot
+// and two that exist only so stored rows keep working:
 //   - "06:00-10:00"  Morning  6 AM – 10 AM       (paused)
 //   - "10:00-14:00"  Midday   10 AM – 2 PM       (paused)
-//   - "16:00-21:00"  Evening  4 PM – 9 PM        (paused — the OLD evening)
 //
-// "16:00-21:00" was the evening slot until the move to a single 3 PM – 9 PM
-// window. It is PAUSED rather than deleted for the same reason morning and
-// midday were: `isValidSlotValue` is what the admin re-book path and the
-// customer self-edit path check, so deleting a value a live row still holds
-// strands that row — the customer cannot move it and an operator cannot
-// either. It also keeps ~50 historical rows rendering "Evening" instead of
-// falling through to the raw-range formatter. Delete it once the data move in
-// docs/evening-slot-data-move.sql has committed AND no history needs the
-// label.
+// "16:00-21:00" IS the long-standing evening slot — the single-window move
+// keeps it and closes the other two, rather than introducing a new value.
+// That is why there is no third paused entry here: an earlier revision of
+// this work targeted "15:00-21:00" and carried the old evening as legacy;
+// the target is now 4 – 9 PM, so the value most live rows already hold is
+// the one that stays bookable and nothing needs a legacy label.
+//
+// Morning and midday are PAUSED rather than deleted because
+// `isValidSlotValue` is what the admin re-book path and the customer
+// self-edit path check: deleting a value a live row still holds strands that
+// row — the customer cannot move it and an operator cannot either. It also
+// keeps history rendering "Morning" / "Midday" instead of falling through to
+// the raw-range formatter.
 //
 // Consumers (intentionally many):
 //   - One-off checkout    (web /api/checkout, mobile /api/mobile/checkout, /checkout page)
@@ -173,26 +176,19 @@ export const SLOTS: Slot[] = [
     rangeLabel: "Midday · 10 AM – 2 PM",
   },
   {
-    value: "15:00-21:00",
-    label: "Evening",
-    startValue: "15:00",
-    endValue: "21:00",
-    // Not a range. Orders go out FROM 3 pm and the team tells the customer
-    // when it is actually coming, often sooner — so the label must not
-    // promise an end time. `endValue` stays 21:00 because that is the
-    // stored window the lead-time and self-edit maths are computed from.
-    rangeLabel: "Evening · from 3 pm",
-  },
-  {
-    // LEGACY, PAUSED. The evening slot until the single-window move. Kept so
-    // rows that still hold it stay valid, editable and legible; its label is
-    // deliberately the old one, because that is what those rows promised.
-    // Listed last so it never wins a `SLOTS.find` ahead of the live slot.
+    // The only bookable window. A CLOSED range, stated end to end.
+    //
+    // An earlier revision labelled the evening "from 3 pm" with no end, on
+    // the argument that a promised end time is a promise we might miss. That
+    // argument is settled the other way: the published window is 4 – 9 PM,
+    // and an open-ended label makes the customer wait all evening without
+    // knowing when they are free. Delivering early is a pleasant surprise;
+    // "from 4 pm" with no end is not a window at all.
     value: "16:00-21:00",
     label: "Evening",
     startValue: "16:00",
     endValue: "21:00",
-    rangeLabel: "Evening · from 4 pm",
+    rangeLabel: "Evening · 4 – 9 PM",
   },
 ];
 
@@ -213,15 +209,14 @@ export function generateSlots(): Slot[] {
 
 /** Slot values closed to new customer bookings.
  *
- *  Every slot except "15:00-21:00" — the single window the business now
- *  delivers in. "16:00-21:00" is here because it WAS the evening slot: the
- *  value is still held by live rows until the data move commits, and by
- *  history after that, so it has to remain valid. Pausing it is what stops a
+ *  Every slot except "16:00-21:00" — the single window the business now
+ *  delivers in. Both entries are still held by live rows until the data move
+ *  in docs/evening-slot-data-move.sql commits, and by history after that, so
+ *  both have to remain VALID while being unbookable. Pausing is what stops a
  *  new booking landing on a window nobody delivers in. */
 export const PAUSED_SLOTS: readonly string[] = [
   "06:00-10:00",
   "10:00-14:00",
-  "16:00-21:00",
 ];
 
 /** Shown in the picker and returned verbatim by the server gate.
