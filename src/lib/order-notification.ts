@@ -37,6 +37,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { waitUntil } from "@vercel/functions";
 
+import { itemLineTotal, itemQty } from "@/lib/order-items";
 import { formatOrderNumber } from "@/lib/order-number";
 
 export type OrderNotificationEvent = "created" | "paid";
@@ -64,11 +65,19 @@ const SEND_TIMEOUT_MS = 8000;
 // Postgres unique_violation. Someone else already owns this (order, event).
 const PG_UNIQUE_VIOLATION = "23505";
 
+// One line of `orders.items`, in BOTH shapes it is written in — the website
+// writes the first of each pair, the mobile app the second. Declaring only the
+// website's names is what made this email print "x1 | Rs —" for every app
+// order; see lib/order-items.ts for the full account of the split. The reads
+// go through that module's helpers, so the coalesce order lives in one place.
 type OrderItem = {
   name?: unknown;
-  qty?: unknown;
-  price_inr?: unknown;
-  line_total?: unknown;
+  qty?: number | null;
+  quantity?: number | null;
+  price_inr?: number | string | null;
+  unit_price_inr?: number | string | null;
+  line_total?: number | string | null;
+  line_total_inr?: number | string | null;
 };
 
 type OrderRow = {
@@ -130,11 +139,13 @@ function parseItems(raw: unknown): { label: string; amount: string }[] {
   if (!Array.isArray(raw)) return [];
   return (raw as OrderItem[]).map((it) => {
     const name = typeof it?.name === "string" ? it.name : "Item";
-    const qty = Number(it?.qty);
-    const line = it?.line_total ?? it?.price_inr;
+    // `|| 1` keeps the long-standing behaviour that an unreadable quantity
+    // still reads as one unit: itemQty answers 0 for a missing or junk value,
+    // and "x0" in an order email is not a number anyone can act on.
+    const qty = itemQty(it) || 1;
     return {
-      label: `${name} x${Number.isFinite(qty) ? qty : 1}`,
-      amount: `Rs ${rupees(typeof line === "number" || typeof line === "string" ? line : null)}`,
+      label: `${name} x${qty}`,
+      amount: `Rs ${rupees(itemLineTotal(it))}`,
     };
   });
 }

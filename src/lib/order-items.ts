@@ -39,9 +39,16 @@ export type OrderItemLike = {
   slug?: string | null;
   product_id?: string | null;
   product_slug?: string | null;
-  name?: string | null;
+  /** Declared only so a caller's whole line is assignable. Nothing here
+   *  reads it — see the note above on why identity never comes from a name —
+   *  and it is `unknown` because jsonb makes no promise that it is a string. */
+  name?: unknown;
   qty?: number | null;
   quantity?: number | null;
+  line_total?: number | string | null;
+  line_total_inr?: number | string | null;
+  price_inr?: number | string | null;
+  unit_price_inr?: number | string | null;
 };
 
 /**
@@ -67,4 +74,28 @@ export function itemQty(it: OrderItemLike | null | undefined): number {
   const raw = it?.qty ?? it?.quantity ?? 0;
   const n = typeof raw === "number" ? raw : Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+/**
+ * Money on one line, or null when the line carries none.
+ *
+ * BOTH LINE TOTALS ARE TRIED BEFORE EITHER UNIT PRICE, because the fallback
+ * is lossy: a unit price on a 2-unit line under-reports the line by half.
+ * Ordering within a pair is arbitrary — no line on prod has ever carried keys
+ * from both shapes — but across pairs it is not, and shape A's `price_inr`
+ * sitting ahead of shape B's `line_total_inr` would be exactly that bug.
+ *
+ * Every line on prod today carries a line total, so the unit-price fallback is
+ * defensive only; it is kept because the alternative is printing no amount at
+ * all, and it is NOT multiplied by the quantity — inventing a total the
+ * database never stored is worse than reporting the one number it did.
+ */
+export function itemLineTotal(
+  it: OrderItemLike | null | undefined,
+): number | null {
+  const raw =
+    it?.line_total ?? it?.line_total_inr ?? it?.price_inr ?? it?.unit_price_inr;
+  if (raw === null || raw === undefined) return null;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
