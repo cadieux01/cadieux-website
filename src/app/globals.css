@@ -455,6 +455,60 @@ select option:disabled {
   }
 }
 
+/* ── Page transitions ──
+   Driven by src/components/PageTransition.tsx, which wraps the navigation in
+   document.startViewTransition(). These rules style the snapshot pseudo-tree
+   the browser parents to the viewport — the real DOM is never transformed, so
+   no `position: fixed` descendant re-anchors (the reason a wrapper div could
+   not be used here; see that file).
+
+   TRANSFORM AND OPACITY ONLY. Both properties composite off the main thread,
+   so the animation costs no layout and no repaint for its duration.
+
+   The travel is 12%, not 100%. A full-width slide is the phone-app idiom and
+   on a 430px viewport asks the compositor to move the whole snapshot across
+   the screen; 12% reads as the page stepping aside. The root snapshot is
+   clipped to the viewport by the spec, so the cost is bounded by screen size
+   and not by how long the page is. */
+@keyframes cdxPageOut {
+  to {
+    transform: translateX(-12%);
+    opacity: 0;
+  }
+}
+@keyframes cdxPageIn {
+  from {
+    transform: translateX(12%);
+    opacity: 0;
+  }
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 300ms;
+  /* Same easing family as the nav drawer's 0.45s slide, so the site has one
+     motion vocabulary rather than two. */
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+  /* The UA default is plus-lighter, which is right for a pure cross-fade and
+     wrong here: with two half-opaque snapshots overlapping it washes the
+     midpoint out to near-white against this ash canvas. */
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  animation-name: cdxPageOut;
+}
+::view-transition-new(root) {
+  animation-name: cdxPageIn;
+}
+/* The cart FAB is the one control present on both sides of almost every
+   navigation. Naming it lifts it out of the root snapshot so it holds still
+   instead of sliding away and crossfading with its own copy. The id already
+   exists for the fly-to-cart animation (FLOATING_CART_ID), so this needs no
+   change to the component. */
+#cadieux-floating-cart {
+  view-transition-name: cdx-cart-fab;
+}
+
 /* Respect user motion preferences. Strips the heaviest animations —
    content remains fully usable. Per-component scroll-driven reveals are
    still allowed (they're tied to scroll, not time) but ambient looping
@@ -473,6 +527,17 @@ select option:disabled {
      already paints flat cream, so cancelling the animation is sufficient —
      nothing to park. */
   .cdx-sub-price { animation: none; }
+  /* The `*, *::before, *::after` reset above does NOT reach these: the
+     view-transition pseudo-elements are not ::before/::after and are not
+     matched by the universal selector. PageTransition.tsx already refuses to
+     start a transition under reduced motion — that is the load-bearing
+     guard, because it also skips the snapshot — and this is the backstop for
+     any transition started by some other route in future. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
 }
 
 /* ── Task F v2 design-system utilities ───────────────────────────────

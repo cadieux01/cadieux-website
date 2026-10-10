@@ -5,9 +5,8 @@ import "./globals.css";
 import NavGate from "@/components/NavGate";
 import SiteMusic from "@/components/SiteMusic";
 import EdgeSwipeNav from "@/components/EdgeSwipeNav";
+import PageTransition from "@/components/PageTransition";
 import PWAServiceWorker from "@/components/PWAServiceWorker";
-import AndroidInstallPrompt from "@/components/AndroidInstallPrompt";
-import IOSInstallHint from "@/components/IOSInstallHint";
 import FloatingCartButton from "@/components/FloatingCartButton";
 import WhatsAppButton from "@/components/WhatsAppButton";
 import { CartProvider } from "@/context/CartContext";
@@ -214,9 +213,14 @@ export default async function RootLayout({
           <NavGate showSandwich={sandwichKitchen.enabled} />
           <SiteMusic />
           <EdgeSwipeNav />
+          <PageTransition />
+          {/* No install prompt is mounted. PWAServiceWorker stays: the
+              manifest, the service worker and "Add to Home Screen" from the
+              browser's own menu all keep working — what was removed is only
+              the unsolicited nag that opened over the first screen. The
+              `cdx_pwa_visits` counter the two prompts shared had no other
+              reader and is retired with them. */}
           <PWAServiceWorker />
-          <AndroidInstallPrompt />
-          <IOSInstallHint />
           {children}
           <WhatsAppButton />
           <FloatingCartButton />

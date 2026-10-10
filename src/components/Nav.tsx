@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { navigateWithTransition } from "@/components/PageTransition";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -67,7 +68,13 @@ export default function Nav({ showSandwich = false }: { showSandwich?: boolean }
 
   function nav(path: string) {
     setMenuOpen(false);
-    router.push(path);
+    // Routed through the shared helper rather than router.push directly: the
+    // drawer's entries are <button>s, so the document-level <a href>
+    // interceptor in PageTransition.tsx never sees them, and the main
+    // navigation surface on the homepage would be the one place with no
+    // transition. Falls back to a plain push where the API is unavailable or
+    // the user asked for reduced motion.
+    navigateWithTransition(() => router.push(path));
   }
 
   function openMenu() {
