@@ -44,6 +44,58 @@
 --    page (which reads `scheduled_time_slot` only) is showing them morning.
 --    Both columns are now tested independently.
 --
+-- 5. PICKUP IS EXCLUDED, AT FIVE SITES — not just on the write.
+--    `and coalesce(o.fulfillment_type, '') <> 'pickup'` appears on the three
+--    section 1 dry-run order buckets, on the `_before` snapshot, and on the
+--    section 2 UPDATE. Guarding only the UPDATE is a bug: verify check 4
+--    asserts "orders now on target == _before.orders.to_move", so the snapshot
+--    would count a pickup row the UPDATE skipped and the script would report
+--    FAIL on a correct run — on exactly the day the guard first matters. The
+--    dry run carries it for the same reason the dry run exists: the operator
+--    compares it against what the move actually writes, and a predicate that
+--    diverges by design makes that comparison worthless.
+--    `coalesce(..., '')` is required because the column is nullable and
+--    `NULL <> 'pickup'` is NULL, not true, which would silently drop every row
+--    with no fulfillment type set.
+--    WHY a pickup order can even hold a delivery window: checkout/page.tsx
+--    :1264-1265 sends `delivery_date` and `delivery_slot` unconditionally and
+--    order-checkout.ts:552-556 persists them, so choosing a slot and then
+--    toggling to Pickup leaves the slot behind. 10 of 145 pickup orders hold
+--    one (measured 2026-10-09). All 10 are dated inside the carve-out, so this
+--    clause is a NO-OP today — one pickup order placed tomorrow would be in
+--    scope, and without it the move would rewrite that row into the 3-9 pm
+--    DELIVERY window and tell a collecting customer they are getting a
+--    delivery.
+--
+-- 6. SECTION 2 RUNS AT REPEATABLE READ, UNDER A SHARE LOCK, WITH TIMEOUTS.
+--    It was already one transaction, but at the server default of READ
+--    COMMITTED, where every statement takes a FRESH snapshot — so a row could
+--    enter scope between the snapshot and the UPDATE and make verify check 4
+--    read "25 vs 24" and fail a move that was correct. This is observed, not
+--    hypothetical: two admin edits at 22:38 and 22:39 on 9 Oct moved orders
+--    from 7 Oct to 12 Oct and took the in-scope count 22 -> 24 between a
+--    section 0 run and a section 1 run.
+--    ISOLATION LEVEL ALONE WAS NOT ENOUGH, and would have been worse. There
+--    are two conflict classes and Postgres treats them differently:
+--      Case A, a row ENTERS scope. A row entering scope is a PHANTOM, and
+--        neither READ COMMITTED nor REPEATABLE READ takes predicate locks.
+--        Under REPEATABLE READ the UPDATE evaluates its WHERE against the
+--        transaction snapshot, where the row does not match, so it is never
+--        locked and NO serialization error is raised — it is silently skipped.
+--        The verify block reads that SAME snapshot, so check 1 cannot see it
+--        either and reads PASS. That commits an order left on a legacy slot
+--        with no signal anywhere. READ COMMITTED at least turns the same event
+--        into a loud, safe, spurious FAIL that rolls back and can be retried.
+--        The explicit `lock table ... in share mode` is what closes Case A.
+--      Case B, a concurrent edit to a row the UPDATE ALREADY targets. This is
+--        a write-write conflict and does raise "could not serialize access due
+--        to concurrent update", SQLSTATE 40001, aborting the whole transaction
+--        cleanly. That abort is the CORRECT outcome, not a partial move.
+--    The lock blocks ALL writers on public.orders, which includes CUSTOMERS
+--    placing orders on the website, not only the admin board — hence
+--    `lock_timeout` 3s (fail fast rather than queue behind someone else's long
+--    transaction while checkout queues behind us) and `statement_timeout` 30s.
+--
 -- ===========================================================================
 -- EVERY COLUMN THAT NAMES THE SLOT, ON ALL THREE TABLES
 -- ===========================================================================
@@ -71,16 +123,18 @@
 --                   {"mon":"10:00-14:00","thu":"16:00-21:00"}. Rewritten
 --                   value-by-value, so a day holding something that is not a
 --                   recognised slot keeps exactly what it has.
---   slot          — NULL on all 92 rows and DELIBERATELY LEFT NULL. It is
---                   null for every subscription that has ever existed, so no
+--   slot          — NULL on all 94 rows and DELIBERATELY LEFT NULL (re-checked
+--                   2026-10-10: 94 rows, 0 non-null). It is null for every
+--                   subscription that has ever existed, so no
 --                   reader can be depending on a value in it; writing one
 --                   would introduce a fourth carrier with no defined
 --                   precedence against the other two. Status quo is safer
 --                   than a tidy-looking write.
 --
 -- time_slot AND slots_by_day DISAGREE ON LIVE ROWS, and neither is derivable
--- from the other, so both must be rewritten. Measured on prod: 6 of the 23
--- live subscriptions have at least one per-day value different from their own
+-- from the other, so both must be rewritten. Measured on prod 2026-10-10:
+-- 6 of the 24 live subscriptions have at least one per-day value different
+-- from their own
 -- time_slot — e.g. time_slot '16:00-21:00' with {"fri":"16:00-21:00",
 -- "mon":"10:00-14:00"}. Filtering on time_slot alone misses that mon entry;
 -- filtering on slots_by_day alone misses rows whose time_slot is the only
@@ -122,6 +176,57 @@
 -- CARVE-OUT: nothing dated TODAY (IST) or earlier is touched. Those deliver as
 -- promised and age out on their own. Section 0 counts them so the figure is
 -- known, and the verify block asserts the count did not move.
+--
+-- ===========================================================================
+-- HOW TO RUN IT
+-- ===========================================================================
+--
+-- Order of operations:
+--   1. Raja messages the affected customers.
+--   2. Run SECTION 0. Every verdict must read `ok`. Any FAIL means an
+--      assumption in this header has gone stale — stop and re-derive.
+--   3. Run SECTION 1. Note the three order buckets.
+--   4. Run SECTION 2 as written — it ends in `rollback`, so it is a rehearsal.
+--      Read every line of the verify block. All 10 must read PASS.
+--   5. Only then swap the last two lines (`rollback;` -> `commit;`) and run it
+--      again. Re-read the verify block before you accept the commit.
+--   6. Deploy the code that makes the old slots unbookable.
+--
+-- RUN IT AS ONE SCRIPT IN ONE SESSION. Section 2 is a single transaction, and
+-- a client that sends each statement in its own autocommit transaction defeats
+-- the snapshot, the lock and the rollback all at once. Use psql or the
+-- Supabase SQL editor, paste the whole section, and confirm the trailing
+-- `rollback` actually took before trusting a rehearsal.
+--
+-- QUOTE NO COUNT FROM THIS FILE. Every figure here is dated because the live
+-- ones move within the hour. In-scope orders read 22, then 24, then 25 across
+-- 48 minutes on the evening of 9 Oct while an operator worked the board — and
+-- the increase was NOT new orders (the newest in-scope order predated both
+-- readings); it was admin date edits pulling rows out of the carve-out, which
+-- `audit_log` records as "Admin edit: Delivery moved from ... to ...". Re-run
+-- SECTION 0 immediately before SECTION 2 and treat that as the only authority.
+-- Related: two figures read in two SEPARATE queries can differ for real
+-- reasons, so any check that compares one population to another belongs in a
+-- SINGLE statement, or the apparent FAIL is just the clock.
+--
+-- HOW LONG THE LOCK IS HELD: 106.4 ms, measured against production with
+-- `rollback` in place (lock acquired 0.4 ms, snapshot 22.5, orders 80.8,
+-- deliveries 89.9, subscriptions 98.3, verify 106.8; all 10 checks PASS and
+-- nothing persisted). The orders UPDATE is ~55% of that because
+-- trg_audit_orders fires per row, roughly 2.3 ms/row — so the figure scales
+-- with ROWS MOVED, not table size. Acquisition was uncontended; in a real run
+-- competing with checkout traffic it can take up to the 3 s `lock_timeout`
+-- and then abort. Honest summary: ~0.1 s held, plus up to 3 s waiting to get
+-- it, and it gives up rather than queue.
+--
+-- IF IT ABORTS, THAT IS THE DESIGN. `could not serialize access due to
+-- concurrent update` (SQLSTATE 40001) means someone edited one of the rows
+-- being moved; nothing was written. Re-run the whole section. Likewise a
+-- `lock_timeout` abort means someone else holds a conflicting lock — nothing
+-- was written, try again when the board is quiet. Neither is a partial move.
+-- The one failure this script cannot self-detect is a row entering scope while
+-- it runs, which is precisely what the SHARE lock exists to prevent — see
+-- item 6 above. Do not remove that lock to "speed it up".
 
 
 -- ===========================================================================
