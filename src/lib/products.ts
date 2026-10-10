@@ -159,53 +159,75 @@ export function hasRealProductImage(
   return typeof imageUrl === "string" && imageUrl.trim().length > 0;
 }
 
-// Build the PDP / shop-tile media gallery, DB-first:
-//   1. products.gallery_urls (admin) non-empty → these image tiles ARE the
-//      gallery (Sunny owns product photos from /admin).
+// Build the shop-tile media gallery, DB-first:
+//   1. [products.image_url, ...products.gallery_urls] — the admin's cover
+//      photo FIRST, then gallery order. De-duplicated by URL.
 //   2. bundled PRODUCT_DETAILS[slug].media — editorial videos + images.
-//   3. a single tile derived from products.image_url.
-// When all three are empty this returns an EMPTY array and the caller renders
-// its empty state. It never substitutes a decorative brand asset — a tile
-// showing a generic flour-and-wheat stock shot reads as "here is the loaf"
-// when no photo exists.
+// When both are empty this returns an EMPTY array and the caller renders its
+// empty state. It never substitutes a decorative brand asset — a tile showing
+// a generic flour-and-wheat stock shot reads as "here is the loaf" when no
+// photo exists.
+//
+// The cover used to be DROPPED whenever gallery_urls was non-empty, which is
+// why the tile's swipe carousel has never been visible to a customer: the one
+// product with a cover AND a gallery entry resolved to a single slide, so
+// nothing ever reached the `media.length > 1` that gates the dots and the
+// swipe hint. image_url and gallery_urls are independent admin fields with no
+// constraint keeping them disjoint — the cover is routinely also pasted into
+// the gallery — so the list must be de-duplicated or the same photo renders
+// twice and the dots claim a slide that is a repeat. Same rule, same reason,
+// as resolvePdpGallery below.
+//
+// Admin photos now outrank the bundled editorial media, which they did not
+// when gallery_urls was the only DB source consulted. That is the right way
+// round: a photo Sunny uploaded of the actual loaf beats a bundled clip. It
+// is also inert today — every PRODUCT_DETAILS[*].media is [].
 export function resolveProductMedia(
   slug: string,
   imageUrl: string | null | undefined,
   galleryUrls: string[] | null | undefined,
 ): ProductMedia[] {
   const bundledName = PRODUCTS.find((p) => p.slug === slug)?.name;
-  const gallery = (galleryUrls ?? []).filter(
-    (u) => typeof u === "string" && u.trim().length > 0,
-  );
-  if (gallery.length > 0) {
-    return gallery.map((src, i) => ({
+  const urls = [imageUrl, ...(galleryUrls ?? [])]
+    .map((u) => (typeof u === "string" ? u.trim() : ""))
+    .filter((u) => u.length > 0);
+  const seen = new Set<string>();
+  const unique = urls.filter((u) => (seen.has(u) ? false : (seen.add(u), true)));
+
+  if (unique.length > 0) {
+    return unique.map((src, i) => ({
+      // Type from the URL's extension — the upload route stamps one on from
+      // the verified MIME. The old code did the same for gallery entries but
+      // hardcoded "image" for the cover; harmless only because
+      // COVER_MUST_BE_PHOTO already refuses a video there.
       type: isVideoUrl(src) ? "video" : "image",
       src,
-      alt: bundledName ? `${bundledName} — ${i + 1}` : "Product image",
+      alt: bundledName
+        ? unique.length > 1
+          ? `${bundledName} — photo ${i + 1} of ${unique.length}`
+          : bundledName
+        : "Product image",
     }));
   }
+
   const bundled = PRODUCT_DETAILS[slug as ProductSlug]?.media;
   if (bundled && bundled.length > 0) {
     console.info(
-      `[lib/products] gallery fallback → bundled media for "${slug}" (products.gallery_urls empty)`,
+      `[lib/products] gallery fallback → bundled media for "${slug}" (no products.image_url or gallery_urls)`,
     );
     return bundled;
   }
-  const heroImage = resolveHeroImage(imageUrl, slug);
-  if (!heroImage) return [];
-  return [
-    {
-      type: "image",
-      src: heroImage,
-      alt: bundledName ? `${bundledName} — hero` : "Product image",
-    },
-  ];
+  // No admin photo and no bundled media: resolveHeroImage logs the miss.
+  resolveHeroImage(imageUrl, slug);
+  return [];
 }
 
-// PDP-ONLY gallery list. Deliberately separate from resolveProductMedia:
-// the shop LIST tiles keep their existing one-photo-per-card behaviour, and
-// folding image_url into the shared helper would silently turn every tile
-// into a two-photo carousel.
+// PDP-ONLY gallery list. Still separate from resolveProductMedia, but no
+// longer because the two want different content — both now resolve
+// [image_url, ...gallery_urls] de-duplicated. What differs is the alt text:
+// this one takes the LIVE DB product name from the caller, so a product that
+// exists only in the DB still gets a real alt, whereas the shop tile has only
+// the slug and falls back to the bundled PRODUCTS name.
 //
 // The PDP shows the FULL set the admin has uploaded, main photo first:
 // [image_url, ...gallery_urls]. These are two independent admin fields with

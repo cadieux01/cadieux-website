@@ -27,6 +27,32 @@ const qtyBtnStyle: React.CSSProperties = {
   WebkitTapHighlightColor: "transparent",
 };
 
+// Play control on an unplayed video slide. Cream disc on the photo, centred,
+// sized past the 44px touch target. Sits above the still (which is
+// pointer-events:none) and is the only interactive thing in the scroller, so
+// a tap on it plays while a tap anywhere else on the slide still opens the
+// PDP through the wrapping <Link>.
+const playBtnStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  transform: "translate(-50%, -50%)",
+  width: 52,
+  height: 52,
+  borderRadius: 999,
+  border: "1px solid #024628",
+  background: "#FBF3D4",
+  color: "#024628",
+  fontSize: 20,
+  lineHeight: 1,
+  paddingLeft: 4,
+  cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
 // Stat strip entries, resolved server-side from product_stat_tiles (with
 // net_weight/slices read through to the products row). Never bundled —
 // an empty array renders no strip at all.
@@ -83,6 +109,17 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
     m.type === "video" && cover && failedVideos.includes(m.src) ? cover : m;
   const markVideoFailed = (src: string) =>
     setFailedVideos((f) => (f.includes(src) ? f : [...f, src]));
+
+  // src of the ONE video the customer has tapped, or null. One at a time per
+  // tile: tapping a second slide's play control stops the first, so a swipe
+  // through a gallery can never leave three clips streaming behind it.
+  const [playing, setPlaying] = useState<string | null>(null);
+  // Still frame for an unplayed video. Prefers the clip's own poster (bundled
+  // editorial only — an admin upload has no poster sibling, and deriving one
+  // just 404s), then the product's cover photo, which COVER_MUST_BE_PHOTO
+  // guarantees is a photo and which slide 0 has already loaded.
+  const posterFor = (m: ProductMedia): string | null =>
+    m.poster ?? cover?.src ?? null;
   // A source that 404s errors before hydration attaches onError, so the React
   // handler alone never hears about it. On mount, ask the element directly:
   // NETWORK_NO_SOURCE means it has already tried every source and given up.
@@ -278,32 +315,92 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               }}
             >
               {m.type === "video" ? (
-                // One source, typed from the extension — see the same
-                // change in the PDP gallery. The derived ".av1.mp4" and
-                // ".poster.jpg" siblings only exist for bundled editorial
-                // clips, never for an admin upload.
-                <video
-                  ref={checkVideoLoaded(m.src)}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  {...(m.poster ? { poster: m.poster } : {})}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    backgroundColor: "#024628",
-                    display: "block",
-                    pointerEvents: "none",
-                  }}
-                >
-                  <source
-                    src={m.src}
-                    type={videoMimeType(m.src)}
-                    onError={() => markVideoFailed(m.src)}
-                  />
-                </video>
+                // NOT autoplayed. Six tiles autoplaying muted loops is six
+                // simultaneous media downloads on a phone — the customer's
+                // data and the main thread both pay for video nobody asked
+                // to watch. The slide shows a still with a play control and
+                // downloads nothing until it is tapped (preload="none"), so
+                // an untapped video costs one <video> element and no bytes.
+                //
+                // One source, typed from the extension — see the same change
+                // in the PDP gallery. The derived ".av1.mp4" and ".poster.jpg"
+                // siblings only exist for bundled editorial clips, never for
+                // an admin upload, which is why the still is NOT the poster
+                // attribute: see posterFor().
+                <>
+                  <video
+                    ref={checkVideoLoaded(m.src)}
+                    muted
+                    loop
+                    playsInline
+                    preload={playing === m.src ? "auto" : "none"}
+                    // The poster attribute is set ONLY while playing, where it
+                    // covers the moment between the tap and the first decoded
+                    // frame. Setting it unplayed as well double-downloads the
+                    // same picture — measured: the raw /x.poster.jpg via this
+                    // attribute AND /_next/image?url=/x.poster.jpg via the
+                    // still below, which is the one that renders.
+                    {...(playing === m.src
+                      ? { autoPlay: true, ...(m.poster ? { poster: m.poster } : {}) }
+                      : {})}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      backgroundColor: "#024628",
+                      display: "block",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <source
+                      src={m.src}
+                      type={videoMimeType(m.src)}
+                      onError={() => markVideoFailed(m.src)}
+                    />
+                  </video>
+                  {playing !== m.src && (
+                    <>
+                      {/* The still. Rendered as the SAME next/image the cover
+                          slide renders, not as the video's poster attribute:
+                          poster would point at the raw storage original and
+                          download it unoptimised, while this resolves to the
+                          identical optimiser URL slide 0 already requested —
+                          a cache hit, zero extra bytes. No cover (a
+                          video-only gallery) leaves the brand panel showing. */}
+                      {posterFor(m) && (
+                        <Image
+                          src={posterFor(m)!}
+                          alt={m.alt || title}
+                          fill
+                          draggable={false}
+                          sizes="(max-width: 768px) 100vw, 600px"
+                          // Same rule as the image branch: the FIRST slide is
+                          // eager because it is the one on screen, and every
+                          // later slide waits. A video at slide 0 would
+                          // otherwise be the one tile whose visible frame
+                          // lazy-loaded.
+                          priority={i === 0}
+                          style={{
+                            objectFit: "cover",
+                            pointerEvents: "none",
+                            userSelect: "none",
+                          }}
+                        />
+                      )}
+                      <button
+                        type="button"
+                        aria-label="Play video"
+                        onClick={(e) => {
+                          stop(e);
+                          setPlaying(m.src);
+                        }}
+                        style={playBtnStyle}
+                      >
+                        ▶
+                      </button>
+                    </>
+                  )}
+                </>
               ) : (
                 <Image
                   src={m.src}
