@@ -509,9 +509,11 @@ export async function PATCH(
     // below names the event unambiguously.
     targetId: params.id,
     // The OLF code, not a UUID slice. `targetLabel` is STORED, so this
-    // only improves rows written from here on; the old ones need the
-    // backfill in supabase/migrations/. `targetId` keeps the UUID, so
-    // nothing that joins on it is affected.
+    // only improves rows written from here on; the old ones need
+    // supabase/scripts/audit_log_relabel_backfill.sql — kept OUT of
+    // supabase/migrations/ on purpose, because `db push` would run it
+    // and relabelling an audit table is not an automatic decision.
+    // `targetId` keeps the UUID, so nothing that joins on it is affected.
     targetLabel: orderLabel,
     context,
     meta: {
