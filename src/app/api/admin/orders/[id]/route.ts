@@ -509,10 +509,12 @@ export async function PATCH(
     // below names the event unambiguously.
     targetId: params.id,
     // The OLF code, not a UUID slice. `targetLabel` is STORED, so this
-    // only improves rows written from here on; the old ones need
-    // supabase/scripts/audit_log_relabel_backfill.sql — kept OUT of
-    // supabase/migrations/ on purpose, because `db push` would run it
-    // and relabelling an audit table is not an automatic decision.
+    // only improves rows written from here on. The old ones are NOT
+    // fixable by a backfill: audit_log is append-only at the database
+    // level (triggers audit_log_no_update / audit_log_no_delete, from
+    // sql/audit-log-tamper-protection.sql), so any UPDATE raises P0001
+    // and changes nothing. History is resolved at READ time instead —
+    // see docs/audit-log-relabel-WONTRUN.md.
     // `targetId` keeps the UUID, so nothing that joins on it is affected.
     targetLabel: orderLabel,
     context,
