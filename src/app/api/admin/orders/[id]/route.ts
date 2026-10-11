@@ -159,13 +159,33 @@ export async function PATCH(
   // canonical-list check — a form that serialises the whole order and
   // resubmits the unchanged slot must not be rejected. Any TRULY new
   // value still has to be one of the three canonical windows.
-  const { data: before } = await supabaseAdmin
+  const { data: before, error: beforeErr } = await supabaseAdmin
     .from("orders")
     .select(
       "order_number, status, delivery_date, delivery_slot, is_preorder, payment_method, payment_status, status_updated_at",
     )
     .eq("id", params.id)
     .maybeSingle();
+
+  // A PATCH to an id that does not exist used to answer ok:true. The UPDATE
+  // below matches no row and raises no error, `updated` comes back null and
+  // only the settlement path looked at it, and the audit event is built from
+  // `params.id` either way — so a typo'd id was indistinguishable from a real
+  // status change AND left a plausible audit row pointing at nothing. Stop
+  // here, before any validation, write, push or audit.
+  //
+  // A failed READ is not a missing order, so it answers 500: a 404 would
+  // invite the operator to conclude the order is gone. /edit already does
+  // exactly this (its 404 is at the same point); /bulk reports per-row
+  // "Order not found" from the UPDATE's empty RETURNING and audits nothing,
+  // which is why only this route needed the guard.
+  if (beforeErr) {
+    console.error("[admin/orders PATCH] pre-fetch failed:", beforeErr.message);
+    return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
+  }
+  if (!before) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
 
   if (typeof body.status === "string") {
     const raw = body.status.toLowerCase();
@@ -295,9 +315,6 @@ export async function PATCH(
         { error: "Invalid cod_settled_method" },
         { status: 400 },
       );
-    }
-    if (!before) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
     // Re-check server-side. The button is already hidden for these rows, but
     // a non-COD or already-paid order must never be settleable by a crafted
