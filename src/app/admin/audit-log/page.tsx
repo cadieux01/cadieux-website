@@ -7,9 +7,14 @@
 //   • date range (preset chips + custom range; serialised to ?from=&to=)
 //   • entity (multi-select via toggle chips)
 //   • action (multi-select via toggle chips)
-//   • free-text search across target_label / context / target_id
+//   • free-text search across target_label / context / target_id, plus an
+//     exact OLF/OLS code lookup — typing a code finds that order's whole
+//     history, including rows whose stored label never carried the code
 // All filter changes refetch from /api/admin/audit-log so the result
 // reflects the canonical server state, not a stale client cache.
+//
+// The Target column shows a code RESOLVED FROM target_id on read, not the
+// stored target_label — see lib/audit-target.ts and the route.
 //
 // CSV export hits the same route with a high limit and downloads the
 // exact filtered result.
@@ -23,6 +28,7 @@ import {
   type DateRangeValue,
 } from "@/components/admin/DateRangeDropdown";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import { targetDisplay } from "@/lib/audit-target";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import { formatDateTime } from "@/lib/admin-formatting";
 import {
@@ -209,7 +215,9 @@ function AuditLogPageInner() {
         { header: "When", value: (r) => r.occurred_at },
         { header: "Entity", value: (r) => entityLabel(r.entity) },
         { header: "Action", value: (r) => actionLabel(r.action) },
-        { header: "Target", value: (r) => r.target_label ?? "" },
+        // Same resolved string the table shows, so the download and the
+        // screen cannot disagree.
+        { header: "Target", value: (r) => targetDisplay(r) },
         { header: "Target ID", value: (r) => r.target_id ?? "" },
         { header: "Context", value: (r) => r.context ?? "" },
         { header: "IP", value: (r) => r.ip_address ?? "" },
@@ -311,7 +319,7 @@ function AuditLogPageInner() {
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search target, context, or ID…"
+            placeholder="Search OLF346, context, or ID…"
             className="px-3 py-2"
             style={{
               border: `1px solid ${BORDER}`,
@@ -452,7 +460,7 @@ function AuditLogPageInner() {
                       <td style={td}>{actionLabel(r.action)}</td>
                       <td style={td}>
                         <div style={{ color: CREAM }}>
-                          {r.target_label || "—"}
+                          {targetDisplay(r) || "—"}
                         </div>
                         {r.target_id ? (
                           <div

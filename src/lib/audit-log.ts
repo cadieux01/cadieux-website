@@ -117,6 +117,22 @@ export type AuditLogRow = {
   action: AuditAction;
   target_id: string | null;
   target_label: string | null;
+  /**
+   * The OLF/OLS code for `target_id`, RESOLVED AT READ TIME by
+   * GET /api/admin/audit-log — never stored, never written back.
+   *
+   * `target_label` is a snapshot taken when the event was recorded, and for
+   * every row written before the writers were fixed it holds a UUID slice
+   * (`#a1b2c3d4`) or a product name instead of the code. Those rows cannot be
+   * repaired by a backfill: audit_log is append-only at the database level
+   * (see docs/audit-log-relabel-WONTRUN.md), so the code is derived from
+   * `target_id` on each read instead.
+   *
+   * Null means the id resolved to nothing — the order or subscription was
+   * deleted — and the caller should fall back to `target_label`, which is
+   * then genuinely all that is known about the event.
+   */
+  target_code?: string | null;
   actor: string | null;
   context: string | null;
   meta: Record<string, unknown> | null;
