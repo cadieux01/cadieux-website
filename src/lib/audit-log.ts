@@ -9,137 +9,41 @@
 //
 // `actor` is intentionally left null for now: the admin panel uses a
 // single shared password, so we have no per-user identity to attribute.
+//
+// SERVER ONLY, ENFORCED. This module reaches `supabaseAdmin`, a service-role
+// client built at module scope from SUPABASE_SERVICE_ROLE_KEY. The vocabulary
+// it used to export — the entity/action lists, the label maps and AuditLogRow
+// — now lives in lib/audit-log-schema.ts, because the "use client"
+// /admin/audit-log page needs those constants, and importing them from here
+// pulled the service client into the browser bundle. There the key is not
+// NEXT_PUBLIC_-prefixed, so it resolves to undefined, createClient throws
+// during module init, and the page renders blank. The `server-only` import
+// below turns a repeat of that into a BUILD failure instead of a silent blank
+// page at runtime.
+//
+// The vocabulary is re-exported unchanged, so the ~54 server-side callers that
+// import AuditAction/AuditEntity from here keep working untouched. Any new
+// client-side consumer must import from lib/audit-log-schema directly;
+// reaching for this module will fail the build, which is the point.
+
+import "server-only";
 
 import type { NextRequest } from "next/server";
 
 import { supabaseAdmin } from "@/lib/admin-auth";
+import type { AuditAction, AuditEntity } from "@/lib/audit-log-schema";
 
-export type AuditEntity =
-  | "product"
-  | "product_report"
-  | "order"
-  | "customer"
-  | "subscription"
-  | "subscription_delivery"
-  | "review"
-  | "email"
-  | "address"
-  | "change_request"
-  | "feedback"
-  | "service_area"
-  | "delivery_request"
-  | "other";
-
-export type AuditAction =
-  | "create"
-  | "update"
-  | "archive"
-  | "unarchive"
-  | "delete"
-  | "send_email"
-  | "status_change"
-  | "price_change"
-  | "cancel"
-  | "refund"
-  | "pause"
-  | "resume"
-  | "other";
-
-export const AUDIT_ENTITIES: AuditEntity[] = [
-  "product",
-  "product_report",
-  "order",
-  "customer",
-  "subscription",
-  "subscription_delivery",
-  "review",
-  "email",
-  "address",
-  "change_request",
-  "feedback",
-  "service_area",
-  "delivery_request",
-  "other",
-];
-
-export const AUDIT_ACTIONS: AuditAction[] = [
-  "create",
-  "update",
-  "archive",
-  "unarchive",
-  "delete",
-  "send_email",
-  "status_change",
-  "price_change",
-  "cancel",
-  "refund",
-  "pause",
-  "resume",
-  "other",
-];
-
-export const AUDIT_ENTITY_LABEL: Record<AuditEntity, string> = {
-  product: "Product",
-  product_report: "Lab report",
-  order: "Order",
-  customer: "Customer",
-  subscription: "Subscription",
-  subscription_delivery: "Delivery",
-  review: "Review",
-  email: "Email",
-  address: "Address",
-  change_request: "Change request",
-  feedback: "Feedback",
-  service_area: "Service area",
-  delivery_request: "Delivery request",
-  other: "Other",
-};
-
-export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
-  create: "Created",
-  update: "Updated",
-  archive: "Archived",
-  unarchive: "Unarchived",
-  delete: "Deleted",
-  send_email: "Email sent",
-  status_change: "Status changed",
-  price_change: "Price changed",
-  cancel: "Cancelled",
-  refund: "Refunded",
-  pause: "Paused",
-  resume: "Resumed",
-  other: "Other",
-};
-
-export type AuditLogRow = {
-  id: string;
-  entity: AuditEntity;
-  action: AuditAction;
-  target_id: string | null;
-  target_label: string | null;
-  /**
-   * The OLF/OLS code for `target_id`, RESOLVED AT READ TIME by
-   * GET /api/admin/audit-log — never stored, never written back.
-   *
-   * `target_label` is a snapshot taken when the event was recorded, and for
-   * every row written before the writers were fixed it holds a UUID slice
-   * (`#a1b2c3d4`) or a product name instead of the code. Those rows cannot be
-   * repaired by a backfill: audit_log is append-only at the database level
-   * (see docs/audit-log-relabel-WONTRUN.md), so the code is derived from
-   * `target_id` on each read instead.
-   *
-   * Null means the id resolved to nothing — the order or subscription was
-   * deleted — and the caller should fall back to `target_label`, which is
-   * then genuinely all that is known about the event.
-   */
-  target_code?: string | null;
-  actor: string | null;
-  context: string | null;
-  meta: Record<string, unknown> | null;
-  ip_address: string | null;
-  user_agent: string | null;
-  occurred_at: string;
-};
+export type {
+  AuditEntity,
+  AuditAction,
+  AuditLogRow,
+} from "@/lib/audit-log-schema";
+export {
+  AUDIT_ENTITIES,
+  AUDIT_ACTIONS,
+  AUDIT_ENTITY_LABEL,
+  AUDIT_ACTION_LABEL,
+} from "@/lib/audit-log-schema";
 
 // Pulls the client IP from the standard proxy headers. Vercel and
 // most edges put the real IP first in `x-forwarded-for`. Falls back

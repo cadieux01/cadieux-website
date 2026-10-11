@@ -12,6 +12,24 @@
 // Places + Geocoding enabled on the GCP project. When no key is set we
 // return null silently so the rest of the flow degrades gracefully.
 
+// SERVER ONLY, ENFORCED AT BUILD TIME. This module builds on `supabaseAdmin`,
+// a service-role client constructed at module scope from
+// SUPABASE_SERVICE_ROLE_KEY. In a client bundle that variable is `undefined`
+// (it is not NEXT_PUBLIC_-prefixed), createClient throws during module init,
+// the client tree never mounts, and the page renders BLANK with no failing
+// request and nothing in the server log — the b012899 bug, when this file was
+// pulled into the checkout page.
+//
+// That is already caught transitively, because @/lib/admin-auth carries the
+// same marker. It is repeated here on purpose: the error then names THIS file,
+// which is the one someone is about to import, and it keeps holding if geocode
+// ever stops reaching admin-auth while still reading a server-only key
+// (GOOGLE_MAPS_API_KEY, UPSTASH_*).
+//
+// If you want distance math in a client component, import `haversineKm` from
+// @/lib/haversine — zero imports, client-safe, and the same function.
+import "server-only";
+
 import { Redis } from "@upstash/redis";
 
 import { supabaseAdmin } from "@/lib/admin-auth";

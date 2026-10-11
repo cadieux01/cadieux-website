@@ -43,11 +43,11 @@ import {
   fetchAddresses,
   upsertAddressToBookBestEffort,
 } from "@/lib/addresses";
-// IMPORTANT: distance math is imported from "@/lib/haversine" (zero imports,
-// client-safe). Do NOT import from "@/lib/geocode" — that file imports the
-// Supabase admin client, which reads SUPABASE_SERVICE_ROLE_KEY at module
-// load. Dragging it into this client component crashes hydration with
-// "supabaseUrl is required" → blank page (the b012899 bug).
+// Distance math comes from "@/lib/haversine" (zero imports, client-safe), not
+// from "@/lib/geocode", which exports the same function alongside the Supabase
+// admin client. geocode.ts now carries `import "server-only"`, so importing it
+// here fails `next build` by name instead of shipping the blank page b012899
+// shipped.
 import { haversineKm } from "@/lib/haversine";
 import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
 import { usePreorderMode } from "@/hooks/usePreorderMode";

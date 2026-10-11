@@ -31,6 +31,10 @@ import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { targetDisplay } from "@/lib/audit-target";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import { formatDateTime } from "@/lib/admin-formatting";
+// NOT from "@/lib/audit-log" — that module builds the service-role Supabase
+// client at import time, so pulling it into this "use client" page crashed
+// hydration and left the page blank. The vocabulary lives in a module with no
+// server imports; lib/audit-log now refuses to be imported here at all.
 import {
   AUDIT_ACTION_LABEL,
   AUDIT_ACTIONS,
@@ -39,7 +43,7 @@ import {
   type AuditAction,
   type AuditEntity,
   type AuditLogRow,
-} from "@/lib/audit-log";
+} from "@/lib/audit-log-schema";
 
 const PAGE_SIZE = 100;
 const EXPORT_LIMIT = 1000;

@@ -1,3 +1,27 @@
+// SERVER ONLY, ENFORCED AT BUILD TIME.
+//
+// `supabaseAdmin` below is constructed at module scope from
+// SUPABASE_SERVICE_ROLE_KEY. That variable is not NEXT_PUBLIC_-prefixed, so in
+// a client bundle Next replaces it with `undefined` and createClient throws
+// "supabaseUrl is required" during module initialisation. The client tree then
+// never mounts, React discards the server-rendered HTML, and the page goes
+// BLANK — with no failing request, no 500, and nothing in the server log to
+// point at. It is a miserable thing to debug and it has happened twice:
+// b012899 (lib/geocode pulled into the checkout page) and 9418bac
+// (lib/audit-log pulled into /admin/audit-log, blank for 146 days before
+// anyone traced it).
+//
+// `server-only` makes the second one impossible. It is a marker package whose
+// "react-server" export condition resolves to an empty module on the server
+// and to a module that throws at BUILD time in a client bundle, so importing
+// this file from a "use client" component now fails `next build` with a named
+// error instead of shipping a blank page.
+//
+// If this import starts failing the build: that is it working. Find the
+// "use client" file in the import chain and give it a module with no server
+// imports — lib/audit-log-schema.ts is the worked example.
+import "server-only";
+
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {

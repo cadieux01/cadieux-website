@@ -28,8 +28,10 @@ import {
   type ZoneSource,
 } from "@/lib/delivery-zones";
 import { matchesSelection, toIstDay, type DaySelection } from "@/lib/day-filter";
-// @/lib/haversine, NOT @/lib/geocode — geocode pulls in the Supabase admin
-// client, and this module is imported by a client component.
+// @/lib/haversine, NOT @/lib/geocode — same function, but geocode pulls in the
+// Supabase admin client and this module is imported by a client component.
+// geocode.ts carries `import "server-only"`, so swapping these would fail the
+// build rather than blank the page.
 import { haversineKm } from "@/lib/haversine";
 import { itemQty, itemSlug } from "@/lib/order-items";
 import { formatOrderNumber, formatSubscriptionNumber } from "@/lib/order-number";
