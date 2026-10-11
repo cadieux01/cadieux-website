@@ -157,7 +157,27 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "System",
     items: [
+      // TWO AUDIT TRAILS, TWO SOURCES, NEITHER SUBSUMES THE OTHER.
+      //
+      //   Audit          → logistics.audit_logs, written by DATABASE TRIGGERS.
+      //                    Cross-panel (website AND dashboard), attributes the
+      //                    actor, carries old_values/new_values diffs, and is
+      //                    the only one that sees LOGIN/BLOCKED security
+      //                    events. Has no IP address.
+      //   Order activity → public.audit_log, written by the APPLICATION
+      //                    (recordAuditEvent, ~54 routes). Website-only, actor
+      //                    always null (one shared admin password), but carries
+      //                    ip_address + user_agent and resolves the OLF/OLS
+      //                    code an operator can search the board on.
+      //
+      // Do NOT "tidy" one away into the other: each holds fields the other
+      // does not, and collapsing them loses data either way. Which one should
+      // be primary is a product decision, not a refactor.
       { href: "/admin/audit", label: "Audit" },
+      // Added because the page had none. It shipped 2026-05-18 and the only
+      // way in was typing the URL, so nobody opened it — which is how it went
+      // 146 days rendering blank without being reported.
+      { href: "/admin/audit-log", label: "Order activity" },
       { href: "/admin/settings", label: "Settings" },
       { href: "/admin/profile", label: "Profile" },
     ],

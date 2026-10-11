@@ -9,7 +9,14 @@
 //
 // Read-only + immutable: no edit/delete affordances anywhere; CSV export
 // only. Filters (date / source / action / category / search) are applied
-// server-side; the returned rows (≤2000) are paginated 50/page client-side.
+// server-side, and so is PAGINATION: one 50-row window per request, with
+// the row count taken from the server's exact count rather than from the
+// length of what came back.
+//
+// It used to say "the returned rows (≤2000)" and slice them in the browser.
+// Both halves of that were wrong: PostgREST caps a response at 1000, so a
+// busy range quietly produced 1000 rows that the page then reported as the
+// total. See MAX_ROWS in api/admin/audit for the full account.
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -23,6 +30,7 @@ import {
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/admin-csv";
 import { formatDateTime } from "@/lib/admin-formatting";
+import { resolveExportScope } from "@/lib/export-scope";
 
 const CREAM_SOFT = "rgba(251,243,212,0.85)";
 const CREAM = "#FBF3D4";
@@ -32,6 +40,12 @@ const BORDER = "rgba(251,243,212,0.18)";
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 const PER_PAGE = 50;
+
+/** Rows per request when the CSV export pages the whole filtered set.
+ *  Matches MAX_ROWS in api/admin/audit — PostgREST will not return more
+ *  than this however large a limit we send, so asking for more would only
+ *  make the loop think it had finished early. */
+const EXPORT_CHUNK = 1000;
 
 type AuditRow = {
   id: string;
@@ -253,6 +267,9 @@ export default function UnifiedAuditPage() {
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  // Rows MATCHING THE FILTERS server-side, not rows loaded. The gap between
+  // the two is the whole point — see `load`.
+  const [total, setTotal] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const buildParams = useCallback(() => {
@@ -267,15 +284,30 @@ export default function UnifiedAuditPage() {
     return sp;
   }, [range, action, source, category, search]);
 
+  // ONE PAGE PER REQUEST, AND THE SERVER'S OWN COUNT.
+  //
+  // This used to ask for every matching row and slice the result 50 at a
+  // time in the browser. PostgREST caps a response at 1000 rows, so on any
+  // range busier than that the page silently held the newest 1000 and
+  // called it the total: "1000 events", "Showing 1-50 of 1000", and a CSV
+  // of 1000 — over a filtered set that is really 7,224. Nothing on screen
+  // said so, which is what made it dangerous rather than merely wrong.
+  //
+  // Now the bound is a WINDOW, not a ceiling: `offset` moves it, and
+  // `total` comes from the server's exact count, so every row is reachable
+  // and the number shown is the real one.
   const load = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
-      const qs = buildParams().toString();
-      const res = await adminFetch<{ rows: AuditRow[] }>(
-        qs ? `/api/admin/audit?${qs}` : "/api/admin/audit",
+      const sp = buildParams();
+      sp.set("limit", String(PER_PAGE));
+      sp.set("offset", String((page - 1) * PER_PAGE));
+      const res = await adminFetch<{ rows: AuditRow[]; total: number }>(
+        `/api/admin/audit?${sp.toString()}`,
       );
       setRows(res.rows ?? []);
+      setTotal(res.total ?? 0);
     } catch (e) {
       setError(
         e instanceof AdminFetchError
@@ -285,21 +317,24 @@ export default function UnifiedAuditPage() {
           : "Failed to load audit trail",
       );
       setRows([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [buildParams]);
+  }, [buildParams, page]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  // Filters reset to page 1. `load` depends on `page`, so this must run
+  // before it to avoid fetching an offset the new filter has no rows for.
   useEffect(() => {
     setPage(1);
   }, [range, action, source, category, search]);
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
-  const pageRows = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const pageRows = rows;
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -310,25 +345,85 @@ export default function UnifiedAuditPage() {
     }
   }, [load]);
 
-  function exportCsv() {
-    const csv = toCsv(rows, [
-      { header: "Timestamp", value: (r) => r.created_at },
-      { header: "Source", value: (r) => r.source ?? "" },
-      { header: "User", value: (r) => r.user_name ?? "" },
-      { header: "Action", value: (r) => r.action_type ?? "" },
-      { header: "Category", value: (r) => r.category ?? "" },
-      { header: "Entity", value: (r) => r.entity_type ?? "" },
-      { header: "Description", value: (r) => r.description ?? "" },
-      { header: "Before", value: (r) => safeJson(r.old_values, 0) },
-      { header: "After", value: (r) => safeJson(r.new_values, 0) },
-    ]);
-    downloadCsv(csvFilename("audit-trail"), csv);
+  // THE FILE IS THE WHOLE FILTERED SET, NOT THE PAGE ON SCREEN.
+  //
+  // `rows` is now 50 rows, so exporting it would write a 50-row file — the
+  // 250-of-718 bug again, just smaller. lib/export-scope.ts already decides
+  // this question: hand it the loaded rows, the server's total and whether
+  // the view is bounded, and it re-fetches when it has to and returns a
+  // sentence stating what the file covers.
+  //
+  // `fetchAll` pages the API in MAX chunks because PostgREST will not
+  // return more than 1000 rows per request however large a limit we send.
+  // `applyFilters` is identity: every filter on this page is applied
+  // server-side via buildParams, so the re-fetch is already scoped and
+  // re-filtering in the browser could only ever diverge from it.
+  const [exporting, setExporting] = useState(false);
+
+  async function exportCsv() {
+    setExporting(true);
+    setError(null);
+    try {
+      const scope = await resolveExportScope<AuditRow>({
+        loaded: rows,
+        total,
+        truncated: total > rows.length,
+        label: "events",
+        fetchAll: async () => {
+          const all: AuditRow[] = [];
+          for (let offset = 0; offset < total; offset += EXPORT_CHUNK) {
+            const sp = buildParams();
+            sp.set("limit", String(EXPORT_CHUNK));
+            sp.set("offset", String(offset));
+            const res = await adminFetch<{ rows: AuditRow[]; total: number }>(
+              `/api/admin/audit?${sp.toString()}`,
+            );
+            const batch = res.rows ?? [];
+            all.push(...batch);
+            // A short chunk means the server has no more to give. Without
+            // this the loop would spin to `total` against a moving table.
+            if (batch.length < EXPORT_CHUNK) break;
+          }
+          return all;
+        },
+        applyFilters: (r) => r,
+      });
+
+      const csv = toCsv(scope.rows, [
+        { header: "Timestamp", value: (r) => r.created_at },
+        { header: "Source", value: (r) => r.source ?? "" },
+        { header: "User", value: (r) => r.user_name ?? "" },
+        { header: "Action", value: (r) => r.action_type ?? "" },
+        { header: "Category", value: (r) => r.category ?? "" },
+        { header: "Entity", value: (r) => r.entity_type ?? "" },
+        { header: "Description", value: (r) => r.description ?? "" },
+        { header: "Before", value: (r) => safeJson(r.old_values, 0) },
+        { header: "After", value: (r) => safeJson(r.new_values, 0) },
+        // Carried in the file itself, because a CSV outlives the screen it
+        // was downloaded from.
+        { header: "Scope", value: () => scope.note },
+      ]);
+      downloadCsv(
+        csvFilename(`audit-trail-${scope.rows.length}-of-${total}`),
+        csv,
+      );
+    } catch (e) {
+      // Nothing is written on failure: a partial audit export is the exact
+      // thing this path exists to prevent.
+      setError(
+        e instanceof AdminFetchError
+          ? `Export failed (${e.message}). Nothing was downloaded.`
+          : "Export failed — nothing was downloaded. Try again.",
+      );
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
     <AdminShell
       title="Audit Trail"
-      subtitle={`${rows.length} event${rows.length === 1 ? "" : "s"} · all panels`}
+      subtitle={`${total} event${total === 1 ? "" : "s"} · all panels`}
       actions={
         <>
           <button
@@ -340,8 +435,20 @@ export default function UnifiedAuditPage() {
           >
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
-          <button type="button" onClick={exportCsv} className="uppercase" style={chipBtn}>
-            Export CSV
+          <button
+            type="button"
+            onClick={() => void exportCsv()}
+            disabled={exporting || total === 0}
+            className="uppercase"
+            style={{
+              ...chipBtn,
+              cursor: exporting ? "wait" : "pointer",
+              opacity: exporting || total === 0 ? 0.6 : 1,
+            }}
+          >
+            {/* The export now re-fetches, so it is no longer instant on a
+                large range. Saying so beats a button that looks ignored. */}
+            {exporting ? "Preparing…" : "Export CSV"}
           </button>
         </>
       }
@@ -497,9 +604,9 @@ export default function UnifiedAuditPage() {
 
       <div className="flex items-center justify-between flex-wrap gap-3" style={{ marginTop: "1rem" }}>
         <span style={{ color: FADED, fontSize: "1rem", fontFamily: "var(--font-body)" }}>
-          {rows.length === 0
+          {total === 0
             ? "No events"
-            : `Showing ${(page - 1) * PER_PAGE + 1}–${Math.min(page * PER_PAGE, rows.length)} of ${rows.length}`}
+            : `Showing ${(page - 1) * PER_PAGE + 1}–${(page - 1) * PER_PAGE + rows.length} of ${total}`}
         </span>
         <div className="flex gap-2">
           <button
