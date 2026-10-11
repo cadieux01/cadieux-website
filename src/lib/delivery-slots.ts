@@ -213,7 +213,18 @@ export function generateSlots(): Slot[] {
  *  delivers in. Both entries are still held by live rows until the data move
  *  in docs/evening-slot-data-move.sql commits, and by history after that, so
  *  both have to remain VALID while being unbookable. Pausing is what stops a
- *  new booking landing on a window nobody delivers in. */
+ *  new booking landing on a window nobody delivers in.
+ *
+ *  KNOWN RISK, accepted deliberately: this is a DENY-list. A slot added to
+ *  SLOTS and not added here becomes bookable silently — no test fails, no
+ *  type complains, and the single-window guarantee is gone. The safer shape
+ *  would be an allow-list of the one bookable value, and that is NOT used on
+ *  purpose: `soleBookableSlot` derives from SLOTS.filter(isBookable), so the
+ *  whole chooser comes back by deleting one string from this array. An
+ *  allow-list would make reversing this change an edit to logic rather than
+ *  an edit to data, which is the property the design rests on.
+ *
+ *  So: if you add a slot to SLOTS, decide here whether it is bookable. */
 export const PAUSED_SLOTS: readonly string[] = [
   "06:00-10:00",
   "10:00-14:00",

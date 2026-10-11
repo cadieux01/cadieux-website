@@ -561,7 +561,12 @@ select bucket, n from (
   -- whose time_slot is on the target but which has a legacy day inside
   -- slots_by_day is a MOVED row and is already counted in (a); it is excluded
   -- here so (a) and (c) stay disjoint and their sum is the post-move count.
-  -- 6 of 24 live subs were in exactly that state on 2026-10-10.
+  -- 2 of 25 live subs were in exactly that state on 2026-10-11. (An earlier
+  -- revision of this comment said "6 of 24", which was a stale figure copied
+  -- from a header line measuring carrier DRIFT and total live subs rather
+  -- than this predicate. Re-measured against prod: 18 subs hold a legacy
+  -- time_slot, 2 more are on the target with a legacy day inside
+  -- slots_by_day, 18 + 2 = 20 = bucket (a), and 20 + 5 clean = 25 live.)
   union all
   select 10, '(c) live subscriptions ALREADY on 16:00-21:00 (time_slot, not moved)', count(*)
     from public.subscriptions s
