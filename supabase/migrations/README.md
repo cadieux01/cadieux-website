@@ -18,8 +18,29 @@ inside are idempotent — and nobody should be finding that out against a table
 with real customer data in it.
 
 **Nobody runs `db push` here until either the history row is repaired
-(`supabase migration repair`) or this file is made idempotent.** Neither has
-been done. This note is a record, not a fix.
+(`supabase migration repair --status applied 20260710120000`) or this file is
+made idempotent.** Neither has been done. This note is a record, not a fix.
+
+The same warning is now repeated in the header of
+`20260710120000_create_whatsapp_conversations.sql` itself, because that header
+previously claimed the table was "NOT YET APPLIED to production. Review-only."
+— the exact opposite of the truth, and the only text a person opening that file
+would have read.
+
+## Files here that are absent from the remote ledger
+
+Checked 2026-10-11: the remote ledger holds 138 rows, latest
+`20261002045742`. This directory holds 25 files. Everything after
+`20261002045742` is therefore unapplied by definition.
+
+| File | Status | Safe to re-run? |
+| --- | --- | --- |
+| `20260710120000_create_whatsapp_conversations.sql` | table exists in prod with live data; not in ledger | **NO — see the file header** |
+| `20261011093000_audit_log_tamper_protection.sql` | triggers exist in prod; not in ledger | yes — `create or replace` + `drop trigger if exists` throughout |
+
+The tamper-protection file was moved here from `sql/` so a fresh environment
+gets the `audit_log` append-only triggers, which previously existed only
+outside this directory and so were silently missing from any new database.
 
 ## Why this went unnoticed
 

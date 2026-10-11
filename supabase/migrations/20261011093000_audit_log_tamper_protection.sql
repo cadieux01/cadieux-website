@@ -8,6 +8,16 @@
 --
 -- Idempotent: re-running the file safely replaces the function and
 -- recreates the triggers.
+--
+-- ALREADY LIVE IN PRODUCTION, but NOT in the remote migration ledger
+-- (verified 2026-10-11: both triggers present and enabled; the ledger's
+-- latest row is 20261002045742). It lived in `sql/` until now, outside this
+-- directory, which meant a freshly provisioned database got none of this
+-- protection — that is the only reason it was moved here. Applying it to the
+-- existing production database is a harmless no-op thanks to the
+-- `create or replace` / `drop trigger if exists` above; the ledger row has
+-- deliberately NOT been repaired, because that is a production write for a
+-- documentation benefit. See ./README.md before running anything.
 
 begin;
 

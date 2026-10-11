@@ -16,7 +16,25 @@
 --     the service role bypasses RLS, so only server-side code (Edge Functions,
 --     Next.js route handlers using the service key) can read/write.
 --
--- NOTE: NOT YET APPLIED to production. Review-only.
+-- ###########################################################################
+-- DO NOT RUN THIS FILE, AND DO NOT RUN `supabase db push` WHILE IT IS HERE.
+--
+-- The header below used to read "NOT YET APPLIED to production. Review-only."
+-- That is FALSE and it is the dangerous part. `public.whatsapp_conversations`
+-- EXISTS in production and holds LIVE CUSTOMER CONVERSATIONS (20 as of
+-- 2026-09-11). It was created by two differently-versioned migrations that ARE
+-- recorded in `supabase_migrations.schema_migrations`; this file is a third,
+-- UNRECORDED description of the same table.
+--
+-- Because it is absent from the remote ledger, `supabase db push` will pick it
+-- up and apply it. `supabase/.temp/project-ref` points at PRODUCTION. Nobody
+-- should be discovering how these statements behave against a table with real
+-- customer messages in it.
+--
+-- Safe to push only after EITHER `supabase migration repair --status applied
+-- 20260710120000` (a prod write — get it approved) OR every statement here is
+-- made provably idempotent. Neither has been done. See ./README.md.
+-- ###########################################################################
 
 -- ---------------------------------------------------------------------------
 -- Conversations
