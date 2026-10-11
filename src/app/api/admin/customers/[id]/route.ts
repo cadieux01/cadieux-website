@@ -78,6 +78,30 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // EXISTENCE FIRST, AHEAD OF EVERYTHING ELSE. There was no such read at all:
+  // the UPDATE below matches no row for an id that does not exist, raises no
+  // error, and `maybeSingle()` resolves that to `data: null, error: null` —
+  // which went unchecked, so the route answered `{ok: true}` and wrote an
+  // audit event whose label and context were the raw UUID (`updated` being
+  // null, both fell through to `params.id`). A typo'd id therefore looked
+  // exactly like a successful edit and left a permanent audit row pointing at
+  // nothing.
+  //
+  // A failed READ answers 500, not 404: the customer is not known to be gone.
+  const { data: before, error: beforeErr } = await supabaseAdmin
+    .from("customers")
+    .select("id")
+    .eq("id", params.id)
+    .maybeSingle();
+
+  if (beforeErr) {
+    console.error("[admin/customers PATCH] pre-fetch failed:", beforeErr.message);
+    return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
+  }
+  if (!before) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const update: Record<string, unknown> = {};
 

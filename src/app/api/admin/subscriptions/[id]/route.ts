@@ -118,6 +118,42 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // EXISTENCE FIRST, AHEAD OF EVERYTHING ELSE. This read used to sit below
+  // the validation, with its error discarded and its null unchecked, and a
+  // PATCH to an id that does not exist answered
+  // `{ok: true, cascaded_deliveries: null}`: the UPDATE matched no row and
+  // raised no error, and the audit event is built from `params.id` regardless,
+  // so a typo'd id was indistinguishable from a real status change and left a
+  // plausible audit row on a table nothing can delete.
+  //
+  // IT MUST ALSO BEAT THE expected_status PATH. With `expected_status` set,
+  // the conditional UPDATE matches nothing for a missing row too, and the
+  // route answered 409 "already changed elsewhere" — which tells the operator
+  // to reload a subscription that was never there. A missing row is a 404,
+  // not a conflict.
+  //
+  // A failed READ answers 500, not 404: the subscription is not known to be
+  // gone, and a 404 would invite the operator to conclude it is.
+  //
+  // subscription_number is read for the audit label below — the OLS code is
+  // what an operator can search the board on.
+  const { data: before, error: beforeErr } = await supabaseAdmin
+    .from("subscriptions")
+    .select("status, payment_status, product_name, subscription_number")
+    .eq("id", params.id)
+    .maybeSingle();
+
+  if (beforeErr) {
+    console.error(
+      "[admin/subscriptions PATCH] pre-fetch failed:",
+      beforeErr.message,
+    );
+    return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
+  }
+  if (!before) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
@@ -149,14 +185,6 @@ export async function PATCH(
       ? body.expected_status.toLowerCase()
       : null;
 
-  const { data: before } = await supabaseAdmin
-    .from("subscriptions")
-    // subscription_number is read for the audit label below — the OLS code is
-    // what an operator can search the board on.
-    .select("status, payment_status, product_name, subscription_number")
-    .eq("id", params.id)
-    .maybeSingle();
-
   let updateQuery = supabaseAdmin
     .from("subscriptions")
     .update(update)
@@ -171,7 +199,9 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Conditional write matched no row → the status moved under us.
+  // Conditional write matched no row → the status moved under us. The row
+  // itself is known to exist (guarded above), so this is now only ever a
+  // genuine conflict.
   if (expected && (!updatedRows || updatedRows.length === 0)) {
     return NextResponse.json(
       {

@@ -131,3 +131,105 @@ run against someone else's in-progress worktree:
 git fetch /Users/sunnyraj/<other-worktree> HEAD
 git merge-tree --write-tree --name-only HEAD FETCH_HEAD
 ```
+
+## PostgREST unescapes `\` inside a quoted filter value
+
+A regex filter needs a **doubled** backslash on the wire. PostgREST processes
+escape sequences inside a quoted filter value before Postgres ever sees it, so
+
+```
+target_label.imatch."\yOLF73\y"
+```
+
+arrives at Postgres as the pattern `yOLF73y`, which matches **nothing**. There
+is no error and no warning: you get **HTTP 200 and a silently shorter result**.
+That is the whole danger — the response looks like a correct answer to a
+narrower question. It cost a real result set here (a search for `OLS94` quietly
+lost its delivery rows, and the only reason it was caught was re-measuring a
+count that had been measured before).
+
+The wire value needs `\\y`, which in a TS template literal is four
+backslashes:
+
+```ts
+const bounded = `"\\\\y${code}\\\\y"`;   // → \\yOLF73\\y on the wire
+```
+
+Quoting is still required — without it the escapes are at the mercy of the
+`or=(...)` list parser. **Probe the escaping with a bare `fetch` before
+trusting any regex filter**, comparing one backslash against two against a
+known row count; the two cases differ only in the number of rows returned, so
+nothing but a count will tell them apart.
+
+(`imatch` is available inside `or=(...)` on hosted Supabase. `\y` is Postgres'
+word boundary, and it is the right tool when a value can be a **prefix of
+another valid value** — order/subscription codes are sequential, so an
+`ilike '%OLF73%'` also returns OLF730 and OLF731.)
+
+## `maybeSingle()` returns `{data: null, error: null}` on zero rows
+
+Null with no error reads as success, so **check the null explicitly**. This is
+not a Supabase bug: supabase-js keeps the array `Accept` header and resolves
+the single-row case client-side, so "no such row" and "fine" are the same
+value.
+
+It has bitten three admin write routes in the same way. A `PATCH` to an id that
+does not exist matched no row, raised no error, and the route fell through to
+its success response:
+
+- `PATCH /api/admin/orders/[id]` answered `200 {ok:true}`
+- `PATCH /api/admin/subscriptions/[id]` answered
+  `200 {ok:true, cascaded_deliveries: null}` — and `409 "already changed
+  elsewhere"` when `expected_status` was set, telling the operator to reload a
+  subscription that never existed
+- `PATCH /api/admin/customers/[id]` answered `200 {ok:true}`
+
+and all three then wrote an audit event built from `params.id`. So a typo'd id
+was **indistinguishable from a real change** and left a plausible row on a
+table that is append-only at the database level (triggers
+`audit_log_no_update` / `audit_log_no_delete` raise P0001), i.e. nothing can
+ever delete it.
+
+The shape of the guard — placed immediately after the pre-fetch and **before
+validation, the write, any cascade, any push and the audit**, so that none of
+them can run for a row that is not there:
+
+```ts
+const { data: before, error: beforeErr } = await supabaseAdmin
+  .from("orders").select("…").eq("id", params.id).maybeSingle();
+if (beforeErr) {
+  console.error("[route] pre-fetch failed:", beforeErr.message);
+  return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
+}
+if (!before) {
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
+}
+```
+
+**A failed READ answers 500, not 404.** The row is not known to be gone, and a
+404 invites the operator to conclude that it is.
+
+### Proving a write guard without touching production
+
+The dev server is a **production** database client. To verify a write path,
+point it at a local PostgREST stand-in instead — a ~40-line `node:http` server
+that returns `[row]` for a control id, `[]` for anything else, a 500 for a
+designated failure id, and **appends every request to a log**, so "no UPDATE
+ran and no audit row was written" becomes an observation rather than an
+argument from reading the source. Run it with
+`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:4555 next dev`.
+
+- It must be `next dev`. **`NEXT_PUBLIC_*` is inlined at build time even in
+  server bundles**, so `next start` of an existing build keeps the production
+  URL.
+- Kill the stub **by port** (`lsof -ti tcp:4555 | xargs kill`), never by job
+  number. A `kill %2` once killed the wrong job, the replacement stub died of
+  `EADDRINUSE` (visible only in its own stdout), and the old stub kept serving
+  — so the "read failure" case silently ran against the wrong server.
+- Give the stub realistic column types. `orders.order_number` is TEXT
+  (`'OLF902'`); a numeric value makes `formatOrderNumber` fall back to the
+  `#slice` and looks like a bug in the route under test.
+- Get the BEFORE control for free with `git stash push -- <paths>`: the dev
+  server HMRs, you re-run the same cases against the unguarded code, then
+  `git stash pop`. Limit the stash to explicit paths — worktrees here are
+  shared between windows.
