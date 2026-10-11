@@ -40,7 +40,10 @@ export async function GET(req: NextRequest) {
       .in("id", deliveryIds),
     supabaseAdmin
       .from("subscriptions")
-      .select("id, customer_id, product_name, total_weeks")
+      // subscription_number is the OLS the admin quotes at the customer in
+      // the WhatsApp/SMS prefill. product_name alone cannot identify a plan
+      // — a customer can hold two of the same product.
+      .select("id, customer_id, product_name, total_weeks, subscription_number")
       .in("id", subIds),
   ]);
 

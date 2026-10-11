@@ -325,7 +325,7 @@ export function OrderChangesPanel() {
                       <ContactActions
                         phone={r.customer.phone}
                         customerName={r.customer.full_name}
-                        orderInfo={`delivery change request for order #${shortId}`}
+                        orderCode={shortId}
                       />
                     ) : null}
                     <span

@@ -603,7 +603,7 @@ export default function AdminSubscriptionDetailPage({
                   <ContactActions
                     phone={phone}
                     customerName={name}
-                    orderInfo={`${sub.product_name} subscription`}
+                    orderCode={formatSubscriptionNumber(sub)}
                   />
                 </span>
               ) : (

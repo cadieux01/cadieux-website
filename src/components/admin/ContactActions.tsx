@@ -24,13 +24,15 @@ type Channel = "whatsapp" | "sms";
 export function ContactActions({
   phone,
   customerName,
-  orderInfo,
+  orderCode,
   size = 28,
   stopPropagation = true,
 }: {
   phone: string | null | undefined;
   customerName?: string | null;
-  orderInfo?: string | null;
+  /** OLF/OLS reference only. Omit on screens that are about a customer
+   *  rather than one order — the message drops the clause. */
+  orderCode?: string | null;
   size?: number;
   /**
    * When the buttons sit inside a clickable row (e.g. the customers
@@ -44,7 +46,7 @@ export function ContactActions({
 
   if (!phone) return null;
 
-  const ctx: ContactMessageContext = { customerName, orderInfo };
+  const ctx: ContactMessageContext = { customerName, orderCode };
 
   function openChannel(c: Channel) {
     setMessage(defaultContactMessage(ctx));

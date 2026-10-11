@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import { formatSubscriptionNumber } from "@/lib/order-number";
 
 type ChangeRequest = {
   id: string;
@@ -28,7 +29,12 @@ type ChangeRequest = {
     scheduled_time_slot: string;
     status: string;
   } | null;
-  subscription?: { product_name: string; total_weeks: number } | null;
+  subscription?: {
+    id: string;
+    product_name: string;
+    total_weeks: number;
+    subscription_number: string | null;
+  } | null;
   customer?: { full_name: string | null; phone: string | null } | null;
 };
 
@@ -259,9 +265,13 @@ export default function ChangeRequestsPage() {
                       <ContactActions
                         phone={r.customer.phone}
                         customerName={r.customer.full_name}
-                        orderInfo={
-                          r.subscription?.product_name
-                            ? `change request${r.delivery?.week_number ? ` for Week ${r.delivery.week_number}` : ""} of ${r.subscription.product_name}`
+                        orderCode={
+                          r.subscription
+                            ? formatSubscriptionNumber({
+                                id: r.subscription.id,
+                                subscription_number:
+                                  r.subscription.subscription_number,
+                              })
                             : null
                         }
                       />

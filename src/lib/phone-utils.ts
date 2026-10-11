@@ -41,25 +41,49 @@ export function whatsAppHrefWithText(
 }
 
 export type ContactMessageContext = {
+  /** Full name as stored. Only the first token reaches the message. */
   customerName?: string | null;
-  orderInfo?: string | null;
+  /**
+   * An OLF/OLS reference and NOTHING else — already formatted by
+   * `formatOrderNumber` / `formatSubscriptionNumber`.
+   *
+   * This used to be `orderInfo`, a free-text phrase ("Protein Bread
+   * subscription", "change request for Week 3 of …"), which is why only
+   * one of the ten call sites ever carried a real code. The body quotes
+   * this verbatim, so a prose phrase here would read as one. Null is the
+   * right answer wherever the screen is about a CUSTOMER rather than one
+   * order — the clause drops rather than inventing a reference.
+   */
+  orderCode?: string | null;
 };
+
+/** First token of a full name. "Priya Sharma" → "Priya". */
+function firstName(full: string | null | undefined): string {
+  return (full ?? "").trim().split(/\s+/)[0] ?? "";
+}
 
 /**
  * Default prefilled message for outbound WhatsApp / SMS. Admin can
  * always edit before sending — this is just the seed.
+ *
+ * Both halves of the lead are optional and the separators belong to the
+ * parts, not to the template, so the four combinations collapse without
+ * ever emitting a dangling "Hi  —" or a leading " — ":
+ *
+ *   name + code  Hi Priya — OLF470 — I'm messaging from Cadieux. …
+ *   name only    Hi Priya — I'm messaging from Cadieux. …
+ *   code only    OLF470 — I'm messaging from Cadieux. …
+ *   neither      I'm messaging from Cadieux. …
+ *
+ * First name only: the admin is opening a conversation, and the full
+ * legal name a customer typed at checkout ("Priya Sharma Reddy") reads
+ * like a bank doing collections.
  */
 export function defaultContactMessage(ctx: ContactMessageContext): string {
-  const name = (ctx.customerName ?? "").trim();
-  const order = (ctx.orderInfo ?? "").trim();
-  const lines = [
-    name ? `Hi ${name},` : "Hi,",
-    "",
-    "This is Cadieux Bakery.",
-    order ? `Regarding ${order}.` : "",
-    "Could you please get back to us when you have a moment?",
-    "",
-    "Thank you!",
-  ].filter(Boolean);
-  return lines.join("\n");
+  const body =
+    "I'm messaging from Cadieux. Do you have a minute to help me with your order?";
+  const first = firstName(ctx.customerName);
+  const code = (ctx.orderCode ?? "").trim();
+  const lead = [first ? `Hi ${first}` : "", code].filter(Boolean);
+  return lead.length > 0 ? `${lead.join(" — ")} — ${body}` : body;
 }

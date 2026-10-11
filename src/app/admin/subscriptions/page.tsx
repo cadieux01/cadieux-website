@@ -1797,7 +1797,7 @@ function SubscriptionsPageInner() {
                           <ContactActions
                             phone={s.customer.phone}
                             customerName={s.customer.full_name}
-                            orderInfo={`${s.product_name} subscription`}
+                            orderCode={formatSubscriptionNumber(s)}
                           />
                         </div>
                       ) : null}
@@ -2550,7 +2550,7 @@ function SubscriptionDrawer({
                 <ContactActions
                   phone={subscription.customer.phone}
                   customerName={subscription.customer.full_name}
-                  orderInfo={`${subscription.product_name} subscription`}
+                  orderCode={formatSubscriptionNumber(subscription)}
                 />
               ) : null}
             </p>

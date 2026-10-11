@@ -2533,7 +2533,7 @@ const OrderRow = memo(function OrderRow({
             <ContactActions
               phone={o.customers.phone}
               customerName={o.customers.full_name}
-              orderInfo={`order ${formatOrderNumber(o)}`}
+              orderCode={formatOrderNumber(o)}
             />
           </div>
         ) : null}
