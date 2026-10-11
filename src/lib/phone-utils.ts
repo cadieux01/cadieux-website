@@ -41,7 +41,9 @@ export function whatsAppHrefWithText(
 }
 
 export type ContactMessageContext = {
-  /** Full name as stored. Only the first token reaches the message. */
+  /** Full name as stored. Only the name the customer goes by reaches the
+   *  message — see `firstName` for which token that is, why it is not
+   *  always the first, and the one case where it is two. */
   customerName?: string | null;
   /**
    * An OLF/OLS reference and NOTHING else — already formatted by
@@ -57,33 +59,134 @@ export type ContactMessageContext = {
   orderCode?: string | null;
 };
 
-/** First token of a full name. "Priya Sharma" → "Priya". */
-function firstName(full: string | null | undefined): string {
-  return (full ?? "").trim().split(/\s+/)[0] ?? "";
+/**
+ * Tokens of a stored full name.
+ *
+ * **A dot separates as surely as a space.** Splitting on whitespace alone
+ * is not enough, because the dot is routinely typed without one. On real
+ * rows that leaves the initial welded to the name, or picks a title:
+ *
+ *   "S.kiran"            → "S.kiran"           not "kiran"
+ *   "T P.Nalini"         → "P.Nalini"          not "Nalini"
+ *   "Dr.Teja Praveen"    → "Dr.Teja"           not "Teja"
+ *   "Y.V.V.S.N.MURTHY"   → "Y.v.v.s.n.murthy"  not "Murthy"
+ *   "Ramathirtha. B"     → "Ramathirtha."      (trailing dot)
+ *
+ * It fixes 20 rows and regresses none. "Dr.Teja Praveen" is the row that
+ * makes it non-negotiable rather than merely tidy: there is no whitespace
+ * anywhere near that dot, so no amount of `/\s+/` ever reaches it.
+ */
+function nameTokens(full: string | null | undefined): string[] {
+  return (full ?? "")
+    .trim()
+    .split(/[\s.]+/)
+    .filter(Boolean);
 }
 
 /**
- * Default prefilled message for outbound WhatsApp / SMS. Admin can
- * always edit before sending — this is just the seed.
+ * Could this token be the name someone goes by?
  *
- * Both halves of the lead are optional and the separators belong to the
- * parts, not to the template, so the four combinations collapse without
- * ever emitting a dangling "Hi  —" or a leading " — ":
+ * **Longer than two characters.** In South Indian naming the leading token
+ * is routinely a family or village initial, not the given name: of 900
+ * named customers, 79 have a first token of two characters or fewer and 59
+ * have a single letter. "Hi J" and "Hi M" are not greetings. Two-letter
+ * prefixes are initials too ("Ch Srinu", "SP Sriram"), which is why the cut
+ * sits at two and not at one.
  *
- *   name + code  Hi Priya — OLF470 — I'm messaging from Cadieux. …
- *   name only    Hi Priya — I'm messaging from Cadieux. …
- *   code only    OLF470 — I'm messaging from Cadieux. …
- *   neither      I'm messaging from Cadieux. …
+ * This is also the entirety of the honorific handling, deliberately. Every
+ * honorific in the table is "Dr" — 9 rows, with no Mr, Mrs, Ms, Smt, Shri,
+ * Prof, Capt, Col, Lt or Rev anywhere — and "Dr" is two characters, so the
+ * length rule already drops it. A stop-list would be a second rule earning
+ * nothing, and one more thing to keep in sync with the data.
  *
- * First name only: the admin is opening a conversation, and the full
- * legal name a customer typed at checkout ("Priya Sharma Reddy") reads
- * like a bank doing collections.
+ * **At least one letter.** One row stores a phone number in `full_name`.
+ * "Hi 7981040614" is worse than no greeting.
+ */
+function isNameToken(token: string): boolean {
+  return token.length > 2 && /[A-Za-z]/.test(token);
+}
+
+/**
+ * Fix the case of a token the customer typed in a single case, and leave
+ * every other token exactly as written.
+ *
+ * A token that is entirely upper or entirely lower carries no case
+ * information — it is a keyboard artefact ("SRINIVAS", "santosh", and the
+ * "uma" of "Dr uma sankar") — so title-case it. A token that is already
+ * mixed case carries the customer's own spelling and is passed through
+ * byte for byte, so "McDonald" and "d'Souza" survive.
+ *
+ * One rule covering both artefacts, not a second rule bolted on for
+ * lowercase. Mixed case is the only thing that means anything.
+ */
+function normaliseCase(token: string): string {
+  const singleCase =
+    token === token.toUpperCase() || token === token.toLowerCase();
+  if (!singleCase) return token;
+  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
+/**
+ * The name to greet someone by, out of a full name as the customer typed
+ * it. Returns "" when no token is usable — the caller then greets without
+ * a name rather than greeting with a bad one.
+ *
+ * ## "Sri" is half of a given name here, not a title
+ * All three rows beginning with it are compound given names — "Sri Harsha
+ * K", "Sri Harshini", "Sri Lakshmi myluru" — 3 of 3, never an honorific.
+ * "Hi Sri" addresses nobody, so when the pick is "Sri" the next usable
+ * token comes with it: "Hi Sri Harsha". The opposite of a stop-list.
+ *
+ * The comparison is made AFTER case normalisation, so "SRI LAKSHMI" and
+ * "sri harsha" are caught by the same line.
+ */
+function firstName(full: string | null | undefined): string {
+  const tokens = nameTokens(full);
+  const at = tokens.findIndex(isNameToken);
+  if (at < 0) return "";
+
+  const picked = normaliseCase(tokens[at]!);
+  if (picked !== "Sri") return picked;
+
+  const next = tokens.slice(at + 1).find(isNameToken);
+  return next ? `${picked} ${normaliseCase(next)}` : picked;
+}
+
+/**
+ * Default prefilled message for outbound WhatsApp / SMS. Admin can always
+ * edit before sending — this is just the seed.
+ *
+ * Both halves of the greeting are optional. They are joined by a space
+ * inside one "Hi …," clause, so there is never a dangling separator and
+ * never a message that opens without greeting anybody:
+ *
+ *   name + code  Hi Priya OLF470, I'm messaging from Cadieux. Do you have
+ *                a minute to help me out with your order?
+ *   name only    Hi Priya, I'm messaging from Cadieux. Do you have a
+ *                minute to speak?
+ *   code only    Hi OLF470, I'm messaging from Cadieux. Do you have a
+ *                minute to help me out with your order?
+ *   neither      Hi, I'm messaging from Cadieux. Do you have a minute to
+ *                speak?
+ *
+ * **The closing question follows the code, not the name.** With a code in
+ * hand the admin is asking about one specific order, so "help me out with
+ * your order" is literal. With no code the screen is about a CUSTOMER —
+ * the customers list, a customer detail, a serviceability request — and
+ * there is no order to help with, so it is "a minute to speak". Two
+ * phrasings, one per case, and the code decides which.
+ *
+ * One name only, never the full stored name: the admin is opening a
+ * conversation, and the legal name typed at checkout ("Priya Sharma
+ * Reddy") reads like a bank doing collections. Which token, and when none
+ * is usable, is `firstName`'s problem.
  */
 export function defaultContactMessage(ctx: ContactMessageContext): string {
-  const body =
-    "I'm messaging from Cadieux. Do you have a minute to help me with your order?";
-  const first = firstName(ctx.customerName);
+  const name = firstName(ctx.customerName);
   const code = (ctx.orderCode ?? "").trim();
-  const lead = [first ? `Hi ${first}` : "", code].filter(Boolean);
-  return lead.length > 0 ? `${lead.join(" — ")} — ${body}` : body;
+  const ask = code
+    ? "Do you have a minute to help me out with your order?"
+    : "Do you have a minute to speak?";
+  const greeting = ["Hi", name, code].filter(Boolean).join(" ");
+  return `${greeting}, I'm messaging from Cadieux. ${ask}`;
 }

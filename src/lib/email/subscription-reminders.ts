@@ -92,7 +92,7 @@ function shell(args: {
           <p style="margin:24px 0 0 0;font-size:13px;line-height:1.6;color:${MUTED};">Thank you for choosing Cadieux.<br/>— The bakers</p>
         </td></tr>
         <tr><td style="background:${INK};padding:22px 32px;text-align:center;">
-          <div style="font-family:Georgia,serif;font-size:11px;letter-spacing:0.25em;color:${GOLD};text-transform:uppercase;">Cadieux Bakery</div>
+          <div style="font-family:Georgia,serif;font-size:11px;letter-spacing:0.25em;color:${GOLD};text-transform:uppercase;">Cadieux</div>
           <div style="font-size:12px;color:rgba(251,243,212,0.65);margin-top:8px;line-height:1.6;">
             Questions? Write to us at <a href="mailto:${SUPPORT_EMAIL}" style="color:${GOLD};text-decoration:none;">${SUPPORT_EMAIL}</a><br/>
             Manage your subscription at <a href="${ACCOUNT_URL}" style="color:${GOLD};text-decoration:none;">cadieux.in/account/subscription</a>
