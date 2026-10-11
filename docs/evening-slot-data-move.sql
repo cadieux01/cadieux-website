@@ -719,8 +719,9 @@ union all
 -- on the target:
 --   a sub with time_slot already on target AND a legacy day inside
 --   slots_by_day is in to_move and would also be in a naive on_target —
---   counted twice, though only one row ends on the target. 6 of 24 live subs
---   were in that state on 2026-10-10.
+--   counted twice, though only one row ends on the target. 2 of 25 live subs
+--   were in that state on 2026-10-11 (see bucket (c) in the dry run — the
+--   "6 of 24" this line used to carry was the same stale figure).
 --   a sub whose time_slot is NULL or a bare time, moved only because of a
 --   legacy day, is in to_move but does NOT end on the target at all.
 -- So check 6 uses these two time_slot-only counts, which ARE disjoint (target
