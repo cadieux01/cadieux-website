@@ -455,7 +455,11 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           <div
             style={{
               position: "absolute",
-              bottom: 12,
+              // The dot rail sits at bottom:10 and is centre-aligned, which at
+              // this letter-spacing runs straight under the pill. Lift clear
+              // only when dots actually render, so every tile without them
+              // keeps today's exact position.
+              bottom: media.length > 1 ? 30 : 12,
               right: 12,
               fontFamily: "var(--font-body)",
               fontSize: 14,
