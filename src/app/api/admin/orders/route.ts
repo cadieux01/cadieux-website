@@ -286,6 +286,12 @@ export async function GET(req: NextRequest) {
       note_count: agg?.note_count ?? 0,
       last_call_note: agg?.last_call_note ?? null,
       last_note: agg?.last_note ?? null,
+      // Paired with status_updated_at (already in ORDER_COLUMNS) this is
+      // everything the New Update flag needs, so every surface reading this
+      // endpoint — the board, the packing list and the run sheet — derives
+      // the same answer with no second attach step to forget on one of
+      // them. See src/lib/order-new-update.ts.
+      last_team_note: agg?.last_team_note ?? null,
       repeat_seq: rep?.repeat_seq ?? null,
       customer_order_count: rep?.customer_order_count ?? null,
       customer_first_order_at: rep?.customer_first_order_at ?? null,

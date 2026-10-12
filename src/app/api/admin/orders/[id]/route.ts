@@ -25,46 +25,68 @@ import {
   type PaidAtSource,
 } from "@/lib/cod-settlement";
 
-// New canonical stages + legacy values that pre-date the
-// order-status-stages migration. The migration normalises existing
-// rows on the way through, but we keep the legacy strings accepted
-// here so any older admin tooling can still PATCH cleanly.
+// INPUT TOLERANCE, NOT THE VOCABULARY. This set says what a PATCH may
+// SEND; ORDER_STATUSES in @/lib/admin-shared says what may be STORED, and
+// since 2026-10 those are deliberately different sizes. Every retired
+// spelling is still accepted here so an older client, a stale tab or a
+// replayed request gets a 200 and lands on a canonical value, rather than a
+// 400 that leaves the row at whatever it was.
 const ALLOWED_STATUSES = new Set([
-  "placed",
+  "pending",
   "confirmed",
-  "preparing",
-  "out_for_delivery",
   "delivered",
   "cancelled",
   // pickup-only stages (see PICKUP_STAGES in lib/order-stages) — admin
   // clients only offer these on pickup orders, but we accept them here
-  // regardless so a mis-clicked transition returns 200 not 400.
+  // regardless so a mis-clicked transition returns 200 not 400. Stored but
+  // unlisted: not in the five-item board menu, still perfectly valid to
+  // write, and the pickup lane still advances through them.
   "ready_for_pickup",
   "picked_up",
-  // legacy aliases — accepted on input, normalised on write below
-  "pending",
+  // retired spellings — accepted on input, normalised on write below
+  "placed",
+  "preparing",
+  "out_for_delivery",
   "dispatched",
 ]);
 
+// The direction of the first line is the whole point and it is the REVERSE
+// of what this file used to do. `pending` is the canonical first stage;
+// `placed` was the sql/order-status-stages.sql spelling and lost. The step
+// in that script that would reverse this has been commented out — if you are
+// changing this line, change that one too, or the next person to run the
+// script undoes you.
+//
+// The other three all land on `confirmed` because that is exactly where
+// sql/orders-retire-preparing-out-for-delivery.sql puts the live rows
+// holding them. Any other target would mean a stray late PATCH re-dirties
+// the column the migration just cleaned, and the board would grow back a
+// bucket it no longer lists.
+//
+// Cost of that choice, stated rather than discovered: a client still sending
+// `out_for_delivery` now pushes "Order confirmed" instead of "On the way",
+// because STATUS_PUSH_COPY is keyed on the POST-alias value. Accepted — no
+// live surface sends it, and a slightly early-sounding notification beats
+// storing a status nothing on the board can filter to.
 const STATUS_ALIAS: Record<string, string> = {
-  pending: "placed",
-  dispatched: "out_for_delivery",
+  placed: "pending",
+  preparing: "confirmed",
+  out_for_delivery: "confirmed",
+  dispatched: "confirmed",
 };
 
 // Customer-facing copy for the push-triggering status transitions.
 // Kept here (not in lib/push) because the wording is admin-flow specific.
+//
+// Keyed on the POST-alias value, so the retired `preparing` and
+// `out_for_delivery` entries that used to live here are GONE rather than
+// kept "just in case": they were unreachable the moment STATUS_ALIAS started
+// folding both into `confirmed`, and a copy block nobody can trigger is the
+// kind of thing that gets read as live wording later.
 const STATUS_PUSH_COPY: Record<string, { title: string; body: string }> = {
   confirmed: {
     title: "Order confirmed",
     body: "Your bread is being prepared.",
-  },
-  preparing: {
-    title: "Preparing your order",
-    body: "We're baking your bread now.",
-  },
-  out_for_delivery: {
-    title: "On the way",
-    body: "Your order is on the way!",
   },
   delivered: {
     title: "Delivered",
@@ -217,8 +239,11 @@ export async function PATCH(
   // value is not a guard. `delivered` is NOT gated — it is annotated instead, in
   // the audit block below.
   //
-  // `update.status` is already past STATUS_ALIAS here, so `dispatched` arrives as
-  // `out_for_delivery`. Skipped when the row is ALREADY at the target status:
+  // `update.status` is already past STATUS_ALIAS here, so `dispatched`,
+  // `preparing` and `out_for_delivery` all arrive as `confirmed` — which is
+  // itself rider-bound, so folding them changed which message the operator
+  // sees but not whether the guard fires. Skipped when the row is ALREADY at
+  // the target status:
   // re-sending the value a row already holds changes nothing and must not start
   // asking questions.
   const riderBoundMove =

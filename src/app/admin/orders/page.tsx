@@ -68,9 +68,15 @@ import {
   ORDER_STATUSES,
   OrderFilterValue,
   OrderStatus,
+  SETTABLE_ORDER_STATUSES,
   formatStatusLabel,
   orderStatusRank,
 } from "@/lib/admin-shared";
+import {
+  NEW_UPDATE_STATUS,
+  boardStatus,
+  hasNewUpdate,
+} from "@/lib/order-new-update";
 import {
   sendCustomerEditSMS,
   sendOrderStatusSMS,
@@ -317,13 +323,13 @@ const SCROLL_KEY = "admin:orders:scrollY";
 const SELECTION_KEY = "admin:orders:selection";
 
 /**
- * The Status dropdown, in operator order.
+ * The Status dropdown, in operator order. FIVE ITEMS.
  *
  * INVARIANT: the counts on the visible options must sum to the count on
- * "All statuses". Every entry below is a distinct stored `orders.status`
- * value, so the buckets partition the rows exactly — no row is counted
- * twice and none is left without an option. If you add an entry here,
- * check it still holds.
+ * "All statuses". Every row resolves through boardStatus() to exactly one
+ * value, so the buckets partition the rows — no row is counted twice and
+ * none is left without an option. If you add an entry here, check it still
+ * holds.
  *
  * It held in neither direction before, and the dropdown was under-reporting
  * the month by 40 orders (116 listed against 156 in "All statuses"):
@@ -337,11 +343,27 @@ const SELECTION_KEY = "admin:orders:selection";
  *     It happened to read 0 this month only because no pending order was
  *     older than the 7-day window; over a wider range it would have pushed
  *     the visible total PAST "All statuses". Do not put a computed state in
- *     this list.
+ *     this list UNLESS it REPLACES the stored one — which is exactly how
+ *     `new_update` earns its place: boardStatus() returns it INSTEAD of the
+ *     row's stored status, so the partition survives. What is banned here
+ *     is a computed state shown ALONGSIDE the stored one, not a computed
+ *     state as such.
  *   • `pending_payment` and `picked_up` are dead — zero rows have ever
  *     carried either. They are still valid filter values (see
  *     ORDER_FILTER_VALUES) and the print view still accepts them off a URL;
  *     they are just not worth a line in the menu.
+ *
+ * THE ONE HOLE IN THE PARTITION, STATED RATHER THAN HIDDEN. The pickup
+ * statuses `ready_for_pickup` and `picked_up` are STORED BUT UNLISTED (see
+ * ORDER_STATUSES in lib/admin-shared): the ask was a clean five-item list,
+ * not the deletion of a shipped workflow, so pickup orders still move
+ * through NEXT_STATUS_PICKUP and still render — they just have no line in
+ * this menu. A live pickup order is therefore counted in "All statuses"
+ * with no option of its own, and the listed counts under-sum by exactly
+ * that many rows. `picked_up` was already in this position before the
+ * five-item change; `ready_for_pickup` joins it. The dev-only effect below
+ * warns and NAMES the buckets, so this stays visible to whoever next
+ * wonders why the numbers do not add up.
  */
 /** Menu command, not a filter value — never enters the selection. */
 const CLEAR_ALL = "__clear_all";
@@ -352,30 +374,35 @@ const POLL_MS = 120_000;
 const STATUS_FILTER_OPTIONS: readonly OrderFilterValue[] = [
   "all",
   "pending",
-  "placed",
   "confirmed",
-  "preparing",
-  "out_for_delivery",
   "delivered",
   "cancelled",
-  "ready_for_pickup",
+  NEW_UPDATE_STATUS,
 ];
 
+// The one-click advance arrow. With `preparing` and `out_for_delivery`
+// retired the delivery lane is two hops: pending → confirmed → delivered.
+//
+// The retired spellings stay as KEYS (never as values) so a historic row,
+// or one a stale browser tab just wrote, still gets a sane next step
+// instead of a dead arrow. They all map to `delivered` because that is
+// where the data migration put them in the lane — at `confirmed`.
 const NEXT_STATUS_DELIVERY: Record<string, OrderStatus | null> = {
-  pending_payment: "confirmed",
-  placed: "confirmed",
-  confirmed: "preparing",
-  preparing: "out_for_delivery",
-  out_for_delivery: "delivered",
+  pending: "confirmed",
+  confirmed: "delivered",
   delivered: null,
   cancelled: null,
-  // legacy aliases — handled so historic rows still get a sane "next"
-  pending: "confirmed",
+  pending_payment: "confirmed",
+  placed: "confirmed",
+  preparing: "delivered",
+  out_for_delivery: "delivered",
   dispatched: "delivered",
 };
 
-// Pickup skips preparing + out_for_delivery. The stall side goes:
-// placed → confirmed → ready_for_pickup → picked_up.
+// Pickup is UNCHANGED, deliberately: pending → confirmed →
+// ready_for_pickup → picked_up. This is the only route a pickup order has
+// to a terminal state, which is why those two statuses are unlisted in the
+// dropdown rather than removed from the vocabulary.
 const NEXT_STATUS_PICKUP: Record<string, OrderStatus | null> = {
   pending_payment: "confirmed",
   placed: "confirmed",
@@ -1230,7 +1257,12 @@ function OrdersPageInner() {
     );
     const c: Record<string, number> = { all: onDay.length };
     for (const o of onDay) {
-      const k = (o.status ?? "").toLowerCase();
+      // boardStatus(), not o.status — New Update REPLACES the stored status
+      // everywhere, so a delivered order carrying a fresh note counts under
+      // new_update and NOT under delivered. Counting the stored value here
+      // would put a number next to "Delivered" that the Delivered filter
+      // then refuses to show.
+      const k = boardStatus(o);
       c[k] = (c[k] ?? 0) + 1;
       if ((o.repeat_seq ?? 0) >= 2) c.repeat = (c.repeat ?? 0) + 1;
       const z = zoneOf.get(o.id);
@@ -1274,6 +1306,34 @@ function OrdersPageInner() {
       // eslint-disable-next-line no-console
       console.warn(
         `[payment] invariant broken: bucket sum ${paySum} !== on-day ${counts.all}`,
+      );
+    }
+    // The status buckets partition too — boardStatus() returns exactly one
+    // value per row — but the MENU deliberately lists only five of them, so
+    // the listed counts under-sum by however many rows sit in a
+    // stored-but-unlisted bucket (ready_for_pickup / picked_up, and any
+    // retired value the migration missed). That gap is expected; what is NOT
+    // expected is not knowing which bucket it is. So instead of comparing
+    // sums and shrugging, name the buckets: an operator asking "why does
+    // 3 + 1 + 20 not make 26" gets an answer from the console, and a
+    // RETIRED value resurfacing in live data shows up by name the first
+    // time it is written.
+    const listed = new Set<string>(STATUS_FILTER_OPTIONS);
+    const unlisted = Object.entries(counts)
+      .filter(
+        ([k, n]) =>
+          n > 0 &&
+          !listed.has(k) &&
+          k !== "all" &&
+          k !== "repeat" &&
+          !k.startsWith("zone_") &&
+          !k.startsWith("pay_"),
+      )
+      .map(([k, n]) => `${k}=${n}`);
+    if (unlisted.length > 0) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[status] ${unlisted.reduce((n, s) => n + Number(s.split("=")[1]), 0)} of ${counts.all} on-day rows are in buckets the menu does not list: ${unlisted.join(", ")}`,
       );
     }
   }, [counts]);
@@ -2609,34 +2669,73 @@ const OrderRow = memo(function OrderRow({
         <PaymentBadge method={o.payment_method} status={o.payment_status} />
       </td>
       <td style={td}>
+        {/* The control reads boardStatus(), not o.status, so what the operator
+            sees selected here is exactly what the badge prints, what the
+            Status filter matches and what the dropdown counted. A delivered
+            order carrying a note added after the status was last set shows
+            "New Update" — and setting it back to Delivered from here is how
+            the operator clears it (the PATCH bumps status_updated_at past
+            the note, so the flag stops being true on its own).
+
+            OPTIONS = the four SETTABLE statuses, plus the current value when
+            that value is not one of them. ONE rule, not three, and it covers
+            all three cases at once: new_update (computed, never storable),
+            ready_for_pickup / picked_up (stored but deliberately unlisted —
+            the pickup lane still advances through them via
+            NEXT_STATUS_PICKUP) and any retired or unknown value still sitting
+            in the column. Without it a Select would be handed a value absent
+            from its own options and would silently render the first one,
+            which is how a board lies about a row it is about to overwrite. */}
         <Select
-          value={(o.status ?? "").toLowerCase()}
+          value={boardStatus(o)}
           disabled={busy}
           ariaLabel="Order status"
           style={statusSelect}
           onChange={(v) => {
+            // new_update is computed; there is nothing to write. It can only
+            // appear here as the CURRENT value, and onChange does not fire
+            // for that, so this is belt-and-braces — but a PATCH of it would
+            // put a word into orders.status that nothing else in the system
+            // recognises, so it is worth the two lines.
+            if (v === NEW_UPDATE_STATUS) return;
             const nextStatus = v as OrderStatus;
             if (nextStatus === "cancelled") {
               if (!confirm("Cancel this order?")) return;
             }
             onPatchStatus(o, nextStatus);
           }}
-          options={[
-            ...ORDER_STATUSES.map((s) => ({
-              value: s,
+          options={(() => {
+            const curr = boardStatus(o);
+            const opts = SETTABLE_ORDER_STATUSES.map((s) => ({
+              value: s as string,
               label: formatStatusLabel(s),
-            })),
-            ...(o.status && !ORDER_STATUSES.includes(o.status as OrderStatus)
-              ? [{ value: o.status, label: formatStatusLabel(o.status) }]
-              : []),
-          ]}
+            }));
+            if (curr && !opts.some((x) => x.value === curr)) {
+              opts.push({ value: curr, label: formatStatusLabel(curr) });
+            }
+            return opts;
+          })()}
         />
         <div style={{ marginTop: 4 }}>
           {/* Show 'expired' badge for stale unpaid pending orders (>7d, per
               src/lib/order-state.ts). Stored orders.status is still
-              'pending' — computed_state is derived on read. */}
+              'pending' — computed_state is derived on read.
+
+              New Update is checked FIRST, and that ordering is the same one
+              orderStatusRank() uses, on purpose: a row can be both expired
+              and carrying a fresh note, and the badge must not disagree with
+              the Select directly above it or with the position the row was
+              sorted into. "Expired" is a fact about an untouched order;
+              a note means somebody just touched it, so it is the newer and
+              more actionable of the two. */}
           <StatusBadge
-            status={o.computed_state === "expired" ? "expired" : o.status}
+            status={
+              hasNewUpdate(o)
+                ? NEW_UPDATE_STATUS
+                : o.computed_state === "expired"
+                  ? "expired"
+                  : o.status
+            }
           />
         </div>
         {/* Call-update dropdown — separate control from Status. Selecting a
@@ -3368,10 +3467,35 @@ function orderColumnSpecs(scopeNote: string): CsvColumnSpec<AdminOrderRow>[] {
       value: (o) => o.total_amount ?? 0,
     },
     {
+      // THE STORED STATUS, NOT boardStatus(). The two columns below are a
+      // pair and neither one alone is the truth.
+      //
+      // Exporting boardStatus() here would be the obvious choice — it is what
+      // the screen shows — but it DESTROYS information on the way out. A New
+      // Update row is still, underneath, delivered or pending or confirmed,
+      // and someone exporting everything to reconcile against the kitchen
+      // would read "New Update" on a delivered order and conclude it had not
+      // been delivered. New Update is a flag about ATTENTION, not a stage.
       key: "status",
       header: "Status",
       defaultOn: true,
-      value: (o) => o.status ?? "",
+      value: (o) => (o.status ?? "").toLowerCase(),
+    },
+    {
+      // ...and the flag itself, so the export still agrees with the screen it
+      // came from. Filter the board to New Update, hit Export, and every row
+      // reads Status=delivered + New update=yes: both facts, neither hidden.
+      //
+      // Keep this derived from hasNewUpdate(), never from a second rule. It
+      // is the same predicate the badge, the row Select, the filter and the
+      // counts use — one resolver is the only reason they cannot disagree.
+      //
+      // "yes"/"no" rather than true/false because this sheet is opened in
+      // Excel, which reads TRUE/FALSE as booleans and then formats them.
+      key: "new_update",
+      header: "New update",
+      defaultOn: true,
+      value: (o) => (hasNewUpdate(o) ? "yes" : "no"),
     },
     {
       key: "delivery_date",
@@ -3483,6 +3607,13 @@ function Placeholder({ children }: { children: React.ReactNode }) {
 // this reads method while the rider's label does not.
 const PAYMENT_BADGE_COLORS: Record<PaymentView, { color: string; bg: string }> = {
   paid: { color: "rgb(251,243,212)", bg: "rgba(251,243,212,0.12)" },
+  // Amber, the board's "money needs a human" hue — the same one
+  // paid_orphaned uses on the subscriptions side. Cream would let a
+  // half-settled order sit indistinguishable from a settled one in a column
+  // somebody skims, and red would say it went wrong when it did not.
+  // Record<PaymentView, …> is what caught this the moment partially_paid
+  // joined PAYMENT_VIEWS; that exhaustiveness is the point of the type.
+  partially_paid: { color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
   failed: { color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
   cod: { color: "rgba(251,243,212,0.85)", bg: "rgba(251,243,212,0.1)" },
   unknown: { color: "rgba(251,243,212,0.5)", bg: "transparent" },

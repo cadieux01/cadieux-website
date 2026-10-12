@@ -31,6 +31,15 @@ const COLOR_BY_STATUS: Record<string, { fg: string; border: string }> = {
   // src/lib/order-state.ts. Muted grey so it reads as "inert" (not scary
   // red, since it's just an abandoned COD, not something to act on).
   expired: { fg: "rgba(251,243,212,0.75)", border: "rgba(251,243,212,0.4)" },
+  // Computed too, but the OPPOSITE of expired in every way that matters
+  // here, so it gets the opposite treatment. `expired` means nobody has
+  // touched this for a week — dim, inert, skippable. `new_update` means a
+  // human wrote a note on it since the status was last set — it is the one
+  // state on this board that is asking to be looked at today. Amber, the
+  // same "neither wrong nor over, waiting on a human" hue paid_orphaned
+  // uses, and for the same reason: red would read as a failure and cream
+  // would let it blend into the rows that need nothing.
+  new_update: { fg: "#F59E0B", border: "rgba(245,158,11,0.6)" },
   // subscriptions
   active: { fg: "#FBF3D4", border: "rgba(251,243,212,0.5)" },
   paused: { fg: "#FBF3D4", border: "rgba(251,243,212,0.5)" },

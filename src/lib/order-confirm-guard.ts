@@ -83,6 +83,15 @@ const ONLINE_METHODS = new Set(["razorpay"]);
  *
  * `pending` is deliberately absent: it is the ordinary COD resting state, and a
  * razorpay+pending row has never existed on prod.
+ *
+ * `partially_paid` is ALSO deliberately absent, and that is a decision rather
+ * than an oversight. This set means "an online attempt did not complete" —
+ * nothing arrived. Partially paid is the opposite: money IS in, the order is
+ * real, somebody committed to it. Listing it here would make every
+ * part-settled order demand an override before it could be put on a rider's
+ * sheet, which is backwards — a half-paid order is MORE bindable than an
+ * unpaid one, not less. The balance is a collection problem, handled by the
+ * amount the rider is told to ask for, not a confirmation problem.
  */
 const UNCOMPLETED_ONLINE_STATUSES = new Set([
   "created",
@@ -120,8 +129,12 @@ export function confirmNeedsPaymentOverride(
  * `cancelled` is not here either — cancelling an unpaid order is the right answer,
  * never something to argue with.
  *
- * Canonical values only. Both routes normalise the legacy `dispatched` alias to
- * `out_for_delivery` BEFORE this is consulted, so there is no alias to carry here.
+ * Canonical values only. Both routes normalise the retired spellings BEFORE
+ * this is consulted — since 2026-10 `dispatched`, `preparing` and
+ * `out_for_delivery` all arrive here as `confirmed` — so there is no alias to
+ * carry. The two retired entries below are kept anyway: they cost nothing,
+ * they stay correct if a path is ever added that skips STATUS_ALIAS, and
+ * removing them would be a silent widening of what can reach a rider unpaid.
  */
 const RIDER_BOUND_STATUSES = new Set([
   "confirmed",

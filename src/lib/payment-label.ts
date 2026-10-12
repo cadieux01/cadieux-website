@@ -142,6 +142,48 @@ export function paymentLabel(p: PaymentFacts): string {
  */
 export const PAYMENT_VIEWS = [
   "paid",
+  // ░░ THE NAME IS LOAD-BEARING. DO NOT RENAME IT. ░░
+  //
+  // isPaidStatus() above matches by PREFIX — `startsWith("paid")` — so the
+  // obvious-looking spellings `paid_partial` and `paid_partially` would both
+  // test TRUE, and the consequence is not cosmetic: paymentLabel() would
+  // print "PAID" on the rider's sheet for an order that is half settled, and
+  // the rider would collect nothing at a door that owes us the balance.
+  // Money out, silently, with no error anywhere.
+  //
+  // `partially_paid` is safe for exactly one reason — it does not START with
+  // "paid" — and that is a thin margin to be relying on, which is why this
+  // comment is here rather than in a commit message. If you need a different
+  // word, change isPaidStatus() to an explicit set FIRST, in the same commit,
+  // and re-read every caller of paymentLabel().
+  //
+  // ░░ BLOCKER: DO NOT WRITE THIS VALUE TO ANY ROW UNTIL THE ANDROID APP ░░
+  // ░░ HANDLES IT. A PLAY RELEASE MUST SHIP FIRST.                       ░░
+  //
+  // The app tests payment_status for EQUALITY with 'paid', not by prefix, so
+  // it fails the opposite way round to the hazard above — and unlike the
+  // website, installed builds cannot be patched. The day a row is written
+  // `partially_paid`, every one of these is wrong on phones already in
+  // customers' hands:
+  //
+  //   components/AddressEditor.tsx:42  isPaid === 'paid' → false, so the
+  //   components/ItemEditor.tsx:41     delivery address and the ITEMS of a
+  //   components/DeliveryEditor.tsx:48 part-paid order become customer-
+  //                                    editable. Paid orders lock; this one
+  //                                    would not. The customer can change
+  //                                    what they owe money on.
+  //
+  //   app/account/orders/[orderId].tsx:193-196  paymentLine() falls THROUGH
+  //   the 'paid' test. On a cod row the next line catches it and the screen
+  //   reads "Cash on Delivery" — as if nothing had been collected. On a
+  //   razorpay row it falls further still and reads "Awaiting payment",
+  //   which is equally false: money HAS arrived, just not all of it.
+  //
+  // This is why the migration (sql/orders-partial-payment-balance.sql) is
+  // written and deliberately NOT run. The vocabulary landing here first is
+  // correct — the app change needs something to code against — but the
+  // ordering is load-bearing: app release, THEN the first write.
+  "partially_paid",
   "cod",
   "awaiting",
   "failed",
@@ -158,6 +200,7 @@ export function isPaymentView(v: unknown): v is PaymentView {
  *  word in both. `unknown` prints the em dash the badge always printed. */
 export const PAYMENT_VIEW_LABELS: Record<PaymentView, string> = {
   paid: "Paid",
+  partially_paid: "Partially paid",
   cod: "COD",
   awaiting: "Awaiting",
   failed: "Failed",
@@ -186,6 +229,12 @@ export function paymentView(p: {
   // changes nothing live — but "has the money arrived" must not have two
   // answers in one file.
   if (isPaidStatus(s)) return "paid";
+  // Checked BEFORE the method test, not after. A partially-paid order is
+  // overwhelmingly a COD order that part-settled online (or the reverse), so
+  // `m === "cod"` below would swallow it and the board would show plain
+  // "COD" on a row where some of the money is already in — which is the
+  // exact confusion this bucket exists to remove.
+  if (s === "partially_paid") return "partially_paid";
   if (s === "failed") return "failed";
   if (m === "cod") return "cod";
   if (!m && !s) return "unknown";

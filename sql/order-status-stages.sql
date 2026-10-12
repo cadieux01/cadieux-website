@@ -36,9 +36,31 @@ update public.orders
 -- 3. Normalize legacy status values to the new canonical set, and
 -- bump status_updated_at so the tracker reflects the migration moment
 -- for any in-flight orders that were previously "pending"/"dispatched".
-update public.orders
-  set status = 'placed', status_updated_at = now()
-  where status = 'pending';
+--
+-- ░░ SUPERSEDED — the pending → placed step is COMMENTED OUT ON PURPOSE ░░
+--
+-- This file predates the five-status decision. The canonical first stage is
+-- now `pending`, NOT `placed`: `pending` is what every live write path
+-- actually stores, it is what the five-item admin list offers, and `placed`
+-- has been retired to a legacy alias that is still RENDERED but never
+-- written (see ORDER_STATUSES in src/lib/admin-shared.ts).
+--
+-- Left in place rather than deleted so the history of the column is still
+-- readable, but neutralised rather than left runnable: this script advertises
+-- itself as "safe to re-run", so a future operator re-running it to pick up
+-- step 1 or 2 would silently rewrite every live `pending` order to a value
+-- the admin board no longer lists and no write path produces. A dormant
+-- script that quietly reverses a settled decision is worse than no script.
+--
+-- The dispatched → out_for_delivery step below is left runnable: it moves
+-- rows off a value nothing writes either way, and `out_for_delivery` is
+-- itself being migrated to `confirmed` by
+-- sql/orders-retire-preparing-out-for-delivery.sql, so re-running it is
+-- inert rather than wrong.
+--
+-- update public.orders
+--   set status = 'placed', status_updated_at = now()
+--   where status = 'pending';
 
 update public.orders
   set status = 'out_for_delivery', status_updated_at = now()

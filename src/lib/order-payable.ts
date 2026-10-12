@@ -43,6 +43,14 @@ const PAYABLE_METHODS = new Set(["cod", "razorpay"]);
  *             `mark_failed`), but it is the correct answer when something is.
  *
  * `paid` and `paid_*` are absent, and so is anything a sweeper writes off.
+ *
+ * `partially_paid` IS ABSENT ON PURPOSE, AND IT IS THE ONE THAT WILL TEMPT
+ * YOU. It looks payable — money is still owed — but Pay Now charges
+ * `total_amount`, not the outstanding balance, so adding it here would bill a
+ * customer who has already part-paid for the WHOLE order a second time. The
+ * gate is not the set membership, it is the amount: this value belongs here
+ * the day the Pay Now flow charges the balance column instead of the total,
+ * and not one commit before.
  */
 const PAYABLE_PAYMENT_STATUSES = new Set(["pending", "created", "failed"]);
 

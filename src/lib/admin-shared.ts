@@ -12,8 +12,24 @@
 import type { NutrientValue } from "@/lib/nutrition";
 import type { NextDelivery } from "@/lib/admin-subscription-derive";
 import type { NoteKind } from "@/lib/order-notes";
+// Value import, not a type: the label map and the rank table both key off
+// it. order-new-update.ts imports nothing, so this edge cannot cycle.
+import {
+  NEW_UPDATE_STATUS,
+  boardStatus,
+  type NewUpdateFacts,
+} from "@/lib/order-new-update";
 
 export const ADMIN_SESSION_KEY = "cadieux_admin_auth";
+
+/** Wordings the mechanical rule below cannot produce. Keep it to genuine
+ *  exceptions — a map that grows to cover every value is just a worse
+ *  version of the function. */
+const STATUS_LABEL_OVERRIDES: Record<string, string> = {
+  // Two capitals. "new_update" would otherwise render "New update", and
+  // this string is the name of a feature, not a sentence.
+  [NEW_UPDATE_STATUS]: "New Update",
+};
 
 /**
  * Raw enum -> readable label: "out_for_delivery" -> "Out for delivery".
@@ -23,22 +39,80 @@ export const ADMIN_SESSION_KEY = "cadieux_admin_auth";
  * via CSS, so it renders "OUT FOR DELIVERY" from the same string.
  */
 export function formatStatusLabel(status: string): string {
+  const key = status.trim().toLowerCase();
+  const override = STATUS_LABEL_OVERRIDES[key];
+  if (override) return override;
   const words = status.replace(/_/g, " ").trim();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : "";
 }
 
+/**
+ * Every value that may legally be STORED in orders.status.
+ *
+ * THIS IS NOT THE DROPDOWN. The row control offers ORDER_STATUS_OPTIONS
+ * below; this wider set is the type, and the difference is deliberate —
+ * exactly the split ORDER_FILTER_VALUES / STATUS_FILTER_OPTIONS already
+ * uses for the filter menu.
+ *
+ * `preparing` and `out_for_delivery` were REMOVED here (2026-10-12). They
+ * were retired from the vocabulary; the 8 rows that held them were moved to
+ * `confirmed` by sql/orders-retire-preparing-out-for-delivery.sql, which
+ * must have run BEFORE this ships or those rows render through the
+ * unknown-value escape hatch and cannot be moved off. Both are still
+ * ACCEPTED by the admin PATCH route and normalised to `confirmed` there, so
+ * a stale browser tab does not 400.
+ *
+ * `placed` went with them. See the note on `pending` below.
+ */
 export const ORDER_STATUSES = [
-  "placed",
+  // The spelling the website actually writes on COD checkout, and what 39
+  // live rows carry. `placed` was the other half of a disagreement nobody
+  // had settled: sql/order-status-stages.sql normalised pending -> placed,
+  // the checkout kept writing `pending`, and prod ended up with 39 of one
+  // and 0 of the other. `pending` won; that migration step is now commented
+  // out so it cannot silently rename them back.
+  "pending",
   "confirmed",
-  "preparing",
-  "out_for_delivery",
   "delivered",
   "cancelled",
-  // pickup-only stages (see PICKUP_STAGES in lib/order-stages)
+  // PICKUP: STORED BUT UNLISTED. Not in ORDER_STATUS_OPTIONS and not in the
+  // filter menu — the ask was a clean five-item dropdown, not the deletion
+  // of a shipped workflow. NEXT_STATUS_PICKUP in the orders board is the
+  // only route a pickup order has to a terminal state, and it still writes
+  // these. They stay here so that path is type-legal and so the row's
+  // status Select can render the current value; see PICKUP_STAGES in
+  // lib/order-stages.
   "ready_for_pickup",
   "picked_up",
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+/**
+ * THE FIVE-ITEM STATUS LIST. What the row control offers and what the
+ * filter dropdown lists, in operator order.
+ *
+ * Five items, and `new_update` is the fifth — it is COMPUTED, never
+ * stored (src/lib/order-new-update.ts), which is why its type is a plain
+ * string rather than OrderStatus. The row control renders it as the
+ * current value when the row has one and offers the four settable
+ * statuses beneath; picking any of them stamps status_updated_at past the
+ * note, which is how an order comes off the flag.
+ */
+export const ORDER_STATUS_OPTIONS: readonly string[] = [
+  "pending",
+  "confirmed",
+  "delivered",
+  "cancelled",
+  NEW_UPDATE_STATUS,
+];
+
+/** The four an operator may actually WRITE from the row control. */
+export const SETTABLE_ORDER_STATUSES: readonly OrderStatus[] = [
+  "pending",
+  "confirmed",
+  "delivered",
+  "cancelled",
+];
 
 export const SUBSCRIPTION_STATUSES = [
   // `pending_confirmation` is the state a subscription is born in (see
@@ -62,6 +136,14 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 // buckets. They stay in the union so /admin/orders/print, which takes its
 // status straight off a URL query param, still compiles and still honours an
 // old bookmark.
+//
+// NOTHING IS EVER DELETED FROM THIS LIST. `placed`, `preparing` and
+// `out_for_delivery` were retired from the vocabulary in 2026-10 and are
+// still here for exactly that reason: a bookmark or a printed link carrying
+// ?status=out_for_delivery must still compile and still mean what it meant
+// when it was saved. Retiring a value is a change to what gets WRITTEN
+// (ORDER_STATUSES) and what gets OFFERED (STATUS_FILTER_OPTIONS), never to
+// what can be read back.
 //
 // `pending_payment` exists at the DB level for the mobile flow but the
 // existing PATCH validator on /api/admin/orders/[id] only accepts the
@@ -87,6 +169,12 @@ export const ORDER_FILTER_VALUES = [
   // client-side filter in src/app/admin/orders/page.tsx. Admin PATCH does
   // NOT accept 'expired' — it's derived on read, never written.
   "expired",
+  // Also computed, also never written: a team note newer than
+  // status_updated_at. See src/lib/order-new-update.ts. Unlike `expired`
+  // this one IS offered in the menu, because it REPLACES the row's
+  // displayed status rather than sitting beside it — so it still
+  // partitions, and the invariant `expired` broke holds.
+  NEW_UPDATE_STATUS,
 ] as const;
 export type OrderFilterValue = (typeof ORDER_FILTER_VALUES)[number];
 
@@ -213,6 +301,15 @@ export type AdminOrderRow = {
     author: string | null;
     created_at: string;
     kind: NoteKind;
+  } | null;
+  /** Newest order_notes row with kind='note' — a HUMAN writing something
+   *  another human needs to read. Narrower than last_note on purpose: see
+   *  src/lib/order-new-update.ts for why 'edit' and 'call' are excluded.
+   *  Compared against status_updated_at to decide the New Update flag. */
+  last_team_note?: {
+    body: string;
+    author: string | null;
+    created_at: string;
   } | null;
 
   // --- repeat-customer facts, computed once per list load (by PHONE,
@@ -481,6 +578,13 @@ export const DELIVERY_STATUS_LABELS: Record<string, string> = {
 export const ORDER_RANK_FALLBACK = 4.5;
 
 const ORDER_STATUS_RANK: Record<string, number> = {
+  // ABOVE EVERYTHING, including pending. A New Update row is the only
+  // bucket on this board that represents a person waiting on a reply —
+  // somebody wrote something and nobody has acted since. Sorting it in
+  // with its stored status would bury a note on a delivered order under
+  // several hundred other delivered orders, which is the same failure as
+  // sinking an unrecognised status to the bottom (see ORDER_RANK_FALLBACK).
+  [NEW_UPDATE_STATUS]: 0,
   pending: 1,
   placed: 1,
   // Mobile-flow only, zero rows in prod. Un-actioned, and "pending" is what
@@ -502,17 +606,26 @@ const ORDER_STATUS_RANK: Record<string, number> = {
 
 /** Sort rank for an order row. Lower sorts higher.
  *
+ *  Goes through boardStatus(), so the row sorts by the status it SHOWS. A
+ *  delivered order carrying a fresh team note displays New Update, and it
+ *  has to sort as New Update too — a badge at the top of the board and a
+ *  row at the bottom of it are the same row disagreeing with itself.
+ *
  *  `expired` (rank 6) is COMPUTED, never stored — those rows carry
  *  status='pending' in the database and would otherwise land at rank 1, at the
- *  very top of the queue. Checked first for that reason. Reads the
- *  server-attached computed_state so this agrees with the expired filter chip
- *  and the row badge, which both do the same. */
-export function orderStatusRank(order: {
-  status?: string | null;
-  computed_state?: string | null;
-}): number {
+ *  very top of the queue. Reads the server-attached computed_state so this
+ *  agrees with the expired filter chip and the row badge, which both do the
+ *  same. Checked AFTER New Update, matching the display: an expired order
+ *  someone has just written a note on is a note to read, not a dead row. */
+export function orderStatusRank(
+  order: {
+    status?: string | null;
+    computed_state?: string | null;
+  } & NewUpdateFacts,
+): number {
+  const s = boardStatus(order);
+  if (s === NEW_UPDATE_STATUS) return ORDER_STATUS_RANK[NEW_UPDATE_STATUS];
   if (order.computed_state === "expired") return 6;
-  const s = (order.status ?? "").toLowerCase();
   return ORDER_STATUS_RANK[s] ?? ORDER_RANK_FALLBACK;
 }
 

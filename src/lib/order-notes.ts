@@ -64,6 +64,13 @@ export type NoteAggregate = {
   note_count: number;
   last_call_note: CallNoteSummary | null;
   last_note: LastNoteSummary | null;
+  /** Newest kind='note' row — a human writing something another human needs
+   *  to read. Deliberately NARROWER than last_note, which is the newest of
+   *  any kind: 'edit' rows are written by the admin_edit_order RPC itself
+   *  and 'call' rows already show up in the contact buttons. This is the
+   *  one the "New Update" rule compares against status_updated_at — see
+   *  src/lib/order-new-update.ts for why it is this kind and no other. */
+  last_team_note: CallNoteSummary | null;
 };
 
 /** Narrow a stored kind string. Anything unrecognised reads as 'note'. */
@@ -198,9 +205,15 @@ export function formatDeliveryEditNote(before: {
 }
 
 /**
- * Batch-hydrate every order id with { note_count, last_call_note, last_note }.
+ * Batch-hydrate every order id with
+ * { note_count, last_call_note, last_note, last_team_note }.
  * Empty input → empty map. Never throws — a failure logs and returns
  * an empty map so the list endpoint stays online without notes.
+ *
+ * A FAILURE HERE DOWNGRADES THE "NEW UPDATE" FLAG TO ABSENT, never to
+ * present: with no aggregate, last_team_note is null and hasNewUpdate()
+ * returns false. The board loses a flag rather than inventing one, which
+ * is the same way it already degrades for note icons and call chips.
  *
  * Fetches ALL note rows for the passed ids and folds them in memory; this
  * keeps the shape flat and avoids one query per row.
@@ -243,7 +256,8 @@ export async function aggregateNotesFor(
         .select(`id, ${column}, kind, body, author, created_at`)
         .in(column, chunk)
         // Newest first, so the first row we see per owner IS the latest note
-        // (any kind), and the first kind='call' row IS the latest call.
+        // (any kind), the first kind='call' row IS the latest call, and the
+        // first kind='note' row IS the latest team note.
         .order("created_at", { ascending: false }),
     ),
   );
@@ -271,6 +285,7 @@ export async function aggregateNotesFor(
       note_count: 0,
       last_call_note: null as CallNoteSummary | null,
       last_note: null as LastNoteSummary | null,
+      last_team_note: null as CallNoteSummary | null,
     };
     curr.note_count += 1;
     if (curr.last_note === null) {
@@ -283,6 +298,17 @@ export async function aggregateNotesFor(
     }
     if (row.kind === "call" && curr.last_call_note === null) {
       curr.last_call_note = {
+        body: row.body,
+        author: row.author,
+        created_at: row.created_at,
+      };
+    }
+    // kind='note' ONLY. asNoteKind() is not used here on purpose: it
+    // coerces anything unrecognised to 'note', which would quietly let a
+    // future kind flip orders to New Update without anyone choosing that.
+    // An exact match is the whole point of the rule.
+    if (row.kind === "note" && curr.last_team_note === null) {
+      curr.last_team_note = {
         body: row.body,
         author: row.author,
         created_at: row.created_at,

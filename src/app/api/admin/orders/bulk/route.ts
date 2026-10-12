@@ -33,18 +33,27 @@ import {
 // Response shape:
 //   { succeeded: string[], failed: { id: string; error: string }[] }
 
+// `prepare` and `dispatch` now both land on `confirmed`, matching
+// STATUS_ALIAS in ../[id]/route.ts and the target that
+// sql/orders-retire-preparing-out-for-delivery.sql moves the live rows to.
+// The ACTIONS are kept rather than deleted so a stale admin tab mid-session
+// still completes its bulk move instead of failing 200 rows with "Invalid
+// action"; the STATUSES behind them are the ones that were retired, not the
+// verbs. No current surface sends either — the board's bulk bar offers
+// confirm / deliver / cancel only.
 const ACTION_TO_STATUS: Record<string, string> = {
   confirm: "confirmed",
-  prepare: "preparing",
-  dispatch: "out_for_delivery",
+  prepare: "confirmed",
+  dispatch: "confirmed",
   deliver: "delivered",
   cancel: "cancelled",
 };
 
+// Keyed on the resolved status, so the retired entries are unreachable and
+// gone. Same reasoning as the single-order route: dead customer-facing copy
+// reads as live copy to whoever edits it next.
 const STATUS_PUSH_COPY: Record<string, { title: string; body: string }> = {
   confirmed: { title: "Order confirmed", body: "Your bread is being prepared." },
-  preparing: { title: "Preparing your order", body: "We're baking your bread now." },
-  out_for_delivery: { title: "On the way", body: "Your order is on the way!" },
   delivered: { title: "Delivered", body: "Your bread has been delivered. Enjoy!" },
   cancelled: { title: "Order cancelled", body: "Your order has been cancelled." },
 };

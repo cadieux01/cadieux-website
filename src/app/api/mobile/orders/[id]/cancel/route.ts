@@ -151,6 +151,17 @@ export async function POST(
     .update({
       status: "cancelled",
       cancelled_at: nowIso,
+      // status_updated_at is NOT optional here, even though cancelled_at
+      // records the same instant. The admin board's New Update flag is
+      // "a note was written AFTER the status was last set", and it reads
+      // status_updated_at and nothing else (src/lib/order-new-update.ts).
+      // Omitting it leaves the stamp at whatever the last ADMIN action set
+      // — possibly days ago — so a customer self-cancelling an order that
+      // already had a note on it would surface on the board as "New Update"
+      // on a cancelled row, pointing at a note nobody just wrote.
+      // A guard added to a read has to be added to everything that writes
+      // what it reads; this is the one write path that had drifted.
+      status_updated_at: nowIso,
       cancellation_reason: reason,
     })
     .eq("id", orderId)

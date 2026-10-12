@@ -25,12 +25,13 @@ import {
   paymentView,
   type PaymentView,
 } from "@/lib/payment-label";
+import { boardStatus, type NewUpdateFacts } from "@/lib/order-new-update";
 
 /** The fields the predicate reads. Structural so both AdminOrderRow and the
  *  print view's row type satisfy it without a cast. `zone` is derived (never
  *  stored) — the board resolves it once via delivery-zones.ts before running
  *  the predicate. */
-export type FilterableOrder = {
+export type FilterableOrder = NewUpdateFacts & {
   status?: string | null;
   computed_state?: string | null;
   last_call_note?: { body?: string | null } | null;
@@ -131,6 +132,14 @@ export function splitFilterValues(values: readonly string[]): {
  * `orders.status`, it is computed on read (see src/lib/order-state.ts) from
  * rows that also carry `pending`/`placed`. It is no longer offered in the menu
  * but old bookmarks and print URLs still carry it, so it is still matched.
+ *
+ * `new_update` is ALSO computed, but it needs no special case here, and the
+ * difference is the whole design: boardStatus() returns it IN PLACE OF the
+ * stored status, so the ordinary `s === v` comparison already handles both
+ * selecting it and — just as importantly — NOT selecting it. Filtering to
+ * Delivered excludes a delivered order carrying a fresh note, because that
+ * row is not showing Delivered. `expired` needs its arm precisely because
+ * it does the opposite: it sits BESIDE the stored status and double-counts.
  */
 export function matchesOrderFilter(
   o: FilterableOrder,
@@ -145,7 +154,7 @@ export function matchesOrderFilter(
   // they never pass this gate.
   if (repeatOnly && (o.repeat_seq ?? 0) < 2) return false;
   if (statuses.length > 0) {
-    const s = (o.status ?? "").toLowerCase();
+    const s = boardStatus(o);
     const hit = statuses.some((v) =>
       v === "expired" ? o.computed_state === "expired" : s === v,
     );

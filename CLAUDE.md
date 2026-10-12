@@ -264,3 +264,33 @@ mv node_modules node_modules.symlink.bak && npm ci    # ~8s, 210 packages
 
 then restart the dev server. Observed 2026-10-06 in `cadieux-evening-slot`,
 whose `node_modules` pointed at `cadieux-zones`.
+
+## A new `payment_status` value is a TWO-REPO change, and only one repo can be patched
+
+The website matches payment status by **prefix** (`isPaidStatus()` in
+`src/lib/payment-label.ts` does `startsWith("paid")`). The Android app matches
+by **equality** (`=== 'paid'`). They fail in opposite directions, so a value
+that is safe in one is dangerous in the other:
+
+- Prefix side — any `paid_*` spelling reads as fully paid, so the rider's
+  sheet prints "PAID" and nothing is collected.
+- Equality side — any value that is *not literally* `paid` reads as not paid,
+  so `components/{Address,Item,Delivery}Editor.tsx` unlock an order that money
+  has been taken on, and `app/account/orders/[orderId].tsx:193-196` falls
+  through to "Cash on Delivery" (cod rows) or "Awaiting payment" (razorpay
+  rows).
+
+The website can be fixed by a deploy. **Installed app builds cannot** — they
+need a Play release, and customers update whenever they feel like it.
+
+So: adding the value to `PAYMENT_VIEWS` is safe and is step one. Writing it to
+a row is step three. Step two is shipping the app. `partially_paid` is sitting
+at step one deliberately (see the comment above the value, and
+`sql/orders-partial-payment-balance.sql`, written and held).
+
+The same asymmetry applies to `orders.status`, with one mercy: that column has
+**no check constraint and no value is ever deleted**, so retiring a status is
+an app-level move plus a data move, and installed builds keep rendering the
+value the rows land on. That is why
+`sql/orders-retire-preparing-out-for-delivery.sql` targets `confirmed` — a word
+every shipped build already draws.
