@@ -111,7 +111,11 @@ export function checkUploadFile(
     return `Unsupported file type${file.type ? ` "${file.type}"` : ""}. Allowed: ${limits.mimes.join(", ")}.`;
   }
   if (file.size > limits.maxBytes) {
-    return `File is ${formatUploadBytes(file.size)} — the limit is ${formatUploadBytes(limits.maxBytes)}.`;
+    // The byte count is not decoration. Both sides round to one decimal, so a
+    // file one byte over the ceiling otherwise reads "File is 50.0 MB — the
+    // limit is 50.0 MB.", which tells the operator nothing.
+    const over = file.size - limits.maxBytes;
+    return `File is ${formatUploadBytes(file.size)} — the limit is ${formatUploadBytes(limits.maxBytes)}. Over by ${over.toLocaleString("en-US")} B.`;
   }
   if (file.size === 0) return "That file is empty (0 bytes).";
   return null;
