@@ -522,18 +522,22 @@ export default function ProductDetailClient({
               </div>
             )}
 
-            {/* Pre-order: the same OUT OF STOCK badge — from the customer's
-                side it is out of stock — with the return date under it, and
-                the order still takeable. Suppressed when in_stock is false,
-                since that banner already says the stronger thing. */}
+            {/* Pre-order, which is NOT the out-of-stock banner above it: the
+                order is takeable right now, only the delivery waits for the
+                date on the line below. It used to reuse that banner's "Out of
+                stock" wording and its red, which told the customer they could
+                not buy a product whose buy button was live two lines down.
+                Cream + green are the cart's own pre-order panel tokens, so
+                tile, PDP and cart now agree. Suppressed when in_stock is
+                false, since that banner says the stronger thing. */}
             {preorder && !outOfStock && (
               <div
                 role="status"
                 style={{
                   marginBottom: 14,
                   padding: "10px 14px",
-                  background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.45)",
+                  background: "#FBF3D4",
+                  border: "1px solid rgba(2,70,40,0.25)",
                   borderRadius: 4,
                 }}
               >
@@ -544,10 +548,10 @@ export default function ProductDetailClient({
                     fontWeight: 500,
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
-                    color: "#991B1B",
+                    color: "#024628",
                   }}
                 >
-                  {dispOutOfStock}
+                  Pre-order
                 </div>
                 <div
                   style={{

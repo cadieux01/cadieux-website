@@ -447,10 +447,19 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>✓</span>
         </div>
 
-        {/* Out-of-stock pill — warning-on-brand red-300 for AAA on FG. A
-            pre-order product shows the same badge: from the customer's side
-            it IS out of stock, the difference is that we'll still take the
-            order. `outOfStock` (in_stock=false) wins when both are set. */}
+        {/* Availability pill. These are OPPOSITE states and must not share a
+            label: `outOfStock` (in_stock=false) means the product cannot be
+            bought at all — the Add button is replaced by an Unavailable span.
+            A pre-order floor means it CAN be bought right now and simply
+            cannot be DELIVERED before a date, so the button stays live.
+            Showing "Out of stock" above a working Pre-order button read as a
+            refusal and misled three readers of this page into believing the
+            press was blocked. `outOfStock` still wins when both are set.
+
+            Red is kept only for the real refusal. The pre-order chip borrows
+            the cart's existing pre-order panel tokens (cream + green) so the
+            two surfaces say the same thing the same way; solid rather than
+            transparent because this one sits over a photograph. */}
         {(outOfStock || preorder) && (
           <div
             style={{
@@ -466,15 +475,23 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
               fontWeight: 500,
               letterSpacing: "0.25em",
               textTransform: "uppercase",
-              color: "var(--warning-on-brand)",
               padding: "5px 10px",
-              background: "transparent",
-              border: "1px solid var(--warning-on-brand)",
               borderRadius: 4,
               pointerEvents: "none",
+              ...(outOfStock
+                ? {
+                    color: "var(--warning-on-brand)",
+                    background: "transparent",
+                    border: "1px solid var(--warning-on-brand)",
+                  }
+                : {
+                    color: "#024628",
+                    background: "#FBF3D4",
+                    border: "1px solid rgba(2,70,40,0.25)",
+                  }),
             }}
           >
-            Out of stock
+            {outOfStock ? "Out of stock" : "Pre-order"}
           </div>
         )}
 
