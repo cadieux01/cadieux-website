@@ -38,6 +38,24 @@ import { useEffect } from "react";
 // shortened because a whole-viewport move reads faster than a 360px panel.
 const COMMIT_BUDGET_MS = 350;
 
+/**
+ * Controls that own their click and must never be read as a navigation, even
+ * when they sit inside an <a href>.
+ *
+ * The shop tiles are the case that matters: the whole card is a <Link> to the
+ * product page, and Add / Pre-order / + / − are real <button>s inside it. Their
+ * handlers call preventDefault + stopPropagation, which is enough to stand
+ * next/link down — but NOT this listener, because capture phase runs before
+ * React's delegated handlers, so there is nothing for them to stop yet. The
+ * result shipped in 5a740f5: pressing Add both added the item AND slid the
+ * customer to the product page. Checking the target first is the only place the
+ * distinction can be made.
+ *
+ * Mirrors ROW_INTERACTIVE_SELECTOR in admin/orders — same problem, same answer.
+ */
+const INTERACTIVE_SELECTOR =
+  'button, input, select, textarea, [role="button"]';
+
 type ViewTransition = { finished: Promise<void>; skipTransition: () => void };
 type DocumentWithViewTransitions = Document & {
   startViewTransition?: (cb: () => void | Promise<void>) => ViewTransition;
@@ -134,7 +152,11 @@ export default function PageTransition() {
       if (e.defaultPrevented || e.button !== 0) return;
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
 
-      const anchor = (e.target as Element | null)?.closest?.<HTMLAnchorElement>("a");
+      const target = e.target as Element | null;
+      // Before anything else: a press on a control is not a navigation.
+      if (target?.closest?.(INTERACTIVE_SELECTOR)) return;
+
+      const anchor = target?.closest?.<HTMLAnchorElement>("a");
       if (!anchor || !anchor.getAttribute("href")) return;
       if (anchor.hasAttribute("download")) return;
       if (anchor.target && anchor.target !== "_self") return;
