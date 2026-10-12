@@ -456,10 +456,18 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
             refusal and misled three readers of this page into believing the
             press was blocked. `outOfStock` still wins when both are set.
 
-            Red is kept only for the real refusal. The pre-order chip borrows
-            the cart's existing pre-order panel tokens (cream + green) so the
-            two surfaces say the same thing the same way; solid rather than
-            transparent because this one sits over a photograph. */}
+            Red is kept only for the real refusal. The pre-order chip's palette
+            is NOT new: it is the cart's pre-order panel, app/cart/page.tsx:103
+            (#FBF3D4 on #024628, rgba(2,70,40,0.25) border). Tile, PDP and cart
+            are the three surfaces that announce a floor, and they must agree —
+            take the tokens from there rather than inventing a fourth set. Solid
+            rather than transparent only because this one sits over a photo.
+
+            An earlier comment here argued the opposite — that a pre-order
+            product "from the customer's side IS out of stock", which is why
+            the two shared a label. That is the decision this overturns: it is
+            not true of a product whose buy button is live, and it cost three
+            readers of this page a wrong conclusion about their own site. */}
         {(outOfStock || preorder) && (
           <div
             style={{

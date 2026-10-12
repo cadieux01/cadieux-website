@@ -522,14 +522,22 @@ export default function ProductDetailClient({
               </div>
             )}
 
-            {/* Pre-order, which is NOT the out-of-stock banner above it: the
-                order is takeable right now, only the delivery waits for the
-                date on the line below. It used to reuse that banner's "Out of
-                stock" wording and its red, which told the customer they could
-                not buy a product whose buy button was live two lines down.
-                Cream + green are the cart's own pre-order panel tokens, so
-                tile, PDP and cart now agree. Suppressed when in_stock is
-                false, since that banner says the stronger thing. */}
+            {/* Pre-order, which is NOT the out-of-stock banner above it. These
+                are OPPOSITE states and must not share a chip: `outOfStock`
+                (in_stock=false) means the product cannot be bought at all and
+                the buy button is replaced by an Unavailable span, whereas a
+                live available_from floor means it CAN be bought right now and
+                only the DELIVERY date is constrained — the line below says
+                when. This block used to reuse that banner's "Out of stock"
+                wording and its red, which told the customer they could not buy
+                a product whose buy button was live two lines down.
+
+                The palette is NOT new: it is the cart's pre-order panel,
+                app/cart/page.tsx:103 (#FBF3D4 on #024628, rgba(2,70,40,0.25)
+                border). Tile, PDP and cart are the three surfaces that
+                announce a floor — take the tokens from there rather than
+                inventing a fourth set. Suppressed when in_stock is false,
+                since that banner says the stronger thing. */}
             {preorder && !outOfStock && (
               <div
                 role="status"
