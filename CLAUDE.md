@@ -294,3 +294,65 @@ an app-level move plus a data move, and installed builds keep rendering the
 value the rows land on. That is why
 `sql/orders-retire-preparing-out-for-delivery.sql` targets `confirmed` — a word
 every shipped build already draws.
+
+## .env files: never source them, never grep them, never print a value
+
+These are hard rules, not preferences. They exist because an Anthropic API key
+has been printed into a session transcript **twice** from this repo's
+`.env.local`, and both times the mechanism was ordinary and easy to repeat.
+
+**1. Never source an .env file in a shell.** Not `. ./.env.local`, not
+`source .env.local`, not `export $(cat .env.local | xargs)`.
+
+An .env file is not a shell script, but sourcing it runs it as one. Any line
+that is not a valid shell assignment is EXECUTED. A value containing spaces, or
+a key written as `NAME = value`, turns the value itself into a command — zsh
+then reports `command not found: <the entire secret>`, which prints the secret
+in full. That is how it leaked:
+
+```
+./.env.local:40: command not found: sk-ant-api03-...
+```
+
+Note what happened there: the failure *is* the disclosure. Nothing crashed in a
+way that could be caught and nothing was redacted, because the shell was simply
+reporting a command it could not find. Redacting the command's own output with
+`sed` does not help — the leak came from the shell, before any pipe.
+
+**2. To read variable NAMES, read only the names.**
+
+```
+cut -d= -f1 .env.local            # names only, values never materialise
+cut -d= -f1 .env.local | grep -i stripe
+```
+
+Never `cat`, `head`, `tail`, or `grep` a value in order to "check" it. If a
+variable needs checking, check its NAME, its presence, or its length — not its
+contents.
+
+**3. Never run the Grep tool on a .env file.** Grep returns whole matching
+lines by design, so grepping for a variable name returns the name *and the
+secret*. There is no flag that makes this safe and no reason to risk it. This
+applies to `.env`, `.env.local`, `.env.production`, and anything else holding
+credentials.
+
+**4. To pass ONE variable to a command, extract exactly that one.**
+
+```
+KEY=$(grep '^SUPABASE_SERVICE_ROLE_KEY=' .env.local | cut -d= -f2-)
+curl -H "apikey: $KEY" ...
+```
+
+This is a plain `grep` in a command substitution, so nothing reaches the
+transcript; the value exists only in a shell variable. It is also scoped — one
+named variable, not the whole file — so an unrelated malformed line cannot be
+executed as a side effect of needing a database URL.
+
+**Why the reasoning is written out here.** A bare prohibition reads as
+superstition and gets dropped by whoever next finds it inconvenient at 2am. The
+cause is specific and mechanical: sourcing executes, grep returns lines, and
+secrets leak through ERROR paths rather than success paths — so "it failed, so
+nothing happened" is precisely backwards.
+
+**If a key does leak: rotate it.** A transcript, a scrollback buffer and a CI
+log are all durable. Deleting the message does not unpublish the secret.
