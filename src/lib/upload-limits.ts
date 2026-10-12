@@ -56,15 +56,37 @@ export const UPLOAD_LIMITS: Readonly<Record<UploadBucket, BucketLimits>> = {
       "video/quicktime": "mov",
     },
   },
-  // Bucket row is still null/null for product-reports — deliberately left
-  // alone, because it holds application/pdf objects and the media mime list
-  // above would have rejected every one of them. So for THIS bucket the limit
-  // below is the only check there is; storage will not second-guess it.
-  // 10 MiB matches MAX_BYTES in api/admin/products/[id]/reports/route.ts.
+  // Bucket row IS set (applied 2026-10-13): file_size_limit = 52428800 and
+  // allowed_mime_types = exactly these three. The values below are therefore
+  // a MIRROR of an enforceable server-side gate, not the gate itself.
+  //
+  // IT USED TO BE null/null, AND null IS NOT THE SAME NUMBER AS ANYTHING.
+  // A null file_size_limit does not mean "no limit" — it means the ceiling
+  // falls through to a project-wide setting that is invisible from this
+  // repo and editable in the dashboard. Probed before the change: 52,428,800
+  // accepted, 52,428,801 -> 413 EntityTooLarge. That ceiling was real, but
+  // nothing in version control said so, and the rule at the top of this file
+  // is that both sides hold the SAME number. So the bucket row now states it.
+  // product-images above already carried 52428800 plus its own explicit mime
+  // list, so null/null here was the odd one out, not the house style.
+  //
+  // THREE NUMBERS MOVE TOGETHER, NONE OF THEM ALONE: this constant, MAX_BYTES
+  // in api/admin/products/[id]/reports/route.ts, and storage.buckets. Change
+  // one and you get the failure mode the header warns about.
+  //
+  // WHY NOT PDF-ONLY. Lab reports arrive as phone photos and flatbed scans at
+  // least as often as PDFs. A PDF-only bucket bounces those at the gate with
+  // an error the uploader cannot act on, so jpeg and png are first-class here
+  // — which is also why the object name must carry the file's REAL extension
+  // (see extByMime) rather than a hardcoded .pdf.
   "product-reports": {
-    maxBytes: 10 * 1024 * 1024,
-    mimes: ["application/pdf"],
-    extByMime: { "application/pdf": "pdf" },
+    maxBytes: 50 * 1024 * 1024, // 52,428,800 — binary, equal to the bucket
+    mimes: ["application/pdf", "image/jpeg", "image/png"],
+    extByMime: {
+      "application/pdf": "pdf",
+      "image/jpeg": "jpg",
+      "image/png": "png",
+    },
   },
 };
 

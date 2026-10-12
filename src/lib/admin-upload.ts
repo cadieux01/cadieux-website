@@ -5,8 +5,8 @@
 // THE PROBLEM THIS SOLVES. Every admin uploader used to POST the file as
 // multipart/form-data to one of our own API routes. Vercel rejects a function
 // request body over ~4.5 MB at the EDGE, before the route handler runs, so
-// those uploads died with a bare 413 and the route's own MAX_BYTES (50 MB for
-// media, 10 MB for reports) was never reachable. Here the browser asks our
+// those uploads died with a bare 413 and the route's own MAX_BYTES (50 MiB for
+// media and for reports alike) was never reachable. Here the browser asks our
 // function only for a signed URL — a few hundred bytes of JSON each way — and
 // then PUTs the bytes straight to Supabase Storage, which has no such cap.
 //

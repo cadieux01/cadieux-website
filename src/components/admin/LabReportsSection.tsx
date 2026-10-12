@@ -2,27 +2,78 @@
 
 // Lab Reports & Certifications panel for the admin product detail page.
 // Loads, uploads, edits, archives, unarchives and deletes rows in the
-// product_reports table via /api/admin/products/[id]/reports. The PDF
-// itself no longer travels through that route: it goes straight to storage
+// product_reports table via /api/admin/products/[id]/reports. The file
+// itself does not travel through that route: it goes straight to storage
 // with a signed upload URL (see lib/admin-upload.ts) because a Vercel
 // function request body is capped at ~4.5 MB at the edge, well under the
-// 10 MB a lab report is allowed. Every mutation is gated by the security
+// 50 MiB storage accepts. Every mutation is gated by the security
 // PIN — requirePin() is owned by the parent page and passed down; the
 // returned grant rides as the `x-pin-grant` header, on the signed-URL
 // request as well as on the metadata POST.
+//
+// UPLOADS ARE A BATCH, AND A BATCH IS NOT ALL-OR-NOTHING. Pick several
+// files at once, give each its own label, and each one uploads and
+// registers independently: the ones that land are kept and the ones that
+// fail stay in the modal with their own reason, so a single bad file does
+// not cost the operator the other nine.
 
 import { useCallback, useEffect, useState } from "react";
 
 import Select from "@/components/ui/Select";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime } from "@/lib/admin-formatting";
-import { readAdminError, uploadViaSignedUrl } from "@/lib/admin-upload";
+import {
+  readAdminError,
+  uploadLimitLabel,
+  uploadViaSignedUrl,
+} from "@/lib/admin-upload";
 import {
   PRODUCT_REPORT_CATEGORIES,
   PRODUCT_REPORT_CATEGORY_LABEL,
   ProductReport,
   ProductReportCategory,
 } from "@/lib/product-reports";
+import { checkUploadFile, UPLOAD_LIMITS } from "@/lib/upload-limits";
+
+// One row per picked file. `status` drives the per-file result badge, which
+// is the whole point: a partial batch has to be readable at a glance.
+type BatchRow = {
+  key: string;
+  file: File;
+  name: string;
+  number: string;
+  summary: string;
+  category: ProductReportCategory;
+  status: "pending" | "uploading" | "done" | "error";
+  error: string | null;
+};
+
+const ACCEPT_ATTR = UPLOAD_LIMITS["product-reports"].mimes.join(",");
+
+let rowSeq = 0;
+
+// Default label from the file name, minus the extension. Operators rename
+// most of these, but "COA-2024-11.pdf" is a better starting point than an
+// empty box, and a blank label is a 400 from the route.
+function labelFromFileName(fileName: string): string {
+  const dot = fileName.lastIndexOf(".");
+  const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
+  return stem.replace(/[_-]+/g, " ").trim().slice(0, 120);
+}
+
+function toBatchRow(file: File): BatchRow {
+  rowSeq += 1;
+  return {
+    key: `${rowSeq}-${file.name}-${file.size}`,
+    file,
+    name: labelFromFileName(file.name),
+    number: "",
+    summary: "",
+    category: "other",
+    status: "pending",
+    error: null,
+  };
+}
 
 const CREAM = "#FBF3D4";
 const FADED = "rgba(251,243,212,0.6)";
@@ -39,13 +90,11 @@ export function LabReportsSection({
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
-  // Add-modal state
+  // Add-modal state. One BatchRow per picked file; `addErr` is reserved for
+  // problems with the batch as a whole (no files, PIN refused), never for a
+  // single file — those live on the row.
   const [showAdd, setShowAdd] = useState(false);
-  const [addName, setAddName] = useState("");
-  const [addNumber, setAddNumber] = useState("");
-  const [addSummary, setAddSummary] = useState("");
-  const [addCategory, setAddCategory] = useState<ProductReportCategory>("other");
-  const [addFile, setAddFile] = useState<File | null>(null);
+  const [addRows, setAddRows] = useState<BatchRow[]>([]);
   const [addBusy, setAddBusy] = useState(false);
   const [addErr, setAddErr] = useState<string | null>(null);
 
@@ -74,64 +123,107 @@ export function LabReportsSection({
     void load();
   }, [load]);
 
+  function patchAddRow(key: string, patch: Partial<BatchRow>) {
+    setAddRows((prev) =>
+      prev.map((r) => (r.key === key ? { ...r, ...patch } : r)),
+    );
+  }
+
+  function addFiles(files: File[]) {
+    if (files.length === 0) return;
+    setAddErr(null);
+    setAddRows((prev) => [...prev, ...files.map(toBatchRow)]);
+  }
+
   async function submitAdd() {
-    if (!addFile) {
-      setAddErr("Select a PDF file");
+    // Anything already uploaded is left alone — this is also the retry path
+    // after a partial batch, so a successful row must never be sent twice.
+    const queue = addRows.filter((r) => r.status !== "done");
+    if (queue.length === 0) {
+      setAddErr("Select at least one file");
       return;
     }
-    if (addFile.type !== "application/pdf") {
-      setAddErr("File must be a PDF");
-      return;
-    }
-    if (!addName.trim()) {
-      setAddErr("Report name is required");
+    const unnamed = queue.filter((r) => !r.name.trim()).length;
+    if (unnamed > 0) {
+      setAddErr(
+        unnamed === 1
+          ? "One file still needs a report name"
+          : `${unnamed} files still need a report name`,
+      );
       return;
     }
     const grant = await requirePin();
     if (!grant) return;
     setAddBusy(true);
     setAddErr(null);
+    // sort_order: every existing row is 0, so ordering currently falls
+    // through to uploaded_at desc. Start the batch ABOVE whatever is already
+    // stored — the picked order is preserved and no existing row is touched.
+    const base =
+      reports.reduce((max, r) => Math.max(max, r.sort_order ?? 0), 0) + 1;
+    setAddRows((prev) =>
+      prev.map((r) =>
+        r.status === "done" ? r : { ...r, status: "uploading", error: null },
+      ),
+    );
+
+    // Each file is its own two-step upload (signed URL straight to storage,
+    // then a metadata POST) and its own try/catch. One rejection marks one
+    // row; it does not reject the batch.
+    const outcomes = await Promise.all(
+      queue.map(async (row, i) => {
+        try {
+          const uploaded = await uploadViaSignedUrl(row.file, {
+            bucket: "product-reports",
+            prefix: productId,
+            pinGrant: grant,
+          });
+          const res = await fetch(`/api/admin/products/${productId}/reports`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "x-pin-grant": grant,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              report_name: row.name.trim(),
+              report_number: row.number.trim(),
+              summary: row.summary.trim(),
+              category: row.category,
+              storage_path: uploaded.path,
+              file_name: row.file.name,
+              sort_order: base + i,
+            }),
+          });
+          if (!res.ok) {
+            throw new Error(await readAdminError(res, "Upload failed"));
+          }
+          patchAddRow(row.key, { status: "done", error: null });
+          return true;
+        } catch (e) {
+          patchAddRow(row.key, {
+            status: "error",
+            error: e instanceof Error ? e.message : "Upload failed",
+          });
+          return false;
+        }
+      }),
+    );
+
     try {
-      // Two steps now. The PDF goes straight to Supabase Storage via a
-      // signed upload URL, then only the metadata is POSTed here as JSON.
-      // The old single multipart POST sent the PDF through a Vercel
-      // function, whose request body is capped at ~4.5 MB at the edge —
-      // the route's own 10 MB limit was never reachable.
-      const uploaded = await uploadViaSignedUrl(addFile, {
-        bucket: "product-reports",
-        prefix: productId,
-        pinGrant: grant,
-      });
-      const res = await fetch(`/api/admin/products/${productId}/reports`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "x-pin-grant": grant,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          report_name: addName.trim(),
-          report_number: addNumber.trim(),
-          summary: addSummary.trim(),
-          category: addCategory,
-          storage_path: uploaded.path,
-          file_name: addFile.name,
-        }),
-      });
-      if (!res.ok) {
-        throw new Error(await readAdminError(res, "Upload failed"));
-      }
-      setShowAdd(false);
-      setAddName("");
-      setAddNumber("");
-      setAddSummary("");
-      setAddCategory("other");
-      setAddFile(null);
       await load();
-    } catch (e) {
-      setAddErr(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setAddBusy(false);
+    }
+
+    const failed = outcomes.filter((ok) => !ok).length;
+    if (failed === 0) {
+      setShowAdd(false);
+      setAddRows([]);
+    } else {
+      setAddErr(
+        `${outcomes.length - failed} of ${outcomes.length} uploaded. ${failed} failed — fix and upload again.`,
+      );
     }
   }
 
@@ -222,6 +314,7 @@ export function LabReportsSection({
           type="button"
           onClick={() => {
             setShowAdd(true);
+            setAddRows([]);
             setAddErr(null);
           }}
           className="uppercase"
@@ -235,7 +328,7 @@ export function LabReportsSection({
             background: "transparent",
           }}
         >
-          + Add Lab Report
+          + Add Lab Reports
         </button>
       </div>
 
@@ -300,19 +393,19 @@ export function LabReportsSection({
 
       {showAdd ? (
         <AddReportModal
-          name={addName}
-          onName={setAddName}
-          number={addNumber}
-          onNumber={setAddNumber}
-          summary={addSummary}
-          onSummary={setAddSummary}
-          category={addCategory}
-          onCategory={setAddCategory}
-          file={addFile}
-          onFile={setAddFile}
+          rows={addRows}
+          onAddFiles={addFiles}
+          onPatchRow={patchAddRow}
+          onRemoveRow={(key) =>
+            setAddRows((prev) => prev.filter((r) => r.key !== key))
+          }
           busy={addBusy}
           err={addErr}
-          onCancel={() => setShowAdd(false)}
+          onCancel={() => {
+            setShowAdd(false);
+            setAddRows([]);
+            setAddErr(null);
+          }}
           onSubmit={submitAdd}
         />
       ) : null}
@@ -608,36 +701,26 @@ function ReportCard({
 }
 
 function AddReportModal({
-  name,
-  onName,
-  number,
-  onNumber,
-  summary,
-  onSummary,
-  category,
-  onCategory,
-  file,
-  onFile,
+  rows,
+  onAddFiles,
+  onPatchRow,
+  onRemoveRow,
   busy,
   err,
   onCancel,
   onSubmit,
 }: {
-  name: string;
-  onName: (s: string) => void;
-  number: string;
-  onNumber: (s: string) => void;
-  summary: string;
-  onSummary: (s: string) => void;
-  category: ProductReportCategory;
-  onCategory: (c: ProductReportCategory) => void;
-  file: File | null;
-  onFile: (f: File | null) => void;
+  rows: BatchRow[];
+  onAddFiles: (files: File[]) => void;
+  onPatchRow: (key: string, patch: Partial<BatchRow>) => void;
+  onRemoveRow: (key: string) => void;
   busy: boolean;
   err: string | null;
   onCancel: () => void;
   onSubmit: () => void;
 }) {
+  const pending = rows.filter((r) => r.status !== "done").length;
+  const done = rows.length - pending;
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
@@ -645,7 +728,7 @@ function AddReportModal({
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-md"
+        className="w-full max-w-2xl"
         style={{
           background: "rgb(29,29,31)",
           border: `1px solid ${BORDER}`,
@@ -677,8 +760,20 @@ function AddReportModal({
               fontWeight: 300,
             }}
           >
-            Add Lab Report
+            Add Lab Reports
           </h4>
+          <p
+            style={{
+              margin: "0.4rem 0 0",
+              fontFamily: "var(--font-body)",
+              color: FADED,
+              fontSize: "1rem",
+            }}
+          >
+            {rows.length === 0
+              ? `Pick one or several files — PDF, JPEG or PNG, up to ${uploadLimitLabel("product-reports")} each.`
+              : `${rows.length} file${rows.length === 1 ? "" : "s"} selected${done > 0 ? ` · ${done} already uploaded` : ""}. Each needs its own report name.`}
+          </p>
         </div>
 
         <div
@@ -691,67 +786,19 @@ function AddReportModal({
             padding: "1rem 1.5rem",
           }}
         >
-          <label className="block mb-3" style={fieldLabel}>
-            Report Name
-            <input
-              value={name}
-              onChange={(e) => onName(e.target.value)}
-              placeholder="e.g. Nutrition Analysis"
-              className="mt-1 w-full px-3 py-2"
-              style={fieldInput}
-            />
-          </label>
-
-          <label className="block mb-3" style={fieldLabel}>
-            Report Number
-            <input
-              value={number}
-              onChange={(e) => onNumber(e.target.value)}
-              placeholder="Optional"
-              className="mt-1 w-full px-3 py-2"
-              style={fieldInput}
-            />
-          </label>
-
-          <label className="block mb-3" style={fieldLabel}>
-            Summary
-            <textarea
-              value={summary}
-              onChange={(e) => onSummary(e.target.value)}
-              placeholder="Optional"
-              rows={3}
-              className="mt-1 w-full px-3 py-2"
-              style={{ ...fieldInput, resize: "vertical" }}
-            />
-          </label>
-
-          <label className="block mb-3" style={fieldLabel}>
-            Category
-            <div className="mt-1">
-              <Select
-                value={category}
-                onChange={(v) => onCategory(v as ProductReportCategory)}
-                ariaLabel="Report category"
-                style={{
-                  borderColor: BORDER,
-                  fontSize: "1rem",
-                  textTransform: "none",
-                  letterSpacing: "0.05em",
-                }}
-                options={PRODUCT_REPORT_CATEGORIES.map((c) => ({
-                  value: c,
-                  label: PRODUCT_REPORT_CATEGORY_LABEL[c],
-                }))}
-              />
-            </div>
-          </label>
-
           <label className="block mb-4" style={fieldLabel}>
-            PDF File (max 10MB)
+            {rows.length === 0 ? "Choose Files" : "Add More Files"}
             <input
               type="file"
-              accept="application/pdf"
-              onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+              multiple
+              accept={ACCEPT_ATTR}
+              disabled={busy}
+              onChange={(e) => {
+                onAddFiles(Array.from(e.target.files ?? []));
+                // Clear the input so re-picking the same file still fires a
+                // change event — otherwise a removed row cannot be re-added.
+                e.target.value = "";
+              }}
               className="mt-1 w-full"
               style={{
                 color: CREAM,
@@ -761,21 +808,18 @@ function AddReportModal({
                 letterSpacing: "0.02em",
               }}
             />
-            {file ? (
-              <span
-                style={{
-                  display: "block",
-                  marginTop: "0.35rem",
-                  color: CREAM,
-                  fontSize: "1rem",
-                  textTransform: "none",
-                  letterSpacing: 0,
-                }}
-              >
-                {file.name} ({formatBytes(file.size)})
-              </span>
-            ) : null}
           </label>
+
+          {rows.map((row, i) => (
+            <BatchRowFields
+              key={row.key}
+              row={row}
+              index={i}
+              busy={busy}
+              onPatch={(p) => onPatchRow(row.key, p)}
+              onRemove={() => onRemoveRow(row.key)}
+            />
+          ))}
 
           {err ? (
             <p
@@ -822,7 +866,7 @@ function AddReportModal({
           <button
             type="button"
             onClick={onSubmit}
-            disabled={busy}
+            disabled={busy || pending === 0}
             className="uppercase"
             style={{
               fontFamily: "var(--font-body)",
@@ -832,13 +876,182 @@ function AddReportModal({
               border: `1px solid ${CREAM}`,
               padding: "0.45rem 0.9rem",
               background: "transparent",
-              opacity: busy ? 0.5 : 1,
+              opacity: busy || pending === 0 ? 0.5 : 1,
             }}
           >
-            {busy ? "Uploading…" : "Upload"}
+            {busy
+              ? "Uploading…"
+              : pending > 1
+                ? `Upload ${pending} Files`
+                : "Upload"}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// One picked file: its own label, number, summary and category, plus its own
+// outcome. The local checkUploadFile() call is a courtesy preview of the
+// refusal uploadViaSignedUrl would give — the bucket row is the real control.
+function BatchRowFields({
+  row,
+  index,
+  busy,
+  onPatch,
+  onRemove,
+}: {
+  row: BatchRow;
+  index: number;
+  busy: boolean;
+  onPatch: (patch: Partial<BatchRow>) => void;
+  onRemove: () => void;
+}) {
+  const locked = row.status === "done" || row.status === "uploading";
+  const localRefusal =
+    row.status === "pending"
+      ? checkUploadFile("product-reports", row.file)
+      : null;
+  const note = row.error ?? localRefusal;
+
+  return (
+    <div
+      className="mb-3 p-3"
+      style={{
+        border: `1px solid ${row.status === "error" ? "#EF4444" : BORDER}`,
+        background: "rgba(251,243,212,0.04)",
+        opacity: row.status === "done" ? 0.6 : 1,
+      }}
+    >
+      <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            color: CREAM,
+            fontSize: "1rem",
+          }}
+        >
+          {index + 1}. {row.file.name} ({formatBytes(row.file.size)})
+        </span>
+        <span className="flex items-baseline gap-3">
+          <span
+            className="uppercase"
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: "0.875rem",
+              letterSpacing: "0.2em",
+              color:
+                row.status === "done"
+                  ? "#34D399"
+                  : row.status === "error"
+                    ? "#EF4444"
+                    : FADED,
+            }}
+          >
+            {row.status === "done"
+              ? "Uploaded"
+              : row.status === "error"
+                ? "Failed"
+                : row.status === "uploading"
+                  ? "Uploading…"
+                  : "Ready"}
+          </span>
+          {row.status === "uploading" ? null : (
+            <button
+              type="button"
+              onClick={onRemove}
+              disabled={busy}
+              className="uppercase"
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "0.875rem",
+                letterSpacing: "0.2em",
+                color: FADED,
+                border: "none",
+                background: "transparent",
+                padding: 0,
+              }}
+            >
+              Remove
+            </button>
+          )}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label className="block" style={fieldLabel}>
+          Report Name
+          <input
+            value={row.name}
+            onChange={(e) => onPatch({ name: e.target.value })}
+            disabled={locked}
+            placeholder="e.g. Nutrition Analysis"
+            className="mt-1 w-full px-3 py-2"
+            style={fieldInput}
+          />
+        </label>
+
+        <label className="block" style={fieldLabel}>
+          Report Number
+          <input
+            value={row.number}
+            onChange={(e) => onPatch({ number: e.target.value })}
+            disabled={locked}
+            placeholder="Optional"
+            className="mt-1 w-full px-3 py-2"
+            style={fieldInput}
+          />
+        </label>
+
+        <label className="block" style={fieldLabel}>
+          Category
+          <div className="mt-1">
+            <Select
+              value={row.category}
+              onChange={(v) => onPatch({ category: v as ProductReportCategory })}
+              disabled={locked}
+              ariaLabel={`Report category for ${row.file.name}`}
+              style={{
+                borderColor: BORDER,
+                fontSize: "1rem",
+                textTransform: "none",
+                letterSpacing: "0.05em",
+              }}
+              options={PRODUCT_REPORT_CATEGORIES.map((c) => ({
+                value: c,
+                label: PRODUCT_REPORT_CATEGORY_LABEL[c],
+              }))}
+            />
+          </div>
+        </label>
+
+        <label className="block" style={fieldLabel}>
+          Summary
+          <textarea
+            value={row.summary}
+            onChange={(e) => onPatch({ summary: e.target.value })}
+            disabled={locked}
+            placeholder="Optional"
+            rows={2}
+            className="mt-1 w-full px-3 py-2"
+            style={{ ...fieldInput, resize: "vertical" }}
+          />
+        </label>
+      </div>
+
+      {note ? (
+        <p
+          className="mt-2"
+          style={{
+            margin: 0,
+            color: "#EF4444",
+            fontFamily: "var(--font-body)",
+            fontSize: "1rem",
+          }}
+        >
+          {note}
+        </p>
+      ) : null}
     </div>
   );
 }

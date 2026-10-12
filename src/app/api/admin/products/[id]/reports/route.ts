@@ -9,6 +9,7 @@ import {
   ProductReportCategory,
   productReportsTag,
 } from "@/lib/product-reports";
+import { UPLOAD_LIMITS } from "@/lib/upload-limits";
 
 // Lab Reports for a single product.
 //   GET  → list all (incl. archived when ?include_archived=1).
@@ -19,7 +20,16 @@ import {
 // files easy to spot: <product_id>/<timestamp>-<rand>.<ext>.
 
 const BUCKET = "product-reports";
-const MAX_BYTES = 10 * 1024 * 1024;
+// Must equal UPLOAD_LIMITS["product-reports"].maxBytes AND the bucket row's
+// file_size_limit. See src/lib/upload-limits.ts — three numbers, one value.
+const MAX_BYTES = UPLOAD_LIMITS["product-reports"].maxBytes;
+// Reports are not PDF-only: phone photos and flatbed scans are normal.
+const ALLOWED_MIME = UPLOAD_LIMITS["product-reports"].mimes;
+
+function mimeRefusal(mime: string): string | null {
+  if (ALLOWED_MIME.includes(mime)) return null;
+  return `File must be a PDF, JPEG or PNG${mime ? ` (got "${mime}")` : ""}`;
+}
 
 const REPORT_SELECT =
   "id, product_id, title, report_number, report_name, summary, category, file_url, file_name, mime_type, file_size_bytes, storage_path, sort_order, is_archived, uploaded_at, archived_at";
@@ -107,6 +117,7 @@ export async function POST(
   //     file: Vercel rejects a function request body over ~4.5 MB AT THE EDGE
   //     before this handler runs, so MAX_BYTES below was never reachable from
   //     the multipart path and a 10 MB report could not be uploaded at all.
+  //     (MAX_BYTES is 50 MiB now; the edge cap is unchanged.)
   //
   //   multipart/form-data — the original path, kept so nothing breaks while
   //     the new one proves itself. Same ~4.5 MB ceiling as before.
@@ -213,8 +224,9 @@ export async function POST(
     path = `${params.id}/${stamp}-${rand}.${ext}`;
     fileName = file.name || `report.${ext}`;
 
-    if (fileMime !== "application/pdf") {
-      return NextResponse.json({ error: "File must be a PDF" }, { status: 400 });
+    const badMime = mimeRefusal(fileMime);
+    if (badMime) {
+      return NextResponse.json({ error: badMime }, { status: 400 });
     }
     if (fileSize > MAX_BYTES) {
       return NextResponse.json(
@@ -255,10 +267,11 @@ export async function POST(
   if (!PRODUCT_REPORT_CATEGORIES.includes(category)) {
     return rejectAndClean(`Invalid category "${category}"`);
   }
-  // Lab reports must be PDFs. On the JSON path this reads storage's own
-  // recorded mime, so it is a real check and not the client's word.
-  if (fileMime !== "application/pdf") {
-    return rejectAndClean("File must be a PDF");
+  // On the JSON path fileMime came from storage's own recorded mime, so this
+  // is a real check and not the client's word.
+  const mimeBad = mimeRefusal(fileMime);
+  if (mimeBad) {
+    return rejectAndClean(mimeBad);
   }
   if (fileSize > MAX_BYTES) {
     return rejectAndClean(
