@@ -46,6 +46,32 @@ export const metadata: Metadata = {
   alternates: { canonical: "/shop" },
 };
 
+// ISR window for this page. PINNED, not inherited — and the value is the one
+// it already resolves to today, so this changes no behaviour.
+//
+// Why state it at all: every tile's pre-order state is computed from
+// `products.available_from` against TODAY (productFloor in
+// lib/product-availability), so this page's HTML carries a date-dependent
+// answer. It goes wrong when the CLOCK crosses a release date, not when any
+// row changes — which means the page cache, not the data cache, is what
+// bounds how long a stale "Out of stock / Pre-order" badge can be served.
+//
+// Next derives a route's revalidate from the SMALLEST nested cache. Today
+// that is getSandwichKitchenState's 10 s unstable_cache, awaited in the root
+// layout (lib/sandwich-kitchen.ts) — nothing on this page at all. The
+// products cache is 60 s. So deleting that one unrelated layout call would
+// silently stretch this page's stale window from 10 s to 60 s, with no
+// failing build and nothing to review. This export is the ceiling that stops
+// it.
+//
+// It IS a ceiling and not an override: the effective value is
+// min(this, smallest nested cache), verified by building at 7 (page went to
+// 7) and at 20 (page stayed at 10, i.e. the layout's number still won). So
+// raising this number cannot make the page staler, and lowering it works.
+// 10 matches today's inherited value, which is why nothing moves now — the
+// export only becomes load-bearing on the day the layout's number rises.
+export const revalidate = 10;
+
 export default async function ShopPage() {
   const availability = await getProductAvailability();
   // Sandwich kitchen switch drives the extra tile after the three products.

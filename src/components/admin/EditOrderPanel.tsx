@@ -29,6 +29,7 @@ import { formatINR } from "@/lib/admin-formatting";
 import type { AdminOrderRow, AdminOrderItemSnapshot } from "@/lib/admin-shared";
 import { isSlotPaused, SLOTS } from "@/lib/delivery-slots";
 import { formatOrderNumber } from "@/lib/order-number";
+import { productFloor } from "@/lib/product-availability";
 import { isPaidStatus } from "@/lib/payment-label";
 
 // The three canonical delivery windows — MUST match what the app + web
@@ -65,10 +66,15 @@ const CANONICAL_SLOTS: Array<{ value: string; label: string; disabled?: boolean 
     }`,
   }));
 
-// Multigrain floor: read from `products.available_from` at panel-open
-// time. Live-read (never hard-coded) because a scheduled task clears it
-// at 06:00 IST on the release date, and a hard-coded floor would keep
-// warning after clearance. See /api/admin/products/availability.
+// Pre-order floor: read from `products.available_from` at panel-open time
+// (never hard-coded) via /api/admin/products/availability.
+//
+// The raw column is NOT the floor. `productFloor` is, and it returns null
+// once the date is in the past — a floor that has passed is spent, because
+// nobody clears the column on the release date and there is no job that does
+// it either. Read the column directly and the warning never expires: every
+// historical order dated before the floor keeps flagging forever. Every
+// customer-facing reader goes through productFloor; so does this one.
 type AvailabilityEntry = { id: string; name: string; available_from: string | null };
 
 const CREAM = "#FBF3D4";
@@ -184,10 +190,11 @@ export function EditOrderPanel({
           (p) => p.id === it.product_id || p.id === it.slug,
         ),
       )
-      .filter(
-        (p): p is AvailabilityEntry =>
-          !!p && !!p.available_from && p.available_from > deliveryDate,
-      );
+      .filter((p): p is AvailabilityEntry => {
+        if (!p) return false;
+        const floor = productFloor(p);
+        return !!floor && floor > deliveryDate;
+      });
   }, [availability, items, deliveryDate]);
 
   const showFloorWarning =

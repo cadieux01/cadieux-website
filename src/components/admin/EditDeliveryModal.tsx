@@ -9,16 +9,19 @@
 // scheduled_date, slot, scheduled_time_slot) — see the route header for
 // the reason.
 //
-// Multigrain floor warning + second-click override mirror EditOrderPanel:
+// Pre-order floor warning + second-click override mirror EditOrderPanel:
 // live-read `products.available_from` at open time, warn if any item on
 // the plan is not yet available on the new date, require an
-// Acknowledge click before Save writes.
+// Acknowledge click before Save writes. The column is read through
+// `productFloor`, which spends a floor once its date has passed — see the
+// note in EditOrderPanel for why reading the raw column never expires.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
 import { isSlotPaused, SLOTS } from "@/lib/delivery-slots";
+import { productFloor } from "@/lib/product-availability";
 import type {
   AdminDeliveryRow,
   AdminSubscriptionItem,
@@ -100,10 +103,11 @@ export function EditDeliveryModal({
   const flooredItems = useMemo(() => {
     if (!date) return [] as AvailabilityEntry[];
     const slugs = new Set(items.map((it) => it.product_slug).filter(Boolean));
-    return availability.filter(
-      (p) =>
-        slugs.has(p.id) && p.available_from && p.available_from > date,
-    );
+    return availability.filter((p) => {
+      if (!slugs.has(p.id)) return false;
+      const floor = productFloor(p);
+      return !!floor && floor > date;
+    });
   }, [availability, items, date]);
 
   const showFloorWarning = flooredItems.length > 0 && ackFloor !== date;
