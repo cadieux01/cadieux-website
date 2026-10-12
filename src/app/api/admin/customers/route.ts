@@ -75,23 +75,58 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ customers: [] });
   }
 
-  // Pull every order row for the matched customers in one query and
-  // fold into per-customer aggregates client-side. We only need a
-  // narrow slice per row — id/customer_id/total_amount/created_at.
+  // Pull every order row for the matched customers and fold into
+  // per-customer aggregates in JS. We only need a narrow slice per row —
+  // customer_id/total_amount/created_at/status.
+  //
+  // CHUNKED, BECAUSE `in.(...)` RIDES IN THE URL. This was one unchunked
+  // call, so with no `?q=` it carried every customer id at once. A uuid plus
+  // its comma is 37 bytes, so the query string grew with the customer table
+  // and the whole screen died the moment it crossed the gateway's limit:
+  // GET /api/admin/customers answered 500 with the bare message
+  // "Bad Request", which took /admin/customers AND /admin/customers/[id]
+  // (you reach the detail page from the list) off the air entirely.
+  //
+  // THE REJECTION IS THE GATEWAY'S, NOT POSTGRES'S, and that is why the
+  // message carried nothing to act on. Measured on production 2026-10-13 at
+  // 977 customers: the request was 36,215 chars and came back
+  // `content-type: text/plain`, body `Bad Request`, from cloudflare /
+  // sb-gateway — a PostgREST error would have been JSON with a code and a
+  // hint. The cliff is ~25 kB of URI: 674 ids (25,020 chars) returned 200,
+  // 675 ids (25,057 chars) returned 400. It is the BYTE LENGTH and not the
+  // id count — 400 ids alone passed at 14,882 chars, and the same 400 ids
+  // padded out to 25,089 chars failed.
+  //
+  // 200 per chunk matches aggregateNotes() in src/lib/order-notes.ts, which
+  // was chunked for exactly this reason; it keeps the URL near 7 kB. Chunks
+  // partition the ids, so each customer's orders land in exactly one chunk
+  // and the fold below is unaffected by the split.
   const custIds = customers.map((c) => c.id);
-  const { data: orders, error: ordErr } = await supabaseAdmin
-    .from("orders")
-    .select("customer_id, total_amount, created_at, status")
-    .in("customer_id", custIds);
+  const CHUNK = 200;
+  const idChunks: string[][] = [];
+  for (let i = 0; i < custIds.length; i += CHUNK) {
+    idChunks.push(custIds.slice(i, i + CHUNK));
+  }
 
+  const ordRes = await Promise.all(
+    idChunks.map((chunk) =>
+      supabaseAdmin
+        .from("orders")
+        .select("customer_id, total_amount, created_at, status")
+        .in("customer_id", chunk),
+    ),
+  );
+
+  const ordErr = ordRes.find((r) => r.error)?.error;
   if (ordErr) {
     console.error("[admin/customers orders agg]", ordErr.message);
     return NextResponse.json({ error: ordErr.message }, { status: 500 });
   }
+  const orders = ordRes.flatMap((r) => r.data ?? []);
 
   type Agg = { total_orders: number; total_spent: number; last_order_at: string | null };
   const agg = new Map<string, Agg>();
-  for (const row of orders ?? []) {
+  for (const row of orders) {
     if (!row.customer_id) continue;
     // Don't count cancelled orders in total_spent — they didn't pay.
     const isCancelled = (row.status ?? "").toLowerCase() === "cancelled";
