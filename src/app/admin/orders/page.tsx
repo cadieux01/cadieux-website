@@ -31,6 +31,7 @@ import {
   type BakeSubscriptionStop,
 } from "@/components/admin/ProductionCountStrip";
 import { DayFilter } from "@/components/admin/DayFilter";
+import { BoardSwitcher } from "@/components/admin/BoardSwitcher";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { CsvColumnPicker } from "@/components/admin/CsvColumnPicker";
 import { OrderLocationActions } from "@/components/admin/OrderLocationActions";
@@ -121,12 +122,16 @@ import {
 import { fetchAllRules } from "@/lib/zone-rules-client";
 import { ZoneAssignPopover } from "@/components/admin/ZoneAssignPopover";
 import {
+  boardSelection,
   DEFAULT_BASIS,
-  matchesDay,
+  matchesSelection,
   orderDateForBasis,
   parseBasis,
   parseDayParam,
+  parseSpanParam,
   type DateBasis,
+  type DaySelection,
+  type DurationPreset,
 } from "@/lib/day-filter";
 import { RepeatStar } from "@/components/admin/RepeatStar";
 import { BulkToolbar, type BulkActionSpec } from "@/components/admin/BulkToolbar";
@@ -163,7 +168,7 @@ type SortKey = "created_desc" | "delivery_asc";
 type ZonedBakeStop = BakeSubscriptionStop & { zone: ZoneKey };
 
 // The date filter is ONE DAY on ONE COLUMN, and all of its semantics —
-// DateBasis, DEFAULT_BASIS, orderDateForBasis, matchesDay — are imported
+// DateBasis, DEFAULT_BASIS, orderDateForBasis, matchesSelection — are imported
 // from @/lib/day-filter rather than declared here. The packing list at
 // /admin/orders/print and the subscriptions board import the same module,
 // so a sheet that walks into the kitchen cannot be cut on a different
@@ -199,6 +204,9 @@ type UrlInitial = {
   basis: DateBasis;
   /** The selected day, or null for "all dates". */
   day: string | null;
+  /** A whole period, or null. Mutually exclusive with `day` in practice —
+   *  see applyDay / applySpan — and resolved by boardSelection either way. */
+  span: DurationPreset | null;
 };
 
 function parseUrlInitial(sp: URLSearchParams): UrlInitial {
@@ -243,12 +251,29 @@ function parseUrlInitial(sp: URLSearchParams): UrlInitial {
   // names is the drift this filter exists to end.
   const day = parseDayParam(sp.get("date"));
 
+  // A whole period, when the operator asked for one instead of a day. Same
+  // rule as `date`: anything unrecognised is NO filter, never a default
+  // window.
+  //
+  // DROPPED OUTRIGHT IF A DAY CAME WITH IT. boardSelection already makes
+  // the day win, so the ROWS would be right either way — but the span would
+  // still be sitting in state, so the preset button would render pressed
+  // above a table showing one day. That is a label contradicting the boxes
+  // under it, the exact ambiguity day-filter.ts retired the From/To control
+  // for, and it is reachable from a stale bookmark. Dropping it here means
+  // the control, the rows and the URL (which is rewritten from this state)
+  // all say the same thing. boardSelection's day-wins rule stays as the
+  // backstop for the sheets, which do not hold state.
+  const spanRaw = parseSpanParam(sp.get("span"));
+  const span = day ? null : spanRaw;
+
   return {
     filter,
     query,
     sort,
     basis,
     day,
+    span,
   };
 }
 
@@ -258,6 +283,7 @@ function stateToSearch(s: {
   sort: SortKey;
   basis: DateBasis;
   day: string | null;
+  span: DurationPreset | null;
 }): string {
   const params = new URLSearchParams();
   const { statuses, calls, zones, payments, repeatOnly } = splitFilterValues(
@@ -272,6 +298,9 @@ function stateToSearch(s: {
   if (s.sort !== DEFAULT_SORT) params.set("sort", s.sort);
   if (s.basis !== DEFAULT_BASIS) params.set("basis", s.basis);
   if (s.day) params.set("date", s.day);
+  // Only one of the two is ever written, because only one is ever set —
+  // see applyDay / applySpan, which clear each other.
+  if (s.span) params.set("span", s.span);
   return params.toString();
 }
 
@@ -485,7 +514,11 @@ function resolveZonesFor(
 type BoardCriteria = {
   kindTab: "bread" | "sandwich";
   basis: DateBasis;
-  day: string | null;
+  // The DATE FILTER, resolved. Not the raw `day`/`span` pair: carrying both
+  // here would let the screen and the export each decide which one wins,
+  // which is exactly the drift this object exists to make impossible.
+  // boardSelection() is the single place that decision is made.
+  selection: DaySelection;
   statusSel: readonly string[];
   callSel: readonly string[];
   zoneSel: readonly ZoneKey[];
@@ -514,7 +547,8 @@ function selectBoardRows(
     // still show up under Bread.
     const kind = (o.order_kind ?? "bread") as "bread" | "sandwich";
     if (kind !== c.kindTab) return false;
-    if (!matchesDay(orderDateForBasis(o, c.basis), c.day)) return false;
+    if (!matchesSelection(orderDateForBasis(o, c.basis), c.selection))
+      return false;
     // Statuses OR'd, call updates OR'd, zones OR'd, payment buckets OR'd,
     // the groups AND'd. Shared with the print view so the packing list
     // can't disagree with the screen it was printed from — see
@@ -655,6 +689,10 @@ function OrdersPageInner() {
   // The whole of the date filter: one day, or null for every row. There is
   // no second representation of it to keep in sync — that is the point.
   const [day, setDay] = useState<string | null>(urlInit.day);
+  // A whole period instead of a day. Never set at the same time as `day`
+  // — applyDay and applySpan clear each other, so there is still exactly
+  // one date filter in play, just two ways to express it.
+  const [span, setSpan] = useState<DurationPreset | null>(urlInit.span);
 
   // Changing a status must update the row where it sits, not teleport it.
   // Without this, flipping Pending → Preparing moves the row from group 1
@@ -675,7 +713,21 @@ function OrdersPageInner() {
   const applyDay = useCallback(
     (next: string | null) => {
       clearRankPins();
+      setSpan(null);
       setDay(next);
+    },
+    [clearRankPins],
+  );
+
+  /** Selecting or releasing a whole period. The counterpart of applyDay,
+   *  and it clears the day for the same reason applyDay clears the span:
+   *  two live date filters would mean the URL, the screen, the counts and
+   *  the export each get to pick one. One of them is always null. */
+  const applySpan = useCallback(
+    (next: DurationPreset | null) => {
+      clearRankPins();
+      setDay(null);
+      setSpan(next);
     },
     [clearRankPins],
   );
@@ -983,8 +1035,8 @@ function OrdersPageInner() {
   // object assembled nearby — which is how the Print link came to be
   // missing ?zone.
   const urlSearch = useMemo(
-    () => stateToSearch({ filter, query, sort, basis, day }),
-    [filter, query, sort, basis, day],
+    () => stateToSearch({ filter, query, sort, basis, day, span }),
+    [filter, query, sort, basis, day, span],
   );
   useUrlWriteback("/admin/orders", urlSearch);
 
@@ -1043,6 +1095,19 @@ function OrdersPageInner() {
     return m;
   }, [zoneResOf]);
 
+  // The date filter, resolved ONCE per render and then shared by the board,
+  // the dropdown counts, the call-note tally and the export. When each of
+  // those re-derived it for itself the filter could mean four things at
+  // once; that is the 60-orders-vs-9 failure day-filter.ts was written for.
+  //
+  // `new Date()` is read inside presetSelection, so a session left open
+  // across IST midnight keeps the window it was given until the next state
+  // change re-runs this. That is the same staleness the day filter already
+  // has (a `?date=` link does not re-aim itself either) and deliberately
+  // so: a board silently changing what it shows while nobody touched it is
+  // worse than one that holds still.
+  const selection = useMemo(() => boardSelection(span, day), [span, day]);
+
   // One object, consumed by the screen AND by the CSV export. See
   // BoardCriteria — the export re-applies exactly this to the unbounded
   // fetch, so "what is on screen" and "what is in the file" cannot drift.
@@ -1050,7 +1115,7 @@ function OrdersPageInner() {
     () => ({
       kindTab,
       basis,
-      day,
+      selection,
       statusSel,
       callSel,
       zoneSel,
@@ -1059,7 +1124,7 @@ function OrdersPageInner() {
       query,
       sort,
     }),
-    [kindTab, basis, day, statusSel, callSel, zoneSel, paySel, repeatOnly, query, sort],
+    [kindTab, basis, selection, statusSel, callSel, zoneSel, paySel, repeatOnly, query, sort],
   );
 
   const filtered = useMemo(
@@ -1155,11 +1220,13 @@ function OrdersPageInner() {
     });
   }, [loading, filtered]);
 
-  // Counts are scoped to the selected day so the numbers in the
-  // Status dropdown match the rows the operator is actually looking at.
+  // Counts are scoped to the same selection the board is, so the numbers in
+  // the Status dropdown match the rows the operator is actually looking at
+  // — including under a week or month preset, where a day-only count would
+  // read "Pending 3" above a table showing 26.
   const counts = useMemo(() => {
     const onDay = orders.filter((o) =>
-      matchesDay(orderDateForBasis(o, basis), day),
+      matchesSelection(orderDateForBasis(o, basis), selection),
     );
     const c: Record<string, number> = { all: onDay.length };
     for (const o of onDay) {
@@ -1175,7 +1242,7 @@ function OrdersPageInner() {
       c[`pay_${pv}`] = (c[`pay_${pv}`] ?? 0) + 1;
     }
     return c;
-  }, [orders, day, basis, zoneOf]);
+  }, [orders, selection, basis, zoneOf]);
 
   // Invariant we assert only in dev: the six zone bucket counts must sum
   // to the total on-day rows. If a zone gets added or a resolver bug
@@ -1216,7 +1283,7 @@ function OrdersPageInner() {
   // dropdown; the label the operator sees is the exact note body.
   const callBodies = useMemo(() => {
     const onDay = orders.filter((o) =>
-      matchesDay(orderDateForBasis(o, basis), day),
+      matchesSelection(orderDateForBasis(o, basis), selection),
     );
     const tally = new Map<string, number>();
     for (const o of onDay) {
@@ -1227,7 +1294,7 @@ function OrdersPageInner() {
     return Array.from(tally.entries())
       .map(([body, count]) => ({ body, count }))
       .sort((a, b) => b.count - a.count);
-  }, [orders, day, basis]);
+  }, [orders, selection, basis]);
 
   // Data-derived option list for the status filter. Iterates the
   // preferred ordering in STATUS_FILTER_OPTIONS (which already omits
@@ -1768,6 +1835,12 @@ function OrdersPageInner() {
                 // than the screen it was printed from.
                 basis,
                 ...(day ? { date: day } : {}),
+                // The span is forwarded even though the sheet REFUSES it.
+                // Dropping it here would be worse than refusing: the link
+                // would silently widen a week on screen into every date in
+                // the kitchen's hands, which is the 60-orders-vs-9 failure
+                // verbatim. The sheet says so and offers the way back.
+                ...(span ? { span } : {}),
               },
             }}
             className="uppercase"
@@ -1785,6 +1858,7 @@ function OrdersPageInner() {
             orders={filtered}
             basis={basis}
             day={day}
+            span={span}
             filterLabel={sliceLabel}
             query={query}
             search={urlSearch}
@@ -1899,6 +1973,11 @@ function OrdersPageInner() {
           alignItems: "flex-start",
         }}
       >
+        {/* Which board. It soft-navigates and carries the date, zone and
+            search across — see BoardSwitcher for why it moves rather than
+            hosting the other table, and why `status` is left behind. */}
+        <BoardSwitcher current="orders" search={urlSearch} />
+
         {/* ONE control: which date-column, and which day. Shared with
             /admin/subscriptions so the two boards cannot ask the same
             question two different ways. */}
@@ -1911,6 +1990,8 @@ function OrdersPageInner() {
           }}
           day={day}
           onDayChange={applyDay}
+          span={span}
+          onSpanChange={applySpan}
         />
       </div>
 

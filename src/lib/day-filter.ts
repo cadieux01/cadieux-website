@@ -188,7 +188,8 @@ export function subscriptionDatesForBasis(
 //   • which end is which — named `from`/`to`, never positional;
 //   • a reversed pair    — normalised once here, not at each call site;
 //   • a half-filled pair — an open end means unbounded on that side, stated;
-//   • a preset label contradicting the boxes — there are no presets.
+//   • a preset label contradicting the boxes — see "Duration presets" below,
+//     where the label IS the only input and no boxes exist to disagree with.
 //
 // If a third caller wants this, make it opt in too. Do NOT flip the default:
 // the moment the kitchen sheet can span days it can disagree with the screen
@@ -286,4 +287,106 @@ export function selectionDays(sel: DaySelection): string[] | null {
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Duration presets — WHY THESE ARE ALLOWED WHERE A RANGE WAS NOT
+//
+// The header above retired From + To for four ambiguities. A preset gives
+// back the one thing a range was wanted for — "how did this week go" — and
+// pays none of them:
+//   • which end is which   — the caller never types an end; both are derived;
+//   • a reversed pair      — unreachable, `from` is computed before `to`;
+//   • a half-filled pair   — unreachable, both ends always come together;
+//   • a label contradicting the boxes — THE LABEL IS THE ONLY INPUT. There
+//     are no boxes. "This week" cannot disagree with itself.
+//
+// So this is deliberately NOT the range control returning under a new name.
+// It is two named windows, each with exactly one way to be expressed.
+//
+// The preset is still OPT-IN per surface, for the reason the header gives:
+// the kitchen sheet and the screen must not be able to disagree, which is
+// the 60-orders-vs-9 failure. A span belongs on a board someone is reading;
+// it does not belong on a sheet someone is packing from.
+// ---------------------------------------------------------------------------
+
+/** A whole period, named. Not a range — see the block above. */
+export type DurationPreset = "week" | "month";
+
+/** Narrow an untrusted `?span=`. Anything else is "no preset", never an
+ *  error and never silently "this week". */
+export function parseSpanParam(
+  raw: string | null | undefined,
+): DurationPreset | null {
+  return raw === "week" || raw === "month" ? raw : null;
+}
+
+/** The button text, and the only input the operator gives. */
+export function spanLabel(preset: DurationPreset): string {
+  return preset === "week" ? "This week" : "This month";
+}
+
+function ymdToUtc(ymd: string): Date {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+function utcToYmd(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Expand a preset into the range it names.
+ *
+ * ORDER MATTERS AND IT IS THE 05:30 TRAP. The IST calendar day is
+ * established FIRST, by `istIsoDate` — the same function every other date
+ * in this module goes through — and only then is calendar arithmetic done,
+ * in UTC, on those Y-M-D fields. Doing it the other way round (add days to
+ * a UTC instant, then convert) puts the boundary 5h30m out: between 00:00
+ * and 05:30 IST it would compute last week.
+ *
+ * Weeks start MONDAY, because the bakery's does. `getUTCDay()` calls Sunday
+ * 0, so the offset back to Monday is `(day + 6) % 7`, which maps Sunday to
+ * 6 rather than to -1.
+ *
+ * `Date.UTC(y, m, 0)` is the last day of month `m - 1`, so February, the
+ * 30-day months and leap years all fall out with no special case.
+ */
+export function presetSelection(
+  preset: DurationPreset,
+  now: Date = new Date(),
+): DaySelection {
+  const today = istIsoDate(now);
+  if (preset === "week") {
+    const start = ymdToUtc(today);
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+    return { mode: "range", from: utcToYmd(start), to: utcToYmd(end) };
+  }
+  const [y, m] = today.split("-").map(Number);
+  return {
+    mode: "range",
+    from: utcToYmd(new Date(Date.UTC(y, m - 1, 1))),
+    to: utcToYmd(new Date(Date.UTC(y, m, 0))),
+  };
+}
+
+/**
+ * The one place a board turns its two URL params into a selection.
+ *
+ * THE DAY WINS. If a link somehow carries both `?day=` and `?span=`, the
+ * narrower, explicitly-typed one is honoured and the span is ignored. The
+ * alternative — showing a month because a stale param rode along — is the
+ * failure this module exists to prevent, and it would be silent. The UI
+ * also clears one when the other is set, so both arriving together means a
+ * hand-edited or stale URL, and the safe reading of that is the day.
+ */
+export function boardSelection(
+  span: DurationPreset | null,
+  day: string | null,
+  now: Date = new Date(),
+): DaySelection {
+  if (day) return { mode: "day", day };
+  return span ? presetSelection(span, now) : ALL_DAYS;
 }

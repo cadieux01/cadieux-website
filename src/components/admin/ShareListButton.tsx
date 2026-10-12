@@ -30,13 +30,14 @@ import {
   type ShareablePartner,
 } from "@/components/admin/PartnerShareButton";
 import { formatDate } from "@/lib/admin-formatting";
-import type { DateBasis } from "@/lib/day-filter";
+import { spanLabel, type DateBasis, type DurationPreset } from "@/lib/day-filter";
 import { composeRunSheet, type RunSheetOrder } from "@/lib/order-run-sheet";
 
 export function ShareListButton({
   orders,
   basis,
   day,
+  span,
   filterLabel,
   query,
   /** The board's own query string, verbatim — see the note on the Link below. */
@@ -49,6 +50,10 @@ export function ShareListButton({
   orders: readonly RunSheetOrder[];
   basis: DateBasis;
   day: string | null;
+  /** The board's whole-period filter, or null. This control is the RIDER's
+   *  document — the same audience as /admin/orders/run-sheet — so it refuses
+   *  a span for the same reason that page does. */
+  span: DurationPreset | null;
   /** The filter groups as the dropdown words them, or "all". */
   filterLabel: string;
   query: string;
@@ -59,9 +64,15 @@ export function ShareListButton({
   buttonStyle: React.CSSProperties;
 }) {
   const basisLabel = basis === "delivery" ? "by delivery date" : "by order date";
-  const dayLabel = day
-    ? `${formatDate(day)} (${basisLabel})`
-    : `all dates (${basisLabel})`;
+  // The span arm is NOT cosmetic. Under a week or a month `day` is null, so
+  // without it this header would read "all dates" over seven days of stops
+  // — a wrong label on a document that leaves the building. It is never
+  // actually sent (see blockedReason) but the dialog still shows it.
+  const dayLabel = span
+    ? `${spanLabel(span).toLowerCase()} (${basisLabel})`
+    : day
+      ? `${formatDate(day)} (${basisLabel})`
+      : `all dates (${basisLabel})`;
 
   const message = composeRunSheet(orders, basis, {
     dayLabel,
@@ -72,8 +83,17 @@ export function ShareListButton({
   // An empty slice must not be sendable. The header alone would read as a
   // run with no stops, which a partner could easily take for a short day
   // rather than a mis-set filter.
-  const blockedReason =
-    orders.length === 0
+  //
+  // A SPAN IS BLOCKED FOR THE SAME REASON, not for being empty. A run is
+  // driven one day at a time, so a message holding a week puts the same
+  // door in the list several times over; the rider cannot tell which stop
+  // is today's. Silently narrowing it to today would make the message
+  // disagree with the board it was sent from without saying so, which is
+  // the failure day-filter.ts's header records. The operator is told, and
+  // told what to do about it.
+  const blockedReason = span
+    ? `This is a one-day sheet and the board is showing ${spanLabel(span).toLowerCase()}. Pick a single date, then share. Your other filters are kept.`
+    : orders.length === 0
       ? `Nothing to share — no orders match ${dayLabel} · ${filterLabel}.`
       : null;
 

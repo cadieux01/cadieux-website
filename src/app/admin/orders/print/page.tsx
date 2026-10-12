@@ -49,8 +49,11 @@ import {
   orderDateForBasis,
   parseBasis,
   parseDayParam,
+  parseSpanParam,
+  spanLabel,
   type DateBasis,
 } from "@/lib/day-filter";
+import { SpanRefusal } from "@/components/admin/SpanRefusal";
 import {
   EMPTY_RULE_SET,
   ZONE_KEYS,
@@ -134,6 +137,10 @@ function PrintOrdersPageInner() {
   const dayLabel = day
     ? `Date: ${formatDate(day)} (${basisLabel})`
     : "Date: all dates";
+  // A week or a month on the board. The board forwards it so this page can
+  // REFUSE rather than print the whole table under a "all dates" header —
+  // see SpanRefusal for why neither printing it nor dropping it is better.
+  const span = parseSpanParam(params.get("span"));
 
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -352,12 +359,28 @@ function PrintOrdersPageInner() {
 
   // Trigger print once we've got data. A single setTimeout gives
   // the browser a paint to render the rows before the dialog opens.
+  //
+  // `!span` is load-bearing, not belt-and-braces: without it the dialog
+  // opens behind the refusal page and the operator is asked to print the
+  // document we just declined to produce.
   useEffect(() => {
-    if (!loading && filtered.length > 0) {
+    if (!span && !loading && filtered.length > 0) {
       const t = setTimeout(() => window.print(), 250);
       return () => clearTimeout(t);
     }
-  }, [loading, filtered.length]);
+  }, [span, loading, filtered.length]);
+
+  // Before the loading branch: the refusal needs no data, and making the
+  // operator wait on an ?all=1 fetch to be told no would be its own insult.
+  if (span) {
+    return (
+      <SpanRefusal
+        sheet="Packing list"
+        label={spanLabel(span)}
+        backHref={`/admin/orders?${params.toString()}`}
+      />
+    );
+  }
 
   if (loading) {
     return (

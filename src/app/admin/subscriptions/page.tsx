@@ -53,13 +53,18 @@ import { formatSubscriptionNumber } from "@/lib/order-number";
 import { isSubscriptionFulfilled } from "@/lib/order-fulfillment";
 import { FulfilledTick } from "@/components/admin/FulfilledTick";
 import { DayFilter } from "@/components/admin/DayFilter";
+import { BoardSwitcher } from "@/components/admin/BoardSwitcher";
 import {
+  boardSelection,
   DEFAULT_BASIS,
-  matchesAnyDay,
+  matchesAnySelection,
   parseBasis,
   parseDayParam,
+  parseSpanParam,
+  spanLabel,
   subscriptionDatesForBasis,
   type DateBasis,
+  type DurationPreset,
 } from "@/lib/day-filter";
 import { ContactActions } from "@/components/admin/ContactActions";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -394,6 +399,46 @@ function SubscriptionsPageInner() {
   const [day, setDay] = useState<string | null>(() =>
     parseDayParam(searchParams.get("date")),
   );
+  // A whole period instead of a day — "how did this week go". Never set at
+  // the same time as `day`: applyDay and applySpan below clear each other,
+  // so there is one date filter with two ways to express it, not two.
+  //
+  // A URL CARRYING BOTH IS DROPPED TO THE DAY, not left to boardSelection.
+  // The rows would be right either way — the day wins there too — but the
+  // span would still be in state, so a preset button would render pressed
+  // above a table showing one date. That is a label contradicting the
+  // control under it, the exact ambiguity day-filter.ts retired the From/To
+  // boxes for, and a stale bookmark reaches it. Same line as the orders
+  // board; both write their state back to the URL, so normalising here is
+  // what makes the control, the rows and the address bar agree.
+  const [span, setSpan] = useState<DurationPreset | null>(() =>
+    parseDayParam(searchParams.get("date"))
+      ? null
+      : parseSpanParam(searchParams.get("span")),
+  );
+
+  /** The two mutually-exclusive setters. The clearing lives HERE and not in
+   *  DayFilter because a single handler calling both callbacks would race on
+   *  their order — see the note on the preset buttons in that file. */
+  const applyDay = useCallback((next: string | null) => {
+    setSpan(null);
+    setDay(next);
+  }, []);
+  const applySpan = useCallback((next: DurationPreset | null) => {
+    setDay(null);
+    setSpan(next);
+  }, []);
+
+  // The date filter, resolved once and shared by the row filter and every
+  // count derived from it. `new Date()` is read inside presetSelection, so
+  // a board left open across IST midnight keeps the window it was given
+  // until the next state change — the same staleness a ?date= link already
+  // has, and preferable to a board that re-aims itself unasked.
+  //
+  // `daySelection`, not `selection`: this file already has a `selection`,
+  // and it is the STATUS/ZONE split. Two things called the same thing on
+  // one board is how a filter comes to be applied to the wrong axis.
+  const daySelection = useMemo(() => boardSelection(span, day), [span, day]);
 
   // Defaults are OMITTED, not encoded, so a plain /admin/subscriptions link
   // stays clean and the parsers above remain the single source of truth for
@@ -415,10 +460,12 @@ function SubscriptionsPageInner() {
     if (query.trim()) params.set("q", query);
     if (basis !== DEFAULT_BASIS) params.set("basis", basis);
     if (day) params.set("date", day);
+    // Only one of the two is ever set — see applyDay / applySpan.
+    if (span) params.set("span", span);
     if (selection.zones.length > 0)
       params.set("zone", encodeZoneParam(selection.zones));
     return params.toString();
-  }, [filter, selection.zones, query, basis, day]);
+  }, [filter, selection.zones, query, basis, day, span]);
   useUrlWriteback("/admin/subscriptions", qs);
   useScrollRestore(SCROLL_KEY, !loading);
 
@@ -545,9 +592,9 @@ function SubscriptionsPageInner() {
   const onDay = useMemo(
     () =>
       subs.filter((s) =>
-        matchesAnyDay(subscriptionDatesForBasis(s, basis), day),
+        matchesAnySelection(subscriptionDatesForBasis(s, basis), daySelection),
       ),
-    [subs, basis, day],
+    [subs, basis, daySelection],
   );
 
   // Repeat-plan index, same pure builder the orders list endpoint uses.
@@ -1228,12 +1275,18 @@ function SubscriptionsPageInner() {
           preset only ever existed to undo a default which had itself hidden
           five live plans. */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
+        {/* Which board. Soft-navigates to /admin/orders carrying the date,
+            zone and search — the same control, the same direction. */}
+        <BoardSwitcher current="subscriptions" search={qs} />
+
         <DayFilter
           idPrefix="subs-date"
           basis={basis}
           onBasisChange={setBasis}
           day={day}
-          onDayChange={setDay}
+          onDayChange={applyDay}
+          span={span}
+          onSpanChange={applySpan}
         />
         {/* Same MultiSelect the orders board uses. The menu stays open so
             several can be ticked in a row; it closes on outside click or Esc. */}
@@ -1446,7 +1499,19 @@ function SubscriptionsPageInner() {
               )
             ) : (
               <>
-                No bake total across all dates — {summary.subs} subscription
+                {/* THE SCOPE IS NAMED, NOT ASSUMED. This arm used to open
+                    with a flat "across all dates", which was the only
+                    wording available when the board had exactly two states.
+                    Under a period preset it is simply false — the board is
+                    showing seven days, not every date — and it sat directly
+                    under a pressed "This week" button saying otherwise. The
+                    REST of the sentence needs no change: each plan's next
+                    delivery still falls on its own day inside a week, so
+                    there is still nothing to add up, and a single date is
+                    still the way to get a total. */}
+                No bake total{" "}
+                {span ? `for ${spanLabel(span).toLowerCase()}` : "across all dates"}{" "}
+                — {summary.subs} subscription
                 {summary.subs === 1 ? "" : "s"} in this filter, and each
                 one&rsquo;s next delivery falls on a different day, so there is
                 nothing meaningful to add up. Each row shows what to bake for

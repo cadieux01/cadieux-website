@@ -35,8 +35,11 @@ import {
   orderDateForBasis,
   parseBasis,
   parseDayParam,
+  parseSpanParam,
+  spanLabel,
   type DateBasis,
 } from "@/lib/day-filter";
+import { SpanRefusal } from "@/components/admin/SpanRefusal";
 import {
   EMPTY_RULE_SET,
   ZONE_LABELS,
@@ -92,6 +95,10 @@ function RunSheetPageInner() {
   const q = params.get("q") ?? "";
   const day = parseDayParam(params.get("date"));
   const basis: DateBasis = parseBasis(params.get("basis"));
+  // A week or a month on the board. Carried here so this page can REFUSE
+  // instead of cutting a rider a sheet with the same door on it four times
+  // — see SpanRefusal.
+  const span = parseSpanParam(params.get("span"));
 
   // The header states the slice in the ADMIN's vocabulary — the same words
   // the dropdown shows, including the payment bucket. A sheet whose
@@ -208,12 +215,27 @@ function RunSheetPageInner() {
   );
 
   // One paint before the dialog, so the rows are on the page when it opens.
+  //
+  // `!span` is load-bearing: without it the dialog opens behind the refusal
+  // page and asks the rider to print the sheet we just declined to cut.
   useEffect(() => {
-    if (!loading && rows.length > 0) {
+    if (!span && !loading && rows.length > 0) {
       const t = setTimeout(() => window.print(), 250);
       return () => clearTimeout(t);
     }
-  }, [loading, rows.length]);
+  }, [span, loading, rows.length]);
+
+  // Before the loading branch — the refusal needs no data, and waiting on
+  // an ?all=1 fetch to be told no would be its own insult.
+  if (span) {
+    return (
+      <SpanRefusal
+        sheet="Run sheet"
+        label={spanLabel(span)}
+        backHref={`/admin/orders?${params.toString()}`}
+      />
+    );
+  }
 
   if (loading) {
     return (
