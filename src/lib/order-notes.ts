@@ -229,17 +229,35 @@ export async function aggregateNotesFor(
   const column = which === "order" ? "order_id" : "subscription_id";
 
   // Chunked because `in.(...)` goes in the URL, and a long URL is a hard
-  // failure, not a slow one. A uuid plus its comma is 37 bytes, and PostgREST
-  // echoes the whole query string back in a `content-location` response
-  // header. Node's fetch caps headers at 16 kB, so past ~430 ids the call
-  // threw UND_ERR_HEADERS_OVERFLOW (after ~9 s of retries), and past ~600 the
-  // gateway rejected the request outright with 400. Measured on production,
-  // 2026-10-09: 200 ids fine (7.4 kB), 400 overflow, 651 Bad Request.
+  // failure, not a slow one. A uuid plus its comma is 37 bytes, so the id list
+  // alone sets the size of both the request and the response headers.
   //
-  // Because every error path here logs and returns an empty map, the orders
-  // board did not break — it quietly rendered with NO note icons, counts or
-  // last-call chips once the board passed ~430 orders. 200 per chunk keeps
-  // the URL near 7 kB with room to spare, and the chunks go out together.
+  // There are TWO separate ceilings, in two different layers, and they are not
+  // the same limit seen twice:
+  //
+  //   1. ~16 kB of RESPONSE HEADER, in Node. PostgREST echoes the whole query
+  //      string back in a `content-location` header, and undici caps response
+  //      headers at 16 kB. Over it, the call throws UND_ERR_HEADERS_OVERFLOW
+  //      after ~9 s of retries — it does not return a response at all.
+  //   2. ~25 kB of REQUEST URI, at the gateway. Over it the request is
+  //      rejected with a 400 before the query ever runs. Pinned against
+  //      production: 674 ids pass, 675 fails.
+  //
+  // Which one bites first is NOT fixed — they count different bytes (one the
+  // request line the gateway sees, the other the header Node parses back), and
+  // the select list, extra filters and ordering feed them unequally. Size a
+  // chunk against both, not against whichever failure you happened to hit.
+  //
+  // 200 clears both with margin: ~7.4 kB echoed, under half the 16 kB header
+  // cap. 300 would be ~11 kB — appreciably closer to that cap, and all it buys
+  // is one fewer HTTP request on a board of this size. That is not a trade
+  // worth narrowing the margin for. `aggregateNotesFor`'s sibling chunk in
+  // src/app/api/admin/customers/route.ts uses 200 for exactly these reasons;
+  // keep the two equal so neither comment has to lie about the other.
+  //
+  // Failure here is SILENT. Every error path logs and returns an empty map, so
+  // nothing looks broken: the board just renders with no note icons, no counts
+  // and no last-call chips. The chunks go out together.
   //
   // Chunks partition the ids, so all of one owner's notes land in exactly one
   // chunk and the per-chunk ordering below is still enough for the fold.
