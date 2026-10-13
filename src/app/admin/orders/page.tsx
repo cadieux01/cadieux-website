@@ -2590,10 +2590,16 @@ const OrderRow = memo(function OrderRow({
             >
               {o.customers.phone}
             </span>
+            {/* The ONLY call site that opts into either of these. The
+                other nine screens pass neither and are unchanged: no
+                colour, no writes, and the message modal still in place. */}
             <ContactActions
               phone={o.customers.phone}
               customerName={o.customers.full_name}
               orderCode={formatOrderNumber(o)}
+              trackOrderId={o.id}
+              contacts={o.contacts}
+              skipMessageModal
             />
           </div>
         ) : null}

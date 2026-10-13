@@ -11,6 +11,7 @@
 // server-side cookie is the real credential.
 import type { NutrientValue } from "@/lib/nutrition";
 import type { NextDelivery } from "@/lib/admin-subscription-derive";
+import type { OrderContacts } from "@/lib/order-contacts";
 import type { NoteKind } from "@/lib/order-notes";
 // Value import, not a type: the label map and the rank table both key off
 // it. order-new-update.ts imports nothing, so this edge cannot cycle.
@@ -281,6 +282,17 @@ export type AdminOrderRow = {
    *  by the admin orders board to split into Bread / Sandwiches tabs. */
   order_kind?: "bread" | "sandwich" | null;
   customers?: AdminCustomerSummary | null;
+  /**
+   * Which contact channels the team has already used on this order —
+   * public.order_contacts, attached by the list endpoint. Drives the
+   * red/green buttons in the board's CUSTOMER cell.
+   *
+   * An ABSENT KEY MEANS RED, and deliberately means red for both reasons:
+   * nobody has used that channel, or the aggregate failed and came back
+   * empty. Those collapse on purpose. Red costs a duplicate phone call;
+   * a false green means nobody rings at all. See src/lib/order-contacts.ts.
+   */
+  contacts?: OrderContacts;
   /** Total order_notes rows attached to this order (both 'note' and
    *  'call'). Zero when nothing has been logged. Populated by the list
    *  endpoint; undefined on paths that don't hydrate notes. */

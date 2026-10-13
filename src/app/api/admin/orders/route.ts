@@ -11,6 +11,7 @@ import {
   type HistoryOrder,
 } from "@/lib/customer-history";
 import { matchesAdminQuery } from "@/lib/admin-search";
+import { aggregateContactsFor } from "@/lib/order-contacts";
 import { aggregateNotesFor } from "@/lib/order-notes";
 import { computeOrderState } from "@/lib/order-state";
 import {
@@ -247,7 +248,7 @@ export async function GET(req: NextRequest) {
   );
   const orderIds = rows.map((r) => r.id).filter((v) => v.length > 0);
 
-  const [pickupRes, noteAgg] = await Promise.all([
+  const [pickupRes, noteAgg, contactAgg] = await Promise.all([
     pickupIds.length > 0
       ? supabaseAdmin
           .from("pickup_locations")
@@ -255,6 +256,11 @@ export async function GET(req: NextRequest) {
           .in("id", pickupIds)
       : Promise.resolve({ data: [], error: null }),
     aggregateNotesFor(supabaseAdmin, "order", orderIds),
+    // Which contact channels the team has already used, for the red/green
+    // buttons on the board. Same swallow-and-return-empty failure mode as
+    // the notes aggregate, and deliberately in the SAME Promise.all — it
+    // must not add a serial round trip to a board that already waits on two.
+    aggregateContactsFor(supabaseAdmin, orderIds),
   ]);
 
   const pickupById: Record<string, { id: string; name: string; area: string; address: string }> = {};
@@ -292,6 +298,10 @@ export async function GET(req: NextRequest) {
       // the same answer with no second attach step to forget on one of
       // them. See src/lib/order-new-update.ts.
       last_team_note: agg?.last_team_note ?? null,
+      // {} rather than null for "no channel used yet", so every consumer
+      // reads it the same way — `contacts.call` is undefined either way and
+      // nothing has to null-check before indexing. An absent key is red.
+      contacts: contactAgg.get(r.id) ?? {},
       repeat_seq: rep?.repeat_seq ?? null,
       customer_order_count: rep?.customer_order_count ?? null,
       customer_first_order_at: rep?.customer_first_order_at ?? null,
