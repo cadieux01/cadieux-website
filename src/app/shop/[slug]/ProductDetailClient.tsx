@@ -130,10 +130,11 @@ export default function ProductDetailClient({
   // the DB / review scope.
   urlSlug: string;
   outOfStock?: boolean;
-  // Pre-order state, resolved server-side from products.available_from.
+  // Baking-days state, resolved server-side from the union of
+  // products.available_from and the product's product_open_dates rows.
   // Orthogonal to outOfStock (products.in_stock): the product is still
-  // sellable, it just cannot be delivered before `date`. The date pickers
-  // floor to it and the server rejects anything earlier with
+  // sellable, it just cannot be delivered on every day. The date pickers
+  // disable the shut days and the server rejects them with
   // code "preorder_floor" — this prop is presentation only.
   preorder?: PreorderInfo | null;
   reports?: ProductReport[];
@@ -522,20 +523,21 @@ export default function ProductDetailClient({
               </div>
             )}
 
-            {/* Pre-order, which is NOT the out-of-stock banner above it. These
-                are OPPOSITE states and must not share a chip: `outOfStock`
-                (in_stock=false) means the product cannot be bought at all and
-                the buy button is replaced by an Unavailable span, whereas a
-                live available_from floor means it CAN be bought right now and
-                only the DELIVERY date is constrained — the line below says
-                when. This block used to reuse that banner's "Out of stock"
-                wording and its red, which told the customer they could not buy
-                a product whose buy button was live two lines down.
+            {/* Baking days, which is NOT the out-of-stock banner above it.
+                These are OPPOSITE states and must not share a chip:
+                `outOfStock` (in_stock=false) means the product cannot be
+                bought at all and the buy button is replaced by an Unavailable
+                span, whereas a live baking schedule means it CAN be bought
+                right now and only the DELIVERY day is constrained — the line
+                below says which. This block used to reuse that banner's "Out
+                of stock" wording and its red, which told the customer they
+                could not buy a product whose buy button was live two lines
+                down.
 
-                The palette is NOT new: it is the cart's pre-order panel,
-                app/cart/page.tsx:103 (#FBF3D4 on #024628, rgba(2,70,40,0.25)
+                The palette is NOT new: it is the cart's baking-days panel in
+                app/cart/page.tsx (#FBF3D4 on #024628, rgba(2,70,40,0.25)
                 border). Tile, PDP and cart are the three surfaces that
-                announce a floor — take the tokens from there rather than
+                announce a schedule — take the tokens from there rather than
                 inventing a fourth set. Suppressed when in_stock is false,
                 since that banner says the stronger thing. */}
             {preorder && !outOfStock && (
@@ -559,7 +561,7 @@ export default function ProductDetailClient({
                     color: "#024628",
                   }}
                 >
-                  Pre-order
+                  Baking days
                 </div>
                 <div
                   style={{
@@ -656,21 +658,23 @@ export default function ProductDetailClient({
                   transition: "background 0.3s ease",
                 }}
               >
+                {/* "Add to Cart" even with a baking schedule: the loaf is on
+                    sale now and only the delivery day is constrained. A
+                    "Pre-order" label would contradict the note directly
+                    below it, which reads "Order now — pick Thu 16 Oct…". */}
                 {outOfStock
                   ? "Out of Stock"
                   : added
                   ? "Added ✓"
                   : orderType === "sub"
                   ? "Set Up Subscription"
-                  : preorder
-                  ? "Pre-order"
                   : "Add to Cart"}
               </button>
             </div>
 
-            {/* "Pre-order now — delivery from <date>." Under the button, so
-                the promise is attached to the action the customer is about
-                to take. */}
+            {/* "Order now — pick Thu 16 Oct, then any day from Mon 19 Oct."
+                Under the button, so the promise is attached to the action the
+                customer is about to take. */}
             {preorder && !outOfStock && (
               <div
                 style={{

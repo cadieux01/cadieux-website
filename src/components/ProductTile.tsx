@@ -77,10 +77,11 @@ type Props = {
   stats: TileStat[];
   media: ProductMedia[];
   outOfStock?: boolean;
-  // Pre-order state, resolved server-side from products.available_from.
-  // Independent of `outOfStock` (products.in_stock): a pre-order product is
-  // still SELLABLE — it just cannot be delivered before `date`. Null = no
-  // restriction. Never construct this client-side; the date is data.
+  // Baking-days state, resolved server-side from the union of
+  // products.available_from and the product's product_open_dates rows.
+  // Independent of `outOfStock` (products.in_stock): a restricted product is
+  // still SELLABLE — it just cannot be delivered on every day. Null = no
+  // restriction. Never construct this client-side; the days are data.
   preorder?: PreorderInfo | null;
   // DERIVED per-loaf subscribe price (MRP × (1 − discount%)), resolved
   // server-side via getSubscriptionPlans — the same figure the wizard quotes
@@ -499,7 +500,12 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   }),
             }}
           >
-            {outOfStock ? "Out of stock" : "Pre-order"}
+            {/* "Baking days", not "Pre-order": the product is on sale now
+                and the restriction is a schedule, not a release date.
+                `preorder` is only ever set from `preorderInfo`, which is
+                built from the REACHABLE set, so this never appears for a
+                schedule the lead time has already emptied. */}
+            {outOfStock ? "Out of stock" : "Baking days"}
           </div>
         )}
 
@@ -624,8 +630,9 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           {subtitle}
         </p>
 
-        {/* "Back in stock <date>." — the badge's explanatory line. Same
-            warning colour as the pill so the two read as one statement. */}
+        {/* "Baking Thu 16 Oct, then any day from Mon 19 Oct." — the badge's
+            explanatory line. Same warning colour as the pill so the two read
+            as one statement. */}
         {preorder && !outOfStock && (
           <p
             style={{
@@ -782,7 +789,12 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
                   whiteSpace: "nowrap",
                 }}
               >
-                {preorder ? "Pre-order" : "Add"}
+                {/* "Add" either way. The loaf is on sale now — the schedule
+                    constrains the delivery DAY, which the chip, the line and
+                    the note below the button all say. A "Pre-order" label
+                    here would contradict its own note, which reads "Order
+                    now — pick Thu 16 Oct…". */}
+                Add
               </button>
             ) : (
               /* In cart — stepper reflects the live cart qty; − at 1 removes. */
@@ -829,8 +841,9 @@ export default function ProductTile({ slug, productIndex, name, tag, title, subt
           )}
         </div>
 
-        {/* "Pre-order now — delivery from <date>." Sits under the button so
-            the promise is attached to the action, not to the badge. */}
+        {/* "Order now — pick Thu 16 Oct, then any day from Mon 19 Oct."
+            Sits under the button so the promise is attached to the action,
+            not to the badge. */}
         {preorder && !outOfStock && (
           <div
             style={{
