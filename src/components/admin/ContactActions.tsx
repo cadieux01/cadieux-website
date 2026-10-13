@@ -508,9 +508,11 @@ function MessageModal({
           }}
         >
           {/* The eight templates, above the text they replace. Inside
-              the SCROLLING zone, not the fixed header: eight chips wrap
-              to three rows on a phone, and a header that tall would eat
-              the textarea on the screens this is used from most. */}
+              the SCROLLING zone, not the fixed header: MEASURED at 375px,
+              the eight chips wrap to FIVE rows — not the three I first
+              guessed — and a header that tall would eat the textarea on
+              the screens this is used from most. Re-measure this rather
+              than re-estimating it if the labels change. */}
           <div
             style={{
               display: "flex",
