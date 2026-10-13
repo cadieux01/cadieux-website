@@ -18,6 +18,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 
+import { getAdminFirstName, setAdminFirstName } from "@/lib/admin-first-name";
 import { ADMIN_SESSION_KEY } from "@/lib/admin-shared";
 import { CREAM, INK, TEXT_FADED, BORDER } from "./theme";
 import {
@@ -689,11 +690,46 @@ function GrainOverlay() {
   );
 }
 
+/**
+ * ░░ WHY THE OPERATOR'S NAME IS ASKED FOR HERE, OF ALL PLACES. ░░
+ *
+ * `order_contacts.last_author` and `order_notes.author` are both filled
+ * from one localStorage key, and until now the ONLY thing that ever wrote
+ * that key was `ensureAdminFirstName()` — a window.prompt() reachable
+ * solely from NotePanel, EditOrderPanel, EditDeliveryModal and the two
+ * board pages. Which means somebody whose job is ringing customers, and
+ * who therefore only ever presses the contact buttons, was permanently
+ * anonymous: the buttons deliberately use the NON-prompting
+ * getAdminFirstName(), because a modal mid-dial is exactly what the
+ * feature was specified not to do.
+ *
+ * The result in prod after one day: 16 of 22 contact rows had no author at
+ * all, and the board could prove somebody had called without proving who.
+ * With at least three people sharing it, that is the whole point missing.
+ *
+ * This gate is the one moment in the month when an operator is already
+ * stopped, typing, and NOT in the middle of an action — the session is
+ * remembered for 30 days, so it is seen about once a month. Asking here
+ * costs one optional field and buys an author on every subsequent press,
+ * note and edit, with no prompt anywhere near a live phone call.
+ *
+ * Deliberately OPTIONAL. Blank submits fine and leaves the author null,
+ * which is a valid row everywhere it is read — this is attribution, not
+ * authentication, and the password is the thing that actually gates entry.
+ * Do not add a `required` here; it would turn a convenience into a lockout
+ * on the one screen nobody can get past.
+ */
 function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Prefilled from storage so a returning operator sees their own name and
+  // just presses Enter; editing it is how you correct a typo or hand the
+  // tablet to someone else.
+  const [operatorName, setOperatorName] = useState(
+    () => getAdminFirstName() ?? "",
+  );
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -735,6 +771,10 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
         // that only set the cookie won't return a token — that's fine, the
         // cookie path still applies there.
         if (data.token) setAdminToken(data.token);
+        // Written only on a SUCCESSFUL login, so a failed attempt cannot
+        // park a name in storage. setAdminFirstName trims, caps at 60 and
+        // treats "" as a removal, so clearing the field clears the name.
+        setAdminFirstName(operatorName);
         // Release any admin requests that mounted (and paused) before login.
         notifyAdminAuthChange();
         onSuccess();
@@ -833,6 +873,43 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
             )}
           </button>
         </div>
+        {/* Sits AFTER the password on purpose. A visible text input placed
+            before a password field is routinely mistaken for the username
+            by password managers, which would break the saved-password
+            autofill the hidden field above exists to enable. autoComplete
+            is off for the same reason. */}
+        <input
+          type="text"
+          name="operator-name"
+          id="admin-operator-name"
+          autoComplete="off"
+          value={operatorName}
+          onChange={(e) => setOperatorName(e.target.value)}
+          placeholder="Your first name (optional)"
+          maxLength={60}
+          className="w-full px-4 py-3 bg-transparent outline-none"
+          style={{
+            border: "1px solid rgba(251,243,212,0.35)",
+            color: "#FBF3D4",
+            fontFamily: "var(--font-body)",
+            letterSpacing: "0.1em",
+            fontSize: "1rem",
+          }}
+        />
+        <p
+          className="text-center"
+          style={{
+            margin: "-0.25rem 0 0",
+            color: "rgba(251,243,212,0.45)",
+            fontFamily: "var(--font-body)",
+            fontSize: "0.8125rem",
+            letterSpacing: "0.06em",
+            lineHeight: 1.5,
+          }}
+        >
+          Shown on the orders board next to calls, messages and notes you
+          record, so the team can tell who dealt with an order.
+        </p>
         <button
           type="submit"
           className="w-full px-4 py-3 uppercase"

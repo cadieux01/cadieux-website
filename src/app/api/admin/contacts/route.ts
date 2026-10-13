@@ -96,12 +96,34 @@ export async function POST(req: NextRequest) {
   // never touched again — which is exactly what "when did this first go
   // green" has to mean. Including it would silently overwrite the original
   // on every subsequent press and quietly destroy the column's meaning.
+  //
+  // ░░ last_author IS OMITTED THE SAME WAY WHEN WE HAVE NO NAME. ░░
+  //
+  // It used to be sent unconditionally, which meant an anonymous press
+  // OVERWROTE a name a colleague had already recorded. Measured in prod
+  // after one day of real use: of 6 rows at press_count >= 2, zero had an
+  // author, against 2 of 16 rows at press_count 1 — every repeat press had
+  // scrubbed whatever was there. OLF687 held "Madhu" and then held null.
+  //
+  // That is the feature destroying its own point. The green mark says
+  // somebody dealt with this order; `last_author` is the part that says
+  // WHO, and at least three people share this board.
+  //
+  // So a null author now writes NOTHING to the column rather than writing
+  // null over it — the same ON CONFLICT property the paragraph above
+  // relies on, which is why this costs no extra round trip and no DDL.
+  // Consequences, both intended:
+  //   • the column means "the last person who IDENTIFIED THEMSELVES",
+  //     not "the last presser", so a stale-looking name is the honest
+  //     answer when the most recent presser was anonymous;
+  //   • a row whose first press is anonymous still has a null author, and
+  //     a later named press fills it in.
   const payload = {
     order_id: orderId,
     channel,
     last_contacted_at: new Date().toISOString(),
     press_count: (existing?.press_count ?? 0) + 1,
-    last_author: author,
+    ...(author === null ? {} : { last_author: author }),
   };
 
   const { data: saved, error: upsertErr } = await supabaseAdmin
