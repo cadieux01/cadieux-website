@@ -29,14 +29,25 @@ would have read.
 
 ## Files here that are absent from the remote ledger
 
-Checked 2026-10-11: the remote ledger holds 138 rows, latest
-`20261002045742`. This directory holds 25 files. Everything after
-`20261002045742` is therefore unapplied by definition.
+Re-checked 2026-10-13 against production: the remote ledger still holds 138
+rows, latest still `20261002045742` — unchanged from the 2026-10-11 reading
+below. This directory now holds 26 files. Everything after `20261002045742`
+is therefore unapplied by definition.
 
 | File | Status | Safe to re-run? |
 | --- | --- | --- |
 | `20260710120000_create_whatsapp_conversations.sql` | table exists in prod with live data; not in ledger | **NO — see the file header** |
 | `20261011093000_audit_log_tamper_protection.sql` | triggers exist in prod; not in ledger | yes — `create or replace` + `drop trigger if exists` throughout |
+| `20261013120000_create_product_open_dates.sql` | **applied to prod by hand 2026-10-13**; not in ledger | yes — `if not exists` / `drop policy if exists` / `on conflict do nothing` throughout |
+
+The last row is the first file added since this note was written, so it is
+worth saying how it got there: it was applied statement-for-statement by
+hand, **not** with `db push`, and no ledger row was created. Creating one was
+considered and rejected — the only mechanism available assigns its own
+version from the wall clock, which would have put a version in the ledger
+that no filename here matches. That is a new instance of exactly the drift
+this document exists to warn about, and strictly worse than an unrecorded
+file that is safe to replay.
 
 The tamper-protection file was moved here from `sql/` so a fresh environment
 gets the `audit_log` append-only triggers, which previously existed only

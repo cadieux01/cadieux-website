@@ -52,6 +52,15 @@
 -- is a hard sell-block on seven server paths and filters the subscription
 -- plan list. These products stay VISIBLE, BROWSABLE and SELLABLE.
 --
+-- STATUS: APPLIED to production (uejagupcwevadfhfuadv) BY HAND on 2026-10-13.
+-- Section 1 and section 2 both ran; verified 6 rows, RLS on, anon SELECT 200,
+-- anon INSERT/DELETE 42501, and all six products' available_from and
+-- stock_message unchanged. NOT recorded in
+-- supabase_migrations.schema_migrations — see README.md: `db push` is
+-- forbidden in this directory, so there is no ledger row to add and this file
+-- joins the unrecorded list there. Every statement below is idempotent, so a
+-- future replay is a no-op.
+--
 -- Idempotent by construction — migrations here are applied BY HAND (see
 -- README.md in this directory); a filename is documentation, not proof.
 
