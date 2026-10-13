@@ -98,10 +98,17 @@ export function hasNewUpdate(o: NewUpdateFacts): boolean {
  * The database is untouched — the order genuinely IS still delivered. The
  * board is reporting that somebody wrote something since.
  *
- * ONE FUNCTION, EVERY SURFACE: the badge, the row's status Select, the
- * filter predicate, the dropdown counts and the sort rank all call this.
- * If any of them read `o.status` directly instead, that surface disagrees
- * with the other four about what the row says.
+ * ONE FUNCTION, EVERY SURFACE THAT READS: the badge, the filter predicate,
+ * the dropdown counts and the sort rank all call this. If any of them read
+ * `o.status` directly instead, that surface disagrees with the other three
+ * about what the row says.
+ *
+ * THE ROW'S STATUS SELECT IS THE DELIBERATE EXCEPTION, and it is not an
+ * oversight — it is a WRITE control, so it binds the stored status. Binding
+ * it here offered `new_update` as a settable option, hid the row's real
+ * status behind the flag, and made re-picking the current value look like
+ * it had done nothing. Read surfaces show the flag; the one write surface
+ * shows what it is about to overwrite.
  */
 export function boardStatus(
   o: NewUpdateFacts & { status?: string | null },

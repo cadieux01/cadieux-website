@@ -631,5 +631,23 @@ export async function PATCH(
     })();
   }
 
-  return NextResponse.json({ ok: true, refund_status: refundOutcome });
+  // Hand back the stamp this request wrote, so the caller does not have to
+  // guess it from its own clock.
+  //
+  // The board derives "New Update" by comparing the newest team note against
+  // status_updated_at (see hasNewUpdate in src/lib/order-new-update.ts), which
+  // means a status write is the acknowledgement that clears the flag. The
+  // board patches optimistically and only reconciles with the server on its
+  // next poll — two minutes away — so without this the operator sets a status,
+  // the write SUCCEEDS, and the badge sits on New Update until the poll lands.
+  // That reads as "the flag cannot be cleared", which is how it was reported.
+  //
+  // Absent when this PATCH did not touch the status (an address or slot edit),
+  // and the caller must leave its own value alone in that case rather than
+  // writing null over it.
+  return NextResponse.json({
+    ok: true,
+    refund_status: refundOutcome,
+    status_updated_at: (update.status_updated_at as string | undefined) ?? null,
+  });
 }

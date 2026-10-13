@@ -20,6 +20,8 @@ import {
 
 const T0 = "2026-10-12T09:00:00.000Z";
 const T1 = "2026-10-12T10:00:00.000Z";
+const T2 = "2026-10-12T11:00:00.000Z";
+const T3 = "2026-10-12T12:00:00.000Z";
 
 test("no note is not a new update", () => {
   assert.equal(hasNewUpdate({ status_updated_at: T0 }), false);
@@ -142,5 +144,42 @@ test("a cancelled order with an older note stays cancelled", () => {
       last_team_note: { created_at: T0 },
     }),
     "cancelled",
+  );
+});
+
+test("the escape hatch: re-setting the status a row ALREADY holds clears it", () => {
+  // Raja's report — "once a note exists I cannot set Delivered, it stays on
+  // New Update" — and the half of the original spec that was never built:
+  // "if somebody deliberately changes the New Update status to Delivered, it
+  // will stay as Delivered."
+  //
+  // There is no new column and no acknowledge button. The deliberate status
+  // change IS the acknowledgement, because it moves status_updated_at past
+  // the note. This test is the loop, in order:
+  const order = {
+    status: "delivered",
+    status_updated_at: T0,
+    last_team_note: { created_at: T1 },
+  };
+
+  // 1. delivered, note written after the status was set -> flagged.
+  assert.equal(boardStatus(order), NEW_UPDATE_STATUS);
+
+  // 2. the operator picks Delivered again. The row is ALREADY delivered, so
+  //    `status` does not change and the stamp is the ONLY thing that moves.
+  //    That is precisely why the board must carry status_updated_at through
+  //    its optimistic update: flipping `status` alone would be a no-op here
+  //    and the row would not appear to respond at all.
+  const acknowledged = { ...order, status_updated_at: T2 };
+
+  // 3. it STAYS Delivered. The note is untouched and still on the order.
+  assert.equal(boardStatus(acknowledged), "delivered");
+  assert.equal(hasNewUpdate(acknowledged), false);
+  assert.equal(acknowledged.last_team_note.created_at, T1);
+
+  // 4. and the flag can come back — acknowledging is not suppressing.
+  assert.equal(
+    boardStatus({ ...acknowledged, last_team_note: { created_at: T3 } }),
+    NEW_UPDATE_STATUS,
   );
 });

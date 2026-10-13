@@ -1673,15 +1673,45 @@ function OrdersPageInner() {
     // array also discarded any unrelated row edit (a call note, another
     // status) that landed during the await.
     const prevStatus = order.status;
+    const prevStatusAt = order.status_updated_at;
+    // THE STAMP MOVES WITH THE STATUS, or the row does not appear to change.
+    //
+    // "New Update" is derived, not stored: hasNewUpdate() asks whether the
+    // newest team note is later than status_updated_at, so setting a status
+    // IS the acknowledgement that clears it. Flipping `status` alone leaves
+    // the old stamp in place, boardStatus() keeps resolving to new_update,
+    // and the badge and the Select both snap straight back — on an order
+    // that is ALREADY at the target status (a delivered row carrying a
+    // later note, which is the exact case reported) nothing moves at all.
+    // The write had succeeded; only the board disagreed, for up to POLL_MS.
+    //
+    // This is our clock, so it can be wrong by whatever the machine is
+    // wrong by. It is replaced by the server's own value the moment the
+    // request returns, and by the poll after that; it exists only to cover
+    // the round trip, which is the window the operator is actually looking
+    // at. Rolled back with the status below.
+    const optimisticStatusAt = new Date().toISOString();
     setOrders((curr) =>
-      curr.map((o) => (o.id === order.id ? { ...o, status: next } : o)),
+      curr.map((o) =>
+        o.id === order.id
+          ? { ...o, status: next, status_updated_at: optimisticStatusAt }
+          : o,
+      ),
     );
     try {
+      // status_updated_at is absent when the PATCH did not touch the status;
+      // every call on this path does, but the field stays optional so a null
+      // can never overwrite a good value.
+      type StatusPatchResult = { status_updated_at?: string | null };
+      let patched: StatusPatchResult;
       try {
-        await adminFetch(`/api/admin/orders/${order.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ status: next }),
-        });
+        patched = await adminFetch<StatusPatchResult>(
+          `/api/admin/orders/${order.id}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ status: next }),
+          },
+        );
       } catch (e) {
         // The unpaid-online guard. The server refuses the first attempt and names
         // the problem; the operator either backs out or restates the intent, and
@@ -1705,10 +1735,25 @@ function OrdersPageInner() {
         ) {
           throw e;
         }
-        await adminFetch(`/api/admin/orders/${order.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ status: next, allow_unpaid_confirm: true }),
-        });
+        patched = await adminFetch<StatusPatchResult>(
+          `/api/admin/orders/${order.id}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ status: next, allow_unpaid_confirm: true }),
+          },
+        );
+      }
+      // Take the server's stamp over ours. Same reason the optimistic one is
+      // set at all, minus the clock-skew caveat.
+      const serverStatusAt = patched?.status_updated_at;
+      if (serverStatusAt) {
+        setOrders((curr) =>
+          curr.map((o) =>
+            o.id === order.id
+              ? { ...o, status_updated_at: serverStatusAt }
+              : o,
+          ),
+        );
       }
       // Mirror legacy: SMS + WhatsApp on every status change we have
       // copy for. Both are fire-and-forget; failures surface in a toast
@@ -1744,7 +1789,9 @@ function OrdersPageInner() {
     } catch (e) {
       setOrders((curr) =>
         curr.map((o) =>
-          o.id === order.id ? { ...o, status: prevStatus } : o,
+          o.id === order.id
+            ? { ...o, status: prevStatus, status_updated_at: prevStatusAt }
+            : o,
         ),
       );
       if (e instanceof AdminFetchError) {
@@ -2675,35 +2722,41 @@ const OrderRow = memo(function OrderRow({
         <PaymentBadge method={o.payment_method} status={o.payment_status} />
       </td>
       <td style={td}>
-        {/* The control reads boardStatus(), not o.status, so what the operator
-            sees selected here is exactly what the badge prints, what the
-            Status filter matches and what the dropdown counted. A delivered
-            order carrying a note added after the status was last set shows
-            "New Update" — and setting it back to Delivered from here is how
-            the operator clears it (the PATCH bumps status_updated_at past
-            the note, so the flag stops being true on its own).
+        {/* THE STORED STATUS, NOT boardStatus(). This control is a WRITE, and
+            a write control must show the value it is about to overwrite.
 
-            OPTIONS = the four SETTABLE statuses, plus the current value when
-            that value is not one of them. ONE rule, not three, and it covers
-            all three cases at once: new_update (computed, never storable),
-            ready_for_pickup / picked_up (stored but deliberately unlisted —
-            the pickup lane still advances through them via
-            NEXT_STATUS_PICKUP) and any retired or unknown value still sitting
-            in the column. Without it a Select would be handed a value absent
-            from its own options and would silently render the first one,
-            which is how a board lies about a row it is about to overwrite. */}
+            It used to bind boardStatus() so that every surface agreed, which
+            put the computed "New Update" into the Select — and into its own
+            options, since the fallback below adds any current value the four
+            settable ones do not cover. That makes a dropdown offering a value
+            that cannot be stored, on a row whose real status it is no longer
+            reporting: a delivered order reads "New Update" rather than
+            "Delivered", so the operator cannot see what the row actually is,
+            and re-picking Delivered looks like it did nothing.
+
+            New Update belongs on the BADGE below, which is a read-out. The
+            filter, the dropdown counts and the sort rank still go through
+            boardStatus() — they are read surfaces and the flag is exactly
+            what the operator wants to pivot on there.
+
+            Clearing the flag still works the same way, and still needs no
+            button: any status write stamps status_updated_at past the note,
+            so picking Delivered on a row that is already Delivered is a
+            legitimate acknowledgement rather than a no-op.
+
+            OPTIONS = the four SETTABLE statuses, plus the stored value when
+            it is not one of them: ready_for_pickup / picked_up (stored but
+            deliberately unlisted — the pickup lane advances through them via
+            NEXT_STATUS_PICKUP) and any retired value still in the column.
+            Without it a Select handed a value absent from its own options
+            silently renders the first one, which is how a board lies about a
+            row it is about to overwrite. */}
         <Select
-          value={boardStatus(o)}
+          value={(o.status ?? "").toLowerCase()}
           disabled={busy}
           ariaLabel="Order status"
           style={statusSelect}
           onChange={(v) => {
-            // new_update is computed; there is nothing to write. It can only
-            // appear here as the CURRENT value, and onChange does not fire
-            // for that, so this is belt-and-braces — but a PATCH of it would
-            // put a word into orders.status that nothing else in the system
-            // recognises, so it is worth the two lines.
-            if (v === NEW_UPDATE_STATUS) return;
             const nextStatus = v as OrderStatus;
             if (nextStatus === "cancelled") {
               if (!confirm("Cancel this order?")) return;
@@ -2711,7 +2764,7 @@ const OrderRow = memo(function OrderRow({
             onPatchStatus(o, nextStatus);
           }}
           options={(() => {
-            const curr = boardStatus(o);
+            const curr = (o.status ?? "").toLowerCase();
             const opts = SETTABLE_ORDER_STATUSES.map((s) => ({
               value: s as string,
               label: formatStatusLabel(s),
