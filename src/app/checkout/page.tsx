@@ -51,10 +51,16 @@ import {
 import { haversineKm } from "@/lib/haversine";
 import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
 import { usePreorderMode } from "@/hooks/usePreorderMode";
-import { useCartFloor } from "@/hooks/useProductFloors";
+import { useCartAvailabilityRows, useCartFloor } from "@/hooks/useProductFloors";
 import {
-  cartFloorEscapeHint,
-  cartFloorMessage,
+  cartOpenDaysEscapeHint,
+  cartOpenDaysMessage,
+  closedDayNote,
+  earliestDeliverable,
+  noDeliveryDayMessage,
+  openSetHas,
+  type AvailabilityRow,
+  type OpenSet,
 } from "@/lib/product-availability";
 
 // Site origin for tracking links embedded in confirmation messages.
@@ -310,18 +316,25 @@ export default function CheckoutPage() {
   const [deliveryDate, setDeliveryDate] = useState<string>(firstBookableIso);
   const [deliverySlot, setDeliverySlot] = useState<string>("");
 
-  // Pre-order floor for this cart: MAX(products.available_from) across its
-  // lines. When one exists there is exactly one deliverable date, so the
-  // picker collapses to a single fixed pill and the date state follows it —
-  // the customer is told, in the banner above the pill, rather than having
-  // their choice quietly overwritten. The server enforces the same floor
-  // independently (code "preorder_floor"), so this is convenience, not
-  // protection.
-  const cartFloorInfo = useCartFloor(cart);
-  const floorDate = cartFloorInfo.date;
+  // Baking days for this cart: the INTERSECTION across its lines, not the
+  // max of their ray starts. The picker keeps all 30 days visible and
+  // disables the shut ones, each cell carrying the name of the loaf that
+  // closed it, so "why not tomorrow?" answers itself.
+  //
+  // The date state is only moved when the CURRENT pick is shut, and then to
+  // the earliest day that works — never on every schedule change, which
+  // would overwrite a deliberate later choice. The server enforces the same
+  // schedule independently (code "preorder_floor"), so this is convenience,
+  // not protection.
+  const cartOpenDaysInfo = useCartFloor(cart);
+  const cartRows = useCartAvailabilityRows(cart);
+  const openSet = cartOpenDaysInfo.set;
+  const firstOpenIso = earliestDeliverable(openSet, 30);
   useEffect(() => {
-    if (floorDate && deliveryDate !== floorDate) setDeliveryDate(floorDate);
-  }, [floorDate, deliveryDate]);
+    if (!openSetHas(openSet, deliveryDate) && firstOpenIso) {
+      setDeliveryDate(firstOpenIso);
+    }
+  }, [openSet, deliveryDate, firstOpenIso]);
 
   // If the currently-picked slot is no longer bookable (e.g. date changed,
   // or time has crept past the 12h10m lead window for a same-day pick),
@@ -2222,9 +2235,11 @@ export default function CheckoutPage() {
             onPickDate={(d) => { setDeliveryDate(d); setError(""); }}
             onPickSlot={(s) => { setDeliverySlot(s); setError(""); }}
             preorderMode={!!preorderMode}
-            floorDate={floorDate}
-            floorMessage={cartFloorMessage(cartFloorInfo)}
-            floorHint={cartFloorEscapeHint(cartFloorInfo)}
+            openSet={openSet}
+            availabilityRows={cartRows}
+            deadEndMessage={noDeliveryDayMessage(cartOpenDaysInfo, 30)}
+            floorMessage={cartOpenDaysMessage(cartOpenDaysInfo)}
+            floorHint={cartOpenDaysEscapeHint(cartOpenDaysInfo)}
           />
         )}
 
@@ -3539,7 +3554,9 @@ function DeliveryScheduleSection({
   onPickDate,
   onPickSlot,
   preorderMode,
-  floorDate,
+  openSet,
+  availabilityRows,
+  deadEndMessage,
   floorMessage,
   floorHint,
 }: {
@@ -3553,11 +3570,17 @@ function DeliveryScheduleSection({
   onPickDate: (d: string) => void;
   onPickSlot: (s: string) => void;
   preorderMode: boolean;
-  // Pre-order floor for the whole cart (MAX across its lines), or null.
-  // Days before it are additionally disabled — the customer can still see
-  // them, so "why not tomorrow?" answers itself when combined with the
-  // banner above.
-  floorDate: string | null;
+  // Baking days for the whole cart — the intersection across its lines.
+  // Shut days are additionally disabled but stay VISIBLE, each naming the
+  // loaf that closed it, so "why not tomorrow?" answers itself.
+  openSet: OpenSet;
+  // The per-line rows, so a cell can name WHICH loaf shut it. The cart-wide
+  // set alone only knows that something did.
+  availabilityRows: AvailabilityRow[];
+  // Set when the cart's lines share no deliverable day at all. The strip is
+  // replaced by this sentence rather than rendered with every cell dead —
+  // an all-disabled calendar reads as a loading failure.
+  deadEndMessage: string | null;
   floorMessage: string | null;
   floorHint: string | null;
 }) {
@@ -3581,11 +3604,11 @@ function DeliveryScheduleSection({
         </div>
       ) : null}
 
-      {/* The floor is explained BEFORE the picker, so the disabled early
-          days read as a consequence the customer understands rather than a
+      {/* The schedule is explained BEFORE the picker, so the disabled days
+          read as a consequence the customer understands rather than a
           silent gate. Suppressed under site-wide pre-order mode, which
           already says no date is being promised. */}
-      {floorMessage && !preorderMode ? (
+      {(deadEndMessage ?? floorMessage) && !preorderMode ? (
         <div
           role="status"
           style={{
@@ -3596,10 +3619,10 @@ function DeliveryScheduleSection({
           }}
         >
           <p style={{ margin: "0 0 4px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.35em", textTransform: "uppercase", color: "#024628" }}>
-            Pre-order
+            {deadEndMessage ? "No shared delivery day" : "Baking days"}
           </p>
           <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 300, lineHeight: 1.55, color: "#024628" }}>
-            {floorMessage}
+            {deadEndMessage ?? floorMessage}
           </p>
           {floorHint ? (
             <p style={{ margin: "6px 0 0", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 400, lineHeight: 1.55, color: "rgba(2,70,40,0.75)" }}>
@@ -3609,11 +3632,13 @@ function DeliveryScheduleSection({
         </div>
       ) : null}
 
+      {deadEndMessage ? null : (
+      <>
       <p style={sectionHead}>Pick a Date</p>
 
       {/* Horizontally scrollable 30-day strip. Wraps naturally on wide
           viewports; scrolls with a touch flick on mobile. Non-bookable and
-          below-floor days remain visible but disabled — see Task 1. */}
+          non-baking days remain visible but disabled — see Task 1. */}
       <div
         style={{
           display: "flex",
@@ -3630,8 +3655,12 @@ function DeliveryScheduleSection({
         aria-label="Delivery date"
       >
         {dateWindow.map((d) => {
-          const belowFloor = floorDate ? d.iso < floorDate : false;
-          const disabled = preorderMode || !d.bookable || belowFloor;
+          // NAMES THE LOAF. A greyed cell with no explanation leaves the
+          // customer unable to tell a day the kitchen is shut from a day the
+          // 12h lead has taken, with three loaves in the basket and no way
+          // to know which one did it.
+          const closedNote = closedDayNote(availabilityRows, d.iso);
+          const disabled = preorderMode || !d.bookable || !!closedNote;
           const active = d.iso === deliveryDate;
           const { weekday, day, month } = formatDatePillParts(d.iso);
           return (
@@ -3641,6 +3670,12 @@ function DeliveryScheduleSection({
               role="radio"
               aria-checked={active}
               disabled={disabled}
+              title={closedNote ?? undefined}
+              aria-label={
+                closedNote
+                  ? `${weekday} ${day} ${month} — ${closedNote}`
+                  : undefined
+              }
               onClick={() => onPickDate(d.iso)}
               style={{
                 flex: "0 0 auto",
@@ -3699,6 +3734,8 @@ function DeliveryScheduleSection({
           onPickSlot={onPickSlot}
         />
       </div>
+      </>
+      )}
     </section>
   );
 }

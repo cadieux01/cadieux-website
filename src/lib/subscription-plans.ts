@@ -26,6 +26,7 @@ import {
   subscriptionDiscountPct,
   subscriptionSavingsInr,
 } from "@/lib/subscription-pricing";
+import { flattenOpenDates, OPEN_DATES_SELECT } from "@/lib/product-availability";
 
 export const SUBSCRIPTION_PLANS_TAG = "subscription-plans";
 
@@ -46,9 +47,17 @@ export type SubscriptionPlanDTO = {
    *  Passed through RAW rather than resolved to a boolean here: this list
    *  is cached for 60 s, and a resolved flag computed at 23:59:30 on the
    *  23rd would still be claiming "out of stock" half a minute into the
-   *  24th. The consumer calls productFloor() at render time, so the plan
+   *  24th. The consumer calls productOpenSet() at render time, so the plan
    *  re-opens by itself on the date with no cache bust and no deploy. */
   available_from: string | null;
+  /** Raw `product_open_dates` rows (yyyy-mm-dd), the discrete baking days
+   *  that sit BEFORE `available_from`. Raw for the same reason — a day in
+   *  the list expires at IST midnight and the consumer resolves it then.
+   *
+   *  This read uses the ANON key, which is why `product_open_dates` has a
+   *  public-SELECT policy: an unreadable table yields `[]`, which fails
+   *  OPEN (every day bookable), not closed. */
+  open_dates: string[];
 };
 
 const supabaseAnon = createClient(
@@ -75,7 +84,7 @@ const getSubscriptionPlansCached = unstable_cache(
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock, available_from, sort_order, is_subscription_plan, subscription_title, subscription_blurb",
+        `slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock, available_from, sort_order, is_subscription_plan, subscription_title, subscription_blurb, ${OPEN_DATES_SELECT}`,
       )
       .eq("is_active", true)
       .eq("is_archived", false)
@@ -116,6 +125,7 @@ const getSubscriptionPlansCached = unstable_cache(
         subscription_savings_inr: subscriptionSavingsInr(row),
         available_from:
           typeof row.available_from === "string" ? row.available_from : null,
+        open_dates: flattenOpenDates(row).open_dates,
       });
     }
     return out;

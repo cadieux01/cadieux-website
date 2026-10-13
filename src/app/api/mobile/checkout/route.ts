@@ -17,12 +17,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey, maskPhone } from "@/lib/phone-cookie";
 import {
-  enforceDeliveryFloor,
+  enforceDeliveryDays,
   reconcilePrices,
   toLocal10,
   validateOrderBodyShape,
   type ProductRow,
 } from "@/lib/order-validation";
+import { flattenOpenDates, OPEN_DATES_SELECT } from "@/lib/product-availability";
 import {
   isAcceptableDeliveryDate,
   isAcceptableDeliverySlot,
@@ -180,7 +181,7 @@ export async function POST(req: NextRequest) {
   const { data: productRows, error: productsErr } = await supabaseAdmin
     .from("products")
     .select(
-      "id, name, price_inr, is_active, is_archived, in_stock, available_from, stock_message",
+      `id, name, price_inr, is_active, is_archived, in_stock, available_from, stock_message, ${OPEN_DATES_SELECT}`,
     )
     .in("id", productIds);
 
@@ -191,11 +192,11 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-
-  const reconciled = reconcilePrices(
-    body.items,
-    (productRows ?? []) as ProductRow[],
+  const products = (productRows ?? []).map((r) =>
+    flattenOpenDates(r as Omit<ProductRow, "open_dates">),
   );
+
+  const reconciled = reconcilePrices(body.items, products);
   if (!reconciled.ok) {
     return NextResponse.json(
       { ok: false, error: reconciled.error, code: reconciled.code },
@@ -203,14 +204,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 5b. Pre-order delivery floor. The app cannot see `available_from` (its
-  // Supabase column list is baked into the shipped binary) and computes its
-  // own date list locally, so an installed build will happily offer tomorrow
-  // for a loaf that does not exist yet. This is the only thing that stops it.
-  const floorFailure = enforceDeliveryFloor(
-    (productRows ?? []) as ProductRow[],
-    deliveryDate,
-  );
+  // 5b. Baking days. The app can see NEITHER `available_from` NOR
+  // `product_open_dates` (its Supabase column list is baked into the shipped
+  // binary) and computes its own date list locally, so an installed build
+  // will happily offer a day the kitchen is shut. This is the only thing
+  // that stops it.
+  const floorFailure = enforceDeliveryDays(products, deliveryDate);
   if (floorFailure) {
     return NextResponse.json(
       { ok: false, error: floorFailure.error, code: floorFailure.code },

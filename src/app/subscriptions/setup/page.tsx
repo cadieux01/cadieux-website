@@ -36,11 +36,16 @@ import Select from "@/components/ui/Select";
 import { usePreorderMode } from "@/hooks/usePreorderMode";
 import { useProductFloors } from "@/hooks/useProductFloors";
 import {
-  cartFloor,
-  cartFloorEscapeHint,
-  cartFloorMessage,
-  isPreorder,
+  cartOpenDays,
+  cartOpenDaysEscapeHint,
+  cartOpenDaysMessage,
+  closedDayNote,
+  earliestDeliverable,
+  formatFloorMedium,
+  noDeliveryDayMessage,
+  openSetHas,
   subscriptionAvailabilityLine,
+  type AvailabilityRow,
 } from "@/lib/product-availability";
 import {
   MIN_SUBSCRIPTION_DAYS_PER_WEEK,
@@ -81,29 +86,13 @@ export default function SetupPage() {
     if (hydrated) saveSetupState(state);
   }, [state, hydrated]);
 
-  // A wizard session started before a loaf went pre-order (or restored from
-  // sessionStorage days later) can still be holding that loaf. Drop it as
-  // soon as the live catalogue says so, otherwise step 1 looks fine and the
-  // server refuses at payment.
-  useEffect(() => {
-    if (!hydrated) return;
-    const blocked = new Set(
-      plans.filter((p) => isPreorder(p)).map((p) => p.slug as string),
-    );
-    if (blocked.size === 0) return;
-    setState((s) => {
-      const next: Record<string, number> = {};
-      let dropped = false;
-      for (const [slug, qty] of Object.entries(s.qtyBySlug)) {
-        if (blocked.has(slug)) {
-          dropped = true;
-          continue;
-        }
-        next[slug] = qty;
-      }
-      return dropped ? { ...s, qtyBySlug: next } : s;
-    });
-  }, [hydrated, plans]);
+  // There is deliberately NO effect dropping a loaf from the basket because
+  // it has a baking schedule. A restricted loaf is a first-class
+  // subscription option — it just constrains the DATES, which step 2 shows
+  // by disabling the shut days and naming the loaf on each one. Silently
+  // emptying the basket instead would both lose the sale and make the whole
+  // intersection model dead code, since no restricted loaf would ever reach
+  // the calendar.
 
   // Drop stored DATES and SLOTS that no longer pass the same availability
   // rules the picker gates on. Previously this dropped stale slots only,
@@ -131,40 +120,63 @@ export default function SetupPage() {
     setStep(2);
   }, [hydrated, state, step]);
 
-  // Pre-order floor for the loaves chosen in step 1. A NEW subscription must
-  // not schedule a delivery before the latest available_from across its
-  // items; the calendar disables everything earlier so the customer sees the
+  // Baking days for the loaves chosen in step 1 — the INTERSECTION of their
+  // schedules, not the max of their ray starts. The calendar disables the
+  // shut days and names the loaf on each, so the customer sees the
   // constraint rather than meeting it as a rejection at payment. Existing
   // subscriptions are untouched — those are being handled by phone.
+  //
+  // Note what is passed: the DTO's RAW halves, never its resolved `date`.
+  // Handing `date` in as `available_from` would turn every open day before
+  // the ray into a closed one.
   const { floors } = useProductFloors();
-  const subFloor = useMemo(
+  const subRows = useMemo<AvailabilityRow[]>(
     () =>
-      cartFloor(
-        Object.keys(state.qtyBySlug).map((slug) => ({
-          name: plans.find((p) => p.slug === slug)?.title ?? slug,
-          available_from: floors[slug]?.date,
-        })),
-      ),
+      Object.keys(state.qtyBySlug).map((slug) => ({
+        name: plans.find((p) => p.slug === slug)?.title ?? slug,
+        available_from: floors[slug]?.from ?? null,
+        open_dates: floors[slug]?.openDates ?? [],
+      })),
     [state.qtyBySlug, plans, floors],
   );
+  const subOpenDays = useMemo(() => cartOpenDays(subRows), [subRows]);
+  const subDeadEnd = noDeliveryDayMessage(subOpenDays, 90);
+  const firstOpenDate = earliestDeliverable(subOpenDays.set, 90);
 
-  // A floor can appear AFTER dates were picked — the customer can walk back
-  // to step 1 and add a pre-order loaf, and the floors map arrives async on
-  // first load. Drop the now-undeliverable dates rather than leaving them
-  // selected-but-disabled, which is the dead end revalidateSetupState exists
-  // to avoid.
-  const floorDate = subFloor.date;
+  // The schedule can tighten AFTER dates were picked — the customer can walk
+  // back to step 1 and add a restricted loaf, and the floors map arrives
+  // async on first load. Drop the now-undeliverable dates rather than
+  // leaving them selected-but-disabled, which is the dead end
+  // revalidateSetupState exists to avoid. This is wizard hygiene BEFORE
+  // submission, not an auto-shift: nothing is moved to another day, and once
+  // a subscription exists its deliveries are never rewritten.
+  const subSet = subOpenDays.set;
   useEffect(() => {
-    if (!hydrated || !floorDate) return;
-    if (!state.selectedDates.some((d) => d < floorDate)) return;
+    if (!hydrated) return;
+    const dropped = state.selectedDates.filter((d) => !openSetHas(subSet, d));
+    if (dropped.length === 0) return;
     setState((s) => {
-      const keep = s.selectedDates.filter((d) => d >= floorDate);
+      const keep = s.selectedDates.filter((d) => openSetHas(subSet, d));
       const slotByDate = { ...s.slotByDate };
-      for (const d of s.selectedDates) if (d < floorDate) delete slotByDate[d];
+      for (const d of s.selectedDates) {
+        if (!openSetHas(subSet, d)) delete slotByDate[d];
+      }
       return { ...s, selectedDates: keep, slotByDate };
     });
+    // Say which days went. revalidateSetupState's reasons are only "past" and
+    // "too_soon" — it is pure and knows nothing about products — so without
+    // this, a day removed for being a shut day is the one removal the
+    // customer is never told about. Which days ARE available is already in
+    // the step-2 banner, so this only has to account for what was taken.
+    setStaleNotice(
+      `We're not baking everything in your plan on ${dropped
+        .map(formatFloorMedium)
+        .join(", ")}, so we removed ${
+        dropped.length === 1 ? "that day" : "those days"
+      }. Please pick again.`,
+    );
     setStep(2);
-  }, [hydrated, floorDate, state.selectedDates]);
+  }, [hydrated, subSet, state.selectedDates]);
 
   function update(patch: Partial<SetupState>) {
     setState((s) => ({ ...s, ...patch }));
@@ -364,9 +376,11 @@ export default function SetupPage() {
             onToggleDate={toggleDate}
             deliveriesCount={state.selectedDates.length}
             totalAmount={liveTotal}
-            floorDate={floorDate}
-            floorMessage={cartFloorMessage(subFloor, "subscription")}
-            floorHint={cartFloorEscapeHint(subFloor, "subscription")}
+            firstOpenDate={firstOpenDate}
+            closedNoteFor={(iso) => closedDayNote(subRows, iso)}
+            deadEndMessage={subDeadEnd}
+            floorMessage={cartOpenDaysMessage(subOpenDays, "subscription")}
+            floorHint={cartOpenDaysEscapeHint(subOpenDays)}
           />
         )}
         {step === 3 && (
@@ -676,7 +690,9 @@ function Step2Dates({
   onToggleDate,
   deliveriesCount,
   totalAmount,
-  floorDate,
+  firstOpenDate,
+  closedNoteFor,
+  deadEndMessage,
   floorMessage,
   floorHint,
 }: {
@@ -684,10 +700,15 @@ function Step2Dates({
   onToggleDate: (iso: string) => void;
   deliveriesCount: number;
   totalAmount: number;
-  // Pre-order floor across the chosen loaves (MAX of their available_from),
-  // or null. Everything before it is disabled in the grid, not merely
-  // rejected on submit.
-  floorDate: string | null;
+  // Which month to open the grid on. Not a minimum — see DateCalendar.
+  firstOpenDate: string | null;
+  // Why a given day is shut, naming the loaf. Those days are disabled in
+  // the grid, not merely rejected on submit.
+  closedNoteFor: (iso: string) => string | null;
+  // Set when the chosen loaves share no deliverable day. The grid is
+  // replaced by this sentence — a month of dead cells reads as a loading
+  // failure and the customer refreshes instead of changing the basket.
+  deadEndMessage: string | null;
   floorMessage: string | null;
   floorHint: string | null;
 }) {
@@ -734,7 +755,7 @@ function Step2Dates({
           {distinctWeekdays} of {MIN_SUBSCRIPTION_DAYS_PER_WEEK} required.
         </p>
       ) : null}
-      {floorMessage ? (
+      {(deadEndMessage ?? floorMessage) ? (
         <div
           role="status"
           style={{
@@ -747,7 +768,7 @@ function Step2Dates({
           }}
         >
           <p style={{ margin: 0, color: TEXT, fontSize: 16, lineHeight: 1.55 }}>
-            {floorMessage}
+            {deadEndMessage ?? floorMessage}
           </p>
           {floorHint ? (
             <p style={{ margin: "6px 0 0", color: FADED, fontSize: 16, lineHeight: 1.55 }}>
@@ -756,13 +777,16 @@ function Step2Dates({
           ) : null}
         </div>
       ) : null}
-      <DateCalendar
-        selectedDates={selectedDates}
-        onToggleDate={onToggleDate}
-        deliveriesCount={deliveriesCount}
-        totalAmount={totalAmount}
-        minDate={floorDate}
-      />
+      {deadEndMessage ? null : (
+        <DateCalendar
+          selectedDates={selectedDates}
+          onToggleDate={onToggleDate}
+          deliveriesCount={deliveriesCount}
+          totalAmount={totalAmount}
+          firstOpenDate={firstOpenDate}
+          closedNoteFor={closedNoteFor}
+        />
+      )}
     </section>
   );
 }

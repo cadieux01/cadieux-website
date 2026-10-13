@@ -17,7 +17,8 @@
 // for customers, it lags the code, and it does not carry the band
 // boundaries the quote is computed from. Read deliveryFee.ts.
 import {
-  cartFloor,
+  cartOpenDays,
+  openSetHas,
   preorderFloorError,
   PREORDER_FLOOR_CODE,
   type AvailabilityRow,
@@ -63,12 +64,17 @@ export type ProductRow = {
   // undefined → in-stock / not-archived to preserve back-compat.
   is_archived?: boolean | null;
   in_stock?: boolean | null;
-  // Per-product delivery floor. Optional for the same back-compat reason as
-  // the two above. Enforced by enforceDeliveryFloor(), NOT by
-  // reconcilePrices — the floor needs the delivery date, which price
-  // reconciliation has no business knowing.
+  // The product's deliverable days, as the two halves of a union: the ray
+  // `available_from` starts, and the discrete `product_open_dates` rows.
+  // Optional for the same back-compat reason as the two above, and a caller
+  // that omits `open_dates` is read as ray-only — see AvailabilityRow for
+  // why that is the safe default and OPEN_DATES_SELECT for how to not need
+  // it. Enforced by enforceDeliveryDays(), NOT by reconcilePrices — the days
+  // need the delivery date, which price reconciliation has no business
+  // knowing.
   available_from?: string | null;
   stock_message?: string | null;
+  open_dates?: string[] | null;
 };
 
 export type ItemSnapshot = {
@@ -424,6 +430,7 @@ export type WebProductRow = {
   in_stock?: boolean | null;
   available_from?: string | null;
   stock_message?: string | null;
+  open_dates?: string[] | null;
 };
 
 export type WebItemSnapshot = {
@@ -505,34 +512,50 @@ export function reconcileWebPrices(
 }
 
 /**
- * Rejects a delivery date that falls before the cart's pre-order floor.
+ * Rejects delivery dates the kitchen is not baking the ordered lines on.
  *
- * The floor is MAX(available_from) across the ordered lines: an order carries
- * one `delivery_date` and the schema has no split-fulfilment concept, so the
- * latest loaf sets the date for the whole box.
+ * The order's deliverable days are the INTERSECTION of its lines' days, not
+ * MAX(available_from): an order carries one `delivery_date` and the schema has
+ * no split-fulfilment concept, so the date has to work for every loaf in the
+ * box — and a max is a ray, which cannot express "the 16th, then daily from
+ * the 19th". See intersectOpenSets.
+ *
+ * TAKES EVERY DATE, NOT THE EARLIEST. For a ray, checking the earliest date
+ * was sufficient: clear the floor and every later date clears it too. For a
+ * set that is false in both directions — 17 Oct is closed while both 16 Oct
+ * before it and 19 Oct after it are open — so a subscription template whose
+ * first delivery is fine can still have its third on a day nobody is baking.
+ * Pass the whole list. A single date is accepted as a convenience and is just
+ * a one-element list.
  *
  * Call this AFTER price reconciliation, with the product rows for the lines
  * actually ordered. Returns null when the order is fine.
  *
  * Two deliberate non-rejections:
- *   - No date at all → allowed. Site-wide pre-order mode strips date + slot
+ *   - No dates at all → allowed. Site-wide pre-order mode strips date + slot
  *     and an admin schedules later, so nothing has been promised to anyone
- *     yet. The floor is re-checked when the admin sets the date.
- *   - A floor in the past → not a floor. Stock landed and nobody cleared the
- *     column; blocking on it would take the product offline indefinitely.
+ *     yet. The days are re-checked when the admin sets the date.
+ *   - A ray start in the past → not a restriction. The day arrived and nobody
+ *     cleared the column; blocking on it would take the product offline
+ *     indefinitely. (A product with open days stays restricted even once they
+ *     have all passed — see productOpenSet's asymmetry.)
  *
  * This is the ONLY thing stopping an already-installed Android build from
- * booking a pre-order loaf for tomorrow: the app computes its own date list
- * locally (lib/deliverySlots.ts), has no way to see `available_from`, and
- * cannot be fixed without a Play release. Do not move this check client-side.
+ * booking a closed day: the app computes its own date list locally
+ * (lib/deliverySlots.ts), has no way to see `available_from` or
+ * `product_open_dates`, and cannot be fixed without a Play release. Do not
+ * move this check client-side.
  */
-export function enforceDeliveryFloor(
+export function enforceDeliveryDays(
   orderedProducts: AvailabilityRow[],
-  deliveryDate: string | null | undefined,
+  deliveryDates: string | null | undefined | (string | null | undefined)[],
   now: Date = new Date(),
 ): ValidationFailure | null {
-  if (!deliveryDate) return null;
-  const floor = cartFloor(orderedProducts, now);
-  if (!floor.date || deliveryDate >= floor.date) return null;
-  return fail(400, preorderFloorError(floor), PREORDER_FLOOR_CODE);
+  const dates = (Array.isArray(deliveryDates) ? deliveryDates : [deliveryDates])
+    .filter((d): d is string => typeof d === "string" && d.length > 0);
+  if (dates.length === 0) return null;
+  const cart = cartOpenDays(orderedProducts, now);
+  if (!cart.set.restricted) return null;
+  if (dates.every((d) => openSetHas(cart.set, d))) return null;
+  return fail(400, preorderFloorError(cart, now), PREORDER_FLOOR_CODE);
 }

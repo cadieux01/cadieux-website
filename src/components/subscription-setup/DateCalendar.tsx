@@ -68,27 +68,37 @@ export function DateCalendar({
   onToggleDate,
   deliveriesCount,
   totalAmount,
-  minDate = null,
+  closedNoteFor,
+  firstOpenDate = null,
 }: {
   selectedDates: string[];
   onToggleDate: (iso: string) => void;
   deliveriesCount: number;
   totalAmount: number;
-  // Pre-order floor (products.available_from) for whatever is being bought.
-  // Earlier dates render disabled, exactly like a past date — the brief is
-  // explicit that they must not be merely rejected on submit.
-  minDate?: string | null;
+  // Why the kitchen is shut on a given day, NAMING the loaf, or null when
+  // the day is fine. Those days render disabled exactly like a past date —
+  // they must not be merely rejected on submit — but with the reason on the
+  // cell, because a greyed cell with three loaves in the basket leaves the
+  // customer no way to know which one did it.
+  //
+  // A callback rather than the set itself: this grid stays a date widget and
+  // the baking-days model lives in one module.
+  closedNoteFor?: (iso: string) => string | null;
+  // Earliest day that IS deliverable, used only to choose which month to
+  // open on. A schedule is no longer a floor, so this is not a minimum and
+  // nothing is disabled by comparing against it.
+  firstOpenDate?: string | null;
 }) {
   const now = useMemo(() => new Date(), []);
   const today = useMemo(() => atMidnight(now), [now]);
   const baseY = today.getFullYear();
   const baseM = today.getMonth();
-  // Open on the floor's month when there is one, so the customer doesn't land
+  // Open on the first deliverable day's month, so the customer doesn't land
   // on a grid where every cell is greyed out. Clamped to the 3-month window
   // the arrows allow.
   const [offset, setOffset] = useState(() => {
-    if (!minDate) return 0;
-    const [y, m] = minDate.split("-").map((s) => parseInt(s, 10));
+    if (!firstOpenDate) return 0;
+    const [y, m] = firstOpenDate.split("-").map((s) => parseInt(s, 10));
     if (!y || !m) return 0;
     return Math.min(2, Math.max(0, (y - baseY) * 12 + (m - 1 - baseM)));
   });
@@ -98,21 +108,22 @@ export function DateCalendar({
   const viewY = viewDate.getFullYear();
   const viewM = viewDate.getMonth();
 
-  // The floor arrives async (the floors map is fetched), so the initial
+  // The schedule arrives async (the floors map is fetched), so the initial
   // offset above can be computed before it exists. Jump forward only when
-  // the month on screen is ENTIRELY before the floor — i.e. nothing in it is
-  // selectable. Any other navigation the customer makes is left alone.
-  const floorMonthOffset = useMemo(() => {
-    if (!minDate) return null;
-    const [y, m] = minDate.split("-").map((s) => parseInt(s, 10));
+  // the month on screen is ENTIRELY before the first deliverable day — i.e.
+  // nothing in it is selectable. Any other navigation the customer makes is
+  // left alone.
+  const firstOpenMonthOffset = useMemo(() => {
+    if (!firstOpenDate) return null;
+    const [y, m] = firstOpenDate.split("-").map((s) => parseInt(s, 10));
     if (!y || !m) return null;
     return (y - baseY) * 12 + (m - 1 - baseM);
-  }, [minDate, baseY, baseM]);
+  }, [firstOpenDate, baseY, baseM]);
   useEffect(() => {
-    if (floorMonthOffset === null) return;
-    if (offset >= floorMonthOffset) return;
-    setOffset(Math.min(2, Math.max(0, floorMonthOffset)));
-  }, [floorMonthOffset, offset]);
+    if (firstOpenMonthOffset === null) return;
+    if (offset >= firstOpenMonthOffset) return;
+    setOffset(Math.min(2, Math.max(0, firstOpenMonthOffset)));
+  }, [firstOpenMonthOffset, offset]);
 
   const rows = useMemo(
     () => buildMonthCells(viewY, viewM, today, now),
@@ -220,8 +231,8 @@ export function DateCalendar({
       >
         {rows.flat().map((cell) => {
           const selected = selectedSet.has(cell.iso);
-          const belowFloor = minDate !== null && cell.iso < minDate;
-          const blocked = cell.isPast || cell.noSlots || belowFloor;
+          const closedNote = cell.isPast ? null : closedNoteFor?.(cell.iso) ?? null;
+          const blocked = cell.isPast || cell.noSlots || !!closedNote;
           const fg = selected
             ? CHARCOAL
             : blocked
@@ -236,16 +247,15 @@ export function DateCalendar({
               disabled={blocked}
               aria-pressed={selected}
               aria-label={`${cell.date.toDateString()}${
-                belowFloor ? " (before the earliest delivery date for your loaves)" : ""
+                closedNote ? ` (${closedNote})` : ""
               }${
                 cell.noSlots ? " (no delivery slots left today — please pick another date)" : ""
               }${selected ? " (selected)" : ""}`}
               title={
-                belowFloor
-                  ? "Earlier than the first delivery date for the loaves you picked."
-                  : cell.noSlots
+                closedNote ??
+                (cell.noSlots
                   ? "We bake fresh — pick a date at least 12 hours from now."
-                  : undefined
+                  : undefined)
               }
               style={{
                 minHeight: 44,

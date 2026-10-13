@@ -17,9 +17,9 @@ import {
 import type { NutrientValue } from "@/lib/nutrition";
 import { isVideoUrl } from "@/lib/product-media";
 import {
-  availabilityLine,
-  preorderButtonNote,
-  productFloor,
+  flattenOpenDates,
+  OPEN_DATES_SELECT,
+  preorderInfo,
   type PreorderInfo,
 } from "@/lib/product-availability";
 
@@ -41,12 +41,18 @@ export type ProductRow = {
   gallery_urls: string[];
   is_active: boolean;
   in_stock: boolean;
-  // Per-product delivery floor. NULL = no restriction. Distinct from
-  // in_stock, which means "never sell" — a product with a floor is still
-  // visible, browsable and sellable, it just cannot be DELIVERED before this
-  // date. See lib/product-availability.ts.
+  // Start of the open-ended RAY of deliverable days. NULL = no ray. Distinct
+  // from in_stock, which means "never sell" — a product with a restriction is
+  // still visible, browsable and sellable, it just cannot be DELIVERED on a
+  // day the kitchen is not baking it. See lib/product-availability.ts.
   available_from: string | null;
   stock_message: string | null;
+  // Discrete open days from `product_open_dates`, UNIONed with the ray above.
+  // Always an array — `[]` for the five products that have none, which is
+  // identical in effect to the ray-only behaviour that predates the table.
+  // Flattened out of the PostgREST embed so that nothing downstream has to
+  // know this is a join.
+  open_dates: string[];
   sort_order: number;
   updated_at: string;
   // Regulatory label fields — free-form multiline. Rendered on the PDP
@@ -78,10 +84,16 @@ const supabaseAnon = createClient(
 // eventual admin "publish prices" action.
 export const getActiveProducts = unstable_cache(
   async (): Promise<ProductRow[]> => {
+    // `product_open_dates(open_date)` is a PostgREST embed over the real FK
+    // on product_open_dates.product_id. It is read with the ANON key, which
+    // is why that table carries an anon SELECT policy instead of this
+    // directory's usual service_role-only shape: an open-day set that comes
+    // back empty degrades to "every date is bookable", the one direction the
+    // table exists to prevent.
     const { data, error } = await supabaseAnon
       .from("products")
       .select(
-        "id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, available_from, stock_message, sort_order, updated_at, ingredients, allergens, nutrition_per_slice, slices_per_loaf, is_subscription_plan",
+        `id, slug, name, price_inr, weight, description, tagline, highlights, image_url, gallery_urls, is_active, in_stock, available_from, stock_message, ${OPEN_DATES_SELECT}, sort_order, updated_at, ingredients, allergens, nutrition_per_slice, slices_per_loaf, is_subscription_plan`,
       )
       .eq("is_active", true)
       .eq("is_archived", false)
@@ -91,7 +103,9 @@ export const getActiveProducts = unstable_cache(
       console.error("[lib/products] fetch failed:", error);
       return [];
     }
-    return data ?? [];
+    return (data ?? []).map((row) =>
+      flattenOpenDates(row as Omit<ProductRow, "open_dates">),
+    );
   },
   ["products-active"],
   { revalidate: 60, tags: ["products"] },
@@ -279,9 +293,9 @@ export function resolvePdpGallery(
 export type AvailabilityMap = {
   listed: Set<string>;
   outOfStock: Set<string>;
-  /** Slug → pre-order info, for products with a live delivery floor. A slug
-   *  here is NOT out of stock: it is sellable, and the customer pre-orders
-   *  it. Absent for everything unrestricted. */
+  /** Slug → baking-days info, for products that cannot be delivered on every
+   *  day. A slug here is NOT out of stock: it is sellable, the customer just
+   *  picks from its baking days. Absent for everything unrestricted. */
   preorder: Map<string, PreorderInfo>;
 };
 
@@ -295,14 +309,8 @@ export async function getProductAvailability(): Promise<AvailabilityMap | null> 
   for (const p of products) {
     listed.add(p.slug);
     if (!p.in_stock) outOfStock.add(p.slug);
-    const floor = productFloor(p, now);
-    if (floor) {
-      preorder.set(p.slug, {
-        date: floor,
-        line: availabilityLine(p, now) ?? "",
-        buttonNote: preorderButtonNote(p, now) ?? "",
-      });
-    }
+    const info = preorderInfo(p, now);
+    if (info) preorder.set(p.slug, info);
   }
   return { listed, outOfStock, preorder };
 }

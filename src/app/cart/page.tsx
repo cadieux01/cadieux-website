@@ -7,8 +7,9 @@ import { useCart } from "@/context/CartContext";
 import { usePreorderMode } from "@/hooks/usePreorderMode";
 import { useCartFloor } from "@/hooks/useProductFloors";
 import {
-  cartFloorEscapeHint,
-  cartFloorMessage,
+  cartOpenDaysEscapeHint,
+  cartOpenDaysMessage,
+  noDeliveryDayMessage,
 } from "@/lib/product-availability";
 import BackLink from "@/components/BackLink";
 
@@ -31,12 +32,16 @@ export default function CartPage() {
   const router = useRouter();
   const { enabled: preorderMode } = usePreorderMode();
 
-  // Pre-order floor for this cart: MAX(available_from) across its lines.
-  // Shown here, BEFORE checkout, so the customer meets the constraint while
-  // they can still act on it — the delivery date is never moved silently.
-  const floor = useCartFloor(cart);
-  const floorMessage = cartFloorMessage(floor);
-  const floorHint = cartFloorEscapeHint(floor);
+  // Baking days for this cart: the INTERSECTION across its lines, not the
+  // max of their ray starts. Shown here, BEFORE checkout, so the customer
+  // meets the constraint while they can still act on it — the delivery date
+  // is never moved silently.
+  const openDays = useCartFloor(cart);
+  // The dead end takes precedence: when these lines share no day at all,
+  // "delivery is <phrase>" would name days the cart cannot actually use.
+  const deadEnd = noDeliveryDayMessage(openDays);
+  const floorMessage = deadEnd ?? cartOpenDaysMessage(openDays);
+  const floorHint = cartOpenDaysEscapeHint(openDays);
 
   return (
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
@@ -124,7 +129,7 @@ export default function CartPage() {
                 color: "#024628",
               }}
             >
-              Pre-order
+              {deadEnd ? "No shared delivery day" : "Baking days"}
             </p>
             <p
               style={{
@@ -141,7 +146,7 @@ export default function CartPage() {
             {/* Mixed cart only. A customer forced six days out for a loaf of
                 Plain they wanted tomorrow is a lost sale this sentence saves;
                 on an all-pre-order cart it would be a dead end, so
-                cartFloorEscapeHint returns null there. */}
+                cartOpenDaysEscapeHint returns null there. */}
             {floorHint ? (
               <p
                 style={{

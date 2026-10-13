@@ -17,11 +17,15 @@ import {
   normalizePhone,
 } from "@/lib/phone-cookie";
 import {
-  enforceDeliveryFloor,
+  enforceDeliveryDays,
   reconcileWebPrices,
   validateWebOrderItemsShape,
   type WebProductRow,
 } from "@/lib/order-validation";
+import {
+  flattenOpenDates,
+  OPEN_DATES_SELECT,
+} from "@/lib/product-availability";
 import {
   isAcceptableDeliveryDate,
   isAcceptableDeliverySlot,
@@ -292,30 +296,28 @@ export async function prepareOneTimeOrder(
   const { data: productRows, error: productsErr } = await supabaseAdmin
     .from("products")
     .select(
-      "slug, name, price_inr, is_active, is_archived, in_stock, available_from, stock_message",
+      `slug, name, price_inr, is_active, is_archived, in_stock, available_from, stock_message, ${OPEN_DATES_SELECT}`,
     )
     .in("slug", slugs);
   if (productsErr) {
     console.error("[checkout] products fetch failed:", productsErr);
     return { ok: false, status: 500, body: { error: "Failed to validate cart" } };
   }
-
-  const reconciled = reconcileWebPrices(
-    itemsShape.items,
-    (productRows ?? []) as WebProductRow[],
+  const products = (productRows ?? []).map((r) =>
+    flattenOpenDates(r as Omit<WebProductRow, "open_dates">),
   );
+
+  const reconciled = reconcileWebPrices(itemsShape.items, products);
   if (!reconciled.ok) {
     return { ok: false, status: reconciled.status, body: { error: reconciled.error, code: reconciled.code } };
   }
 
-  // Pre-order delivery floor: MAX(available_from) across the cart's lines.
-  // Skipped under site-wide pre-order mode, which strips the date entirely
-  // and leaves an admin to schedule — nothing has been promised there yet.
+  // Baking days: the INTERSECTION of the cart's lines, not the max of their
+  // ray starts. Skipped under site-wide pre-order mode, which strips the date
+  // entirely and leaves an admin to schedule — nothing has been promised
+  // there yet.
   if (!opts.preorderMode) {
-    const floorFailure = enforceDeliveryFloor(
-      (productRows ?? []) as WebProductRow[],
-      deliveryDate,
-    );
+    const floorFailure = enforceDeliveryDays(products, deliveryDate);
     if (floorFailure) {
       return {
         ok: false,

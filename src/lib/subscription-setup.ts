@@ -32,12 +32,19 @@ export type WizardProduct = {
   mrp_inr?: number;
   subscription_discount_pct?: number;
   subscription_savings_inr?: number;
-  /** Raw `products.available_from`. A future date means the loaf cannot
-   *  start a NEW plan — the picker disables it and the server refuses.
-   *  Left raw (not a resolved boolean) so the comparison happens at render
-   *  time and the plan re-opens on the date without a cache bust. Absent on
-   *  the hardcoded fallback below, which is a network-failure shape only. */
+  /** Raw `products.available_from` — the start of the open-ended half of
+   *  the loaf's baking schedule. Does NOT block the loaf from starting a new
+   *  plan; it constrains the DATES, and the step-2 calendar disables the
+   *  ones the kitchen is shut on. Left raw (not a resolved boolean) so the
+   *  comparison happens at render time and the schedule advances without a
+   *  cache bust. Absent on the hardcoded fallback below, which is a
+   *  network-failure shape only. */
   available_from?: string | null;
+  /** Raw `product_open_dates` rows — the discrete baking days that sit
+   *  BEFORE `available_from`. Raw for the same reason. Absent on the
+   *  fallback; absent means "no extra days", which is what every product
+   *  without a row behaves as. */
+  open_dates?: string[] | null;
 };
 
 /** Hardcoded wizard catalogue used as a NETWORK-FAILURE FALLBACK.
