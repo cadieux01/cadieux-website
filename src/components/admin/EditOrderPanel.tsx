@@ -29,7 +29,12 @@ import { formatINR } from "@/lib/admin-formatting";
 import type { AdminOrderRow, AdminOrderItemSnapshot } from "@/lib/admin-shared";
 import { isSlotPaused, SLOTS } from "@/lib/delivery-slots";
 import { formatOrderNumber } from "@/lib/order-number";
-import { productFloor } from "@/lib/product-availability";
+import {
+  flattenOpenDates,
+  formatOpenDays,
+  openSetHas,
+  productOpenSet,
+} from "@/lib/product-availability";
 import { isPaidStatus } from "@/lib/payment-label";
 
 // The three canonical delivery windows — MUST match what the app + web
@@ -66,16 +71,32 @@ const CANONICAL_SLOTS: Array<{ value: string; label: string; disabled?: boolean 
     }`,
   }));
 
-// Pre-order floor: read from `products.available_from` at panel-open time
-// (never hard-coded) via /api/admin/products/availability.
+// Baking days: read from `products.available_from` + `product_open_dates` at
+// panel-open time (never hard-coded) via /api/admin/products/availability.
 //
-// The raw column is NOT the floor. `productFloor` is, and it returns null
-// once the date is in the past — a floor that has passed is spent, because
-// nobody clears the column on the release date and there is no job that does
-// it either. Read the column directly and the warning never expires: every
-// historical order dated before the floor keeps flagging forever. Every
-// customer-facing reader goes through productFloor; so does this one.
-type AvailabilityEntry = { id: string; name: string; available_from: string | null };
+// NEITHER column is the schedule on its own, and the test is `openSetHas`,
+// not a date comparison. A product is deliverable on a day if that day is in
+// its open-date list OR on/after `available_from` — so a date can be refused
+// for sitting before the open-ended start OR for falling in a gap between
+// baking days, and only the second case needs the list.
+//
+// Both halves decay with the calendar, which is what stops this warning
+// flagging history: nobody clears `available_from` on the release date (there
+// is no job that does), so `productOpenSet` spends a start date once it has
+// passed and drops open days once they are behind us. Every customer-facing
+// reader and the server gate go through the same function; so does this one.
+type AvailabilityEntry = {
+  id: string;
+  name: string;
+  available_from: string | null;
+  open_dates: string[];
+};
+
+/** Wire shape of /api/admin/products/availability — open days arrive as the
+ *  joined rows and are flattened on receipt. */
+type AvailabilityWireRow = Omit<AvailabilityEntry, "open_dates"> & {
+  product_open_dates?: { open_date: string }[] | null;
+};
 
 const CREAM = "#FBF3D4";
 const INK = "#024628";
@@ -159,10 +180,11 @@ export function EditOrderPanel({
     let cancelled = false;
     (async () => {
       try {
-        const res = await adminFetch<{ products: AvailabilityEntry[] }>(
+        const res = await adminFetch<{ products: AvailabilityWireRow[] }>(
           "/api/admin/products/availability",
         );
-        if (!cancelled) setAvailability(res.products ?? []);
+        if (!cancelled)
+          setAvailability((res.products ?? []).map(flattenOpenDates));
       } catch {
         // silent — no warning is safer than a broken warning
       }
@@ -182,7 +204,7 @@ export function EditOrderPanel({
   // carry `slug` (e.g. "high-protein", "multigrain") and legacy rows
   // may carry `product_id`. products.id happens to be the slug string,
   // so both keys resolve against the same column.
-  const flooredItems = useMemo(() => {
+  const closedItems = useMemo(() => {
     if (!deliveryDate) return [] as AvailabilityEntry[];
     return items
       .map((it) =>
@@ -190,15 +212,14 @@ export function EditOrderPanel({
           (p) => p.id === it.product_id || p.id === it.slug,
         ),
       )
-      .filter((p): p is AvailabilityEntry => {
-        if (!p) return false;
-        const floor = productFloor(p);
-        return !!floor && floor > deliveryDate;
-      });
+      .filter(
+        (p): p is AvailabilityEntry =>
+          !!p && !openSetHas(productOpenSet(p), deliveryDate),
+      );
   }, [availability, items, deliveryDate]);
 
-  const showFloorWarning =
-    flooredItems.length > 0 && ackFloor !== deliveryDate;
+  const showClosedWarning =
+    closedItems.length > 0 && ackFloor !== deliveryDate;
 
   // Read through the shared predicate, not `=== "paid"`. It matches by
   // prefix, which is what makes `paid_orphaned` — money captured, nothing
@@ -303,11 +324,11 @@ export function EditOrderPanel({
       return;
     }
 
-    // Multigrain floor: second-click override. Ack must match the
-    // current date to count (switching dates re-arms).
-    if (flooredItems.length > 0 && ackFloor !== deliveryDate) {
+    // Baking days: second-click override. Ack must match the current
+    // date to count (switching dates re-arms).
+    if (closedItems.length > 0 && ackFloor !== deliveryDate) {
       setErr(
-        `${flooredItems.map((p) => p.name).join(", ")} isn't available yet — click Acknowledge above, then Save.`,
+        `${closedItems.map((p) => p.name).join(", ")} isn't baked on this date — click Acknowledge above, then Save.`,
       );
       return;
     }
@@ -440,7 +461,7 @@ export function EditOrderPanel({
     coordsDirty,
     coords,
     onSaved,
-    flooredItems,
+    closedItems,
     ackFloor,
   ]);
 
@@ -568,7 +589,7 @@ export function EditOrderPanel({
                 </select>
               </Field>
             </div>
-            {showFloorWarning ? (
+            {showClosedWarning ? (
               <div
                 role="alert"
                 style={{
@@ -582,10 +603,11 @@ export function EditOrderPanel({
                 }}
               >
                 <strong>Heads up:</strong>{" "}
-                {flooredItems.map((p) => p.name).join(", ")}{" "}
-                {flooredItems.length === 1 ? "is" : "are"} only available from{" "}
-                {flooredItems
-                  .map((p) => p.available_from)
+                {closedItems.map((p) => p.name).join(", ")}{" "}
+                {closedItems.length === 1 ? "isn't" : "aren't"} baked on this
+                date. Baking days:{" "}
+                {closedItems
+                  .map((p) => formatOpenDays(productOpenSet(p)))
                   .filter(Boolean)
                   .join(" / ")}
                 . Save again to confirm this delivery date anyway.

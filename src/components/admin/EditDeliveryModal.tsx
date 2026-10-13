@@ -9,19 +9,29 @@
 // scheduled_date, slot, scheduled_time_slot) — see the route header for
 // the reason.
 //
-// Pre-order floor warning + second-click override mirror EditOrderPanel:
-// live-read `products.available_from` at open time, warn if any item on
-// the plan is not yet available on the new date, require an
-// Acknowledge click before Save writes. The column is read through
-// `productFloor`, which spends a floor once its date has passed — see the
-// note in EditOrderPanel for why reading the raw column never expires.
+// Baking-days warning + second-click override mirror EditOrderPanel:
+// live-read each product's schedule at open time, warn if the kitchen does
+// not bake an item on the plan on the new date, require an Acknowledge click
+// before Save writes. It WARNS, never blocks — an operator moving a row
+// knowingly is the whole point of the override.
+//
+// The test is `openSetHas`, the same predicate the customer calendar and the
+// server gate use, so an operator is never warned about a day a customer
+// could book (or vice versa). A date can be shut because it sits BEFORE the
+// product's open-ended start OR because it falls in a gap between baking
+// days — a floor comparison would miss the second case entirely.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { ensureAdminFirstName } from "@/lib/admin-first-name";
 import { isSlotPaused, SLOTS } from "@/lib/delivery-slots";
-import { productFloor } from "@/lib/product-availability";
+import {
+  flattenOpenDates,
+  formatOpenDays,
+  openSetHas,
+  productOpenSet,
+} from "@/lib/product-availability";
 import type {
   AdminDeliveryRow,
   AdminSubscriptionItem,
@@ -52,6 +62,13 @@ type AvailabilityEntry = {
   id: string;
   name: string;
   available_from: string | null;
+  open_dates: string[];
+};
+
+/** Wire shape of /api/admin/products/availability — the open days arrive as
+ *  the joined rows and are flattened on receipt. */
+type AvailabilityWireRow = Omit<AvailabilityEntry, "open_dates"> & {
+  product_open_dates?: { open_date: string }[] | null;
 };
 
 export function EditDeliveryModal({
@@ -64,7 +81,7 @@ export function EditDeliveryModal({
   subscriptionId: string;
   delivery: AdminDeliveryRow;
   /** Subscription items — used to match against product availability
-   *  for the Multigrain floor warning. Legacy rows may pass []. */
+   *  for the baking-days warning. Legacy rows may pass []. */
   items: AdminSubscriptionItem[];
   onCancel: () => void;
   onSaved: () => void;
@@ -85,10 +102,11 @@ export function EditDeliveryModal({
     let cancelled = false;
     (async () => {
       try {
-        const res = await adminFetch<{ products: AvailabilityEntry[] }>(
+        const res = await adminFetch<{ products: AvailabilityWireRow[] }>(
           "/api/admin/products/availability",
         );
-        if (!cancelled) setAvailability(res.products ?? []);
+        if (!cancelled)
+          setAvailability((res.products ?? []).map(flattenOpenDates));
       } catch {
         // silent
       }
@@ -100,17 +118,15 @@ export function EditDeliveryModal({
 
   // Match subscription-item slugs against the products table. Legacy
   // items without a slug simply can't match — no false warning.
-  const flooredItems = useMemo(() => {
+  const closedItems = useMemo(() => {
     if (!date) return [] as AvailabilityEntry[];
     const slugs = new Set(items.map((it) => it.product_slug).filter(Boolean));
-    return availability.filter((p) => {
-      if (!slugs.has(p.id)) return false;
-      const floor = productFloor(p);
-      return !!floor && floor > date;
-    });
+    return availability.filter(
+      (p) => slugs.has(p.id) && !openSetHas(productOpenSet(p), date),
+    );
   }, [availability, items, date]);
 
-  const showFloorWarning = flooredItems.length > 0 && ackFloor !== date;
+  const showClosedWarning = closedItems.length > 0 && ackFloor !== date;
 
   const slotIsCanonical = CANONICAL_SLOTS.some((s) => s.value === slot);
 
@@ -124,9 +140,9 @@ export function EditDeliveryModal({
       setErr("Pick a delivery window (Morning / Midday / Evening).");
       return;
     }
-    if (flooredItems.length > 0 && ackFloor !== date) {
+    if (closedItems.length > 0 && ackFloor !== date) {
       setErr(
-        `${flooredItems.map((p) => p.name).join(", ")} isn't available yet — click Acknowledge, then Save.`,
+        `${closedItems.map((p) => p.name).join(", ")} isn't baked on this date — click Acknowledge, then Save.`,
       );
       return;
     }
@@ -172,7 +188,7 @@ export function EditDeliveryModal({
     date,
     slot,
     slotIsCanonical,
-    flooredItems,
+    closedItems,
     ackFloor,
     initialDate,
     initialSlot,
@@ -287,7 +303,7 @@ export function EditDeliveryModal({
             ))}
           </select>
 
-          {showFloorWarning ? (
+          {showClosedWarning ? (
             <div
               role="alert"
               style={{
@@ -301,10 +317,11 @@ export function EditDeliveryModal({
               }}
             >
               <strong>Heads up:</strong>{" "}
-              {flooredItems.map((p) => p.name).join(", ")}{" "}
-              {flooredItems.length === 1 ? "is" : "are"} only available from{" "}
-              {flooredItems
-                .map((p) => p.available_from)
+              {closedItems.map((p) => p.name).join(", ")}{" "}
+              {closedItems.length === 1 ? "isn't" : "aren't"} baked on this
+              date. Baking days:{" "}
+              {closedItems
+                .map((p) => formatOpenDays(productOpenSet(p)))
                 .filter(Boolean)
                 .join(" / ")}
               . Acknowledge to enable Save on this date.
