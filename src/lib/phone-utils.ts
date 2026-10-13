@@ -140,7 +140,7 @@ function normaliseCase(token: string): string {
  * The comparison is made AFTER case normalisation, so "SRI LAKSHMI" and
  * "sri harsha" are caught by the same line.
  */
-function firstName(full: string | null | undefined): string {
+export function firstName(full: string | null | undefined): string {
   const tokens = nameTokens(full);
   const at = tokens.findIndex(isNameToken);
   if (at < 0) return "";

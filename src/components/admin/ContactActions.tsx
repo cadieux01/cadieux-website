@@ -25,6 +25,11 @@ import { useState } from "react";
 
 import { adminFetch } from "@/lib/admin-client";
 import { getAdminFirstName } from "@/lib/admin-first-name";
+import {
+  CONTACT_TEMPLATES,
+  type ContactTemplateContext,
+  type ContactTemplateId,
+} from "@/lib/contact-templates";
 import type { ContactChannel, ContactPress, OrderContacts } from "@/lib/order-contacts";
 import {
   ContactMessageContext,
@@ -132,6 +137,8 @@ export function ContactActions({
   trackOrderId,
   contacts,
   skipMessageModal = false,
+  deliverySlot,
+  deliveryDate,
 }: {
   phone: string | null | undefined;
   customerName?: string | null;
@@ -164,9 +171,29 @@ export function ContactActions({
    * acts immediately — it is one tap in the way.
    */
   skipMessageModal?: boolean;
+  /**
+   * This order's STORED slot and date ("16:00-21:00", "2026-10-16") —
+   * not display labels. They feed the (SLOT) and (DATE) holes in the
+   * templates; see contact-templates.ts for how each renders when the
+   * value is absent, which it legitimately is on 41 of the 312 orders
+   * since 1 Oct and on every pickup row.
+   *
+   * Optional, and absent on every screen that is about a customer
+   * rather than one order. The templates that need them say so in their
+   * own text rather than silently inventing a window.
+   */
+  deliverySlot?: string | null;
+  deliveryDate?: string | null;
 }) {
   const [channel, setChannel] = useState<Channel | null>(null);
   const [message, setMessage] = useState("");
+  // Which template chip reads as selected. Null = the one-line opener
+  // every screen seeded before templates existed, which stays the
+  // default so no existing screen changes behaviour until a chip is
+  // tapped. NOT derived from `message`: the operator is expected to edit
+  // the text, and a chip that un-highlighted on the first keystroke
+  // would read as having lost the template.
+  const [templateId, setTemplateId] = useState<ContactTemplateId | null>(null);
   // Optimistically-green channels. Merged with the server's view below, so
   // a press lights up on the same frame it fires rather than after a round
   // trip the operator would see as lag.
@@ -175,6 +202,12 @@ export function ContactActions({
   if (!phone) return null;
 
   const ctx: ContactMessageContext = { customerName, orderCode };
+  const templateCtx: ContactTemplateContext = {
+    customerName,
+    orderCode,
+    deliverySlot,
+    deliveryDate,
+  };
   const tracked = typeof trackOrderId === "string" && trackOrderId.length > 0;
 
   function isGreen(c: ContactChannel): boolean {
@@ -224,7 +257,16 @@ export function ContactActions({
     // the operator confirms, no channel has been opened and nothing has
     // happened that a green button should be claiming.
     setMessage(defaultContactMessage(ctx));
+    setTemplateId(null);
     setChannel(c);
+  }
+
+  /** Tapping a chip REPLACES the textarea. It is a seed, not a merge:
+   *  appending a second sign-off to a message that already has one is
+   *  the only other thing it could do. */
+  function pickTemplate(t: (typeof CONTACT_TEMPLATES)[number]) {
+    setTemplateId(t.id);
+    setMessage(t.body(templateCtx));
   }
 
   function hrefFor(c: Channel, text: string): string {
@@ -372,6 +414,8 @@ export function ContactActions({
           phone={phone}
           message={message}
           onMessage={setMessage}
+          templateId={templateId}
+          onTemplate={pickTemplate}
           onCancel={() => setChannel(null)}
           onSend={send}
         />
@@ -385,6 +429,8 @@ function MessageModal({
   phone,
   message,
   onMessage,
+  templateId,
+  onTemplate,
   onCancel,
   onSend,
 }: {
@@ -392,6 +438,8 @@ function MessageModal({
   phone: string;
   message: string;
   onMessage: (s: string) => void;
+  templateId: ContactTemplateId | null;
+  onTemplate: (t: (typeof CONTACT_TEMPLATES)[number]) => void;
   onCancel: () => void;
   onSend: () => void;
 }) {
@@ -459,6 +507,46 @@ function MessageModal({
             padding: "1rem 1.5rem",
           }}
         >
+          {/* The eight templates, above the text they replace. Inside
+              the SCROLLING zone, not the fixed header: eight chips wrap
+              to three rows on a phone, and a header that tall would eat
+              the textarea on the screens this is used from most. */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              marginBottom: "0.85rem",
+            }}
+          >
+            {CONTACT_TEMPLATES.map((t) => {
+              const on = t.id === templateId;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => onTemplate(t)}
+                  title={`Replace the message with the ${t.label} template`}
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.75rem",
+                    letterSpacing: "0.08em",
+                    padding: "0.3rem 0.6rem",
+                    // Selected = filled cream. An outline-only "selected"
+                    // state against an outline-only "unselected" one is
+                    // the mistake the contact buttons already documented:
+                    // distinguish by TREATMENT, not by a shade of cream.
+                    color: on ? "rgb(29,29,31)" : FADED,
+                    background: on ? CREAM : "transparent",
+                    border: `1px solid ${on ? CREAM : BORDER}`,
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
           <textarea
             value={message}
             onChange={(e) => onMessage(e.target.value)}

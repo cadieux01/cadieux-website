@@ -2647,6 +2647,16 @@ const OrderRow = memo(function OrderRow({
               trackOrderId={o.id}
               contacts={o.contacts}
               skipMessageModal
+              // Feeds the (SLOT) and (DATE) holes in the eight message
+              // templates. Unread while `skipMessageModal` is set — the
+              // board opens WhatsApp/SMS without the modal the template
+              // chips live in — and passed anyway because this is the
+              // only call site that HAS an order's slot and date, so on
+              // the day that prop comes off the copy is already right
+              // rather than silently falling back to "we will confirm
+              // the time window shortly" on all 312 orders.
+              deliverySlot={o.delivery_slot}
+              deliveryDate={o.delivery_date}
             />
           </div>
         ) : null}
