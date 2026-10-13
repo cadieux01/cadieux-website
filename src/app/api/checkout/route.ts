@@ -37,7 +37,8 @@ import {
   SANDWICH_CHECKOUT_BLOCK_CODE,
   SANDWICH_CHECKOUT_BLOCK_MESSAGE,
 } from "@/lib/sandwich-checkout-guard";
-import { enforceDeliveryFloor } from "@/lib/order-validation";
+import { enforceDeliveryDays } from "@/lib/order-validation";
+import { flattenOpenDates, OPEN_DATES_SELECT } from "@/lib/product-availability";
 import { queueOrderNotification } from "@/lib/order-notification";
 import { queueBurstAlert } from "@/lib/order-burst-alert";
 import {
@@ -784,7 +785,7 @@ export async function POST(req: NextRequest) {
       const { data: rows, error: rowsErr } = await supabaseAdmin
         .from("products")
         .select(
-          "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message, is_subscription_plan",
+          `slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message, is_subscription_plan, ${OPEN_DATES_SELECT}`,
         )
         .in("slug", slugs);
       if (rowsErr) {
@@ -794,7 +795,9 @@ export async function POST(req: NextRequest) {
           { status: 500 },
         );
       }
-      const bySlug = new Map((rows ?? []).map((r) => [r.slug as string, r]));
+      const bySlug = new Map(
+        (rows ?? []).map((r) => [r.slug as string, flattenOpenDates(r)]),
+      );
 
       type SnapItem = {
         product_slug: string;
@@ -850,22 +853,24 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Pre-order floor. A NEW subscription containing a pre-order loaf can
-      // START on or after that loaf's `available_from`, and every generated
-      // delivery must fall on or after it too. Checked against the EARLIEST
-      // delivery in the template — deliveries are sorted ascending, so if
-      // the first one clears the floor every later one does. Existing
-      // subscriptions are untouched by design.
+      // Baking days. A NEW subscription may only be created if EVERY
+      // generated delivery falls on a day the kitchen bakes all of its
+      // loaves. Refused at creation — never auto-skipped, never
+      // auto-shifted. Existing subscriptions are untouched by design.
+      //
+      // EVERY date is checked, not just the earliest. That shortcut was
+      // sound while availability was a ray (one floor, open-ended): clear
+      // the first delivery and every later one clears too. It is false for
+      // a discrete set of baking days — 17 Oct can be shut while both the
+      // 16th and the 19th are open — so a monotonicity argument no longer
+      // holds and the whole template goes in.
       //
       // Historically there was a stricter "pre-order loaf cannot start a
       // new plan at all" gate (`subscriptionFloorError`) checked ahead of
       // this one; that gate has been removed so a customer can open a
-      // subscription on Multigrain (etc.) as long as the first delivery is
-      // on/after its floor, which is exactly what the calendar surfaces.
-      const earliestDelivery = deliveryTemplate
-        .map((d) => d.delivery_date)
-        .sort()[0];
-      const subFloorFailure = enforceDeliveryFloor(
+      // subscription on Multigrain (etc.) as long as its deliveries land on
+      // baking days, which is exactly what the calendar surfaces.
+      const subFloorFailure = enforceDeliveryDays(
         snapItems.map((s) => ({
           name: s.product_name,
           available_from: bySlug.get(s.product_slug)?.available_from as
@@ -876,8 +881,9 @@ export async function POST(req: NextRequest) {
             | string
             | null
             | undefined,
+          open_dates: bySlug.get(s.product_slug)?.open_dates,
         })),
-        earliestDelivery,
+        deliveryTemplate.map((d) => d.delivery_date),
       );
       if (subFloorFailure) {
         return NextResponse.json(
@@ -998,7 +1004,7 @@ export async function POST(req: NextRequest) {
     const { data: planRow, error: planErr } = await supabaseAdmin
       .from("products")
       .select(
-        "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message, is_subscription_plan",
+        `slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message, is_subscription_plan, ${OPEN_DATES_SELECT}`,
       )
       .eq("slug", planId)
       .maybeSingle();
@@ -1035,25 +1041,24 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    // Pre-order floor — same rule as the multi-variant branch above:
-    // the first delivery (and therefore every subsequent one) must land
-    // on/after the loaf's `available_from`. A stricter "cannot start a
-    // new plan at all" gate previously ran ahead of this and has been
-    // removed — the calendar disables earlier dates, and this server gate
-    // is the safety net.
+    // Baking days — same rule as the multi-variant branch above: EVERY
+    // generated delivery must land on a day the kitchen bakes this loaf,
+    // so the whole template is checked rather than just the earliest date
+    // (a discrete set of days is not monotone the way a floor was). A
+    // stricter "cannot start a new plan at all" gate previously ran ahead
+    // of this and has been removed — the calendar disables shut days, and
+    // this server gate is the safety net.
     {
-      const earliestDelivery = deliveryTemplate
-        .map((d) => d.delivery_date)
-        .sort()[0];
-      const planFloorFailure = enforceDeliveryFloor(
+      const planFloorFailure = enforceDeliveryDays(
         [
           {
             name: planRow.name as string,
             available_from: planRow.available_from as string | null | undefined,
             stock_message: planRow.stock_message as string | null | undefined,
+            open_dates: flattenOpenDates(planRow).open_dates,
           },
         ],
-        earliestDelivery,
+        deliveryTemplate.map((d) => d.delivery_date),
       );
       if (planFloorFailure) {
         return NextResponse.json(

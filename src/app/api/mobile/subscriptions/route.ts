@@ -47,7 +47,8 @@ import {
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 import { formatSubscriptionNumber } from "@/lib/order-number";
 import { getPreorderMode } from "@/lib/preorderMode";
-import { enforceDeliveryFloor } from "@/lib/order-validation";
+import { enforceDeliveryDays } from "@/lib/order-validation";
+import { flattenOpenDates, OPEN_DATES_SELECT } from "@/lib/product-availability";
 import {
   isValidSlotValue,
   validateBookingSlot,
@@ -735,14 +736,16 @@ async function handleMultiVariant(
   const { data: rows, error: rowsErr } = await supabaseAdmin
     .from("products")
     .select(
-      "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message, is_subscription_plan",
+      `slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message, is_subscription_plan, ${OPEN_DATES_SELECT}`,
     )
     .in("slug", slugs);
   if (rowsErr) {
     console.error("[mobile/subscriptions] multi-variant plan lookup:", rowsErr);
     return fail(500, "Failed to validate subscription");
   }
-  const bySlug = new Map((rows ?? []).map((r) => [r.slug as string, r]));
+  const bySlug = new Map(
+    (rows ?? []).map((r) => [r.slug as string, flattenOpenDates(r)]),
+  );
 
   type SnapItem = {
     product_slug: string;
@@ -787,16 +790,18 @@ async function handleMultiVariant(
     });
   }
 
-  // Pre-order floor. A NEW subscription containing a pre-order loaf can
-  // start on/after that loaf's `available_from`, and every generated
-  // delivery must fall on or after it. `deliveries` is sorted ascending
-  // so the first entry is the only one that can breach the floor.
-  // Existing subscriptions are deliberately untouched — those are handled
-  // by phone. The stricter "cannot start a new plan at all" gate that
-  // used to run ahead of this check has been removed so Multigrain (etc.)
-  // is a first-class subscription option again.
+  // Baking days. A NEW subscription is refused unless EVERY generated
+  // delivery falls on a day the kitchen bakes all of its loaves — never
+  // auto-skipped, never auto-shifted. Every date goes in, not just
+  // `deliveries[0]`: that shortcut was sound while availability was a ray
+  // (clear the earliest and the rest follow) but a discrete set of baking
+  // days is not monotone — a shut 17 Oct can sit between an open 16th and
+  // an open 19th. Existing subscriptions are deliberately untouched —
+  // those are handled by phone. The stricter "cannot start a new plan at
+  // all" gate that used to run ahead of this check has been removed so
+  // Multigrain (etc.) is a first-class subscription option again.
   {
-    const floorFailure = enforceDeliveryFloor(
+    const floorFailure = enforceDeliveryDays(
       snapItems.map((s) => ({
         name: s.product_name,
         available_from: bySlug.get(s.product_slug)?.available_from as
@@ -807,8 +812,9 @@ async function handleMultiVariant(
           | string
           | null
           | undefined,
+        open_dates: bySlug.get(s.product_slug)?.open_dates,
       })),
-      deliveries[0]?.date,
+      deliveries.map((d) => d.date),
     );
     if (floorFailure) {
       return fail(floorFailure.status, floorFailure.error, floorFailure.code);
@@ -1151,7 +1157,7 @@ export async function POST(req: NextRequest) {
   const { data: product, error: productErr } = await supabaseAdmin
     .from("products")
     .select(
-      "id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock, available_from, stock_message, is_subscription_plan",
+      `id, slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, is_archived, in_stock, available_from, stock_message, is_subscription_plan, ${OPEN_DATES_SELECT}`,
     )
     .eq("id", body.product_id)
     .maybeSingle();
@@ -1178,9 +1184,9 @@ export async function POST(req: NextRequest) {
     return fail(400, NOT_A_SUBSCRIPTION_PLAN_ERROR, "not_a_subscription_plan");
   }
   // (The stricter "pre-order loaf cannot start a new plan at all" gate has
-  // been removed. The 6b delivery-floor block below is the only guard —
-  // first delivery ≥ `available_from` implies every subsequent delivery
-  // clears the floor too.)
+  // been removed. The 6b baking-days block below is the only guard, and it
+  // checks every generated delivery — see the note there for why the
+  // earliest date alone is not enough.)
   //
   // V10 back-compat bridge: the authoritative subscription price is now
   // DERIVED from price_inr × (1 − subscription_discount_pct/100). The v8 app
@@ -1298,23 +1304,25 @@ export async function POST(req: NextRequest) {
     subRowFrequency = "custom";
   }
 
-  // 6b. Pre-order floor. Placed AFTER the template is built so it covers both
+  // 6b. Baking days. Placed AFTER the template is built so it covers both
   // pattern and calendar modes from one check — a pattern schedule generates
-  // its own dates and would otherwise slip through. Existing subscriptions
-  // are deliberately untouched.
+  // its own dates and would otherwise slip through. EVERY generated date is
+  // checked, not just the earliest: a discrete set of baking days can be
+  // shut on the 17th while open on both the 16th and the 19th, so clearing
+  // the first delivery says nothing about the rest. Creation is refused
+  // outright; nothing is auto-skipped or auto-shifted, and existing
+  // subscriptions are deliberately untouched.
   {
-    const earliest = deliveryRowsTemplate
-      .map((d) => d.delivery_date)
-      .sort()[0];
-    const floorFailure = enforceDeliveryFloor(
+    const floorFailure = enforceDeliveryDays(
       [
         {
           name: product.name as string,
           available_from: product.available_from as string | null | undefined,
           stock_message: product.stock_message as string | null | undefined,
+          open_dates: flattenOpenDates(product).open_dates,
         },
       ],
-      earliest,
+      deliveryRowsTemplate.map((d) => d.delivery_date),
     );
     if (floorFailure) {
       return fail(floorFailure.status, floorFailure.error, floorFailure.code);

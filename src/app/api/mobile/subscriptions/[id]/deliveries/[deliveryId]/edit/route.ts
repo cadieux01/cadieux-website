@@ -31,7 +31,8 @@ import {
   validateBookingSlot,
 } from "@/lib/delivery-slots";
 import { dayKeyForIsoDate } from "@/lib/subscription-dates";
-import { enforceDeliveryFloor } from "@/lib/order-validation";
+import { enforceDeliveryDays } from "@/lib/order-validation";
+import { flattenOpenDates, OPEN_DATES_SELECT } from "@/lib/product-availability";
 import { formatDeliveryEditNote } from "@/lib/order-notes";
 
 const supabaseAdmin = createClient(
@@ -226,10 +227,10 @@ export async function POST(
     }
   }
 
-  // Product-availability floor. A self-edit can't move a delivery to
-  // before any of the subscription's products lands back in stock.
-  // `enforceDeliveryFloor` produces the same customer-facing sentence
-  // the app already renders verbatim on the create paths.
+  // Baking days. A self-edit can't move a delivery onto a day the kitchen
+  // isn't baking any of the subscription's products. `enforceDeliveryDays`
+  // produces the same customer-facing sentence the app already renders
+  // verbatim on the create paths.
   {
     const { data: subItems } = await supabaseAdmin
       .from("subscription_items")
@@ -245,14 +246,18 @@ export async function POST(
     if (slugs.length > 0) {
       const { data: productRows } = await supabaseAdmin
         .from("products")
-        .select("name, available_from, stock_message")
+        .select(`name, available_from, stock_message, ${OPEN_DATES_SELECT}`)
         .in("slug", slugs);
-      const floorFailure = enforceDeliveryFloor(
-        (productRows ?? []) as Array<{
-          name: string;
-          available_from: string | null;
-          stock_message: string | null;
-        }>,
+      const floorFailure = enforceDeliveryDays(
+        (productRows ?? []).map((r) =>
+          flattenOpenDates(
+            r as {
+              name: string;
+              available_from: string | null;
+              stock_message: string | null;
+            },
+          ),
+        ),
         finalDate,
       );
       if (floorFailure) {
