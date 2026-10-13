@@ -226,14 +226,20 @@ export default async function ProductDetailPage({
     tag: pickString(content, "pdp.tag", internalSlug),
     // The <h1>. Driven by products.name — see pickProductTitle.
     title: pickProductTitle(content, internalSlug, productRow?.name),
-    // A pre-order product ignores pdp.subtitle and falls back to the bundled
-    // editorial line. The Android app has no OTA, so its PDP subtitle is the
-    // only place we can put the pre-order sentence in front of an installed
-    // build — the content_strings row exists FOR the app (see migration
-    // 20260918090000). The website renders the same sentence properly, from
-    // available_from, in the banner and under the button, so honouring the
-    // row here would print it a third time in the product's voice slot.
-    subtitle: preorder ? "" : pickString(content, "pdp.subtitle", internalSlug),
+    // Printed unconditionally. There used to be a `preorder ? "" : …`
+    // suppression here: the Android app has no OTA and cannot see
+    // `available_from`, so a pre-order sentence was written into this row FOR
+    // the app, and the website blanked it rather than print a third copy of
+    // something it already renders from the schedule.
+    //
+    // The suppression keyed on whether the product HAS a schedule and never
+    // looked at the value, so it blanked genuine product copy too — all three
+    // multigrain subtitles vanished the moment that trio got a schedule. The
+    // dated sentence is out of the DATA instead (migration 20261013150000),
+    // which is the only fix that also helps the app: the app was the one
+    // client still reading it, and nothing retires a sentence with a date in
+    // it.
+    subtitle: pickString(content, "pdp.subtitle", internalSlug),
     description: pickString(content, "pdp.description", internalSlug),
     reportsEyebrow: pickString(content, "pdp.section.reports.eyebrow"),
     reportsTitle: pickString(content, "pdp.section.reports.title"),

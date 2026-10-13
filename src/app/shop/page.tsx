@@ -49,12 +49,13 @@ export const metadata: Metadata = {
 // ISR window for this page. PINNED, not inherited — and the value is the one
 // it already resolves to today, so this changes no behaviour.
 //
-// Why state it at all: every tile's pre-order state is computed from
-// `products.available_from` against TODAY (productFloor in
-// lib/product-availability), so this page's HTML carries a date-dependent
-// answer. It goes wrong when the CLOCK crosses a release date, not when any
-// row changes — which means the page cache, not the data cache, is what
-// bounds how long a stale "Out of stock / Pre-order" badge can be served.
+// Why state it at all: every tile's baking-days state is computed from
+// `products.available_from` + `product_open_dates` against TODAY
+// (productOpenSet in lib/product-availability), so this page's HTML carries a
+// date-dependent answer. It goes wrong when the CLOCK crosses a start date or
+// an open day, not when any row changes — which means the page cache, not the
+// data cache, is what bounds how long a stale "Out of stock / Baking days"
+// badge can be served.
 //
 // Next derives a route's revalidate from the SMALLEST nested cache. Today
 // that is getSandwichKitchenState's 10 s unstable_cache, awaited in the root
@@ -130,13 +131,13 @@ export default async function ShopPage() {
       name: pickString(c, "pdp.name", slug),
       tag: pickString(c, "pdp.tag", slug),
       title: pickProductTitle(c, slug, nameBySlug[slug]),
-      // Same suppression as the PDP: `shop` pulls the `pdp` prefix, and the
-      // pdp.subtitle row for a pre-order product carries app-only copy (the
-      // app has no OTA — see migration 20260918090000). The tile renders the
-      // pre-order line itself, from available_from.
-      subtitle: availability?.preorder.has(slug)
-        ? ""
-        : pickString(c, "pdp.subtitle", slug),
+      // Printed unconditionally. There used to be a `preorder ? "" : …`
+      // suppression here, to stop an app-only pre-order announcement living
+      // in this row from being printed in the product's voice slot. It keyed
+      // on whether the product HAS a schedule and never looked at the value,
+      // so it also blanked three genuine product subtitles. The dated copy is
+      // gone from the data instead — see migration 20261013150000.
+      subtitle: pickString(c, "pdp.subtitle", slug),
       // Same DB tiles the PDP renders (net weight + slices already read
       // through to the products row by getPageContent), so the grid can
       // never disagree with the product page.
