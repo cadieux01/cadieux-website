@@ -1,9 +1,26 @@
 "use client";
 
 // Compact row of three icon buttons (Call / WhatsApp / SMS) shown next
-// to every phone number in the admin panel. Call opens the dialer
-// directly; WhatsApp and SMS first open a small modal so the admin can
-// edit the prefilled message before sending.
+// to every phone number in the admin panel.
+//
+// ─────────────────────────────────────────────────────────────────────
+// ░░ THE MODAL IS PER-CHANNEL, NOT PER-SURFACE. ░░
+//
+//   Call      → dials. No modal, on every screen. Raja: "It shouldn't ask
+//               anything." A dialog mid-dial is the thing he forbade, and
+//               the <a href="tel:"> below has never had one.
+//   WhatsApp  → opens the picker.
+//   SMS       → opens the picker.
+//
+// There was briefly a `skipMessageModal` prop that let the orders board
+// send WhatsApp/SMS without the modal, on the rationale that it was "a
+// confirmation in front of a confirmation". That was true while the modal
+// only confirmed. It stopped being true the moment the modal became WHERE
+// THE OPERATOR CHOOSES WHAT TO SAY: with the prop set, the eight
+// templates were unreachable from the one screen that has the orders, and
+// verifying them needed a throwaway page. A feature you cannot reach from
+// where the work is has not shipped. So the prop is gone rather than
+// defaulted — Call never needed it, and no other channel may now skip.
 //
 // ─────────────────────────────────────────────────────────────────────
 // TWO MODES, AND NINE OF THE TEN CALL SITES ARE THE OLD ONE.
@@ -13,12 +30,7 @@
 // GREEN afterwards, with the press recorded to public.order_contacts.
 // Omit it — as the customers list, the subscriptions screens and the rest
 // still do — and this component behaves exactly as it did before: cream
-// outlines, no colour, no writes, no network. The same applies to
-// `skipMessageModal`, which defaults to today's behaviour.
-//
-// Both props exist rather than one because they are different decisions.
-// A screen could reasonably want the shared colour without losing the
-// message modal; the orders board happens to want both.
+// outlines, no colour, no writes, no network.
 // ─────────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
@@ -136,7 +148,6 @@ export function ContactActions({
   stopPropagation = true,
   trackOrderId,
   contacts,
-  skipMessageModal = false,
   deliverySlot,
   deliveryDate,
 }: {
@@ -160,17 +171,6 @@ export function ContactActions({
   trackOrderId?: string | null;
   /** Server-side contact state for this order, from /api/admin/orders. */
   contacts?: OrderContacts;
-  /**
-   * Open WhatsApp/SMS straight away instead of showing the edit-first
-   * modal. Default false = every existing screen is untouched.
-   *
-   * Safe to skip because the modal was never a send confirmation: both
-   * wa.me?text= and sms:?body= hand the message to the target app
-   * UNSENT and still editable there. The modal is a confirmation in front
-   * of a confirmation, and on the board — where the point is that a press
-   * acts immediately — it is one tap in the way.
-   */
-  skipMessageModal?: boolean;
   /**
    * This order's STORED slot and date ("16:00-21:00", "2026-10-16") —
    * not display labels. They feed the (SLOT) and (DATE) holes in the
@@ -275,15 +275,22 @@ export function ContactActions({
       : smsHref(phone, text);
   }
 
-  /** The no-modal path: open now, inside the click handler, then record. */
-  function openDirect(c: Channel) {
-    const url = hrefFor(c, defaultContactMessage(ctx));
-    if (typeof window !== "undefined" && url) {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
-    record(c);
-  }
-
+  /**
+   * ░░ THE PRESS IS RECORDED HERE, AND ONLY HERE, FOR WhatsApp/SMS. ░░
+   *
+   * Not when the picker opens. A cancelled modal means no channel was
+   * ever opened, so there is nothing a green mark should be claiming —
+   * and a row that goes green when nobody was actually contacted is the
+   * same class of lie as the null `last_author` this board just fixed.
+   *
+   * The cost, stated plainly because the team will feel it: green now
+   * lands one tap later than it did on the board, and an operator who
+   * opens the picker and backs out leaves the row RED for the next
+   * person. That is the correct reading of what happened. Ruled.
+   *
+   * `call` is the exception and records on the anchor itself, because
+   * the dial IS the browser's default action — there is no later moment.
+   */
   function send() {
     if (!channel) return;
     const url = hrefFor(channel, message);
@@ -386,8 +393,7 @@ export function ContactActions({
           style={styleFor("whatsapp")}
           onClick={(e) => {
             guard(e);
-            if (skipMessageModal) openDirect("whatsapp");
-            else openChannel("whatsapp");
+            openChannel("whatsapp");
           }}
         >
           <WhatsAppIcon size={iconSize} />
@@ -399,8 +405,7 @@ export function ContactActions({
           style={styleFor("sms")}
           onClick={(e) => {
             guard(e);
-            if (skipMessageModal) openDirect("sms");
-            else openChannel("sms");
+            openChannel("sms");
           }}
         >
           <SmsIcon size={iconSize} />

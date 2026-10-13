@@ -2637,24 +2637,23 @@ const OrderRow = memo(function OrderRow({
             >
               {o.customers.phone}
             </span>
-            {/* The ONLY call site that opts into either of these. The
-                other nine screens pass neither and are unchanged: no
-                colour, no writes, and the message modal still in place. */}
+            {/* The ONLY call site that opts into any of these. The other
+                nine screens pass none of them and are unchanged: no
+                colour, no writes. All ten now show the message modal on
+                WhatsApp/SMS — this one used to skip it, which is what
+                made the eight templates unreachable from the one screen
+                that has the orders. */}
             <ContactActions
               phone={o.customers.phone}
               customerName={o.customers.full_name}
               orderCode={formatOrderNumber(o)}
               trackOrderId={o.id}
               contacts={o.contacts}
-              skipMessageModal
               // Feeds the (SLOT) and (DATE) holes in the eight message
-              // templates. Unread while `skipMessageModal` is set — the
-              // board opens WhatsApp/SMS without the modal the template
-              // chips live in — and passed anyway because this is the
-              // only call site that HAS an order's slot and date, so on
-              // the day that prop comes off the copy is already right
-              // rather than silently falling back to "we will confirm
-              // the time window shortly" on all 312 orders.
+              // templates, and this is the only call site that HAS an
+              // order's slot and date — everywhere else the screen is
+              // about a customer, and the templates say "we will confirm
+              // the time window shortly" rather than inventing one.
               deliverySlot={o.delivery_slot}
               deliveryDate={o.delivery_date}
             />
