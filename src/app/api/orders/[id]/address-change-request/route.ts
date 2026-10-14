@@ -1,9 +1,12 @@
 // POST /api/orders/[id]/address-change-request
 //
-// Customer-facing "request an address change" for an UNPAID order (ANY
-// payment method). Mirrors the type='delivery' /change-request route, but:
+// Customer-facing "request an address change" for an order we have NOT yet
+// taken money on (ANY payment method). Mirrors the type='delivery'
+// /change-request route, but:
 //   - dedicated type='address' row (clean separation from date/slot edits)
-//   - strict UNPAID gate (payment_status != 'paid'); a paid order is LOCKED
+//   - nothing-collected gate (!hasMoneyArrived): both a fully paid and a
+//     PART-paid order are LOCKED, because the address can move the delivery
+//     fee on an amount we have already charged
 //   - only `requested_delivery_address` is recorded; date/slot stay null
 //
 // Owner-scoped (cookie auth via getVerifiedPhone -> customer by phone ->
@@ -24,6 +27,7 @@ import {
 } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
+import { hasMoneyArrived } from "@/lib/payment-label";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -119,11 +123,14 @@ export async function POST(
       { status: 409 },
     );
   }
-  if ((order.payment_status ?? "").toLowerCase() === "paid") {
+  // Any money collected locks the address — it can move the delivery fee on
+  // an order we have already charged, and that is as true of half the money
+  // as of all of it (hasMoneyArrived, src/lib/payment-label.ts).
+  if (hasMoneyArrived(order.payment_status)) {
     return NextResponse.json(
       {
         error:
-          "The delivery address can't be changed on a paid order.",
+          "The delivery address can't be changed once payment has been taken.",
         code: "address_locked_paid",
       },
       { status: 409 },

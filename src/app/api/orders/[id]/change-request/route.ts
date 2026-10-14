@@ -10,7 +10,8 @@
 // other customers' orders).
 //
 // Guards:
-//   - order must be COD, not paid, not cancelled (else 409)
+//   - order must be COD or already part/fully paid, and not cancelled; an
+//     address change additionally requires that no money has arrived (409)
 //   - at least one requested field must differ from the order's current value
 //   - if a date and/or slot is requested, it must pass the 12h10m booking lead
 //     rule (validateBookingSlot) — same gate as checkout
@@ -25,6 +26,7 @@ import {
   rollPhoneCookieOnWebRequest,
 } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
+import { hasMoneyArrived } from "@/lib/payment-label";
 import {
   isIsoDate,
   isValidSlotValue,
@@ -131,10 +133,18 @@ export async function POST(
 
   // Editable scope:
   //   - not cancelled (always required)
-  //   - date/slot: allowed on a PAID order (any method) OR a COD-unpaid order
-  //   - address: COD-unpaid only — it can change the delivery fee and a paid
-  //     order has already been charged.
-  const isPaid = (order.payment_status ?? "").toLowerCase() === "paid";
+  //   - date/slot: allowed once money has arrived (any method) OR on a
+  //     COD order with nothing collected yet
+  //   - address: nothing-collected only — it can change the delivery fee and
+  //     we have already charged.
+  //
+  // THE TWO GATES BELOW READ THE SAME FACT IN OPPOSITE DIRECTIONS, which is
+  // why both go through hasMoneyArrived() (src/lib/payment-label.ts) rather
+  // than their own string test. Money-in PERMITS the date/slot change and
+  // FORBIDS the address change, so a status this file got wrong would leak on
+  // one line and lock out on the other — and a `partially_paid` order is
+  // entitled to the date change exactly as a settled one is.
+  const moneyIn = hasMoneyArrived(order.payment_status);
   const isCod = (order.payment_method ?? "").toLowerCase() === "cod";
   if ((order.status ?? "").toLowerCase() === "cancelled") {
     return NextResponse.json(
@@ -142,17 +152,17 @@ export async function POST(
       { status: 409 },
     );
   }
-  if (!isPaid && !isCod) {
+  if (!moneyIn && !isCod) {
     return NextResponse.json(
       { error: "Delivery changes are only available for Cash on Delivery orders.", code: "not_cod" },
       { status: 409 },
     );
   }
-  if (isPaid && reqAddress) {
+  if (moneyIn && reqAddress) {
     return NextResponse.json(
       {
         error:
-          "The delivery address can't be changed on a paid order. You can still change the date or time.",
+          "The delivery address can't be changed once payment has been taken. You can still change the date or time.",
         code: "address_locked_paid",
       },
       { status: 409 },

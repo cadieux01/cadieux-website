@@ -7,7 +7,8 @@
 // app's checkout/create-order persists (the web route keys on slug + kind).
 //
 // Auth: X-App-Key + bearer (getVerifiedPhone) + owner-by-phone (404 on
-// mismatch). Items are COD-only: order must be COD, not paid, not cancelled.
+// mismatch). Items are COD-only: order must be COD, with no money collected
+// (not fully AND not partly paid), not cancelled.
 //
 // MONEY SAFETY: subtotal is recomputed SERVER-SIDE from the order's OWN
 // stored unit_price_inr * new qty; delivery_fee (distance-only) is carried
@@ -22,6 +23,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
+import { hasMoneyArrived } from "@/lib/payment-label";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -116,7 +118,7 @@ export async function POST(
     return fail(404, "Order not found.");
   }
 
-  // Items are COD-only: must be COD, not paid, not cancelled.
+  // Items are COD-only: must be COD, nothing collected, not cancelled.
   if ((order.payment_method ?? "").toLowerCase() !== "cod") {
     return fail(
       409,
@@ -124,10 +126,13 @@ export async function POST(
       "not_cod",
     );
   }
-  if ((order.payment_status ?? "").toLowerCase() === "paid") {
+  // Items ARE the amount, so once any money is collected the lines are
+  // frozen — a part-paid order included (hasMoneyArrived,
+  // src/lib/payment-label.ts).
+  if (hasMoneyArrived(order.payment_status)) {
     return fail(
       409,
-      "This order is already paid — items can no longer be changed.",
+      "Payment has already been taken on this order — items can no longer be changed.",
       "already_paid",
     );
   }

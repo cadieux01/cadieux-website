@@ -86,6 +86,40 @@ export function isPaidStatus(status: string | null | undefined): boolean {
   return (status ?? "").trim().toLowerCase().startsWith("paid");
 }
 
+/**
+ * Has ANY of the money reached us? — the question the EDIT GATES ask.
+ *
+ * Distinct from isPaidStatus() on purpose, and the two must not be merged:
+ *
+ *   isPaidStatus()    "is there nothing left to collect" — the RIDER'S
+ *                     question. A `partially_paid` order still owes a
+ *                     balance at the door, so it must stay FALSE here or
+ *                     paymentLabel() prints "PAID" and the rider collects
+ *                     nothing. See the PAYMENT_VIEWS comment below.
+ *
+ *   hasMoneyArrived() "have we already charged this customer" — the
+ *                     question every change-request route asks before it
+ *                     lets a customer alter an order. Part of the money is
+ *                     as irreversible as all of it: the address can move
+ *                     the delivery fee, and the items ARE the amount. A
+ *                     half-settled order must be as locked as a settled
+ *                     one, so this is TRUE for both.
+ *
+ * Built on isPaidStatus() rather than its own prefix test so `paid_orphaned`
+ * and any future `paid_*` keep flowing to the same answer in both.
+ *
+ * The Android app carries the same split in lib/paymentStatus.ts
+ * (isFullyPaid / isPartiallyPaid / hasMoneyArrived). Keep the two in step:
+ * installed builds cannot be patched, so the server must never be the
+ * looser of the two.
+ */
+export function hasMoneyArrived(status: string | null | undefined): boolean {
+  return (
+    isPaidStatus(status) ||
+    (status ?? "").trim().toLowerCase() === "partially_paid"
+  );
+}
+
 export type PaymentFacts = {
   payment_status?: string | null;
   /**

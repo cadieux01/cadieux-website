@@ -10,7 +10,8 @@
 // Owner-scoped (cookie/bearer auth via getVerifiedPhone → customer by phone →
 // order scoped to customer_id; 404 on mismatch).
 //
-// Items are COD-only: the order must be COD, not paid, not cancelled. Only
+// Items are COD-only: the order must be COD, with no money collected (not
+// fully AND not partly paid), not cancelled. Only
 // kind:"once" lines are editable; kind:"sub" lines are pass-through and may
 // not be changed.
 //
@@ -30,6 +31,7 @@ import {
   rollPhoneCookieOnWebRequest,
 } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
+import { hasMoneyArrived } from "@/lib/payment-label";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -130,16 +132,22 @@ export async function POST(
     return NextResponse.json({ error: "Order not found." }, { status: 404 });
   }
 
-  // Items are COD-only: must be COD, not paid, not cancelled.
+  // Items are COD-only: must be COD, nothing collected, not cancelled.
   if ((order.payment_method ?? "").toLowerCase() !== "cod") {
     return NextResponse.json(
       { error: "Item changes are only available for Cash on Delivery orders.", code: "not_cod" },
       { status: 409 },
     );
   }
-  if ((order.payment_status ?? "").toLowerCase() === "paid") {
+  // Items ARE the amount, so any money collected freezes the lines — a
+  // part-paid order included (hasMoneyArrived, src/lib/payment-label.ts).
+  if (hasMoneyArrived(order.payment_status)) {
     return NextResponse.json(
-      { error: "This order is already paid — items can no longer be changed.", code: "already_paid" },
+      {
+        error:
+          "Payment has already been taken on this order — items can no longer be changed.",
+        code: "already_paid",
+      },
       { status: 409 },
     );
   }

@@ -1,17 +1,18 @@
 // POST /api/mobile/orders/[id]/address-change-request
 //
 // Mobile counterpart of /api/orders/[id]/address-change-request. Same intent
-// — let a customer request an address change on an UNPAID order (ANY
-// payment method), pending admin approval.
+// — let a customer request an address change on an order we have NOT yet
+// taken money on (ANY payment method), pending admin approval.
 //
 // Auth: X-App-Key + bearer (getVerifiedPhone) + owner-by-phone (404 on
 // mismatch).
 //
 // Gates (mirror the web route):
 //   - cancelled order  → 409 'cancelled'
-//   - paid order       → 409 'address_locked_paid' (paid orders are LOCKED;
-//                        the address can change the delivery fee, so once
-//                        money has been collected the address is fixed)
+//   - any money in     → 409 'address_locked_paid'. Paid AND part-paid are
+//                        both LOCKED (hasMoneyArrived): the address can
+//                        change the delivery fee, so once any money has been
+//                        collected the address is fixed.
 //   - new address must differ from the current one
 //   - new address must end in a 6-digit pincode AND be serviceable
 //     (customers can't redirect to a no-go zone via change-request; if they
@@ -27,6 +28,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, isValidMobileAppKey } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
+import { hasMoneyArrived } from "@/lib/payment-label";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -104,10 +106,13 @@ export async function POST(
   if ((order.status ?? "").toLowerCase() === "cancelled") {
     return fail(409, "This order is cancelled.", "cancelled");
   }
-  if ((order.payment_status ?? "").toLowerCase() === "paid") {
+  // Any money collected locks the address — the address can move the
+  // delivery fee, and we have already charged. A part-paid order is as
+  // locked as a fully paid one (hasMoneyArrived, src/lib/payment-label.ts).
+  if (hasMoneyArrived(order.payment_status)) {
     return fail(
       409,
-      "The delivery address can't be changed on a paid order.",
+      "The delivery address can't be changed once payment has been taken.",
       "address_locked_paid",
     );
   }
