@@ -10,6 +10,10 @@ import {
   buildReminder,
   type ReminderWindow,
 } from "@/lib/email/subscription-reminders";
+import {
+  effectiveDeliveryDate,
+  resolveEndDate,
+} from "@/lib/subscription-end-date";
 
 // ── IST helpers ─────────────────────────────────────────────────────────────
 
@@ -63,6 +67,10 @@ function buildWindowMap(): Record<string, ReminderWindow> {
 interface SubscriptionRow {
   id: string;
   bread_name: string | null;
+  /** The authoritative week count — see planWeeks() in
+   *  src/lib/subscription-end-date.ts for why it is this column and not
+   *  `total_weeks`, which the admin board's copy of this rule used to
+   *  read. */
   weeks: number | null;
   customer_name: string | null;
   customer_phone: string | null;
@@ -103,9 +111,13 @@ export async function runSubscriptionReminders(
   }
 
   const subIds = subscriptions.map((s) => s.id);
+  // scheduled_date is projected as well as delivery_date: a rescheduled
+  // final stop moves when the plan ends, and this phase decides when the
+  // "your plan is ending" email goes out. Reading the raw column alone
+  // would send it against a date the customer no longer has.
   const { data: deliveries, error: delErr } = await supabase
     .from("subscription_deliveries")
-    .select("subscription_id, delivery_date")
+    .select("subscription_id, delivery_date, scheduled_date")
     .in("subscription_id", subIds);
 
   if (delErr) {
@@ -115,11 +127,14 @@ export async function runSubscriptionReminders(
   const maxByDel = new Map<string, string>();
   for (const row of (deliveries || []) as {
     subscription_id: string;
-    delivery_date: string;
+    delivery_date: string | null;
+    scheduled_date: string | null;
   }[]) {
+    const eff = effectiveDeliveryDate(row);
+    if (!eff) continue;
     const cur = maxByDel.get(row.subscription_id);
-    if (!cur || row.delivery_date > cur) {
-      maxByDel.set(row.subscription_id, row.delivery_date);
+    if (!cur || eff > cur) {
+      maxByDel.set(row.subscription_id, eff);
     }
   }
 
@@ -130,12 +145,8 @@ export async function runSubscriptionReminders(
   };
   const candidates: Candidate[] = [];
   for (const sub of subscriptions) {
-    let endDate = maxByDel.get(sub.id);
-    if (!endDate) {
-      if (!sub.weeks || sub.weeks <= 0) continue;
-      const createdISO = sub.created_at.slice(0, 10);
-      endDate = addDaysISO(createdISO, sub.weeks * 7);
-    }
+    const endDate = resolveEndDate(sub, maxByDel.get(sub.id));
+    if (!endDate) continue;
     const window = windows[endDate];
     if (!window) continue;
     candidates.push({ sub, endDate, window });

@@ -45,6 +45,7 @@ import {
   NOT_A_SUBSCRIPTION_PLAN_ERROR,
 } from "@/lib/subscription-pricing";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
+import { weekColumns } from "@/lib/subscription-end-date";
 import { formatSubscriptionNumber } from "@/lib/order-number";
 import { getPreorderMode } from "@/lib/preorderMode";
 import { enforceDeliveryFloor } from "@/lib/order-validation";
@@ -933,7 +934,10 @@ async function handleMultiVariant(
       bread_slug: primary.product_slug,
       bread_name: primary.product_name,
       bread_price: primary.price_snapshot_inr,
-      weeks: 0, // 0 marks calendar mode
+      // 0 marks calendar mode — the app renders `weeks > 0 ? "N weeks"
+      // : "Custom dates"`, so this zero is load-bearing UI in installed
+      // builds. weekColumns keeps the `total_weeks` mirror in step.
+      ...weekColumns(0),
       days: daysSorted,
       slot_mode: "same",
       // `slot` dropped, not set to null: the column is dead and nothing
@@ -954,7 +958,6 @@ async function handleMultiVariant(
       frequency: "custom",
       day_of_week: firstDayKey,
       time_slot: null,
-      total_weeks: 0,
       delivery_address: deliveryAddressJson,
       total_amount: serverAmount,
       // Prepaid. Never 'cod' — the trigger tg_subscriptions_assert_not_cod
@@ -1405,7 +1408,8 @@ export async function POST(req: NextRequest) {
       bread_slug: product.slug,
       bread_name: product.name,
       bread_price: subPrice,
-      weeks: subRowWeeks,
+      // Authoritative `weeks` + its `total_weeks` mirror, one value.
+      ...weekColumns(subRowWeeks),
       days: subRowDays,
       slot_mode: "same",
       // `slot` dropped — see the calendar-mode insert above.
@@ -1426,7 +1430,6 @@ export async function POST(req: NextRequest) {
       frequency: subRowFrequency,
       day_of_week: subRowFirstDayKey,
       time_slot: null,
-      total_weeks: subRowWeeks,
       delivery_address: deliveryAddressJson,
       total_amount: totalAmountInr,
       // Prepaid. Never 'cod' — the trigger tg_subscriptions_assert_not_cod

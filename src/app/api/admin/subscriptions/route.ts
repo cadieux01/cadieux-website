@@ -194,8 +194,14 @@ export async function GET(req: NextRequest) {
       itemsBySub.set(it.subscription_id, list);
     }
 
+    // `weeks` is the authoritative column, `total_weeks` its write-time
+    // mirror — see planWeeks() in src/lib/subscription-end-date.ts. The row
+    // comes from SELECT *, so both are already here and both are passed:
+    // withholding the source would make this board resolve a plan's end
+    // date from a different column than the reminder cron does.
     const subLites: SubLite[] = subs.map((s) => ({
       id: s.id,
+      weeks: s.weeks,
       total_weeks: s.total_weeks,
       created_at: s.created_at,
     }));

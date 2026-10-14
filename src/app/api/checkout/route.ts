@@ -46,6 +46,7 @@ import {
   NOT_A_SUBSCRIPTION_PLAN_ERROR,
 } from "@/lib/subscription-pricing";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
+import { weekColumns } from "@/lib/subscription-end-date";
 import {
   buildMultiVariantSubscriptionInsert,
   insertMultiVariantSubscription,
@@ -1147,7 +1148,11 @@ export async function POST(req: NextRequest) {
         bread_slug,
         bread_name: plan.name,
         bread_price: plan.pricePerLoafInr,
-        weeks,
+        // `weeks` (authoritative — installed Android builds read it) plus
+        // its `total_weeks` mirror, from one value. See weekColumns() in
+        // lib/subscription-end-date.ts; the two used to be written as
+        // separate properties twenty lines apart with nothing tying them.
+        ...weekColumns(weeks),
         days: dayKeys,
         slot_mode,
         // `slot` deliberately not written — dead column, NULL on all 94 rows.
@@ -1169,7 +1174,6 @@ export async function POST(req: NextRequest) {
         frequency,
         day_of_week: dayKeys[0] ?? null,
         time_slot: slot_mode === "same" ? slot : (slots_by_day?.[dayKeys[0]] ?? null),
-        total_weeks: weeks,
         delivery_address: deliveryAddressJson,
         total_amount: serverAmount,
         // Prepaid. Never 'cod' — the trigger tg_subscriptions_assert_not_cod

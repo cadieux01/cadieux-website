@@ -411,6 +411,10 @@ export type AdminSubscriptionRow = {
   product_name: string;
   quantity_per_delivery: number;
   frequency: string;
+  /** DISPLAY ONLY — the week count shown in the drawer, the board column
+   *  and the CSV export. This is the write-time MIRROR of `weeks`, which is
+   *  the authoritative column; see planWeeks() in
+   *  src/lib/subscription-end-date.ts. Do not derive dates from it. */
   total_weeks: number;
   total_amount: number;
   payment_status: string;
@@ -434,9 +438,16 @@ export type AdminSubscriptionRow = {
     phone?: string | null;
   } | null;
   customer?: AdminCustomerSummary | null;
-  // Server-computed using MAX(subscription_deliveries.delivery_date)
-  // with a fallback to created_at + total_weeks * 7d. Matches the
-  // derivation in src/app/api/cron/subscription-reminders/route.ts.
+  // Server-computed: MAX of each delivery's EFFECTIVE date
+  // (scheduled_date ?? delivery_date), falling back to
+  // created_at + weeks * 7d only when the plan has no delivery rows.
+  //
+  // The rule lives in exactly one place — src/lib/subscription-end-date.ts
+  // — which the subscription-reminder cron phase calls as well, so this
+  // field and the "your plan is ending" email cannot disagree about a
+  // plan. This comment previously cited
+  // src/app/api/cron/subscription-reminders/route.ts, a file deleted in
+  // 20aa908 when the crons were consolidated behind a registry.
   derived_end_date?: string | null;
   remaining_deliveries?: number;
   // Total subscription_deliveries rows for this sub (any status). Feeds

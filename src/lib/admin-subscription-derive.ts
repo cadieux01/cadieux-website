@@ -1,18 +1,31 @@
 // Reusable derivations for the Subscriptions UI / analytics.
 //
-// `derived_end_date` mirrors the rule used in
-// src/app/api/cron/subscription-reminders/route.ts:
-//   MAX(subscription_deliveries.delivery_date)
-//   fallback → created_at + total_weeks * 7d
+// `derived_end_date` is NOT mirrored here any more — it is imported.
+// The rule, the choice of week column and the reasoning all live in
+// src/lib/subscription-end-date.ts, which the subscription-reminder cron
+// calls too, so the board's "expiring in 7 days" filter and the
+// "your plan is ending" email cannot disagree about the same plan.
 //
-// Keep both in sync: if the cron rule changes, this helper must
-// change too (otherwise the "expiring in 7 days" filter will lie).
+// This comment used to point at src/app/api/cron/subscription-reminders/
+// route.ts and say "keep both in sync". That file was DELETED in 20aa908
+// when the crons were consolidated behind a registry, so the only
+// instruction tying the two copies together had been aimed at nothing for
+// as long as there were two copies. The live phase module is
+// src/lib/cron/subscription-reminders-phase.ts (run by
+// /api/cron/daily-housekeeping) — and now there is nothing to keep in
+// sync, which is the better fix than a corrected pointer.
 
-import { addDaysISO } from "@/lib/admin-formatting";
+import {
+  effectiveDeliveryDate,
+  resolveEndDate,
+} from "@/lib/subscription-end-date";
 
 export type SubLite = {
   id: string;
-  total_weeks: number | null;
+  /** Authoritative week count. Optional because a caller may project only
+   *  the `total_weeks` mirror; see planWeeks() for the precedence. */
+  weeks?: number | null;
+  total_weeks?: number | null;
   created_at: string;
 };
 
@@ -76,20 +89,20 @@ export function buildDerivations(
   const datesBySub = new Map<string, Set<string>>();
   for (const row of deliveries) {
     const sid = row.subscription_id;
+    // effectiveDeliveryDate, NOT the raw delivery_date. This accumulator
+    // used to read the raw column while every other date in this function
+    // honoured `scheduled_date ?? delivery_date` — a file that contradicted
+    // its own stated rule eight lines further down. OLS36 is the live case:
+    // a stop moved from 2026-09-23 to 2026-09-21 left derived_end_date two
+    // days late, so the plan showed as running after it had finished.
+    const eff = effectiveDeliveryDate(row);
     const cur = maxByDel.get(sid);
-    if (!cur || row.delivery_date > cur) maxByDel.set(sid, row.delivery_date);
+    if (eff && (!cur || eff > cur)) maxByDel.set(sid, eff);
     totalBySub.set(sid, (totalBySub.get(sid) ?? 0) + 1);
-    if (row.status !== "cancelled") {
-      // Same `scheduled_date ?? delivery_date` precedence the next-delivery
-      // pick below uses, and the same one the UI displays. Reading the raw
-      // column instead would put a rescheduled stop on the board under its
-      // ORIGINAL date while the row itself shows the new one.
-      const date = row.scheduled_date ?? row.delivery_date;
-      if (date) {
-        let set = datesBySub.get(sid);
-        if (!set) datesBySub.set(sid, (set = new Set()));
-        set.add(date);
-      }
+    if (row.status !== "cancelled" && eff) {
+      let set = datesBySub.get(sid);
+      if (!set) datesBySub.set(sid, (set = new Set()));
+      set.add(eff);
     }
     if (row.status === "delivered") {
       deliveredBySub.set(sid, (deliveredBySub.get(sid) ?? 0) + 1);
@@ -98,11 +111,10 @@ export function buildDerivations(
       row.status === "delivered" || row.status === "cancelled";
     if (!isTerminal) {
       remainingBySub.set(sid, (remainingBySub.get(sid) ?? 0) + 1);
-      const date = row.scheduled_date ?? row.delivery_date;
       const best = nextBySub.get(sid);
-      if (date && (!best || date < best.date)) {
+      if (eff && (!best || eff < best.date)) {
         nextBySub.set(sid, {
-          date,
+          date: eff,
           slot: row.scheduled_time_slot ?? row.slot ?? null,
           sequence: row.sequence ?? null,
           week_number: row.week_number ?? null,
@@ -113,13 +125,8 @@ export function buildDerivations(
   }
   const out = new Map<string, DerivedSub>();
   for (const sub of subs) {
-    let endDate = maxByDel.get(sub.id) ?? null;
-    if (!endDate && sub.total_weeks && sub.total_weeks > 0) {
-      const createdISO = sub.created_at.slice(0, 10);
-      endDate = addDaysISO(createdISO, sub.total_weeks * 7);
-    }
     out.set(sub.id, {
-      derived_end_date: endDate,
+      derived_end_date: resolveEndDate(sub, maxByDel.get(sub.id) ?? null),
       remaining_deliveries: remainingBySub.get(sub.id) ?? 0,
       total_deliveries: totalBySub.get(sub.id) ?? 0,
       delivered_deliveries: deliveredBySub.get(sub.id) ?? 0,

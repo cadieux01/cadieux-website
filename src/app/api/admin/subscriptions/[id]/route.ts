@@ -69,8 +69,17 @@ export async function GET(
     .eq("subscription_id", params.id)
     .order("sequence", { ascending: true });
 
+  // Both week columns — `weeks` is authoritative, `total_weeks` the mirror.
+  // See planWeeks() in src/lib/subscription-end-date.ts.
   const derived = buildDerivations(
-    [{ id: sub.id, total_weeks: sub.total_weeks, created_at: sub.created_at }],
+    [
+      {
+        id: sub.id,
+        weeks: sub.weeks,
+        total_weeks: sub.total_weeks,
+        created_at: sub.created_at,
+      },
+    ],
     (deliveries as DeliveryLite[]) ?? [],
   ).get(sub.id);
 

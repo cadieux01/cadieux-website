@@ -23,6 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { DayKey } from "@/lib/subscription-dates";
 import type { OrderSource } from "@/lib/order-source";
+import { weekColumns } from "@/lib/subscription-end-date";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -162,7 +163,9 @@ export function buildMultiVariantSubscriptionInsert(
     bread_slug: primary.product_slug,
     bread_name: primary.product_name,
     bread_price: primary.price_snapshot_inr,
-    weeks,
+    // `weeks` (authoritative, read by installed Android builds) and its
+    // `total_weeks` mirror, from one value. See weekColumns().
+    ...weekColumns(weeks),
     days: dayKeys,
     slot_mode,
     // `slot` is deliberately NOT written. It is the dead column of the pair:
@@ -187,7 +190,6 @@ export function buildMultiVariantSubscriptionInsert(
     day_of_week: dayKeys[0] ?? null,
     time_slot:
       slot_mode === "same" ? slot : (slots_by_day?.[dayKeys[0]] ?? null),
-    total_weeks: weeks,
     delivery_address: deliveryAddressJson,
     // serverAmount is the FULL prepaid total: (loaves + fee) × deliveries.
     total_amount: serverAmount,
