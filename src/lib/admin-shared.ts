@@ -50,10 +50,10 @@ export function formatStatusLabel(status: string): string {
 /**
  * Every value that may legally be STORED in orders.status.
  *
- * THIS IS NOT THE DROPDOWN. The row control offers ORDER_STATUS_OPTIONS
- * below; this wider set is the type, and the difference is deliberate —
- * exactly the split ORDER_FILTER_VALUES / STATUS_FILTER_OPTIONS already
- * uses for the filter menu.
+ * THIS IS NOT THE DROPDOWN. The row control's menu is built by
+ * orderStatusSelectModel() below; this wider set is the type, and the
+ * difference is deliberate — exactly the split ORDER_FILTER_VALUES /
+ * STATUS_FILTER_OPTIONS already uses for the filter menu.
  *
  * `preparing` and `out_for_delivery` were REMOVED here (2026-10-12). They
  * were retired from the vocabulary; the 8 rows that held them were moved to
@@ -76,44 +76,103 @@ export const ORDER_STATUSES = [
   "confirmed",
   "delivered",
   "cancelled",
-  // PICKUP: STORED BUT UNLISTED. Not in ORDER_STATUS_OPTIONS and not in the
-  // filter menu — the ask was a clean five-item dropdown, not the deletion
-  // of a shipped workflow. NEXT_STATUS_PICKUP in the orders board is the
-  // only route a pickup order has to a terminal state, and it still writes
-  // these. They stay here so that path is type-legal and so the row's
-  // status Select can render the current value; see PICKUP_STAGES in
-  // lib/order-stages.
+  // PICKUP: STORED BUT UNLISTED. Not in SETTABLE_ORDER_STATUSES and not in
+  // the filter menu — the ask was a clean five-item dropdown, not the
+  // deletion of a shipped workflow. NEXT_STATUS_PICKUP in the orders board is
+  // the only route a pickup order has to a terminal state, and it still
+  // writes these. They stay here so that path is type-legal, and they are the
+  // reason orderStatusSelectModel() keeps a fallback at all; see PICKUP_STAGES
+  // in lib/order-stages.
   "ready_for_pickup",
   "picked_up",
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
-/**
- * THE FIVE-ITEM STATUS LIST. What the row control offers and what the
- * filter dropdown lists, in operator order.
+/** The four an operator may actually WRITE from the row control.
  *
- * Five items, and `new_update` is the fifth — it is COMPUTED, never
- * stored (src/lib/order-new-update.ts), which is why its type is a plain
- * string rather than OrderStatus. The row control renders it as the
- * current value when the row has one and offers the four settable
- * statuses beneath; picking any of them stamps status_updated_at past the
- * note, which is how an order comes off the flag.
- */
-export const ORDER_STATUS_OPTIONS: readonly string[] = [
-  "pending",
-  "confirmed",
-  "delivered",
-  "cancelled",
-  NEW_UPDATE_STATUS,
-];
-
-/** The four an operator may actually WRITE from the row control. */
+ *  NEW_UPDATE_STATUS is deliberately absent, and that absence is load-bearing:
+ *  it is what the row's onChange keys on to refuse the write. */
 export const SETTABLE_ORDER_STATUSES: readonly OrderStatus[] = [
   "pending",
   "confirmed",
   "delivered",
   "cancelled",
 ];
+
+/** One row of the status control's menu. Structurally the `SelectOption` that
+ *  components/ui/Select takes, re-declared here so this module keeps no edge
+ *  to a component. */
+export type OrderStatusOption = { value: string; label: string };
+
+/**
+ * THE ROW'S STATUS CONTROL, AS DATA: what it displays and what it offers.
+ *
+ * Pure and exported so the dropdown's contract is testable without rendering
+ * anything — the original bug here was a rendering accident that no unit test
+ * could have seen, which is the argument for pulling the decision out of JSX.
+ *
+ * ── What it shows ───────────────────────────────────────────────────────────
+ * A flagged row DISPLAYS "New Update", because that is the status the operator
+ * reads the row by. A dropdown that never shows it is lying about the row.
+ *
+ * ── ░░ NEW UPDATE IS LISTED EXPLICITLY. IT MUST NEVER ARRIVE VIA THE ░░ ─────
+ * ── ░░ FALLBACK AT THE BOTTOM OF THIS FUNCTION.                      ░░ ─────
+ * That fallback exists to surface a STORED value the four settable ones do not
+ * cover. Letting a COMPUTED value reach it was the whole original defect: the
+ * Select was handed `new_update`, the fallback dutifully appended it to the
+ * menu, and the board ended up offering a status that cannot be stored while
+ * hiding the one the row actually holds. Those are two bugs from one line, and
+ * neither is visible in the source — you have to open the menu to see them.
+ *
+ * So the fallback keys on `stored`, never on `value`. `stored` is read
+ * straight out of the column and can never equal `new_update` (nothing writes
+ * that string, by construction — see src/lib/order-new-update.ts), which means
+ * the fallback is unreachable for it no matter how the row is flagged. It
+ * keeps doing its real job for `ready_for_pickup` / `picked_up`, which ARE
+ * stored and ARE deliberately unlisted.
+ *
+ * ── Picking something ───────────────────────────────────────────────────────
+ * The four settable statuses sit below and each one WRITES, which stamps
+ * status_updated_at past the note and clears the flag on its own. Picking
+ * "New Update" is a NO-OP — it is derived, there is no row shape that means
+ * "manually marked New Update", and faking the timestamps to invent one would
+ * re-break the loop this board just finished fixing.
+ *
+ * ── The "(current)" suffix ──────────────────────────────────────────────────
+ * The one thing showing "New Update" in the trigger costs us: while a row is
+ * flagged, nothing else on it says "Delivered". That information loss is what
+ * moving the flag to the badge was meant to fix, so it is bought back here
+ * rather than given up — the stored status names itself in the open menu. Only
+ * while flagged; unflagged, the checkmark already says it.
+ */
+export function orderStatusSelectModel(
+  o: NewUpdateFacts & { status?: string | null },
+): { value: string; options: OrderStatusOption[] } {
+  const stored = (o.status ?? "").toLowerCase();
+  const value = boardStatus(o);
+  const flagged = value === NEW_UPDATE_STATUS;
+
+  const label = (s: string) =>
+    flagged && s === stored
+      ? `${formatStatusLabel(s)} (current)`
+      : formatStatusLabel(s);
+
+  const options: OrderStatusOption[] = [];
+  if (flagged) {
+    options.push({
+      value: NEW_UPDATE_STATUS,
+      label: formatStatusLabel(NEW_UPDATE_STATUS),
+    });
+  }
+  for (const s of SETTABLE_ORDER_STATUSES) {
+    options.push({ value: s, label: label(s) });
+  }
+  // The escape hatch — STORED values only. See the block comment above.
+  if (stored && !options.some((x) => x.value === stored)) {
+    options.push({ value: stored, label: label(stored) });
+  }
+  return { value, options };
+}
 
 export const SUBSCRIPTION_STATUSES = [
   // `pending_confirmation` is the state a subscription is born in (see

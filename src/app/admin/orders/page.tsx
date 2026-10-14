@@ -68,9 +68,9 @@ import {
   ORDER_STATUSES,
   OrderFilterValue,
   OrderStatus,
-  SETTABLE_ORDER_STATUSES,
   formatStatusLabel,
   orderStatusRank,
+  orderStatusSelectModel,
 } from "@/lib/admin-shared";
 import {
   NEW_UPDATE_STATUS,
@@ -2731,59 +2731,52 @@ const OrderRow = memo(function OrderRow({
         <PaymentBadge method={o.payment_method} status={o.payment_status} />
       </td>
       <td style={td}>
-        {/* THE STORED STATUS, NOT boardStatus(). This control is a WRITE, and
-            a write control must show the value it is about to overwrite.
+        {/* New Update IS IN THIS DROPDOWN, by Raja's ruling: it is the status
+            he reads the row by, and a dropdown that never shows it is lying
+            about the row.
 
-            It used to bind boardStatus() so that every surface agreed, which
-            put the computed "New Update" into the Select — and into its own
-            options, since the fallback below adds any current value the four
-            settable ones do not cover. That makes a dropdown offering a value
-            that cannot be stored, on a row whose real status it is no longer
-            reporting: a delivered order reads "New Update" rather than
-            "Delivered", so the operator cannot see what the row actually is,
-            and re-picking Delivered looks like it did nothing.
+            Both halves of this are decided in orderStatusSelectModel()
+            (src/lib/admin-shared.ts), not here, because the defect this
+            replaced was a RENDERING accident — nothing in the JSX looked
+            wrong, you had to open the menu to see it. As data it is covered by
+            tests/order-new-update.test.mjs; read the long comment there for
+            why New Update is listed explicitly rather than being allowed to
+            reach the stored-value fallback.
 
-            New Update belongs on the BADGE below, which is a read-out. The
-            filter, the dropdown counts and the sort rank still go through
-            boardStatus() — they are read surfaces and the flag is exactly
-            what the operator wants to pivot on there.
-
-            Clearing the flag still works the same way, and still needs no
-            button: any status write stamps status_updated_at past the note,
-            so picking Delivered on a row that is already Delivered is a
-            legitimate acknowledgement rather than a no-op.
-
-            OPTIONS = the four SETTABLE statuses, plus the stored value when
-            it is not one of them: ready_for_pickup / picked_up (stored but
-            deliberately unlisted — the pickup lane advances through them via
-            NEXT_STATUS_PICKUP) and any retired value still in the column.
-            Without it a Select handed a value absent from its own options
-            silently renders the first one, which is how a board lies about a
-            row it is about to overwrite. */}
-        <Select
-          value={(o.status ?? "").toLowerCase()}
-          disabled={busy}
-          ariaLabel="Order status"
-          style={statusSelect}
-          onChange={(v) => {
-            const nextStatus = v as OrderStatus;
-            if (nextStatus === "cancelled") {
-              if (!confirm("Cancel this order?")) return;
-            }
-            onPatchStatus(o, nextStatus);
-          }}
-          options={(() => {
-            const curr = (o.status ?? "").toLowerCase();
-            const opts = SETTABLE_ORDER_STATUSES.map((s) => ({
-              value: s as string,
-              label: formatStatusLabel(s),
-            }));
-            if (curr && !opts.some((x) => x.value === curr)) {
-              opts.push({ value: curr, label: formatStatusLabel(curr) });
-            }
-            return opts;
-          })()}
-        />
+            The one thing that stays here is the refusal below, because it is a
+            property of the WRITE, not of the menu. */}
+        {(() => {
+          const { value, options } = orderStatusSelectModel(o);
+          return (
+            <Select
+              value={value}
+              disabled={busy}
+              ariaLabel="Order status"
+              style={statusSelect}
+              options={options}
+              onChange={(v) => {
+                // PICKING "New Update" IS A NO-OP. It is derived from
+                // (note vs status stamp), so there is no row shape that
+                // means "manually marked New Update" — the only way to
+                // produce one would be to move the timestamps, which is
+                // exactly the loop this board just fixed. Returning here
+                // writes nothing and PATCHes nothing; the menu closes and
+                // the row is left saying what it already said, which is
+                // the honest outcome.
+                if (v === NEW_UPDATE_STATUS) return;
+                const nextStatus = v as OrderStatus;
+                if (nextStatus === "cancelled") {
+                  if (!confirm("Cancel this order?")) return;
+                }
+                // Any of the four WRITES, and the write is what clears the
+                // flag: the PATCH stamps status_updated_at past the note.
+                // Picking the status the row already holds is therefore a
+                // real acknowledgement, not a no-op.
+                onPatchStatus(o, nextStatus);
+              }}
+            />
+          );
+        })()}
         <div style={{ marginTop: 4 }}>
           {/* Show 'expired' badge for stale unpaid pending orders (>7d, per
               src/lib/order-state.ts). Stored orders.status is still
@@ -3761,7 +3754,12 @@ const statusSelect: React.CSSProperties = {
   letterSpacing: "0.1em",
   textTransform: "uppercase",
   cursor: "pointer",
-  maxWidth: 140,
+  // 140 fitted every status this control could show until "New Update" was
+  // added to it. MEASURED at 1440px: the label's scrollWidth is 106 against a
+  // clientWidth of 100, so it rendered "NEW UPDA…" — uppercased and tracked
+  // out at 0.1em, it is the longest string this trigger has ever had to hold.
+  // A status the operator has to guess at is the opposite of the point.
+  maxWidth: 160,
   minHeight: 0,
   borderRadius: 6,
 };
