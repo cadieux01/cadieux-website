@@ -5,10 +5,14 @@
 // runs off a passed-in `SandwichKitchenState` — the reader is somebody
 // else's job.
 //
-// All comparisons are IST wall-clock, matching how admin edits + stores
-// the open/close values ("13:00", "23:00"). We do NOT round-trip through
-// UTC: the customer's device clock is not authoritative, but the SERVER's
-// UTC-to-IST offset is a fixed +05:30 and every reader here is server-side.
+// All comparisons are IST wall-clock, matching how admin edits + stores the
+// open/close values: zero-padded 24-hour "HH:MM" strings. (This used to name
+// a particular pair of times as an example, which read as a statement of the
+// current hours and went out of date as soon as the operator changed them —
+// the FORMAT is what matters here, and `hhmmToMinutes` is what enforces it.)
+// We do NOT round-trip through UTC: the customer's device clock is not
+// authoritative, but the SERVER's UTC-to-IST offset is a fixed +05:30 and
+// every reader here is server-side.
 
 import type { SandwichKitchenState } from "./sandwich-kitchen";
 
@@ -56,12 +60,21 @@ export function formatHour12(hhmm: string): string {
  *
  *  - `enabled=false` → always closed (master switch wins).
  *  - `open <= now < close` on the standard case.
- *  - Cross-midnight windows (close < open, e.g. 22:00–02:00) DO work
- *    because we split into two ranges — future-proof for a night menu
- *    even though the seed today is 13:00–23:00.
- *  - Malformed values fall back to the safe DEFAULTS (13:00–23:00) — a
- *    lookup that returned garbage must NEVER open the kitchen wider than
- *    the operator asked for.
+ *  - Cross-midnight windows (close < open, e.g. 22:00–02:00) DO work,
+ *    because the comparison splits into two ranges. One extra branch buys
+ *    a night menu with no change here.
+ *  - A malformed `open` or `close` returns FALSE. This function fails
+ *    CLOSED and substitutes nothing: a lookup that returned garbage must
+ *    never open the kitchen. The fallback to sane defaults lives in the
+ *    reader (`readSandwichKitchenState` in `sandwich-kitchen.ts`), which
+ *    is the only place that knows what a missing or malformed row should
+ *    become. Splitting it that way means a value reaching this function by
+ *    some other path still cannot open the kitchen.
+ *
+ *  This docblock names no clock times deliberately. It used to state what
+ *  the seeded window "is" — a row in `app_config` that nothing in this file
+ *  reads, and that no tool compares against the comment. The configured
+ *  hours are whatever the operator last saved.
  */
 export function isKitchenOpenNow(
   state: SandwichKitchenState,

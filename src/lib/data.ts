@@ -39,7 +39,11 @@ export type CartItem = {
 };
 
 export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-export const TIMES = ["7 – 9 am", "9 – 11 am", "12 – 2 pm", "5 – 7 pm", "7 – 9 pm"];
+// There is no `TIMES` here on purpose. One used to sit on this line, holding
+// five windows that matched nothing in `SLOTS` and had no importers at all —
+// so it survived every schedule change while reading, to anyone grepping for
+// delivery times, like the list. Slot values come from `SLOTS` in
+// `@/lib/delivery-slots` and nowhere else.
 export const SUB_WEEKS = [2, 3, 4, 6];
 
 // @deprecated: prefer getActiveProducts() from @/lib/products for live

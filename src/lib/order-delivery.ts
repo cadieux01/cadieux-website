@@ -1,11 +1,20 @@
 // Legacy entry-point for one-off order delivery helpers. The canonical
-// implementation now lives in `delivery-slots.ts` — this file re-exports
-// the unified API under the old names so callers (checkout page + API
-// routes) compile unchanged while the new rules take effect:
+// implementation lives in `delivery-slots.ts`; this file re-exports that
+// unified API under the old names so existing callers (checkout page + API
+// routes) compile unchanged.
 //
-//   - 3 fixed windows: Morning (6–10 AM), Midday (10 AM–2 PM), Evening (4–9 PM)
-//   - 12 h booking lead (measured to the slot's START), IST-aware
-//   - "today + future" date list (was tomorrow / day-after only)
+// This header deliberately does NOT restate the slot universe, the booking
+// lead, or which windows are bookable. It used to, and the copy rotted: it
+// listed three bookable windows and kept listing them after two were paused,
+// so the file whose entire job is to FORWARD to `delivery-slots.ts` ended up
+// contradicting it. A re-export has no rules of its own to describe. Read
+// `SLOTS`, `PAUSED_SLOTS` and `BOOKING_LEAD_MINUTES` in `delivery-slots.ts`,
+// where the values are defined and so cannot disagree with themselves.
+//
+// What IS particular to this file, and is visible in the code below rather
+// than asserted here: the exported names differ from the canonical ones, and
+// `getOrderDeliveryDateOptions` narrows the full date list down to the two
+// pills the legacy checkout UI was built around.
 //
 // New code should import from "@/lib/delivery-slots" directly.
 
