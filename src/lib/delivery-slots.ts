@@ -413,6 +413,32 @@ export function firstBookableSlot(
   return found ? found.value : null;
 }
 
+/** The slot a picker should PRE-SELECT when it has no date to reason about,
+ *  or when it deliberately bypasses the lead-time gate.
+ *
+ *  Answers a narrower question than `firstBookableSlot`: "which window may I
+ *  default to?", not "which window may this date take?". Two callers need
+ *  exactly that and neither can use the date-bound helpers:
+ *    - a bulk "set same time for all" selector, which has a SET of dates;
+ *    - the admin register form, which back-dates deliveries that already
+ *      happened, so every window is legitimately selectable there.
+ *
+ *  Those callers were defaulting to `SLOTS[0]`, which is Morning — paused.
+ *  Being allowed to CHOOSE a paused window (an operator re-booking a live
+ *  row) is not the same as being HANDED one, and a default nobody edits is
+ *  how a paused window gets written by accident.
+ *
+ *  Derived from PAUSED_SLOTS rather than naming the evening value, so
+ *  un-pausing Morning moves the default back on its own — the same
+ *  one-string-deletion reversal the rest of this file is built around.
+ *
+ *  Falls back to SLOTS[0] only if every slot is paused, which would mean the
+ *  business is closed; a picker still has to render something, and the server
+ *  gate refuses the write regardless. */
+export function firstUnpausedSlot(): string {
+  return (SLOTS.find((s) => !isSlotPaused(s.value)) ?? SLOTS[0]).value;
+}
+
 // ── Self-edit (14h) rule ────────────────────────────────────────────────
 
 /** True iff the customer is still allowed to self-edit the delivery

@@ -41,7 +41,9 @@ import {
   SLOTS,
   bookableSlots,
   dateLabel,
+  firstUnpausedSlot,
   formatSlotForDisplay,
+  isSlotPaused,
   nextDeliveryDates,
 } from "@/lib/delivery-slots";
 import {
@@ -183,29 +185,51 @@ export function RegisterOrderForm({
   // 12 h lead. The server enforces the same split via
   // PrepareOptions.allowAnyDeliveryDate — this is UI, not the gate.
   const canBackdate = authMode === "admin";
-  // Slot values offered on the SUBSCRIPTION path. Full admin registers
+  // Slot values OFFERED on the SUBSCRIPTION path. Full admin registers
   // deliveries that have often already happened, so every window stays
-  // available there — the same deliberate bypass as the one-time `slots`
-  // list below. Team-PIN mode gets the open windows only (TIME_SLOTS drops
-  // paused ones), because the server refuses a paused slot and the default
-  // here is the first entry in the list.
+  // selectable there — the same deliberate bypass as the one-time `slots`
+  // list below, and the reason the admin create route gates on
+  // isValidSlotValue rather than validateBookingSlot. Team-PIN mode gets the
+  // open windows only (TIME_SLOTS drops paused ones), because the server
+  // refuses a paused slot from that path outright.
+  //
+  // OFFERED, not defaulted: what may be CHOSEN and what is PRE-SELECTED are
+  // two different questions, and conflating them is what made this list's
+  // first entry — Morning, paused — the default for every bulk apply. The
+  // default comes from firstUnpausedSlot(); see defaultSubSlot below.
   const subSlotValues = useMemo(
     () => (canBackdate ? SLOTS.map((s) => s.value) : TIME_SLOTS),
     [canBackdate],
   );
+  // Pre-selected subscription slot. Mode-independent on purpose: TIME_SLOTS
+  // is SLOTS minus the paused ones, so its first entry IS firstUnpausedSlot()
+  // by construction, and deriving one value for both modes removes the
+  // branch that previously only got the admin side wrong.
+  const defaultSubSlot = useMemo(() => firstUnpausedSlot(), []);
   const dates = useMemo(() => nextDeliveryDates(7), []);
   const [deliveryDate, setDeliveryDate] = useState<string>(dates[0] ?? "");
+  // `paused` is carried on BOTH branches so the picker can say WHY a window
+  // is unavailable. The admin branch forces disabled:false (back-dating
+  // bypasses the 12 h rule) but a paused window is still paused — that is a
+  // fact about the business, not about this date's clock.
   const slots = useMemo(
     () =>
       deliveryDate
         ? canBackdate
-          ? SLOTS.map((s) => ({ ...s, disabled: false }))
+          ? SLOTS.map((s) => ({
+              ...s,
+              disabled: false,
+              paused: isSlotPaused(s.value),
+            }))
           : bookableSlots(deliveryDate)
         : [],
     [deliveryDate, canBackdate],
   );
+  // Excludes paused explicitly rather than leaning on `disabled`: in admin
+  // mode every slot is enabled, so `!s.disabled` alone selects SLOTS[0] —
+  // Morning — and hands the operator a window nobody delivers in.
   const firstEnabledSlot = useMemo(
-    () => slots.find((s) => !s.disabled)?.value ?? "",
+    () => slots.find((s) => !s.disabled && !s.paused)?.value ?? "",
     [slots],
   );
   const [deliverySlot, setDeliverySlot] = useState<string>("");
@@ -216,7 +240,7 @@ export function RegisterOrderForm({
   // ── SUBSCRIPTION: per-date calendar + per-date slots ───────────────
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [slotByDate, setSlotByDate] = useState<Record<string, string>>({});
-  const [bulkSlot, setBulkSlot] = useState<string>(subSlotValues[0] ?? "");
+  const [bulkSlot, setBulkSlot] = useState<string>(defaultSubSlot);
   const [subStatus, setSubStatus] = useState<
     "active" | "pending_confirmation"
   >("active");
@@ -252,13 +276,13 @@ export function RegisterOrderForm({
     setItems([{ slug: "", qty: "1" }]);
     setSelectedDates([]);
     setSlotByDate({});
-    setBulkSlot(subSlotValues[0] ?? "");
+    setBulkSlot(defaultSubSlot);
     setSubStatus("active");
     setPayment("cod");
     setStatus("pending");
     setServiceabilityOverride(false);
     setDeliveryDate(dates[0] ?? "");
-  }, [dates, subSlotValues]);
+  }, [dates, defaultSubSlot]);
 
   // ── Mode-switch cleanup ────────────────────────────────────────────
   const switchMode = useCallback(
@@ -275,11 +299,11 @@ export function RegisterOrderForm({
       } else {
         setSelectedDates([]);
         setSlotByDate({});
-        setBulkSlot(subSlotValues[0] ?? "");
+        setBulkSlot(defaultSubSlot);
         setSubStatus("active");
       }
     },
-    [orderType, dates, firstEnabledSlot, subSlotValues],
+    [orderType, dates, firstEnabledSlot, defaultSubSlot],
   );
 
   // ── Customer prefill on phone-blur ─────────────────────────────────
@@ -931,6 +955,13 @@ export function RegisterOrderForm({
                   onChange={(e) => setDeliverySlot(e.target.value)}
                   style={input}
                 >
+                  {/* Paused is tested FIRST: in team mode a paused window is
+                      also `disabled`, and reporting the 12 h rule for it sends
+                      the reader hunting for a later date that will never open.
+                      Two different failures, two different sentences.
+                      Suffix shape matches the other full slot pickers —
+                      checkout/page.tsx and subscriptions/setup/page.tsx both
+                      render exactly `" — paused" : " — too soon"`. */}
                   {slots.map((s) => (
                     <option
                       key={s.value}
@@ -938,7 +969,7 @@ export function RegisterOrderForm({
                       disabled={s.disabled}
                     >
                       {formatSlotForDisplay(s.value)}
-                      {s.disabled ? " (too soon)" : ""}
+                      {s.paused ? " — paused" : s.disabled ? " — too soon" : ""}
                     </option>
                   ))}
                 </select>
@@ -977,9 +1008,14 @@ export function RegisterOrderForm({
                       onChange={(e) => setBulkSlot(e.target.value)}
                       style={{ ...input, maxWidth: 200 }}
                     >
+                      {/* Marked, NOT disabled: an operator re-booking a live
+                          row on a paused window is the reason paused values
+                          stay in SLOTS at all. The label is so that choice is
+                          deliberate rather than accidental. */}
                       {subSlotValues.map((s) => (
                         <option key={s} value={s}>
                           {formatSlot(s)}
+                          {isSlotPaused(s) ? " — paused" : ""}
                         </option>
                       ))}
                     </select>
@@ -1031,6 +1067,7 @@ export function RegisterOrderForm({
                           {subSlotValues.map((s) => (
                             <option key={s} value={s}>
                               {formatSlot(s)}
+                              {isSlotPaused(s) ? " — paused" : ""}
                             </option>
                           ))}
                         </select>
