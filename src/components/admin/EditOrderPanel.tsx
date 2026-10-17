@@ -28,6 +28,7 @@ import { ensureAdminFirstName } from "@/lib/admin-first-name";
 import { formatINR } from "@/lib/admin-formatting";
 import type { AdminOrderRow, AdminOrderItemSnapshot } from "@/lib/admin-shared";
 import { isSlotPaused, SLOTS } from "@/lib/delivery-slots";
+import { totalAmountToPost } from "@/lib/order-edit-total";
 import { formatOrderNumber } from "@/lib/order-number";
 import { productFloor } from "@/lib/product-availability";
 import { isPaidStatus } from "@/lib/payment-label";
@@ -355,7 +356,8 @@ export function EditOrderPanel({
       // holds a draft taken when it opened; if the row was paid in another
       // tab since, the disabled inputs alone would not stop a stale draft
       // being posted.
-      if (itemsChanged && !itemsLocked) {
+      const itemsPosted = itemsChanged && !itemsLocked;
+      if (itemsPosted) {
         body.items = items.map((it) => ({
           product_id: it.product_id,
           slug: it.slug,
@@ -366,15 +368,24 @@ export function EditOrderPanel({
       }
 
       const currentFee = round2(Number(order.delivery_fee ?? 0));
-      if (parsedFee !== currentFee) {
+      const feeChanged = parsedFee !== currentFee;
+      if (feeChanged) {
         body.delivery_fee = parsedFee;
       }
 
-      // Send total only if the derived (or overridden) figure differs
-      // from the stored total. This is the key that gates the
-      // money-delta note on the server side.
-      if (effectiveTotal !== oldTotal) {
-        body.total_amount = effectiveTotal;
+      // Send a total only when the operator moved something the total is
+      // made of — see totalAmountToPost for why "it differs from the row"
+      // is not a safe test here. Presence of this key is still what gates
+      // the server's money-delta note.
+      const nextTotal = totalAmountToPost({
+        itemsPosted,
+        feeChanged,
+        totalOverridden: overrideTotal,
+        effectiveTotal,
+        storedTotal: oldTotal,
+      });
+      if (nextTotal !== null) {
+        body.total_amount = nextTotal;
       }
 
       // Coordinates: only include if the panel touched them. Both are

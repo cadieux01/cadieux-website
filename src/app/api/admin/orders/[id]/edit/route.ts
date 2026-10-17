@@ -39,12 +39,25 @@
 // or collection is recorded anywhere. The money-delta note only fires on
 // total_amount, so an items edit could move the figure with no trail.
 //
-// The lock is stated in THREE places on purpose — the panel disables the
-// inputs and says why, this route rejects the field, and `admin_edit_order`
-// raises. The RPC check is the one that counts: it reads payment_status
-// itself, so a caller that bypasses this route (psql, another service, a
-// future endpoint) still cannot get through. The first two exist so the
-// operator learns the rule at the keyboard rather than from a 500.
+// THE LOCK IS NOT ENFORCED IN THE DATABASE. It lives in two places, both
+// TypeScript: EditOrderPanel disables the inputs and says why, and the `items`
+// branch below rejects the field. The panel exists so the operator learns the
+// rule at the keyboard rather than from a 500; this route is the only thing
+// actually stopping the write.
+//
+// An earlier version of this comment claimed `admin_edit_order` raises on a
+// paid order because it "reads payment_status itself". It does not. The RPC
+// whitelists items, total_amount and delivery_fee and writes whatever it is
+// handed; its sole mention of payment_status is a comment about keeping that
+// column OUT of the whitelist. So anything reaching the RPC directly — psql,
+// another service, a future endpoint — can still re-price a captured order,
+// and an invented backstop is worse than no comment: it sends the next reader
+// away satisfied.
+//
+// Second gap, same shape: the check below is isPaidStatus, so a
+// `partially_paid` order's items are editable here even though the
+// customer-facing change-request routes refuse them via hasMoneyArrived
+// (lib/payment-label.ts). Part of the money has still arrived.
 
 import { NextRequest, NextResponse } from "next/server";
 

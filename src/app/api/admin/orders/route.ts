@@ -39,8 +39,16 @@ const SITE_URL =
 // status_updated_at + paid_at + cod_settled_method are projected for the
 // COD settlement control: it must SHOW the paid_at it is about to write
 // (for a delivered order that is status_updated_at) before saving.
+//
+// delivery_fee is projected because EditOrderPanel mounts straight off a
+// row from this list and derives the order total from items + fee. An
+// absent fee is not a blank input — `order.delivery_fee ?? 0` reads a
+// missing column as a genuine zero, so the panel derived items-only
+// totals and every date edit from the board posted one, knocking the fee
+// off the stored total. Keep this in step with the single-order
+// projection in [id]/route.ts; the panel is mounted from both.
 const FULL_SELECT =
-  "id, order_number, public_ref, customer_id, total_amount, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, status_updated_at, paid_at, cod_settled_method, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, order_kind, customers(id, full_name, phone, city)";
+  "id, order_number, public_ref, customer_id, total_amount, delivery_fee, status, payment_method, payment_status, delivery_address, delivery_date, delivery_slot, items, created_at, status_updated_at, paid_at, cod_settled_method, latitude, longitude, distance_km, fulfillment_type, pickup_location_id, pickup_ready_at, picked_up_at, is_preorder, scheduled_delivery_date_by, scheduled_delivery_date_at, order_kind, customers(id, full_name, phone, city)";
 
 // The LEAN projection: every column needed to (a) fold the repeat-customer
 // index and the retention panel over the whole table, (b) answer the search
