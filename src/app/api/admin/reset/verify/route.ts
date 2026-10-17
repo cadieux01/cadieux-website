@@ -12,7 +12,7 @@ import {
   resetOtpKey,
   validateNewPassword,
 } from "@/lib/admin-reset";
-import { logLogisticsAudit } from "@/lib/logistics-audit";
+import { queueLogisticsAudit } from "@/lib/logistics-audit";
 
 // POST /api/admin/reset/verify  { phone, code, newPassword }
 //
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   const admin = await resolveActiveAdminByPhone(to);
   if (!admin) {
     // No active admin for this number. Generic invalid reply.
-    void logLogisticsAudit({
+    queueLogisticsAudit({
       actionType: "BLOCKED",
       entityType: "admin_password_reset",
       category: "security",
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
   const result = await verifyOtp(resetOtpKey(to), code);
   if (!result.ok) {
-    void logLogisticsAudit({
+    queueLogisticsAudit({
       actionType: "BLOCKED",
       entityType: "admin_password_reset",
       entityId: admin.id,
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
 
   if (updateErr) {
     console.error("[admin/reset/verify] password update failed:", updateErr.message);
-    void logLogisticsAudit({
+    queueLogisticsAudit({
       actionType: "BLOCKED",
       entityType: "admin_password_reset",
       entityId: admin.id,
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  void logLogisticsAudit({
+  queueLogisticsAudit({
     actionType: "UPDATE",
     entityType: "admin_password_reset",
     entityId: admin.id,

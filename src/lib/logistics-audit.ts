@@ -7,6 +7,8 @@
 // bypasses RLS. Writes are best-effort — a failure here is logged but
 // never thrown, because the user-visible action has already happened.
 
+import { waitUntil } from "@vercel/functions";
+
 import { supabaseAdmin } from "@/lib/admin-auth";
 
 // action_type values accepted by logistics.audit_logs after the CHECK
@@ -59,5 +61,36 @@ export async function logLogisticsAudit(
     }
   } catch (err) {
     console.warn("[logistics-audit] unexpected failure:", err);
+  }
+}
+
+/**
+ * Queue an audit write from a call site that cannot await it.
+ *
+ * USE THIS INSTEAD OF `void logLogisticsAudit(...)`. A bare floating promise
+ * is killed when Vercel freezes the invocation the instant the response is
+ * returned, so the insert never runs — not rejected, not logged, just absent.
+ * Measured on /api/verify/check 2026-10-17: ~12% of rows lost, and survivors
+ * arriving seconds late and out of order as frozen instances were thawed by
+ * later requests. `order-burst-alert.ts:392-394` and
+ * `orphaned-payment-alert.ts:148-152` reached the same conclusion earlier.
+ *
+ * Off-Vercel (local dev, tests) waitUntil is a no-op that does not throw, so
+ * the promise simply runs to completion.
+ *
+ * Never throws and never delays the caller, so it is safe on paths where the
+ * user-visible action has already happened.
+ */
+export function queueLogisticsAudit(input: LogisticsAuditInput): void {
+  try {
+    const task = logLogisticsAudit(input).catch((e) => {
+      // logLogisticsAudit catches internally, so reaching here is unexpected.
+      // Still required: an unhandled rejection inside waitUntil can take down
+      // the invocation, which WOULD be user-visible.
+      console.warn("[logistics-audit] queued write threw:", e);
+    });
+    waitUntil(task);
+  } catch (e) {
+    console.warn("[logistics-audit] queue failed:", e);
   }
 }

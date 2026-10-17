@@ -8,7 +8,7 @@ import {
 import { generateOtp, putOtp } from "@/lib/otp-store";
 import { sendOtpSms } from "@/lib/msg91";
 import { resolveActiveAdminByPhone, resetOtpKey } from "@/lib/admin-reset";
-import { logLogisticsAudit } from "@/lib/logistics-audit";
+import { queueLogisticsAudit } from "@/lib/logistics-audit";
 
 // POST /api/admin/reset/start  { phone }
 //
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   if (!admin) {
     // Unknown / non-admin number. Audit the probe (best-effort) but reply
     // generically so we never confirm or deny the number.
-    void logLogisticsAudit({
+    queueLogisticsAudit({
       actionType: "BLOCKED",
       entityType: "admin_password_reset",
       category: "security",
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   await putOtp(resetOtpKey(to), otp);
   const sent = await sendOtpSms(to, otp);
 
-  void logLogisticsAudit({
+  queueLogisticsAudit({
     actionType: sent.ok ? "UPDATE" : "BLOCKED",
     entityType: "admin_password_reset",
     entityId: admin.id,
