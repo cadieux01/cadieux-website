@@ -4,7 +4,7 @@ import { revalidateTag } from "next/cache";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { writeAuditEntries } from "@/lib/admin-product-audit";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { logLogisticsAudit } from "@/lib/logistics-audit";
+import { queueLogisticsAudit } from "@/lib/logistics-audit";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 
 // POST /api/admin/products/[id]/archive
@@ -86,7 +86,7 @@ export async function POST(
   });
 
   // Unified audit trail (logistics.audit_logs) — PIN verified.
-  void logLogisticsAudit({
+  queueLogisticsAudit({
     actionType: "DELETE",
     entityType: "product",
     entityId: after.id,

@@ -10,7 +10,7 @@ import {
   writeAuditEntries,
 } from "@/lib/admin-product-audit";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { logLogisticsAudit } from "@/lib/logistics-audit";
+import { queueLogisticsAudit } from "@/lib/logistics-audit";
 import {
   canonicalNutrientValue,
   parseNutrientValue,
@@ -353,7 +353,7 @@ export async function PATCH(
   });
 
   // Unified audit trail (logistics.audit_logs) — PIN verified.
-  void logLogisticsAudit({
+  queueLogisticsAudit({
     actionType: "UPDATE",
     entityType: "product",
     entityId: after.id,

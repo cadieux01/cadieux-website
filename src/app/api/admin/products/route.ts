@@ -9,7 +9,7 @@ import {
 } from "@/lib/admin-product-audit";
 import { seedDefaultProductContent } from "@/lib/admin-product-content-seed";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { logLogisticsAudit } from "@/lib/logistics-audit";
+import { queueLogisticsAudit } from "@/lib/logistics-audit";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import { COVER_MUST_BE_PHOTO, isVideoUrl } from "@/lib/product-media";
 import { CONTENT_CACHE_TAG } from "@/lib/content";
@@ -289,7 +289,7 @@ export async function POST(req: NextRequest) {
   });
 
   // Unified logistics audit trail (same channel as PATCH / archive).
-  void logLogisticsAudit({
+  queueLogisticsAudit({
     actionType: "CREATE",
     entityType: "product",
     entityId: inserted.id,

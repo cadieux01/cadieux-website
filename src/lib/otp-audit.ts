@@ -35,9 +35,8 @@
 // themselves, so there is exactly one place this can be got wrong.
 
 import type { NextRequest } from "next/server";
-import { waitUntil } from "@vercel/functions";
 import { maskPhone } from "@/lib/phone-cookie";
-import { logLogisticsAudit, type LogisticsAction } from "@/lib/logistics-audit";
+import { queueLogisticsAudit, type LogisticsAction } from "@/lib/logistics-audit";
 import type { VerifyResult } from "@/lib/otp-store";
 
 /** How a send attempt ended. */
@@ -125,32 +124,21 @@ export function otpAuditMeta(
 }
 
 /**
- * Fire-and-forget audit write shared by both sides. Still fire-and-forget —
- * the caller is never delayed — but handed to `waitUntil` rather than left
- * as a bare floating promise.
+ * Fire-and-forget audit write shared by both sides — the caller is never
+ * delayed.
  *
- * WHY waitUntil AND NOT `void`. Vercel may freeze the invocation the instant
- * the response is returned, which kills an un-awaited promise mid-insert. We
- * measured it: of 8 probes against production on 2026-10-17, 7 rows landed
- * and 1 was lost, and the survivors arrived up to ~11.7s LATE and OUT OF
- * ORDER — one row flushing only when the next request reused the instance.
- * The one that vanished was last in its burst with no following request, so
- * it was still pending at teardown. Nothing failed; the insert never ran.
- *
- * This is the same conclusion `order-burst-alert.ts:392-394` and
- * `orphaned-payment-alert.ts:148-152` had already reached. Outside a Vercel
- * request context (local dev, tests) waitUntil is a no-op that does not
- * throw, so the promise simply runs to completion.
+ * Queued through `queueLogisticsAudit`, NOT `void logLogisticsAudit(...)`.
+ * Vercel may freeze the invocation the instant the response is returned,
+ * which kills an un-awaited promise mid-insert; measured here on
+ * /api/verify/check, ~12% of rows lost with survivors seconds late and out
+ * of order. The helper holds the `waitUntil` + rejection-guard pattern and
+ * the full evidence; this file deliberately does not keep a second copy of
+ * it.
  *
  * NOTHING HERE MAY THROW. These calls sit on the login path, so an audit
- * problem must never become a failed verification. Three guards:
- *   - `maskPhone` and the object spread cannot throw;
- *   - the `.catch` keeps a rejection from becoming an unhandled rejection
- *     inside waitUntil, which CAN take down the invocation and so would be
- *     customer-visible (logLogisticsAudit catches internally already, so
- *     this is a second line of defence, not the first);
- *   - the outer try/catch covers `waitUntil` itself on any runtime where it
- *     is unavailable rather than a no-op.
+ * problem must never become a failed verification. `maskPhone` and the
+ * object spread cannot throw, and `queueLogisticsAudit` is non-throwing by
+ * construction, so this function has no failure mode of its own.
  */
 function writeOtpRow(
   entityType: "otp_send" | "otp_check",
@@ -160,22 +148,15 @@ function writeOtpRow(
   meta: OtpAuditMeta & { outcome: OtpOutcome },
 ): void {
   const masked = maskPhone(rawPhone);
-  try {
-    const task = logLogisticsAudit({
-      actionType: action,
-      entityType,
-      category: "security",
-      description: `${verb} ${meta.outcome} for ${masked} via ${meta.source}`,
-      // Not an admin action — don't inherit the helper's "Super Admin" default.
-      userName: meta.channel === "mobile" ? "Mobile app (public)" : "Website (public)",
-      metadata: { ...meta, phone: masked },
-    }).catch((e) => {
-      console.error("[otp-audit] write threw:", e);
-    });
-    waitUntil(task);
-  } catch (e) {
-    console.error("[otp-audit] queue failed:", e);
-  }
+  queueLogisticsAudit({
+    actionType: action,
+    entityType,
+    category: "security",
+    description: `${verb} ${meta.outcome} for ${masked} via ${meta.source}`,
+    // Not an admin action — don't inherit the helper's "Super Admin" default.
+    userName: meta.channel === "mobile" ? "Mobile app (public)" : "Website (public)",
+    metadata: { ...meta, phone: masked },
+  });
 }
 
 /**
