@@ -30,7 +30,40 @@ function normalize(raw: string): string {
   return digits.replace(/^0+/, "");
 }
 
-type Result = { ok: true } | { ok: false; error: string };
+type Result =
+  | { ok: true; requestId: string | null }
+  | { ok: false; error: string };
+
+/**
+ * MSG91's id for an accepted submission, pulled off the Flow response.
+ *
+ * Why this is worth keeping: `{ ok: true }` from this file means "MSG91
+ * accepted the call", NOT "the handset received it" — the only thing checked
+ * below is the synchronous acknowledgement. When those two diverge (as they
+ * appear to have during the 2026-10-16/17 OTP incident) this id is what lets
+ * a row in logistics.audit_logs be reconciled against MSG91's own delivery
+ * log. Without it the only join is phone + timestamp, by hand.
+ *
+ * SHAPE CAVEAT, read before trusting a null: on the v5 Flow endpoint the
+ * request id arrives in `message` on a success response — the SAME field
+ * used as the human-readable error text on a failure (see the `type ===
+ * "error"` branch below), which is why `message` is only consulted here on
+ * the success path. `request_id` is preferred when present. The key order
+ * mirrors extractMessageId in msg91-whatsapp.ts, whose endpoint answers in a
+ * different shape. If MSG91 changes either, this returns null and the audit
+ * row simply loses the id — it must never affect delivery.
+ */
+function extractRequestId(data: unknown): string | null {
+  const d = (data ?? {}) as Record<string, unknown>;
+  if (typeof d.request_id === "string") return d.request_id;
+  if (typeof d.requestId === "string") return d.requestId;
+  const inner = d.data as Record<string, unknown> | undefined;
+  if (inner && typeof inner.request_id === "string") return inner.request_id;
+  if (typeof d.message === "string" && d.message.trim().length > 0) {
+    return d.message;
+  }
+  return null;
+}
 
 /**
  * Sends a self-generated OTP via the MSG91 flow template. Returns a tagged
@@ -74,7 +107,7 @@ export async function sendOtpSms(phone: string, otp: string): Promise<Result> {
       console.error("MSG91 flow error:", data);
       return { ok: false, error: msg };
     }
-    return { ok: true };
+    return { ok: true, requestId: extractRequestId(data) };
   } catch (err) {
     console.error("MSG91 fetch failed:", err);
     return { ok: false, error: "MSG91 request failed" };
@@ -142,7 +175,7 @@ export async function sendMsg91FlowTemplate(
       });
       return { ok: false, error: msg };
     }
-    return { ok: true };
+    return { ok: true, requestId: extractRequestId(data) };
   } catch (err) {
     console.error("[msg91-flow] fetch failed:", err);
     return { ok: false, error: "MSG91 request failed" };

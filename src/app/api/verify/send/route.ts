@@ -93,6 +93,13 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
-  logOtpSend("CREATE", to, { ...meta, outcome: "sent" });
+  // `requestId` is MSG91's handle for the accepted message. "sent" here means
+  // MSG91 took the call, not that the SMS landed — this id is what makes the
+  // row reconcilable against MSG91's delivery log when those two differ.
+  logOtpSend("CREATE", to, {
+    ...meta,
+    outcome: "sent",
+    requestId: sent.requestId,
+  });
   return NextResponse.json({ ok: true });
 }

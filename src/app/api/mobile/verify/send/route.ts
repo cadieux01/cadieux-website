@@ -126,6 +126,12 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
-  logOtpSend("CREATE", to, { ...meta, outcome: "sent" });
+  // See the matching note in /api/verify/send: "sent" is MSG91's acceptance,
+  // and `requestId` is the only handle that ties this row to their delivery log.
+  logOtpSend("CREATE", to, {
+    ...meta,
+    outcome: "sent",
+    requestId: sent.requestId,
+  });
   return NextResponse.json({ ok: true });
 }

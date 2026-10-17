@@ -6,6 +6,8 @@ import {
   signPhoneCookie,
 } from "@/lib/phone-cookie";
 import { verifyOtp } from "@/lib/otp-store";
+import { otpAuditMeta, logOtpCheck } from "@/lib/otp-audit";
+import { getClientIP } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
@@ -17,10 +19,14 @@ export async function POST(req: NextRequest) {
   }
 
   const to = normalizePhone(phone);
+  const meta = otpAuditMeta(req, getClientIP(req), "web");
 
   try {
     const result = await verifyOtp(to, code);
     if (!result.ok) {
+      // Logged BEFORE the response is built, and fire-and-forget, so the
+      // customer's answer never waits on the audit insert.
+      logOtpCheck(to, { ...meta, outcome: result.reason });
       if (result.reason === "too_many_attempts") {
         return NextResponse.json(
           { ok: false, error: "Too many attempts. Try again later." },
@@ -29,6 +35,7 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ ok: false, error: "Invalid code." }, { status: 401 });
     }
+    logOtpCheck(to, { ...meta, outcome: "ok" });
 
     const exp = Date.now() + PHONE_COOKIE_TTL_MS;
     const cookieValue = signPhoneCookie(to, exp);

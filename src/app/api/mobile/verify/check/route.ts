@@ -19,6 +19,8 @@ import {
   signPhoneCookie,
 } from "@/lib/phone-cookie";
 import { verifyOtp } from "@/lib/otp-store";
+import { otpAuditMeta, logOtpCheck } from "@/lib/otp-audit";
+import { getClientIP } from "@/lib/ratelimit";
 
 // Admin client used to stamp age_verified_at on the customer row when
 // the user ticks the 18+ confirmation during OTP verification. RLS is
@@ -69,6 +71,7 @@ export async function POST(req: NextRequest) {
   }
 
   const to = normalizePhone(phone);
+  const meta = otpAuditMeta(req, getClientIP(req), "mobile");
 
   // ───────── Play review bypass — remove after approval ─────────
   // When REVIEW_TEST_PHONE + REVIEW_TEST_CODE are set and both match,
@@ -85,9 +88,15 @@ export async function POST(req: NextRequest) {
   // ──────────────────────────────────────────────────────────────
 
   try {
+    // Only the real verification path is audited. The review bypass above
+    // never calls verifyOtp, so logging an 'ok' for it would record a check
+    // that did not happen.
     if (!isReviewBypass) {
       const result = await verifyOtp(to, code);
       if (!result.ok) {
+        // Fire-and-forget, before the response is built — the customer's
+        // answer never waits on the audit insert.
+        logOtpCheck(to, { ...meta, outcome: result.reason });
         if (result.reason === "too_many_attempts") {
           return NextResponse.json(
             { ok: false, error: "Too many attempts. Try again later." },
@@ -99,6 +108,7 @@ export async function POST(req: NextRequest) {
           { status: 401 }
         );
       }
+      logOtpCheck(to, { ...meta, outcome: "ok" });
     }
 
     // Stamp age_verified_at on the customer record once the OTP is approved.
