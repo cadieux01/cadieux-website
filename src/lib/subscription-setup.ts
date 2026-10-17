@@ -125,11 +125,27 @@ export async function fetchSubscriptionPlans(): Promise<WizardProduct[]> {
  *  the canonical windows minus the paused ones.
  *
  *  This derived from SLOTS alone and so carried no pause, which made the
- *  wizard's "set same time for all" selector — and the register form's
- *  subscription slot dropdowns, whose default is `TIME_SLOTS[0]` — offer a
- *  window the server would refuse. The per-date selector got it right
- *  because it goes through `bookableSlots`; this list is the same idea for
- *  the paths that have no date in hand yet.
+ *  wizard's "set same time for all" selector offer a window the server would
+ *  refuse. The per-date selector got it right because it goes through
+ *  `bookableSlots`; this list is the same idea for the paths that have no
+ *  date in hand yet.
+ *
+ *  AN OFFER LIST, NOT A DEFAULT. An earlier version of this comment also
+ *  claimed the register form's subscription dropdowns default to
+ *  `TIME_SLOTS[0]`, and that sentence is why a paused default survived
+ *  review — it was wrong about both consumers, in opposite directions. The
+ *  customer wizard starts at "" behind a "pick a slot" placeholder, so it
+ *  has no default to be right or wrong about. RegisterOrderForm uses this
+ *  list in team-PIN mode ONLY: its admin mode offers unfiltered SLOTS on
+ *  purpose, so an operator can re-book a live row onto a paused window —
+ *  and SLOTS[0] is Morning, which is paused, so that branch pre-selected
+ *  the one window nobody delivers in. Pre-selection is now
+ *  `firstUnpausedSlot()` in delivery-slots.ts, for every mode.
+ *
+ *  So: do not describe a caller's default from here. This list answers
+ *  "what may be OFFERED to a customer", and nothing else. Which value a
+ *  picker lands on is the picker's business, and a claim about it made
+ *  here is one no type checker can contradict.
  *
  *  NOT a validity test: legacy "HH:MM" and paused canonical values still
  *  store and still render via `formatSlot()`. `isValidSlotValue` in
