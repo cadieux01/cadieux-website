@@ -201,9 +201,14 @@ export function formatFloorShort(iso: string): string {
 //
 // Same rule as the one-off: a subscription containing a pre-order loaf can
 // only START on or after that loaf's floor, and every generated delivery
-// must fall on or after it. Both are enforced by `enforceDeliveryFloor` on
-// the earliest delivery in the template (deliveries are sorted ascending,
-// so if the first clears the floor every later one does).
+// must fall on or after it. Both are enforced by `enforceDeliveryFloor`.
+//
+// How many of the template's dates a caller hands it is the CALLER's
+// decision, not this module's, so ask the caller. The two shapes in the tree
+// decide the same thing today for the same reason: a floor is a RAY, so the
+// earliest delivery clearing it means every later one does. Testing all of
+// them is the shape that survives availability becoming a discrete SET of
+// open days, where an earlier date clearing says nothing about a later one.
 //
 // There used to be a stricter gate that refused subscription creation
 // entirely (`subscriptionFloorError` + the `preorder_subscription` code,

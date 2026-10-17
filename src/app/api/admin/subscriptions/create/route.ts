@@ -73,6 +73,8 @@ import {
 } from "@/lib/subscription-delivery-fee";
 import { formatSubscriptionNumber } from "@/lib/order-number";
 import { isValidSlotValue } from "@/lib/delivery-slots";
+import { enforceDeliveryFloor } from "@/lib/order-validation";
+import type { AvailabilityRow } from "@/lib/product-availability";
 
 // Client-supplied delivery row shape — mirrors /api/checkout's
 // ClientDelivery type (see route.ts:317-324). `slot` may be null when a
@@ -400,10 +402,17 @@ export async function POST(req: NextRequest) {
   // 7. Server-side pricing from DB. Prices from products row only —
   //    subscriptionUnitPrice is the shared single source of truth.
   const slugs = Array.from(new Set(multiItems.map((i) => i.slug)));
+  //    `available_from` + `stock_message` are here for the step 7a floor
+  //    check and nothing else. They have to be SELECTed explicitly:
+  //    AvailabilityRow declares both optional, so a projection that omits
+  //    them type-checks perfectly and every product reads as having no
+  //    floor. That is the delivery_fee bug exactly — an absent column is
+  //    not a blank value — and the only thing that notices is a customer
+  //    receiving a loaf that does not exist yet. Do not trim this list.
   const { data: rows, error: rowsErr } = await supabaseAdmin
     .from("products")
     .select(
-      "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived",
+      "slug, name, price_inr, subscription_per_loaf_inr, subscription_discount_pct, is_active, in_stock, is_archived, available_from, stock_message",
     )
     .in("slug", slugs);
   if (rowsErr) {
@@ -419,6 +428,11 @@ export async function POST(req: NextRequest) {
   const bySlug = new Map((rows ?? []).map((r) => [r.slug as string, r]));
 
   const snapItems: SubscriptionSnapItem[] = [];
+  // Accumulated alongside snapItems so step 7a reads rows that have already
+  // passed the archived / inactive / out-of-stock gates below, and so the
+  // floor never has to re-look-up a slug (a `bySlug.get(...)!` there would be
+  // a non-null assertion standing in for the loop's own refusals).
+  const floorRows: AvailabilityRow[] = [];
   let amountPerDelivery = 0;
   let totalUnits = 0;
   for (const it of multiItems) {
@@ -456,6 +470,43 @@ export async function POST(req: NextRequest) {
       quantity_per_delivery: it.qty,
       price_snapshot_inr: unit,
     });
+    floorRows.push({
+      name: row.name as string,
+      available_from: row.available_from as string | null,
+      stock_message: row.stock_message as string | null,
+    });
+  }
+
+  // 7a. Pre-order floor. `products.available_from` is a per-product DELIVERY
+  //     floor: the loaf is sellable, it just cannot be handed over before
+  //     that date. This route is the offline/walk-in subscription writer and
+  //     had no floor gate at all, which is how OLS105 got a Multigrain plan
+  //     delivering below the floor.
+  //
+  //     NO OVERRIDE HERE, deliberately. Admin bypasses the 12h10m booking
+  //     lead above because back-dating a walk-in is a real operator action
+  //     against a kitchen that CAN bake. A floor is the kitchen saying the
+  //     loaf does not exist yet, so there is nothing for an operator to know
+  //     that the column does not already say. Clearing the floor is one
+  //     UPDATE with no deploy; that is the escape hatch.
+  //
+  //     CHECKED PER DELIVERY, not on the earliest row. /api/checkout tests
+  //     only the earliest, which is sound for a floor because a floor is a
+  //     RAY — clear its start and every later date clears too. That
+  //     implication dies the moment availability becomes a discrete SET of
+  //     open days (a shut Friday between an open Thursday and an open
+  //     Monday). `products.open_dates` does that, but it lives on an
+  //     unmerged branch and does NOT exist on main, so nothing below reads
+  //     it: this loop is SHAPED for the set predicate without using it, so
+  //     adopting it later changes which question is asked, not where.
+  for (const delivery of deliveryTemplate) {
+    const floorFailure = enforceDeliveryFloor(floorRows, delivery.delivery_date);
+    if (floorFailure) {
+      return NextResponse.json(
+        { error: floorFailure.error, code: floorFailure.code },
+        { status: floorFailure.status },
+      );
+    }
   }
 
   // 7b. Delivery fee + distance gate. Same shared helper one-time orders
