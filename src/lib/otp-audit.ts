@@ -54,9 +54,15 @@ export type OtpSendOutcome =
  * two cannot drift. Add a reason there and this union widens with it, which
  * turns "a new outcome nobody logs" into a compile error at the call sites.
  * Today that resolves to expired | invalid | too_many_attempts.
+ *
+ * `error` is the one member deliberately NOT derived, because it is not a
+ * verdict verifyOtp returns — it is verifyOtp (or Upstash underneath it)
+ * THROWING, which both routes catch and answer with a 500. That branch was
+ * the last exit from either check route that recorded nothing at all.
  */
 export type OtpCheckOutcome =
   | "ok"
+  | "error"
   | Extract<VerifyResult, { ok: false }>["reason"];
 
 export type OtpOutcome = OtpSendOutcome | OtpCheckOutcome;
@@ -169,24 +175,30 @@ export function logOtpSend(
 /**
  * One row per check attempt — the funnel's second half.
  *
- * `LOGIN` on success (this endpoint is what signs a customer in) and
- * `BLOCKED` on every rejection. Both values are already permitted by
- * logistics.audit_logs' action_type CHECK constraint, so this needs no
- * migration — verified against the live constraint, which accepts exactly
- * CREATE / UPDATE / DELETE / LOGIN / FEEDBACK_REPLY / BLOCKED / LOCKOUT. Do
- * not invent an action_type here: the writer swallows its own errors, so a
- * constraint violation would silently log nothing at all, which is the
- * exact blindness these rows exist to remove.
+ * `LOGIN` on success (this endpoint is what signs a customer in), `LOCKOUT`
+ * once the attempt counter is burned, and `BLOCKED` for every other
+ * rejection. All three are already permitted by logistics.audit_logs'
+ * action_type CHECK constraint, so this needs no migration — verified
+ * against the live constraint, which accepts exactly CREATE / UPDATE /
+ * DELETE / LOGIN / FEEDBACK_REPLY / BLOCKED / LOCKOUT. Do not invent an
+ * action_type here: the writer swallows its own errors, so a constraint
+ * violation would silently log nothing at all, which is the exact blindness
+ * these rows exist to remove.
+ *
+ * `action_type` is a COARSE grouping and three outcomes share `BLOCKED`.
+ * `metadata->>'outcome'` is the discriminator — filter on that, not on
+ * action_type, or expired / invalid / error become one indistinguishable
+ * bucket.
  */
 export function logOtpCheck(
   rawPhone: string,
   meta: OtpAuditMeta & { outcome: OtpCheckOutcome },
 ): void {
-  writeOtpRow(
-    "otp_check",
-    meta.outcome === "ok" ? "LOGIN" : "BLOCKED",
-    rawPhone,
-    "OTP check",
-    meta,
-  );
+  const action: LogisticsAction =
+    meta.outcome === "ok"
+      ? "LOGIN"
+      : meta.outcome === "too_many_attempts"
+        ? "LOCKOUT"
+        : "BLOCKED";
+  writeOtpRow("otp_check", action, rawPhone, "OTP check", meta);
 }

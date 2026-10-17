@@ -49,7 +49,18 @@ export async function POST(req: NextRequest) {
     });
     return response;
   } catch (err) {
+    // Something in the verification path threw instead of returning a
+    // verdict — verifyOtp with Upstash unreachable mid-check being the
+    // likeliest source, though signPhoneCookie is inside the try too, so
+    // `error` means "no verdict", not specifically "Redis down". `err` is
+    // logged FIRST so that nothing below can mask or delay it, and the 500
+    // is byte-for-byte what it was.
+    //
+    // The row records only THAT a throw happened, never `err` itself: an
+    // Upstash failure message can carry the REST endpoint, and that does
+    // not belong in a database row that outlives the request.
     console.error("verify/check error:", err);
+    logOtpCheck(to, { ...meta, outcome: "error" });
     return NextResponse.json({ ok: false, error: "Verification failed." }, { status: 500 });
   }
 }

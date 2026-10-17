@@ -145,7 +145,16 @@ export async function POST(req: NextRequest) {
     const token = signPhoneCookie(to, exp);
     return NextResponse.json({ ok: true, token, exp });
   } catch (err) {
+    // See the matching note in /api/verify/check. Two exclusions are
+    // specific to this route: the age_verified_at upsert has its own try /
+    // catch, so a Supabase failure can never surface as `error`; and the
+    // review bypass is skipped for the same reason the success path skips
+    // it — verifyOtp was never called, so there is no check to record.
+    //
+    // `err` is logged FIRST so the audit write cannot mask or delay it, and
+    // the row records only THAT a throw happened, never `err` itself.
     console.error("mobile/verify/check error:", err);
+    if (!isReviewBypass) logOtpCheck(to, { ...meta, outcome: "error" });
     return NextResponse.json(
       { ok: false, error: "Verification failed." },
       { status: 500 }
