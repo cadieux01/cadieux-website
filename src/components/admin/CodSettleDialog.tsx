@@ -22,6 +22,7 @@ import {
   codMethodDisplay,
   codMethodLabel,
   settlementPaidAt,
+  settlementWording,
   type CodSettledMethod,
 } from "@/lib/cod-settlement";
 import type { AdminOrderRow } from "@/lib/admin-shared";
@@ -273,15 +274,20 @@ export function CodSettleDialog({
 }
 
 /** The trigger. Rendered only for an unsettled COD order — the caller gates
- *  on canSettleCod(), so this does not re-check. */
+ *  on canSettleCod(), so this does not re-check.
+ *
+ *  `fulfillmentType` only picks the wording (see settlementWording): a pickup
+ *  order's money is taken at the counter, never at a door. */
 export function CodSettleButton({
   disabled,
   onClick,
   style,
+  fulfillmentType,
 }: {
   disabled?: boolean;
   onClick: () => void;
   style?: React.CSSProperties;
+  fulfillmentType?: string | null;
 }) {
   return (
     <button
@@ -300,7 +306,7 @@ export function CodSettleButton({
         opacity: disabled ? 0.5 : 1,
         ...style,
       }}
-      title="Record how this COD order's cash arrived"
+      title={`Record how ${settlementWording(fulfillmentType).tooltipSubject} arrived`}
     >
       Record cash
     </button>
@@ -308,7 +314,13 @@ export function CodSettleButton({
 }
 
 /** Settled state, for a row that already has a method. Read-only. */
-export function CodSettledChip({ method }: { method: string }) {
+export function CodSettledChip({
+  method,
+  fulfillmentType,
+}: {
+  method: string;
+  fulfillmentType?: string | null;
+}) {
   const label = codMethodDisplay(method);
   return (
     <span
@@ -317,7 +329,7 @@ export function CodSettledChip({ method }: { method: string }) {
         color: TEXT_MUTED,
         whiteSpace: "nowrap",
       }}
-      title="How this COD order's cash arrived"
+      title={`How ${settlementWording(fulfillmentType).tooltipSubject} arrived`}
     >
       {label}
     </span>

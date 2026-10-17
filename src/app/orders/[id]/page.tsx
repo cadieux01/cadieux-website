@@ -107,14 +107,30 @@ type ChangeRequest = {
 
 // Customer-facing label for how the order is being paid for.
 //   razorpay + paid    → "Paid"
+//   cod + pickup       → "Pay at Pickup"
 //   cod                → "Cash on Delivery"
 //   razorpay + failed  → "Payment failed"
 //   anything else      → "Awaiting payment" (razorpay 'created'/'pending')
-function paymentLabel(method: string | null, status: string | null): string {
+//
+// THE PICKUP BRANCH IS THE SAME WORDS CHECKOUT USED. A pickup customer's only
+// payment button is labelled "Pay at Pickup" (PaymentButtons in
+// app/checkout/page.tsx); showing them "Cash on Delivery" afterwards describes
+// a delivery they are not getting, on the one screen they open to check what
+// they owe. The stored payment_method is still 'cod' and stays that way — this
+// is wording, not classification.
+function paymentLabel(
+  method: string | null,
+  status: string | null,
+  fulfillmentType?: string | null,
+): string {
   const m = (method ?? "").toLowerCase();
   const s = (status ?? "").toLowerCase();
   if (s === "paid") return "Paid";
-  if (m === "cod") return "Cash on Delivery";
+  if (m === "cod") {
+    return (fulfillmentType ?? "").trim().toLowerCase() === "pickup"
+      ? "Pay at Pickup"
+      : "Cash on Delivery";
+  }
   if (s === "failed") return "Payment failed";
   return "Awaiting payment";
 }
@@ -890,7 +906,11 @@ export default function OrderDetailPage() {
                     textAlign: "right",
                   }}
                 >
-                  {paymentLabel(order.payment_method, order.payment_status)}
+                  {paymentLabel(
+                    order.payment_method,
+                    order.payment_status,
+                    order.fulfillment_type,
+                  )}
                 </span>
               </div>
 

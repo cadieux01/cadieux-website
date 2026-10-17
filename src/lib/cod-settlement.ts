@@ -36,6 +36,44 @@ export function codMethodDisplay(stored: string): string {
   return isCodSettledMethod(stored) ? codMethodLabel(stored) : stored;
 }
 
+/**
+ * The words for "this order's money", which are NOT the same words on a pickup
+ * order even though the column says 'cod' on both.
+ *
+ * A pickup customer is never shown "Cash on Delivery": checkout labels their
+ * only payment button "Pay at Pickup" (see PaymentButtons in
+ * app/checkout/page.tsx). Telling the operator who takes that money at the
+ * counter that they are recording a "COD order" describes a doorstep that did
+ * not happen, and the same phrase goes into audit_log where it is the only
+ * record of the event. 'cod' stays in the COLUMN — it is the honest value for
+ * "money not taken online", and changing it would reclassify 117 live rows for
+ * every reader of payment_method. Only the human-facing words change.
+ *
+ * ONE FUNCTION, BOTH SURFACES, on purpose: the operator's tooltip and the audit
+ * line describe the same event, and the audit line is the half nobody looks at
+ * until months later, so it is the half that would rot alone.
+ *
+ * Null / absent / legacy fulfillment_type reads as delivery, matching the
+ * column's own convention (see AdminOrderRow.fulfillment_type).
+ */
+export function settlementWording(fulfillmentType?: string | null): {
+  /** Leads the audit_log context line, before " by Cash". */
+  auditSubject: string;
+  /** Fills "Record how <this> arrived" in the admin tooltips. */
+  tooltipSubject: string;
+} {
+  const pickup = (fulfillmentType ?? "").trim().toLowerCase() === "pickup";
+  return pickup
+    ? {
+        auditSubject: "Pickup counter payment settled",
+        tooltipSubject: "this pickup order's counter payment",
+      }
+    : {
+        auditSubject: "COD settled",
+        tooltipSubject: "this COD order's cash",
+      };
+}
+
 type SettleableOrder = {
   payment_method?: string | null;
   payment_status?: string | null;

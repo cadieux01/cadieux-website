@@ -10,7 +10,10 @@
 // Auth: cookie-based via getVerifiedPhone(req). The order must belong to the
 // verified phone's customer, otherwise 404 (don't leak unrelated orders).
 //
-// Guard: not already paid, not cancelled, and payable per isPayableOnline().
+// Guard: not already paid, not cancelled, and payable per isPayableOnline() —
+// which as of 18 Oct 2026 also refuses a PICKUP order placed from the cutoff
+// onwards, because pickup is paid at the counter. Pickup orders older than the
+// cutoff keep this door; the rule and the reason are in order-payable.ts.
 // This route used to refuse everything whose payment_method was not `cod`, and
 // that one check was the whole reason a dismissed Razorpay window could never be
 // finished — src/lib/order-payable.ts now owns the rule, so the customer's button
@@ -85,8 +88,13 @@ export async function POST(
   // Load the order, scoped to this customer.
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
+    // fulfillment_type + created_at are here for isPayableOnline, which reads
+    // BOTH to refuse a pickup order placed under the counter-payment rule while
+    // grandfathering the ones that predate it. Dropping either from this
+    // projection does not fail — it silently stops the guard firing (the
+    // function treats an absent created_at as grandfathered on purpose).
     .select(
-      "id, customer_id, total_amount, status, payment_method, payment_status, razorpay_order_id",
+      "id, customer_id, total_amount, status, payment_method, payment_status, razorpay_order_id, fulfillment_type, created_at",
     )
     .eq("id", id)
     .maybeSingle();

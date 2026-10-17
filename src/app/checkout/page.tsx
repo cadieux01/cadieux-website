@@ -3421,9 +3421,23 @@ function PaymentButtons({
   onCOD: () => void;
   onOnline: () => void;
   loading: boolean;
-  /** Pickup has no delivery, so "Cash on Delivery" reads as "not for me" to
-   *  the one customer who most needs the fallback — the one whose online
-   *  payment just failed. Same handler, honest label. */
+  /** PICKUP IS PAID AT THE COUNTER, so there is no Pay Online button on it at
+   *  all — Raja's rule, 18 Oct 2026. `onCOD` is then the only CTA, which is
+   *  why its label stops being a fallback's label: it is not "the other
+   *  option" any more, it is the way a pickup order is placed.
+   *
+   *  The relabel predates the rule and its original reason has expired with
+   *  it — it was there because "Cash on Delivery" read as "not for me" to a
+   *  pickup customer whose ONLINE PAYMENT HAD JUST FAILED, and that customer
+   *  can no longer exist. The label stays because it is still the honest
+   *  description of what happens; the old rationale is gone deliberately
+   *  rather than left to mislead the next reader.
+   *
+   *  THIS HIDES THE DOOR, IT DOES NOT LOCK IT. /api/create-order still
+   *  accepts a pickup payload and prices it (prepareOneTimeOrder treats
+   *  'pickup' as a first-class mode), so a crafted POST can still mint a
+   *  razorpay pickup row. What a resume of one is refused by is
+   *  isPayableOnline in @/lib/order-payable. */
   isPickup: boolean;
   error: string;
 }) {
@@ -3441,23 +3455,25 @@ function PaymentButtons({
           {error}
         </p>
       )}
-      <button
-        onClick={onOnline}
-        disabled={loading}
-        style={{
-          display: "block", width: "100%", height: 56,
-          background: "#024628",
-          border: "none",
-          cursor: loading ? "default" : "pointer",
-          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
-          letterSpacing: "0.4em", textTransform: "uppercase",
-          color: "#FBF3D4",
-          opacity: loading ? 0.6 : 1,
-          WebkitTapHighlightColor: "transparent",
-        }}
-      >
-        {loading ? "Processing…" : "Pay Online"}
-      </button>
+      {!isPickup && (
+        <button
+          onClick={onOnline}
+          disabled={loading}
+          style={{
+            display: "block", width: "100%", height: 56,
+            background: "#024628",
+            border: "none",
+            cursor: loading ? "default" : "pointer",
+            fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500,
+            letterSpacing: "0.4em", textTransform: "uppercase",
+            color: "#FBF3D4",
+            opacity: loading ? 0.6 : 1,
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          {loading ? "Processing…" : "Pay Online"}
+        </button>
+      )}
       <button
         onClick={onCOD}
         disabled={loading}

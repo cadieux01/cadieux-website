@@ -531,7 +531,10 @@ export default function AdminOrderDetailPage({
           title="Payment"
           action={
             canSettleCod(order) ? (
-              <CodSettleButton onClick={() => setSettling(order)} />
+              <CodSettleButton
+                onClick={() => setSettling(order)}
+                fulfillmentType={order.fulfillment_type}
+              />
             ) : null
           }
         >

@@ -21,6 +21,7 @@ import {
   codMethodLabel,
   isCodSettledMethod,
   settlementPaidAt,
+  settlementWording,
   type CodSettledMethod,
   type PaidAtSource,
 } from "@/lib/cod-settlement";
@@ -183,8 +184,11 @@ export async function PATCH(
   // value still has to be one of the three canonical windows.
   const { data: before, error: beforeErr } = await supabaseAdmin
     .from("orders")
+    // fulfillment_type is read ONLY for the audit line's wording (a pickup
+    // order's money arrives at a counter, not at a door). Nothing branches on
+    // it — see settlementWording in @/lib/cod-settlement.
     .select(
-      "order_number, status, delivery_date, delivery_slot, is_preorder, payment_method, payment_status, status_updated_at",
+      "order_number, status, delivery_date, delivery_slot, is_preorder, payment_method, payment_status, status_updated_at, fulfillment_type",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -510,7 +514,7 @@ export async function PATCH(
   if (settlementPaidAtSource) {
     const m = update.cod_settled_method as CodSettledMethod;
     context =
-      `COD settled by ${codMethodLabel(m)}` +
+      `${settlementWording(before?.fulfillment_type).auditSubject} by ${codMethodLabel(m)}` +
       (settlementPaidAtSource === "delivered"
         ? ` — paid_at backdated to the delivered time`
         : settlementPaidAtSource === "unknown"

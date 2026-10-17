@@ -2889,9 +2889,16 @@ const OrderRow = memo(function OrderRow({
             </button>
           ) : null}
           {canSettleCod(o) ? (
-            <CodSettleButton disabled={busy} onClick={() => onSettleCod(o)} />
+            <CodSettleButton
+              disabled={busy}
+              onClick={() => onSettleCod(o)}
+              fulfillmentType={o.fulfillment_type}
+            />
           ) : o.cod_settled_method ? (
-            <CodSettledChip method={o.cod_settled_method} />
+            <CodSettledChip
+              method={o.cod_settled_method}
+              fulfillmentType={o.fulfillment_type}
+            />
           ) : null}
           {isShareable(o) ? (
             <OrderShareButton
