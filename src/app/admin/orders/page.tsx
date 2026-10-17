@@ -3754,12 +3754,26 @@ const statusSelect: React.CSSProperties = {
   letterSpacing: "0.1em",
   textTransform: "uppercase",
   cursor: "pointer",
-  // 140 fitted every status this control could show until "New Update" was
-  // added to it. MEASURED at 1440px: the label's scrollWidth is 106 against a
-  // clientWidth of 100, so it rendered "NEW UPDA…" — uppercased and tracked
-  // out at 0.1em, it is the longest string this trigger has ever had to hold.
-  // A status the operator has to guess at is the opposite of the point.
-  maxWidth: 160,
+  // THE CAP BELOW IS SHARED, and it caps the TRIGGER, not the text. Two
+  // Selects on every row use this object — the order status one and the "Call
+  // update…" one further down this file — so whichever carries the longest
+  // label sets the floor for both, and it is not always the one you are
+  // editing. The label span is narrower than the cap by this object's
+  // horizontal padding plus the flex gap and caret that components/ui/Select
+  // draws, so the cap has to clear the longest label by that much again and
+  // then leave slack: sized to exactly today's longest label, the next word
+  // anyone adds clips. Both labels are also uppercased and tracked out at
+  // 0.1em here, so the source strings understate their rendered width.
+  // Re-derive it rather than trusting this number, at a phone width as well as
+  // a desk one — the column is inside a horizontal scroller, so a cap that is
+  // too small clips quietly instead of overflowing visibly:
+  //   [...document.querySelectorAll('tbody [data-select-label]')]
+  //     .map(e => [e.textContent, e.scrollWidth, e.clientWidth])
+  //     .filter(([, s, c]) => s > c)        // must be []
+  // Do not eyeball it instead. A label that already ends in "…" hides its own
+  // clipping, which is how "Call update…" sat clipped here without anyone
+  // noticing until the query above was run across both consumers.
+  maxWidth: 180,
   minHeight: 0,
   borderRadius: 6,
 };

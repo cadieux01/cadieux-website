@@ -403,7 +403,13 @@ export default function Select({
         onKeyDown={onKeyDown}
         style={triggerStyle}
       >
+        {/* This span, not the button, is where a label gets clipped — the
+            button carries the width cap, the span carries the ellipsis. The
+            data attribute exists so callers that constrain the trigger's width
+            can measure every label a cap governs in one query, including ones
+            added later that they do not know about. */}
         <span
+          data-select-label=""
           style={{
             overflow: "hidden",
             textOverflow: "ellipsis",
