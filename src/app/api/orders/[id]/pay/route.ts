@@ -115,6 +115,19 @@ export async function POST(
       { status: 409 },
     );
   }
+  // MOVED ABOVE isPayableOnline on 19 Oct 2026, when that predicate started
+  // reading `status` too. This check is now redundant, but it is NOT dead: left
+  // below, it was unreachable, and a cancelled order would have been answered
+  // with the generic "message us on WhatsApp" text under code `not_payable`
+  // instead of the specific `cancelled` this route has always returned and the
+  // app documents (lib/api.ts, payNow). Redundancy is fine; silently changing
+  // an error code out from under a shipped client is not.
+  if (status === "cancelled") {
+    return NextResponse.json(
+      { error: "Order is cancelled", code: "cancelled" },
+      { status: 409 },
+    );
+  }
   if (!isPayableOnline(order)) {
     return NextResponse.json(
       {
@@ -123,12 +136,6 @@ export async function POST(
           "WhatsApp and we'll sort it out.",
         code: "not_payable",
       },
-      { status: 409 },
-    );
-  }
-  if (status === "cancelled") {
-    return NextResponse.json(
-      { error: "Order is cancelled", code: "cancelled" },
       { status: 409 },
     );
   }

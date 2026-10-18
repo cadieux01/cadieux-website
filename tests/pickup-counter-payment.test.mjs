@@ -20,18 +20,18 @@ import assert from "node:assert/strict";
 
 import "./_alias-hook.mjs";
 
-// order-payable.ts imports nothing (deliberately — see its header), so a
-// static import resolves without the alias hook.
-import {
-  PICKUP_ONLINE_PAYMENT_CUTOFF_ISO,
-  isPayableOnline,
-} from "../src/lib/order-payable.ts";
-
-// cod-settlement.ts imports @/lib/payment-label, so this MUST be a top-level
-// `await import`: Node links the whole static graph before evaluating any
-// module body, so the hook above has not run yet when static imports resolve.
-// The failure reads as ERR_MODULE_NOT_FOUND — a missing file, not an ordering
-// problem — which is why this is spelled out rather than left to be rediscovered.
+// BOTH of these MUST be top-level `await import`, not static imports: Node
+// links the entire static graph before evaluating any module body, so the hook
+// above has not run yet when a static import is resolved. The failure reads as
+// ERR_MODULE_NOT_FOUND — a missing file, not an ordering problem — which is why
+// it is spelled out rather than left to be rediscovered.
+//
+// order-payable.ts used to be importable statically because it imported
+// nothing. It now imports @/lib/order-stages (to avoid restating the
+// cancellation rule), so it needs the hook like everything else.
+const { PICKUP_ONLINE_PAYMENT_CUTOFF_ISO, isPayableOnline } = await import(
+  "../src/lib/order-payable.ts"
+);
 const { settlementWording, codMethodLabel } = await import(
   "../src/lib/cod-settlement.ts"
 );
@@ -152,6 +152,47 @@ test("the payment-status and method gates still come first", () => {
     isPayableOnline({ ...OLD_PICKUP, payment_method: "counter" }),
     false,
   );
+});
+
+/* ── Cancellation, folded in 19 Oct 2026 ──────────────────────────────── */
+
+test("a cancelled order is not payable, whatever its payment columns say", () => {
+  // Cancelling does not rewrite payment_method/payment_status, so these rows
+  // sit at cod+pending for ever and read as payable on the sets alone.
+  for (const extra of [
+    {},
+    { fulfillment_type: "delivery" },
+    { payment_method: "razorpay", payment_status: "created" },
+    { created_at: NEW_PICKUP.created_at },
+  ]) {
+    assert.equal(
+      isPayableOnline({ ...OLD_PICKUP, ...extra, status: "cancelled" }),
+      false,
+      JSON.stringify(extra),
+    );
+  }
+});
+
+test("status is matched case-insensitively, as order-stages spells it", () => {
+  // Not a restatement: this pins that isPayableOnline goes through
+  // isCancelled() rather than an inline comparison of its own.
+  for (const v of ["Cancelled", "CANCELLED"]) {
+    assert.equal(isPayableOnline({ ...OLD_PICKUP, status: v }), false, v);
+  }
+});
+
+test("a non-cancelled status does not interfere", () => {
+  for (const v of ["placed", "confirmed", "delivered", "ready_for_pickup"]) {
+    assert.equal(isPayableOnline({ ...OLD_PICKUP, status: v }), true, v);
+  }
+});
+
+test("an absent status reads as not-cancelled — the documented default", () => {
+  // Same direction of doubt as created_at: a caller that forgets the
+  // projection keeps the behaviour it had before this check existed.
+  assert.equal(isPayableOnline({ ...OLD_PICKUP, status: undefined }), true);
+  assert.equal(isPayableOnline({ ...OLD_PICKUP, status: null }), true);
+  assert.equal(isPayableOnline({ ...OLD_PICKUP, status: "" }), true);
 });
 
 test("the tripwire: the cutoff may be moved later, never earlier", () => {

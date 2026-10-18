@@ -26,11 +26,35 @@
 // two methods and, counting `paid`, three payment_statuses, so these sets are
 // exhaustive today rather than defensive guesses.
 //
-// SCOPE. This answers the payment question ONLY. Whether the order is cancelled,
-// expired, or has a delivery change pending is each caller's own business and is
-// deliberately not folded in here: the route refuses a cancelled order with its
-// own `cancelled` code, and the page additionally hides the button on expiry
-// (see order-state.ts) and while a change-request is open.
+// SCOPE. Everything that makes an order un-payable FULL STOP belongs here, and
+// as of 19 Oct 2026 that includes cancellation. It did not used to: the rule was
+// "this answers the payment question only, cancellation is each caller's own
+// business", and the three callers each restated it correctly. That is the
+// problem — three independent restatements of one rule are three chances to
+// diverge, which is the exact failure this file was created to prevent, and a
+// fourth caller would have had to know to add a check this file does not mention.
+// Cancellation is not a matter of opinion per surface: a cancelled order cannot
+// be paid on any of them.
+//
+// Still each caller's own business, because these genuinely DO differ by
+// surface: expiry (the page hides the button at >7d unpaid pending via
+// order-state.ts; the route lets such a row be paid, because a customer who
+// reaches it is someone we want to take money from) and an open delivery
+// change-request (the page suppresses the button so the total cannot move
+// under the customer mid-payment; the route has no view of it).
+//
+// The redundant cancellation checks at the call sites are deliberately LEFT IN
+// for now — the route's own `cancelled` code is part of its API, and removing
+// three checks in the same commit that adds one is how you find out the hard
+// way that the new one is subtly different. They are now belt-and-braces rather
+// than the only belt.
+
+// `isCancelled` is IMPORTED rather than restated as a one-line comparison. The
+// reason this file folded cancellation in was to stop a rule being spelled out
+// in several places; writing `status === "cancelled"` here would have added a
+// fourth spelling to fix that. order-stages.ts imports nothing, so this stays
+// the cheap, dependency-light module both callers can pull in.
+import { isCancelled } from "@/lib/order-stages";
 
 // PICKUP IS PAID AT THE COUNTER — AND THE RULE HAS A DATE IN IT.
 //
@@ -103,6 +127,9 @@ export type PayableFacts = {
   fulfillment_type?: string | null;
   /** Which rule this order was placed under. See the cutoff above. */
   created_at?: string | null;
+  /** The FULFILLMENT status (`orders.status`), not payment_status. Only
+   *  cancellation is read from it; see the note on isPayableOnline. */
+  status?: string | null;
 };
 
 /**
@@ -126,12 +153,27 @@ function isCounterPayPickup(order: PayableFacts): boolean {
   return createdMs >= PICKUP_CUTOFF_MS;
 }
 
-/** True iff the money has not arrived and this row is one we will take it on. */
+/**
+ * True iff the money has not arrived and this row is one we will take it on.
+ *
+ * `status` IS OPTIONAL AND AN ABSENT ONE READS AS NOT-CANCELLED, which is the
+ * same direction of doubt as `created_at` above and for the same reason: a
+ * caller that forgets the projection falls back to the behaviour it had before
+ * this check existed, rather than silently losing its Pay Now button. That is
+ * only an acceptable default because the three existing call sites each still
+ * check cancellation themselves (see SCOPE in the header) — if those are ever
+ * removed, this default is the thing to revisit, because then a forgotten
+ * projection would let a customer pay for a cancelled order.
+ */
 export function isPayableOnline(order: PayableFacts): boolean {
   const method = (order.payment_method ?? "").trim().toLowerCase();
-  const status = (order.payment_status ?? "").trim().toLowerCase();
+  const paymentStatus = (order.payment_status ?? "").trim().toLowerCase();
   if (!PAYABLE_METHODS.has(method)) return false;
-  if (!PAYABLE_PAYMENT_STATUSES.has(status)) return false;
+  if (!PAYABLE_PAYMENT_STATUSES.has(paymentStatus)) return false;
+  // A cancelled order owes nothing, whatever its payment_status still says.
+  // 35 cancelled pickup rows and others carry `cod` + `pending` for ever,
+  // because cancelling an order does not rewrite its payment columns.
+  if (isCancelled(order.status)) return false;
   // Last, and as a veto: the sets above answer "is money still owed on a row
   // we take money on", which stays true of a pickup order. What changes is
   // whether WE will take it online.

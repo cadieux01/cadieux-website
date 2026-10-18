@@ -915,16 +915,24 @@ export default function OrderDetailPage() {
               </div>
 
               {/* Pay Now — for any unpaid order we will still take money on
-                  that isn't cancelled or expired, and never while a delivery
-                  change-request is pending. Expired = server-computed (>7d
-                  unpaid pending); see src/lib/order-state.ts.
+                  that isn't expired, and never while a delivery change-request
+                  is pending. Expired = server-computed (>7d unpaid pending);
+                  see src/lib/order-state.ts. Those two are genuinely this
+                  surface's own call, which is why they are here and not in the
+                  predicate.
 
                   This used to read `payment_method === "cod"`, which hid the
                   button on exactly the orders that most needed it: a Razorpay
                   checkout the customer opened and never finished still sits at
                   `razorpay` + `created`, with no way back in. isPayableOnline()
                   is the same rule /api/orders/[id]/pay enforces, so the button
-                  and the route cannot disagree. */}
+                  and the route cannot disagree.
+
+                  `!isCancelled` is now REDUNDANT — isPayableOnline() reads
+                  `status` as of 19 Oct 2026. Left in deliberately, and only
+                  until a commit that can remove all three restatements at once;
+                  dropping it here alone would make this surface the one that
+                  finds out first if the folded-in check is subtly different. */}
               {isPayableOnline(order) &&
                 !isCancelled(order.status) &&
                 order.computed_state !== "expired" &&
