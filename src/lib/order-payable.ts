@@ -1,10 +1,16 @@
 // Can this order's payment still be finished online?
 //
-// ONE RULE, TWO CALLERS, AND THEY MUST NOT DIVERGE. The customer's "Pay Now"
+// ONE RULE, THREE CALLERS, AND THEY MUST NOT DIVERGE. The customer's "Pay Now"
 // button (src/app/orders/[id]/page.tsx) and the route behind it
 // (/api/orders/[id]/pay) have to answer this identically — a button the route
 // then 409s is worse than no button, because the customer has already been told
 // they can pay.
+//
+// The third caller is /api/create-order, which asks the question of a row that
+// does not exist yet: it describes the row it is about to insert and refuses to
+// insert it at all if the answer is no. That is deliberate rather than clever —
+// see the comment there — and it is why this predicate must stay a pure
+// function of the facts it is handed, with no reads of its own.
 //
 // WHY THIS FILE EXISTS AT ALL. Both callers used to ask `payment_method ===
 // "cod"`, and that is what made a dismissed Razorpay window unrecoverable.

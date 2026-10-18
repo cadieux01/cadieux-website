@@ -195,6 +195,24 @@ test("an absent status reads as not-cancelled — the documented default", () =>
   assert.equal(isPayableOnline({ ...OLD_PICKUP, status: "" }), true);
 });
 
+/* ── The creation refusal ─────────────────────────────────────────────── */
+
+test("the row /api/create-order is about to insert: pickup refused, delivery allowed", () => {
+  // This is the CONTRACT between that route and this predicate, written out
+  // the way the route writes it. If the route's synthetic row drifts from this
+  // shape the refusal stops working, and nothing else would notice: a crafted
+  // razorpay+pickup POST does not look like an error from the outside.
+  const atCreation = (fulfillment_type) => ({
+    payment_method: "razorpay",
+    payment_status: "created",
+    status: "pending",
+    fulfillment_type,
+    created_at: new Date(CUTOFF_MS + 1000).toISOString(),
+  });
+  assert.equal(isPayableOnline(atCreation("pickup")), false);
+  assert.equal(isPayableOnline(atCreation("delivery")), true);
+});
+
 test("the tripwire: the cutoff may be moved later, never earlier", () => {
   // Moving it earlier retroactively strips Pay Now from real unpaid orders —
   // the one change to this file that cannot be noticed from the outside. The

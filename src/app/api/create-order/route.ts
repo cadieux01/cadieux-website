@@ -13,6 +13,11 @@
 // signature in /api/verify-payment (or the webhook). The amount sent to
 // Razorpay is derived on the server; the client cannot influence it.
 //
+// PICKUP IS REFUSED HERE (code `pickup_pay_at_counter`), via the same
+// isPayableOnline predicate the Pay Now button uses. This is the only place in
+// the online-payment path where a pickup order can be refused without orphaning
+// money — see the note at the check itself.
+//
 // Request body: the full order payload (same shape as place_order):
 //   { customer_id, delivery_address, total_amount (client subtotal, compared
 //     not trusted), pincode?, latitude?, longitude?, delivery_date,
@@ -29,6 +34,7 @@ import {
   orderInsertColumns,
   logProximitySuggestion,
 } from "@/lib/order-checkout";
+import { isPayableOnline } from "@/lib/order-payable";
 import { getPreorderMode } from "@/lib/preorderMode";
 import {
   hasSandwichItems,
@@ -121,6 +127,46 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(prep.body, { status: prep.status });
   }
   const prepared = prep.data;
+
+  // PICKUP IS PAID AT THE COUNTER, AND THIS IS WHERE THAT IS ENFORCED.
+  //
+  // Checkout hides the Pay Online button on pickup, but a hidden button is not
+  // a rule: this route accepts a `fulfillment_type: 'pickup'` payload and
+  // prices it perfectly well, so without this a crafted POST would mint a
+  // razorpay pickup row — and once Razorpay has the money, refusing it later
+  // only orphans the payment (see the standing rule in /api/verify-payment:
+  // refuse at creation, never at attribution). Creation is the only place a
+  // refusal is free.
+  //
+  // ASKED THROUGH isPayableOnline, NOT A FRESH `=== "pickup"` TEST. The whole
+  // point of order-payable.ts is that one rule has one spelling; a second
+  // spelling here would be free to drift from the one the Pay Now button and
+  // /api/orders/[id]/pay use, and the drift would show up as a pickup order
+  // that can be created online but not resumed, or vice versa. So describe the
+  // row this route is ABOUT to insert and ask the shared predicate about it.
+  // `created_at` is the honest value: the insert is moments away, and the
+  // grandfather cutoff is read against it. A consequence worth knowing: if the
+  // cutoff is ever moved into the future, this refusal relaxes with it, which
+  // is the same answer the resume path would give.
+  if (
+    !isPayableOnline({
+      payment_method: "razorpay",
+      payment_status: "created",
+      status: "pending",
+      fulfillment_type: prepared.fulfillmentType,
+      created_at: new Date().toISOString(),
+    })
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Pickup orders are paid at the counter when you collect. Please " +
+          "place the order and pay on collection.",
+        code: "pickup_pay_at_counter",
+      },
+      { status: 400 },
+    );
+  }
 
   // Per-phone cap, checked after prepare (read-only) and before we create
   // anything at Razorpay or in the orders table. Shares the `order:` key with
