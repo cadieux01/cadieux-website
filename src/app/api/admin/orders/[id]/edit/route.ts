@@ -54,6 +54,13 @@
 // and an invented backstop is worse than no comment: it sends the next reader
 // away satisfied.
 //
+// THE PRE-ORDER FLOOR IS ENFORCED HERE TOO, and was not before. A date (or
+// a new item) below `products.available_from` is refused unless the body
+// carries `floor_override: true` — the Acknowledge press EditOrderPanel now
+// forwards. Every honoured override writes an audit_log row. Same split as
+// the lock above: the panel teaches the rule at the keyboard, this route is
+// the only thing enforcing it. See lib/admin-preorder-floor.ts.
+//
 // Second gap, same shape: the check below is isPaidStatus, so a
 // `partially_paid` order's items are editable here even though the
 // customer-facing change-request routes refuse them via hasMoneyArrived
@@ -68,6 +75,7 @@ import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/deliver
 import { getDrivingDistanceKm } from "@/lib/distanceMatrix";
 import { formatDate } from "@/lib/admin-formatting";
 import { formatOrderNumber } from "@/lib/order-number";
+import { guardPreorderFloor } from "@/lib/admin-preorder-floor";
 import type { AdminOrderItemSnapshot } from "@/lib/admin-shared";
 
 // Client-supplied items are validated line-by-line, then re-emitted
@@ -409,6 +417,53 @@ export async function POST(
 
   if (changed.length === 0) {
     return NextResponse.json({ error: "No changes" }, { status: 400 });
+  }
+
+  // -- pre-order floor ----------------------------------------------
+  // EditOrderPanel already warns when the chosen date is below an item's
+  // `products.available_from` and makes the operator press Acknowledge.
+  // That press unlocked a client-side `if` and nothing else: this route
+  // took the date either way, so the rule did not exist for curl, for a
+  // replayed request, or for any future screen.
+  //
+  // Only runs when the DATE or the ITEMS moved. An order can already sit
+  // below a floor; refusing an address-only edit on such a row would turn
+  // the floor into a lock on the whole record.
+  //
+  // Checked against the POST-EDIT state of both — new items on an
+  // unchanged date is the same breach as a new date with unchanged items,
+  // and the panel's warning covers both.
+  const floorRelevant =
+    changed.includes("delivery_date") || changed.includes("items");
+  if (floorRelevant) {
+    const finalDate =
+      updates.delivery_date !== undefined
+        ? (updates.delivery_date as string | null)
+        : ((before.delivery_date as string | null) ?? null);
+    const finalItems =
+      normalisedItems ?? ((before.items as AdminOrderItemSnapshot[] | null) ?? []);
+    const guard = await guardPreorderFloor({
+      req,
+      items: finalItems.map((it) => ({
+        slug: it.slug ?? null,
+        product_id: it.product_id ?? null,
+      })),
+      deliveryDate: finalDate,
+      override: body.floor_override === true,
+      entity: "order",
+      targetId: id,
+      targetLabel: formatOrderNumber({
+        id,
+        order_number: before.order_number,
+      }),
+      logTag: "admin/orders/edit",
+    });
+    if (!guard.ok) {
+      return NextResponse.json(
+        { error: guard.error, code: guard.code },
+        { status: guard.status },
+      );
+    }
   }
 
   // Author label — same source as the notes panel. The header comes

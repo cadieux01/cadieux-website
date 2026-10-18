@@ -15,6 +15,11 @@
 // Acknowledge click before Save writes. The column is read through
 // `productFloor`, which spends a floor once its date has passed — see the
 // note in EditOrderPanel for why reading the raw column never expires.
+//
+// The Acknowledge press is now SENT (`floor_override: true`). The route
+// refuses a below-floor date without it, so this is no longer the only
+// thing standing between a warned operator and the write — and the server
+// audits every override it honours. See lib/admin-preorder-floor.ts.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -152,6 +157,11 @@ export function EditDeliveryModal({
           body: JSON.stringify({
             scheduled_date: date,
             scheduled_time_slot: slot,
+            // The Acknowledge press, carried to the server. It used to
+            // unlock the client-side `if` above and nothing more; the
+            // route now refuses a below-floor date without this flag and
+            // audits the bypass when it honours it.
+            ...(flooredItems.length > 0 ? { floor_override: true } : {}),
           }),
         },
       );

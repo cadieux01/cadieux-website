@@ -24,6 +24,11 @@
 // double-booking a plan produces bake-plan duplicates that the operator
 // discovers hours later.
 //
+// A date move is also gated on the pre-order floor: a new date below an
+// item's `products.available_from` is refused unless the body carries
+// `floor_override: true`, which is EditDeliveryModal's Acknowledge press.
+// Honoured overrides are audited. See lib/admin-preorder-floor.ts.
+//
 // A customer-visible `order_notes` edit row is written whenever the
 // schedule actually moves, using the shared wording helper so this
 // reads the same as the orders-side admin_edit_order RPC output. Audit
@@ -37,6 +42,9 @@ import { formatSlotForDisplay, isValidSlotValue } from "@/lib/delivery-slots";
 import { formatDeliveryEditNote } from "@/lib/order-notes";
 import { formatSubscriptionNumber } from "@/lib/order-number";
 import { dayKeyForIsoDate } from "@/lib/subscription-dates";
+import { deliveryItems } from "@/lib/subscription-counts";
+import { guardPreorderFloor } from "@/lib/admin-preorder-floor";
+import type { AdminSubscriptionItem } from "@/lib/admin-shared";
 
 const ALLOWED_STATUSES = new Set([
   "pending_confirmation",
@@ -119,9 +127,12 @@ export async function PATCH(
   // note wording. Read delivery_date/slot too so the note reads from
   // the operator's mental model (the planned columns) rather than
   // whatever scheduled_* was last set to.
+  // `items_override` is here only for the pre-order floor check below.
   const { data: before } = await supabaseAdmin
     .from("subscription_deliveries")
-    .select("status, scheduled_date, scheduled_time_slot, delivery_date, slot, subscription_id")
+    .select(
+      "status, scheduled_date, scheduled_time_slot, delivery_date, slot, subscription_id, items_override",
+    )
     .eq("id", params.deliveryId)
     .eq("subscription_id", params.id)
     .maybeSingle();
@@ -157,6 +168,66 @@ export async function PATCH(
           code: "date_collision",
         },
         { status: 409 },
+      );
+    }
+  }
+
+  // `subscription_deliveries` has no number column of its own, but
+  // params.id IS the parent subscription — so name THAT, with the date
+  // picking out which of its deliveries this was. "Delivery 3f2a9c01"
+  // identified nothing to anybody reading the audit page.
+  //
+  // Read BEFORE the update because the floor guard below needs the label
+  // for its audit row, and that guard has to run before anything is
+  // written. Nothing in this read is affected by the update.
+  const { data: subRow } = await supabaseAdmin
+    .from("subscriptions")
+    .select("subscription_number")
+    .eq("id", params.id)
+    .maybeSingle();
+  const subLabel = formatSubscriptionNumber({
+    id: params.id,
+    subscription_number: subRow?.subscription_number ?? null,
+  });
+
+  // -- pre-order floor ----------------------------------------------
+  // EditDeliveryModal already warns when the new date is below an item's
+  // `products.available_from` and makes the operator press Acknowledge.
+  // Until now that press unlocked a client-side `if` and nothing else.
+  //
+  // Only on a DATE move: a slot-only change cannot cross a floor, and a
+  // stop that already sits below one must stay administrable.
+  if (update.scheduled_date !== undefined) {
+    // The lines actually going out on THIS stop: the per-delivery
+    // override when it has content, otherwise the plan's rows. Same
+    // precedence as the bake plan and the admin counts, via the same
+    // helper, so the three cannot disagree about what a stop contains.
+    const { data: itemRows } = await supabaseAdmin
+      .from("subscription_items")
+      .select("product_slug, product_name, quantity_per_delivery")
+      .eq("subscription_id", params.id);
+    const planItems = (itemRows ?? []) as AdminSubscriptionItem[];
+    const lines = deliveryItems(
+      { items_override: before?.items_override },
+      planItems,
+    );
+    const guard = await guardPreorderFloor({
+      req,
+      // Subscription lines carry a slug and never a product_id, so the
+      // guard's id key is simply absent here. It still matches on both,
+      // because the ORDER side needs it.
+      items: lines.map((it) => ({ slug: it.product_slug })),
+      deliveryDate: update.scheduled_date as string,
+      override: body.floor_override === true,
+      entity: "subscription_delivery",
+      targetId: params.deliveryId,
+      targetLabel: `${subLabel} delivery`,
+      logTag: "admin/subscription_deliveries",
+    });
+    if (!guard.ok) {
+      return NextResponse.json(
+        { error: guard.error, code: guard.code },
+        { status: guard.status },
       );
     }
   }
@@ -199,19 +270,6 @@ export async function PATCH(
     (before?.scheduled_time_slot ?? null) !== (update.scheduled_time_slot ?? null);
   const schedulingChanged = dateChanged || slotChanged;
 
-  // `subscription_deliveries` has no number column of its own, but
-  // params.id IS the parent subscription — so name THAT, with the date
-  // picking out which of its deliveries this was. "Delivery 3f2a9c01"
-  // identified nothing to anybody reading the audit page.
-  const { data: subRow } = await supabaseAdmin
-    .from("subscriptions")
-    .select("subscription_number")
-    .eq("id", params.id)
-    .maybeSingle();
-  const subLabel = formatSubscriptionNumber({
-    id: params.id,
-    subscription_number: subRow?.subscription_number ?? null,
-  });
   const labelDate =
     (update.scheduled_date ??
       before?.scheduled_date ??

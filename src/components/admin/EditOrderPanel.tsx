@@ -407,6 +407,19 @@ export function EditOrderPanel({
         return;
       }
 
+      // The Acknowledge press, carried to the server. Until this existed
+      // the button unlocked the `if` above and nothing more — the route
+      // accepted the date whether or not anyone had been warned. The
+      // server now refuses a below-floor date without this flag, and
+      // writes an audit row naming the floor when it honours it.
+      //
+      // Added AFTER the empty-body check on purpose: it is not a change,
+      // and counting it as one would turn an accidental no-op save into a
+      // request.
+      if (flooredItems.length > 0) {
+        body.floor_override = true;
+      }
+
       // Pass the operator's first name so the resulting order_notes
       // rows carry author. Same source as the notes panel; a null is
       // fine (author column is nullable).
