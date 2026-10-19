@@ -29,6 +29,7 @@
 import "server-only";
 
 import type { NextRequest } from "next/server";
+import { waitUntil } from "@vercel/functions";
 
 import { supabaseAdmin } from "@/lib/admin-auth";
 import type { AuditAction, AuditEntity } from "@/lib/audit-log-schema";
@@ -98,5 +99,41 @@ export async function recordAuditEvent(
     }
   } catch (err) {
     console.warn("[audit-log] unexpected failure:", err);
+  }
+}
+
+/**
+ * Queue an audit write from a call site that cannot await it.
+ *
+ * USE THIS INSTEAD OF `void recordAuditEvent(...)`. A bare floating promise is
+ * killed when Vercel freezes the invocation the instant the response is
+ * returned, so the insert never runs — not rejected, not logged, just absent.
+ * The loss was measured on the other trail (see queueLogisticsAudit in
+ * logistics-audit.ts); nothing about the mechanism is schema-specific, and the
+ * `void recordAuditEvent(...)` call sites in this one are exposed to exactly
+ * the same freeze. They are NOT converted here — that is its own sweep, and
+ * this change is scoped to the one new write.
+ *
+ * Off-Vercel (local dev, tests) waitUntil is a no-op that does not throw, so
+ * the promise simply runs to completion.
+ *
+ * Never throws and never delays the caller, so it is safe on paths where the
+ * user-visible action has already happened.
+ *
+ * A DELIBERATE MIRROR of queueLogisticsAudit: two audit trails, one queueing
+ * discipline. If you change one, change the other — a difference between them
+ * would be read as intentional by the next person, and it would not be.
+ */
+export function queueAuditEvent(input: RecordAuditEventInput): void {
+  try {
+    const task = recordAuditEvent(input).catch((e) => {
+      // recordAuditEvent catches internally, so reaching here is unexpected.
+      // Still required: an unhandled rejection inside waitUntil can take down
+      // the invocation, which WOULD be user-visible.
+      console.warn("[audit-log] queued write threw:", e);
+    });
+    waitUntil(task);
+  } catch (e) {
+    console.warn("[audit-log] queue failed:", e);
   }
 }

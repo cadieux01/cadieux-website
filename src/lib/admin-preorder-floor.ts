@@ -20,10 +20,10 @@
 // So the override is honoured, and AUDITED. A bypass nobody can find later
 // is the same as no rule: the next person to ask "why did OLF212 go out two
 // days before the loaf existed?" must be able to answer it from `audit_log`,
-// not from reading this file. The row is written through `waitUntil` for the
-// reason b21f00f documents in otp-audit.ts — a floating promise is dropped
-// when Vercel freezes the invocation, so the record of the bypass would
-// itself be a coin flip.
+// not from reading this file. The row is QUEUED, through `queueAuditEvent`,
+// rather than left as a floating promise: Vercel freezes the invocation the
+// instant the response is returned, so the record of the bypass would itself
+// be a coin flip. That helper carries the measurement and the reasoning.
 //
 // Query the bypasses with:
 //   select occurred_at, entity, target_label, context, meta
@@ -37,10 +37,9 @@
 import "server-only";
 
 import type { NextRequest } from "next/server";
-import { waitUntil } from "@vercel/functions";
 
 import { supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent, type AuditEntity } from "@/lib/audit-log";
+import { queueAuditEvent, type AuditEntity } from "@/lib/audit-log";
 import { enforceDeliveryFloor } from "@/lib/order-validation";
 import { cartFloor, type AvailabilityRow } from "@/lib/product-availability";
 
@@ -185,7 +184,7 @@ export async function guardPreorderFloor(opts: {
   // NAMES, and the gate only returns a finished English sentence. Both are
   // pure functions over the same rows, so they cannot disagree.
   const floor = cartFloor(rows);
-  const task = recordAuditEvent({
+  queueAuditEvent({
     req: opts.req,
     entity: opts.entity,
     // `other`, not `update`: the edit itself already writes its own `update`
@@ -201,16 +200,7 @@ export async function guardPreorderFloor(opts: {
       floor_date: floor.date,
       products: floor.names,
     },
-  }).catch((e) => {
-    console.error(`[${opts.logTag}] floor override audit threw:`, e);
   });
-  try {
-    waitUntil(task);
-  } catch (e) {
-    // waitUntil is a no-op outside a Vercel request context; this covers a
-    // runtime where it is absent entirely rather than inert.
-    console.error(`[${opts.logTag}] floor override audit queue failed:`, e);
-  }
 
   return OK;
 }
