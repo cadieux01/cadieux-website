@@ -26,6 +26,7 @@ import {
   isAcceptableDeliveryDate,
   isAcceptableDeliverySlot,
 } from "@/lib/order-delivery";
+import { belowOneTimeMinimum } from "@/lib/order-minimum";
 import { isIsoDate, validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import {
@@ -106,6 +107,12 @@ export type PrepareOptions = {
    *  let the caller flip it into `orderInsertColumns`. Every other gate
    *  (serviceability, price, phone, item-shape) still runs. */
   preorderMode?: boolean;
+  /** When true, skip the `MIN_ONE_TIME_UNITS` cart floor. Set ONLY by the
+   *  admin/offline entry endpoint (POST /api/admin/orders), for both full-
+   *  admin and team-PIN callers: the floor is a storefront rule, and an
+   *  operator recording a real single-item sale that already happened must
+   *  not be refused by it. Nothing on a customer path can reach this. */
+  skipUnitMinimum?: boolean;
 };
 
 /**
@@ -286,6 +293,23 @@ export async function prepareOneTimeOrder(
   const itemsShape = validateWebOrderItemsShape(body.items);
   if (!itemsShape.ok) {
     return { ok: false, status: itemsShape.status, body: { error: itemsShape.error, code: itemsShape.code } };
+  }
+
+  // Cart floor, BEFORE the products fetch. Nothing below this point is
+  // needed to decide it — the shape validator has already guaranteed
+  // integer quantities and a non-empty array — so a too-small cart costs no
+  // DB round trip. It also sits ahead of the pre-order floor and the
+  // serviceability/distance work on purpose: those can call out to Google,
+  // and refusing first keeps a one-item cart from spending that quota.
+  if (!opts.skipUnitMinimum) {
+    const minimumFailure = belowOneTimeMinimum(itemsShape.items);
+    if (minimumFailure) {
+      return {
+        ok: false,
+        status: minimumFailure.status,
+        body: { error: minimumFailure.error, code: minimumFailure.code },
+      };
+    }
   }
 
   const slugs = Array.from(new Set(itemsShape.items.map((i) => i.slug)));

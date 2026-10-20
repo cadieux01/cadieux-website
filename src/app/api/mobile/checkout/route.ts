@@ -27,6 +27,7 @@ import {
   isAcceptableDeliveryDate,
   isAcceptableDeliverySlot,
 } from "@/lib/order-delivery";
+import { belowOneTimeMinimum } from "@/lib/order-minimum";
 import { validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import { computeDeliveryFee, MAX_DELIVERY_KM } from "@/lib/deliveryFee";
@@ -97,6 +98,21 @@ export async function POST(req: NextRequest) {
     );
   }
   const { body, fullName, addressString } = shape;
+
+  // 4a. Cart floor (2 items). This route has its own pipeline — it does NOT
+  // go through prepareOneTimeOrder — so the gate has to be stated here too;
+  // the shared predicate in order-minimum.ts is what keeps the two in
+  // agreement. Every line here is one-time: the app's subscriptions go to
+  // /api/mobile/subscriptions and this body shape has no `kind` field, so
+  // there is no mixed cart to exempt. Placed before serviceability so a
+  // one-item cart never spends a geocode/distance call.
+  const minimumFailure = belowOneTimeMinimum(body.items);
+  if (minimumFailure) {
+    return NextResponse.json(
+      { ok: false, error: minimumFailure.error, code: minimumFailure.code },
+      { status: minimumFailure.status },
+    );
+  }
 
   // 4b. Pincode serviceability: refuse to place orders for pincodes we
   // don't currently deliver to. Mobile clients should funnel the user

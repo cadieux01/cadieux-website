@@ -40,6 +40,7 @@ import {
   isAcceptableDeliveryDate,
   isAcceptableDeliverySlot,
 } from "@/lib/order-delivery";
+import { belowOneTimeMinimum } from "@/lib/order-minimum";
 import { validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import { computeDeliveryFee, MAX_DELIVERY_KM } from "@/lib/deliveryFee";
@@ -117,6 +118,19 @@ export async function POST(req: NextRequest) {
     );
   }
   const { body, fullName, addressString } = shape;
+
+  // 4a. Cart floor (2 items) — same gate, same shared predicate, as
+  // /api/mobile/checkout. Both app routes need it stated explicitly because
+  // neither goes through prepareOneTimeOrder. It matters on THIS route in
+  // particular that the refusal lands before any Razorpay order is created:
+  // a rejected cart must never leave a payment intent behind.
+  const minimumFailure = belowOneTimeMinimum(body.items);
+  if (minimumFailure) {
+    return NextResponse.json(
+      { ok: false, error: minimumFailure.error, code: minimumFailure.code },
+      { status: minimumFailure.status },
+    );
+  }
 
   // 4b. Pincode serviceability.
   const pincode = normalizePincode(body.delivery_address.pincode);

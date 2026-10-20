@@ -471,6 +471,13 @@ export async function POST(req: NextRequest) {
     // (past delivery date, no 12 h lead). Team-PIN callers keep the public
     // booking rules — same split as serviceability_override above.
     allowAnyDeliveryDate: !isTeam,
+    // Unconditional, team-PIN INCLUDED — deliberately not split like the
+    // two above. The 2-item cart floor is a storefront rule aimed at the
+    // checkout basket; an operator taking a single loaf at the counter or
+    // over the phone is recording a sale that already happened, and a
+    // refusal here has no remedy for them. Every other gate — price, item
+    // shape, phone, slot — still runs.
+    skipUnitMinimum: true,
   });
   if (!prep.ok) {
     return NextResponse.json(prep.body, { status: prep.status });
