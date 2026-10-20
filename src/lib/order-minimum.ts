@@ -88,6 +88,20 @@ export function totalCartUnits(items: readonly MinimumCartLine[]): number {
 }
 
 /**
+ * Facts about the order being placed that switch this floor off.
+ *
+ * `isPickup` MUST be derived from `canonicalFulfillment` in
+ * fulfillment-type.ts — the same call the caller uses to decide the pickup
+ * branch and the stored column. This module contains no pickup literal and
+ * reads no `fulfillment_type` field, by design: an exemption decided here
+ * from a raw body value would be a second, independent reading of that
+ * field, and "Pickup" or "pick-up" slipping past one reader but not the
+ * other turns the exemption into a way to bypass the floor. Default false,
+ * so a caller that forgets the option gets the floor, not the exemption.
+ */
+export type MinimumContext = { isPickup?: boolean };
+
+/**
  * The gate. Returns a ready-to-serialise failure, or null when the order
  * may proceed.
  *
@@ -96,10 +110,17 @@ export function totalCartUnits(items: readonly MinimumCartLine[]): number {
  * taken and strand orders placed under the older rule. Admin and team-PIN
  * entry is exempt at its call site, not here — an operator recording a real
  * single-item sale must not be blocked by a storefront rule.
+ *
+ * WHY PICKUP IS EXEMPT (Raja, 20 Oct 2026): the floor exists because a
+ * single-item delivery costs more to run than it earns. A customer
+ * collecting from the stall imposes none of that, so there is nothing for
+ * the floor to protect and refusing them is a lost sale.
  */
 export function belowOneTimeMinimum(
   items: readonly MinimumCartLine[],
+  ctx: MinimumContext = {},
 ): { status: number; error: string; code: string } | null {
+  if (ctx.isPickup) return null;
   if (carriesSubscriptionLine(items)) return null;
   if (totalCartUnits(items) >= MIN_ONE_TIME_UNITS) return null;
   return {

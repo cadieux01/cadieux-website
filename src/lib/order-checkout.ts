@@ -27,6 +27,10 @@ import {
   isAcceptableDeliverySlot,
 } from "@/lib/order-delivery";
 import { belowOneTimeMinimum } from "@/lib/order-minimum";
+import {
+  canonicalFulfillment,
+  PICKUP_FULFILLMENT,
+} from "@/lib/fulfillment-type";
 import { isIsoDate, validateBookingSlot } from "@/lib/delivery-slots";
 import { normalizePincode, resolveServiceability } from "@/lib/service-areas";
 import {
@@ -134,13 +138,11 @@ export async function prepareOneTimeOrder(
 
   // Fulfillment routing. Default to 'delivery' so pre-Step-2 clients (which
   // don't send this field yet) hit the exact same code path they always have.
-  const rawFulfillment =
-    typeof body.fulfillment_type === "string"
-      ? body.fulfillment_type.toLowerCase()
-      : "delivery";
-  const fulfillmentType: "delivery" | "pickup" =
-    rawFulfillment === "pickup" ? "pickup" : "delivery";
-  const isPickup = fulfillmentType === "pickup";
+  // Read ONCE, here: `isPickup` below drives the pickup gates, the stored
+  // column AND the cart-floor exemption, so none of them can disagree about
+  // what the client asked for. See fulfillment-type.ts.
+  const fulfillmentType = canonicalFulfillment(body.fulfillment_type);
+  const isPickup = fulfillmentType === PICKUP_FULFILLMENT;
 
   // Common preflight — required for both flows.
   if (total_amount === undefined || total_amount === null) {
@@ -301,8 +303,13 @@ export async function prepareOneTimeOrder(
   // DB round trip. It also sits ahead of the pre-order floor and the
   // serviceability/distance work on purpose: those can call out to Google,
   // and refusing first keeps a one-item cart from spending that quota.
+  //
+  // `isPickup` is the value derived at the top of this function — the same
+  // one the pickup-location gate and the stored column use. The floor is
+  // never decided from `body.fulfillment_type` directly; see the note on
+  // MinimumContext for why a second reading would be a bypass.
   if (!opts.skipUnitMinimum) {
-    const minimumFailure = belowOneTimeMinimum(itemsShape.items);
+    const minimumFailure = belowOneTimeMinimum(itemsShape.items, { isPickup });
     if (minimumFailure) {
       return {
         ok: false,

@@ -16,6 +16,15 @@ const {
   totalCartUnits,
 } = await import("../src/lib/order-minimum.ts");
 
+const { canonicalFulfillment, PICKUP_FULFILLMENT } = await import(
+  "../src/lib/fulfillment-type.ts"
+);
+
+/** How a route decides the exemption: ONE canonical read, reused. */
+const ctxFor = (rawFulfillmentType) => ({
+  isPickup: canonicalFulfillment(rawFulfillmentType) === PICKUP_FULFILLMENT,
+});
+
 /** A website request line: `quantity` + `kind`. */
 const web = (quantity, kind = "once") => ({
   slug: "high-protein",
@@ -87,6 +96,73 @@ test("no exclamation mark anywhere in the customer copy", () => {
 test("the copy says items, not loaves — buns and bases count", () => {
   assert.ok(ONE_TIME_MINIMUM_MESSAGE.includes("items"));
   assert.ok(!/loaf|loaves/i.test(ONE_TIME_MINIMUM_MESSAGE));
+});
+
+// ── Pickup is exempt, and only through the canonical reader ──────────────
+
+test("pickup + 1 item PASSES", () => {
+  // Raja, 20 Oct: the floor protects the cost of a delivery run. A customer
+  // collecting at the stall imposes none of it.
+  assert.equal(belowOneTimeMinimum([web(1)], ctxFor("pickup")), null);
+});
+
+test("delivery + 1 item FAILS", () => {
+  // The pair of these two tests is the exemption.
+  assert.ok(belowOneTimeMinimum([web(1)], ctxFor("delivery")));
+});
+
+test("an absent fulfillment_type is a delivery, so the floor applies", () => {
+  // Every app build and every pre-pickup website build omits the field.
+  assert.ok(belowOneTimeMinimum([web(1)], ctxFor(undefined)));
+  // And a caller that passes no context at all gets the floor, never the
+  // exemption — the default must fail closed.
+  assert.ok(belowOneTimeMinimum([web(1)]));
+  assert.ok(belowOneTimeMinimum([web(1)], {}));
+});
+
+test("a non-canonical CASING is exempted via the canonical reader", () => {
+  // The trap this split exists for. `canonicalFulfillment` lowercases, so
+  // "Pickup" IS a pickup order — it takes the pickup branch, the pickup
+  // location gate and the ₹0 fee. The floor must agree with that, which it
+  // does because it is handed the same derived boolean rather than reading
+  // the field a second time.
+  for (const spelling of ["Pickup", "PICKUP", "pIcKuP"]) {
+    assert.equal(canonicalFulfillment(spelling), PICKUP_FULFILLMENT, spelling);
+    assert.equal(belowOneTimeMinimum([web(1)], ctxFor(spelling)), null, spelling);
+  }
+});
+
+test("a spelling the reader does NOT accept is refused, not exempted", () => {
+  // "pick-up" / " pickup " are not pickup orders anywhere in the pipeline:
+  // they route as delivery, get an address gate and a distance fee. So the
+  // floor must apply to them. This is the direction that matters — an
+  // unrecognised spelling that EXEMPTED would be a way to bypass the floor
+  // while still taking a delivery.
+  for (const spelling of ["pick-up", " pickup ", "pick up", "collect", 1, null]) {
+    assert.equal(canonicalFulfillment(spelling), "delivery", String(spelling));
+    assert.ok(belowOneTimeMinimum([web(1)], ctxFor(spelling)), String(spelling));
+  }
+});
+
+test("the exemption does not raise the floor for a pickup cart of 2", () => {
+  assert.equal(belowOneTimeMinimum([web(2)], ctxFor("pickup")), null);
+});
+
+test("order-minimum.ts holds no pickup literal of its own", async () => {
+  // The structural half of the guarantee: if this module ever grows its own
+  // `"pickup"` comparison, that is a second reading of fulfillment_type and
+  // the hole is back. Keep the decision at the one canonical call site.
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(
+    new URL("../src/lib/order-minimum.ts", import.meta.url),
+    "utf8",
+  );
+  const code = src
+    .split("\n")
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .join("\n");
+  assert.ok(!/["']pickup["']/i.test(code), code);
+  assert.ok(!/fulfillment/i.test(code), code);
 });
 
 // ── Mixed carts: a subscription line exempts the whole cart ───────────────

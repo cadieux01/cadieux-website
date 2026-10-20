@@ -124,6 +124,16 @@ export async function POST(req: NextRequest) {
   // neither goes through prepareOneTimeOrder. It matters on THIS route in
   // particular that the refusal lands before any Razorpay order is created:
   // a rejected cart must never leave a payment intent behind.
+  //
+  // No pickup exemption, and nothing to exempt — same reason as
+  // /api/mobile/checkout: `validateOrderBodyShape` hard-requires
+  // `delivery_address`, this route never reads or writes `fulfillment_type`,
+  // and `body.delivery_address.pincode` is dereferenced directly on the next
+  // line. Every order it can create is a delivery. Pickup on this pipeline
+  // would additionally need `isPayableOnline` (order-payable.ts) honoured —
+  // pickup is paid at the counter, so a Razorpay route is the wrong home for
+  // it. If it is ever added, pass the exemption in from
+  // `canonicalFulfillment`, never from a second read of the body.
   const minimumFailure = belowOneTimeMinimum(body.items);
   if (minimumFailure) {
     return NextResponse.json(

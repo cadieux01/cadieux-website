@@ -106,6 +106,17 @@ export async function POST(req: NextRequest) {
   // /api/mobile/subscriptions and this body shape has no `kind` field, so
   // there is no mixed cart to exempt. Placed before serviceability so a
   // one-item cart never spends a geocode/distance call.
+  //
+  // NO PICKUP EXEMPTION HERE, AND NOTHING TO EXEMPT: this pipeline cannot
+  // produce a pickup order. `validateOrderBodyShape` hard-requires
+  // `delivery_address` (and `line1`/`area`/`city`/`pincode` inside it), the
+  // insert below never writes `fulfillment_type` or `pickup_location_id`,
+  // and the serviceability + distance gates below assume an address. So
+  // every order this route can create is a delivery, and the floor applies
+  // to all of them. If mobile pickup is ever wired up, the exemption must be
+  // passed in from `canonicalFulfillment` (fulfillment-type.ts) — the same
+  // call that drives the routing — never from `raw.fulfillment_type` read
+  // again here.
   const minimumFailure = belowOneTimeMinimum(body.items);
   if (minimumFailure) {
     return NextResponse.json(
