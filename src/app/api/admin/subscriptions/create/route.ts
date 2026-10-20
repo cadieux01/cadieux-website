@@ -49,7 +49,7 @@ import {
   supabaseAdmin,
   verifyAdminOrTeamOrder,
 } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import {
   DAY_KEYS,
   generateDeliveries,
@@ -621,7 +621,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(write.error.body, { status: write.error.status });
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "subscription",
     action: "create",

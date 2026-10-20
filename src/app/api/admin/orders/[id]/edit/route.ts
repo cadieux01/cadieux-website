@@ -70,7 +70,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { isPaidStatus } from "@/lib/payment-label";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/delivery-slots";
 import { getDrivingDistanceKm } from "@/lib/distanceMatrix";
 import { formatDate } from "@/lib/admin-formatting";
@@ -531,7 +531,7 @@ export async function POST(
   // does. trg_audit_orders already captures the full before/after JSON
   // in logistics.capture_public_audit; this row is the higher-level
   // "who did what" summary the admin audit page renders.
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "order",
     action: "update",

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 export async function POST(
   req: NextRequest,
@@ -47,7 +47,7 @@ export async function POST(
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "delivery_request",
     action: "status_change",

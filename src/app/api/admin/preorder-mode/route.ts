@@ -12,7 +12,7 @@ import {
   PREORDER_MODE_TAG,
   setPreorderMode,
 } from "@/lib/preorderMode";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -69,7 +69,7 @@ export async function PUT(req: NextRequest) {
   // be cached at all without the toggle ever looking stale.
   revalidateTag(PREORDER_MODE_TAG);
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "other",
     action: "update",

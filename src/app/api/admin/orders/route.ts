@@ -18,7 +18,7 @@ import {
   orderInsertColumns,
   prepareOneTimeOrder,
 } from "@/lib/order-checkout";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { internalJsonHeaders } from "@/lib/internal-secret";
 import { buildOrderPlacedWhatsApp } from "@/lib/order-messages";
 import { maskPhone } from "@/lib/phone-cookie";
@@ -525,7 +525,7 @@ export async function POST(req: NextRequest) {
   // other COD order. Never awaited; see lib/order-notification.ts.
   queueOrderNotification(order.id, "created");
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "order",
     action: "create",

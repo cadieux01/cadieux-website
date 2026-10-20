@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { formatOrderNumber } from "@/lib/order-number";
 
 // PATCH /api/admin/order-change-requests/[id]
@@ -231,7 +231,7 @@ export async function PATCH(
     .eq("id", cr.order_id)
     .maybeSingle();
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "delivery_request",
     action: "update",

@@ -5,7 +5,7 @@ import {
   type DeliveryLite,
 } from "@/lib/admin-subscription-derive";
 import { matchSubscriptionCoordinates } from "@/lib/subscription-coordinates";
-import { recordAuditEvent, type AuditAction } from "@/lib/audit-log";
+import { queueAuditEvent, type AuditAction } from "@/lib/audit-log";
 import { formatSubscriptionNumber } from "@/lib/order-number";
 
 const ALLOWED_STATUSES = new Set([
@@ -265,7 +265,7 @@ export async function PATCH(
     subscription_number: before?.subscription_number,
   });
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "subscription",
     action,

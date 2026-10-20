@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { notifyCustomer } from "@/lib/push";
 import { isIsoDate, isValidSlotValue, formatSlotForDisplay } from "@/lib/delivery-slots";
 import { canAutoRefund } from "@/lib/order-cancellation";
@@ -542,7 +542,7 @@ export async function PATCH(
     context = `Updated order ${orderLabel}`;
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "order",
     action: statusChanged

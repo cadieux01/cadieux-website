@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { formatOrderNumber } from "@/lib/order-number";
 import { notifyCustomer } from "@/lib/push";
 import {
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
 
     const label = formatOrderNumber(data);
 
-    void recordAuditEvent({
+    queueAuditEvent({
       req,
       entity: "order",
       action: nextStatus === "cancelled" ? "cancel" : "status_change",
