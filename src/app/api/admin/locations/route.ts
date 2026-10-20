@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 // Admin CRUD for pickup_locations. Mirrors the conventions of
 // /api/admin/products: isAdmin gate, supabaseAdmin client, audit log
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
 
   revalidateTag("pickup-locations");
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "other",
     action: "create",

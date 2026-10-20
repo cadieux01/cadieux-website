@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { normalizeWhatsAppPhone } from "@/lib/delivery-partner-phone";
 
 // PATCH /api/admin/delivery-partners/[id] — partial update.
@@ -93,7 +93,7 @@ export async function PATCH(
     );
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "other",
     action: patch.is_active === false ? "archive" : "update",
@@ -140,7 +140,7 @@ export async function DELETE(
     );
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "other",
     action: "archive",

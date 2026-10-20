@@ -37,7 +37,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { formatSlotForDisplay, isValidSlotValue } from "@/lib/delivery-slots";
 import { formatDeliveryEditNote } from "@/lib/order-notes";
 import { formatSubscriptionNumber } from "@/lib/order-number";
@@ -292,7 +292,7 @@ export async function PATCH(
     context = `Updated ${deliveryLabel}`;
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "subscription_delivery",
     action: statusChanged ? "status_change" : "update",

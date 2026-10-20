@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import { CONTENT_CACHE_TAG } from "@/lib/content";
 
@@ -16,7 +16,7 @@ import { CONTENT_CACHE_TAG } from "@/lib/content";
 //   1. write the row through the service-role client (bypasses RLS),
 //   2. revalidateTag('content') so the public reader (getPageContent)
 //      drops its cache,
-//   3. fire recordAuditEvent — best-effort, never throws.
+//   3. fire queueAuditEvent — best-effort, never throws.
 //
 // The DB has AFTER INS/UPD/DEL triggers feeding `content_audit`, so the
 // row-level history is captured server-side regardless.
@@ -327,7 +327,7 @@ async function handleCreate(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   bust();
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product",
     action: "create",
@@ -366,7 +366,7 @@ async function handleUpdate(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   bust();
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product",
     action: "update",
@@ -417,7 +417,7 @@ async function handleUpsert(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   bust();
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product",
     action: "update",
@@ -448,7 +448,7 @@ async function handleDelete(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   bust();
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product",
     action: "delete",
@@ -488,7 +488,7 @@ async function handleReorder(
     }
   }
   bust();
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product",
     action: "update",

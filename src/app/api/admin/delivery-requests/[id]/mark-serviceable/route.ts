@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { internalJsonHeaders } from "@/lib/internal-secret";
 import { invalidateServiceAreas } from "@/lib/service-areas";
 
@@ -108,7 +108,7 @@ export async function POST(
   const message = `Good news from Cadieux — we now deliver to your location (pincode ${pincode}, ${areaName}). Open the app or visit cadieux.in to complete your order.`;
   void sendWhatsApp(req, phone, message);
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "delivery_request",
     action: "status_change",

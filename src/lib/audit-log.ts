@@ -77,8 +77,12 @@ export type RecordAuditEventInput = {
 
 // Insert one audit row. Wrapped in try/catch so an audit failure
 // (network blip, schema drift, RLS misconfig) is logged but never
-// thrown — callers use `void recordAuditEvent(...)` so they don't
-// even need to await it.
+// thrown.
+//
+// CALL THIS ONLY WHERE YOU CAN AWAIT IT. Awaiting is the strongest form:
+// the row is on disk before the function returns. Everywhere else use
+// queueAuditEvent below — floating the promise loses the write, which is
+// why no route handler calls this directly any more.
 export async function recordAuditEvent(
   input: RecordAuditEventInput,
 ): Promise<void> {
@@ -105,14 +109,16 @@ export async function recordAuditEvent(
 /**
  * Queue an audit write from a call site that cannot await it.
  *
- * USE THIS INSTEAD OF `void recordAuditEvent(...)`. A bare floating promise is
- * killed when Vercel freezes the invocation the instant the response is
+ * USE THIS INSTEAD OF FLOATING THE PROMISE. A bare `void recordAuditEvent(…)`
+ * is killed when Vercel freezes the invocation the instant the response is
  * returned, so the insert never runs — not rejected, not logged, just absent.
  * The loss was measured on the other trail (see queueLogisticsAudit in
- * logistics-audit.ts); nothing about the mechanism is schema-specific, and the
- * `void recordAuditEvent(...)` call sites in this one are exposed to exactly
- * the same freeze. They are NOT converted here — that is its own sweep, and
- * this change is scoped to the one new write.
+ * logistics-audit.ts); nothing about the mechanism is schema-specific.
+ *
+ * Every route handler on this trail now goes through here — the sweep that
+ * converted them is done, so a floating `recordAuditEvent` in a handler is a
+ * regression, not a leftover. The one remaining direct caller awaits it
+ * (preorder-notify.ts), which is stronger than queueing, not weaker.
  *
  * Off-Vercel (local dev, tests) waitUntil is a no-op that does not throw, so
  * the promise simply runs to completion.

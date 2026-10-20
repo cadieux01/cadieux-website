@@ -8,7 +8,7 @@ import {
   writeAuditEntries,
 } from "@/lib/admin-product-audit";
 import { seedDefaultProductContent } from "@/lib/admin-product-content-seed";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { queueLogisticsAudit } from "@/lib/logistics-audit";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import { COVER_MUST_BE_PHOTO, isVideoUrl } from "@/lib/product-media";
@@ -272,7 +272,7 @@ export async function POST(req: NextRequest) {
 
   bustProductCaches();
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product",
     action: "create",

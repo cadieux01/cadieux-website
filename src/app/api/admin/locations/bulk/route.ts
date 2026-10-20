@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 type BulkAction = "archive" | "unarchive" | "delete";
 
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
         ? "update"
         : "delete";
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "other",
     action: auditAction,

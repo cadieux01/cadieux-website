@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { normalizeWhatsAppPhone } from "@/lib/delivery-partner-phone";
 
 // Admin CRUD for `delivery_partners` — the tiny operator-managed list
 // of delivery riders the /admin/orders "Share" button dispatches to
 // via wa.me. Mirrors the shape of /api/admin/locations (isAdmin gate,
-// supabaseAdmin, recordAuditEvent).
+// supabaseAdmin, queueAuditEvent).
 
 const PARTNER_SELECT =
   "id, name, phone, is_active, sort_order, created_at, updated_at";
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "other",
     action: "create",

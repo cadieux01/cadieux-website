@@ -18,7 +18,7 @@ import {
   orderRateLimit,
   SUBSCRIPTION_PHONE_LIMIT_MESSAGE,
 } from "@/lib/ratelimit";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { generateDeliveries, DAY_KEYS, type DayKey } from "@/lib/subscription-dates";
 import {
   isSlotPaused,
@@ -202,7 +202,7 @@ export async function GET(req: NextRequest) {
 
   // Forensic trail: a verified caller pulled their own customer + address
   // record. Best-effort (never awaited, never throws to the caller).
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "customer",
     action: "other",

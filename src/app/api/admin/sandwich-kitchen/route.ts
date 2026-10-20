@@ -13,7 +13,7 @@ import {
   setSandwichKitchenState,
   SANDWICH_KITCHEN_TAG,
 } from "@/lib/sandwich-kitchen";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -83,7 +83,7 @@ export async function PUT(req: NextRequest) {
     // read it as broken.
     revalidateTag(SANDWICH_KITCHEN_TAG);
 
-    void recordAuditEvent({
+    queueAuditEvent({
       req,
       entity: "other",
       action: "update",

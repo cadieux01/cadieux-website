@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import {
   PRODUCT_REPORT_CATEGORIES,
@@ -127,7 +127,7 @@ export async function PATCH(
 
   bust(params.id);
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product_report",
     action: "update",
@@ -191,7 +191,7 @@ export async function DELETE(
 
   bust(params.id);
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product_report",
     action: "delete",

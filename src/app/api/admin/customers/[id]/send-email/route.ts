@@ -25,7 +25,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 const FROM_EMAIL =
   process.env.RESEND_FROM_EMAIL || "Cadieux <hello@cadieux.in>";
@@ -159,7 +159,7 @@ export async function POST(
     console.warn("[admin/send-email] audit insert failed:", auditErr.message);
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "email",
     action: "send_email",

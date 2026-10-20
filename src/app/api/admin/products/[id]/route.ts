@@ -9,7 +9,7 @@ import {
   slugify,
   writeAuditEntries,
 } from "@/lib/admin-product-audit";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { queueLogisticsAudit } from "@/lib/logistics-audit";
 import {
   canonicalNutrientValue,
@@ -331,7 +331,7 @@ export async function PATCH(
 
   const priceChanged =
     "price_inr" in update && before.price_inr !== after.price_inr;
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product",
     action: priceChanged ? "price_change" : "update",

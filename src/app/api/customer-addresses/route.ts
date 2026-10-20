@@ -30,7 +30,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, maskPhone } from "@/lib/phone-cookie";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req: request,
     entity: "address",
     action: "other",

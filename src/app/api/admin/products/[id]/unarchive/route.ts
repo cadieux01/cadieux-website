@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { writeAuditEntries } from "@/lib/admin-product-audit";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { queueLogisticsAudit } from "@/lib/logistics-audit";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 
@@ -72,7 +72,7 @@ export async function POST(
   revalidateTag("products");
   revalidateTag("subscription-plans");
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product",
     action: "unarchive",

@@ -6,13 +6,13 @@
 //   1. Require a valid admin session (verifyAdminSession via isAdmin).
 //   2. Validate input shape with zod (1–1000 chars, no HTML).
 //   3. Rate limit: 10 replies per minute per admin session.
-//   4. Audit every successful reply (recordAuditEvent).
+//   4. Audit every successful reply (queueAuditEvent).
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import { isAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { adminReplyRateLimit, getClientIP } from "@/lib/ratelimit";
 import { parseBody, ReviewReplySchema } from "@/lib/validation";
 
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   if (data) {
-    void recordAuditEvent({
+    queueAuditEvent({
       req,
       entity: "review",
       action: "create",

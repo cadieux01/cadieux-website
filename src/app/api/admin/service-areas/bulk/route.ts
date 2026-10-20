@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { invalidateServiceAreas, normalizePincode } from "@/lib/service-areas";
 
 type BulkBody = {
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
   // is about to add it, and dropping a key that was not there costs nothing.
   await invalidateServiceAreas(pincodes);
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "service_area",
     action: action === "activate" ? "update" : "archive",

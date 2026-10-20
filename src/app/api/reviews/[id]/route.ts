@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { getVerifiedPhone, normalizePhone } from "@/lib/phone-cookie";
 import { isWithinEditWindow, publicDisplayName } from "@/lib/review-display";
 
@@ -65,7 +65,7 @@ export async function DELETE(
       console.error("review soft-delete failed:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    void recordAuditEvent({
+    queueAuditEvent({
       req,
       entity: "review",
       action: "delete",
@@ -210,7 +210,7 @@ export async function PATCH(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     const toggledDelete = payload.is_deleted !== undefined;
-    void recordAuditEvent({
+    queueAuditEvent({
       req,
       entity: "review",
       action: toggledDelete && !contentChanged ? "delete" : "update",

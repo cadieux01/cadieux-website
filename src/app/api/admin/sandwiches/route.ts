@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 const SLUG_RE = /^[a-z0-9][a-z0-9\-]*[a-z0-9]$/;
 
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "other",
     action: "create",

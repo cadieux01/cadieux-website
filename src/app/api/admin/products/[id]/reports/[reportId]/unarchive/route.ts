@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import { productReportsTag } from "@/lib/product-reports";
 
@@ -39,7 +39,7 @@ export async function POST(
   revalidateTag("product-reports");
   revalidateTag(productReportsTag(params.id));
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product_report",
     action: "unarchive",

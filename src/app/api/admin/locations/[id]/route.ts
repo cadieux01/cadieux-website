@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 // PATCH /api/admin/locations/[id] — partial update. Only fields
 // present on the body are written; everything else is left alone.
@@ -149,7 +149,7 @@ export async function PATCH(
 
   revalidateTag("pickup-locations");
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "other",
     action: "update",

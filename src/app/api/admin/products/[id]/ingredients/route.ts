@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { hasValidPinGrant } from "@/lib/pin-grant";
 import { PRODUCT_INGREDIENTS_TAG } from "@/lib/ingredients";
 import { CONTENT_CACHE_TAG } from "@/lib/content";
@@ -133,7 +133,7 @@ export async function POST(
 
   bust();
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "product",
     action: "update",

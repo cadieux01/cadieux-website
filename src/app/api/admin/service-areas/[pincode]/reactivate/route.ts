@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { geocodeArea } from "@/lib/geocode";
 import { invalidateServiceAreas, normalizePincode } from "@/lib/service-areas";
 
@@ -54,7 +54,7 @@ export async function POST(
 
   await invalidateServiceAreas([pincode]);
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "service_area",
     action: "unarchive",

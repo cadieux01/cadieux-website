@@ -13,7 +13,7 @@ import {
   supabaseAdmin,
   verifyAdminOrTeamOrder,
 } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 export async function GET(req: NextRequest) {
   // Dual-auth: full admin session OR the narrow team-order token
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       // Exact phone match only. `.eq` avoids the ILIKE wildcard entirely.
       const digits = q.replace(/\D/g, "");
       custQ = custQ.eq("phone", digits);
-      void recordAuditEvent({
+      queueAuditEvent({
         req,
         entity: "customer",
         action: "other",

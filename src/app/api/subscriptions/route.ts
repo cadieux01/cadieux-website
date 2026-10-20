@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedPhone, normalizePhone, maskPhone } from "@/lib/phone-cookie";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 import { HIDDEN_SUBSCRIPTION_FILTER } from "@/lib/subscription-visibility";
 
 const supabaseAdmin = createClient(
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ subscriptions: [] });
   }
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "subscription",
     action: "other",

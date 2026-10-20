@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 // POST /api/admin/locations/[id]/archive — soft-delete by flipping
 // is_archived=true. Archived rows disappear from public /find-us and
@@ -46,7 +46,7 @@ export async function POST(
 
   revalidateTag("pickup-locations");
 
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "other",
     action: "archive",

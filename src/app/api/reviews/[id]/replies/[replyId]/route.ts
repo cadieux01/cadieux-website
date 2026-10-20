@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isAdmin } from "@/lib/admin-auth";
-import { recordAuditEvent } from "@/lib/audit-log";
+import { queueAuditEvent } from "@/lib/audit-log";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,7 +29,7 @@ export async function DELETE(
     .eq("id", params.replyId)
     .eq("review_id", params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "review",
     action: "delete",
@@ -97,7 +97,7 @@ export async function PATCH(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const toggledDelete = payload.is_deleted !== undefined;
-  void recordAuditEvent({
+  queueAuditEvent({
     req,
     entity: "review",
     action: toggledDelete && !edited ? "delete" : "update",
