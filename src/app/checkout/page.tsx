@@ -14,6 +14,8 @@ import { Autocomplete, useJsApiLoader } from "@react-google-maps/api";
 import { useCart } from "@/context/CartContext";
 import { trackBeginCheckout } from "@/lib/analytics";
 import { PRODUCTS } from "@/lib/data";
+import { cartToOrderItems } from "@/lib/cart-order-items";
+import { belowOneTimeMinimum } from "@/lib/order-minimum";
 import {
   hasSandwichItems,
   SANDWICH_CHECKOUT_BLOCK_MESSAGE,
@@ -203,28 +205,15 @@ export default function CheckoutPage() {
     trackBeginCheckout(cart, cartTotal);
   }, [cart, cartTotal]);
 
-  // Cart snapshot for place_order body.
-  //
-  // TEMPORARY SCAFFOLDING (SANDWICH_CHECKOUT_BLOCK_CODE) — remove with the
-  // OLF/OLW cart-split. Sandwich lines (kind === "sandwich",
-  // productIndex === -1) cannot be turned into loaf order items today.
-  // Skip them here so PRODUCTS[-1] does NOT crash the render; without this
-  // filter the checkout page white-screens on mount and the customer never
-  // sees the refusal the guards in placeOrderCOD / payOnline (and both
-  // server routes) are meant to surface. This filter is PAIRED with those
-  // guards — if you remove them, remove this filter too, or you turn a
-  // loud refusal into a silent drop (customer pays for bread only and
-  // never learns the sandwich vanished). The SANDWICH_CHECKOUT_BLOCK_CODE
-  // tag above is here so the grep-audit that finds the guards also finds
-  // this site.
-  const orderItems = cart
-    .filter((c) => c.kind !== "sandwich")
-    .map((c) => ({
-      slug: PRODUCTS[c.productIndex].slug,
-      quantity: c.qty,
-      kind: c.orderType,
-      line_total_inr: c.price * c.qty,
-    }));
+  // Cart snapshot for place_order body. Derived by cartToOrderItems so the
+  // cart page's floor warning reads the SAME lines this posts — including
+  // the TEMPORARY SCAFFOLDING (SANDWICH_CHECKOUT_BLOCK_CODE) sandwich filter,
+  // which moved into that module with the mapping. The filter stays PAIRED
+  // with the guards in placeOrderCOD / payOnline below (and both server
+  // routes): it drops the line from the payload, they are what refuse out
+  // loud, and without them a customer pays for bread only and never learns
+  // the sandwich vanished.
+  const orderItems = cartToOrderItems(cart);
 
   const [step, setStep] = useState<Step>("address");
   const [formMode, setFormMode] = useState<FormMode>("fresh");
@@ -1245,6 +1234,17 @@ export default function CheckoutPage() {
       setError(SANDWICH_CHECKOUT_BLOCK_MESSAGE);
       return;
     }
+    // 2-item floor. Advisory only — /api/checkout asks belowOneTimeMinimum the
+    // same question about the same lines and stays authoritative; this just
+    // saves the customer a round trip. Deliberately BELOW the sandwich guard:
+    // cartToOrderItems drops sandwich lines, so a sandwich-only cart counts
+    // zero units here, and "add one more item" would be the wrong refusal for
+    // a cart whose real problem is that sandwiches cannot be ordered yet.
+    const minimumBlock = belowOneTimeMinimum(orderItems, { isPickup });
+    if (minimumBlock) {
+      setError(minimumBlock.error);
+      return;
+    }
     const { fullAddress, customerPhone, customerName } = resolveOrderIdentity();
     // Defensive: should be unreachable since step 1 gates on otpVerified,
     // but if a user clears sessionStorage / cookies mid-flow the server
@@ -1328,6 +1328,15 @@ export default function CheckoutPage() {
     // TEMPORARY SCAFFOLDING (SANDWICH_CHECKOUT_BLOCK_CODE) — see placeOrderCOD.
     if (hasSandwichItems(cart)) {
       setError(SANDWICH_CHECKOUT_BLOCK_MESSAGE);
+      return;
+    }
+    // 2-item floor — see placeOrderCOD. Refuse BEFORE the gateway opens:
+    // /api/create-order asks the same question and would refuse anyway, but
+    // only after a Razorpay order had been minted against a cart that can
+    // never be accepted.
+    const minimumBlock = belowOneTimeMinimum(orderItems, { isPickup });
+    if (minimumBlock) {
+      setError(minimumBlock.error);
       return;
     }
     // Same defensive check as COD — server rejects place_order without

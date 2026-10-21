@@ -10,6 +10,8 @@ import {
   cartFloorEscapeHint,
   cartFloorMessage,
 } from "@/lib/product-availability";
+import { cartToOrderItems } from "@/lib/cart-order-items";
+import { belowOneTimeMinimum } from "@/lib/order-minimum";
 import BackLink from "@/components/BackLink";
 
 const GRAIN = "url(/grain.svg)";
@@ -37,6 +39,22 @@ export default function CartPage() {
   const floor = useCartFloor(cart);
   const floorMessage = cartFloorMessage(floor);
   const floorHint = cartFloorEscapeHint(floor);
+
+  // 2-item floor on one-time orders, surfaced at the cart rather than after
+  // the customer has typed an address, verified a phone and tapped Pay.
+  //
+  // THE LINES MUST COME FROM cartToOrderItems, NOT FROM `cart`. CartItem.kind
+  // is "loaf" | "sandwich"; the posted kind is "once" | "sub" and comes from
+  // orderType. Reading the cart directly would make carriesSubscriptionLine
+  // never match, and a subscription cart — which the server exempts whole —
+  // would be refused here.
+  //
+  // NO PICKUP EXEMPTION IS AVAILABLE AT THIS SCREEN: fulfillment is chosen on
+  // the checkout address step, so this asks the delivery question, which is
+  // the default and the one the floor was written for. Checkout re-asks with
+  // the real isPickup and the server is authoritative either way.
+  const minimumBlock = belowOneTimeMinimum(cartToOrderItems(cart));
+  const belowMinimum = cart.length > 0 && minimumBlock !== null;
 
   return (
     <div style={{ minHeight: "100dvh", background: "#C0C8CE", position: "relative", overflowX: "clip" }}>
@@ -159,6 +177,50 @@ export default function CartPage() {
           </div>
         ) : null}
 
+        {belowMinimum ? (
+          <div
+            role="status"
+            style={{
+              background: "#FBF3D4",
+              border: "1px solid rgba(2,70,40,0.25)",
+              padding: "18px 22px",
+              margin: "0 0 32px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+                fontWeight: 500,
+                letterSpacing: "0.35em",
+                textTransform: "uppercase",
+                color: "#024628",
+              }}
+            >
+              Minimum order
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body)",
+                fontSize: 16,
+                fontWeight: 300,
+                lineHeight: 1.55,
+                color: "#024628",
+              }}
+            >
+              {/* The sentence is NOT retyped here — it is the same string the
+                  server returns, so the customer reads one wording whether
+                  they are stopped at the cart or at Pay. */}
+              {minimumBlock!.error}
+            </p>
+          </div>
+        ) : null}
+
         {cart.length === 0 ? (
           <div>
             <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, color: "rgba(2,70,40,0.65)", letterSpacing: "0.1em", marginBottom: 32 }}>Your cart is empty.</p>
@@ -241,7 +303,8 @@ export default function CartPage() {
 
             <button
               onClick={() => router.push("/checkout")}
-              style={{ display: "block", width: "100%", marginTop: 32, background: "#024628", border: "none", padding: "18px 0", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.45em", textTransform: "uppercase", color: "#FBF3D4", WebkitTapHighlightColor: "transparent" }}
+              disabled={belowMinimum}
+              style={{ display: "block", width: "100%", marginTop: 32, background: "#024628", border: "none", padding: "18px 0", cursor: belowMinimum ? "not-allowed" : "pointer", opacity: belowMinimum ? 0.45 : 1, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.45em", textTransform: "uppercase", color: "#FBF3D4", WebkitTapHighlightColor: "transparent" }}
             >
               Proceed to Checkout
             </button>
