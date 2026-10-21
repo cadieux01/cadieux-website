@@ -194,8 +194,10 @@ export async function POST(req: NextRequest) {
 
   // Subscription-vs-single-order gate — applied AFTER both branches so
   // it catches the client-deliveries and legacy uniform-days shapes.
-  // A single delivery day is a one-time order, not a subscription;
-  // the 10% subscription discount only applies when this rule is met.
+  // Fewer than MIN_SUBSCRIPTION_DAYS_PER_WEEK delivery days is a one-time
+  // order, not a subscription; the 10% subscription discount only applies
+  // when this rule is met. Creation only — an operator editing an existing
+  // plan that predates the current minimum must not be blocked by it.
   if (!hasMinSubscriptionDays(dayKeys)) {
     return NextResponse.json(
       { error: MIN_DAYS_ERROR_MESSAGE, code: MIN_DAYS_ERROR_CODE },

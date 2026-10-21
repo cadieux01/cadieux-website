@@ -595,9 +595,10 @@ export async function POST(req: NextRequest) {
     if (dayKeys.length === 0) {
       return NextResponse.json({ error: "No valid delivery days." }, { status: 400 });
     }
-    // A subscription must span ≥2 distinct weekdays; a single day is a
-    // one-time order at full price. Enforced server-side on every path
-    // via the shared helper so the discount can never leak to 1-day plans.
+    // A subscription must span MIN_SUBSCRIPTION_DAYS_PER_WEEK distinct
+    // weekdays; fewer is a one-time order at full price. Enforced
+    // server-side on every path via the shared helper so the discount can
+    // never leak to a plan below the minimum.
     if (!hasMinSubscriptionDays(dayKeys)) {
       return NextResponse.json(
         { error: MIN_DAYS_ERROR_MESSAGE, code: MIN_DAYS_ERROR_CODE },

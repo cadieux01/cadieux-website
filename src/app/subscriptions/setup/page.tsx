@@ -43,6 +43,7 @@ import {
   subscriptionAvailabilityLine,
 } from "@/lib/product-availability";
 import {
+  MIN_DAYS_ERROR_MESSAGE,
   MIN_SUBSCRIPTION_DAYS_PER_WEEK,
   distinctWeekdaysFromDates,
 } from "@/lib/subscription-min-days";
@@ -198,10 +199,10 @@ export default function SetupPage() {
       // step 2 below.
       case 1: return totalUnitsPerDelivery(state) > 0;
       case 2:
-        // Subscription rule: ≥2 DISTINCT weekdays across the picked
-        // dates. Multiple dates on the same weekday still count as one
-        // day (server enforces the same). One day = single order, not
-        // a subscription.
+        // Subscription rule: MIN_SUBSCRIPTION_DAYS_PER_WEEK DISTINCT
+        // weekdays across the picked dates. Multiple dates on the same
+        // weekday still count as one day (server enforces the same).
+        // Fewer than the minimum = one-time orders, not a subscription.
         return (
           state.selectedDates.length >= 1 &&
           distinctWeekdaysFromDates(state.selectedDates) >=
@@ -450,10 +451,9 @@ function NavRow({
   onNext: () => void;
   finalLabel: string;
 }) {
-  const nextTooltip =
-    step === 2 && !canNext
-      ? `A subscription needs ${MIN_SUBSCRIPTION_DAYS_PER_WEEK}+ delivery days per week. For a single day, place a one-time order instead.`
-      : "";
+  // The shared sentence, not a second copy of it — this tooltip and the
+  // server's 400 must not be able to disagree about the rule.
+  const nextTooltip = step === 2 && !canNext ? MIN_DAYS_ERROR_MESSAGE : "";
   return (
     <div
       style={{
@@ -692,8 +692,9 @@ function Step2Dates({
   floorHint: string | null;
 }) {
   // Live count of DISTINCT weekdays so we can render a helper line under
-  // the copy explaining why "Next" stays disabled with only one weekday
-  // selected. Matches the server-side rule enforced on all 3 endpoints.
+  // the copy explaining why "Next" stays disabled while the selection is
+  // short of the minimum. Matches the server-side rule enforced on all 3
+  // endpoints.
   const distinctWeekdays = distinctWeekdaysFromDates(selectedDates);
   const needsMoreWeekdays =
     selectedDates.length > 0 &&
@@ -712,9 +713,12 @@ function Step2Dates({
         {/* No discount figure here: the rule is the rule whatever the plan
             costs, and this component is not passed the selected plan, so it
             cannot tell a 10% loaf from a 0% bun. Naming a saving that some
-            plans do not have would be false for those. */}
-        A subscription needs {MIN_SUBSCRIPTION_DAYS_PER_WEEK}+ delivery days
-        per week. For a single day, place a one-time order instead.
+            plans do not have would be false for those.
+
+            The shared sentence rather than a third copy of it — this line,
+            the Next tooltip and the server's 400 now say the same thing by
+            construction. */}
+        {MIN_DAYS_ERROR_MESSAGE}
       </p>
       {needsMoreWeekdays ? (
         <p
