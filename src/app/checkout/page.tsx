@@ -16,6 +16,7 @@ import { trackBeginCheckout } from "@/lib/analytics";
 import { PRODUCTS } from "@/lib/data";
 import { cartToOrderItems } from "@/lib/cart-order-items";
 import { belowOneTimeMinimum } from "@/lib/order-minimum";
+import { codPaymentLabel } from "@/lib/customer-payment-wording";
 import {
   hasSandwichItems,
   SANDWICH_CHECKOUT_BLOCK_MESSAGE,
@@ -364,7 +365,10 @@ export default function CheckoutPage() {
   // What the pay-later button is actually called, for use inside the payment
   // error messages. Telling a pickup customer to "use Cash on Delivery" points
   // them at a button that, to them, describes a service they didn't order.
-  const fallbackLabel = isPickup ? "Pay at Pickup" : "Cash on Delivery";
+  //
+  // Reads the same helper the button itself does, so an error message cannot
+  // name a button by a label the button no longer carries.
+  const fallbackLabel = codPaymentLabel(fulfillmentType);
   const [pickupLocationId, setPickupLocationId] = useState<string | null>(null);
   const [pickupLocations, setPickupLocations] = useState<PickupLoc[]>([]);
   const [pickupLocationsLoading, setPickupLocationsLoading] = useState(false);
@@ -2361,6 +2365,7 @@ export default function CheckoutPage() {
               onOnline={payOnline}
               loading={orderLoading}
               isPickup={isPickup}
+              codLabel={fallbackLabel}
               error={error}
             />
           )}
@@ -3425,7 +3430,7 @@ function PickupSection(props: {
 // dismissed saw no explanation at all and simply tapped again. Five orders
 // from one phone on 3 Sep were exactly that.
 function PaymentButtons({
-  onCOD, onOnline, loading, isPickup, error,
+  onCOD, onOnline, loading, isPickup, codLabel, error,
 }: {
   onCOD: () => void;
   onOnline: () => void;
@@ -3448,6 +3453,12 @@ function PaymentButtons({
    *  razorpay pickup row. What a resume of one is refused by is
    *  isPayableOnline in @/lib/order-payable. */
   isPickup: boolean;
+  /** "Cash on Delivery" / "Pay at Pickup", from `codPaymentLabel`. PASSED IN
+   *  rather than derived here from `isPickup`, so the button carries the
+   *  BYTE-IDENTICAL string the payment error messages name it by
+   *  (`fallbackLabel` is this same value) — "please use X" pointing at a
+   *  button labelled Y is the failure that cannot happen now. */
+  codLabel: string;
   error: string;
 }) {
   return (
@@ -3498,7 +3509,7 @@ function PaymentButtons({
           WebkitTapHighlightColor: "transparent",
         }}
       >
-        {isPickup ? "Pay at Pickup" : "Cash on Delivery"}
+        {codLabel}
       </button>
     </div>
   );

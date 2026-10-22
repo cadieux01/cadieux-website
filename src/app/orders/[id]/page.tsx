@@ -29,6 +29,7 @@ import {
 import { trackPurchase } from "@/lib/analytics";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isPayableOnline } from "@/lib/order-payable";
+import { codPaymentLabel } from "@/lib/customer-payment-wording";
 import BackLink from "@/components/BackLink";
 import { composeCustomerShareMessage } from "@/lib/order-share-customer";
 
@@ -118,6 +119,12 @@ type ChangeRequest = {
 // a delivery they are not getting, on the one screen they open to check what
 // they owe. The stored payment_method is still 'cod' and stays that way — this
 // is wording, not classification.
+//
+// That pair of strings now lives in lib/customer-payment-wording.ts, shared
+// with checkout and the Payments tab, because the third copy of it (the
+// Payments tab) had lost the pickup branch. `fulfillmentType` stays optional
+// HERE — this function's other parameters are nullable too and its one caller
+// passes all three — but the shared helper requires its argument.
 function paymentLabel(
   method: string | null,
   status: string | null,
@@ -126,11 +133,7 @@ function paymentLabel(
   const m = (method ?? "").toLowerCase();
   const s = (status ?? "").toLowerCase();
   if (s === "paid") return "Paid";
-  if (m === "cod") {
-    return (fulfillmentType ?? "").trim().toLowerCase() === "pickup"
-      ? "Pay at Pickup"
-      : "Cash on Delivery";
-  }
+  if (m === "cod") return codPaymentLabel(fulfillmentType);
   if (s === "failed") return "Payment failed";
   return "Awaiting payment";
 }

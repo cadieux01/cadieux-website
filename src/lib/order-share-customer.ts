@@ -121,6 +121,19 @@ export function sharePaymentLabel(order: CustomerShareOrder): string {
   const status = (order.payment_status ?? "").trim().toLowerCase();
   // Nobody delivers anything on a pickup order, so "cash on delivery" there
   // is a small lie that reads as a promise to come to the door.
+  //
+  // DELIBERATELY NOT `codPaymentLabel` FROM lib/customer-payment-wording.ts,
+  // which 22 Oct 2026 made the one source for the pair on the three SCREENS
+  // (checkout button, order detail badge, Payments tab badge). The same
+  // separation payment-label.ts documents between its own two functions
+  // applies here: these are not two spellings of one fact.
+  //
+  // This is PROSE, not a label. It goes into a sentence inside a message the
+  // customer forwards, and the "paid" branch below lowercases it — "Paid, cash
+  // on pickup" reads; "Paid, pay at pickup" does not. The lower-case 'd' in
+  // "Cash on delivery" is the same decision, for a line of running text rather
+  // than a pill. If the screens' wording changes, this need not, and the
+  // reverse — do not consolidate them to make the grep tidy.
   const cash =
     order.fulfillment_type === "pickup" ? "Cash on pickup" : "Cash on delivery";
 

@@ -69,6 +69,11 @@ export type PaymentRow = {
   total_amount: number;
   payment_status: string | null;
   payment_method: string | null;
+  /** 'delivery' | 'pickup', NULL on rows predating the pickup UI. Surfaced
+   *  only so the payment wording can tell a counter payment from cash at the
+   *  door — see codPaymentLabel in lib/customer-payment-wording.ts. Without
+   *  it the Payments tab called every pickup order "Cash on Delivery". */
+  fulfillment_type: string | null;
   paid_at: string | null;
   razorpay_payment_id: string | null;
   created_at: string;
@@ -114,7 +119,11 @@ export async function loadMyRequests(
   const { data: orders, error: ordersErr } = await supabase
     .from("orders")
     .select(
-      "id, order_number, public_ref, status, total_amount, delivery_date, delivery_slot, delivery_address, payment_status, payment_method, paid_at, razorpay_payment_id, created_at",
+      // `fulfillment_type` is here for the payment WORDING, not for any
+      // delivery logic: a pickup order is paid at the counter, and without
+      // this column the Payments tab had nothing to branch on and called all
+      // 123 live cod/pending pickup orders "Cash on Delivery".
+      "id, order_number, public_ref, status, total_amount, delivery_date, delivery_slot, delivery_address, payment_status, payment_method, fulfillment_type, paid_at, razorpay_payment_id, created_at",
     )
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
@@ -200,6 +209,8 @@ export async function loadMyRequests(
     total_amount: Number(o.total_amount ?? 0),
     payment_status: o.payment_status ?? null,
     payment_method: o.payment_method ?? null,
+    fulfillment_type:
+      (o as { fulfillment_type?: string | null }).fulfillment_type ?? null,
     paid_at: o.paid_at ?? null,
     razorpay_payment_id: o.razorpay_payment_id ?? null,
     created_at: o.created_at,

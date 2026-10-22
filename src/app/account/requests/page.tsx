@@ -18,6 +18,7 @@ import {
 } from "@/lib/order-number";
 import BackLink from "@/components/BackLink";
 import { formatSlotForDisplay } from "@/lib/delivery-slots";
+import { codPaymentLabel } from "@/lib/customer-payment-wording";
 
 const GRAIN = "url(/grain.svg)";
 
@@ -65,6 +66,10 @@ type SubscriptionChangeRequest = {
   updated_at: string | null;
 };
 
+// A hand-kept copy of PaymentRow in src/lib/my-requests.ts, which is what
+// GET /api/my-requests actually returns. That file is the source of truth; a
+// field missing HERE is only invisible, a field missing from the PROJECTION
+// there is the bug this page had.
 type PaymentRow = {
   order_id: string;
   /** OLF number — see the decision note in src/lib/order-number.ts. */
@@ -74,6 +79,9 @@ type PaymentRow = {
   total_amount: number;
   payment_status: string | null;
   payment_method: string | null;
+  /** 'delivery' | 'pickup', NULL on rows predating the pickup UI. Drives the
+   *  payment wording and nothing else. */
+  fulfillment_type: string | null;
   paid_at: string | null;
   razorpay_payment_id: string | null;
   created_at: string;
@@ -122,7 +130,10 @@ function statusColor(status: string): { bg: string; fg: string; border: string }
 
 function paymentLabel(p: PaymentRow): string {
   if (p.payment_status === "paid") return "Paid";
-  if (p.payment_method === "cod") return "Cash on Delivery";
+  // The cod branch is `codPaymentLabel` and nothing else — this badge used to
+  // say "Cash on Delivery" to pickup customers, contradicting the "Pay at
+  // Pickup" button they had pressed.
+  if (p.payment_method === "cod") return codPaymentLabel(p.fulfillment_type);
   if (p.payment_status === "failed") return "Failed";
   if (p.payment_status === "created") return "Awaiting payment";
   return "Awaiting payment";

@@ -35,6 +35,21 @@ const { PICKUP_ONLINE_PAYMENT_CUTOFF_ISO, isPayableOnline } = await import(
 const { settlementWording, codMethodLabel } = await import(
   "../src/lib/cod-settlement.ts"
 );
+const { codPaymentLabel } = await import(
+  "../src/lib/customer-payment-wording.ts"
+);
+
+/** Read a source file as text, with whole-line comments stripped, so a
+ *  structural assertion cannot be satisfied — or broken — by prose. Several
+ *  of the notes below legitimately QUOTE the strings they forbid in code. */
+async function codeOf(relPath) {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL(relPath, import.meta.url), "utf8");
+  return src
+    .split("\n")
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .join("\n");
+}
 
 const CUTOFF_MS = Date.parse(PICKUP_ONLINE_PAYMENT_CUTOFF_ISO);
 
@@ -257,5 +272,82 @@ test("the composed audit line reads correctly for both fulfillments", () => {
   assert.equal(
     line("pickup", "upi"),
     "Pickup counter payment settled by UPI",
+  );
+});
+
+/* ── The customer-facing pair, consolidated 22 Oct 2026 ───────────────── */
+
+test("codPaymentLabel: pickup pays at the counter, delivery is unchanged", () => {
+  assert.equal(codPaymentLabel("pickup"), "Pay at Pickup");
+
+  // Byte-for-byte on BOTH branches, because these are the words a customer
+  // reads on a button and then expects to see again on the badge. "Pay at
+  // Pickup" is the label checkout has shipped since 18 Oct — not a new
+  // spelling invented to fix the old ones.
+  for (const v of ["delivery", null, undefined, "", "DELIVERY", "courier"]) {
+    assert.equal(codPaymentLabel(v), "Cash on Delivery", String(v));
+  }
+});
+
+test("codPaymentLabel matches the stored column case- and space-insensitively", () => {
+  // Same convention as isCounterPayPickup / settlementWording above. Unlike
+  // the request-body path (canonicalFulfillment, which deliberately does NOT
+  // trim), a stray space here can only affect wording, and a pickup order
+  // should be named correctly whatever shape its column is in.
+  for (const v of ["Pickup", "PICKUP", "  pickup  ", "\tpickup\n"]) {
+    assert.equal(codPaymentLabel(v), "Pay at Pickup", JSON.stringify(v));
+  }
+});
+
+test("the three customer screens hold no cod/pickup literal of their own", async () => {
+  // THE WHOLE POINT OF THE HELPER. There were three hand-written copies of
+  // this ternary and the third had lost its pickup branch, so 123 live pickup
+  // orders were told "Cash on Delivery" on the Payments tab while the button
+  // they pressed said "Pay at Pickup". A fourth copy would be the same bug
+  // again, so the absence is asserted rather than trusted.
+  for (const f of [
+    "../src/app/checkout/page.tsx",
+    "../src/app/orders/[id]/page.tsx",
+    "../src/app/account/requests/page.tsx",
+  ]) {
+    const code = await codeOf(f);
+    assert.ok(
+      !/"Cash on Delivery"/.test(code),
+      `${f} spells "Cash on Delivery" itself`,
+    );
+    assert.ok(
+      !/"Pay at Pickup"/.test(code),
+      `${f} spells "Pay at Pickup" itself`,
+    );
+    assert.ok(
+      /codPaymentLabel/.test(code),
+      `${f} no longer reads codPaymentLabel`,
+    );
+  }
+});
+
+test("the forwarded-message wording is left out of the helper on purpose", async () => {
+  // order-share-customer.ts is PROSE inside a sentence the customer forwards,
+  // and its "paid" branch lowercases the phrase: "Paid, cash on pickup" reads,
+  // "Paid, pay at pickup" does not. Converting it would be a regression that
+  // looks like tidying, so the separation is pinned here, next to the
+  // operator/admin vocabularies it belongs with.
+  const code = await codeOf("../src/lib/order-share-customer.ts");
+  assert.ok(/"Cash on pickup"/.test(code), "share message lost its own wording");
+  assert.ok(!/codPaymentLabel/.test(code), "share message was consolidated");
+});
+
+test("the my-requests orders projection still selects fulfillment_type", async () => {
+  // THE BUG CLASS, not the symptom: the ternary was never wrong, the COLUMN
+  // was absent from the projection, so the page had nothing to branch on and
+  // silently took the delivery path. Third time — delivery_fee and
+  // AvailabilityRow were the first two. An absent column reads as a blank and
+  // nothing throws, which is exactly why it needs a test and not a comment.
+  const code = await codeOf("../src/lib/my-requests.ts");
+  const select = code.match(/\.from\("orders"\)[\s\S]*?\.select\(([\s\S]*?)\)/);
+  assert.ok(select, "could not find the orders projection");
+  assert.ok(
+    /fulfillment_type/.test(select[1]),
+    "fulfillment_type dropped from the orders projection",
   );
 });
