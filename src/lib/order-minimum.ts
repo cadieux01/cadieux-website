@@ -58,6 +58,30 @@ export const ONE_TIME_MINIMUM_CODE = "one_time_minimum_units";
 export const ONE_TIME_MINIMUM_MESSAGE =
   `One-time orders need at least ${MIN_ONE_TIME_UNITS} items. Add one more to your cart to continue.`;
 
+/**
+ * The cart's ADVISORY version of the same floor.
+ *
+ * WHY A SECOND SENTENCE AND NOT THE ONE ABOVE. The cart screen knows strictly
+ * less than the server does: fulfillment is chosen on the checkout address
+ * step, so at the cart `isPickup` is unknown and the pickup exemption
+ * (`belowOneTimeMinimum`, Raja 20 Oct 2026) cannot be evaluated. The refusal
+ * above is only ever emitted once delivery IS known, so it may state the
+ * floor flatly. Here it would be a false claim to a customer who is about to
+ * choose pickup — hence "delivery orders", and hence the second clause, which
+ * names the way out instead of leaving the customer stuck.
+ *
+ * ADVISORY MEANS THE BUTTON STAYS LIVE. This sentence accompanies a banner,
+ * not a disabled Proceed button: disabling it would block a one-loaf pickup
+ * order the server would accept, with no visible reason and no route onward.
+ * The gate itself lives at checkout, which has the real `isPickup`, and at
+ * the server, which is authoritative.
+ *
+ * `MIN_ONE_TIME_UNITS` is interpolated so the number keeps one owner. The
+ * test pins this sentence byte-for-byte, so raising the floor fails there.
+ */
+export const CART_ONE_TIME_MINIMUM_HINT =
+  `One-time delivery orders need at least ${MIN_ONE_TIME_UNITS} items. Add one more, or choose pickup at checkout to collect a single item.`;
+
 /** A cart line as seen by this module: any of the quantity keys, plus the
  *  website's one-time/subscription discriminator. `kind` is `unknown`
  *  because it is absent on the app's shape and jsonb promises nothing. */

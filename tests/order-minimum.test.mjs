@@ -11,6 +11,7 @@ const {
   MIN_ONE_TIME_UNITS,
   ONE_TIME_MINIMUM_CODE,
   ONE_TIME_MINIMUM_MESSAGE,
+  CART_ONE_TIME_MINIMUM_HINT,
   belowOneTimeMinimum,
   carriesSubscriptionLine,
   totalCartUnits,
@@ -96,6 +97,57 @@ test("no exclamation mark anywhere in the customer copy", () => {
 test("the copy says items, not loaves — buns and bases count", () => {
   assert.ok(ONE_TIME_MINIMUM_MESSAGE.includes("items"));
   assert.ok(!/loaf|loaves/i.test(ONE_TIME_MINIMUM_MESSAGE));
+});
+
+// ── The cart's ADVISORY sentence ─────────────────────────────────────────
+
+test("the cart hint is pinned byte-for-byte", () => {
+  assert.equal(
+    CART_ONE_TIME_MINIMUM_HINT,
+    "One-time delivery orders need at least 2 items. Add one more, or " +
+      "choose pickup at checkout to collect a single item.",
+  );
+});
+
+test("the cart hint carries the live number, not a stale literal", () => {
+  assert.ok(
+    CART_ONE_TIME_MINIMUM_HINT.includes(`at least ${MIN_ONE_TIME_UNITS} items`),
+    CART_ONE_TIME_MINIMUM_HINT,
+  );
+});
+
+test("the cart hint says DELIVERY orders and names pickup as the way out", () => {
+  // The cart does not know `isPickup` — fulfillment is chosen on the
+  // checkout address step. Stating the floor flatly here would be a false
+  // claim to a customer about to collect a single loaf, which the server
+  // accepts. Hence "delivery orders" and an escape route in the sentence.
+  assert.ok(/delivery orders/i.test(CART_ONE_TIME_MINIMUM_HINT), CART_ONE_TIME_MINIMUM_HINT);
+  assert.ok(/pickup/i.test(CART_ONE_TIME_MINIMUM_HINT), CART_ONE_TIME_MINIMUM_HINT);
+  // And it is NOT the server's flat refusal.
+  assert.notEqual(CART_ONE_TIME_MINIMUM_HINT, ONE_TIME_MINIMUM_MESSAGE);
+  assert.ok(!CART_ONE_TIME_MINIMUM_HINT.includes("!"), CART_ONE_TIME_MINIMUM_HINT);
+});
+
+test("the cart WARNS but never blocks — Proceed is not disabled", async () => {
+  // The structural half of the advisory rule. A `disabled` on that button
+  // dead-ends a one-loaf PICKUP order the server would accept, with no
+  // explanation and no route onward, because this screen cannot evaluate the
+  // pickup exemption. If this assertion ever fails, that is the review
+  // conversation, not a silent regression.
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(
+    new URL("../src/app/cart/page.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.ok(!/disabled=\{belowMinimum\}/.test(src), "cart Proceed button is disabled");
+  // Nor greyed out, which reads as disabled even when the click works.
+  // `belowMinimum ?` on its own is fine — that is the banner's condition.
+  assert.ok(!/cursor: belowMinimum/.test(src), "Proceed shows a not-allowed cursor");
+  assert.ok(!/opacity: belowMinimum/.test(src), "Proceed is dimmed");
+  // The banner still renders, and renders the imported sentence rather than
+  // a retyped copy or the server's refusal.
+  assert.ok(src.includes("{CART_ONE_TIME_MINIMUM_HINT}"), "cart banner text");
+  assert.ok(!src.includes("minimumBlock!.error"), "cart shows the server refusal");
 });
 
 // ── Pickup is exempt, and only through the canonical reader ──────────────

@@ -11,7 +11,10 @@ import {
   cartFloorMessage,
 } from "@/lib/product-availability";
 import { cartToOrderItems } from "@/lib/cart-order-items";
-import { belowOneTimeMinimum } from "@/lib/order-minimum";
+import {
+  belowOneTimeMinimum,
+  CART_ONE_TIME_MINIMUM_HINT,
+} from "@/lib/order-minimum";
 import BackLink from "@/components/BackLink";
 
 const GRAIN = "url(/grain.svg)";
@@ -49,10 +52,16 @@ export default function CartPage() {
   // never match, and a subscription cart — which the server exempts whole —
   // would be refused here.
   //
-  // NO PICKUP EXEMPTION IS AVAILABLE AT THIS SCREEN: fulfillment is chosen on
-  // the checkout address step, so this asks the delivery question, which is
-  // the default and the one the floor was written for. Checkout re-asks with
-  // the real isPickup and the server is authoritative either way.
+  // NO PICKUP EXEMPTION IS AVAILABLE AT THIS SCREEN, WHICH IS WHY THIS IS
+  // ADVISORY ONLY. Fulfillment is chosen on the checkout address step, so
+  // `isPickup` is unknown here and this asks the delivery question. A single
+  // loaf collected from the stall is exempt (order-minimum.ts, Raja 20 Oct
+  // 2026) and the server WOULD accept it, so the Proceed button must stay
+  // live: disabling it would dead-end a legitimate pickup order with no
+  // explanation. The banner warns; checkout re-asks with the real isPickup;
+  // the server is authoritative. For the same reason the banner uses
+  // CART_ONE_TIME_MINIMUM_HINT rather than the server's flat refusal — the
+  // flat sentence would be a false claim to a customer heading for pickup.
   const minimumBlock = belowOneTimeMinimum(cartToOrderItems(cart));
   const belowMinimum = cart.length > 0 && minimumBlock !== null;
 
@@ -213,10 +222,12 @@ export default function CartPage() {
                 color: "#024628",
               }}
             >
-              {/* The sentence is NOT retyped here — it is the same string the
-                  server returns, so the customer reads one wording whether
-                  they are stopped at the cart or at Pay. */}
-              {minimumBlock!.error}
+              {/* The sentence is NOT retyped here — it is imported, so the
+                  number has one owner. It is the CART wording, not the
+                  server's refusal: this screen does not know whether the
+                  order is a delivery, so it says so and names pickup as the
+                  way out. See the comment beside `minimumBlock` above. */}
+              {CART_ONE_TIME_MINIMUM_HINT}
             </p>
           </div>
         ) : null}
@@ -303,8 +314,7 @@ export default function CartPage() {
 
             <button
               onClick={() => router.push("/checkout")}
-              disabled={belowMinimum}
-              style={{ display: "block", width: "100%", marginTop: 32, background: "#024628", border: "none", padding: "18px 0", cursor: belowMinimum ? "not-allowed" : "pointer", opacity: belowMinimum ? 0.45 : 1, fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.45em", textTransform: "uppercase", color: "#FBF3D4", WebkitTapHighlightColor: "transparent" }}
+              style={{ display: "block", width: "100%", marginTop: 32, background: "#024628", border: "none", padding: "18px 0", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.45em", textTransform: "uppercase", color: "#FBF3D4", WebkitTapHighlightColor: "transparent" }}
             >
               Proceed to Checkout
             </button>
