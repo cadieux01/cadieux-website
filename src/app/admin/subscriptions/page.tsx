@@ -313,11 +313,17 @@ const SELECTION_KEY = "admin:subscriptions:selection";
 // to an offset measured on a list of a different length.
 const SCROLL_KEY = "admin:subscriptions:scrollY";
 
-// 30s, up from 10s, for the SubscriptionDrawer's own poll — deliberately NOT
-// named POLL_MS, because the list poll further up this file still ticks at its
-// own 10s and a shared-looking name here would read as covering both.
-// A delivery moves through three states across a five-hour window, so 30s is
-// still 600 polls to catch three events.
+// Two independent polls live in this file, so neither constant is called
+// POLL_MS — a shared-looking name would read as covering both.
+//
+// The list board. Still 10s: this is the cadence Sunny works the board at
+// during a dispatch run, and slowing it is a separate decision from fixing
+// the refocus guard below. See the note on the poll itself.
+const LIST_POLL_MS = 10_000;
+
+// The SubscriptionDrawer's own poll. 30s: a delivery moves through three
+// states across a five-hour window, so that is still ~600 polls to catch
+// three events.
 const DRAWER_POLL_MS = 30_000;
 
 type SubBulkAction = "share" | "copy";
@@ -528,6 +534,10 @@ function SubscriptionsPageInner() {
   // like "the status didn't save" even though the PATCH succeeded.
   const subsGeneration = useRef(0);
 
+  // When the list was last ATTEMPTED. A ref, not state, so reading it cannot
+  // restart the interval.
+  const lastLoadAt = useRef(0);
+
   const load = useCallback(async () => {
     const gen = ++subsGeneration.current;
     setError(null);
@@ -549,6 +559,10 @@ function SubscriptionsPageInner() {
       // Unconditional: a superseded response must still clear the initial
       // spinner, or a load raced on mount would leave it up forever.
       setLoading(false);
+      // The ATTEMPT time, not the success time — an endpoint that is failing
+      // must not get re-hit on every alt-tab. Unconditional for the same
+      // reason as setLoading: a superseded load still hit the network.
+      lastLoadAt.current = Date.now();
     }
   }, []);
 
@@ -565,19 +579,25 @@ function SubscriptionsPageInner() {
     void load();
   }, [load]);
 
-  // 10s polling — same cadence as the legacy admin dashboard.
-  //
   // Skipped while the tab is hidden. A backgrounded board was still firing a
   // full round trip to Tokyo every 10 seconds forever, and nobody was looking
-  // at the result. Returning to the tab refetches immediately, so pausing
-  // never leaves a human staring at stale data.
+  // at the result. Returning to the tab refetches, so pausing never leaves a
+  // human staring at stale data.
+  //
+  // The refocus refetch is now gated on staleness. It used to fire on EVERY
+  // visibilitychange, which made alt-tabbing its own poll: clicking out to
+  // WhatsApp to message a customer and back is a full enriched list fetch
+  // each way, at no fixed rate and with no upper bound. On a dispatch run
+  // that is the most common thing the operator does.
   useEffect(() => {
     const t = setInterval(() => {
       if (document.visibilityState !== "visible") return;
       void load();
-    }, 10_000);
+    }, LIST_POLL_MS);
     const onVisible = () => {
-      if (document.visibilityState === "visible") void load();
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastLoadAt.current < LIST_POLL_MS) return;
+      void load();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
