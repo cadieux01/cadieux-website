@@ -10,7 +10,7 @@
 // and API calls are unchanged — only the AdminShell wrapper was removed (the
 // combined page supplies it) and the Refresh button moved inline.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ContactActions } from "@/components/admin/ContactActions";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
@@ -34,6 +34,11 @@ const CREAM = "#FBF3D4";
 const FADED = "rgba(251,243,212,0.6)";
 const BORDER = "rgba(251,243,212,0.18)";
 
+// 60s, up from 10s. These are customer-submitted "deliver here please"
+// requests — they arrive a handful a day and nothing downstream is time
+// critical, so a minute is generous. Refresh is still one click away.
+const POLL_MS = 60_000;
+
 const FILTERS: { value: "pending" | "serviceable" | "rejected" | "all"; label: string }[] = [
   { value: "pending", label: "Pending" },
   { value: "serviceable", label: "Activated" },
@@ -52,6 +57,10 @@ export function ServiceabilityPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   const [areaInputs, setAreaInputs] = useState<Record<string, string>>({});
 
+  // When the list last came back. A ref, not state, so reading it cannot
+  // restart the interval.
+  const lastLoadAt = useRef(0);
+
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -69,6 +78,9 @@ export function ServiceabilityPanel() {
       );
     } finally {
       setLoading(false);
+      // The ATTEMPT time, not the success time — an endpoint that is failing
+      // must not get re-hit on every alt-tab.
+      lastLoadAt.current = Date.now();
     }
   }, [filter]);
 
@@ -86,10 +98,24 @@ export function ServiceabilityPanel() {
     void load();
   }, [load]);
 
-  // 10s polling for active dispatch awareness.
   useEffect(() => {
-    const t = setInterval(() => void load(), 10_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void load();
+    }, POLL_MS);
+    // Coming back to the tab refetches, so pausing while hidden never leaves
+    // a human reading data from however long they were away — but only if it
+    // is actually stale, or alt-tabbing becomes its own poll.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastLoadAt.current < POLL_MS) return;
+      void load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   const counts = useMemo(() => {

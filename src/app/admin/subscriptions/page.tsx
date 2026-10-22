@@ -313,6 +313,13 @@ const SELECTION_KEY = "admin:subscriptions:selection";
 // to an offset measured on a list of a different length.
 const SCROLL_KEY = "admin:subscriptions:scrollY";
 
+// 30s, up from 10s, for the SubscriptionDrawer's own poll — deliberately NOT
+// named POLL_MS, because the list poll further up this file still ticks at its
+// own 10s and a shared-looking name here would read as covering both.
+// A delivery moves through three states across a five-hour window, so 30s is
+// still 600 polls to catch three events.
+const DRAWER_POLL_MS = 30_000;
+
 type SubBulkAction = "share" | "copy";
 
 // No bulk Cancel. Cancelling a plan cancels every delivery hanging off it
@@ -2351,10 +2358,14 @@ function SubscriptionDrawer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Same race, same guard as the list above: this drawer runs its own
-  // 10-second poll, and updateDeliveryStatus writes optimistically into the
-  // state that poll overwrites.
+  // Same race, same guard as the list above: this drawer runs its own poll,
+  // and updateDeliveryStatus writes optimistically into the state that poll
+  // overwrites.
   const deliveriesGeneration = useRef(0);
+
+  // When the deliveries last came back. A ref, not state, so reading it
+  // cannot restart the interval.
+  const lastLoadAt = useRef(0);
 
   const fetchDeliveries = useCallback(async () => {
     const gen = ++deliveriesGeneration.current;
@@ -2372,13 +2383,31 @@ function SubscriptionDrawer({
       );
     } finally {
       setLoading(false);
+      // The ATTEMPT time, not the success time — an endpoint that is failing
+      // must not get re-hit on every alt-tab.
+      lastLoadAt.current = Date.now();
     }
   }, [subscription.id]);
 
   useEffect(() => {
     void fetchDeliveries();
-    const t = setInterval(() => void fetchDeliveries(), 10_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void fetchDeliveries();
+    }, DRAWER_POLL_MS);
+    // Coming back to the tab refetches, so pausing while hidden never leaves
+    // a human reading data from however long they were away — but only if it
+    // is actually stale, or alt-tabbing becomes its own poll.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastLoadAt.current < DRAWER_POLL_MS) return;
+      void fetchDeliveries();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fetchDeliveries]);
 
   const updateOverallStatus = async (next: string) => {

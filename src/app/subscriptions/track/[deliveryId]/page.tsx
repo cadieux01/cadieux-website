@@ -43,6 +43,11 @@ type ChangeRequest = {
 
 const BG = "#C0C8CE";
 const FADED = "rgba(2,70,40,0.4)";
+
+// 30s, up from 10s, matching the track list. A delivery moves through three
+// states across a five-hour window; 30s is still 600 polls to catch three
+// events. Customer page, so it is also a pinned-tab risk.
+const POLL_MS = 30_000;
 const REASON_MAX = 200;
 
 const STEPS = [
@@ -111,6 +116,10 @@ export default function DeliveryDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [toast, setToast] = useState("");
 
+  // When the fetch was last ATTEMPTED. A ref, not state, so reading it cannot
+  // restart the interval.
+  const lastLoadAt = useRef(0);
+
   useEffect(() => {
     setPhone(readPhone());
   }, []);
@@ -120,26 +129,47 @@ export default function DeliveryDetailPage() {
       setLoading(false);
       return;
     }
-    const r = await fetch(
-      `/api/subscriptions/delivery/${deliveryId}?phone=${encodeURIComponent(phone)}`,
-      { cache: "no-store" }
-    );
-    if (r.status === 404) {
-      setNotFound(true);
+    try {
+      const r = await fetch(
+        `/api/subscriptions/delivery/${deliveryId}?phone=${encodeURIComponent(phone)}`,
+        { cache: "no-store" }
+      );
+      if (r.status === 404) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+      const j = await r.json().catch(() => ({}));
+      setDelivery(j.delivery ?? null);
+      setSub(j.subscription ?? null);
+      setChangeRequests(j.change_requests ?? []);
       setLoading(false);
-      return;
+    } finally {
+      // The ATTEMPT time, not the success time — an endpoint that is failing
+      // must not get re-hit on every alt-tab.
+      lastLoadAt.current = Date.now();
     }
-    const j = await r.json().catch(() => ({}));
-    setDelivery(j.delivery ?? null);
-    setSub(j.subscription ?? null);
-    setChangeRequests(j.change_requests ?? []);
-    setLoading(false);
   }, [phone, deliveryId]);
 
   useEffect(() => {
-    fetchData();
-    const t = setInterval(fetchData, 10_000);
-    return () => clearInterval(t);
+    void fetchData();
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void fetchData();
+    }, POLL_MS);
+    // Coming back to the tab refetches, so pausing while hidden never leaves
+    // someone reading data from however long they were away — but only if it
+    // is actually stale, or alt-tabbing becomes its own poll.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastLoadAt.current < POLL_MS) return;
+      void fetchData();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fetchData]);
 
   // Auto-clear toast.

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -57,6 +57,17 @@ function statusStep(status: string): number {
 
 const MS_DAY = 86_400_000;
 
+// 30s, up from 10s. A delivery moves through three states (confirmed →
+// out_for_delivery → delivered) across a five-hour window; 30s is still 600
+// polls to catch three events, and nobody is watching a bread van by the
+// second.
+//
+// This is the expensive one: each tick is 1 + N no-store requests (the list,
+// then one per active subscription), on a CUSTOMER page that lives in a pinned
+// phone tab. At 10s with no visibility check that was (1+N) × 8,640 origin
+// requests per tab per day, awake or not.
+const POLL_MS = 30_000;
+
 /** Mirrors classifyEdit() on the detail page. Drives the per-card icon hint. */
 type EditMode = "direct" | "request" | "terminal";
 function classifyEdit(d: { status: string; scheduled_date: string }): EditMode {
@@ -79,6 +90,10 @@ export default function TrackPage() {
   const [deliveriesBySub, setDeliveriesBySub] = useState<Record<string, Delivery[]>>({});
   const [loading, setLoading] = useState(true);
 
+  // When the fan-out was last ATTEMPTED. A ref, not state, so reading it
+  // cannot restart the interval.
+  const lastLoadAt = useRef(0);
+
   useEffect(() => {
     setPhone(readPhone());
   }, []);
@@ -88,34 +103,58 @@ export default function TrackPage() {
       setLoading(false);
       return;
     }
-    const r = await fetch(
-      `/api/subscriptions?phone=${encodeURIComponent(phone)}`,
-      { cache: "no-store" }
-    );
-    const j = await r.json().catch(() => ({}));
-    const list: Sub[] = j.subscriptions ?? [];
-    setSubs(list);
-    setLoading(false);
+    // NOTE: the 1 + N fan-out below is unchanged and still open — one list
+    // call plus one call per active subscription, every tick. Throttling and
+    // gating it cuts the volume; it does not fix the shape.
+    try {
+      const r = await fetch(
+        `/api/subscriptions?phone=${encodeURIComponent(phone)}`,
+        { cache: "no-store" }
+      );
+      const j = await r.json().catch(() => ({}));
+      const list: Sub[] = j.subscriptions ?? [];
+      setSubs(list);
+      setLoading(false);
 
-    // Fetch deliveries for every active sub in parallel.
-    const map: Record<string, Delivery[]> = {};
-    await Promise.all(
-      list.map(async (s) => {
-        const dr = await fetch(
-          `/api/subscriptions/${s.id}?phone=${encodeURIComponent(phone)}`,
-          { cache: "no-store" }
-        );
-        const dj = await dr.json().catch(() => ({}));
-        map[s.id] = dj.deliveries ?? [];
-      })
-    );
-    setDeliveriesBySub(map);
+      // Fetch deliveries for every active sub in parallel.
+      const map: Record<string, Delivery[]> = {};
+      await Promise.all(
+        list.map(async (s) => {
+          const dr = await fetch(
+            `/api/subscriptions/${s.id}?phone=${encodeURIComponent(phone)}`,
+            { cache: "no-store" }
+          );
+          const dj = await dr.json().catch(() => ({}));
+          map[s.id] = dj.deliveries ?? [];
+        })
+      );
+      setDeliveriesBySub(map);
+    } finally {
+      // The ATTEMPT time, not the success time — an endpoint that is failing
+      // must not get re-hit on every alt-tab.
+      lastLoadAt.current = Date.now();
+    }
   }, [phone]);
 
   useEffect(() => {
-    fetchSubs();
-    const t = setInterval(fetchSubs, 10_000);
-    return () => clearInterval(t);
+    void fetchSubs();
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void fetchSubs();
+    }, POLL_MS);
+    // Coming back to the tab refetches, so pausing while hidden never leaves
+    // someone reading data from however long they were away — but only if it
+    // is actually stale, or alt-tabbing becomes its own poll.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastLoadAt.current < POLL_MS) return;
+      void fetchSubs();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fetchSubs]);
 
   return (
