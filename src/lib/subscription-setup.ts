@@ -215,9 +215,11 @@ export const ADDRESS_KEY = "cadieux_setup_address_v1";
 // migrated transparently on load.
 //
 // There is NO minimum on loaves per delivery — one loaf is a valid
-// subscription. The only subscription minimum is TWO DIFFERENT DELIVERY
-// DAYS, which lives in subscription-min-days.ts and is unrelated to
-// quantity.
+// subscription. The only subscription minimum is the TOTAL NUMBER OF
+// DELIVERIES, which lives in subscription-min-deliveries.ts and is
+// unrelated to quantity. (This note said "two different delivery days"
+// while the rule was four weekdays, and then while it became a total —
+// hence the constant is now named for what it holds.)
 export type SetupState = {
   qtyBySlug: Record<string, number>;          // slug -> units per delivery (>0)
   selectedDates: string[];                    // ISO dates, sorted ascending

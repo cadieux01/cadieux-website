@@ -63,10 +63,11 @@ import {
   type SubscriptionSnapItem,
 } from "@/lib/subscription-checkout";
 import {
-  hasMinSubscriptionDays,
-  MIN_DAYS_ERROR_CODE,
-  MIN_DAYS_ERROR_MESSAGE,
-} from "@/lib/subscription-min-days";
+  hasMinSubscriptionDeliveries,
+  patternDeliveryCount,
+  MIN_DELIVERIES_ERROR_CODE,
+  MIN_DELIVERIES_ERROR_MESSAGE,
+} from "@/lib/subscription-min-deliveries";
 import {
   quoteSubscriptionDeliveryFee,
   computeSubscriptionTotal,
@@ -192,15 +193,27 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Subscription-vs-single-order gate — applied AFTER both branches so
-  // it catches the client-deliveries and legacy uniform-days shapes.
-  // Fewer than MIN_SUBSCRIPTION_DAYS_PER_WEEK delivery days is a one-time
+  // Subscription-vs-single-order gate — applied AFTER both branches so it
+  // catches the client-deliveries and legacy uniform-days shapes. Fewer
+  // than MIN_SUBSCRIPTION_DELIVERIES deliveries in TOTAL is a one-time
   // order, not a subscription; the 10% subscription discount only applies
   // when this rule is met. Creation only — an operator editing an existing
   // plan that predates the current minimum must not be blocked by it.
-  if (!hasMinSubscriptionDays(dayKeys)) {
+  //
+  // The two shapes are counted differently, and must be. When the operator
+  // sent explicit rows, those rows ARE the schedule, so their count is the
+  // total: `weeks` above is only `weekSet.size`, and multiplying it by
+  // `daySet.size` over-counts a sparse calendar (Mon of week 1 + Tue of
+  // week 2 would read as 4 deliveries when there are 2). The legacy
+  // uniform-days shape genuinely repeats every chosen day each week, so
+  // there the product is the real total.
+  const totalDeliveries =
+    clientDeliveries && clientDeliveries.length > 0
+      ? clientDeliveries.length
+      : patternDeliveryCount(dayKeys, weeks);
+  if (!hasMinSubscriptionDeliveries(totalDeliveries)) {
     return NextResponse.json(
-      { error: MIN_DAYS_ERROR_MESSAGE, code: MIN_DAYS_ERROR_CODE },
+      { error: MIN_DELIVERIES_ERROR_MESSAGE, code: MIN_DELIVERIES_ERROR_CODE },
       { status: 400 },
     );
   }

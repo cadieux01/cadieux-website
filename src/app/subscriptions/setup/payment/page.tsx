@@ -21,9 +21,9 @@ import {
   type WizardProduct,
 } from "@/lib/subscription-setup";
 import {
-  MIN_SUBSCRIPTION_DAYS_PER_WEEK,
-  distinctWeekdaysFromDates,
-} from "@/lib/subscription-min-days";
+  countDeliveryDates,
+  hasMinSubscriptionDeliveries,
+} from "@/lib/subscription-min-deliveries";
 // Pure math + the distance cutoff only. Importing from
 // @/lib/subscription-delivery-fee here would drag Google + the Supabase
 // service-role client into the browser bundle.
@@ -83,7 +83,7 @@ export default function PaymentPage() {
     const s = loadSetupState();
     const a = loadAddress();
     // Backstop: kick back to the wizard if stored state has no loaves at
-    // all, no dates, fewer than N distinct weekdays, or a date/slot that
+    // all, no dates, fewer than N deliveries in total, or a date/slot that
     // has gone stale while this tab sat open. The server rejects the same
     // shapes, but redirecting is a friendlier fail before the network
     // round-trip. Note there is no minimum on the number of loaves — one
@@ -92,7 +92,7 @@ export default function PaymentPage() {
     if (
       totalUnitsPerDelivery(s) === 0 ||
       s.selectedDates.length === 0 ||
-      distinctWeekdaysFromDates(s.selectedDates) < MIN_SUBSCRIPTION_DAYS_PER_WEEK ||
+      !hasMinSubscriptionDeliveries(countDeliveryDates(s.selectedDates)) ||
       revalidateSetupState(s).removedAny
     ) {
       router.replace("/subscriptions/setup");

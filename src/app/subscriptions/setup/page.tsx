@@ -43,10 +43,11 @@ import {
   subscriptionAvailabilityLine,
 } from "@/lib/product-availability";
 import {
-  MIN_DAYS_ERROR_MESSAGE,
-  MIN_SUBSCRIPTION_DAYS_PER_WEEK,
-  distinctWeekdaysFromDates,
-} from "@/lib/subscription-min-days";
+  MIN_DELIVERIES_ERROR_MESSAGE,
+  MIN_SUBSCRIPTION_DELIVERIES,
+  countDeliveryDates,
+  hasMinSubscriptionDeliveries,
+} from "@/lib/subscription-min-deliveries";
 
 const BG = "#C0C8CE";
 const GOLD = "#024628";
@@ -195,18 +196,16 @@ export default function SetupPage() {
     if (preorderMode && step === 1) return false;
     switch (step) {
       // One loaf is enough. There is no quantity minimum — the only
-      // subscription minimum is the two distinct weekdays checked in
-      // step 2 below.
+      // subscription minimum is the delivery count checked in step 2.
       case 1: return totalUnitsPerDelivery(state) > 0;
       case 2:
-        // Subscription rule: MIN_SUBSCRIPTION_DAYS_PER_WEEK DISTINCT
-        // weekdays across the picked dates. Multiple dates on the same
-        // weekday still count as one day (server enforces the same).
-        // Fewer than the minimum = one-time orders, not a subscription.
-        return (
-          state.selectedDates.length >= 1 &&
-          distinctWeekdaysFromDates(state.selectedDates) >=
-            MIN_SUBSCRIPTION_DAYS_PER_WEEK
+        // Subscription rule: MIN_SUBSCRIPTION_DELIVERIES deliveries IN
+        // TOTAL. This wizard is an explicit-date plan, so every picked
+        // date is one delivery and the count of dates is the total —
+        // whether they fall on one weekday or four. The server applies the
+        // same count to the same list.
+        return hasMinSubscriptionDeliveries(
+          countDeliveryDates(state.selectedDates),
         );
       case 3: {
         const rows = listWeekDayRows(state);
@@ -453,7 +452,7 @@ function NavRow({
 }) {
   // The shared sentence, not a second copy of it — this tooltip and the
   // server's 400 must not be able to disagree about the rule.
-  const nextTooltip = step === 2 && !canNext ? MIN_DAYS_ERROR_MESSAGE : "";
+  const nextTooltip = step === 2 && !canNext ? MIN_DELIVERIES_ERROR_MESSAGE : "";
   return (
     <div
       style={{
@@ -691,14 +690,13 @@ function Step2Dates({
   floorMessage: string | null;
   floorHint: string | null;
 }) {
-  // Live count of DISTINCT weekdays so we can render a helper line under
-  // the copy explaining why "Next" stays disabled while the selection is
-  // short of the minimum. Matches the server-side rule enforced on all 3
-  // endpoints.
-  const distinctWeekdays = distinctWeekdaysFromDates(selectedDates);
-  const needsMoreWeekdays =
-    selectedDates.length > 0 &&
-    distinctWeekdays < MIN_SUBSCRIPTION_DAYS_PER_WEEK;
+  // Live delivery count so we can render a helper line under the copy
+  // explaining why "Next" stays disabled while the selection is short of
+  // the minimum. Matches the server-side rule enforced on all 3 endpoints:
+  // one picked date is one delivery.
+  const deliveryCount = countDeliveryDates(selectedDates);
+  const needsMoreDeliveries =
+    selectedDates.length > 0 && !hasMinSubscriptionDeliveries(deliveryCount);
   return (
     <section>
       <StepTitle>Choose your delivery dates</StepTitle>
@@ -718,9 +716,9 @@ function Step2Dates({
             The shared sentence rather than a third copy of it — this line,
             the Next tooltip and the server's 400 now say the same thing by
             construction. */}
-        {MIN_DAYS_ERROR_MESSAGE}
+        {MIN_DELIVERIES_ERROR_MESSAGE}
       </p>
-      {needsMoreWeekdays ? (
+      {needsMoreDeliveries ? (
         <p
           role="status"
           style={{
@@ -734,8 +732,8 @@ function Step2Dates({
             background: "rgba(2,70,40,0.05)",
           }}
         >
-          Add at least one more weekday — right now you&apos;ve picked{" "}
-          {distinctWeekdays} of {MIN_SUBSCRIPTION_DAYS_PER_WEEK} required.
+          Add more dates — right now you&apos;ve picked {deliveryCount} of{" "}
+          {MIN_SUBSCRIPTION_DELIVERIES} deliveries required.
         </p>
       ) : null}
       {floorMessage ? (

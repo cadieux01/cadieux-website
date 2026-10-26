@@ -52,10 +52,10 @@ import {
   insertMultiVariantSubscription,
 } from "@/lib/subscription-checkout";
 import {
-  hasMinSubscriptionDays,
-  MIN_DAYS_ERROR_CODE,
-  MIN_DAYS_ERROR_MESSAGE,
-} from "@/lib/subscription-min-days";
+  hasMinSubscriptionDeliveries,
+  MIN_DELIVERIES_ERROR_CODE,
+  MIN_DELIVERIES_ERROR_MESSAGE,
+} from "@/lib/subscription-min-deliveries";
 import {
   quoteSubscriptionDeliveryFee,
   computeSubscriptionTotal,
@@ -595,16 +595,12 @@ export async function POST(req: NextRequest) {
     if (dayKeys.length === 0) {
       return NextResponse.json({ error: "No valid delivery days." }, { status: 400 });
     }
-    // A subscription must span MIN_SUBSCRIPTION_DAYS_PER_WEEK distinct
-    // weekdays; fewer is a one-time order at full price. Enforced
-    // server-side on every path via the shared helper so the discount can
-    // never leak to a plan below the minimum.
-    if (!hasMinSubscriptionDays(dayKeys)) {
-      return NextResponse.json(
-        { error: MIN_DAYS_ERROR_MESSAGE, code: MIN_DAYS_ERROR_CODE },
-        { status: 400 },
-      );
-    }
+    // The minimum-deliveries gate used to sit here, on `dayKeys` alone.
+    // It cannot: the rule is now a total over days AND weeks, and this path
+    // accepts both a {days, weeks} pattern and an explicit `deliveries`
+    // list. Both collapse into `deliveryTemplate` below, whose length is
+    // the authoritative count, so the gate moved there. Nothing between
+    // here and there talks to the customer or the database.
 
     // Build the new-tracking-model address blob (jsonb) from the legacy flat fields.
     const deliveryAddressJson = {
@@ -689,6 +685,24 @@ export async function POST(req: NextRequest) {
           scheduled_time_slot: slotForDay,
         };
       });
+    }
+
+    // Minimum-deliveries gate. `deliveryTemplate.length` is the count that
+    // will actually be written, for both the explicit-`deliveries` shape
+    // and the {days, weeks} pattern, so it is the one honest total — and
+    // the same number the price validation below is derived from. Counting
+    // days x weeks here instead would over-count an explicit-date plan
+    // (Mon of week 1 + Tue of week 2 reads as 4) and let a two-delivery
+    // plan take the subscription discount.
+    //
+    // Placed BEFORE the slot-value gate on purpose: a plan that is too
+    // short AND carries a stale slot must hear the rule it actually broke,
+    // not "invalid delivery slot", which it cannot act on.
+    if (!hasMinSubscriptionDeliveries(deliveryTemplate.length)) {
+      return NextResponse.json(
+        { error: MIN_DELIVERIES_ERROR_MESSAGE, code: MIN_DELIVERIES_ERROR_CODE },
+        { status: 400 },
+      );
     }
 
     // Slot-value gate: EVERY delivery's slot must be one of the three

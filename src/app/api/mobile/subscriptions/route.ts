@@ -54,10 +54,11 @@ import {
   validateBookingSlot,
 } from "@/lib/delivery-slots";
 import {
-  MIN_SUBSCRIPTION_DAYS_PER_WEEK,
-  MIN_DAYS_ERROR_CODE,
-  MIN_DAYS_ERROR_MESSAGE,
-} from "@/lib/subscription-min-days";
+  hasMinSubscriptionDeliveries,
+  patternDeliveryCount,
+  MIN_DELIVERIES_ERROR_CODE,
+  MIN_DELIVERIES_ERROR_MESSAGE,
+} from "@/lib/subscription-min-deliveries";
 import {
   quoteSubscriptionDeliveryFee,
   computeSubscriptionTotal,
@@ -330,17 +331,10 @@ function validatePatternShape(
   }
   const weekdays = Array.from(weekdaysSet).sort((a, b) => a - b);
 
-  // Subscription-vs-single-order gate: a subscription must span ≥ N
-  // distinct weekdays. Distinct-set size is what matters (0..6 integers
-  // already dedupe'd above).
-  if (weekdaysSet.size < MIN_SUBSCRIPTION_DAYS_PER_WEEK) {
-    return {
-      ok: false,
-      status: 400,
-      error: MIN_DAYS_ERROR_MESSAGE,
-      code: MIN_DAYS_ERROR_CODE,
-    };
-  }
+  // The minimum-deliveries gate cannot run here any more: the rule is now
+  // days x weeks, and `weeks` is not validated until just below. Gating on
+  // weekdays alone would refuse a once-a-week plan that is perfectly
+  // valid. It runs immediately after the `weeks` check instead.
 
   // weeks — integer 1..26
   if (
@@ -356,6 +350,23 @@ function validatePatternShape(
     };
   }
   const weeks = r.weeks as number;
+
+  // Subscription-vs-single-order gate, pattern shape. A pattern plan
+  // repeats every chosen weekday each week, so days x weeks is its real
+  // delivery total. Both inputs are validated above — weekdays deduped and
+  // range-checked, weeks an integer in 1..26 — and the multiplication is
+  // left to `patternDeliveryCount` so the rule's arithmetic lives in one
+  // place. Weekday integers are mapped to day keys for that call rather
+  // than multiplied here.
+  const patternDays = weekdays.map((w) => JS_WEEKDAY_TO_KEY[w]).filter(Boolean);
+  if (!hasMinSubscriptionDeliveries(patternDeliveryCount(patternDays, weeks))) {
+    return {
+      ok: false,
+      status: 400,
+      error: MIN_DELIVERIES_ERROR_MESSAGE,
+      code: MIN_DELIVERIES_ERROR_CODE,
+    };
+  }
 
   // start_date — ISO yyyy-mm-dd, today (IST) or up to 30 days out
   if (!isString(r.start_date) || !DATE_RE.test(r.start_date)) {
@@ -694,13 +705,18 @@ async function handleMultiVariant(
   if (!dv.ok) return fail(dv.status, dv.error, dv.code);
   const deliveries = dv.deliveries;
 
-  // Distinct-weekday rule. This depends ONLY on the picked dates, so it is
-  // enforced here — before the per-variant price reconcile below — and not
-  // after it. Ordering matters: a client that sends a stale or MRP-based
-  // price snapshot for a single-weekday plan would otherwise be told
+  // Minimum-deliveries rule. This depends ONLY on the picked dates, so it
+  // is enforced here — before the per-variant price reconcile below — and
+  // not after it. Ordering matters: a client that sends a stale or
+  // MRP-based price snapshot for a too-short plan would otherwise be told
   // "Price mismatch — please refresh and retry", which is both the wrong
   // reason and unactionable, since refreshing corrects the price and then
   // surfaces this rule anyway. The customer must hear the real rule first.
+  //
+  // This is an EXPLICIT-DATE plan, so its delivery total is how many dates
+  // were picked — not distinct weekdays times anything. `daysSorted` is
+  // still derived because the stored row records which weekdays the plan
+  // covers, but it is no longer what the rule measures.
   const distinctKeys = new Set<DayKey>();
   for (const item of deliveries) {
     const dt = parseLocalDate(item.date);
@@ -712,8 +728,8 @@ async function handleMultiVariant(
   const daysSorted = Array.from(distinctKeys).sort(
     (a, b) => DAY_KEYS.indexOf(a) - DAY_KEYS.indexOf(b),
   );
-  if (daysSorted.length < MIN_SUBSCRIPTION_DAYS_PER_WEEK) {
-    return fail(400, MIN_DAYS_ERROR_MESSAGE, MIN_DAYS_ERROR_CODE);
+  if (!hasMinSubscriptionDeliveries(deliveries.length)) {
+    return fail(400, MIN_DELIVERIES_ERROR_MESSAGE, MIN_DELIVERIES_ERROR_CODE);
   }
 
   // Items: [{ product_slug, quantity_per_delivery }].
@@ -1121,12 +1137,18 @@ export async function POST(req: NextRequest) {
   }
   const { body, addressString } = shape;
 
-  // 4b. Distinct-weekday rule for calendar mode. Enforced BEFORE the price
-  //     reconcile in step 5 because it depends only on the picked dates: a
-  //     client sending a stale or MRP-based snapshot for a single-weekday
-  //     plan would otherwise get "Price mismatch — please refresh and
-  //     retry", which is the wrong reason and unactionable. Pattern mode is
-  //     already checked inside validatePatternShape, well before this point.
+  // 4b. Minimum-deliveries rule for calendar mode. Enforced BEFORE the
+  //     price reconcile in step 5 because it depends only on the picked
+  //     dates: a client sending a stale or MRP-based snapshot for a
+  //     too-short plan would otherwise get "Price mismatch — please refresh
+  //     and retry", which is the wrong reason and unactionable. Pattern
+  //     mode is checked inside validatePatternShape (days x weeks), well
+  //     before this point.
+  //
+  //     Calendar mode is an explicit-date plan: the delivery total is the
+  //     number of dates picked. It is NOT days x weeks here — the stored
+  //     `weeks` for calendar mode is literally 0 as a mode marker, so that
+  //     product would be zero and would refuse every calendar plan.
   let calendarDaysSorted: DayKey[] | null = null;
   if (body.mode !== "pattern") {
     const distinctKeys = new Set<DayKey>();
@@ -1141,8 +1163,8 @@ export async function POST(req: NextRequest) {
     calendarDaysSorted = Array.from(distinctKeys).sort(
       (a, b) => DAY_KEYS.indexOf(a) - DAY_KEYS.indexOf(b),
     );
-    if (calendarDaysSorted.length < MIN_SUBSCRIPTION_DAYS_PER_WEEK) {
-      return fail(400, MIN_DAYS_ERROR_MESSAGE, MIN_DAYS_ERROR_CODE);
+    if (!hasMinSubscriptionDeliveries(body.deliveries.length)) {
+      return fail(400, MIN_DELIVERIES_ERROR_MESSAGE, MIN_DELIVERIES_ERROR_CODE);
     }
   }
 
