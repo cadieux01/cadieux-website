@@ -313,14 +313,29 @@ create table if not exists public.production_batches (
   -- the bake plan or an order list without honouring that is an off-by-one
   -- day, and it will look like a yield problem rather than a date problem.
   production_date date not null,
-  -- NEW VOCABULARY, NOT DRAWN FROM ANYWHERE EXISTING. Nothing in the website
-  -- or the app has a shift concept today — the bake is currently described as
-  -- a single overnight run. This set is a guess and needs Raja to confirm it
-  -- before the file is applied; widening a CHECK later is one visible line in
-  -- a migration (the house pattern, cf. payment_exceptions.reason), whereas
-  -- free text lets 'AM', 'am' and 'Morning' coexist and silently breaks every
-  -- group-by over shift.
-  shift text not null check (shift in ('morning','evening','night')),
+  -- CONFIRMED BY RAJA: one production run per day, in the morning. The CHECK
+  -- therefore admits exactly one value today, and the DEFAULT means nobody has
+  -- to type it.
+  --
+  -- The column stays rather than being dropped, because it is the growth path:
+  -- when an evening run starts, WIDENING THIS CHECK IS THE WHOLE CHANGE — one
+  -- visible line in a migration, which is the house pattern (cf.
+  -- payment_exceptions.reason, order_notes.kind, both CHECKs rather than enums
+  -- for exactly this reason). A dropped column would instead mean a schema
+  -- change, a backfill decision about what every historical row's shift was,
+  -- and a two-repo vocabulary negotiation.
+  --
+  -- A single-value CHECK rather than free text, because free text lets 'AM',
+  -- 'am' and 'Morning' coexist and silently breaks every group-by over shift —
+  -- and dirty data of that kind is not recoverable later, whereas a CHECK that
+  -- is too narrow announces itself immediately and loudly.
+  --
+  -- NOTE for whoever widens it: narrowing is the hard direction, not widening.
+  -- The convergence block below re-adds this constraint on every run, so once
+  -- rows with another shift exist, running a file that lists only 'morning'
+  -- will FAIL on the ADD rather than quietly dropping the rule. That failure is
+  -- correct, and it is the reason the block exists.
+  shift text not null default 'morning' check (shift in ('morning')),
   -- Free text by design, matching sandwich_variants.bread_slug, which holds
   -- products.slug values without a foreign key. A batch is a historical record
   -- of what was made under the name it was made under; a FK with a cascade, or
@@ -399,7 +414,41 @@ comment on table public.production_batches is
   'not defeat the control. No UNIQUE on (date, shift, product, variant): two '
   'runs in a shift are legitimate and must stay two rows. product_slug is free '
   'text, like sandwich_variants.bread_slug — a batch records the name the '
-  'product had when it was made and must survive a rename.';
+  'product had when it was made and must survive a rename. shift is CHECKed to '
+  'the single confirmed value ''morning'' (one run per day) and defaults to it; '
+  'the column is kept as the growth path, and starting an evening run means '
+  'widening that CHECK by one word.';
+
+-- ---------------------------------------------------------------------------
+-- Convergence for the shift rule.
+--
+-- `create table if not exists` above is a NO-OP on a database that already has
+-- this table, which means an earlier revision of this same file — one that
+-- allowed ('morning','evening','night') and had no default — would keep its
+-- looser CHECK forever and the edit above would appear to have done nothing.
+-- That is not a hypothetical in this repo: ./README.md documents a table that
+-- exists in production while its migration is absent from the ledger, so
+-- "which version of this file actually ran" is not a question anyone here can
+-- answer from the filename.
+--
+-- These two statements make the file CONVERGE rather than merely apply: after
+-- it runs, the shift rule is the one written above regardless of what was
+-- there before. Both are no-ops on a fresh database.
+--
+-- Deliberately a plain drop-then-add rather than a conditional: the ADD
+-- re-validates every existing row, so if rows with some other shift already
+-- exist this FAILS LOUDLY instead of quietly narrowing a rule the data does
+-- not satisfy. Narrowing a vocabulary that is already in use should hurt.
+-- Widening it never will.
+-- ---------------------------------------------------------------------------
+alter table public.production_batches
+  alter column shift set default 'morning';
+
+alter table public.production_batches
+  drop constraint if exists production_batches_shift_check;
+
+alter table public.production_batches
+  add constraint production_batches_shift_check check (shift in ('morning'));
 
 -- ===========================================================================
 -- production_batch_materials
