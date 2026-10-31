@@ -126,7 +126,18 @@ export default async function ReceiptPage({
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          header, footer, nav { display: none !important; }
+          /* ONLY THE DOCUMENT GOES ON PAPER. Naming tags here does not
+             work: the root layout's chrome is a bare <div> for the
+             off-canvas drawer and a bare <button> for the floating music
+             toggle, so "header, footer, nav" matched neither and the
+             music button — position:fixed and on-screen — printed on the
+             receipt. This page's own content is the <main>, and the
+             print button inside it is .no-print, so excluding everything
+             else at body level is both sufficient and stable against the
+             chrome being re-tagged later. Hiding the sibling <style>/
+             <script> nodes is harmless; a stylesheet still applies when
+             its element is display:none. */
+          body > *:not(main) { display: none !important; }
           @page { margin: 14mm; }
           html, body { background: #fff !important; }
           main { padding: 0 !important; }
