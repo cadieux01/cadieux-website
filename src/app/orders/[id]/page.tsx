@@ -29,7 +29,7 @@ import {
 import { trackPurchase } from "@/lib/analytics";
 import { formatOrderNumber } from "@/lib/order-number";
 import { isPayableOnline } from "@/lib/order-payable";
-import { codPaymentLabel } from "@/lib/customer-payment-wording";
+import { customerPaymentLabel } from "@/lib/customer-payment-wording";
 import BackLink from "@/components/BackLink";
 import { composeCustomerShareMessage } from "@/lib/order-share-customer";
 
@@ -120,22 +120,24 @@ type ChangeRequest = {
 // they owe. The stored payment_method is still 'cod' and stays that way — this
 // is wording, not classification.
 //
-// That pair of strings now lives in lib/customer-payment-wording.ts, shared
-// with checkout and the Payments tab, because the third copy of it (the
-// Payments tab) had lost the pickup branch. `fulfillmentType` stays optional
-// HERE — this function's other parameters are nullable too and its one caller
-// passes all three — but the shared helper requires its argument.
+// ALL FOUR BRANCHES now live in lib/customer-payment-wording.ts, shared with
+// the order receipt. The cod pair moved there first (the Payments tab, a third
+// copy, had lost the pickup branch); the rest followed when the receipt needed
+// to state the same fact, because a second hand-written copy of these four
+// lines is how the pickup bug happened the first time. Strings and branch
+// order are unchanged — this is a re-export, not a rewording.
+//
+// The positional signature is kept so the call site below is untouched.
 function paymentLabel(
   method: string | null,
   status: string | null,
   fulfillmentType?: string | null,
 ): string {
-  const m = (method ?? "").toLowerCase();
-  const s = (status ?? "").toLowerCase();
-  if (s === "paid") return "Paid";
-  if (m === "cod") return codPaymentLabel(fulfillmentType);
-  if (s === "failed") return "Payment failed";
-  return "Awaiting payment";
+  return customerPaymentLabel({
+    payment_method: method,
+    payment_status: status,
+    fulfillmentType,
+  });
 }
 
 function paymentColor(method: string | null, status: string | null): string {

@@ -77,6 +77,48 @@ export function itemQty(it: OrderItemLike | null | undefined): number {
 }
 
 /**
+ * The UNIT price on one line, or null when the line carries none.
+ *
+ * Unlike itemLineTotal below, the ordering here carries no hazard: both keys
+ * mean the identical thing (price of one unit), so the pair is a pure rename
+ * and either order is lossless. Shape A's `price_inr` comes first only to
+ * match the probability of seeing it.
+ *
+ * SEPARATE FROM itemLineTotal ON PURPOSE. A receipt prints unit price and
+ * line total as two columns, and the fallback chain that is correct for the
+ * line total (try both line totals BEFORE either unit price) would make this
+ * reader return a 2-unit line's full total as its unit price.
+ */
+export function itemUnitPrice(
+  it: OrderItemLike | null | undefined,
+): number | null {
+  const raw = it?.price_inr ?? it?.unit_price_inr;
+  if (raw === null || raw === undefined) return null;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * The name the customer saw when they ordered, or null.
+ *
+ * THE ONE PLACE `name` IS LEGITIMATELY READ, and it does not contradict the
+ * header's rule that identity never comes from a name. This is the opposite
+ * direction: not "which product is this" (itemSlug answers that) but "what
+ * words were on the screen when this line was bought". For a receipt the
+ * stored string is the MORE correct of the two sources — the Plain loaf has
+ * been renamed once already, and a receipt reprinted after a rename should
+ * still say what the customer actually bought.
+ *
+ * `unknown` in the type because jsonb makes no promise, hence the typeof
+ * guard rather than a cast.
+ */
+export function itemName(it: OrderItemLike | null | undefined): string | null {
+  const raw = it?.name;
+  const s = typeof raw === "string" ? raw.trim() : "";
+  return s || null;
+}
+
+/**
  * Money on one line, or null when the line carries none.
  *
  * BOTH LINE TOTALS ARE TRIED BEFORE EITHER UNIT PRICE, because the fallback

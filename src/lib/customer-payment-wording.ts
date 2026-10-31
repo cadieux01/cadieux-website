@@ -70,3 +70,40 @@ export function codPaymentLabel(
     ? "Pay at Pickup"
     : "Cash on Delivery";
 }
+
+/**
+ * The whole customer-facing payment line, all four states.
+ *
+ *   paid              → "Paid"
+ *   cod (any state)   → codPaymentLabel() — "Cash on Delivery" / "Pay at Pickup"
+ *   failed            → "Payment failed"
+ *   anything else     → "Awaiting payment"   (razorpay 'created' / 'pending')
+ *
+ * LIFTED VERBATIM from the local paymentLine() in app/orders/[id]/page.tsx,
+ * branch order and strings unchanged, because the order receipt has to state
+ * the same fact and a hand-written second copy is precisely the failure this
+ * file was created to stop — three copies of the cod ternary drifted until one
+ * of them was wrong for 123 live pickup orders.
+ *
+ * This is NOT the convergence the header above rules out. That one was about
+ * making the two BADGE SITES agree on wording they spell differently
+ * ("Failed" vs "Payment failed"); every string here is the one that already
+ * shipped on the order page, so nothing visible changes on any screen.
+ *
+ * BRANCH ORDER IS LOAD-BEARING. `paid` is tested before `cod`, because Pay Now
+ * settles a COD order online and deliberately leaves payment_method as 'cod' —
+ * reading method first would tell a customer who has already paid that they
+ * owe cash at the door.
+ */
+export function customerPaymentLabel(p: {
+  payment_status?: string | null;
+  payment_method?: string | null;
+  fulfillmentType?: string | null;
+}): string {
+  const s = (p.payment_status ?? "").toLowerCase();
+  const m = (p.payment_method ?? "").toLowerCase();
+  if (s === "paid") return "Paid";
+  if (m === "cod") return codPaymentLabel(p.fulfillmentType);
+  if (s === "failed") return "Payment failed";
+  return "Awaiting payment";
+}

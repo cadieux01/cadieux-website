@@ -319,9 +319,17 @@ test("the three customer screens hold no cod/pickup literal of their own", async
       !/"Pay at Pickup"/.test(code),
       `${f} spells "Pay at Pickup" itself`,
     );
+    // EITHER entry point into lib/customer-payment-wording.ts counts. The
+    // invariant guarded here is "this screen does not spell the wording
+    // itself" — asserted by the two checks above — not which of the module's
+    // functions it calls. app/orders/[id]/page.tsx now delegates its whole
+    // four-branch payment line via customerPaymentLabel(), which calls
+    // codPaymentLabel() internally for the cod case, so the wording still has
+    // exactly one home. A hand-written literal fails the checks above, and
+    // dropping the helper altogether fails this one.
     assert.ok(
-      /codPaymentLabel/.test(code),
-      `${f} no longer reads codPaymentLabel`,
+      /codPaymentLabel|customerPaymentLabel/.test(code),
+      `${f} no longer delegates to lib/customer-payment-wording`,
     );
   }
 });
