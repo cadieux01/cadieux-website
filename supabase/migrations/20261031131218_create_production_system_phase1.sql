@@ -1,12 +1,25 @@
 -- Production system, phase 1: vendors, raw materials, an append-only stock
 -- ledger, production batches with two-person verification, and yield baselines.
 --
--- NOT APPLIED. NOT IN THE REMOTE LEDGER. Written to be read and argued with
--- first. Migrations in this repo are applied BY HAND (see ./README.md), so this
--- filename is documentation, not proof anything ran. The `20261031120118`
--- prefix is PROVISIONAL — rename this file to the version the ledger actually
--- mints when it is applied, the way 20260930164156_create_payment_exceptions
--- was renamed.
+-- APPLIED BY HAND to prod (uejagupcwevadfhfuadv) on 2026-10-31. Ledger version
+-- 20261031131218, which took the ledger from 138 rows to 139. The minted
+-- version is NOT the prefix originally written on this file — it was drafted as
+-- 20261031120118 — and the file was renamed to match the ledger, because the
+-- ledger is the record of what ran. Same treatment as
+-- 20260930164156_create_payment_exceptions.
+--
+-- Migrations in this repo are applied BY HAND (see ./README.md), so a filename
+-- here is documentation, not proof anything ran. Applied with the begin/commit
+-- wrapper intact, then re-run once to confirm idempotency: zero errors, and no
+-- second ledger row.
+--
+-- Verified on prod after applying, read-only: all six tables plus the
+-- raw_material_stock view present; `current_qty` exists on the VIEW ONLY and on
+-- no base table; production_batches.shift defaults to 'morning' with exactly
+-- one CHECK, `shift = 'morning'`; RLS enabled on all six tables with one
+-- deny-all policy each; zero grants to anon/authenticated on all seven
+-- relations; security_invoker=true on the view; all three append-only triggers
+-- STATEMENT-level. All six tables empty at apply time.
 --
 -- Every statement is idempotent (`if not exists` / `create or replace` /
 -- `drop ... if exists`), so re-running the file is a harmless no-op rather than
