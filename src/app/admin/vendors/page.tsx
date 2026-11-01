@@ -221,6 +221,11 @@ export default function AdminVendorsPage() {
 
       {loading ? (
         <p style={{ color: FADED, fontSize: 13 }}>Loading…</p>
+      ) : error ? (
+        // See the same branch in ../raw-materials/page.tsx: after a failed
+        // load `vendors` is [] just as it is on an empty table, so the
+        // "none yet" sentence would claim a fact nobody has.
+        null
       ) : shown.length === 0 ? (
         <p style={{ color: FADED, fontSize: 13, lineHeight: 1.7 }}>
           {vendors.length === 0

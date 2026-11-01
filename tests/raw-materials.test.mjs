@@ -178,6 +178,26 @@ test("both screens can reach the inactive rows they create", () => {
   }
 });
 
+test("a failed load never renders the empty-state copy", () => {
+  // Found in the browser: with the load 500ing, both boards showed the error
+  // AND "No raw materials yet" / "No vendors yet", because the state array is
+  // [] after a failure exactly as it is on a genuinely empty table. The
+  // sentence asserts a fact nobody has.
+  for (const p of ["app/admin/vendors/page.tsx", "app/admin/raw-materials/page.tsx"]) {
+    const src = read(p);
+    assert.match(
+      src,
+      /\) : error \? \(/,
+      `${p} has no error branch before the empty state`,
+    );
+    // The error branch must come BEFORE the length check, or it never runs.
+    assert.ok(
+      src.indexOf(") : error ? (") < src.indexOf("shown.length === 0"),
+      `${p} checks emptiness before the error`,
+    );
+  }
+});
+
 test("stock is read from the view, never recomputed", () => {
   const src = read("app/api/admin/raw-materials/route.ts");
   assert.match(src, /from\("raw_material_stock"\)/);

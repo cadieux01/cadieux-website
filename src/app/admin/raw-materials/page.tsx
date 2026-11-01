@@ -318,6 +318,12 @@ export default function AdminRawMaterialsPage() {
 
       {loading ? (
         <p style={{ color: FADED, fontSize: 13 }}>Loading…</p>
+      ) : error ? (
+        // NO EMPTY-STATE COPY WHEN THE LOAD FAILED. `materials` is [] after a
+        // failed load exactly as it is on a genuinely empty table, so the
+        // "none yet" sentence would assert there are no materials when the
+        // truth is that nobody knows. The error box above is the whole answer.
+        null
       ) : shown.length === 0 ? (
         <p style={{ color: FADED, fontSize: 13, lineHeight: 1.7 }}>
           {materials.length === 0
