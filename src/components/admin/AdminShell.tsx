@@ -145,6 +145,12 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/subscriptions/plans", label: "Subscription Plans" },
       { href: "/admin/locations", label: "Store Locator" },
       { href: "/admin/service-areas", label: "Areas We Serve" },
+      // Raw materials and the vendors they come from. Master data, not a
+      // today-queue: editing a row changes what a future batch can be
+      // recorded against, it does not touch anything already baked. Linked
+      // from the start — two pages in this drawer already spent months
+      // unopened because they shipped without one.
+      { href: "/admin/raw-materials", label: "Raw Materials" },
     ],
   },
   {
