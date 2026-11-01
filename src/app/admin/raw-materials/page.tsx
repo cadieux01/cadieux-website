@@ -17,38 +17,26 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
+import { CODE_MAX_LENGTH, RAW_MATERIAL_UNITS } from "@/lib/raw-materials";
 import {
-  classifyReorder,
-  CODE_MAX_LENGTH,
-  RAW_MATERIAL_UNITS,
-  REORDER_LABEL,
-  type ReorderState,
-} from "@/lib/raw-materials";
-
-const CREAM = "#FBF3D4";
-const FADED = "rgba(251,243,212,0.6)";
-const BORDER = "rgba(251,243,212,0.18)";
-const DANGER = "#EF4444";
-const OK = "#4ADE80";
-const UNDECIDED = "#F59E0B";
-
-type MaterialRow = {
-  material_id: string;
-  code: string;
-  name: string;
-  unit: string;
-  category: string | null;
-  reorder_level: number | string | null;
-  lead_time_days: number | null;
-  vendor_id: string | null;
-  is_active: boolean;
-  current_qty: number | string | null;
-  movement_count: number;
-  last_movement_at: string | null;
-  needs_reorder: boolean | null;
-  vendor_name: string | null;
-  vendor_is_active: boolean | null;
-};
+  BORDER,
+  CREAM,
+  DANGER,
+  FADED,
+  hintStyle,
+  inputStyle,
+  labelStyle,
+  type MaterialRow,
+  MaterialTable,
+  primaryBtnStyle,
+  rowBtnStyle,
+  sectionHeadingStyle,
+  tableStyle,
+  tdStyle,
+  theadRowStyle,
+  thStyle,
+  UNDECIDED,
+} from "./ui";
 
 type Vendor = {
   id: string;
@@ -128,19 +116,6 @@ const EMPTY_VENDOR: VendorEditor = {
   address: "",
   notes: "",
 };
-
-function numberOrNull(value: number | string | null): number | null {
-  if (value === null || value === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-function formatQty(value: number | string | null): string {
-  const n = numberOrNull(value);
-  if (n === null) return "—";
-  // Trim the view's three trailing decimals when they carry nothing.
-  return String(Number(n.toFixed(3)));
-}
 
 export default function RawMaterialsPage() {
   const [tab, setTab] = useState<"materials" | "vendors">("materials");
@@ -504,148 +479,6 @@ export default function RawMaterialsPage() {
 // be mistakable for "ok": it gets its own colour, a DASHED border, and
 // wording that names the gap ("No reorder level") rather than describing
 // stock, because nothing about stock has been established.
-function ReorderBadge({ state }: { state: ReorderState }) {
-  const palette: Record<
-    ReorderState,
-    { color: string; label: string; dashed: boolean }
-  > = {
-    below: { color: DANGER, label: "Reorder", dashed: false },
-    ok: { color: OK, label: "OK", dashed: false },
-    undecided: { color: UNDECIDED, label: "No reorder level", dashed: true },
-  };
-  const { color, label, dashed } = palette[state];
-  return (
-    <span
-      title={REORDER_LABEL[state]}
-      style={{
-        display: "inline-block",
-        color,
-        border: `1px ${dashed ? "dashed" : "solid"} ${color}`,
-        padding: "2px 8px",
-        fontSize: "0.75rem",
-        letterSpacing: "0.1em",
-        textTransform: "uppercase",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {label}
-    </span>
-  );
-}
-
-function MaterialTable({
-  rows,
-  emptyLabel,
-  muted,
-  onEdit,
-  onToggleActive,
-}: {
-  rows: MaterialRow[];
-  emptyLabel: string;
-  muted?: boolean;
-  onEdit: (row: MaterialRow) => void;
-  onToggleActive: (row: MaterialRow, next: boolean) => void;
-}) {
-  if (rows.length === 0) {
-    return emptyLabel ? (
-      <p style={{ color: FADED, fontStyle: "italic" }}>{emptyLabel}</p>
-    ) : null;
-  }
-  return (
-    <div style={{ border: `1px solid ${BORDER}`, opacity: muted ? 0.7 : 1 }}>
-      <table style={tableStyle}>
-        <thead>
-          <tr style={theadRowStyle}>
-            <th style={thStyle}>Code</th>
-            <th style={thStyle}>Name</th>
-            <th style={thStyle}>Unit</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>In stock</th>
-            <th style={thStyle}>Reorder</th>
-            <th style={thStyle}>Category</th>
-            <th style={thStyle}>Vendor</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Lead</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const state = classifyReorder(row.needs_reorder);
-            return (
-              <tr
-                key={row.material_id}
-                style={{ borderTop: `1px solid ${BORDER}`, color: CREAM }}
-              >
-                <td style={{ ...tdStyle, fontVariantNumeric: "tabular-nums" }}>
-                  {row.code}
-                </td>
-                <td style={tdStyle}>{row.name}</td>
-                <td style={tdStyle}>{row.unit}</td>
-                <td
-                  style={{
-                    ...tdStyle,
-                    textAlign: "right",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {formatQty(row.current_qty)}
-                  {row.reorder_level !== null && (
-                    <span style={{ color: FADED }}>
-                      {" "}
-                      / {formatQty(row.reorder_level)}
-                    </span>
-                  )}
-                </td>
-                <td style={tdStyle}>
-                  <ReorderBadge state={state} />
-                </td>
-                <td style={tdStyle}>{row.category ?? "—"}</td>
-                <td style={tdStyle}>
-                  {row.vendor_name ?? "—"}
-                  {row.vendor_name && row.vendor_is_active === false && (
-                    <span style={{ color: UNDECIDED, fontSize: "0.75rem" }}>
-                      {" "}
-                      (inactive)
-                    </span>
-                  )}
-                </td>
-                <td
-                  style={{
-                    ...tdStyle,
-                    textAlign: "right",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {row.lead_time_days === null ? "—" : `${row.lead_time_days}d`}
-                </td>
-                <td style={{ ...tdStyle, textAlign: "right" }}>
-                  <button
-                    type="button"
-                    onClick={() => onEdit(row)}
-                    style={rowBtnStyle}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onToggleActive(row, !row.is_active)}
-                    style={{
-                      ...rowBtnStyle,
-                      marginLeft: 6,
-                      color: row.is_active ? DANGER : CREAM,
-                    }}
-                  >
-                    {row.is_active ? "Deactivate" : "Reactivate"}
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function VendorTable({
   rows,
   emptyLabel,
@@ -1063,85 +896,3 @@ function VendorModal({
     </Modal>
   );
 }
-
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  fontFamily: "var(--font-body)",
-  fontSize: "1rem",
-};
-
-const theadRowStyle: React.CSSProperties = {
-  background: "rgba(251,243,212,0.05)",
-  color: FADED,
-  textAlign: "left",
-  fontSize: "0.875rem",
-  letterSpacing: "0.15em",
-  textTransform: "uppercase",
-};
-
-const thStyle: React.CSSProperties = { padding: "10px 12px" };
-const tdStyle: React.CSSProperties = { padding: "10px 12px" };
-
-const sectionHeadingStyle: React.CSSProperties = {
-  color: FADED,
-  fontFamily: "var(--font-body)",
-  fontSize: "0.875rem",
-  letterSpacing: "0.15em",
-  textTransform: "uppercase",
-  margin: "0 0 12px",
-};
-
-const rowBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  color: CREAM,
-  border: `1px solid ${BORDER}`,
-  padding: "4px 10px",
-  fontFamily: "var(--font-body)",
-  fontSize: "0.875rem",
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
-
-const primaryBtnStyle: React.CSSProperties = {
-  background: CREAM,
-  color: "#1D1D1F",
-  border: "none",
-  padding: "8px 16px",
-  fontFamily: "var(--font-body)",
-  fontSize: "0.875rem",
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  marginBottom: 14,
-  fontSize: "0.875rem",
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-  color: FADED,
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "#1D1D1F",
-  color: CREAM,
-  border: `1px solid ${BORDER}`,
-  padding: "10px 12px",
-  fontFamily: "var(--font-body)",
-  fontSize: "1rem",
-  letterSpacing: "0.02em",
-  textTransform: "none",
-};
-
-const hintStyle: React.CSSProperties = {
-  color: FADED,
-  fontSize: "0.75rem",
-  letterSpacing: "0.02em",
-  textTransform: "none",
-  marginTop: 4,
-};
