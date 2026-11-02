@@ -148,16 +148,19 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    // Reference data for the kitchen, not a today-queue: editing either of
+    // Reference data for production, not a today-queue: editing either of
     // these changes what a future batch can be recorded against, it does not
     // touch anything already produced. Kept out of Catalog because that group
     // is what a CUSTOMER can buy, and out of Operations for the same reason
     // Subscription Plans was moved — every neighbour there is live work.
     //
+    // "Production", not "Kitchen", because Production is Raja's own word for
+    // this and the nav should read in the vocabulary the operator already uses.
+    //
     // Linked from day one on purpose. /admin/audit-log shipped with no nav
     // entry and spent 146 days rendering blank because the only way in was
     // typing the URL.
-    label: "Kitchen",
+    label: "Production",
     items: [
       { href: "/admin/raw-materials", label: "Raw Materials" },
       { href: "/admin/vendors", label: "Vendors" },

@@ -218,6 +218,84 @@ test("the unit lock is checked before the write, and only on a real change", () 
   assert.match(src, /patch\.unit !== undefined && patch\.unit !== before\.unit/);
 });
 
+test("the lock counts consumption, never the view's movement_count", () => {
+  // movement_count counts ALL stock_movements, purchases included. A material
+  // that had only ever been BOUGHT has movements and no consumption, so
+  // locking off that number would freeze the unit of a material no batch has
+  // ever touched — an edit the database would happily have accepted.
+  // production_batch_materials is the only table the composite FK points at.
+  for (const p of [
+    "app/api/admin/raw-materials/route.ts",
+    "app/api/admin/raw-materials/[id]/route.ts",
+  ]) {
+    const src = read(p);
+    assert.match(src, /production_batch_materials/, `${p} does not count consumption`);
+  }
+  // The view's column may be SELECTed for display, but must never reach the
+  // lock. Nothing named movement_count may appear in a conditional.
+  const lockSrc = read("app/api/admin/raw-materials/route.ts");
+  assert.equal(
+    /movement_count\s*(>|<|>=|<=|===|!==|==|!=|\?)/.test(lockSrc),
+    false,
+    "movement_count is being used as a decision, not just displayed",
+  );
+  assert.equal(
+    /movement_count/.test(read("app/api/admin/raw-materials/[id]/route.ts")),
+    false,
+    "the PATCH route reads movement_count at all",
+  );
+});
+
+// ── the lock fails CLOSED ─────────────────────────────────────────────────
+//
+// "Has this material been consumed" has two answers, and a failed read is
+// neither. Everything below asserts the same thing in three places: silence
+// means LOCKED, because the only direction that cannot be wrong is the one
+// that refuses an edit nobody has shown to be possible.
+
+test("a failed consumed-count is treated as locked, not as unlocked", () => {
+  const src = read("app/api/admin/raw-materials/[id]/route.ts");
+  const at = src.indexOf("if (countErr)");
+  assert.ok(at > 0, "the PATCH route does not handle a failed count");
+  // The branch must answer with the locked sentence, not fall through to the
+  // write and not hand back a transient-looking 500 of the raw PG string.
+  const branch = src.slice(at, at + 600);
+  assert.match(branch, /UNIT_LOCKED_REASON/, "a failed count does not lock");
+  assert.match(branch, /status: 409/, "a failed count does not refuse with 409");
+  assert.equal(
+    /status: 500/.test(branch),
+    false,
+    "a failed count still 500s with the raw database message",
+  );
+});
+
+test("a failed lock read fails the whole GET rather than defaulting to unlocked", () => {
+  const src = read("app/api/admin/raw-materials/route.ts");
+  // Degrading to `unit_locked: false` would render an editable unit on a
+  // consumed material and only discover it at the save.
+  assert.match(src, /lockedRes\.error/);
+  assert.match(src, /status: 500/);
+  assert.equal(
+    /unit_locked:\s*(false|lockedRes\.error)/.test(src),
+    false,
+    "the GET defaults unit_locked to false somewhere",
+  );
+});
+
+test("the form locks the unit when nobody has answered unit_locked", () => {
+  const src = read("app/admin/raw-materials/page.tsx");
+  // `=== true` is the fail-OPEN form: an absent or undefined flag — an older
+  // payload, a route that drops nulls via conditional spread, a merge read
+  // that came back short — would render the field editable. Only an explicit
+  // false may unlock it.
+  assert.equal(
+    /unit_locked === true/.test(src),
+    false,
+    "the form unlocks on anything other than an explicit false",
+  );
+  assert.match(src, /editing !== null && editing\.unit_locked !== false/);
+});
+
 test("the form omits unit entirely when the material is locked", () => {
   const src = read("app/admin/raw-materials/page.tsx");
   assert.match(src, /unit_locked/);
@@ -232,4 +310,8 @@ test("both screens are reachable from the nav", () => {
   const shell = read("components/admin/AdminShell.tsx");
   assert.match(shell, /href: "\/admin\/raw-materials"/);
   assert.match(shell, /href: "\/admin\/vendors"/);
+  // The group is called Production — Raja's own word for it. "Kitchen" was the
+  // first guess and nobody who works here calls it that.
+  assert.match(shell, /label: "Production"/);
+  assert.equal(/label: "Kitchen"/.test(shell), false);
 });

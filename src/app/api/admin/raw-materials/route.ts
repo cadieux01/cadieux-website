@@ -91,6 +91,10 @@ export async function GET(req: NextRequest) {
     supabaseAdmin.from("vendors").select("id, name"),
   ]);
 
+  // A failed lock read fails the WHOLE response, deliberately. Serving the rows
+  // with `unit_locked` defaulted to false would be the fail-open direction: the
+  // form would render an editable unit on a consumed material and only find out
+  // at the save. No board is better than a board offering an impossible edit.
   if (notesRes.error || lockedRes.error || vendorRes.error) {
     const msg =
       notesRes.error?.message ??

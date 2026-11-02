@@ -175,9 +175,21 @@ export async function PATCH(
       .select("id", { count: "exact", head: true })
       .eq("material_id", params.id);
 
+    // A FAILED COUNT IS TREATED AS LOCKED. The question "has this material been
+    // consumed" has two answers, and an error is neither of them — so the only
+    // thing known here is that the material cannot be shown to be unconsumed.
+    // Letting the write through would hand the decision to the constraint and
+    // surface it as "violates foreign key constraint"; returning a 500 with the
+    // raw Postgres string would read as transient and invite a retry of an edit
+    // that may be permanently impossible. The real cause goes to the log, where
+    // it is recoverable, and the operator gets the sentence that is true in
+    // every case the count might have been about to return.
     if (countErr) {
       console.error("[admin/raw-materials PATCH] consumed check", countErr.message);
-      return NextResponse.json({ error: countErr.message }, { status: 500 });
+      return NextResponse.json(
+        { error: UNIT_LOCKED_REASON, code: "unit_locked" },
+        { status: 409 },
+      );
     }
     if ((count ?? 0) > 0) {
       return NextResponse.json(

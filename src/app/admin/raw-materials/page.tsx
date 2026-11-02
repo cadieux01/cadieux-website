@@ -216,7 +216,17 @@ export default function AdminRawMaterialsPage() {
   // consumed material's unit cannot change. The server answers `unit_locked`
   // per row; the field is disabled from that answer alone, never from a guess
   // about stock or movement counts.
-  const unitLocked = editing?.unit_locked === true;
+  //
+  // FAILS CLOSED: only an explicit `false` unlocks the field. An absent or
+  // undefined `unit_locked` — an older payload, a route that drops nulls via
+  // conditional spread, a merge read that came back short — means nobody has
+  // answered the question, and the safe reading of silence is LOCKED. `=== true`
+  // here would have rendered the field editable on a consumed material and sent
+  // `unit` to a save Postgres then refuses.
+  //
+  // Creating is the one unlocked case by definition: a material that does not
+  // exist yet cannot have been consumed.
+  const unitLocked = editing !== null && editing.unit_locked !== false;
 
   async function save() {
     if (!form.code.trim()) {
