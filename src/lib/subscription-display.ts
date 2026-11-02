@@ -81,9 +81,21 @@ export function formatSubscriptionItems(sub: PlanShape): string {
   return parts.length > 0 ? parts.join(", ") : "—";
 }
 
+/** Just the day columns — all `subscriptionDays` actually reads.
+ *
+ *  Narrower than PlanShape so a caller holding neither product column can
+ *  still ask which days a plan runs. PlanShape satisfies it, so every
+ *  existing call site is unaffected; the subscriber receipt projects no
+ *  product columns for labelling and would otherwise have had to invent
+ *  values for two fields this function never touches. */
+export type PlanDaysShape = {
+  days?: string[] | null;
+  day_of_week?: string | null;
+};
+
 /** The days a plan runs, deduped and in week order — the stored array is
  *  in pick order, so a Thursday+Friday plan arrives as ["fri","thu"]. */
-export function subscriptionDays(sub: PlanShape): string[] {
+export function subscriptionDays(sub: PlanDaysShape): string[] {
   const raw =
     sub.days && sub.days.length > 0
       ? sub.days

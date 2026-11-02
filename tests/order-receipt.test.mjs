@@ -288,34 +288,10 @@ test("the route verifies the phone cookie and never trusts a phone param", () =>
   );
 });
 
-test("the print block keeps the site chrome off the paper by position, not by tag", () => {
-  const src = fs.readFileSync(RECEIPT_PAGE, "utf8");
-  // Bound the region to the print block itself and strip CSS comments:
-  // slicing to end-of-file swept in the whole component, and the comment
-  // explaining why tag names failed CONTAINS "header, footer, nav", so the
-  // doesNotMatch below fired on its own documentation.
-  const start = src.indexOf("@media print");
-  const end = src.indexOf("`}</style>", start);
-  assert.ok(start !== -1 && end > start, "the print block must be locatable");
-  const block = src.slice(start, end).replace(/\/\*[\s\S]*?\*\//g, "");
-
-  // The regression this catches is invisible on screen and only appears on
-  // paper. The root layout's chrome is a bare <div> (off-canvas drawer) and
-  // a bare <button> (floating music toggle), so a "header, footer, nav"
-  // rule matched NEITHER and the music button printed on the receipt.
-  assert.match(
-    block,
-    /body\s*>\s*\*:not\(main\)\s*\{[^}]*display:\s*none/,
-    "everything at body level except the document must be hidden in print",
-  );
-  assert.doesNotMatch(
-    block,
-    /header,\s*footer,\s*nav/,
-    "naming chrome tags is what failed; do not reintroduce it as the guard",
-  );
-  // The print button lives inside <main>, so it needs its own rule.
-  assert.match(block, /\.no-print\s*\{[^}]*display:\s*none/);
-});
+// The print rules moved to components/ReceiptShell.tsx, which three
+// documents now share, and the tripwire moved with them to
+// tests/receipt-print.test.mjs. That test also asserts THIS page still
+// renders through the shell and has not grown a print block of its own.
 
 /* ── 4. IT IS A RECEIPT, NOT A TAX INVOICE ──────────────────────────── */
 

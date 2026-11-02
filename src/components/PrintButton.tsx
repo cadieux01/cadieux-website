@@ -1,17 +1,21 @@
 "use client";
 
-// The only client-side code on the receipt. window.print() needs a browser,
-// so this is a leaf component rather than a reason to make the whole page a
-// client component — the receipt's name, phone and address are fetched and
+// The only client-side code on any receipt. window.print() needs a browser,
+// so this is a leaf component rather than a reason to make a whole page a
+// client component — a receipt's name, phone and address are fetched and
 // authorised on the server and must stay there.
 //
 // No PDF library. The browser's own print dialog already produces a PDF via
 // "Save as PDF" on every platform the customer might be on, so shipping a
 // renderer would add a dependency to re-implement a feature the OS has.
 //
-// `.no-print` is hidden by the @media print block on the page.
+// `.no-print` is hidden by the @media print block in ReceiptShell.
+//
+// Lives in components/ rather than beside one route because three documents
+// use it now: the order receipt, the subscription summary and the
+// per-delivery note.
 
-export default function PrintButton() {
+export default function PrintButton({ label }: { label?: string }) {
   return (
     <button
       type="button"
@@ -30,7 +34,7 @@ export default function PrintButton() {
         cursor: "pointer",
       }}
     >
-      Download receipt
+      {label ?? "Download receipt"}
     </button>
   );
 }

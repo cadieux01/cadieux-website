@@ -37,8 +37,19 @@ import {
 import { PHONE_COOKIE_NAME, verifyPhoneCookie } from "@/lib/phone-cookie";
 import { toLocal10 } from "@/lib/order-validation";
 import { rupees } from "@/lib/payment-label";
-
-import PrintButton from "./PrintButton";
+import {
+  RECEIPT_RULE,
+  ReceiptFacts,
+  ReceiptField,
+  ReceiptRow,
+  ReceiptShell,
+  ReceiptSignInNotice,
+  ReceiptTable,
+  ReceiptTd,
+  ReceiptTh,
+  ReceiptTotal,
+  ReceiptTotals,
+} from "@/components/ReceiptShell";
 
 // A receipt is per-customer and must never be cached or prerendered.
 export const dynamic = "force-dynamic";
@@ -58,8 +69,10 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
-const INK = "#1A1A1A";
-const RULE = "1px solid rgba(0,0,0,0.18)";
+// The sheet, its print rules and these primitives all live in
+// @/components/ReceiptShell — three documents print on the same paper and a
+// second copy of the print block is how the music-button bug would come back.
+const RULE = RECEIPT_RULE;
 
 export default async function ReceiptPage({
   params,
@@ -112,266 +125,100 @@ export default async function ReceiptPage({
   const receipt = buildReceipt({ order, customer });
 
   return (
-    <main
-      style={{
-        background: "#fff",
-        color: INK,
-        minHeight: "100vh",
-        padding: "32px 20px 64px",
-        fontFamily: "var(--font-dm-sans, system-ui, sans-serif)",
-      }}
+    <ReceiptShell
+      businessName={receipt.businessName}
+      fssai={receipt.fssai}
+      title={receipt.title}
+      footnote="This is an order receipt, not a tax invoice."
     >
-      {/* Print rules. The button and the site chrome come off the paper;
-          the sheet itself drops its screen margins so it fills A4. */}
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          /* ONLY THE DOCUMENT GOES ON PAPER. Naming tags here does not
-             work: the root layout's chrome is a bare <div> for the
-             off-canvas drawer and a bare <button> for the floating music
-             toggle, so "header, footer, nav" matched neither and the
-             music button — position:fixed and on-screen — printed on the
-             receipt. This page's own content is the <main>, and the
-             print button inside it is .no-print, so excluding everything
-             else at body level is both sufficient and stable against the
-             chrome being re-tagged later. Hiding the sibling <style>/
-             <script> nodes is harmless; a stylesheet still applies when
-             its element is display:none. */
-          body > *:not(main) { display: none !important; }
-          @page { margin: 14mm; }
-          html, body { background: #fff !important; }
-          main { padding: 0 !important; }
-          .receipt-sheet {
-            border: none !important;
-            max-width: none !important;
-            padding: 0 !important;
+      <ReceiptFacts>
+        <ReceiptField label="Order number" value={receipt.orderNumber} />
+        <ReceiptField
+          label="Date"
+          value={receipt.placedAt ? formatDateTime(receipt.placedAt) : null}
+        />
+        <ReceiptField label="Name" value={receipt.customerName} />
+        <ReceiptField label="Phone" value={receipt.customerPhone} />
+        <ReceiptField
+          label={
+            receipt.fulfillment === "pickup" ? "Collection" : "Delivery address"
           }
-        }
-      `}</style>
+          value={
+            receipt.fulfillment === "pickup"
+              ? "Pickup at counter"
+              : receipt.deliveryAddress
+          }
+        />
+        <ReceiptField label="Payment" value={receipt.paymentLabel} />
+      </ReceiptFacts>
 
-      <div
-        className="receipt-sheet"
-        style={{
-          maxWidth: 720,
-          margin: "0 auto",
-          border: RULE,
-          padding: 36,
-        }}
-      >
-        <header style={{ borderBottom: RULE, paddingBottom: 18 }}>
-          <div
-            style={{ fontSize: 22, letterSpacing: "0.3em", fontWeight: 600 }}
-          >
-            {receipt.businessName.toUpperCase()}
-          </div>
-          <div style={{ fontSize: 11, marginTop: 6, opacity: 0.75 }}>
-            FSSAI Lic. No. {receipt.fssai}
-          </div>
-          <h1
-            style={{
-              fontSize: 13,
-              letterSpacing: "0.28em",
-              textTransform: "uppercase",
-              marginTop: 18,
-              fontWeight: 600,
-            }}
-          >
-            {receipt.title}
-          </h1>
-        </header>
-
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 20,
-            padding: "18px 0",
-            borderBottom: RULE,
-            fontSize: 13,
-          }}
-        >
-          <Field label="Order number" value={receipt.orderNumber} />
-          <Field
-            label="Date"
-            value={receipt.placedAt ? formatDateTime(receipt.placedAt) : null}
-          />
-          <Field label="Name" value={receipt.customerName} />
-          <Field label="Phone" value={receipt.customerPhone} />
-          <Field
-            label={receipt.fulfillment === "pickup" ? "Collection" : "Delivery address"}
-            value={
-              receipt.fulfillment === "pickup"
-                ? "Pickup at counter"
-                : receipt.deliveryAddress
-            }
-          />
-          <Field label="Payment" value={receipt.paymentLabel} />
-        </section>
-
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: 13,
-            margin: "18px 0",
-          }}
-        >
-          <thead>
-            <tr style={{ borderBottom: RULE }}>
-              <Th align="left">Item</Th>
-              <Th align="right">Qty</Th>
-              <Th align="right">Unit price</Th>
-              <Th align="right">Line total</Th>
+      <ReceiptTable>
+        <thead>
+          <tr style={{ borderBottom: RULE }}>
+            <ReceiptTh align="left">Item</ReceiptTh>
+            <ReceiptTh align="right">Qty</ReceiptTh>
+            <ReceiptTh align="right">Unit price</ReceiptTh>
+            <ReceiptTh align="right">Line total</ReceiptTh>
+          </tr>
+        </thead>
+        <tbody>
+          {receipt.lines.length === 0 ? (
+            <tr>
+              <td colSpan={4} style={{ padding: "16px 0", opacity: 0.7 }}>
+                No items recorded on this order.
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {receipt.lines.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={4}
-                  style={{ padding: "16px 0", opacity: 0.7 }}
-                >
-                  No items recorded on this order.
-                </td>
-              </tr>
-            ) : (
-              receipt.lines.map((line, i) => (
-                <LineRow key={`${line.slug ?? "item"}-${i}`} line={line} />
-              ))
-            )}
-          </tbody>
-        </table>
+          ) : (
+            receipt.lines.map((line, i) => (
+              <LineRow key={`${line.slug ?? "item"}-${i}`} line={line} />
+            ))
+          )}
+        </tbody>
+      </ReceiptTable>
 
-        <section
-          style={{
-            borderTop: RULE,
-            paddingTop: 14,
-            fontSize: 13,
-            display: "grid",
-            gap: 6,
-            justifyContent: "end",
-          }}
-        >
-          <Total label="Items subtotal" value={receipt.itemsSubtotal} />
-          <Total label="Delivery fee" value={receipt.deliveryFee} />
-          <Total label="Total" value={receipt.grandTotal} strong />
-        </section>
-
-        <p style={{ fontSize: 11, opacity: 0.7, marginTop: 24 }}>
-          This is an order receipt, not a tax invoice.
-        </p>
-      </div>
-
-      <div style={{ textAlign: "center", marginTop: 28 }}>
-        <PrintButton />
-      </div>
-    </main>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div>
-      <div
-        style={{
-          fontSize: 10,
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          opacity: 0.6,
-        }}
-      >
-        {label}
-      </div>
-      <div style={{ marginTop: 3 }}>{value ?? "—"}</div>
-    </div>
-  );
-}
-
-function Th({
-  children,
-  align,
-}: {
-  children: React.ReactNode;
-  align: "left" | "right";
-}) {
-  return (
-    <th
-      style={{
-        textAlign: align,
-        padding: "8px 0",
-        fontSize: 10,
-        letterSpacing: "0.18em",
-        textTransform: "uppercase",
-        opacity: 0.6,
-        fontWeight: 600,
-      }}
-    >
-      {children}
-    </th>
+      <ReceiptTotals>
+        <ReceiptTotal
+          label="Items subtotal"
+          value={rupees(receipt.itemsSubtotal)}
+        />
+        <ReceiptTotal
+          label="Delivery fee"
+          value={receipt.deliveryFee === null ? null : rupees(receipt.deliveryFee)}
+        />
+        <ReceiptTotal
+          label="Total"
+          value={receipt.grandTotal === null ? null : rupees(receipt.grandTotal)}
+          strong
+        />
+      </ReceiptTotals>
+    </ReceiptShell>
   );
 }
 
 function LineRow({ line }: { line: ReceiptLine }) {
   return (
-    <tr style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
-      <td style={{ padding: "10px 0" }}>{line.name}</td>
-      <td style={{ padding: "10px 0", textAlign: "right" }}>{line.qty}</td>
-      <td style={{ padding: "10px 0", textAlign: "right" }}>
+    <ReceiptRow>
+      <ReceiptTd>{line.name}</ReceiptTd>
+      <ReceiptTd align="right">{line.qty}</ReceiptTd>
+      <ReceiptTd align="right">
         {line.unitPrice === null ? "—" : rupees(line.unitPrice)}
-      </td>
-      <td style={{ padding: "10px 0", textAlign: "right" }}>
+      </ReceiptTd>
+      <ReceiptTd align="right">
         {line.lineTotal === null ? "—" : rupees(line.lineTotal)}
-      </td>
-    </tr>
-  );
-}
-
-/** A null value prints "—", never "₹0" — see readDeliveryFee. */
-function Total({
-  label,
-  value,
-  strong,
-}: {
-  label: string;
-  value: number | null;
-  strong?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 28,
-        justifyContent: "space-between",
-        minWidth: 260,
-        fontWeight: strong ? 600 : 400,
-        fontSize: strong ? 15 : 13,
-      }}
-    >
-      <span>{label}</span>
-      <span>{value === null ? "—" : rupees(value)}</span>
-    </div>
+      </ReceiptTd>
+    </ReceiptRow>
   );
 }
 
 function SignInNotice() {
   return (
-    <main
-      style={{
-        minHeight: "60vh",
-        display: "grid",
-        placeContent: "center",
-        padding: 32,
-        textAlign: "center",
-        fontFamily: "var(--font-dm-sans, system-ui, sans-serif)",
-      }}
-    >
-      <h1 style={{ fontSize: 14, letterSpacing: "0.22em", fontWeight: 600 }}>
-        SIGN IN TO VIEW THIS RECEIPT
-      </h1>
-      <p style={{ fontSize: 13, opacity: 0.75, marginTop: 12 }}>
-        Open your order from <strong>My Orders</strong> and verify your phone
-        number, then return to this page.
-      </p>
-    </main>
+    <ReceiptSignInNotice
+      body={
+        <>
+          Open your order from <strong>My Orders</strong> and verify your phone
+          number, then return to this page.
+        </>
+      }
+    />
   );
 }
