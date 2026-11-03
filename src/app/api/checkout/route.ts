@@ -338,6 +338,68 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // AUTHENTICATION. This is the only action on the route that writes the
+    // customers table, and it keys on a phone number taken from the REQUEST
+    // BODY. Before this check it ran for anyone, with two consequences:
+    //
+    //   • an existing row matched by that phone had its `full_name` and
+    //     `city` OVERWRITTEN by whatever the body said, and
+    //   • the response handed back that customer's real UUID — the id every
+    //     order and subscription path downstream keys on.
+    //
+    // So knowing a phone number was enough to rewrite a stranger's name and
+    // city, and to harvest the customer_id for it. The caller must now have
+    // PROVED the number being saved.
+    //
+    // CHECKED BEFORE THE LOOKUP, deliberately. An unverified caller must not
+    // be able to learn whether a number is on file at all, so the refusal
+    // cannot be allowed to depend on what the query found — same reasoning as
+    // the order gate in lib/order-checkout.ts: assert the refusal, not the
+    // comparison.
+    //
+    // NO LEGITIMATE CALLER LOSES ANYTHING. All three call sites already
+    // refuse to fetch until `otpVerified` — checkout/page.tsx:974 (pickup)
+    // and :1022 (delivery), and subscriptions/setup/checkout/page.tsx:508 —
+    // and the returning-customer fast path skips this action outright because
+    // it already holds a customer id. `getVerifiedPhone` honours the mobile
+    // BEARER as well as the web cookie, though no mobile build calls this
+    // action today (checked: zero hits in the app repo).
+    const verified = getVerifiedPhone(req);
+    if (!verified) {
+      return NextResponse.json(
+        {
+          error: "Please verify your phone number to continue.",
+          code: "phone_not_verified",
+        },
+        { status: 401 },
+      );
+    }
+    // Compared NORMALISED on both sides. `isValidIndianMobile` accepts
+    // `9876543210`, `919876543210` and `+919876543210`, the cookie carries
+    // E.164 and the checkout body sends bare digits, so a raw `!==` here
+    // would refuse every real web caller. normalizePhone maps all three to
+    // `+91…`.
+    if (normalizePhone(verified.phone) !== normalizePhone(phone)) {
+      // Verified as one number, saving another. Logged masked: what matters
+      // is that it happened, not which numbers were involved.
+      console.warn("⚠️  save_customer phone mismatch", {
+        verified_phone: maskPhone(verified.phone),
+        body_phone: maskPhone(phone),
+      });
+      return NextResponse.json(
+        {
+          error: "Phone verification mismatch.",
+          code: "phone_not_verified",
+        },
+        { status: 401 },
+      );
+    }
+
+    // The lookup still matches on the EXACT string, unchanged. One human can
+    // therefore hold more than one row (`9876543210` vs `+919876543210`) —
+    // pre-existing, documented at lib/order-burst-alert.ts:270-274, and left
+    // alone on purpose: normalising the key here would re-point live rows and
+    // is a data migration, not an auth fix.
     const { data: existing } = await supabaseAdmin
       .from("customers")
       .select("id")
