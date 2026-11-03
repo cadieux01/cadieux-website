@@ -593,11 +593,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid subscription payload." }, { status: 400 });
     }
 
-    // Phone-verification gate (mirrors place_order). Accept EITHER a
-    // valid OTP cookie/bearer OR a saved customer record — the latter is
-    // proof of past verification for returning subscribers whose 30-min
-    // cookie has expired. Phone-match check below still enforces that a
-    // valid cookie can't be paired with someone else's customer_id.
+    // Resolves the caller's proven session, if any. A LIVE SESSION IS THE
+    // ONLY THING ACCEPTED HERE — see the gate at the end of this block,
+    // which refuses null outright.
+    //
+    // This comment used to claim the opposite, and the claim outlived the
+    // code: it said a saved customer record was itself "proof of past
+    // verification" and could stand in for an expired cookie. That was
+    // never a second credential, it was the `?? normalizePhone(cust.phone)`
+    // fallback compared against itself, so the gate could not fail and an
+    // unauthenticated POST could open a prepaid subscription against any
+    // customer_id. f3facf1 removed the fallback; the description of it as
+    // deliberate survived until this commit.
+    //
+    // The old text also said the web cookie lasts 30 minutes. It does not:
+    // PHONE_COOKIE_TTL_MS is 7 days (lib/phone-cookie.ts), re-issued on
+    // every successful response by rollPhoneCookieOnWebRequest, so the
+    // clock runs from last activity rather than from the OTP. The 30-day
+    // figure belongs to the mobile bearer (MOBILE_TOKEN_TTL_MS).
     const verified = getVerifiedPhone(req);
 
     const { data: cust } = await supabaseAdmin

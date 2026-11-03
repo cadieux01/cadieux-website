@@ -3,7 +3,8 @@
 //
 // Returns the HMAC token in the JSON body — NO Set-Cookie. App stores
 // the token in AsyncStorage and sends it as `Authorization: Bearer …`
-// on subsequent calls. Token TTL = 30 days (vs. 30 min for web cookie);
+// on subsequent calls. Token TTL = 30 days, MOBILE_TOKEN_TTL_MS (vs. 7
+// days for the web cookie, PHONE_COOKIE_TTL_MS — this line said 30 min);
 // signing uses the exact same `signPhoneCookie` so cookies and bearer
 // tokens are interchangeable on the server side via `getVerifiedPhone`.
 //

@@ -47,8 +47,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; deliveryId: string } }
 ) {
-  // 1. Phone auth. Accepts the web cookie (HMAC, 30-min TTL) or a mobile
-  //    bearer token (HMAC, 30-day TTL) — same signer, interchangeable.
+  // 1. Phone auth. Accepts the web cookie (HMAC, 7-day TTL, rolling —
+  //    PHONE_COOKIE_TTL_MS; this line claimed 30 min) or a mobile bearer
+  //    token (HMAC, 30-day TTL) — same signer, interchangeable.
   const verified = getVerifiedPhone(req);
   if (!verified) {
     return NextResponse.json(

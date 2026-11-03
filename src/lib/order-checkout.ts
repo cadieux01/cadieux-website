@@ -494,8 +494,14 @@ export async function prepareOneTimeOrder(
 
   const grandTotal = reconciled.subtotal + deliveryFee;
 
-  // Phone-verification gate: a saved customer record proves past OTP
-  // verification; a valid cookie must match that record's phone.
+  // Loads the phone of record for `customer_id`. This is the value the
+  // gate below compares the PROVEN session against — it is not itself a
+  // credential. The older wording here ("a saved customer record proves
+  // past OTP verification") described the fallback f3facf1 deleted, under
+  // which an absent cookie was replaced by this very row and the check
+  // compared the stored phone to itself. A missing row is a 401 because
+  // there is then nothing to compare, not because the row would have
+  // authenticated anyone.
   const { data: cust } = await supabaseAdmin
     .from("customers")
     .select("id, phone")

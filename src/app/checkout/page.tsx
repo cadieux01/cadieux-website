@@ -1004,9 +1004,10 @@ export default function CheckoutPage() {
     // still require an in-session OTP (cookie). Without it the server
     // will reject `place_order` with "Phone verification required"
     // at the payment step. Forcing OTP here means payment can't fail
-    // for that reason; for returning customers whose 30-min cookie
-    // is still valid the prefill effect already flipped otpVerified
-    // to true so this gate is a no-op.
+    // for that reason; for returning customers whose cookie is still
+    // valid (PHONE_COOKIE_TTL_MS — 7 rolling days, not the 30 minutes
+    // this line used to claim) the prefill effect already flipped
+    // otpVerified to true so this gate is a no-op.
     if (formMode === "returning" && savedCustomer && customer?.id) {
       if (!otpVerified) { setError("Please verify your phone number to continue."); return; }
       if (pinStatus.state === "checking") { setError("Checking pincode availability…"); return; }
