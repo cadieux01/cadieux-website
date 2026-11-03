@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+// No `signPhoneCookie` / `PHONE_COOKIE_NAME` here on purpose: this route
+// must not be able to issue a session, only extend one that OTP granted.
+// See the note above `rollPhoneCookieOnWebRequest` in the place_order branch.
 import {
   getVerifiedPhone,
   isValidIndianMobile,
   normalizePhone,
   maskPhone,
   rollPhoneCookieOnWebRequest,
-  signPhoneCookie,
-  PHONE_COOKIE_NAME,
-  PHONE_COOKIE_TTL_MS,
 } from "@/lib/phone-cookie";
 import {
   allowedOrFailOpen,
@@ -471,26 +471,25 @@ export async function POST(req: NextRequest) {
       public_ref: order.public_ref,
       total_amount: prepared.grandTotal,
     });
-    // Re-issue the verified-phone cookie so the post-checkout redirect to
-    // /orders/<id> lands authenticated. Returning customers skip OTP (no
-    // cookie set) and the 30-min cookie can lapse during a long checkout;
-    // the tracking page's read gate is strict (401 → "Verify your phone").
-    // The order was just placed for this customer, so stamping the cookie
-    // for their own phone is safe and matches /api/verify/check.
-    if (prepared.custPhone) {
-      const exp = Date.now() + PHONE_COOKIE_TTL_MS;
-      res.cookies.set(
-        PHONE_COOKIE_NAME,
-        signPhoneCookie(normalizePhone(prepared.custPhone), exp),
-        {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          path: "/",
-          maxAge: Math.floor(PHONE_COOKIE_TTL_MS / 1000),
-        },
-      );
-    }
+    // Extend an EXISTING session so the post-checkout redirect to
+    // /orders/<id> lands authenticated (that page's read gate is strict).
+    //
+    // This used to MINT the cookie instead:
+    //
+    //     res.cookies.set(PHONE_COOKIE_NAME,
+    //       signPhoneCookie(normalizePhone(prepared.custPhone), exp), ...)
+    //
+    // signed from the phone on the ORDER, which came from a customers row
+    // the caller named by id. Combined with the gate above passing without
+    // a cookie, placing an order MINTED a genuine verified session for any
+    // phone a caller typed in — an escalation from "no auth" to "a real
+    // credential", on the one route that must never do that.
+    //
+    // rollPhoneCookieOnWebRequest re-signs the phone from the INBOUND
+    // cookie and is a no-op when there isn't a valid one, so it cannot
+    // issue a session that OTP did not already grant. Only
+    // /api/verify/check mints.
+    rollPhoneCookieOnWebRequest(req, res);
     return res;
   }
 
@@ -580,14 +579,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const verifiedPhone = verified?.phone ?? normalizePhone(cust.phone);
-
-    if (normalizePhone(cust.phone) !== verifiedPhone) {
+    // THE PHONE-VERIFICATION GATE — the subscription half of the same fix
+    // applied in lib/order-checkout.ts. This was an independent copy of the
+    // identical defect:
+    //
+    //     const verifiedPhone = verified?.phone ?? normalizePhone(cust.phone);
+    //     if (normalizePhone(cust.phone) !== verifiedPhone) { ...401 }
+    //
+    // With no cookie the comparison had the stored phone on both sides and
+    // could never fail, so an unauthenticated POST could open a prepaid
+    // subscription against any customer_id.
+    //
+    // There is no operator exemption on this branch, unlike the one-time
+    // order path: nothing admin-side calls `place_subscription`, so a
+    // missing session here is always a customer without one.
+    if (!verified) {
       return NextResponse.json(
-        { error: "Phone verification mismatch." },
-        { status: 401 }
+        {
+          error: "Please verify your phone number to start this subscription.",
+          code: "phone_not_verified",
+        },
+        { status: 401 },
       );
     }
+    if (normalizePhone(cust.phone) !== normalizePhone(verified.phone)) {
+      return NextResponse.json(
+        { error: "Phone verification mismatch.", code: "phone_not_verified" },
+        { status: 401 },
+      );
+    }
+
+    // Past the gate, so this name is finally accurate: it is the phone the
+    // caller PROVED they control. Previously the same identifier could hold
+    // a phone nobody had verified, which is what the two [PRICE_TAMPERING]
+    // log lines below were unknowingly recording.
+    const verifiedPhone = normalizePhone(verified.phone);
 
     const dayKeys = (days as string[])
       .map((d) => d.toLowerCase())

@@ -461,8 +461,14 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. Run the SAME validation pipeline the public checkout uses.
-  //    OTP gate is already soft: with no cookie, effectiveVerifiedPhone
-  //    falls back to the customer's stored phone → passes automatically.
+  //    The OTP gate is skipped HERE AND ONLY HERE, via an explicit flag.
+  //    It used to pass by accident: with no cookie the old gate compared
+  //    the stored phone to itself and could never fail. That accident was
+  //    also what let an unauthenticated POST to /api/checkout place an
+  //    order, so it was closed — and this route, which legitimately has no
+  //    customer session (the operator is on the phone or at the counter),
+  //    now says so out loud. `verifyAdminOrTeamOrder` above is what makes
+  //    it safe; the flag is unreachable from any customer path.
   const serviceabilityOverride = body.serviceability_override === true;
   const bodyForPrep = { ...body, customer_id: customerId } as Record<string, unknown>;
   const prep = await prepareOneTimeOrder(bodyForPrep, req, supabaseAdmin, {
@@ -476,8 +482,13 @@ export async function POST(req: NextRequest) {
     // checkout basket; an operator taking a single loaf at the counter or
     // over the phone is recording a sale that already happened, and a
     // refusal here has no remedy for them. Every other gate — price, item
-    // shape, phone, slot — still runs.
+    // shape, phone format, slot — still runs.
     skipUnitMinimum: true,
+    // This route is already behind verifyAdminOrTeamOrder (line ~374).
+    // Team-PIN callers are included deliberately: they are the counter and
+    // phone-order operators, and they are exactly who records an order for
+    // a customer who is not holding the browser.
+    operatorAuthenticated: true,
   });
   if (!prep.ok) {
     return NextResponse.json(prep.body, { status: prep.status });

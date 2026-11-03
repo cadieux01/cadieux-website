@@ -8,7 +8,11 @@
 // from the products table, the delivery fee is computed server-side, and
 // the client-supplied total is only ever compared, never trusted.
 
-import { NextRequest } from "next/server";
+// `import type`, not a value import. `next` ships no `exports` map, so an ESM
+// `import … from "next/server"` cannot resolve `server.js` — which made this
+// module unloadable under `node --test` even though it only ever needs the
+// TYPE. Marked type-only so the stripper removes the statement outright.
+import type { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getVerifiedPhone,
@@ -117,6 +121,22 @@ export type PrepareOptions = {
    *  operator recording a real single-item sale that already happened must
    *  not be refused by it. Nothing on a customer path can reach this. */
   skipUnitMinimum?: boolean;
+  /** The caller has ALREADY been authenticated as an operator by its own
+   *  route, and is placing this order on a customer's behalf.
+   *
+   *  Set ONLY by POST /api/admin/orders, behind `verifyAdminOrTeamOrder`.
+   *  There is no customer OTP session on such a request and there never can
+   *  be — the operator is on the phone or at the counter, not the customer's
+   *  browser — so the phone-verification gate below is skipped outright
+   *  rather than quietly passed.
+   *
+   *  This flag exists because that gate USED to be skippable by accident:
+   *  `verified?.phone ?? normalizePhone(cust.phone)` compared the stored
+   *  phone to itself whenever the cookie was absent, so it could never fail,
+   *  and the admin route depended on that. The exemption is now explicit,
+   *  auditable and reachable only from an admin-gated route. Nothing on a
+   *  customer path may ever set it. */
+  operatorAuthenticated?: boolean;
 };
 
 /**
@@ -505,14 +525,52 @@ export async function prepareOneTimeOrder(
     };
   }
 
-  const effectiveVerifiedPhone = verified?.phone ?? normalizePhone(cust.phone);
-  if (normalizePhone(cust.phone) !== effectiveVerifiedPhone) {
-    console.warn("⚠️  place_order phone mismatch", {
-      customer_id,
-      cust_phone: cust?.phone,
-      verified_phone: verified?.phone,
-    });
-    return { ok: false, status: 401, body: { error: "Phone verification mismatch." } };
+  // THE PHONE-VERIFICATION GATE. Two separate refusals, and the order
+  // matters.
+  //
+  // This used to be ONE comparison with a fallback in it:
+  //
+  //     const effective = verified?.phone ?? normalizePhone(cust.phone);
+  //     if (normalizePhone(cust.phone) !== effective) { ...401 }
+  //
+  // With no cookie, `getVerifiedPhone` returns null, `??` took the stored
+  // phone, and the line compared `cust.phone` to ITSELF. It could not fail.
+  // An unauthenticated POST carrying any `customer_id` passed the only
+  // server-side OTP check on the order path. The fallback is gone: a
+  // missing session is now refused, never substituted for.
+  //
+  // An operator placing an order on a customer's behalf has no customer
+  // session and never will; that case is an EXPLICIT, admin-gated opt-in
+  // (see PrepareOptions.operatorAuthenticated), not a hole left open.
+  if (!opts.operatorAuthenticated) {
+    if (!verified) {
+      console.warn("⚠️  place_order refused: no verified phone session", {
+        customer_id,
+      });
+      return {
+        ok: false,
+        status: 401,
+        body: {
+          error: "Please verify your phone number to place this order.",
+          code: "phone_not_verified",
+        },
+      };
+    }
+    if (normalizePhone(cust.phone) !== normalizePhone(verified.phone)) {
+      console.warn("⚠️  place_order phone mismatch", {
+        customer_id,
+        cust_phone: maskPhone(cust.phone),
+        verified_phone: maskPhone(verified.phone),
+      });
+      return {
+        ok: false,
+        status: 401,
+        body: {
+          error: "Phone verification mismatch.",
+          code: "phone_not_verified",
+        },
+      };
+    }
   }
 
   return {

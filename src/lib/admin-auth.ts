@@ -22,7 +22,10 @@
 // imports — lib/audit-log-schema.ts is the worked example.
 import "server-only";
 
-import { NextRequest } from "next/server";
+// `import type`: only the TYPE is used below, and `next` ships no `exports`
+// map, so a value import of "next/server" is unresolvable outside the bundler
+// — which made this module unloadable under `node --test`.
+import type { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   verifyAdminSession,

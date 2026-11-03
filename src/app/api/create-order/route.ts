@@ -42,11 +42,11 @@ import {
   SANDWICH_CHECKOUT_BLOCK_MESSAGE,
 } from "@/lib/sandwich-checkout-guard";
 import { queueBurstAlert } from "@/lib/order-burst-alert";
+// No `signPhoneCookie` / `PHONE_COOKIE_NAME` here on purpose: this route
+// must not be able to issue a session. See the note at the end of POST.
 import {
   normalizePhone,
-  signPhoneCookie,
-  PHONE_COOKIE_NAME,
-  PHONE_COOKIE_TTL_MS,
+  rollPhoneCookieOnWebRequest,
 } from "@/lib/phone-cookie";
 import {
   allowedOrFailOpen,
@@ -262,25 +262,16 @@ export async function POST(req: NextRequest) {
     currency: rzp.currency,
     server_fee_inr: prepared.deliveryFee,
   });
-  // Re-issue the verified-phone cookie so that after the Razorpay modal
-  // succeeds and the client redirects to /orders/<id>, the tracking page's
-  // strict read gate sees a valid cookie instead of 401 ("Verify your
-  // phone"). Returning customers skip OTP (no cookie) and the 30-min cookie
-  // can lapse during the online flow. The order was just created for this
-  // customer; stamping the cookie for their own phone matches verify/check.
-  if (prepared.custPhone) {
-    const exp = Date.now() + PHONE_COOKIE_TTL_MS;
-    res.cookies.set(
-      PHONE_COOKIE_NAME,
-      signPhoneCookie(normalizePhone(prepared.custPhone), exp),
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: Math.floor(PHONE_COOKIE_TTL_MS / 1000),
-      },
-    );
-  }
+  // Extend an EXISTING session so that after the Razorpay modal succeeds
+  // and the client redirects to /orders/<id>, the tracking page's strict
+  // read gate sees a valid cookie.
+  //
+  // This used to MINT the cookie from `prepared.custPhone` — the phone on
+  // the order, not on any proven session — which turned an unverified
+  // order into a genuine verified session for whatever number was typed
+  // in. See the same note in /api/checkout. rollPhoneCookieOnWebRequest
+  // re-signs from the INBOUND cookie and no-ops without a valid one, so
+  // only /api/verify/check can issue a session.
+  rollPhoneCookieOnWebRequest(req, res);
   return res;
 }
