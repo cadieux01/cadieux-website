@@ -247,7 +247,7 @@ test("the lock counts consumption, never the view's movement_count", () => {
   const sql = readMigration();
   assert.match(
     sql,
-    /exists\s*\(\s*select 1\s+from production_batch_materials/i,
+    /exists\s*\(\s*select 1\s+from\s+(public\.)?production_batch_materials/i,
     "the view does not derive unit_locked from consumption",
   );
   // Nothing may turn movement_count into a decision, in SQL or in either route.

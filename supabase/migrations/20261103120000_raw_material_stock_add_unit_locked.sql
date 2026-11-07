@@ -82,11 +82,11 @@ with (security_invoker = true) as
     -- once per material.
     exists (
       select 1
-      from production_batch_materials pbm
+      from public.production_batch_materials pbm
       where pbm.material_id = m.id
     ) as unit_locked
-  from raw_materials m
-    left join stock_movements sm on sm.material_id = m.id
+  from public.raw_materials m
+    left join public.stock_movements sm on sm.material_id = m.id
   group by
     m.id,
     m.code,
