@@ -359,7 +359,7 @@ export async function POST(req: NextRequest) {
     //
     // NO LEGITIMATE CALLER LOSES ANYTHING. All three call sites already
     // refuse to fetch until `otpVerified` — checkout/page.tsx:974 (pickup)
-    // and :1022 (delivery), and subscriptions/setup/checkout/page.tsx:508 —
+    // and :1023 (delivery), and subscriptions/setup/checkout/page.tsx:508 —
     // and the returning-customer fast path skips this action outright because
     // it already holds a customer id. `getVerifiedPhone` honours the mobile
     // BEARER as well as the web cookie, though no mobile build calls this
