@@ -515,8 +515,28 @@ export default function CheckoutPage() {
       typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).get("edit") === "1";
 
-    const sessionPhone = sessionStorage.getItem("cadieux_verified_phone");
-    if (sessionPhone === saved) setOtpVerified(true);
+    // NO CLIENT-SIDE SEED FOR `otpVerified`. This used to read
+    // sessionStorage.cadieux_verified_phone and, if it matched the saved
+    // phone, set the flag TRUE before asking anyone — a value this page
+    // wrote itself, treated as proof of a credential it never checked.
+    //
+    // sessionStorage outlives the thing it was standing in for. The
+    // `cdx_phone_verified` cookie expires; the sessionStorage entry does not,
+    // so a tab whose cookie had died still rendered "Phone verified ✓" and
+    // skipped the OTP step while holding nothing. /api/checkout's own comment
+    // describes the same shape of bug on /orders, from the same cause: the
+    // client-side phone record never expires while the cookie does, so the
+    // page cannot tell the two apart without asking the server.
+    //
+    // It is not kept as an optimistic value either. The only thing that could
+    // overturn it is the fetch below, and that fetch ends in
+    // `.catch(() => {})` — so an offline or failing request would leave a
+    // stale "verified" on screen indefinitely, which is the bug. Making the
+    // optimistic form safe would mean setting FALSE in the catch too, turning
+    // every transient blip into a forced re-verification, and an OTP re-send
+    // costs real money against a shared 3/phone/hour budget. The flag now
+    // starts false and only the server turns it on, which is also what makes
+    // the empty catch below correct rather than merely harmless.
 
     // `slim=1` skips the full orders + subscriptions history fetch that
     // the /orders list page needs but checkout doesn't. Cuts prefill
@@ -541,9 +561,17 @@ export default function CheckoutPage() {
         //      drive-by's.
         if (d.phone_verified || d.customer) {
           setOtpVerified(true);
-          try {
-            sessionStorage.setItem("cadieux_verified_phone", saved);
-          } catch { /* private mode */ }
+        } else {
+          // THE ELSE BRANCH IS THE FIX. Without it this flag could only ever
+          // turn ON: the server's answer was read as permission to verify and
+          // never as a reason to stop. An expired cookie returns 401 with
+          // `{ phone_verified: false }`, which fell through here silently and
+          // left whatever the flag already held.
+          //
+          // The server is the only authority on this, so its "no" has to be
+          // as load-bearing as its "yes". Anything short of an explicit yes
+          // means re-verify.
+          setOtpVerified(false);
         }
         if (!d.customer) return;
         const c = d.customer as Customer;
@@ -927,7 +955,10 @@ export default function CheckoutPage() {
       }
       setOtpVerified(true);
       setOtpSent(false);
-      sessionStorage.setItem("cadieux_verified_phone", phone.replace(/\D/g, ""));
+      // Deliberately does NOT record the verified phone in sessionStorage.
+      // The POST above already set the signed `cdx_phone_verified` cookie,
+      // which is the credential; a second copy in storage that outlives it is
+      // what let a dead session look alive. Nothing reads such a key now.
     } catch {
       setOtpError("Network error. Try again.");
     } finally {
@@ -1991,7 +2022,6 @@ export default function CheckoutPage() {
                       onClick={() => {
                         if (!window.confirm("Delete saved details? You'll need to enter your address again next time.")) return;
                         try { localStorage.removeItem("cadieux_phone"); } catch { /* private mode */ }
-                        try { sessionStorage.removeItem("cadieux_verified_phone"); } catch { /* private mode */ }
                         setSavedCustomer(null);
                         setCustomer(null);
                         setFormMode("fresh");
