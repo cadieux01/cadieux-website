@@ -237,6 +237,32 @@ test("ONLY the admin route sets operatorAuthenticated", () => {
   assert.deepEqual(hits, ["src/app/api/admin/orders/route.ts"]);
 });
 
+test("a SIBLING option never turns the exemption on", async () => {
+  // The two tests above cover "set explicitly" and "set in only one file".
+  // Neither covers the direction a refactor actually breaks it: some OTHER
+  // member of PrepareOptions arriving and the exemption coming along with
+  // it. `operatorAuthenticated` is one of five optional booleans in that
+  // type, and the gate reads `if (!opts.operatorAuthenticated)` — so the
+  // whole public checkout rests on that one key being absent from the
+  // object /api/checkout passes, which today is `{ preorderMode }` alone.
+  //
+  // Anything that merges, spreads or defaults these options together is
+  // one typo away from making a truthy sibling mean "authenticated". That
+  // would not fail any other test in this file: the admin path would still
+  // work and the exemption would still appear in exactly one source file.
+  //
+  // So: pass siblings, assert the refusal is UNCHANGED. `{}` is the
+  // baseline (it duplicates the no-cookie test on purpose — the loop's
+  // value is that all three answers are identical).
+  for (const opts of [{}, { preorderMode: false }, { skipServiceability: true }]) {
+    const res = await prepare(requestWith(), opts);
+
+    assert.equal(res.ok, false, `opts ${JSON.stringify(opts)} should refuse`);
+    assert.equal(res.status, 401, `opts ${JSON.stringify(opts)} should be 401`);
+    assert.equal(res.body.code, "phone_not_verified");
+  }
+});
+
 // ── THE ESCALATION — defect 2 ─────────────────────────────────────────────
 
 /**
