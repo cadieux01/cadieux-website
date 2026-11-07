@@ -27,8 +27,13 @@ import {
 // returns needs_reorder as a THREE-valued column (NULL when no reorder_level
 // is set). Recomputing any of it here would create a second answer that could
 // disagree with the view.
+// `unit_locked` is the view's own EXISTS against production_batch_materials
+// (migration 20261103120000). It used to be a second query here, folded into a
+// Set — which PostgREST's `Max rows` silently truncated, under-reporting locks
+// and offering an edit the database then refused. One row, one answer, nothing
+// to truncate.
 const STOCK_SELECT =
-  "material_id, code, name, unit, category, reorder_level, lead_time_days, vendor_id, is_active, current_qty, movement_count, last_movement_at, needs_reorder";
+  "material_id, code, name, unit, category, reorder_level, lead_time_days, vendor_id, is_active, current_qty, movement_count, last_movement_at, needs_reorder, unit_locked";
 
 const MATERIAL_SELECT =
   "id, code, name, unit, category, reorder_level, lead_time_days, vendor_id, is_active, notes, created_at, updated_at";
@@ -74,31 +79,14 @@ export async function GET(req: NextRequest) {
   // discovering notes missing is exactly the absent-column-reads-as-blank
   // failure that has bitten this codebase before, so the two reads are
   // explicit rather than implied.
-  const [notesRes, lockedRes, vendorRes] = await Promise.all([
+  const [notesRes, vendorRes] = await Promise.all([
     supabaseAdmin.from("raw_materials").select("id, notes").in("id", ids),
-    // Which materials have been CONSUMED. This is what makes `unit`
-    // uneditable: production_batch_materials(material_id, unit) references
-    // raw_materials(id, unit) ON UPDATE RESTRICT, so once a row exists here
-    // Postgres refuses the unit change. The UI needs the answer up front to
-    // disable the field instead of letting the save fail.
-    //
-    // Deliberately NOT limited. A cap would under-report locks and the form
-    // would offer an edit the database is going to reject.
-    supabaseAdmin
-      .from("production_batch_materials")
-      .select("material_id")
-      .in("material_id", ids),
     supabaseAdmin.from("vendors").select("id, name"),
   ]);
 
-  // A failed lock read fails the WHOLE response, deliberately. Serving the rows
-  // with `unit_locked` defaulted to false would be the fail-open direction: the
-  // form would render an editable unit on a consumed material and only find out
-  // at the save. No board is better than a board offering an impossible edit.
-  if (notesRes.error || lockedRes.error || vendorRes.error) {
+  if (notesRes.error || vendorRes.error) {
     const msg =
       notesRes.error?.message ??
-      lockedRes.error?.message ??
       vendorRes.error?.message ??
       "Could not load raw materials.";
     console.error("[admin/raw-materials GET] merge", msg);
@@ -108,20 +96,21 @@ export async function GET(req: NextRequest) {
   const notesById = new Map<string, string | null>(
     (notesRes.data ?? []).map((r) => [r.id as string, r.notes as string | null]),
   );
-  const lockedIds = new Set<string>(
-    (lockedRes.data ?? []).map((r) => r.material_id as string),
-  );
   const vendorNameById = new Map<string, string>(
     (vendorRes.data ?? []).map((v) => [v.id as string, v.name as string]),
   );
 
+  // `unit_locked` is passed through from the view, NOT recomputed and NOT
+  // defaulted. If the column is ever missing the row carries `undefined`, and
+  // the form reads anything other than an explicit `false` as LOCKED — the
+  // same fail-closed direction the old Set could not offer, because a short
+  // page and an empty one looked identical to it.
   const materials: RawMaterialAdminRow[] = rows.map((r) => ({
     ...r,
     notes: notesById.get(r.material_id) ?? null,
     vendor_name: r.vendor_id
       ? vendorNameById.get(r.vendor_id) ?? null
       : null,
-    unit_locked: lockedIds.has(r.material_id),
   }));
 
   // The unit list travels with the payload so the form never has to guess it.

@@ -200,21 +200,28 @@ export type RawMaterialStockRow = {
   movement_count: number;
   last_movement_at: string | null;
   needs_reorder: boolean | null;
+  /**
+   * "Has this material been consumed" — the view's own EXISTS against
+   * production_batch_materials (migration 20261103120000). It is what makes
+   * `unit` uneditable: the composite FK (material_id, unit) → (id, unit) is
+   * ON UPDATE RESTRICT, so the UI needs the answer BEFORE the save.
+   *
+   * NOT movement_count. That counts every stock_movements row, purchases
+   * included, so a material only ever BOUGHT would read as locked.
+   */
+  unit_locked: boolean;
 };
 
 /**
- * What GET /api/admin/raw-materials returns: the view's row plus the three
+ * What GET /api/admin/raw-materials returns: the view's row plus the two
  * things the view does not carry.
  *
  * `notes` is absent from raw_material_stock, so it is read from the base
- * table and merged. `unit_locked` is the answer to "do production_batch_materials
- * rows exist for this material" — the UI needs it to disable the field BEFORE
- * a save fails, and it cannot be derived from the view.
+ * table and merged; `vendor_name` likewise.
  */
 export type RawMaterialAdminRow = RawMaterialStockRow & {
   notes: string | null;
   vendor_name: string | null;
-  unit_locked: boolean;
 };
 
 export type VendorRow = {

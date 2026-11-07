@@ -29,6 +29,18 @@ const {
 const SRC = path.join(process.cwd(), "src");
 const read = (p) => fs.readFileSync(path.join(SRC, p), "utf8");
 
+// The migration that puts `unit_locked` on the view. Located by its suffix
+// rather than its timestamp, so renumbering it before it is applied does not
+// break these assertions.
+const MIGRATIONS = path.join(process.cwd(), "supabase", "migrations");
+function readMigration() {
+  const f = fs
+    .readdirSync(MIGRATIONS)
+    .find((n) => n.endsWith("_raw_material_stock_add_unit_locked.sql"));
+  assert.ok(f, "the unit_locked migration is missing from supabase/migrations");
+  return fs.readFileSync(path.join(MIGRATIONS, f), "utf8");
+}
+
 test("unit list matches raw_materials_unit_check, in order", () => {
   // Verbatim from the prod CHECK:
   //   CHECK ((unit = ANY (ARRAY['kg','g','l','ml','pcs','packet'])))
@@ -224,26 +236,79 @@ test("the lock counts consumption, never the view's movement_count", () => {
   // locking off that number would freeze the unit of a material no batch has
   // ever touched — an edit the database would happily have accepted.
   // production_batch_materials is the only table the composite FK points at.
+  //
+  // The GET gets its answer from the view's unit_locked column; the PATCH
+  // still counts the table directly, pre-write.
+  assert.match(
+    read("app/api/admin/raw-materials/[id]/route.ts"),
+    /from\("production_batch_materials"\)/,
+    "the PATCH route does not count consumption",
+  );
+  const sql = readMigration();
+  assert.match(
+    sql,
+    /exists\s*\(\s*select 1\s+from production_batch_materials/i,
+    "the view does not derive unit_locked from consumption",
+  );
+  // Nothing may turn movement_count into a decision, in SQL or in either route.
+  assert.equal(
+    /movement_count[^,\n]*(>|<|>=|<=|=)/i.test(sql.replace(/count\(sm\.id\) as movement_count/i, "")),
+    false,
+    "the view decides something off movement_count",
+  );
   for (const p of [
     "app/api/admin/raw-materials/route.ts",
     "app/api/admin/raw-materials/[id]/route.ts",
   ]) {
-    const src = read(p);
-    assert.match(src, /production_batch_materials/, `${p} does not count consumption`);
+    assert.equal(
+      /movement_count\s*(>|<|>=|<=|===|!==|==|!=|\?)/.test(read(p)),
+      false,
+      `${p} uses movement_count as a decision`,
+    );
   }
-  // The view's column may be SELECTed for display, but must never reach the
-  // lock. Nothing named movement_count may appear in a conditional.
-  const lockSrc = read("app/api/admin/raw-materials/route.ts");
-  assert.equal(
-    /movement_count\s*(>|<|>=|<=|===|!==|==|!=|\?)/.test(lockSrc),
-    false,
-    "movement_count is being used as a decision, not just displayed",
+});
+
+test("the view's unit_locked keeps every existing column, in order, last", () => {
+  // CREATE OR REPLACE VIEW can only APPEND. A reordered or renamed column
+  // makes the migration fail on the live database, and a dropped one takes a
+  // board column with it.
+  // Comments first: the header names most of these columns in prose, and an
+  // indexOf against that prose would measure the explanation, not the view.
+  const sql = readMigration().replace(/--[^\n]*/g, "");
+  const order = [
+    "material_id",
+    "code",
+    "name",
+    "unit",
+    "category",
+    "reorder_level",
+    "lead_time_days",
+    "vendor_id",
+    "is_active",
+    "current_qty",
+    "movement_count",
+    "last_movement_at",
+    "needs_reorder",
+    "unit_locked",
+  ];
+  // `\b` matters: without it `as unit` would match `as unit_locked` and put
+  // the fourth column after the fourteenth.
+  const positions = order.map((c) =>
+    sql.search(new RegExp(`(as\\s+|m\\.)${c}\\b`)),
   );
-  assert.equal(
-    /movement_count/.test(read("app/api/admin/raw-materials/[id]/route.ts")),
-    false,
-    "the PATCH route reads movement_count at all",
-  );
+  for (const [i, c] of order.entries()) {
+    assert.ok(positions[i] > 0, `${c} is missing from the view`);
+    if (i > 0) {
+      assert.ok(
+        positions[i] > positions[i - 1],
+        `${c} is not after ${order[i - 1]}`,
+      );
+    }
+  }
+  // RLS posture must survive the replace.
+  assert.match(sql, /security_invoker\s*=\s*true/);
+  // needs_reorder stays THREE-valued.
+  assert.match(sql, /when m\.reorder_level is null then null::boolean/i);
 });
 
 // ── the lock fails CLOSED ─────────────────────────────────────────────────
@@ -269,17 +334,28 @@ test("a failed consumed-count is treated as locked, not as unlocked", () => {
   );
 });
 
-test("a failed lock read fails the whole GET rather than defaulting to unlocked", () => {
+test("the GET passes unit_locked through and never manufactures it", () => {
   const src = read("app/api/admin/raw-materials/route.ts");
-  // Degrading to `unit_locked: false` would render an editable unit on a
-  // consumed material and only discover it at the save.
-  assert.match(src, /lockedRes\.error/);
-  assert.match(src, /status: 500/);
+  // It comes off the view row, so there is no second result set to truncate.
+  // PostgREST caps a response at the project's Max rows (1000 by default), and
+  // the bulk `select material_id from production_batch_materials` this
+  // replaced was silently short on any busy kitchen — under-reporting locks,
+  // which is the fail-OPEN direction.
+  assert.match(src, /needs_reorder, unit_locked/, "the view select omits unit_locked");
   assert.equal(
-    /unit_locked:\s*(false|lockedRes\.error)/.test(src),
+    /from\("production_batch_materials"\)/.test(src),
     false,
-    "the GET defaults unit_locked to false somewhere",
+    "the GET still runs the bulk lock query the view replaced",
   );
+  // No default, no recompute, no Set.
+  assert.equal(
+    /unit_locked:\s*/.test(src.slice(src.indexOf("const materials"))),
+    false,
+    "the GET assigns unit_locked instead of passing it through",
+  );
+  // A failed view read still fails the whole response rather than serving rows.
+  assert.match(src, /stockErr/);
+  assert.match(src, /status: 500/);
 });
 
 test("the form locks the unit when nobody has answered unit_locked", () => {
