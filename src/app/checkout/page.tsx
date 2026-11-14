@@ -121,6 +121,32 @@ type PinState =
   | { state: "unserviceable" }
   | { state: "error" };
 
+/* THE VERIFIED-PHONE FLAG IS THREE-VALUED, AND THE THIRD VALUE IS THE POINT.
+ *
+ *   "unknown"    — the server has not answered yet, or both attempts to ask
+ *                  it failed. We do not know whether this customer holds a
+ *                  valid `cdx_phone_verified` cookie.
+ *   "verified"   — the server said yes, or the customer just passed OTP here.
+ *   "unverified" — the server said no, or the customer changed their number.
+ *
+ * It replaced a boolean, and the boolean's problem was that it had to answer
+ * "has this phone been verified?" before anyone had asked. It answered false,
+ * which reads as "not verified" everywhere downstream — so a returning
+ * customer with a perfectly good cookie was shown the OTP form, and the
+ * submit gates told them to "verify your phone number", during the ~150ms the
+ * check was in flight and FOREVER if the request failed. 2713404 made the
+ * flag clearable, which fixed the opposite bug (it could only turn ON) and
+ * left this one: false still means both "we asked and the answer was no" and
+ * "we have not asked".
+ *
+ * Those two are not the same and must not render the same. "unknown" renders
+ * a checking strip with a retry, never the OTP form and never the
+ * "Please verify your phone number" error — asking someone to re-verify
+ * because OUR request timed out spends one of their 3-per-hour OTP sends on
+ * our own network blip.
+ */
+type VerifiedState = "unknown" | "verified" | "unverified";
+
 const DAY_LABEL_TO_KEY: Record<string, string> = {
   mon: "mon", tue: "tue", wed: "wed", thu: "thu",
   fri: "fri", sat: "sat", sun: "sun",
@@ -259,7 +285,44 @@ export default function CheckoutPage() {
   const [phone, setPhone] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
-  const [otpVerified, setOtpVerified] = useState(false);
+  // See the VerifiedState comment above. Starts "unknown" — NOT false —
+  // because on first render nobody has asked the server anything yet.
+  const [verifiedState, setVerifiedState] = useState<VerifiedState>("unknown");
+  // Set only once BOTH check attempts have failed. It drives the retry
+  // affordance and nothing else; `verifiedState` stays exactly three-valued
+  // rather than growing a fourth "errored" member that every consumer would
+  // then have to treat as "unknown" anyway.
+  const [verifyCheckFailed, setVerifyCheckFailed] = useState(false);
+  // DERIVED, so the ~20 existing read sites and both child components keep
+  // the boolean contract they already have. The important asymmetry: a
+  // boolean setter can express verified and unverified but CANNOT express
+  // unknown, so no ordinary caller can put the page back into the checking
+  // state by accident. Only the prefill effect does that, and only when its
+  // own request failed.
+  const otpVerified = verifiedState === "verified";
+  const setOtpVerified = useCallback(
+    (b: boolean) => setVerifiedState(b ? "verified" : "unverified"),
+    [],
+  );
+  // The retry button. Deliberately a SEPARATE path from the mount effect's
+  // automatic retry: this one is user-initiated, so it gets no retry of its
+  // own — press it again if it fails again. It asks the server, it does not
+  // guess, and a failure leaves the page in "unknown" exactly as before.
+  const recheckVerification = useCallback(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem("cadieux_phone") : null;
+    if (!saved) { setVerifiedState("unverified"); return; }
+    setVerifyCheckFailed(false);
+    setVerifiedState("unknown");
+    fetch(`/api/checkout?phone=${encodeURIComponent(saved)}&slim=1`)
+      .then((r) => r.json())
+      .then((d) => {
+        setVerifiedState(d.phone_verified || d.customer ? "verified" : "unverified");
+      })
+      .catch(() => {
+        setVerifiedState("unknown");
+        setVerifyCheckFailed(true);
+      });
+  }, []);
   const [addressLine, setAddressLine] = useState("");
   const [area, setArea] = useState("");
   const [city, setCity] = useState("");
@@ -503,7 +566,17 @@ export default function CheckoutPage() {
   /* ── Pre-fill on mount ────────────────────────────────────────────────── */
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("cadieux_phone") : null;
-    if (!saved) return;
+    if (!saved) {
+      // NO SAVED PHONE MEANS THERE IS NOTHING TO CHECK, so resolve out of
+      // "unknown" immediately rather than returning and leaving it there.
+      // This is load-bearing: the fetch below is the ONLY thing that ever
+      // leaves the checking state, and it is downstream of this early
+      // return. Without this line a first-time visitor sits on the checking
+      // strip forever and can never reach the OTP form — the checkout page
+      // would be dead for every new customer.
+      setVerifiedState("unverified");
+      return;
+    }
     setPhone(saved);
 
     // `?edit=1` deep-links from /account/addresses → lands the wizard
@@ -541,51 +614,78 @@ export default function CheckoutPage() {
     // `slim=1` skips the full orders + subscriptions history fetch that
     // the /orders list page needs but checkout doesn't. Cuts prefill
     // latency from ~3s (subscriptions seq-scan) down to ~150ms.
-    fetch(`/api/checkout?phone=${encodeURIComponent(saved)}&slim=1`)
-      .then((r) => r.json())
-      .then((d) => {
-        // Server-side trust signal for skipping OTP. ONE live acceptance
-        // path, not the two this comment used to describe:
-        //   1. `phone_verified` — valid cookie (PHONE_COOKIE_TTL_MS, not
-        //      the 30 minutes claimed here before) or mobile bearer.
-        //   2. `d.customer` present — DEAD. The intent was that a saved
-        //      customer row is longer-lived proof of a past OTP, letting a
-        //      returning buyer with an expired cookie skip the step. But
-        //      /api/checkout returns `customer: null` BEFORE it ever looks
-        //      the customer up when the phone isn't verified, so `d.customer`
-        //      cannot be set while `phone_verified` is false. That branch
-        //      has never widened anything. It now also arrives as a 401.
-        //      Left in place rather than removed: the mandatory login gate
-        //      is rewriting this gate wholesale, and deciding whether a
-        //      saved row should re-grant trust is its call, not a
-        //      drive-by's.
-        if (d.phone_verified || d.customer) {
-          setOtpVerified(true);
-        } else {
-          // THE ELSE BRANCH IS THE FIX. Without it this flag could only ever
-          // turn ON: the server's answer was read as permission to verify and
-          // never as a reason to stop. An expired cookie returns 401 with
-          // `{ phone_verified: false }`, which fell through here silently and
-          // left whatever the flag already held.
-          //
-          // The server is the only authority on this, so its "no" has to be
-          // as load-bearing as its "yes". Anything short of an explicit yes
-          // means re-verify.
-          setOtpVerified(false);
-        }
-        if (!d.customer) return;
-        const c = d.customer as Customer;
-        setSavedCustomer(c);
-        setCustomer(c);
-        setName(c.full_name ?? "");
-        setCity(c.city ?? "");
-        prefillAddress(c.delivery_address ?? "");
-        // ?edit=1 (from /account/addresses → "Edit") drops the user
-        // straight into the editable address form pre-populated with
-        // their saved fields, skipping the read-only saved card.
-        setFormMode(editParam ? "edit" : "returning");
-      })
-      .catch(() => {});
+    // Retries ONCE and no more. A single retry covers what actually happens
+    // — a dropped connection on a phone changing cells, a cold lambda, a
+    // 502 from the edge — without turning a real outage into a retry storm
+    // from every open checkout tab. After the second failure the page says
+    // so and offers the retry as a button, which is a user-initiated
+    // request rather than an automatic one.
+    const runVerificationCheck = (attempt: number) => {
+      fetch(`/api/checkout?phone=${encodeURIComponent(saved)}&slim=1`)
+        .then((r) => r.json())
+        .then((d) => {
+          // Server-side trust signal for skipping OTP. ONE live acceptance
+          // path, not the two this comment used to describe:
+          //   1. `phone_verified` — valid cookie (PHONE_COOKIE_TTL_MS, not
+          //      the 30 minutes claimed here before) or mobile bearer.
+          //   2. `d.customer` present — DEAD. The intent was that a saved
+          //      customer row is longer-lived proof of a past OTP, letting a
+          //      returning buyer with an expired cookie skip the step. But
+          //      /api/checkout returns `customer: null` BEFORE it ever looks
+          //      the customer up when the phone isn't verified, so `d.customer`
+          //      cannot be set while `phone_verified` is false. That branch
+          //      has never widened anything. It now also arrives as a 401.
+          //      Left in place rather than removed: the mandatory login gate
+          //      is rewriting this gate wholesale, and deciding whether a
+          //      saved row should re-grant trust is its call, not a
+          //      drive-by's.
+          // An answer arrived, so we are out of "unknown" either way. Clear
+          // the failed flag too: a successful late attempt must not leave a
+          // stale "couldn't check" retry button on screen.
+          setVerifyCheckFailed(false);
+          if (d.phone_verified || d.customer) {
+            setVerifiedState("verified");
+          } else {
+            // THE ELSE BRANCH IS THE FIX. Without it this flag could only ever
+            // turn ON: the server's answer was read as permission to verify and
+            // never as a reason to stop. An expired cookie returns 401 with
+            // `{ phone_verified: false }`, which fell through here silently and
+            // left whatever the flag already held.
+            //
+            // The server is the only authority on this, so its "no" has to be
+            // as load-bearing as its "yes". An explicit no is "unverified" —
+            // a DIFFERENT state from the "unknown" we started in, and the
+            // only one of the two that may show the OTP form.
+            setVerifiedState("unverified");
+          }
+          if (!d.customer) return;
+          const c = d.customer as Customer;
+          setSavedCustomer(c);
+          setCustomer(c);
+          setName(c.full_name ?? "");
+          setCity(c.city ?? "");
+          prefillAddress(c.delivery_address ?? "");
+          // ?edit=1 (from /account/addresses → "Edit") drops the user
+          // straight into the editable address form pre-populated with
+          // their saved fields, skipping the read-only saved card.
+          setFormMode(editParam ? "edit" : "returning");
+        })
+        .catch(() => {
+          // Network failure, timeout, or a non-JSON body (an edge 502 is
+          // HTML, and `r.json()` throws on it — which lands here, not in
+          // the `else` above). We did not get an answer, so the state is
+          // "unknown", NOT "unverified".
+          if (attempt === 0) {
+            // Stay in "unknown" and ask once more. The strip keeps saying
+            // "checking" across the retry, which is the truth.
+            runVerificationCheck(1);
+            return;
+          }
+          setVerifiedState("unknown");
+          setVerifyCheckFailed(true);
+        });
+    };
+    runVerificationCheck(0);
     // editParam is read once on mount; deps would re-fire the whole
     // prefill if it changed mid-session, which we don't want.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -990,6 +1090,7 @@ export default function CheckoutPage() {
 
       // Returning customer — already has a customer id, skip save_customer.
       if (formMode === "returning" && savedCustomer && customer?.id) {
+        if (verifiedState === "unknown") { setError(verifyCheckFailed ? "We couldn't check your phone verification. Tap Retry above." : "Checking your phone verification…"); return; }
         if (!otpVerified) { setError("Please verify your phone number to continue."); return; }
         setAddressConfirmed(true);
         setStep("payment"); // pickup skips the delivery date/slot step
@@ -1002,6 +1103,7 @@ export default function CheckoutPage() {
       // later will overwrite it via the same endpoint.
       if (!name.trim()) { setError("Please enter your name."); return; }
       if (phone.replace(/\D/g, "").length !== 10) { setError("Enter a valid 10-digit number."); return; }
+      if (verifiedState === "unknown") { setError(verifyCheckFailed ? "We couldn't check your phone verification. Tap Retry above." : "Checking your phone verification…"); return; }
       if (!otpVerified) { setError("Please verify your phone number."); return; }
 
       setSubmitting(true);
@@ -1040,6 +1142,7 @@ export default function CheckoutPage() {
     // this line used to claim) the prefill effect already flipped
     // otpVerified to true so this gate is a no-op.
     if (formMode === "returning" && savedCustomer && customer?.id) {
+      if (verifiedState === "unknown") { setError(verifyCheckFailed ? "We couldn't check your phone verification. Tap Retry above." : "Checking your phone verification…"); return; }
       if (!otpVerified) { setError("Please verify your phone number to continue."); return; }
       if (pinStatus.state === "checking") { setError("Checking pincode availability…"); return; }
       if (pinStatus.state === "unserviceable") { setError("We don't deliver to this pincode yet."); return; }
@@ -1051,6 +1154,7 @@ export default function CheckoutPage() {
 
     if (!name.trim()) { setError("Please enter your name."); return; }
     if (phone.replace(/\D/g, "").length !== 10) { setError("Enter a valid 10-digit number."); return; }
+    if (verifiedState === "unknown") { setError(verifyCheckFailed ? "We couldn't check your phone verification. Tap Retry above." : "Checking your phone verification…"); return; }
     if (!otpVerified) { setError("Please verify your phone number."); return; }
     if (locQuestion === "unanswered") {
       setError("Please tell us whether you're currently at this delivery address.");
@@ -1286,6 +1390,13 @@ export default function CheckoutPage() {
     // but if a user clears sessionStorage / cookies mid-flow the server
     // would reject place_order. Bounce back to step 1 with a clear msg
     // instead of letting "Phone verification required" surface here.
+    if (verifiedState === "unknown") {
+      // Not "please verify" — we genuinely do not know, so say that and send
+      // them back to the step that can find out.
+      setError("Still checking your phone verification. One moment, then try again.");
+      setStep("address");
+      return;
+    }
     if (!otpVerified) {
       setError("Please verify your phone number before paying.");
       setStep("address");
@@ -1377,6 +1488,13 @@ export default function CheckoutPage() {
     }
     // Same defensive check as COD — server rejects place_order without
     // a valid OTP cookie, so refuse to even open the gateway.
+    if (verifiedState === "unknown") {
+      // Not "please verify" — we genuinely do not know, so say that and send
+      // them back to the step that can find out.
+      setError("Still checking your phone verification. One moment, then try again.");
+      setStep("address");
+      return;
+    }
     if (!otpVerified) {
       setError("Please verify your phone number before paying.");
       setStep("address");
@@ -1959,6 +2077,9 @@ export default function CheckoutPage() {
                 otpCode={otpCode}
                 setOtpCode={setOtpCode}
                 otpVerified={otpVerified}
+                verifiedState={verifiedState}
+                verifyCheckFailed={verifyCheckFailed}
+                onRecheckVerification={recheckVerification}
                 setOtpVerified={setOtpVerified}
                 setOtpSent={setOtpSent}
                 otpError={otpError}
@@ -2138,7 +2259,10 @@ export default function CheckoutPage() {
                   "Phone verification required" error. Forcing OTP at
                   step 1 means payment never has to surface that gate.
                 */}
-                {!otpVerified && (
+                {verifiedState === "unknown" && (
+                  <VerificationStatusStrip failed={verifyCheckFailed} onRetry={recheckVerification} />
+                )}
+                {verifiedState === "unverified" && (
                   <SavedCustomerOtpBlock
                     phone={savedCustomer.phone}
                     otpSent={otpSent}
@@ -2152,7 +2276,7 @@ export default function CheckoutPage() {
                     verifyingOtp={verifyingOtp}
                   />
                 )}
-                {otpVerified && (
+                {verifiedState === "verified" && (
                   <p style={{ margin: "0 0 16px", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.25em", textTransform: "uppercase", color: "#024628" }}>
                     ✓ Phone Verified
                   </p>
@@ -2216,6 +2340,9 @@ export default function CheckoutPage() {
                 otpCode={otpCode}
                 setOtpCode={setOtpCode}
                 otpVerified={otpVerified}
+                verifiedState={verifiedState}
+                verifyCheckFailed={verifyCheckFailed}
+                onRecheckVerification={recheckVerification}
                 setOtpVerified={setOtpVerified}
                 setOtpSent={setOtpSent}
                 otpError={otpError}
@@ -2433,6 +2560,13 @@ function AddressForm(props: {
   otpSent: boolean; setOtpSent: (b: boolean) => void;
   otpCode: string; setOtpCode: (s: string) => void;
   otpVerified: boolean; setOtpVerified: (b: boolean) => void;
+  // The tri-state travels down alongside the derived boolean rather than
+  // replacing it: `otpVerified` still answers "may this customer proceed",
+  // which is what most of this component asks, while `verifiedState`
+  // answers "do we know yet", which only the OTP form needs.
+  verifiedState: VerifiedState;
+  verifyCheckFailed: boolean;
+  onRecheckVerification: () => void;
   otpError: string; setOtpError: (s: string) => void;
   sendOtp: () => void;
   verifyOtp: () => void;
@@ -2462,6 +2596,7 @@ function AddressForm(props: {
     name, setName, phone, setPhone,
     otpSent, setOtpSent, otpCode, setOtpCode,
     otpVerified, setOtpVerified, otpError, setOtpError,
+    verifiedState, verifyCheckFailed, onRecheckVerification,
     sendOtp, verifyOtp, sendingOtp, verifyingOtp,
     addressLine, setAddressLine, area, setArea,
     city, setCity, pincode, setPincode,
@@ -2629,7 +2764,7 @@ function AddressForm(props: {
               }}
             />
           </div>
-          {otpVerified ? (
+          {verifiedState === "unknown" ? null : otpVerified ? (
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 4 }}>
               <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", color: "#024628" }}>✓ Verified</span>
               <button
@@ -2661,7 +2796,11 @@ function AddressForm(props: {
           )}
         </div>
 
-        {otpSent && !otpVerified && (
+        {verifiedState === "unknown" && (
+          <VerificationStatusStrip failed={verifyCheckFailed} onRetry={onRecheckVerification} />
+        )}
+
+        {otpSent && verifiedState === "unverified" && (
           <div style={{ marginTop: 14 }}>
             <span style={labelSt}>Enter OTP *</span>
             <input
@@ -3178,6 +3317,13 @@ function PickupSection(props: {
   otpSent: boolean; setOtpSent: (b: boolean) => void;
   otpCode: string; setOtpCode: (s: string) => void;
   otpVerified: boolean; setOtpVerified: (b: boolean) => void;
+  // The tri-state travels down alongside the derived boolean rather than
+  // replacing it: `otpVerified` still answers "may this customer proceed",
+  // which is what most of this component asks, while `verifiedState`
+  // answers "do we know yet", which only the OTP form needs.
+  verifiedState: VerifiedState;
+  verifyCheckFailed: boolean;
+  onRecheckVerification: () => void;
   otpError: string; setOtpError: (s: string) => void;
   sendOtp: () => void;
   verifyOtp: () => void;
@@ -3202,6 +3348,7 @@ function PickupSection(props: {
     name, setName, phone, setPhone,
     otpSent, otpCode, setOtpCode,
     otpVerified, setOtpVerified, setOtpSent,
+    verifiedState, verifyCheckFailed, onRecheckVerification,
     otpError, setOtpError,
     sendOtp, verifyOtp, sendingOtp, verifyingOtp,
     onSwitchToFresh,
@@ -3236,7 +3383,9 @@ function PickupSection(props: {
             </p>
           </div>
 
-          {!otpVerified ? (
+          {verifiedState === "unknown" ? (
+            <VerificationStatusStrip failed={verifyCheckFailed} onRetry={onRecheckVerification} />
+          ) : verifiedState === "unverified" ? (
             <SavedCustomerOtpBlock
               phone={savedCustomer!.phone}
               otpSent={otpSent}
@@ -3312,7 +3461,7 @@ function PickupSection(props: {
                 autoComplete="tel"
                 maxLength={10}
               />
-              {otpVerified ? (
+              {verifiedState === "unknown" ? null : otpVerified ? (
                 <div style={{ flexShrink: 0, display: "flex", alignItems: "center", padding: "0 12px" }}>
                   <span style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, letterSpacing: "0.2em", color: "#024628" }}>
                     ✓ Verified
@@ -3342,7 +3491,11 @@ function PickupSection(props: {
             </div>
           </div>
 
-          {otpSent && !otpVerified && (
+          {verifiedState === "unknown" && (
+            <VerificationStatusStrip failed={verifyCheckFailed} onRetry={onRecheckVerification} />
+          )}
+
+          {otpSent && verifiedState === "unverified" && (
             <div style={{ marginBottom: 14 }}>
               <span style={labelSt}>Enter OTP *</span>
               <input
@@ -3550,6 +3703,68 @@ function PaymentButtons({
 // Task G: green-on-green + amber-on-amber → matrix-legal FG "success" (brand
 // IS green) and --warning-on-light for unserviceable/error. Checking uses
 // FG@75%.
+/* The face of "unknown". Shows that a check is happening, or that it failed
+ * and can be retried — and in neither case does it show the OTP form or tell
+ * the customer to verify anything. Styled on PincodeStatusStrip below, which
+ * is the same idea for serviceability: a status line that distinguishes
+ * "checking" from "no". */
+function VerificationStatusStrip({
+  failed,
+  onRetry,
+}: {
+  failed: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      style={{
+        marginBottom: 16,
+        padding: "12px 14px",
+        border: failed ? "1px solid rgba(153,27,27,0.4)" : "1px solid #024628",
+        background: failed ? "rgba(153,27,27,0.06)" : "transparent",
+        fontFamily: "var(--font-body)",
+        fontSize: 16,
+        fontWeight: 300,
+        letterSpacing: "0.04em",
+        color: failed ? "var(--warning-on-light)" : "#024628",
+        lineHeight: 1.5,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <span>
+        {failed
+          ? "We couldn't check whether your number is already verified."
+          : "Checking your phone verification…"}
+      </span>
+      {failed && (
+        <button
+          type="button"
+          onClick={onRetry}
+          style={{
+            flexShrink: 0,
+            background: "none",
+            border: "1px solid var(--warning-on-light)",
+            padding: "6px 14px",
+            cursor: "pointer",
+            fontFamily: "var(--font-body)",
+            fontSize: 14,
+            fontWeight: 500,
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            color: "var(--warning-on-light)",
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PincodeStatusStrip({ pinStatus }: { pinStatus: PinState }) {
   if (pinStatus.state === "idle") return null;
   const isOk = pinStatus.state === "serviceable";
