@@ -110,6 +110,11 @@ import {
 } from "react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import {
+  CodSettleButton,
+  CodSettleDialog,
+  CodSettledChip,
+} from "@/components/admin/CodSettleDialog";
 import DateSpanPicker from "@/components/admin/DateSpanPicker";
 import { ZoneAssignPopover } from "@/components/admin/ZoneAssignPopover";
 import { ZoneBadge } from "@/components/admin/ZoneBadge";
@@ -117,6 +122,7 @@ import { adminFetch } from "@/lib/admin-client";
 import { useUrlWriteback } from "@/lib/admin-url-state";
 import { formatINR } from "@/lib/admin-formatting";
 import type { AdminOrderRow, AdminSubscriptionRow } from "@/lib/admin-shared";
+import { canSettleCod } from "@/lib/cod-settlement";
 import {
   parseDayParam,
   parseRangeParams,
@@ -285,6 +291,12 @@ function DeliveriesPageInner() {
 
   const [orders, setOrders] = useState<AdminOrderRow[] | null>(null);
   const [subs, setSubs] = useState<AdminSubscriptionRow[] | null>(null);
+
+  // The order whose cash is being recorded. Holds the ORDER, not the stop:
+  // CodSettleDialog takes an AdminOrderRow and is reused here byte-for-byte
+  // from /admin/orders, so the board must hand it the same shape that board
+  // does rather than a DeliveryRow.
+  const [settling, setSettling] = useState<AdminOrderRow | null>(null);
   const [rules, setRules] = useState<ZoneRuleSet>(EMPTY_RULE_SET);
   // The raw override rows are kept alongside the derived rule set purely so
   // an already-pinned row can offer "Remove pin" — that needs the override's
@@ -390,6 +402,24 @@ function DeliveriesPageInner() {
     }
     return (subs ?? []).map((s) => subscriptionToDeliveryRow(s, rules));
   }, [source, orders, subs, rules]);
+
+  /** orderId -> the order it was reduced from.
+   *
+   *  DeliveryRow deliberately carries no payment_status, cod_settled_method,
+   *  status_updated_at or fulfillment_type — it is a STOP, the shape a rider
+   *  reads, and widening it would make every consumer of partner-deliveries
+   *  carry settlement fields it has no use for. The settle gate and the dialog
+   *  need all four, so they read the order back out of the list this board
+   *  already holds. Nothing is re-fetched: `orders` is the exact array
+   *  `allRows` was mapped from, so a stop whose order is missing here cannot
+   *  exist on screen.
+   *
+   *  Empty for `source === "subscriptions"`, which is what leaves subscription
+   *  stops with no button without a single branch on row kind. */
+  const ordersById = useMemo(
+    () => new Map((orders ?? []).map((o) => [o.id, o])),
+    [orders],
+  );
 
   // Date + search. Everything below — the totals, the zone counts and the
   // table — is computed from THIS set, so the numbers on the screen are all
@@ -1038,6 +1068,8 @@ function DeliveriesPageInner() {
                 onAssign={openAssign}
                 naming={naming}
                 onSaveNote={saveNote}
+                ordersById={ordersById}
+                onSettleCod={setSettling}
               />
             )}
           </section>
@@ -1095,6 +1127,31 @@ function DeliveriesPageInner() {
           }
         />
       ) : null}
+
+      {/* REUSED UNCHANGED from /admin/orders. It owns the method choice, the
+          paid_at it is about to write (computed by settlementPaidAt, the same
+          function the PATCH route calls) and the single-flight guard, so this
+          board adds no second opinion about any of them. */}
+      {settling ? (
+        <CodSettleDialog
+          order={settling}
+          onCancel={() => setSettling(null)}
+          onSaved={() => {
+            setSettling(null);
+            // Re-read rather than patch the row in place. The route decides
+            // payment_status and paid_at, so a local guess here could show a
+            // state the database does not hold — the same reasoning
+            // /admin/orders states where it calls load() on save.
+            //
+            // Nulling the state is how this board reloads: the fetch effect
+            // is guarded on `orders !== null` and re-runs when that clears.
+            // It costs the whole ?all=1 read again, which is the honest price
+            // of not guessing; the date and zone selection are separate state
+            // and survive it.
+            setOrders(null);
+          }}
+        />
+      ) : null}
     </AdminShell>
   );
 }
@@ -1126,6 +1183,8 @@ function DeliveryTable({
   onAssign,
   naming,
   onSaveNote,
+  ordersById,
+  onSettleCod,
 }: {
   rows: readonly DeliveryRow[];
   sel: DaySelection;
@@ -1133,6 +1192,8 @@ function DeliveryTable({
   onAssign: (row: DeliveryRow, rect: DOMRect) => void;
   naming: AreaNaming;
   onSaveNote: SaveNote;
+  ordersById: ReadonlyMap<string, AdminOrderRow>;
+  onSettleCod: (order: AdminOrderRow) => void;
 }) {
   return (
     <table
@@ -1188,6 +1249,8 @@ function DeliveryTable({
             onAssign={onAssign}
             naming={naming}
             onSaveNote={onSaveNote}
+            order={r.orderId ? ordersById.get(r.orderId) ?? null : null}
+            onSettleCod={onSettleCod}
           />
         ))}
       </tbody>
@@ -1212,6 +1275,8 @@ function DeliveryTableRow({
   onAssign,
   naming,
   onSaveNote,
+  order,
+  onSettleCod,
 }: {
   row: DeliveryRow;
   stopDate: string | null;
@@ -1219,6 +1284,12 @@ function DeliveryTableRow({
   onAssign: (row: DeliveryRow, rect: DOMRect) => void;
   naming: AreaNaming;
   onSaveNote: SaveNote;
+  /** The order this stop was reduced from, or null on a subscription stop —
+   *  which is what makes the settle control absent there rather than
+   *  disabled. A subscription's money is a different object (one plan, many
+   *  deliveries, its own payment rows) and recording it is not this change. */
+  order: AdminOrderRow | null;
+  onSettleCod: (order: AdminOrderRow) => void;
 }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
@@ -1317,7 +1388,28 @@ function DeliveryTableRow({
           }}
         />
       </Cell>
-      <Cell label="Payment">{r.paymentMode}</Cell>
+      <Cell label="Payment">
+        {/* The money column, so the money action lives here — no eighth
+            column. Seven already only fit 360px as a stacked block below
+            `md`, and the control is a block under the mode rather than
+            beside it so neither can push the cell wider than its 11%. */}
+        <div>{r.paymentMode}</div>
+        {order && canSettleCod(order) ? (
+          <div style={{ marginTop: "0.25rem" }}>
+            <CodSettleButton
+              onClick={() => onSettleCod(order)}
+              fulfillmentType={order.fulfillment_type}
+            />
+          </div>
+        ) : order?.cod_settled_method ? (
+          <div style={{ marginTop: "0.25rem" }}>
+            <CodSettledChip
+              method={order.cod_settled_method}
+              fulfillmentType={order.fulfillment_type}
+            />
+          </div>
+        ) : null}
+      </Cell>
       <Cell label="Total">{formatINR(r.totalInr)}</Cell>
       <Cell label="Note">
         <NoteCell
