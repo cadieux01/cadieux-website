@@ -2,21 +2,26 @@
 -- logistics production tables: let DASHBOARD ADMINS read/write raw materials,
 -- vendors and stock movements. Nothing changes for sales, partner or anon.
 -- =============================================================================
--- *** NOT APPLIED. NOT PUSHED. The filename version above is a PLACEHOLDER. ***
--- `supabase db push` is never run in this repo -- read ./README.md. When Raja
--- says "apply", this file is applied BY HAND to PRODUCTION (ref
--- uejagupcwevadfhfuadv) via the Supabase MCP `apply_migration`, which MINTS a
--- ledger version; the file is then `git mv`-ed to that version and this header
--- corrected. Every statement is idempotent, but the idempotency re-run must go
--- through `execute_sql`, never a second `apply_migration` (that would mint a
--- duplicate ledger row).
+-- APPLIED BY HAND to PRODUCTION (ref uejagupcwevadfhfuadv) on 2026-11-16 via
+-- the Supabase MCP `apply_migration`; minted ledger version 20261116174449,
+-- which is this filename. `supabase db push` is never run in this repo -- read
+-- ./README.md before touching anything here. Every statement below is
+-- idempotent and the re-run was done via `execute_sql`, never a second
+-- `apply_migration` (that would mint a duplicate ledger row).
+--
+-- ONE DIFFERENCE between the text applied and the text below, disclosed rather
+-- than glossed over: the `apply_migration` payload carried a SHORTER comment
+-- preamble, because this block quotes a ledger version that did not exist until
+-- the apply returned. The EXECUTABLE STATEMENTS were byte-identical -- verified
+-- by stripping comment lines from both texts and diffing to exit 0. Nothing
+-- below was re-ordered, added or removed.
 --
 -- -----------------------------------------------------------------------------
 -- WHY
 -- -----------------------------------------------------------------------------
 -- The six production tables moved `public` -> `logistics` on 2026-11-07 (ledger
 -- 20261107103856) carrying their original ACLs, which are postgres +
--- service_role ONLY. Measured on prod 2026-11-14: relacl on vendors,
+-- service_role ONLY. Measured on prod 2026-11-16: relacl on vendors,
 -- raw_materials, stock_movements, production_batch_materials,
 -- production_batches, yield_baselines and the raw_material_stock view is
 -- exactly {postgres=arwdDxtm/postgres, service_role=arwdDxtm/postgres}.
@@ -156,7 +161,7 @@ create policy "lgx: admins select production_batch_materials"
 
 
 -- 3 ------------------------------------------- raw_material_stock.unit_locked
--- Body below is prod's own pg_get_viewdef(..., true) read on 2026-11-14, with
+-- Body below is prod's own pg_get_viewdef(..., true) read on 2026-11-16, with
 -- ONE addition: unit_locked appended as column 14. CREATE OR REPLACE VIEW can
 -- only append at the end and cannot change the 13 existing columns' names,
 -- types or order, so the dashboard's current reads are unaffected. The ACL
