@@ -5,9 +5,12 @@
 //
 //   - Mounts inside CartProvider (see app/layout.tsx) so it can read the
 //     live item count for its badge.
-//   - Hides on /admin (not customer-facing), and on /cart + /checkout
-//     where it would either duplicate or overlap the page's own primary
-//     CTAs.
+//   - Hides on /admin and /mkt (neither customer-facing), and on
+//     /cart + /checkout where it would either duplicate or overlap
+//     the page's own primary CTAs. /mkt is an operator surface and the
+//     cart bubble on it was both nonsensical UX (the operator is not a
+//     customer with a cart) and visually competing with the bottom of
+//     the detail pane.
 //   - Exposes a known DOM id (FLOATING_CART_ID) so the fly-to-cart
 //     animation can target its on-screen coords from anywhere.
 //   - Listens for `cadieux:cart-bounce` and plays a short pulse so the
@@ -20,7 +23,7 @@ import { useCart } from "@/context/CartContext";
 
 export const FLOATING_CART_ID = "cadieux-floating-cart";
 
-const HIDDEN_PREFIXES = ["/admin", "/cart", "/checkout"];
+const HIDDEN_PREFIXES = ["/admin", "/mkt", "/cart", "/checkout"];
 
 export default function FloatingCartButton() {
   const { cartCount } = useCart();

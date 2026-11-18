@@ -191,6 +191,61 @@ test("list route GET performs NO writes — .insert/.update/.upsert/.delete", ()
   }
 });
 
+// ── Storefront cart bubble must not render on /mkt ─────────────────
+
+test("TimelineRow middle column carries minWidth:0 — the overlap fix", () => {
+  // The symptom the operator reported before this phase: "OLF192"
+  // colliding with the row's rupee meta (e.g. ₹7,418), and note
+  // bodies sitting on top of their own timestamps in the detail
+  // pane.
+  //
+  // Root cause: the <li> was a 3-column grid
+  // (28px · minmax(0,1fr) · auto), and the middle grid cell held a
+  // <div> whose content (the title row + body paragraph) had its
+  // own intrinsic min-content. Without min-width:0 on that child
+  // div, long tokens (an order's whole-rupee amount, an un-broken
+  // single-word note body) stretched past the cell edge and
+  // visually overlapped the auto-sized right cell (the timestamp).
+  //
+  // The fix is one declaration; pin it so a future refactor can't
+  // silently remove it and reintroduce the overlap.
+  const src = read(PAGE);
+  // Find the TimelineRow slice; inside, assert there IS a
+  // minWidth: 0 on the middle div.
+  const slice = src.slice(
+    src.indexOf("function TimelineRow"),
+    src.indexOf("function SkeletonList") > -1
+      ? src.indexOf("function SkeletonList")
+      : src.length,
+  );
+  assert.ok(
+    /minWidth\s*:\s*0/.test(slice),
+    "TimelineRow's middle grid cell is missing minWidth: 0 — the overlap will come back",
+  );
+});
+
+test("FloatingCartButton hides on /mkt — not just /admin", () => {
+  // The cart bubble is mounted in the root layout and renders on
+  // every route that isn't in HIDDEN_PREFIXES. /admin was already
+  // excluded; /mkt must be too — the operator is not a customer,
+  // and the bubble was both nonsensical here and visually crashing
+  // into the detail pane's bottom buttons. This is a structural
+  // pin: adding a new operator surface in future means adding it
+  // here too.
+  const src = read("src/components/FloatingCartButton.tsx");
+  // The constant definition carries the literal list.
+  const match = src.match(/HIDDEN_PREFIXES\s*=\s*\[([^\]]+)\]/);
+  assert.ok(match, "HIDDEN_PREFIXES is gone from FloatingCartButton");
+  const items = match[1]
+    .split(",")
+    .map((s) => s.trim().replace(/^["']|["']$/g, ""));
+  assert.ok(
+    items.includes("/mkt"),
+    `/mkt is not in HIDDEN_PREFIXES — the bubble would render on the marketing workspace. Got: ${items.join(", ")}`,
+  );
+  assert.ok(items.includes("/admin"), "/admin still in HIDDEN_PREFIXES");
+});
+
 test("/mkt page performs NO writes", () => {
   const src = code(PAGE);
   // `.insert(` / `.update(` / `.upsert(` are unambiguous — the only
