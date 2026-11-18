@@ -134,6 +134,7 @@ export function MktShell({
           >
             <Link href="/mkt" style={{ color: MKT.ink }}>CRM</Link>
             <Link href="/mkt/tasks" style={{ color: MKT.ink }}>Tasks</Link>
+            <Link href="/mkt/campaigns" style={{ color: MKT.ink }}>Campaigns</Link>
             {profile.role === "admin" ? (
               <Link href="/mkt/team" style={{ color: MKT.ink }}>Team</Link>
             ) : null}
