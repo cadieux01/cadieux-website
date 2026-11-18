@@ -37,8 +37,51 @@ type CustomerListRow = AdminCustomerSummary & {
   created_at: string;
   total_orders: number;
   total_spent: number;
+  /** Open COD exposure — payment_method='cod' AND payment_status not
+   *  like 'paid%' AND status <> 'cancelled'. Rupees, same shape as
+   *  total_spent. */
+  outstanding_cod: number;
   last_order_at: string | null;
+  has_subscription: boolean;
 };
+
+// Filter chip values; "all" is the empty state.
+const SEGMENTS = [
+  "all",
+  "never_ordered",
+  "one_and_done",
+  "lapsed",
+  "subscribers",
+  "has_outstanding_cod",
+] as const;
+type Segment = (typeof SEGMENTS)[number];
+
+const SEGMENT_LABEL: Record<Segment, string> = {
+  all: "All",
+  never_ordered: "Never ordered",
+  one_and_done: "One & done",
+  lapsed: "Lapsed (>21d)",
+  subscribers: "Subscribers",
+  has_outstanding_cod: "Outstanding COD",
+};
+
+const LAPSED_DAYS = 21;
+const DAY_MS = 86_400_000;
+
+function parseSegment(raw: string | null): Segment {
+  return (SEGMENTS as readonly string[]).includes(raw ?? "")
+    ? (raw as Segment)
+    : "all";
+}
+
+/** Days since the given ISO timestamp, or null if absent. Integer days,
+ *  floor; a 21.4-day gap reads as 21. */
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  return Math.floor((Date.now() - t) / DAY_MS);
+}
 
 // Suspense wrapper is required because the inner component reads
 // useSearchParams() to hydrate its filters; Next.js prerender fails the
@@ -119,6 +162,13 @@ function CustomersPageInner() {
     customTo: searchParams.get("to") ?? "",
   }));
 
+  // Segment filter — a single chip row controls which subset renders.
+  // Hydrates from ?segment= and writes back to the URL below so that the
+  // same back-link/bookmark story works as for the search box.
+  const [segment, setSegment] = useState<Segment>(
+    () => parseSegment(searchParams.get("segment")),
+  );
+
   const handleRangeChange = useCallback(
     (next: DateRangeValue, meta?: DateRangeMeta) => {
       setRange(next);
@@ -140,8 +190,9 @@ function CustomersPageInner() {
       params.set("preset", rangeMeta.preset);
     if (rangeMeta.customFrom) params.set("from", rangeMeta.customFrom);
     if (rangeMeta.customTo) params.set("to", rangeMeta.customTo);
+    if (segment !== "all") params.set("segment", segment);
     return params.toString();
-  }, [query, rangeMeta]);
+  }, [query, rangeMeta, segment]);
   useUrlWriteback("/admin/customers", qs);
   useScrollRestore(SCROLL_KEY, !loading);
 
@@ -187,12 +238,41 @@ function CustomersPageInner() {
   // Range filter is applied client-side on customer.created_at; the
   // server doesn't accept a date filter today and adding one is
   // overkill given the customer table is small.
-  const visible = useMemo(
-    () => rows.filter((c) => withinDateRange(c.created_at, range)),
-    [rows, range],
-  );
+  //
+  // Segment is applied AFTER the date range so the counts next to each
+  // chip reflect what the operator will actually see when they click.
+  // "Never ordered" requires BOTH no order AND no subscription — a
+  // plan-holder with no ad-hoc orders is still a customer the shop has
+  // served, not a stranger. "Lapsed" needs a last order to measure
+  // against, so never-ordered customers deliberately fall out of the
+  // win-back bucket.
+  const visible = useMemo(() => {
+    const byDate = rows.filter((c) => withinDateRange(c.created_at, range));
+    if (segment === "all") return byDate;
+    return byDate.filter((c) => {
+      switch (segment) {
+        case "never_ordered":
+          return c.total_orders === 0 && !c.has_subscription;
+        case "one_and_done":
+          return c.total_orders === 1;
+        case "lapsed": {
+          const d = daysSince(c.last_order_at);
+          return d !== null && d > LAPSED_DAYS;
+        }
+        case "subscribers":
+          return c.has_subscription;
+        case "has_outstanding_cod":
+          return (c.outstanding_cod ?? 0) > 0;
+        default:
+          return true;
+      }
+    });
+  }, [rows, range, segment]);
 
   const handleExport = () => {
+    // CSV columns are APPENDED, never inserted — a downstream sheet
+    // that reads by position must not shift when a new column arrives.
+    // Same rule the audit-log CSV follows.
     const csv = toCsv(visible, [
       { header: "Customer ID", value: (c) => c.id },
       { header: "Name", value: (c) => c.full_name ?? "" },
@@ -202,6 +282,12 @@ function CustomersPageInner() {
       { header: "Total spent", value: (c) => c.total_spent },
       { header: "Last order", value: (c) => c.last_order_at ?? "" },
       { header: "Joined", value: (c) => c.created_at },
+      {
+        header: "Days since last order",
+        value: (c) => daysSince(c.last_order_at) ?? "",
+      },
+      { header: "Outstanding COD", value: (c) => c.outstanding_cod ?? 0 },
+      { header: "Subscriber", value: (c) => (c.has_subscription ? "Y" : "N") },
     ]);
     downloadCsv(csvFilename("customers"), csv);
   };
@@ -243,7 +329,7 @@ function CustomersPageInner() {
           initialCustomTo={customTo}
         />
       </div>
-      <div className="flex flex-wrap gap-3 mb-6 items-center">
+      <div className="flex flex-wrap gap-3 mb-4 items-center">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -261,6 +347,18 @@ function CustomersPageInner() {
         <span style={{ color: "rgba(251,243,212,0.55)", fontSize: "1rem" }}>
           {visible.length} result{visible.length === 1 ? "" : "s"}
         </span>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-6 items-center">
+        {SEGMENTS.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setSegment(s)}
+            style={segment === s ? chipSelected : chipNeutral}
+          >
+            {SEGMENT_LABEL[s]}
+          </button>
+        ))}
       </div>
 
       {error ? (
@@ -290,15 +388,17 @@ function CustomersPageInner() {
           }}
         >
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 960 }}>
             <thead>
               <tr style={tableHeadRow}>
                 <th style={th}>Name</th>
                 <th style={th}>Phone</th>
-                <th style={th}>City</th>
                 <th style={th}>Orders</th>
                 <th style={th}>Spent</th>
                 <th style={th}>Last order</th>
+                <th style={th}>Days since</th>
+                <th style={th}>Open COD</th>
+                <th style={th}>Sub</th>
                 <th style={th}></th>
               </tr>
             </thead>
@@ -345,10 +445,21 @@ function CustomersPageInner() {
                       "—"
                     )}
                   </td>
-                  <td style={td}>{c.city ?? "—"}</td>
                   <td style={td}>{c.total_orders}</td>
                   <td style={td}>{formatINR(c.total_spent)}</td>
                   <td style={td}>{formatDate(c.last_order_at)}</td>
+                  <td style={td}>
+                    {(() => {
+                      const d = daysSince(c.last_order_at);
+                      return d === null ? "—" : `${d}d`;
+                    })()}
+                  </td>
+                  <td style={td}>
+                    {c.outstanding_cod > 0
+                      ? formatINR(c.outstanding_cod)
+                      : "—"}
+                  </td>
+                  <td style={td}>{c.has_subscription ? "Yes" : "—"}</td>
                   <td style={td}>
                     <Link
                       href={`/admin/customers/${c.id}`}
@@ -421,6 +532,13 @@ const chipNeutral: React.CSSProperties = {
   color: "rgba(251,243,212,0.85)",
   cursor: "pointer",
   textTransform: "uppercase",
+};
+
+const chipSelected: React.CSSProperties = {
+  ...chipNeutral,
+  background: "rgba(251,243,212,0.14)",
+  borderColor: "rgba(251,243,212,0.7)",
+  color: "#FBF3D4",
 };
 
 const buttonSmAnchor: React.CSSProperties = {

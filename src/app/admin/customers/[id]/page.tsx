@@ -77,12 +77,61 @@ type PushToken = {
   updated_at: string | null;
 };
 
+type NoteRow = {
+  id: string;
+  kind: string;
+  body: string;
+  author: string | null;
+  created_at: string;
+  order_id: string | null;
+  subscription_id: string | null;
+  customer_visible: boolean | null;
+};
+
+type WaConversation = {
+  id: string;
+  phone: string | null;
+  status: string | null;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
+  last_message_at: string | null;
+  created_at: string | null;
+};
+
+type WaMessage = {
+  id: string;
+  conversation_id: string;
+  direction: string | null;
+  body: string | null;
+  status: string | null;
+  ai_generated: boolean | null;
+  sent_at: string | null;
+  created_at: string;
+};
+
+type ReviewRow = {
+  id: string;
+  product_slug: string | null;
+  author_name: string | null;
+  rating: number | null;
+  body: string;
+  created_at: string;
+  is_deleted: boolean | null;
+  customer_phone: string | null;
+};
+
 type DetailResponse = {
   customer: CustomerDetail;
   orders: OrderRow[];
   addresses: AddressRow[];
   subscriptions: SubRow[];
   push_tokens: PushToken[];
+  notes: NoteRow[];
+  notes_error: string | null;
+  whatsapp: { conversations: WaConversation[]; messages: WaMessage[] };
+  whatsapp_error: string | null;
+  reviews: ReviewRow[];
+  reviews_error: string | null;
 };
 
 type AdminEmailRow = {
@@ -374,6 +423,175 @@ export default function CustomerDetailPage() {
         </Table>
       )}
 
+      <h3 style={sectionHeading}>Notes timeline</h3>
+      {data.notes_error ? (
+        <PanelError>Notes failed to load: {data.notes_error}</PanelError>
+      ) : data.notes.length === 0 ? (
+        <Placeholder>No notes yet.</Placeholder>
+      ) : (
+        <Table headers={["When", "Kind", "Body", "Author", "Link"]}>
+          {data.notes.map((n) => (
+            <tr key={n.id}>
+              <td style={td}>{formatDateTime(n.created_at)}</td>
+              <td style={td}>{n.kind}</td>
+              <td style={{ ...td, maxWidth: 420, whiteSpace: "pre-wrap" }}>
+                {n.body}
+              </td>
+              <td style={td}>{n.author ?? "—"}</td>
+              <td style={td}>
+                {n.order_id ? (
+                  <Link
+                    href={`/admin/orders/${n.order_id}`}
+                    style={{ color: "#FBF3D4" }}
+                  >
+                    Order ↗
+                  </Link>
+                ) : n.subscription_id ? (
+                  <Link
+                    href={`/admin/subscriptions/${n.subscription_id}`}
+                    style={{ color: "#FBF3D4" }}
+                  >
+                    Sub ↗
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
+      <h3 style={sectionHeading}>WhatsApp thread</h3>
+      {data.whatsapp_error ? (
+        <PanelError>WhatsApp failed to load: {data.whatsapp_error}</PanelError>
+      ) : data.whatsapp.conversations.length === 0 ? (
+        // whatsapp_conversations.customer_id is 100% NULL in prod, so the
+        // matched conversations here are discovered via trailing-10 phone
+        // match server-side. An empty result is a GENUINE "no WhatsApp
+        // on file" — not a failed join. The error path above covers the
+        // join-failure case so these two never alias.
+        <Placeholder>No WhatsApp conversations on file.</Placeholder>
+      ) : (
+        <div
+          style={{
+            border: "1px solid rgba(251,243,212,0.18)",
+            borderRadius: 6,
+            padding: "0.6rem 1rem 1rem",
+            marginBottom: "2rem",
+          }}
+        >
+          {data.whatsapp.conversations.map((conv) => {
+            const msgs = data.whatsapp.messages.filter(
+              (m) => m.conversation_id === conv.id,
+            );
+            return (
+              <div key={conv.id} style={{ marginTop: "0.8rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.8rem",
+                    alignItems: "baseline",
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.9rem",
+                    color: "rgba(251,243,212,0.7)",
+                    marginBottom: "0.4rem",
+                  }}
+                >
+                  <span style={{ color: "#FBF3D4" }}>
+                    {conv.phone ?? "unknown"}
+                  </span>
+                  <StatusBadge status={conv.status} />
+                  <span>last msg {formatDateTime(conv.last_message_at)}</span>
+                </div>
+                {msgs.length === 0 ? (
+                  <p
+                    style={{
+                      color: "rgba(251,243,212,0.55)",
+                      fontSize: "1rem",
+                      margin: 0,
+                    }}
+                  >
+                    No messages in this conversation yet.
+                  </p>
+                ) : (
+                  <div style={{ display: "grid", gap: "0.3rem" }}>
+                    {msgs.map((m) => (
+                      <div
+                        key={m.id}
+                        style={{
+                          display: "flex",
+                          gap: "0.6rem",
+                          padding: "0.35rem 0.6rem",
+                          border:
+                            m.direction === "in"
+                              ? "1px solid rgba(127,212,193,0.35)"
+                              : "1px solid rgba(251,243,212,0.2)",
+                          background:
+                            m.direction === "in"
+                              ? "rgba(127,212,193,0.08)"
+                              : "rgba(251,243,212,0.04)",
+                          borderRadius: 4,
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.95rem",
+                          color: "#FBF3D4",
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: "rgba(251,243,212,0.55)",
+                            whiteSpace: "nowrap",
+                            minWidth: 140,
+                          }}
+                        >
+                          {formatDateTime(m.created_at)}
+                        </span>
+                        <span
+                          style={{
+                            color: "rgba(251,243,212,0.55)",
+                            minWidth: 30,
+                          }}
+                        >
+                          {m.direction === "in"
+                            ? "←"
+                            : m.direction === "out"
+                            ? "→"
+                            : "·"}
+                        </span>
+                        <span style={{ whiteSpace: "pre-wrap", flex: 1 }}>
+                          {m.body ?? ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <h3 style={sectionHeading}>Reviews</h3>
+      {data.reviews_error ? (
+        <PanelError>Reviews failed to load: {data.reviews_error}</PanelError>
+      ) : data.reviews.length === 0 ? (
+        <Placeholder>No reviews from this customer.</Placeholder>
+      ) : (
+        <Table headers={["When", "Product", "Rating", "Body", "Status"]}>
+          {data.reviews.map((r) => (
+            <tr key={r.id}>
+              <td style={td}>{formatDateTime(r.created_at)}</td>
+              <td style={td}>{r.product_slug ?? "—"}</td>
+              <td style={td}>{r.rating == null ? "—" : `${r.rating}★`}</td>
+              <td style={{ ...td, maxWidth: 420, whiteSpace: "pre-wrap" }}>
+                {r.body}
+              </td>
+              <td style={td}>{r.is_deleted ? "deleted" : "live"}</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
       <h3 style={sectionHeading}>Order history</h3>
       {data.orders.length === 0 ? (
         <Placeholder>No orders yet.</Placeholder>
@@ -607,6 +825,27 @@ function Placeholder({ children }: { children: React.ReactNode }) {
         padding: "2rem 1rem",
         textAlign: "center",
         color: "rgba(251,243,212,0.55)",
+        fontSize: "1rem",
+        marginBottom: "2rem",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Panel-scoped error — a 500 inside one CRM panel must not read like an
+// empty state. Visually distinct from <Placeholder>, which is for the
+// genuine "no data" case.
+function PanelError({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(239,68,68,0.5)",
+        background: "rgba(239,68,68,0.08)",
+        padding: "0.9rem 1rem",
+        color: "#EF4444",
+        fontFamily: "var(--font-body)",
         fontSize: "1rem",
         marginBottom: "2rem",
       }}

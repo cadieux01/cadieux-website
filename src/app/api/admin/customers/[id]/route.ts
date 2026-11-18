@@ -3,9 +3,35 @@ import { isAdmin, supabaseAdmin } from "@/lib/admin-auth";
 import { queueAuditEvent } from "@/lib/audit-log";
 
 // GET — admin detail view. Returns the customer row + every order
-// they've placed + every subscription they hold + push token presence.
-// No pagination on orders/subs by design — at launch we don't expect a
-// single customer to exceed a few hundred rows.
+// they've placed + every subscription they hold + push token presence,
+// plus three CRM panels: a notes timeline (order_notes union over
+// order_id / subscription_id), the WhatsApp thread, and the customer's
+// reviews.
+//
+// JOIN KEYS — measured against prod, these are the only ones that
+// actually resolve:
+//
+//   orders.customer_id         → customers.id  (clean, no orphans)
+//   subscriptions.customer_id  → customers.id
+//   order_notes                → customer via (order_id XOR subscription_id)
+//   whatsapp_conversations     → customer_id is 100% NULL in prod, USELESS.
+//                                Join on the trailing 10 digits of phone;
+//                                customers.phone is bare 10, wa.phone is
+//                                91-prefixed 12. A plain customers.phone =
+//                                whatsapp_conversations.phone comparison
+//                                silently returns 0 rows, no error.
+//   whatsapp_messages          → by conversation_id. The CONVERSATION row
+//                                holds no message text — only status +
+//                                last_*_at stamps. The thread body lives
+//                                here.
+//   reviews                    → same normalised-phone join, and the
+//                                column is `customer_phone` (asking for
+//                                `phone` returns 42703 undefined_column).
+//
+// EVERY PANEL CARRIES ITS OWN *_error. An empty thread and a failed join
+// must not look identical on the page — if the reviews table lookup
+// fails we want to tell the operator "reviews failed to load", not
+// silently paint "no reviews" over a 500.
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } },
@@ -30,7 +56,9 @@ export async function GET(
 
   const ordersP = supabaseAdmin
     .from("orders")
-    .select("id, order_number, total_amount, status, delivery_address, created_at, latitude, longitude")
+    .select(
+      "id, order_number, total_amount, status, payment_method, payment_status, delivery_address, created_at, latitude, longitude",
+    )
     .eq("customer_id", id)
     .order("created_at", { ascending: false });
   const addressesP = supabaseAdmin
@@ -61,12 +89,165 @@ export async function GET(
 
   const [oRes, aRes, sRes, tRes] = await Promise.all([ordersP, addressesP, subsP, tokensP]);
 
+  // ── CRM panels ───────────────────────────────────────────────────────
+  //
+  // Each panel's failure stays inside the panel — a 500 on reviews must
+  // not take the orders table off the page. So we hand the operator a
+  // reasonable UI (an inline error on that one card) and 200 the route.
+
+  // Notes timeline — the order_notes table has a mutually-exclusive
+  // order_id XOR subscription_id, so we fetch both sides and UNION them
+  // newest-first. Bodies are 1..1000 chars, so even a prolific customer
+  // fits comfortably in a single response.
+  const orderIds = (oRes.data ?? []).map((o) => o.id);
+  const subIds = (sRes.data ?? []).map((s) => s.id);
+
+  let notes: Array<{
+    id: string;
+    kind: string;
+    body: string;
+    author: string | null;
+    created_at: string;
+    order_id: string | null;
+    subscription_id: string | null;
+    customer_visible: boolean | null;
+  }> = [];
+  let notes_error: string | null = null;
+  if (orderIds.length > 0 || subIds.length > 0) {
+    const [noByOrder, noBySub] = await Promise.all([
+      orderIds.length > 0
+        ? supabaseAdmin
+            .from("order_notes")
+            .select(
+              "id, kind, body, author, created_at, order_id, subscription_id, customer_visible",
+            )
+            .in("order_id", orderIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      subIds.length > 0
+        ? supabaseAdmin
+            .from("order_notes")
+            .select(
+              "id, kind, body, author, created_at, order_id, subscription_id, customer_visible",
+            )
+            .in("subscription_id", subIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (noByOrder.error) notes_error = noByOrder.error.message;
+    else if (noBySub.error) notes_error = noBySub.error.message;
+    else {
+      notes = [...(noByOrder.data ?? []), ...(noBySub.data ?? [])].sort(
+        (a, b) => String(b.created_at).localeCompare(String(a.created_at)),
+      );
+    }
+  }
+  if (notes_error) {
+    console.error("[admin/customers notes]", notes_error);
+  }
+
+  // WhatsApp — the trap is that whatsapp_conversations.customer_id is
+  // 100% NULL in prod. The usable join is on normalised phone: tail
+  // 10 digits of each side. customers.phone is stored bare 10, wa.phone
+  // as `91XXXXXXXXXX`, so `ilike '%<tail10>'` on wa matches. We also
+  // fetch any messages for the resulting conversation ids — the
+  // conversation row carries status + stamps but NO text, which is the
+  // second trap.
+  const custPhoneDigits = String(customer.phone ?? "").replace(/\D/g, "");
+  const custTail10 = custPhoneDigits.slice(-10);
+  const whatsapp: {
+    conversations: Array<{
+      id: string;
+      phone: string | null;
+      status: string | null;
+      last_inbound_at: string | null;
+      last_outbound_at: string | null;
+      last_message_at: string | null;
+      created_at: string | null;
+    }>;
+    messages: Array<{
+      id: string;
+      conversation_id: string;
+      direction: string | null;
+      body: string | null;
+      status: string | null;
+      ai_generated: boolean | null;
+      sent_at: string | null;
+      created_at: string;
+    }>;
+  } = { conversations: [], messages: [] };
+  let whatsapp_error: string | null = null;
+  if (custTail10.length === 10) {
+    const { data: convRows, error: convErr } = await supabaseAdmin
+      .from("whatsapp_conversations")
+      .select(
+        "id, phone, status, last_inbound_at, last_outbound_at, last_message_at, created_at",
+      )
+      // Trailing-10-digit match. `%XXXXXXXXXX` catches 91-prefixed,
+      // +91-prefixed, and bare-10 spellings of the same number — the
+      // table has mostly the 91-prefixed shape but legacy rows exist.
+      .ilike("phone", `%${custTail10}`)
+      .order("last_message_at", { ascending: false, nullsFirst: false });
+    if (convErr) {
+      whatsapp_error = convErr.message;
+    } else if (convRows && convRows.length > 0) {
+      whatsapp.conversations = convRows;
+      const convIds = convRows.map((c) => c.id);
+      const { data: msgRows, error: msgErr } = await supabaseAdmin
+        .from("whatsapp_messages")
+        .select(
+          "id, conversation_id, direction, body, status, ai_generated, sent_at, created_at",
+        )
+        .in("conversation_id", convIds)
+        .order("created_at", { ascending: true });
+      if (msgErr) whatsapp_error = msgErr.message;
+      else whatsapp.messages = msgRows ?? [];
+    }
+  }
+  if (whatsapp_error) {
+    console.error("[admin/customers whatsapp]", whatsapp_error);
+  }
+
+  // Reviews — same trailing-10 match, on customer_phone (NOT phone —
+  // asking for `phone` here raises Postgres 42703 undefined_column).
+  let reviews: Array<{
+    id: string;
+    product_slug: string | null;
+    author_name: string | null;
+    rating: number | null;
+    body: string;
+    created_at: string;
+    is_deleted: boolean | null;
+    customer_phone: string | null;
+  }> = [];
+  let reviews_error: string | null = null;
+  if (custTail10.length === 10) {
+    const { data, error } = await supabaseAdmin
+      .from("reviews")
+      .select(
+        "id, product_slug, author_name, rating, body, created_at, is_deleted, customer_phone",
+      )
+      .ilike("customer_phone", `%${custTail10}`)
+      .order("created_at", { ascending: false });
+    if (error) reviews_error = error.message;
+    else reviews = data ?? [];
+  }
+  if (reviews_error) {
+    console.error("[admin/customers reviews]", reviews_error);
+  }
+
   return NextResponse.json({
     customer,
     orders: oRes.data ?? [],
     addresses: aRes.data ?? [],
     subscriptions: sRes.data ?? [],
     push_tokens: tRes.error ? [] : tRes.data ?? [],
+    notes,
+    notes_error,
+    whatsapp,
+    whatsapp_error,
+    reviews,
+    reviews_error,
   });
 }
 
