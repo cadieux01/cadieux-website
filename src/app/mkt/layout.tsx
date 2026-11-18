@@ -1,40 +1,52 @@
-// /mkt is the marketing workspace. First screen is the CRM.
+// /mkt layout — now the SERVER-SIDE gate for the marketing workspace.
 //
-// AUTH SCOPE — /mkt and everything under it are isAdmin ONLY. The
-// counter PIN that /register issues (verifyAdminOrTeamOrder) MUST NOT
-// reach this tree: notes bodies, WhatsApp message bodies and the
-// merged timeline are content the counter staff has no business
-// reading. The real enforcement is on the per-API route (every CRM
-// request goes through adminFetch into /api/admin/customers* which
-// gates on isAdmin for the detail route and omits sensitive aggregate
-// fields on the list route for team-PIN callers).
+// Earlier phases gated /mkt via a client-side PasswordGate inside
+// MktShell (shared with /admin). That gate accepted a generic admin
+// password, which meant `auth.uid()` was null on every /mkt action and
+// nothing could be attributed to the person doing it.
 //
-// This layout only sets a font scope and is NOT where the gate lives.
-// Each /mkt page wraps its content in AdminShell, which runs the
-// client-side PasswordGate (same mechanism as /admin/*). Importantly,
-// AdminShell's gate verifies an ADMIN session token; it rejects every
-// team-order bearer because verifyAdminSessionToken refuses any
-// payload whose `p` field is not "admin" (see src/lib/admin-session).
+// This layout now:
+//   1. Reads the Supabase Auth session via @supabase/ssr.
+//   2. Looks up the caller's logistics.profiles row.
+//   3. Redirects to /mkt/login unless profile.status = 'active'.
+//   4. Renders the page's children with a shared ProfileProvider so
+//      every /mkt client component can read the signed-in identity
+//      without re-fetching.
 //
-// There is deliberately no server-side `redirect()` here: AdminShell
-// already shows the password form inline, and the tests pin that the
-// /mkt entry point renders AdminShell. Adding a second gate in this
-// file would duplicate the enforcement and the failure mode (two
-// different "unauthorised" states).
+// The /mkt/login route is a direct child of this layout, so it runs
+// through the gate too — but readMktSession() is read-only, and the
+// login page skips the shared chrome. The gate redirects there when
+// the session is missing; the login page itself never needs it.
 
 import type { ReactNode } from "react";
-import { Nunito } from "next/font/google";
 
-const nunito = Nunito({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-mkt",
-  display: "swap",
-});
+import { MktProfileProvider } from "@/components/mkt/MktProfileContext";
+import { readMktSession } from "@/lib/mkt-auth";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
-export default function MktLayout({ children }: { children: ReactNode }) {
-  // Scoped font variable only — the page's content paints its own
-  // dark surface via AdminShell. Nunito matches /admin so operators
-  // moving between the two don't experience a typographic jump.
-  return <div className={nunito.variable}>{children}</div>;
+export default async function MktLayout({ children }: { children: ReactNode }) {
+  // The login page is the escape hatch: if we redirected it into
+  // itself whenever the session was absent we'd loop. next/headers
+  // exposes the request path so we can short-circuit here.
+  const h = headers();
+  const pathname =
+    h.get("x-invoke-path") ??
+    h.get("x-pathname") ??
+    h.get("next-url") ??
+    "";
+
+  if (pathname.startsWith("/mkt/login")) {
+    return <>{children}</>;
+  }
+
+  const state = await readMktSession();
+  if (state.kind === "none") redirect("/mkt/login");
+  if (state.kind === "no-profile") redirect("/mkt/login?denied=no-profile");
+  if (state.kind === "inactive")
+    redirect(`/mkt/login?denied=${encodeURIComponent(state.profile.status)}`);
+
+  return (
+    <MktProfileProvider profile={state.profile}>{children}</MktProfileProvider>
+  );
 }
