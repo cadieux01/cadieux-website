@@ -172,11 +172,11 @@ function paymentModeOf(
   method: string | null | undefined,
   status: string | null | undefined,
 ): string {
+  const s = (status ?? "").trim().toLowerCase();
+  if (s === "paid" || s === "captured") return "ONLINE";
   const m = (method ?? "").trim().toLowerCase();
   if (m === "cod" || m === "cash") return "COD";
   if (m) return m.toUpperCase();
-  const s = (status ?? "").trim().toLowerCase();
-  if (s === "paid" || s === "captured") return "ONLINE";
   return "—";
 }
 
