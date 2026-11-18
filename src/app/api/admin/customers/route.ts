@@ -128,12 +128,15 @@ export async function GET(req: NextRequest) {
     idChunks.push(custIds.slice(i, i + CHUNK));
   }
 
+  // `id` on orders/subs is projected so the with_touch block below can
+  // reverse-map a note row back to its customer. Without it the touch
+  // merge would need a second fan-out — same join, two queries.
   const ordRes = await Promise.all(
     idChunks.map((chunk) =>
       supabaseAdmin
         .from("orders")
         .select(
-          "customer_id, total_amount, created_at, status, payment_method, payment_status",
+          "id, customer_id, total_amount, created_at, status, payment_method, payment_status",
         )
         .in("customer_id", chunk),
     ),
@@ -149,12 +152,13 @@ export async function GET(req: NextRequest) {
   // Subscriber flag — "is there any subscription row at all for this
   // customer_id". `completed` subscriptions still count: a dormant plan
   // template can still generate deliveries, so the operator must see it.
-  // We only need the id set; no columns beyond customer_id.
+  // id is projected here (same reason as orders above — the touch block
+  // needs the id to reverse-map a note back to its customer).
   const subRes = await Promise.all(
     idChunks.map((chunk) =>
       supabaseAdmin
         .from("subscriptions")
-        .select("customer_id")
+        .select("id, customer_id")
         .in("customer_id", chunk),
     ),
   );
@@ -234,8 +238,245 @@ export async function GET(req: NextRequest) {
     }
   });
 
+  // ── Optional per-customer "last touch" ──────────────────────────────
+  //
+  // `?with_touch=1` returns, per customer, the NEWER of (their latest
+  // order_note body, their latest WhatsApp message body). This is the
+  // signal /mkt's "who's gone quiet" column rides on; the plain /admin
+  // customers page does not need it and must not pay for it, so the
+  // block is opt-in.
+  //
+  // Admin-only — note bodies and WA message bodies are sensitive
+  // content that the team-PIN has no business seeing. We already exited
+  // early for isTeam above, so by the time we reach this block the
+  // caller is a full admin. Still, the `with_touch` flag is checked
+  // alongside the data shape so a future refactor of the early-return
+  // branch cannot leak the bodies.
+  //
+  // Join shape, measured against prod:
+  //   notes     → owner is order_id XOR subscription_id; reverse-map via
+  //               the order/sub `id → customer_id` tables already built
+  //               above.
+  //   whatsapp  → conversations.customer_id is 100% NULL (see
+  //               tests/admin-customers-crm.test.mjs). Join is on the
+  //               trailing 10 digits of phone: customers.phone is bare
+  //               10, wa.phone is 91-prefixed 12.
+  //
+  // Scale note: with 1363 customers / 1195 orders / 140 subs / 170 wa
+  // conversations the whole block is one-digit megabytes of PostgREST
+  // traffic. Past ~5000 customers the orderIds chunk list alone would
+  // warrant a different shape; comment-driven alarm bell for then.
+  const wantTouch = req.nextUrl.searchParams.get("with_touch") === "1";
+  type Touch = { at: string; body: string; kind: "note" | "call" | "edit" | "whatsapp" };
+  const touchByCustomer = new Map<string, Touch>();
+  let touch_error: string | null = null;
+
+  if (wantTouch) {
+    // Reverse maps — order/sub id → customer id. Built inline so a
+    // single pass of notes can be folded straight into the result.
+    const orderToCust = new Map<string, string>();
+    for (const r of orders) {
+      if (r.id && r.customer_id) orderToCust.set(r.id, r.customer_id);
+    }
+    const subToCust = new Map<string, string>();
+    for (const chunk of subRes) {
+      for (const row of chunk.data ?? []) {
+        if (row.id && row.customer_id) subToCust.set(row.id, row.customer_id);
+      }
+    }
+
+    const orderIds = Array.from(orderToCust.keys());
+    const subIds = Array.from(subToCust.keys());
+
+    // Notes are chunked for exactly the same URL-length reason the
+    // orders fan-out is chunked above; see that comment.
+    const orderNoteChunks: string[][] = [];
+    for (let i = 0; i < orderIds.length; i += CHUNK) {
+      orderNoteChunks.push(orderIds.slice(i, i + CHUNK));
+    }
+    const subNoteChunks: string[][] = [];
+    for (let i = 0; i < subIds.length; i += CHUNK) {
+      subNoteChunks.push(subIds.slice(i, i + CHUNK));
+    }
+
+    const [noteByOrderRes, noteBySubRes, waConvRes] = await Promise.all([
+      orderNoteChunks.length > 0
+        ? Promise.all(
+            orderNoteChunks.map((chunk) =>
+              supabaseAdmin
+                .from("order_notes")
+                .select("kind, body, created_at, order_id, subscription_id")
+                .in("order_id", chunk)
+                .order("created_at", { ascending: false }),
+            ),
+          )
+        : Promise.resolve([] as const),
+      subNoteChunks.length > 0
+        ? Promise.all(
+            subNoteChunks.map((chunk) =>
+              supabaseAdmin
+                .from("order_notes")
+                .select("kind, body, created_at, order_id, subscription_id")
+                .in("subscription_id", chunk)
+                .order("created_at", { ascending: false }),
+            ),
+          )
+        : Promise.resolve([] as const),
+      // Pull EVERY conversation row and match in JS. There are 170 in
+      // prod today; past a few thousand this would want a server-side
+      // filter, but the client doesn't support a "right(phone, 10) IN
+      // (…)" expression and a long OR-chain of ilikes would run up
+      // against the same URL-length cliff the chunking above dodges.
+      // Stays under 25 kB because we only project three columns.
+      supabaseAdmin
+        .from("whatsapp_conversations")
+        .select("id, phone, last_message_at"),
+    ]);
+
+    const noteErr =
+      (Array.isArray(noteByOrderRes)
+        ? noteByOrderRes.find((r) => r.error)?.error
+        : null) ??
+      (Array.isArray(noteBySubRes)
+        ? noteBySubRes.find((r) => r.error)?.error
+        : null);
+    if (noteErr) {
+      touch_error = noteErr.message;
+    } else {
+      const noteRows = [
+        ...(Array.isArray(noteByOrderRes)
+          ? noteByOrderRes.flatMap((r) => r.data ?? [])
+          : []),
+        ...(Array.isArray(noteBySubRes)
+          ? noteBySubRes.flatMap((r) => r.data ?? [])
+          : []),
+      ];
+      // First row per customer wins because each query is ordered desc.
+      // We still have to compare across the two unioned result sets, so
+      // the max-by-created_at check is kept.
+      for (const row of noteRows as Array<{
+        kind: string;
+        body: string;
+        created_at: string;
+        order_id: string | null;
+        subscription_id: string | null;
+      }>) {
+        const cid = row.order_id
+          ? orderToCust.get(row.order_id) ?? null
+          : row.subscription_id
+          ? subToCust.get(row.subscription_id) ?? null
+          : null;
+        if (!cid) continue;
+        const kind =
+          row.kind === "call" || row.kind === "edit" ? row.kind : "note";
+        const cur = touchByCustomer.get(cid);
+        if (!cur || row.created_at > cur.at) {
+          touchByCustomer.set(cid, {
+            at: row.created_at,
+            body: row.body,
+            kind,
+          });
+        }
+      }
+    }
+
+    if (waConvRes.error) {
+      touch_error = touch_error ?? waConvRes.error.message;
+    } else {
+      // Map each conversation to a customer via trailing 10 digits.
+      // Multiple conversations can point at the same customer (rare —
+      // the inbound handler reuses a row — but legacy data has some),
+      // and one tail10 value is unique per customer (same real phone).
+      const tailToCustomer = new Map<string, string>();
+      for (const c of customers) {
+        const tail = String(c.phone ?? "").replace(/\D/g, "").slice(-10);
+        if (tail.length === 10) tailToCustomer.set(tail, c.id);
+      }
+      const convToCustomer = new Map<string, string>();
+      const convLastMsgAt = new Map<string, string | null>();
+      for (const row of waConvRes.data ?? []) {
+        const tail = String(row.phone ?? "").replace(/\D/g, "").slice(-10);
+        if (tail.length !== 10) continue;
+        const cid = tailToCustomer.get(tail);
+        if (!cid) continue;
+        convToCustomer.set(row.id as string, cid);
+        convLastMsgAt.set(
+          row.id as string,
+          (row.last_message_at as string | null) ?? null,
+        );
+      }
+
+      const relevantConvIds = Array.from(convToCustomer.keys());
+      if (relevantConvIds.length > 0) {
+        // Chunked, same reason as everything else here.
+        const convIdChunks: string[][] = [];
+        for (let i = 0; i < relevantConvIds.length; i += CHUNK) {
+          convIdChunks.push(relevantConvIds.slice(i, i + CHUNK));
+        }
+        const msgRes = await Promise.all(
+          convIdChunks.map((chunk) =>
+            supabaseAdmin
+              .from("whatsapp_messages")
+              .select("conversation_id, body, created_at")
+              .in("conversation_id", chunk)
+              .order("created_at", { ascending: false }),
+              // NO LIMIT. The sibling /api/admin/whatsapp/conversations
+              // list uses `.limit(convIds.length * 4)` because it only
+              // needs a one-line preview per conv — but WITH LIMIT and
+              // a global ORDER BY DESC, a handful of chatty convs can
+              // drown out the quiet ones' newest row entirely (eg at
+              // 170 convs and 72 matched, 72×4=288 against 847 total
+              // messages in prod today). Here we need the newest
+              // message PER conv, not globally; the only safe fold is
+              // against the full set. The table is small (847 rows
+              // 2026-11-18), so this is a few hundred KB.
+          ),
+        );
+        const msgErr = msgRes.find((r) => r.error)?.error;
+        if (msgErr) {
+          touch_error = touch_error ?? msgErr.message;
+        } else {
+          // Newest first; first hit per conv wins.
+          const newestMsgByConv = new Map<
+            string,
+            { body: string; created_at: string }
+          >();
+          for (const r of msgRes) {
+            for (const row of r.data ?? []) {
+              const convId = row.conversation_id as string;
+              if (!newestMsgByConv.has(convId)) {
+                newestMsgByConv.set(convId, {
+                  body: (row.body as string) ?? "",
+                  created_at: row.created_at as string,
+                });
+              }
+            }
+          }
+          // Fold each conversation's newest message into the customer
+          // touch. Take the greater of the current touch (notes side)
+          // and this message's created_at.
+          convToCustomer.forEach((cid, convId) => {
+            const msg = newestMsgByConv.get(convId);
+            if (!msg) return;
+            const cur = touchByCustomer.get(cid);
+            if (!cur || msg.created_at > cur.at) {
+              touchByCustomer.set(cid, {
+                at: msg.created_at,
+                body: msg.body,
+                kind: "whatsapp",
+              });
+            }
+          });
+        }
+      }
+    }
+
+    if (touch_error) console.error("[admin/customers with_touch]", touch_error);
+  }
+
   const enriched = customers.map((c) => {
     const a = agg.get(c.id);
+    const touch = wantTouch ? touchByCustomer.get(c.id) ?? null : null;
     return {
       ...c,
       total_orders: a?.total_orders ?? 0,
@@ -245,8 +486,22 @@ export async function GET(req: NextRequest) {
       outstanding_cod: a ? a.outstanding_cod_paise / 100 : 0,
       last_order_at: a?.last_order_at ?? null,
       has_subscription: subscriberSet.has(c.id),
+      // Touch fields are only projected when with_touch was asked for.
+      // Absent vs null is intentional: absent means "not requested",
+      // null means "requested, no touch found" — the UI distinguishes
+      // them.
+      ...(wantTouch
+        ? {
+            last_touch_at: touch?.at ?? null,
+            last_touch_body: touch?.body ?? null,
+            last_touch_kind: touch?.kind ?? null,
+          }
+        : {}),
     };
   });
 
-  return NextResponse.json({ customers: enriched });
+  return NextResponse.json({
+    customers: enriched,
+    ...(wantTouch ? { touch_error } : {}),
+  });
 }
