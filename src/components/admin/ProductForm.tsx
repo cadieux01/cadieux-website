@@ -8,6 +8,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 import { AdminProductRow } from "@/lib/admin-shared";
 import { uploadViaSignedUrl } from "@/lib/admin-upload";
+import { productImageUrl } from "@/lib/supabase-image";
 import {
   CANONICAL_NUTRIENT_KEYS,
   canonicalNutrientValue,
@@ -748,9 +749,13 @@ function MediaUploader({
                       }}
                     />
                   ) : (
+                    // Tile preview in the admin uploader — ~160 px
+                    // wide on a desktop editor at most, so request
+                    // 320 px (retina) from the transform. Was
+                    // shipping 15 MB originals into every row.
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={url}
+                      src={productImageUrl(url, { width: 320, quality: 80 })}
                       alt=""
                       style={{
                         width: "100%",

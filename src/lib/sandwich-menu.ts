@@ -29,6 +29,14 @@
 import { unstable_cache } from "next/cache";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { isVideoUrl } from "@/lib/product-media";
+import { productImageUrl } from "@/lib/supabase-image";
+
+// Same PDP_WIDTH knob as lib/products.ts. Sandwich cards aren't as
+// large as bread PDPs but they share a bucket, and keeping the one
+// transform width per surface is simpler than juggling two.
+const SANDWICH_WIDTH = 1600;
+
 export const SANDWICH_MENU_TAG = "sandwich-menu";
 
 /** Storefront labels for the two bread slugs the seed uses today. The customer
@@ -119,8 +127,19 @@ async function readMenu(): Promise<Sandwich[]> {
       name: r.name,
       category: r.category as "veg" | "nonveg",
       description: r.description,
-      imageUrl: r.image_url,
-      galleryUrls: Array.isArray(r.gallery_urls) ? r.gallery_urls : [],
+      // Rewrite to the transform endpoint on the way out. Videos
+      // pass through untouched (the helper checks).
+      imageUrl: r.image_url
+        ? (isVideoUrl(r.image_url)
+            ? r.image_url
+            : productImageUrl(r.image_url, { width: SANDWICH_WIDTH, quality: 80 }))
+        : null,
+      galleryUrls: (Array.isArray(r.gallery_urls) ? r.gallery_urls : [])
+        .map((u) =>
+          isVideoUrl(u)
+            ? u
+            : productImageUrl(u, { width: SANDWICH_WIDTH, quality: 80 }),
+        ),
       sortOrder: r.sort_order,
       variants: (r.sandwich_variants ?? [])
         .filter((v) => v.is_available && Number.isFinite(v.price_inr) && v.price_inr > 0)

@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { uploadViaSignedUrl } from "@/lib/admin-upload";
+import { productImageUrl } from "@/lib/supabase-image";
 
 const CREAM = "#FBF3D4";
 const FADED = "rgba(251,243,212,0.6)";
@@ -637,9 +638,12 @@ function ImageUpload({
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {value ? (
+        // 46px display, request 96px for retina. Same egress-save as
+        // the admin products grid — was shipping originals into every
+        // editor row.
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={value}
+          src={productImageUrl(value, { width: 96, quality: 80 })}
           alt=""
           style={{
             width: 46,

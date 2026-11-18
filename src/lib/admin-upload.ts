@@ -118,6 +118,19 @@ function getBrowserUploader() {
 /**
  * Upload one file and return the stored object. Throws with an
  * operator-readable message on any failure.
+ *
+ * RESIZE-BEFORE-UPLOAD. Any image/jpeg, image/png or image/webp is
+ * downscaled in the BROWSER to a longest-edge of UPLOAD_MAX_LONGEST_EDGE
+ * (2000 px) and re-encoded at quality 0.80 before the signed URL is
+ * even minted. The server-side transform endpoint then serves smaller
+ * widths from this already-shrunk master. A 15 MB phone photo lands
+ * as ~400-700 KB in the bucket; a 25 MB PNG lands as ~500-900 KB as
+ * JPG (PNG is re-encoded as JPG — product photos are opaque, and
+ * canvas.toBlob at image/png doesn't honour quality). Videos pass
+ * through untouched. If the browser can't decode an image (rare —
+ * HEIC on very old devices), we log and upload the original so the
+ * operator doesn't lose their work; the per-bucket size cap still
+ * applies on the server.
  */
 export async function uploadViaSignedUrl(
   file: File,
@@ -129,6 +142,15 @@ export async function uploadViaSignedUrl(
   const reason = checkUploadFile(bucket, file);
   if (reason) throw new Error(`${file.name}: ${reason}`);
 
+  // Resize + re-encode in the browser, then upload the result. On
+  // image failure (decode crash, unknown format), fall back to the
+  // original so the operator still ships SOMETHING; the oversized
+  // file is still subject to the bucket's file_size_limit.
+  const toUpload = await maybeResizeImageForUpload(file).catch((e) => {
+    console.warn("[admin-upload] resize skipped for", file.name, e);
+    return file;
+  });
+
   const headers = adminAuthHeaders({ "Content-Type": "application/json" });
   if (pinGrant) headers.set("x-pin-grant", pinGrant);
 
@@ -139,8 +161,12 @@ export async function uploadViaSignedUrl(
     body: JSON.stringify({
       bucket,
       prefix: prefix ?? "",
-      mime: file.type,
-      size: file.size,
+      // NB: we send the RESIZED file's mime/size, because the signed
+      // URL's path and the server's audit row have to match the bytes
+      // we're about to PUT. A PNG that resized to a JPG needs the
+      // server to stamp a .jpg path, not the original .png.
+      mime: toUpload.type,
+      size: toUpload.size,
     }),
   });
   if (!res.ok) {
@@ -162,7 +188,7 @@ export async function uploadViaSignedUrl(
     bucket,
     json.path,
     json.token,
-    file,
+    toUpload,
   );
   if (error) {
     // Storage rejects on the bucket's own file_size_limit /
@@ -174,9 +200,102 @@ export async function uploadViaSignedUrl(
     url: json.publicUrl,
     path: json.path,
     bucket,
-    mime: file.type,
-    size: file.size,
+    mime: toUpload.type,
+    size: toUpload.size,
   };
+}
+
+// ── Upload-time resize ─────────────────────────────────────────────
+
+/** Longest edge in pixels. Chosen to match the website's PDP+shop
+ *  render widths (1600 at 2x for retina = 3200, but we never fetch
+ *  more than 2000 through the transform endpoint anyway — capping at
+ *  2000 saves bucket bytes without hurting any screen we serve). */
+export const UPLOAD_MAX_LONGEST_EDGE = 2000;
+export const UPLOAD_JPEG_QUALITY = 0.8;
+
+const RESIZABLE_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/** Decode a File into an HTMLImageElement. Rejects on decode failure
+ *  (bad format, truncated file) so the caller can fall back to the
+ *  original. Uses an object URL + onload rather than createImageBitmap
+ *  because older iOS Safari was unreliable on the latter until 16.4. */
+function decodeImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
+
+/** Returns a resized + re-encoded File if the input is a
+ *  resizable image AND it's actually larger than the target. Otherwise
+ *  returns the input unchanged (same identity). */
+export async function maybeResizeImageForUpload(file: File): Promise<File> {
+  if (!RESIZABLE_MIMES.has(file.type)) return file;
+  if (typeof document === "undefined") return file; // SSR safety
+
+  let img: HTMLImageElement;
+  try {
+    img = await decodeImage(file);
+  } catch {
+    return file; // fall back to original; see onwards branch below
+  }
+
+  const longest = Math.max(img.naturalWidth, img.naturalHeight);
+  // Already small enough AND already a well-compressed format (jpg or
+  // webp): skip. PNG always re-encodes to JPG — a 2.9 MB PNG we saw
+  // in prod becomes ~250 KB JPG at q=0.8 with no visible loss on
+  // product photography.
+  if (longest <= UPLOAD_MAX_LONGEST_EDGE && file.type !== "image/png") {
+    return file;
+  }
+
+  // Target dimensions preserving aspect ratio.
+  const scale =
+    longest > UPLOAD_MAX_LONGEST_EDGE ? UPLOAD_MAX_LONGEST_EDGE / longest : 1;
+  const targetW = Math.max(1, Math.round(img.naturalWidth * scale));
+  const targetH = Math.max(1, Math.round(img.naturalHeight * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return file;
+  // High-quality downscale. Canvas 2D does bilinear by default; the
+  // smoothing-quality hint moves good browsers to bicubic-ish, which
+  // is visibly cleaner on text-bearing labels.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, targetW, targetH);
+
+  // Output mime. Keep webp as webp (lossy webp at 0.8 is smaller than
+  // jpg at 0.8 for most photos); jpeg and png both go out as jpeg.
+  const outMime = file.type === "image/webp" ? "image/webp" : "image/jpeg";
+  const outExt = outMime === "image/webp" ? "webp" : "jpg";
+
+  const blob: Blob | null = await new Promise((resolve) =>
+    canvas.toBlob(resolve, outMime, UPLOAD_JPEG_QUALITY),
+  );
+  if (!blob) return file;
+
+  // If the "optimised" file is BIGGER than the original (rare — a
+  // very small or already-compressed source), keep the original.
+  if (blob.size >= file.size) return file;
+
+  const base = file.name.replace(/\.[^.]+$/, "");
+  return new File([blob], `${base}.${outExt}`, {
+    type: outMime,
+    lastModified: Date.now(),
+  });
 }
 
 /** Human-readable limit for this bucket, for help text. */

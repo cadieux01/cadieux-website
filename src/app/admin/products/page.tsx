@@ -13,6 +13,7 @@ import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import { formatDateTime, formatINR } from "@/lib/admin-formatting";
 import { AdminProductRow } from "@/lib/admin-shared";
 import { subscriptionUnitPrice } from "@/lib/subscription-pricing";
+import { productImageUrl } from "@/lib/supabase-image";
 
 const CREAM = "#FBF3D4";
 const FADED = "rgba(251,243,212,0.6)";
@@ -168,9 +169,15 @@ export default function AdminProductsPage() {
                 >
                   <Td>
                     {r.image_url ? (
+                      // 48px display, 96px source for retina. The
+                      // admin grid was shipping the 15–25 MB original
+                      // into every row — Supabase transform makes it
+                      // a few KB. eslint-disable the next/image rule
+                      // because this is a 48×48 thumbnail in a table
+                      // row, not a page-level image.
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={r.image_url}
+                        src={productImageUrl(r.image_url, { width: 96, quality: 80 })}
                         alt=""
                         style={{
                           width: 48,

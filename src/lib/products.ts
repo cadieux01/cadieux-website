@@ -22,6 +22,15 @@ import {
   productFloor,
   type PreorderInfo,
 } from "@/lib/product-availability";
+import { productImageUrl } from "@/lib/supabase-image";
+
+// Default serving widths. PDP_WIDTH is wider than any product tile on
+// a 2x retina screen (shop grid tile ~400 CSS px → 800 device px);
+// OG_WIDTH matches the standard 1200×630 social preview. Both are
+// explicit here, never magic numbers inline below — if egress needs
+// to be trimmed further, this is the one place to turn the knob.
+const PDP_WIDTH = 1600;
+const OG_WIDTH = 1200;
 
 export type { PreorderInfo };
 
@@ -129,7 +138,7 @@ export function resolveHeroImage(
   slug: string,
 ): string | null {
   const trimmed = (imageUrl ?? "").trim();
-  if (trimmed) return trimmed;
+  if (trimmed) return productImageUrl(trimmed, { width: PDP_WIDTH, quality: 80 });
   console.info(
     `[lib/products] no product image for "${slug}" (products.image_url empty) — rendering empty state`,
   );
@@ -146,7 +155,12 @@ export function resolveOgImage(
   imageUrl: string | null | undefined,
   slug: string,
 ): string {
-  return resolveHeroImage(imageUrl, slug) ?? OG_FALLBACK_IMAGE;
+  const trimmed = (imageUrl ?? "").trim();
+  // Separate OG_WIDTH so a social crawler gets the 1200×630-friendly
+  // size, rather than the PDP's 1600 which is wider than any social
+  // card renders. resolveHeroImage above is for in-page rendering.
+  if (trimmed) return productImageUrl(trimmed, { width: OG_WIDTH, quality: 80 });
+  return OG_FALLBACK_IMAGE;
 }
 
 // Companion to resolveHeroImage: true iff the DB row has a real admin-uploaded
@@ -195,19 +209,22 @@ export function resolveProductMedia(
   const unique = urls.filter((u) => (seen.has(u) ? false : (seen.add(u), true)));
 
   if (unique.length > 0) {
-    return unique.map((src, i) => ({
-      // Type from the URL's extension — the upload route stamps one on from
-      // the verified MIME. The old code did the same for gallery entries but
-      // hardcoded "image" for the cover; harmless only because
-      // COVER_MUST_BE_PHOTO already refuses a video there.
-      type: isVideoUrl(src) ? "video" : "image",
-      src,
-      alt: bundledName
-        ? unique.length > 1
-          ? `${bundledName} — photo ${i + 1} of ${unique.length}`
-          : bundledName
-        : "Product image",
-    }));
+    return unique.map((src, i) => {
+      // Videos pass through productImageUrl unchanged (checked there);
+      // image URLs come back as the Supabase transform endpoint with a
+      // width param, so next/image downstream fetches ~300 KB instead
+      // of the 15-25 MB raw original.
+      const type: "video" | "image" = isVideoUrl(src) ? "video" : "image";
+      return {
+        type,
+        src: type === "video" ? src : productImageUrl(src, { width: PDP_WIDTH, quality: 80 }),
+        alt: bundledName
+          ? unique.length > 1
+            ? `${bundledName} — photo ${i + 1} of ${unique.length}`
+            : bundledName
+          : "Product image",
+      };
+    });
   }
 
   const bundled = PRODUCT_DETAILS[slug as ProductSlug]?.media;
@@ -256,21 +273,23 @@ export function resolvePdpGallery(
   const unique = urls.filter((u) => (seen.has(u) ? false : (seen.add(u), true)));
 
   const name = (productName ?? "").trim();
-  return unique.map((src, i) => ({
-    // The media type comes from the URL's extension — the upload route
-    // stamps one on from the verified MIME. Hardcoding "image" here is what
-    // sent admin-uploaded videos to next/image, whose optimizer 400s on a
-    // video content-type and leaves a blank slide.
-    type: isVideoUrl(src) ? "video" : "image",
-    src,
-    // Single-photo products get a plain product-name alt; numbering a list of
-    // one reads as broken to a screen reader.
-    alt: name
-      ? unique.length > 1
-        ? `${name} — photo ${i + 1} of ${unique.length}`
-        : name
-      : "Product image",
-  }));
+  return unique.map((src, i) => {
+    const type: "video" | "image" = isVideoUrl(src) ? "video" : "image";
+    return {
+      type,
+      // Videos through unchanged (productImageUrl detects and skips);
+      // images rewritten to the transform endpoint at PDP width so
+      // next/image's upstream fetch is a few hundred KB, not 25 MB.
+      src: type === "video" ? src : productImageUrl(src, { width: PDP_WIDTH, quality: 80 }),
+      // Single-photo products get a plain product-name alt; numbering a list of
+      // one reads as broken to a screen reader.
+      alt: name
+        ? unique.length > 1
+          ? `${name} — photo ${i + 1} of ${unique.length}`
+          : name
+        : "Product image",
+    };
+  });
 }
 
 // Lightweight availability map for the public shop. Returns null when

@@ -20,6 +20,7 @@ import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 
 import { resolveStatTiles } from "@/lib/stat-tiles";
+import { productImageUrl } from "@/lib/supabase-image";
 
 export const CONTENT_CACHE_TAG = "content";
 
@@ -442,7 +443,20 @@ async function fetchProcessSteps(locale: ContentLocale): Promise<ProcessStep[]> 
     console.error("[content] fetchProcessSteps:", error.message);
     return [];
   }
-  return (data ?? []) as ProcessStep[];
+  // Rewrite image_url to the transform endpoint on the way out. This
+  // is the one place making-step images are shipped to callers —
+  // both the website's /making page AND the mobile app's
+  // /api/mobile/content refresh. Fixing it here fixes both, including
+  // the app without a Play release. Width 1200 is wider than the
+  // largest making-step tile on retina and lands around 150-250 KB
+  // for a 15 MB source.
+  const rows = (data ?? []) as ProcessStep[];
+  return rows.map((r) => ({
+    ...r,
+    image_url: r.image_url
+      ? productImageUrl(r.image_url, { width: 1200, quality: 80 })
+      : null,
+  }));
 }
 
 // ── Public reader ──────────────────────────────────────────────────────

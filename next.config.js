@@ -72,11 +72,23 @@ const nextConfig = {
     // Product photos uploaded through the admin live in the Supabase
     // `product-images` bucket, so next/image must be allowed to optimise
     // that host (CSP img-src already whitelists it).
+    //
+    // Both /object/public/** and /render/image/public/** are allowed —
+    // the latter is Supabase's image-transformation endpoint, which
+    // src/lib/supabase-image.ts rewrites URLs to so a 15-25 MB raw
+    // original lands at a few hundred KB before next/image even
+    // touches it. Without this second entry next/image refuses to
+    // optimise the transformed URLs with a cryptic 400.
     remotePatterns: [
       {
         protocol: "https",
         hostname: "uejagupcwevadfhfuadv.supabase.co",
         pathname: "/storage/v1/object/public/**",
+      },
+      {
+        protocol: "https",
+        hostname: "uejagupcwevadfhfuadv.supabase.co",
+        pathname: "/storage/v1/render/image/public/**",
       },
     ],
     formats: ["image/avif", "image/webp"],
