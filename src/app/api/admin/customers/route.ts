@@ -5,6 +5,19 @@
 // (case-insensitive). No pagination yet; the customer count is small
 // enough at launch that an in-memory aggregation is fine. Revisit if
 // it grows past a few thousand rows.
+//
+// DUAL AUTH — this route is one of exactly four endpoints that
+// verifyAdminOrTeamOrder opens to the shared /register PIN (the three
+// others: POST /api/admin/orders, POST /api/admin/subscriptions/create,
+// GET /api/admin/products). Counter staff on the team-PIN need to
+// resolve a phone to a customer_id to fill in an order; they must not
+// see any CRM aggregate. So the aggregates (total_spent,
+// outstanding_cod, has_subscription, and even total_orders /
+// last_order_at — all of which are derived, nothing to do with the
+// register form) are OMITTED from the response entirely for team-PIN
+// callers, not zeroed. Omission means a hostile PIN user cannot even
+// tell whether "unknown vs zero" aggregates match a real human; zeroing
+// would leak that signal.
 
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -14,6 +27,7 @@ import {
   verifyAdminOrTeamOrder,
 } from "@/lib/admin-auth";
 import { queueAuditEvent } from "@/lib/audit-log";
+import { isCancelled } from "@/lib/order-stages";
 
 export async function GET(req: NextRequest) {
   // Dual-auth: full admin session OR the narrow team-order token
@@ -75,9 +89,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ customers: [] });
   }
 
+  // Team-PIN caller — stop here. No aggregates, no extra round-trips.
+  // The register form only reads id/full_name/phone/city off this.
+  if (isTeam) {
+    return NextResponse.json({ customers });
+  }
+
   // Pull every order row for the matched customers and fold into
   // per-customer aggregates in JS. We only need a narrow slice per row —
-  // customer_id/total_amount/created_at/status.
+  // customer_id/total_amount/created_at/status/payment_method/payment_status.
   //
   // CHUNKED, BECAUSE `in.(...)` RIDES IN THE URL. This was one unchunked
   // call, so with no `?q=` it carried every customer id at once. A uuid plus
@@ -112,7 +132,9 @@ export async function GET(req: NextRequest) {
     idChunks.map((chunk) =>
       supabaseAdmin
         .from("orders")
-        .select("customer_id, total_amount, created_at, status")
+        .select(
+          "customer_id, total_amount, created_at, status, payment_method, payment_status",
+        )
         .in("customer_id", chunk),
     ),
   );
@@ -124,32 +146,105 @@ export async function GET(req: NextRequest) {
   }
   const orders = ordRes.flatMap((r) => r.data ?? []);
 
-  type Agg = { total_orders: number; total_spent: number; last_order_at: string | null };
+  // Subscriber flag — "is there any subscription row at all for this
+  // customer_id". `completed` subscriptions still count: a dormant plan
+  // template can still generate deliveries, so the operator must see it.
+  // We only need the id set; no columns beyond customer_id.
+  const subRes = await Promise.all(
+    idChunks.map((chunk) =>
+      supabaseAdmin
+        .from("subscriptions")
+        .select("customer_id")
+        .in("customer_id", chunk),
+    ),
+  );
+  const subErr = subRes.find((r) => r.error)?.error;
+  if (subErr) {
+    console.error("[admin/customers subs agg]", subErr.message);
+    return NextResponse.json({ error: subErr.message }, { status: 500 });
+  }
+  const subscriberSet = new Set<string>();
+  for (const r of subRes) {
+    for (const row of r.data ?? []) {
+      if (row.customer_id) subscriberSet.add(row.customer_id);
+    }
+  }
+
+  // Money accumulates in PAISE to dodge the float drift a repeated
+  // rupee-level sum carries — orders.total_amount is stored in rupees
+  // and occasionally lands non-integer (delivery fee + ladder discount),
+  // so a long running total in float rupees can drift by a few paise per
+  // row. Paise ints add cleanly; we divide once at the end. Assertion
+  // below pins the integer invariant so a future caller that forgets to
+  // Math.round() cannot sneak a float in.
+  //
+  // `cancelled_at` IS NEVER WRITTEN on this table — null on all 1195
+  // rows and cancellation_reason blank on all 1195. The authoritative
+  // signal is `status = 'cancelled'`, matched via isCancelled() in
+  // order-stages.ts. Using the dead column overstates lifetime value by
+  // ~44k and outstanding COD by ~35k.
+  type Agg = {
+    total_orders: number;
+    total_spent_paise: number;
+    outstanding_cod_paise: number;
+    last_order_at: string | null;
+  };
   const agg = new Map<string, Agg>();
   for (const row of orders) {
     if (!row.customer_id) continue;
-    // Don't count cancelled orders in total_spent — they didn't pay.
-    const isCancelled = (row.status ?? "").toLowerCase() === "cancelled";
+    if (isCancelled(row.status)) continue; // excludes BOTH count and spend
     const cur = agg.get(row.customer_id) ?? {
       total_orders: 0,
-      total_spent: 0,
+      total_spent_paise: 0,
+      outstanding_cod_paise: 0,
       last_order_at: null,
     };
     cur.total_orders += 1;
-    if (!isCancelled) cur.total_spent += Number(row.total_amount) || 0;
+    const amt = Number(row.total_amount) || 0;
+    const paise = Math.round(amt * 100);
+    cur.total_spent_paise += paise;
+    const pay = String(row.payment_status ?? "").toLowerCase();
+    const method = String(row.payment_method ?? "").toLowerCase();
+    // Outstanding COD mirrors isPaid()'s rule in reverse: payment_method
+    // is 'cod' and payment_status is NOT one of the paid-family values.
+    // "not like 'paid%'" catches both 'paid' and 'paid_at_counter'.
+    if (method === "cod" && !pay.startsWith("paid")) {
+      cur.outstanding_cod_paise += paise;
+    }
     if (!cur.last_order_at || row.created_at > cur.last_order_at) {
       cur.last_order_at = row.created_at;
     }
     agg.set(row.customer_id, cur);
   }
 
+  // Integer invariant — asserted at build-up time rather than trusted.
+  // A single float-polluted total_amount would produce a float paise sum
+  // and this would catch it. Dev-only; in prod we log and continue so a
+  // bad row cannot take the whole screen off the air.
+  agg.forEach((a, cid) => {
+    if (
+      !Number.isInteger(a.total_spent_paise) ||
+      !Number.isInteger(a.outstanding_cod_paise)
+    ) {
+      console.error(
+        `[admin/customers] non-integer paise for ${cid}:`,
+        a.total_spent_paise,
+        a.outstanding_cod_paise,
+      );
+    }
+  });
+
   const enriched = customers.map((c) => {
     const a = agg.get(c.id);
     return {
       ...c,
       total_orders: a?.total_orders ?? 0,
-      total_spent: a?.total_spent ?? 0,
+      // Divide once, at the end. Consumers (CSV export, formatINR) read
+      // rupees, same as before.
+      total_spent: a ? a.total_spent_paise / 100 : 0,
+      outstanding_cod: a ? a.outstanding_cod_paise / 100 : 0,
       last_order_at: a?.last_order_at ?? null,
+      has_subscription: subscriberSet.has(c.id),
     };
   });
 
