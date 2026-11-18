@@ -239,21 +239,84 @@ export function kindName(k: TimelineItem["kind"]): string {
   }
 }
 
-// Palette + icon per kind. Mirrors src/lib/order-notes.ts
-// NOTE_KIND_STYLE so a 'call' reads amber in both the orders board
-// and here, and 'edit' teal in both. Declared here in the .ts module
-// so the page's own inline map stays in sync with what the test can
-// pin.
+// Palette + icon per kind. Colours resolve against the /mkt CREAM
+// surface (#FBF3D4), not the admin INK surface — this file is
+// imported by /mkt only, and the admin notes board uses its own
+// NOTE_KIND_STYLE in src/lib/order-notes.ts. Kind-to-hue is kept in
+// the same family (amber-ish for calls, green for orders/edits,
+// WhatsApp brand green for messages) so an operator switching
+// surfaces still reads the same kind as the same thing.
 export const KIND_STYLE: Record<
   TimelineItem["kind"] | "whatsapp",
   { label: string; color: string; icon: string }
 > = {
-  note: { label: "Note", color: "rgba(251,243,212,0.72)", icon: "✎" },
-  call: { label: "Call", color: "#F59E0B", icon: "☎" },
-  edit: { label: "Edit", color: "#7FD4C1", icon: "⟲" },
-  whatsapp: { label: "WhatsApp", color: "#25D366", icon: "💬" },
-  whatsapp_in: { label: "WhatsApp ↓", color: "#25D366", icon: "💬" },
-  whatsapp_out: { label: "WhatsApp ↑", color: "#25D366", icon: "💬" },
-  order: { label: "Order", color: "#FBF3D4", icon: "◉" },
-  review: { label: "Review", color: "#F0C419", icon: "★" },
+  note: { label: "Note", color: "#1D1D1F", icon: "✎" },
+  call: { label: "Call", color: "#B35A00", icon: "☎" },
+  edit: { label: "Edit", color: "#024628", icon: "⟲" },
+  whatsapp: { label: "WhatsApp", color: "#128C7E", icon: "💬" },
+  whatsapp_in: { label: "WhatsApp ↓", color: "#128C7E", icon: "💬" },
+  whatsapp_out: { label: "WhatsApp ↑", color: "#128C7E", icon: "💬" },
+  order: { label: "Order", color: "#024628", icon: "◉" },
+  review: { label: "Review", color: "#8A5A00", icon: "★" },
 };
+
+// ── 12-week activity strip ─────────────────────────────────────────
+
+/** Build 12 ordered buckets, oldest week first, counting how many of
+ *  the given order rows fell inside each bucket. The newest bucket
+ *  ends at end-of-today (local time, which here is IST — a UTC
+ *  bucket would push late-evening orders one column over and the
+ *  strip would read wrong at the right edge).
+ *
+ *  Exported so the page can render the strip and a test can pin the
+ *  bucketing rule without mounting React. */
+export type WeekBucket = { start: Date; count: number };
+export const WEEKS = 12;
+
+export function buildWeekBuckets(
+  orders: Array<{ created_at: string }>,
+  now: Date = new Date(),
+): WeekBucket[] {
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  const buckets: WeekBucket[] = [];
+  for (let i = WEEKS - 1; i >= 0; i--) {
+    const end = new Date(endOfToday.getTime() - i * 7 * 86_400_000);
+    const start = new Date(end.getTime() - 7 * 86_400_000 + 1);
+    buckets.push({ start, count: 0 });
+  }
+
+  const earliest = buckets[0].start.getTime();
+  const latestEnd = endOfToday.getTime();
+
+  for (const o of orders) {
+    const t = Date.parse(o.created_at);
+    if (!Number.isFinite(t)) continue;
+    if (t < earliest || t > latestEnd) continue;
+    const ageDays = Math.floor((latestEnd - t) / 86_400_000);
+    const bucketFromEnd = Math.floor(ageDays / 7);
+    const idx = WEEKS - 1 - bucketFromEnd;
+    if (idx >= 0 && idx < WEEKS) buckets[idx].count += 1;
+  }
+  return buckets;
+}
+
+// ── Timeline body clamping ─────────────────────────────────────────
+
+/** Line-count a body as it would render in the timeline. Counts hard
+ *  newlines plus a rough wrap at `wrapAt` characters per line. Used
+ *  to decide whether to show a "more" toggle on the body. */
+export function countTimelineLines(body: string, wrapAt = 90): number {
+  if (!body) return 0;
+  const lines = body.split(/\r?\n/);
+  let total = 0;
+  for (const line of lines) {
+    if (line.length === 0) {
+      total += 1;
+    } else {
+      total += Math.ceil(line.length / wrapAt);
+    }
+  }
+  return total;
+}

@@ -49,7 +49,14 @@ const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;
 // during sign-out and on any 401 via ADMIN_AUTH_LOGOUT_EVENT below.
 const LEGACY_ADMIN_AUTHED_FLAG = "admin_authenticated";
 
-function readRememberedAuth(): boolean {
+// The three helpers below + PasswordGate below are also consumed by
+// /mkt via src/components/mkt/MktShell.tsx. The gate itself (same admin
+// session, same POST /api/admin/login, same 30-day remember-me) must
+// stay centralised so a change to the credential rules doesn't need to
+// be mirrored to two files that quietly drift. Exporting rather than
+// duplicating keeps there being one authoritative gate for every
+// surface that needs the admin session.
+export function readRememberedAuth(): boolean {
   if (typeof window === "undefined") return false;
   const session = sessionStorage.getItem(ADMIN_SESSION_KEY);
   const ls = localStorage.getItem(ADMIN_SESSION_KEY);
@@ -76,7 +83,7 @@ function readRememberedAuth(): boolean {
   return false;
 }
 
-function writeRememberedAuth(): void {
+export function writeRememberedAuth(): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(
     ADMIN_SESSION_KEY,
@@ -84,7 +91,7 @@ function writeRememberedAuth(): void {
   );
 }
 
-function clearRememberedAuth(): void {
+export function clearRememberedAuth(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(ADMIN_SESSION_KEY);
   sessionStorage.removeItem(ADMIN_SESSION_KEY);
@@ -719,7 +726,7 @@ function GrainOverlay() {
  * Do not add a `required` here; it would turn a convenience into a lockout
  * on the one screen nobody can get past.
  */
-function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
+export function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);

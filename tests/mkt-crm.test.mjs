@@ -90,23 +90,44 @@ function handlerSlice(src, which) {
 
 // ── 1. /mkt rides the admin password gate ───────────────────────────
 
-test("/mkt page wraps content in AdminShell — the admin-session gate", () => {
+test("/mkt page wraps content in MktShell — the admin-session gate", () => {
+  // The page wraps its content in <MktShell>, which composes the
+  // SAME PasswordGate that AdminShell uses. Both AdminShell and the
+  // three remembered-auth helpers are exported from AdminShell.tsx
+  // specifically so MktShell can reuse them — there is still ONE
+  // authoritative gate per surface that needs the admin session.
   const src = read(PAGE);
   assert.match(
     src,
-    /from\s+["']@\/components\/admin\/AdminShell["']/,
-    "the /mkt page must import AdminShell — it is the gate",
+    /from\s+["']@\/components\/mkt\/MktShell["']/,
+    "the /mkt page must import MktShell — the lighter, on-brand chrome",
   );
-  assert.match(src, /<AdminShell[\s>]/);
+  assert.match(src, /<MktShell[\s>]/);
+});
+
+test("MktShell gates on PasswordGate exported from AdminShell", () => {
+  // Pin that MktShell doesn't duplicate the gate — that would
+  // bifurcate the admin-session rules.
+  const shell = read("src/components/mkt/MktShell.tsx");
+  assert.match(
+    shell,
+    /from\s+["']@\/components\/admin\/AdminShell["']/,
+    "MktShell must import from AdminShell — the gate is shared, not duplicated",
+  );
+  assert.match(shell, /PasswordGate/);
+  assert.match(shell, /readRememberedAuth/);
 });
 
 test("/mkt does NOT open to verifyAdminOrTeamOrder", () => {
   // The whole file tree under /mkt must never reach for the PIN gate.
-  // The layout is intentionally minimal; the page uses AdminShell. If
-  // either file ever imports verifyAdminOrTeamOrder, the surface is
-  // open to the counter staff. Comments are stripped before the check
-  // so a block-comment explaining the rule doesn't satisfy it.
-  for (const rel of [PAGE, LAYOUT]) {
+  // The layout is intentionally minimal; the page uses MktShell,
+  // which gates on the admin session via PasswordGate. If any file
+  // in the /mkt tree OR its dedicated shell imports the PIN helpers,
+  // the surface is open to counter staff. Comments are stripped
+  // before the check so a block-comment explaining the rule doesn't
+  // satisfy it.
+  const files = [PAGE, LAYOUT, "src/components/mkt/MktShell.tsx"];
+  for (const rel of files) {
     assert.ok(
       !/verifyAdminOrTeamOrder|isTeamOrderToken/.test(code(rel)),
       `${rel} refers to the PIN gate — /mkt must be isAdmin only`,
@@ -172,14 +193,20 @@ test("list route GET performs NO writes — .insert/.update/.upsert/.delete", ()
 
 test("/mkt page performs NO writes", () => {
   const src = code(PAGE);
-  for (const verb of [".insert(", ".update(", ".upsert(", ".delete("]) {
+  // `.insert(` / `.update(` / `.upsert(` are unambiguous — the only
+  // things in this codebase that name them are supabase query
+  // builders. `.delete(` is deliberately NOT in this list because
+  // Map.prototype.delete is a legitimate client-side API and the
+  // row-element ref registry uses it. The real network-write check
+  // is the method-regex below — anything that would issue a delete
+  // call has to go through adminFetch, which travels under a POST /
+  // PUT / PATCH / DELETE method the regex catches.
+  for (const verb of [".insert(", ".update(", ".upsert("]) {
     assert.ok(
       !src.includes(verb),
       `/mkt page contains ${verb} — the mkt phase is READ-ONLY`,
     );
   }
-  // adminFetch defaults to GET; if a future method:"POST" or "PATCH"
-  // sneaks in through adminFetch it should break this test.
   assert.ok(
     !/method\s*:\s*["'](POST|PUT|PATCH|DELETE)["']/.test(src),
     "the /mkt page issues a non-GET adminFetch — READ-ONLY is the rule",
@@ -311,6 +338,91 @@ test("buildTimeline interleaves ALL four sources and sorts newest first", () => 
   // an order id (uuids don't, but the prefix also serves as a React
   // key safety net) still produces distinct timeline rows.
   assert.ok(items.every((i) => /^[onwr]-/.test(i.id)));
+});
+
+// ── 12-week activity strip bucketing ────────────────────────────────
+
+const buildWeekBuckets = libMod.buildWeekBuckets;
+const countTimelineLines = libMod.countTimelineLines;
+const WEEKS = libMod.WEEKS;
+
+test("buildWeekBuckets returns exactly 12 buckets in oldest-first order", () => {
+  const buckets = buildWeekBuckets(
+    [],
+    new Date("2026-11-18T12:00:00+05:30"),
+  );
+  assert.equal(buckets.length, 12);
+  assert.equal(WEEKS, 12);
+  // Oldest first — bucket[0].start precedes bucket[11].start.
+  for (let i = 1; i < buckets.length; i++) {
+    assert.ok(
+      buckets[i - 1].start.getTime() < buckets[i].start.getTime(),
+      `bucket ${i - 1} must precede bucket ${i}`,
+    );
+  }
+  // Empty input — every count is zero.
+  assert.ok(buckets.every((b) => b.count === 0));
+});
+
+test("buildWeekBuckets drops rows older than the 12-week window", () => {
+  const now = new Date("2026-11-18T12:00:00+05:30");
+  // 13 weeks ago is outside; a bucket count of 1 would mean the
+  // window silently widened.
+  const thirteen = new Date(now.getTime() - 13 * 7 * 86_400_000).toISOString();
+  const buckets = buildWeekBuckets([{ created_at: thirteen }], now);
+  assert.equal(
+    buckets.reduce((s, b) => s + b.count, 0),
+    0,
+    "a 13-week-old row must not land in any of the 12 buckets",
+  );
+});
+
+test("buildWeekBuckets lands today's order in the newest bucket", () => {
+  const now = new Date("2026-11-18T12:00:00+05:30");
+  const today = new Date(now.getTime() - 60 * 1000).toISOString();
+  const buckets = buildWeekBuckets([{ created_at: today }], now);
+  assert.equal(buckets[buckets.length - 1].count, 1);
+  // And nowhere else.
+  assert.equal(
+    buckets.slice(0, -1).reduce((s, b) => s + b.count, 0),
+    0,
+  );
+});
+
+test("buildWeekBuckets — malformed dates are skipped, never crash", () => {
+  const now = new Date("2026-11-18T12:00:00+05:30");
+  const buckets = buildWeekBuckets(
+    [
+      { created_at: "not a date" },
+      { created_at: "" },
+      { created_at: now.toISOString() },
+    ],
+    now,
+  );
+  assert.equal(
+    buckets.reduce((s, b) => s + b.count, 0),
+    1,
+    "only the valid date counts",
+  );
+});
+
+// ── Timeline body line-counting ────────────────────────────────────
+
+test("countTimelineLines — short body is 1 line, long body wraps", () => {
+  assert.equal(countTimelineLines("hello"), 1);
+  // 180 characters wraps to 2 at wrapAt=90.
+  assert.equal(countTimelineLines("x".repeat(180)), 2);
+  // Three lines of hard breaks is 3.
+  assert.equal(countTimelineLines("a\nb\nc"), 3);
+});
+
+test("countTimelineLines — the >3 threshold that drives the 'more' toggle", () => {
+  // The page uses countTimelineLines(body) > 3 to show "more". Pin
+  // both sides of that boundary so a refactor can't silently flip.
+  const threeLines = "a\nb\nc";
+  const fourLines = "a\nb\nc\nd";
+  assert.ok(!(countTimelineLines(threeLines) > 3), "3 lines must NOT trigger 'more'");
+  assert.ok(countTimelineLines(fourLines) > 3, "4 lines MUST trigger 'more'");
 });
 
 test("buildTimeline — empty detail yields an empty timeline", () => {

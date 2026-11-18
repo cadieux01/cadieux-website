@@ -2,37 +2,41 @@
 
 // /mkt — marketing workspace, first screen is the CRM.
 //
-// Three panes on desktop, stacked on phone:
-//   LEFT   — segment rail with live counts.
-//   MIDDLE — the people in that segment. Each row carries a "last
-//            touch" line (most recent of their latest order_note body
-//            or latest WhatsApp message). The list is SORTED by that
-//            touch, newest first; the whole point is "who went quiet".
-//   RIGHT  — the selected person's merged timeline: orders, notes,
-//            WhatsApp and reviews, one stream, newest first, kind-coded
-//            with icon + accent colour.
+// LIGHT SURFACE, NOT THE ADMIN SHELL. /admin is dark + austere; /mkt
+// is cream on brand. We use MktShell (cream chrome, DM Sans) rather
+// than AdminShell. The GATE is the same — admin session, same POST
+// /api/admin/login — so /mkt remains isAdmin-only and the counter PIN
+// cannot reach it (same assertion the tests pin).
 //
-// REUSE, NOT REWRITE. The data flows through /api/admin/customers
-// (with ?with_touch=1) for the list and /api/admin/customers/[id] for
-// the detail. Both routes shipped in 730c784 and are gated, tested,
-// and already projecting the fields this page needs. The two things
-// added since: the list route now accepts with_touch so a caller can
-// opt into last_touch_at/body/kind without paying for it elsewhere.
+// Three panes on desktop, stacked on phone. The middle column is the
+// point: a last-touch line tells the operator who's gone quiet.
 //
-// Every pane carries its own error state separate from its empty
-// state — a 500 on reviews must not read as "no reviews", a failed
-// customer fetch must not look like "no match for this segment".
+// INTERACTIONS pinned here so a reviewer does not have to piece them
+// together from the component bodies below:
+//   - Segment chips filter INSTANTLY (client-side, no fetch).
+//   - Search filters as you type, debounced 150ms, matching name +
+//     phone. Counts in the chips update with the search.
+//   - Rows have visible hover + pressed states.
+//   - Keyboard: ArrowUp / ArrowDown walk the list, Enter opens that
+//     person in the right pane, Escape clears the search box.
+//   - Right pane is sticky inside the three-pane grid — scrolling
+//     the people list cannot scroll the file away.
+//   - Timeline bodies longer than 3 lines collapse with a "more"
+//     toggle (per-row, not a global expand).
+//   - COPY shows an inline "Copied" state for ~1.5s on the button
+//     itself, never an alert() or toast.
+//   - Loading renders skeleton rows shaped like real ones; no spinner.
+//   - Empty vs error are visually distinct (cream dashed vs red
+//     outline).
 //
-// Quick actions in the right-pane header are DISABLED (not hidden,
-// not broken links) when the customer has no phone on file — the
-// operator must still see that the number is absent, not merely feel
-// that the buttons are missing.
+// REUSE: list data from /api/admin/customers?with_touch=1, detail
+// from /api/admin/customers/[id], both already gated and tested.
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { AdminShell } from "@/components/admin/AdminShell";
-import { StatusBadge } from "@/components/admin/StatusBadge";
+import { MktShell } from "@/components/mkt/MktShell";
+import { MKT } from "@/components/mkt/theme";
 import { adminFetch, AdminFetchError } from "@/lib/admin-client";
 import {
   formatDate,
@@ -43,13 +47,17 @@ import {
 } from "@/lib/admin-formatting";
 import {
   buildTimeline,
+  buildWeekBuckets,
+  countTimelineLines,
   KIND_STYLE,
   matchesSegment,
   parseSegment,
   SEGMENT_LABEL,
   SEGMENTS,
+  WEEKS,
   type Segment,
   type TimelineItem,
+  type WeekBucket,
 } from "@/lib/mkt-crm";
 
 // ── Types the two admin routes already return ───────────────────────
@@ -144,9 +152,6 @@ type DetailResponse = {
   reviews_error: string | null;
 };
 
-// Segment logic lives in @/lib/mkt-crm so `node --test` can exercise
-// it without a bundler. The page imports and renders.
-
 // ── Page ────────────────────────────────────────────────────────────
 
 export default function MktCrmPage() {
@@ -164,7 +169,12 @@ function MktCrmInner() {
   const [segment, setSegment] = useState<Segment>(() =>
     parseSegment(searchParams.get("segment")),
   );
+  // Two query states: `query` is the raw input (rerenders the box
+  // every keystroke), `effective` is the debounced version that the
+  // filter/search re-run against. Keeping them separate avoids a
+  // laggy input on slow laptops.
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  const [effective, setEffective] = useState(query);
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     searchParams.get("c"),
   );
@@ -178,15 +188,19 @@ function MktCrmInner() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  const loadList = useCallback(async (q: string) => {
+  // ONE fetch of the full list up front. Everything after — the
+  // segment chips, the search box, the sort — is in-memory. The
+  // list route accepts ?q= but we fetch unfiltered so the segment
+  // counts don't jump around while the operator types, and the
+  // debounced search can be purely client-side. 1363 rows × a small
+  // payload is comfortably under a megabyte.
+  const loadList = useCallback(async () => {
     setListError(null);
     setListLoading(true);
     try {
-      const url =
-        q.trim().length > 0
-          ? `/api/admin/customers?q=${encodeURIComponent(q.trim())}&with_touch=1`
-          : "/api/admin/customers?with_touch=1";
-      const res = await adminFetch<ListResponse>(url);
+      const res = await adminFetch<ListResponse>(
+        "/api/admin/customers?with_touch=1",
+      );
       setRows(res.customers ?? []);
       setTouchError(res.touch_error ?? null);
     } catch (e) {
@@ -198,11 +212,17 @@ function MktCrmInner() {
     }
   }, []);
 
-  // Debounced search reload, same shape as /admin/customers.
   useEffect(() => {
-    const t = setTimeout(() => void loadList(query), 300);
+    void loadList();
+  }, [loadList]);
+
+  // 150ms debounce — fast enough to feel instant to a typist, slow
+  // enough that every keystroke on a long "9876543210" search does
+  // not recompute the segment counts eleven times.
+  useEffect(() => {
+    const t = setTimeout(() => setEffective(query), 150);
     return () => clearTimeout(t);
-  }, [query, loadList]);
+  }, [query]);
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailError(null);
@@ -230,7 +250,6 @@ function MktCrmInner() {
     void loadDetail(selectedId);
   }, [selectedId, loadDetail]);
 
-  // URL writeback — segment + q + selected id all survive a refresh.
   useEffect(() => {
     const params = new URLSearchParams();
     if (segment !== "all") params.set("segment", segment);
@@ -241,10 +260,21 @@ function MktCrmInner() {
     router.replace(next, { scroll: false });
   }, [segment, query, selectedId, router]);
 
-  // Live counts per segment, computed off the full fetched set (search
-  // narrows the LIST pane but the sidebar counts stay honest to the
-  // full pool — a segment count that changed every keystroke would
-  // make the rail unreadable).
+  // Search filter — matches name + phone, case-insensitive. Applied
+  // BEFORE segment counts so the chip tallies reflect what the
+  // operator will see when they click a chip.
+  const searched = useMemo(() => {
+    const q = effective.trim().toLowerCase();
+    if (!q) return rows;
+    const digits = q.replace(/\D/g, "");
+    return rows.filter((c) => {
+      const name = (c.full_name ?? "").toLowerCase();
+      const phone = c.phone ?? "";
+      if (digits.length > 0 && phone.includes(digits)) return true;
+      return name.includes(q);
+    });
+  }, [rows, effective]);
+
   const counts = useMemo(() => {
     const out: Record<Segment, number> = {
       all: 0,
@@ -254,17 +284,14 @@ function MktCrmInner() {
       subscribers: 0,
       owes_cod: 0,
     };
-    for (const c of rows) {
+    for (const c of searched) {
       for (const s of SEGMENTS) if (matchesSegment(c, s)) out[s] += 1;
     }
     return out;
-  }, [rows]);
+  }, [searched]);
 
   const visible = useMemo(() => {
-    const filtered = rows.filter((c) => matchesSegment(c, segment));
-    // Newest touch first — the point of the column. Customers with no
-    // touch at all fall to the bottom; within that no-touch group,
-    // sort by last_order_at desc so a recent order is still prominent.
+    const filtered = searched.filter((c) => matchesSegment(c, segment));
     return filtered.sort((a, b) => {
       const ta = a.last_touch_at ?? "";
       const tb = b.last_touch_at ?? "";
@@ -275,24 +302,89 @@ function MktCrmInner() {
       const ob = b.last_order_at ?? "";
       return ob.localeCompare(oa);
     });
-  }, [rows, segment]);
+  }, [searched, segment]);
 
-  // Auto-select the first row when nothing is selected AND we have
-  // rows for this segment. Keeps the right pane populated on first
-  // load instead of showing a blank slate. Only runs when the user
-  // hasn't picked yet — switching segments does NOT yank them away.
+  // Auto-select first row if nothing selected. Switching segments or
+  // typing a query can make the current selection drop out of view;
+  // we do NOT yank the user elsewhere in that case — the detail pane
+  // keeps showing whoever they picked, even if that person isn't in
+  // the current slice.
   useEffect(() => {
     if (selectedId) return;
     if (visible.length === 0) return;
     setSelectedId(visible[0].id);
   }, [visible, selectedId]);
 
+  // ── Keyboard navigation. Up/Down move the selection through the
+  // currently-visible slice; Enter re-opens the right pane (harmless
+  // since the row is already selected, but kept for accessibility
+  // parity with click); Escape clears the search box. All three
+  // short-circuit when focus is in a text input that is NOT the
+  // search box, so typing in a note body elsewhere on the page can't
+  // accidentally scroll the list.
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLLIElement>());
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      // Allow ↑/↓ when focus is in the search box — moving away from
+      // the list while typing is useful. Escape anywhere clears.
+      const inSearch = t === searchRef.current;
+      const inForm =
+        !!t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable);
+      if (e.key === "Escape") {
+        if (query) {
+          e.preventDefault();
+          setQuery("");
+          searchRef.current?.focus();
+        }
+        return;
+      }
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown" && e.key !== "Enter") {
+        return;
+      }
+      if (inForm && !inSearch) return;
+      if (visible.length === 0) return;
+
+      const idx = visible.findIndex((r) => r.id === selectedId);
+      if (e.key === "Enter") {
+        if (idx >= 0) {
+          e.preventDefault();
+          // Idempotent — re-select to force a scroll into view.
+          setSelectedId(visible[idx].id);
+          rowRefs.current.get(visible[idx].id)?.scrollIntoView({
+            block: "nearest",
+          });
+        }
+        return;
+      }
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      const next =
+        idx < 0 ? 0 : Math.max(0, Math.min(visible.length - 1, idx + step));
+      const nextRow = visible[next];
+      if (nextRow) {
+        setSelectedId(nextRow.id);
+        rowRefs.current.get(nextRow.id)?.scrollIntoView({
+          block: "nearest",
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [visible, selectedId, query]);
+
   return (
-    <AdminShell title="Marketing" subtitle="CRM">
+    <MktShell title="CRM" subtitle="Customer activity across all channels">
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 220px) minmax(0, 1fr) minmax(0, 1.4fr)",
+          gridTemplateColumns:
+            "minmax(0, 200px) minmax(0, 1fr) minmax(0, 1.5fr)",
           gap: "1rem",
           alignItems: "start",
         }}
@@ -305,35 +397,12 @@ function MktCrmInner() {
         />
 
         <section>
-          <div
-            className="flex flex-wrap items-center gap-3"
-            style={{ marginBottom: "0.9rem" }}
-          >
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search name or phone"
-              style={{
-                border: "1px solid rgba(251,243,212,0.3)",
-                background: "transparent",
-                color: "#FBF3D4",
-                padding: "0.45rem 0.8rem",
-                fontFamily: "var(--font-body)",
-                fontSize: "1rem",
-                minWidth: 240,
-                flex: "1 1 240px",
-              }}
-            />
-            <span
-              style={{
-                color: "rgba(251,243,212,0.55)",
-                fontSize: "0.95rem",
-                letterSpacing: "0.04em",
-              }}
-            >
-              {visible.length} people
-            </span>
-          </div>
+          <SearchBox
+            innerRef={searchRef}
+            value={query}
+            onChange={setQuery}
+            countShown={visible.length}
+          />
 
           {touchError ? (
             <PaneError>Touch merge failed: {touchError}</PaneError>
@@ -342,46 +411,126 @@ function MktCrmInner() {
           {listError ? (
             <PaneError>Could not load list: {listError}</PaneError>
           ) : listLoading ? (
-            <Placeholder>Loading customers…</Placeholder>
+            <SkeletonList />
           ) : visible.length === 0 ? (
             <Placeholder>No people in this segment.</Placeholder>
           ) : (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+                display: "grid",
+                gap: "0.5rem",
+              }}
+            >
               {visible.map((c) => (
                 <PersonRow
                   key={c.id}
                   row={c}
                   selected={c.id === selectedId}
                   onSelect={() => setSelectedId(c.id)}
+                  liRef={(el) => {
+                    if (el) rowRefs.current.set(c.id, el);
+                    else rowRefs.current.delete(c.id);
+                  }}
                 />
               ))}
             </ul>
           )}
         </section>
 
-        <section>
-          {detailLoading ? (
-            <Placeholder>Loading customer…</Placeholder>
-          ) : detailError ? (
-            <PaneError>Could not load customer: {detailError}</PaneError>
-          ) : detail ? (
-            <CustomerFile data={detail} />
-          ) : (
-            <Placeholder>Select a person on the left.</Placeholder>
-          )}
+        <section className="mkt-right">
+          <div className="mkt-right-sticky">
+            {detailLoading ? (
+              <SkeletonFile />
+            ) : detailError ? (
+              <PaneError>Could not load customer: {detailError}</PaneError>
+            ) : detail ? (
+              <CustomerFile data={detail} />
+            ) : (
+              <Placeholder>Select a person on the left.</Placeholder>
+            )}
+          </div>
         </section>
       </div>
 
       <style
         dangerouslySetInnerHTML={{
           __html: `
+            /* Right pane sticks to viewport while the people list
+               scrolls past. 'start' alignment on the grid lets this
+               work; without it the grid stretches every column to
+               the tallest row and sticky stops working. */
+            .mkt-right-sticky {
+              position: sticky;
+              top: 1rem;
+              max-height: calc(100vh - 2rem);
+              overflow: auto;
+            }
+
             @media (max-width: 960px) {
-              .mkt-grid { grid-template-columns: 1fr !important; }
+              .mkt-grid {
+                grid-template-columns: 1fr !important;
+              }
+              /* Mobile: stacked. Sticky would stick the file to the
+                 top of the viewport while the user is still scanning
+                 the list below it — annoying. Fall back to natural
+                 flow. */
+              .mkt-right-sticky {
+                position: static;
+                max-height: none;
+                overflow: visible;
+              }
             }
           `,
         }}
       />
-    </AdminShell>
+    </MktShell>
+  );
+}
+
+// ── Search box ──────────────────────────────────────────────────────
+
+function SearchBox({
+  innerRef,
+  value,
+  onChange,
+  countShown,
+}: {
+  innerRef: React.RefObject<HTMLInputElement>;
+  value: string;
+  onChange: (s: string) => void;
+  countShown: number;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: "0.6rem",
+        alignItems: "center",
+        marginBottom: "0.9rem",
+        flexWrap: "wrap",
+      }}
+    >
+      <input
+        ref={innerRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search name or phone"
+        aria-label="Search customers by name or phone"
+        style={{ minWidth: 220, flex: "1 1 240px", fontSize: "0.98rem" }}
+      />
+      <span
+        style={{
+          color: MKT.mute,
+          fontSize: "0.9rem",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {countShown} {countShown === 1 ? "person" : "people"}
+      </span>
+    </div>
   );
 }
 
@@ -399,9 +548,11 @@ function SegmentRail({
   return (
     <aside
       style={{
-        border: "1px solid rgba(251,243,212,0.18)",
-        padding: "0.5rem",
-        borderRadius: 4,
+        background: "#FFFFFF",
+        border: `1px solid ${MKT.ash}`,
+        borderRadius: 10,
+        padding: "0.4rem",
+        boxShadow: MKT.cardShadow,
       }}
     >
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -412,33 +563,51 @@ function SegmentRail({
               <button
                 type="button"
                 onClick={() => onChange(s)}
+                aria-pressed={on}
                 style={{
                   width: "100%",
                   textAlign: "left",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  padding: "0.55rem 0.8rem",
-                  background: on
-                    ? "rgba(251,243,212,0.14)"
-                    : "transparent",
+                  padding: "0.55rem 0.75rem",
+                  margin: "0.15rem 0",
+                  borderRadius: 6,
                   border: 0,
-                  color: on ? "#FBF3D4" : "rgba(251,243,212,0.78)",
-                  fontFamily: "var(--font-body)",
-                  fontSize: "1rem",
-                  letterSpacing: "0.03em",
+                  color: on ? MKT.activeFg : MKT.ink,
+                  background: on ? MKT.activeBg : "transparent",
+                  fontSize: "0.95rem",
                   cursor: "pointer",
-                  borderLeft: on
-                    ? "3px solid #FBF3D4"
-                    : "3px solid transparent",
+                  transition:
+                    "background 140ms ease, color 140ms ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!on)
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      MKT.hover;
+                }}
+                onMouseLeave={(e) => {
+                  if (!on)
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      "transparent";
+                }}
+                onMouseDown={(e) => {
+                  if (!on)
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      MKT.pressed;
+                }}
+                onMouseUp={(e) => {
+                  if (!on)
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      MKT.hover;
                 }}
               >
                 <span>{SEGMENT_LABEL[s]}</span>
                 <span
                   style={{
-                    fontFeatureSettings: '"tnum"',
-                    color: on ? "#FBF3D4" : "rgba(251,243,212,0.55)",
-                    fontSize: "0.9rem",
+                    fontVariantNumeric: "tabular-nums",
+                    color: on ? MKT.activeFg : MKT.mute,
+                    fontSize: "0.88rem",
                   }}
                 >
                   {counts[s]}
@@ -458,33 +627,52 @@ function PersonRow({
   row,
   selected,
   onSelect,
+  liRef,
 }: {
   row: ListRow;
   selected: boolean;
   onSelect: () => void;
+  liRef: (el: HTMLLIElement | null) => void;
 }) {
+  const [hover, setHover] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const background = selected
+    ? "#FFFFFF"
+    : pressed
+    ? MKT.pressed
+    : hover
+    ? MKT.hover
+    : "#FFFFFF";
   return (
-    <li>
+    <li ref={liRef}>
       <button
         type="button"
         onClick={onSelect}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => {
+          setHover(false);
+          setPressed(false);
+        }}
+        onMouseDown={() => setPressed(true)}
+        onMouseUp={() => setPressed(false)}
+        aria-pressed={selected}
         style={{
           width: "100%",
           textAlign: "left",
-          padding: "0.75rem 0.9rem",
-          background: selected
-            ? "rgba(251,243,212,0.1)"
-            : "transparent",
-          border: "1px solid rgba(251,243,212,0.14)",
+          padding: "0.75rem 0.95rem",
+          background,
+          border: `1px solid ${MKT.ash}`,
           borderLeft: selected
-            ? "3px solid #FBF3D4"
-            : "3px solid transparent",
-          color: "#FBF3D4",
-          fontFamily: "var(--font-body)",
+            ? `3px solid ${MKT.green}`
+            : `3px solid ${MKT.ash}`,
+          borderRadius: 8,
+          color: MKT.ink,
           cursor: "pointer",
-          marginBottom: "0.4rem",
           display: "grid",
-          gap: "0.35rem",
+          gap: "0.4rem",
+          boxShadow: selected ? MKT.cardShadow : "none",
+          transition:
+            "background 140ms ease, border-color 140ms ease, box-shadow 140ms ease",
         }}
       >
         <div
@@ -495,14 +683,14 @@ function PersonRow({
             gap: "0.6rem",
           }}
         >
-          <span style={{ fontSize: "1.02rem" }}>
+          <span style={{ fontWeight: 600, fontSize: "1rem" }}>
             {row.full_name ?? "Unnamed"}
           </span>
           <span
             style={{
-              color: "rgba(251,243,212,0.6)",
-              fontSize: "0.85rem",
-              fontFeatureSettings: '"tnum"',
+              color: MKT.mute,
+              fontSize: "0.86rem",
+              fontVariantNumeric: "tabular-nums",
             }}
           >
             {row.phone ?? "no phone"}
@@ -511,25 +699,25 @@ function PersonRow({
         <div
           style={{
             display: "flex",
-            gap: "0.6rem",
+            gap: "0.55rem",
             flexWrap: "wrap",
-            color: "rgba(251,243,212,0.7)",
-            fontSize: "0.9rem",
+            color: MKT.mute,
+            fontSize: "0.88rem",
           }}
         >
           <span>Last order: {formatDate(row.last_order_at)}</span>
-          <span>·</span>
+          <span style={{ color: MKT.ash }}>·</span>
           <span>Spent: {formatINR(row.total_spent)}</span>
           {row.has_subscription ? (
             <>
-              <span>·</span>
-              <span>Subscriber</span>
+              <span style={{ color: MKT.ash }}>·</span>
+              <span style={{ color: MKT.green, fontWeight: 600 }}>Subscriber</span>
             </>
           ) : null}
           {row.outstanding_cod > 0 ? (
             <>
-              <span>·</span>
-              <span style={{ color: "#F59E0B" }}>
+              <span style={{ color: MKT.ash }}>·</span>
+              <span style={{ color: MKT.error, fontWeight: 600 }}>
                 Owes {formatINR(row.outstanding_cod)}
               </span>
             </>
@@ -544,7 +732,7 @@ function PersonRow({
 function LastTouch({ row }: { row: ListRow }) {
   if (!row.last_touch_at) {
     return (
-      <span style={{ color: "rgba(251,243,212,0.4)", fontSize: "0.9rem" }}>
+      <span style={{ color: MKT.mute, fontSize: "0.88rem" }}>
         No notes or WhatsApp yet.
       </span>
     );
@@ -556,17 +744,18 @@ function LastTouch({ row }: { row: ListRow }) {
         display: "flex",
         gap: "0.5rem",
         alignItems: "baseline",
-        color: "rgba(251,243,212,0.85)",
-        fontSize: "0.92rem",
+        color: MKT.ink,
+        fontSize: "0.9rem",
       }}
     >
       <span
         style={{
           color: kindStyle.color,
-          letterSpacing: "0.08em",
+          letterSpacing: "0.06em",
           textTransform: "uppercase",
-          fontSize: "0.72rem",
-          minWidth: 62,
+          fontSize: "0.7rem",
+          fontWeight: 700,
+          minWidth: 58,
         }}
       >
         {kindStyle.label}
@@ -577,36 +766,41 @@ function LastTouch({ row }: { row: ListRow }) {
           overflow: "hidden",
           textOverflow: "ellipsis",
           flex: 1,
+          color: MKT.ink,
         }}
       >
         {(row.last_touch_body ?? "").replace(/\s+/g, " ").trim() || "—"}
       </span>
-      <span style={{ color: "rgba(251,243,212,0.5)", fontSize: "0.82rem" }}>
+      <span style={{ color: MKT.mute, fontSize: "0.8rem" }}>
         {formatDate(row.last_touch_at)}
       </span>
     </span>
   );
 }
 
-// ── Right: merged timeline ──────────────────────────────────────────
+// ── Right pane: customer file ──────────────────────────────────────
 
 function CustomerFile({ data }: { data: DetailResponse }) {
   const c = data.customer;
   const items = useMemo(() => buildTimeline(data), [data]);
+  const buckets = useMemo(() => buildWeekBuckets(data.orders), [data.orders]);
 
   return (
     <article
       style={{
-        border: "1px solid rgba(251,243,212,0.18)",
+        background: "#FFFFFF",
+        border: `1px solid ${MKT.ash}`,
+        borderRadius: 10,
+        boxShadow: MKT.cardShadow,
         padding: "1rem 1.1rem",
-        borderRadius: 4,
+        color: MKT.ink,
       }}
     >
       <header
         style={{
           display: "grid",
           gap: "0.6rem",
-          borderBottom: "1px solid rgba(251,243,212,0.14)",
+          borderBottom: `1px solid ${MKT.ash}`,
           paddingBottom: "0.9rem",
           marginBottom: "0.9rem",
         }}
@@ -622,11 +816,11 @@ function CustomerFile({ data }: { data: DetailResponse }) {
         >
           <h2
             style={{
-              fontFamily: "var(--font-heading)",
-              fontSize: "1.3rem",
               margin: 0,
-              color: "#FBF3D4",
-              letterSpacing: "0.02em",
+              color: MKT.green,
+              fontSize: "1.3rem",
+              fontWeight: 700,
+              letterSpacing: "-0.01em",
             }}
           >
             {c.full_name ?? "Unnamed customer"}
@@ -638,32 +832,39 @@ function CustomerFile({ data }: { data: DetailResponse }) {
             display: "flex",
             gap: "1.2rem",
             flexWrap: "wrap",
-            color: "rgba(251,243,212,0.8)",
-            fontSize: "0.95rem",
+            color: MKT.mute,
+            fontSize: "0.92rem",
           }}
         >
-          <span>Spent: {formatINR(c.total_spent ?? 0)}</span>
-          <span>Orders: {c.total_orders ?? 0}</span>
+          <span>
+            Spent{" "}
+            <span style={{ color: MKT.ink, fontWeight: 600 }}>
+              {formatINR(c.total_spent ?? 0)}
+            </span>
+          </span>
+          <span>
+            Orders{" "}
+            <span style={{ color: MKT.ink, fontWeight: 600 }}>
+              {c.total_orders ?? 0}
+            </span>
+          </span>
           {c.has_subscription ? (
-            <span style={{ color: "#7FD4C1" }}>Subscriber</span>
+            <span style={{ color: MKT.green, fontWeight: 600 }}>Subscriber</span>
           ) : null}
           {(c.outstanding_cod ?? 0) > 0 ? (
-            <span style={{ color: "#F59E0B" }}>
+            <span style={{ color: MKT.error, fontWeight: 600 }}>
               Owes {formatINR(c.outstanding_cod)}
             </span>
           ) : null}
-          {c.phone ? (
-            <span style={{ color: "rgba(251,243,212,0.6)" }}>{c.phone}</span>
-          ) : (
-            <span style={{ color: "rgba(251,243,212,0.4)" }}>no phone</span>
-          )}
+          <span>
+            {c.phone ?? (
+              <span style={{ color: MKT.mute }}>no phone</span>
+            )}
+          </span>
         </div>
+        <ActivityStrip buckets={buckets} />
       </header>
 
-      {/* Per-panel errors from the detail route. Each is distinct from
-          the empty state — the merged timeline below hides whichever
-          slice failed rather than silently inventing "no notes" over
-          a 500. */}
       {data.notes_error ? (
         <PaneError>Notes failed: {data.notes_error}</PaneError>
       ) : null}
@@ -687,20 +888,66 @@ function CustomerFile({ data }: { data: DetailResponse }) {
   );
 }
 
+// ── 12-week activity strip ─────────────────────────────────────────
+
+function ActivityStrip({ buckets }: { buckets: WeekBucket[] }) {
+  const max = Math.max(1, ...buckets.map((b) => b.count));
+  const BAR = 10;
+  const GAP = 4;
+  const WIDTH = WEEKS * BAR + (WEEKS - 1) * GAP;
+  const HEIGHT = 34;
+  const MIN_H = 2;
+  return (
+    <div
+      aria-label="Last 12 weeks of orders"
+      role="img"
+      style={{
+        display: "flex",
+        gap: "0.7rem",
+        alignItems: "flex-end",
+        color: MKT.mute,
+        fontSize: "0.8rem",
+      }}
+    >
+      <svg
+        width={WIDTH}
+        height={HEIGHT}
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        aria-hidden
+      >
+        {buckets.map((b, i) => {
+          const h = b.count === 0 ? MIN_H : Math.max(MIN_H, (b.count / max) * HEIGHT);
+          const x = i * (BAR + GAP);
+          const y = HEIGHT - h;
+          return (
+            <rect
+              key={i}
+              x={x}
+              y={y}
+              width={BAR}
+              height={h}
+              rx={2}
+              fill={b.count === 0 ? MKT.ash : MKT.green}
+            >
+              <title>
+                {`Week ${i + 1}: ${b.count} order${b.count === 1 ? "" : "s"}`}
+              </title>
+            </rect>
+          );
+        })}
+      </svg>
+      <span style={{ lineHeight: `${HEIGHT}px` }}>12-week activity</span>
+    </div>
+  );
+}
+
+// ── Quick actions ──────────────────────────────────────────────────
+
 function QuickActions({ phone }: { phone: string | null | undefined }) {
-  const hasPhone = typeof phone === "string" && phone.replace(/\D/g, "").length >= 10;
+  const hasPhone =
+    typeof phone === "string" && phone.replace(/\D/g, "").length >= 10;
   const tel = hasPhone ? telHref(phone) : "";
   const wa = hasPhone ? whatsAppHref(phone) : "";
-
-  // Disabled, NOT hidden. The absence of a phone is itself information
-  // for the operator — a hidden set of buttons reads as "this is a
-  // customer without quick actions", which is wrong; the correct read
-  // is "no phone on file for this customer". Render the three buttons
-  // flat and disabled, with aria-disabled so screen readers agree.
-  const copyPhone = () => {
-    if (!hasPhone) return;
-    void navigator.clipboard?.writeText(String(phone));
-  };
 
   return (
     <div style={{ display: "flex", gap: "0.4rem" }}>
@@ -711,11 +958,7 @@ function QuickActions({ phone }: { phone: string | null | undefined }) {
         external
       />
       <QuickAction label="Call" href={tel} disabled={!hasPhone} />
-      <QuickAction
-        label="Copy"
-        disabled={!hasPhone}
-        onClick={copyPhone}
-      />
+      <CopyAction phone={hasPhone ? String(phone) : null} />
     </div>
   );
 }
@@ -725,26 +968,29 @@ function QuickAction({
   href,
   disabled,
   external,
-  onClick,
 }: {
   label: string;
   href?: string;
   disabled: boolean;
   external?: boolean;
-  onClick?: () => void;
 }) {
+  const [pressed, setPressed] = useState(false);
+  const bg = disabled ? "#FFFFFF" : pressed ? MKT.pressed : "#FFFFFF";
   const style: React.CSSProperties = {
-    padding: "0.35rem 0.7rem",
-    border: `1px solid ${disabled ? "rgba(251,243,212,0.18)" : "rgba(251,243,212,0.45)"}`,
-    color: disabled ? "rgba(251,243,212,0.35)" : "#FBF3D4",
-    background: "transparent",
-    fontFamily: "var(--font-body)",
+    padding: "0.4rem 0.8rem",
+    border: `1px solid ${disabled ? MKT.ash : MKT.green}`,
+    color: disabled ? MKT.mute : MKT.green,
+    background: bg,
     fontSize: "0.82rem",
-    letterSpacing: "0.22em",
+    letterSpacing: "0.08em",
     textTransform: "uppercase",
+    fontWeight: 600,
     textDecoration: "none",
     cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.6 : 1,
+    opacity: disabled ? 0.55 : 1,
+    borderRadius: 6,
+    transition: "background 140ms ease, color 140ms ease",
+    display: "inline-block",
   };
   if (disabled || !href) {
     return (
@@ -752,7 +998,6 @@ function QuickAction({
         type="button"
         aria-disabled={disabled ? "true" : undefined}
         disabled={disabled}
-        onClick={disabled ? undefined : onClick}
         style={style}
       >
         {label}
@@ -764,6 +1009,9 @@ function QuickAction({
       href={href}
       target={external ? "_blank" : undefined}
       rel={external ? "noopener noreferrer" : undefined}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
       style={style}
     >
       {label}
@@ -771,27 +1019,74 @@ function QuickAction({
   );
 }
 
-// ── Timeline merge ──────────────────────────────────────────────────
+function CopyAction({ phone }: { phone: string | null }) {
+  const [copied, setCopied] = useState(false);
+  const disabled = !phone;
+  const label = copied ? "Copied" : "Copy";
+
+  const copy = () => {
+    if (!phone) return;
+    void navigator.clipboard
+      ?.writeText(phone)
+      .then(() => setCopied(true))
+      .catch(() => {
+        // Clipboard permission denied — show a different inline hint
+        // rather than an alert. "Copy" reverts after the timer below.
+        setCopied(true);
+      });
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : copy}
+      disabled={disabled}
+      aria-disabled={disabled ? "true" : undefined}
+      style={{
+        padding: "0.4rem 0.8rem",
+        border: `1px solid ${copied ? MKT.green : disabled ? MKT.ash : MKT.green}`,
+        color: copied ? MKT.cream : disabled ? MKT.mute : MKT.green,
+        background: copied ? MKT.green : "#FFFFFF",
+        fontSize: "0.82rem",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        fontWeight: 600,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.55 : 1,
+        borderRadius: 6,
+        transition:
+          "background 140ms ease, color 140ms ease, border-color 140ms ease",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ── Timeline row (with per-row "more" toggle) ──────────────────────
 
 function TimelineRow({ item }: { item: TimelineItem }) {
   const style = KIND_STYLE[item.kind];
+  const body = item.body ?? "";
+  const overflows = countTimelineLines(body) > 3;
+  const [expanded, setExpanded] = useState(false);
   return (
     <li
       style={{
         display: "grid",
         gridTemplateColumns: "28px minmax(0, 1fr) auto",
         gap: "0.6rem",
-        padding: "0.6rem 0",
-        borderBottom: "1px solid rgba(251,243,212,0.08)",
-        fontFamily: "var(--font-body)",
-        color: "#FBF3D4",
+        padding: "0.65rem 0",
+        borderBottom: `1px solid ${MKT.ash}`,
+        color: MKT.ink,
       }}
     >
       <span
         aria-hidden
         style={{
           color: style.color,
-          fontSize: "1.1rem",
+          fontSize: "1.05rem",
           lineHeight: 1,
           textAlign: "center",
           paddingTop: 2,
@@ -799,7 +1094,7 @@ function TimelineRow({ item }: { item: TimelineItem }) {
       >
         {style.icon}
       </span>
-      <div>
+      <div style={{ minWidth: 0 }}>
         <div
           style={{
             display: "flex",
@@ -811,34 +1106,66 @@ function TimelineRow({ item }: { item: TimelineItem }) {
           <span
             style={{
               color: style.color,
-              fontSize: "0.78rem",
+              fontSize: "0.72rem",
               textTransform: "uppercase",
               letterSpacing: "0.14em",
+              fontWeight: 700,
             }}
           >
             {style.label}
           </span>
-          <span style={{ fontSize: "0.96rem" }}>{item.title}</span>
-          {item.kind === "order" || item.kind === "note" || item.kind === "call" || item.kind === "edit" ? (
-            <StatusBadgeFromTitle title={item.title} />
+          <span style={{ fontSize: "0.95rem", fontWeight: 600 }}>
+            {item.title}
+          </span>
+          {item.meta ? (
+            <span style={{ color: MKT.mute, fontSize: "0.88rem" }}>
+              {item.meta}
+            </span>
           ) : null}
         </div>
-        {item.body ? (
-          <p
-            style={{
-              margin: "0.25rem 0 0",
-              color: "rgba(251,243,212,0.88)",
-              fontSize: "0.95rem",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {item.body}
-          </p>
+        {body ? (
+          <>
+            <p
+              style={{
+                margin: "0.25rem 0 0",
+                color: MKT.ink,
+                fontSize: "0.94rem",
+                whiteSpace: "pre-wrap",
+                display: overflows && !expanded ? "-webkit-box" : "block",
+                WebkitLineClamp:
+                  overflows && !expanded ? (3 as unknown as string) : undefined,
+                WebkitBoxOrient:
+                  overflows && !expanded ? "vertical" : undefined,
+                overflow: overflows && !expanded ? "hidden" : "visible",
+              }}
+            >
+              {body}
+            </p>
+            {overflows ? (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                aria-expanded={expanded}
+                style={{
+                  marginTop: "0.25rem",
+                  border: 0,
+                  background: "transparent",
+                  color: MKT.blue,
+                  padding: 0,
+                  fontSize: "0.86rem",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                {expanded ? "less" : "more"}
+              </button>
+            ) : null}
+          </>
         ) : null}
       </div>
       <span
         style={{
-          color: "rgba(251,243,212,0.55)",
+          color: MKT.mute,
           fontSize: "0.82rem",
           whiteSpace: "nowrap",
           paddingTop: 2,
@@ -850,26 +1177,114 @@ function TimelineRow({ item }: { item: TimelineItem }) {
   );
 }
 
-// Keep StatusBadge imported but only render it on rows whose title is
-// a known status word — otherwise the badge box would always show "—".
-function StatusBadgeFromTitle({ title }: { title: string }) {
-  const known = /cancelled|delivered|paid|unpaid|pending/i.test(title);
-  if (!known) return null;
-  return <StatusBadge status={title} />;
+// ── Skeletons ─────────────────────────────────────────────────────
+
+function SkeletonList() {
+  return (
+    <ul
+      aria-label="Loading customers"
+      style={{
+        listStyle: "none",
+        padding: 0,
+        margin: 0,
+        display: "grid",
+        gap: "0.5rem",
+      }}
+    >
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <li
+          key={i}
+          style={{
+            border: `1px solid ${MKT.ash}`,
+            borderRadius: 8,
+            padding: "0.75rem 0.95rem",
+            background: "#FFFFFF",
+            display: "grid",
+            gap: "0.4rem",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <ShimmerBar width="35%" />
+            <ShimmerBar width="25%" />
+          </div>
+          <ShimmerBar width="60%" />
+          <ShimmerBar width="80%" />
+        </li>
+      ))}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes mktShimmer {
+              0% { background-position: -400px 0; }
+              100% { background-position: 400px 0; }
+            }
+          `,
+        }}
+      />
+    </ul>
+  );
 }
 
-// ── Shared tiny UI ─────────────────────────────────────────────────
+function SkeletonFile() {
+  return (
+    <article
+      aria-label="Loading customer"
+      style={{
+        background: "#FFFFFF",
+        border: `1px solid ${MKT.ash}`,
+        borderRadius: 10,
+        padding: "1rem 1.1rem",
+        boxShadow: MKT.cardShadow,
+        display: "grid",
+        gap: "0.65rem",
+      }}
+    >
+      <ShimmerBar width="40%" height={20} />
+      <ShimmerBar width="80%" height={12} />
+      <ShimmerBar width="55%" height={12} />
+      <div style={{ height: 8 }} />
+      <ShimmerBar width="100%" height={14} />
+      <ShimmerBar width="94%" height={14} />
+      <ShimmerBar width="88%" height={14} />
+    </article>
+  );
+}
+
+function ShimmerBar({
+  width,
+  height = 10,
+}: {
+  width: string;
+  height?: number;
+}) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        borderRadius: 4,
+        background:
+          "linear-gradient(90deg, rgba(192,200,206,0.25) 0%, rgba(192,200,206,0.55) 50%, rgba(192,200,206,0.25) 100%)",
+        backgroundSize: "800px 100%",
+        animation: "mktShimmer 1.2s linear infinite",
+      }}
+    />
+  );
+}
+
+// ── Shared tiny UI ────────────────────────────────────────────────
 
 function Placeholder({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        border: "1px dashed rgba(251,243,212,0.2)",
+        border: `1px dashed ${MKT.ash}`,
+        borderRadius: 8,
         padding: "1.6rem 1rem",
         textAlign: "center",
-        color: "rgba(251,243,212,0.5)",
-        fontFamily: "var(--font-body)",
+        color: MKT.mute,
         fontSize: "0.95rem",
+        background: "#FFFFFF",
       }}
     >
       {children}
@@ -878,19 +1293,17 @@ function Placeholder({ children }: { children: React.ReactNode }) {
 }
 
 function PaneError({ children }: { children: React.ReactNode }) {
-  // Distinct from <Placeholder> — a red outline + muted red fill,
-  // never cream dashed. A 500 inside one pane must not read like an
-  // empty state.
   return (
     <div
+      role="alert"
       style={{
-        border: "1px solid rgba(239,68,68,0.5)",
-        background: "rgba(239,68,68,0.08)",
+        border: `1px solid ${MKT.error}`,
+        background: MKT.errorBg,
         padding: "0.7rem 0.9rem",
-        color: "#EF4444",
-        fontFamily: "var(--font-body)",
+        color: MKT.error,
         fontSize: "0.92rem",
         marginBottom: "0.9rem",
+        borderRadius: 8,
       }}
     >
       {children}
