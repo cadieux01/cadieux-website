@@ -560,9 +560,75 @@ create policy notifications_mark_read
   to authenticated
   using ( recipient_id = auth.uid() )
   with check ( recipient_id = auth.uid() );
--- NB: the UPDATE policy lets a caller write ANY column of their own row,
--- not just is_read. That is intentional for the small API here; if a
--- future review wants to lock it down to is_read only, the restriction
--- goes in a column-level privilege or a BEFORE UPDATE trigger that
--- raises on changes to any column other than is_read. Flagged, not
--- hidden.
+
+
+-- 14 -------------------- notifications: lock the row-owner UPDATE down
+--                                        to is_read ONLY
+--
+-- The policy above lets the recipient update their own row. Without
+-- further guards that allows writing ANY column of the row — title,
+-- message, related_id, type, created_at. A BEFORE UPDATE trigger that
+-- raises on any column change OTHER than is_read is the honest
+-- enforcement: policies decide WHO can UPDATE, and this trigger
+-- decides WHAT the UPDATE may contain.
+--
+-- Service-role writes are exempt via logistics.is_service_role() —
+-- backfills, rebroadcasts, admin tooling (and the task-assignment
+-- trigger that INSERTs, which doesn't come through this UPDATE path
+-- anyway). Admins are NOT exempt here: an admin editing their own
+-- notification body is the same mistake as a user editing theirs,
+-- and if the operator genuinely needs to rewrite history they still
+-- have service-role tooling.
+--
+-- is_read is the ONLY column the row owner may flip. is_read going
+-- false→true (unread → read) is the inbox API's single use case; the
+-- trigger deliberately allows true→false too, so a "mark unread"
+-- feature can land without a migration.
+create or replace function logistics.notifications_restrict_update()
+returns trigger
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  stripped_new jsonb;
+  stripped_old jsonb;
+begin
+  -- Service role is allowed everything. The trigger fires for every
+  -- caller, so the exemption is here rather than in a WHEN clause.
+  -- NOTE: the existing dashboard calls mark_notifications_read() as a
+  -- SECURITY DEFINER RPC that runs under the PostgREST role, NOT
+  -- service_role — so this exemption does NOT cover it. We WANT the
+  -- trigger to fire on that path (any user-shape UPDATE), because
+  -- that RPC only ever flips is_read and so the comparison below
+  -- succeeds without a raise.
+  if logistics.is_service_role() then
+    return new;
+  end if;
+
+  -- Compare NEW to OLD after stripping is_read. Done via to_jsonb so
+  -- the trigger is FUTURE-PROOF: any column added to
+  -- logistics.notifications later is automatically protected without
+  -- editing this function. The row owner may change is_read freely
+  -- (true <-> false, to allow a "mark unread" feature without a
+  -- schema change); everything else must be byte-for-byte equal.
+  stripped_new := to_jsonb(new) - 'is_read';
+  stripped_old := to_jsonb(old) - 'is_read';
+  if stripped_new is distinct from stripped_old then
+    raise exception using
+      errcode = '42501',  -- insufficient_privilege
+      message = 'notifications: row owner may update only is_read';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notifications_restrict_update on logistics.notifications;
+create trigger notifications_restrict_update
+  before update on logistics.notifications
+  for each row execute function logistics.notifications_restrict_update();
+
+revoke all on function logistics.notifications_restrict_update() from public;
+-- No GRANT EXECUTE — triggers run as the table owner regardless, and
+-- the function is useful to nobody else.
