@@ -6,6 +6,7 @@
 // fetch — the dataset is small and RLS already keeps rows scoped to
 // what the caller can see.
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MKT } from "@/components/mkt/theme";
@@ -468,7 +469,12 @@ function TaskRow({
           flexWrap: "wrap",
         }}
       >
-        <strong style={{ fontSize: "1rem" }}>{task.title}</strong>
+        <Link
+          href={`/mkt/tasks/${task.id}`}
+          style={{ color: MKT.ink, fontSize: "1rem", fontWeight: 700 }}
+        >
+          {task.title}
+        </Link>
         <span style={{ color: MKT.mute, fontSize: "0.82rem" }}>
           {task.due_date ? (
             <span style={{ color: overdue ? MKT.error : MKT.mute, fontWeight: overdue ? 700 : 400 }}>
