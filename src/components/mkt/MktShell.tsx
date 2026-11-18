@@ -1,35 +1,28 @@
 "use client";
 
-// Chrome for /mkt and future marketing surfaces. Deliberately
-// different from AdminShell — /admin is dark + austere, /mkt is light
-// + on brand (cream surface, green primary, blue accent). But the
-// GATE is the same: a valid admin session, same POST /api/admin/login,
-// same 30-day remember-me. We import PasswordGate + the three
-// remembered-auth helpers from AdminShell rather than duplicating
-// them — one authoritative gate per surface that needs the admin
-// session, see the export banner on those helpers.
+// Chrome for /mkt. Pure chrome — the GATE now lives in /mkt/layout.tsx
+// (server-side, Supabase Auth). Earlier phases had MktShell run the
+// admin PasswordGate here; that is gone, so by the time this file
+// renders, the caller is a known profile with status='active'.
 //
-// A note on the password screen itself: PasswordGate is INK-themed
-// because it lives inside AdminShell too, and retheming it here would
-// bifurcate the login UX. That screen appears at most once a month
-// (the cookie's TTL is 30 days). The CRM surface — which is what the
-// operator actually works on — is cream.
+// What this renders:
+//   * page title + subtitle + action slot (same API as before).
+//   * a small identity chip top-right with the signed-in name, role,
+//     and a Sign out button.
+//   * a NotificationBar that reads logistics.notifications for
+//     auth.uid() via /api/mkt/notifications.
+//
+// Idle logout is DROPPED here — the Supabase session TTL and refresh
+// flow handle that, and the previous idle-timer depended on the admin
+// HMAC cookie which /mkt no longer uses. /admin keeps its idle timer
+// unchanged.
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-import {
-  PasswordGate,
-  clearRememberedAuth,
-  readRememberedAuth,
-  writeRememberedAuth,
-} from "@/components/admin/AdminShell";
-import {
-  ADMIN_AUTH_LOGOUT_EVENT,
-  adminTokenValid,
-} from "@/lib/admin-client";
-import { IDLE, useIdleLogout } from "@/lib/session-timeout";
+import { useMktProfile } from "@/components/mkt/MktProfileContext";
+import { NotificationBar } from "@/components/mkt/NotificationBar";
 import { MKT } from "./theme";
 
 export function MktShell({
@@ -43,84 +36,19 @@ export function MktShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const [authed, setAuthed] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const [idleWarning, setIdleWarning] = useState<string | null>(null);
+  const profile = useMktProfile();
+  const router = useRouter();
 
-  useEffect(() => {
-    if (adminTokenValid() || readRememberedAuth()) setAuthed(true);
-    setChecking(false);
-  }, []);
-
-  useEffect(() => {
-    const onLogout = () => setAuthed(false);
-    window.addEventListener(ADMIN_AUTH_LOGOUT_EVENT, onLogout);
-    return () =>
-      window.removeEventListener(ADMIN_AUTH_LOGOUT_EVENT, onLogout);
-  }, []);
-
-  useIdleLogout({
-    enabled: authed,
-    timeoutMs: IDLE.SUPER_ADMIN,
-    warnBeforeMs: 5 * 60 * 1000,
-    onWarn: () =>
-      setIdleWarning(
-        "You'll be signed out in 5 minutes due to inactivity. Move the mouse or press a key to stay signed in.",
-      ),
-    onTimeout: () => {
-      void fetch("/api/admin/logout", {
-        method: "POST",
-        credentials: "same-origin",
-        cache: "no-store",
-      }).catch(() => {});
-      clearRememberedAuth();
-      setAuthed(false);
-      setIdleWarning(null);
-    },
-  });
-
-  useEffect(() => {
-    if (!idleWarning) return;
-    const reset = () => setIdleWarning(null);
-    const events = ["mousedown", "keydown", "touchstart"] as const;
-    for (const e of events)
-      window.addEventListener(e, reset, { once: true });
-    return () => {
-      for (const e of events) window.removeEventListener(e, reset);
-    };
-  }, [idleWarning]);
-
-  if (checking) return null;
-
-  if (!authed) {
-    // PasswordGate is dark; see module comment. This is deliberate —
-    // same credentials, same component, a 30-day remember-me means the
-    // operator sees this screen about once a month.
-    return (
-      <main
-        style={{
-          minHeight: "100vh",
-          position: "relative",
-          background: "#1D1D1F",
-        }}
-      >
-        <PasswordGate
-          onSuccess={() => {
-            writeRememberedAuth();
-            try {
-              localStorage.setItem(
-                "cdx_last_activity",
-                String(Date.now()),
-              );
-            } catch {
-              /* storage unavailable; in-memory timer still works */
-            }
-            setAuthed(true);
-          }}
-        />
-      </main>
-    );
-  }
+  const signOut = async () => {
+    try {
+      await fetch("/api/mkt/auth/signout", { method: "POST" });
+    } catch {
+      /* best-effort; the server clears the cookie via the route, but
+         if the network drops we still want the user off the page. */
+    }
+    router.replace("/mkt/login");
+    router.refresh();
+  };
 
   return (
     <div
@@ -132,19 +60,10 @@ export function MktShell({
         fontFamily: "var(--font-body)",
       }}
     >
-      {/* Scoped reset. The customer-facing layout paints <body> ash
-          and the admin subtree paints it ink; /mkt is cream on top of
-          both without fighting, because this div sets background +
-          min-height itself. The !important on text-color is there
-          because several admin components we might pull in via adminFetch
-          surfaces (e.g. StatusBadge) set a cream text colour that would
-          vanish on this background. */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            .mkt-scope, .mkt-scope * {
-              box-sizing: border-box;
-            }
+            .mkt-scope, .mkt-scope * { box-sizing: border-box; }
             .mkt-scope a { color: ${MKT.blue}; text-decoration: none; }
             .mkt-scope a:hover { text-decoration: underline; text-underline-offset: 2px; }
             .mkt-scope input, .mkt-scope select, .mkt-scope textarea {
@@ -163,10 +82,6 @@ export function MktShell({
             }
             .mkt-scope button { font-family: var(--font-body); }
             .mkt-scope ::placeholder { color: rgba(29,29,31,0.45); }
-
-            /* Reduced motion — honour the OS setting. 120-150ms is
-               already modest; this cuts it to instant for anyone who
-               has asked for it. */
             @media (prefers-reduced-motion: reduce) {
               .mkt-scope *, .mkt-scope *::before, .mkt-scope *::after {
                 transition-duration: 0ms !important;
@@ -177,27 +92,11 @@ export function MktShell({
         }}
       />
 
-      {idleWarning ? (
-        <div
-          role="status"
-          style={{
-            background: MKT.green,
-            color: MKT.cream,
-            padding: "0.6rem 1rem",
-            fontSize: "0.92rem",
-            textAlign: "center",
-            fontFamily: "var(--font-body)",
-          }}
-        >
-          {idleWarning}
-        </div>
-      ) : null}
-
       <header
         style={{
           borderBottom: `1px solid ${MKT.ash}`,
           padding:
-            "0.9rem clamp(1rem, 4vw, 1.5rem) 0.9rem calc(clamp(1rem, 4vw, 1.5rem) + env(safe-area-inset-left))",
+            "0.8rem clamp(1rem, 4vw, 1.5rem) 0.8rem calc(clamp(1rem, 4vw, 1.5rem) + env(safe-area-inset-left))",
           background: "#FFFDF4",
         }}
       >
@@ -223,17 +122,27 @@ export function MktShell({
           >
             Cadieux · Marketing
           </Link>
+
           <nav
             style={{
               display: "flex",
               gap: "1rem",
-              alignItems: "baseline",
+              alignItems: "center",
               fontSize: "0.92rem",
+              flexWrap: "wrap",
             }}
           >
-            <Link href="/admin/overview" style={{ color: MKT.ink }}>
-              Admin
-            </Link>
+            <Link href="/mkt" style={{ color: MKT.ink }}>CRM</Link>
+            <Link href="/mkt/tasks" style={{ color: MKT.ink }}>Tasks</Link>
+            {profile.role === "admin" ? (
+              <Link href="/mkt/team" style={{ color: MKT.ink }}>Team</Link>
+            ) : null}
+            <NotificationBar />
+            <IdentityChip
+              name={profile.full_name ?? profile.email ?? "You"}
+              role={profile.role}
+              onSignOut={signOut}
+            />
           </nav>
         </div>
       </header>
@@ -290,6 +199,57 @@ export function MktShell({
         </div>
         {children}
       </section>
+    </div>
+  );
+}
+
+function IdentityChip({
+  name,
+  role,
+  onSignOut,
+}: {
+  name: string;
+  role: string;
+  onSignOut: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.4rem",
+        padding: "0.25rem 0.55rem",
+        border: `1px solid ${MKT.ash}`,
+        borderRadius: 999,
+        background: "#FFFFFF",
+      }}
+    >
+      <span style={{ color: MKT.ink, fontSize: "0.88rem" }}>{name}</span>
+      <span
+        style={{
+          color: MKT.green,
+          fontSize: "0.72rem",
+          textTransform: "uppercase",
+          letterSpacing: "0.1em",
+          fontWeight: 700,
+        }}
+      >
+        {role}
+      </span>
+      <button
+        type="button"
+        onClick={onSignOut}
+        style={{
+          border: 0,
+          background: "transparent",
+          color: MKT.blue,
+          fontSize: "0.82rem",
+          cursor: "pointer",
+          padding: "0 0.1rem",
+        }}
+      >
+        Sign out
+      </button>
     </div>
   );
 }

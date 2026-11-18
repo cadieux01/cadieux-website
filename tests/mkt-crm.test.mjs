@@ -88,14 +88,17 @@ function handlerSlice(src, which) {
   return null;
 }
 
-// ── 1. /mkt rides the admin password gate ───────────────────────────
+// ── 1. /mkt is gated server-side by Supabase Auth ──────────────────
+//
+// This block replaces a prior admin-PasswordGate assertion. The gate
+// has MOVED from MktShell (client-side) into /mkt/layout.tsx
+// (server-side) — see tests/mkt-team-tasks.test.mjs for the broader
+// pins on the new auth surface. The assertions here are the slice
+// that belongs with the /mkt CRM: the page still wraps content in
+// MktShell, the shell is pure chrome, and the layout is where the
+// gate lives.
 
-test("/mkt page wraps content in MktShell — the admin-session gate", () => {
-  // The page wraps its content in <MktShell>, which composes the
-  // SAME PasswordGate that AdminShell uses. Both AdminShell and the
-  // three remembered-auth helpers are exported from AdminShell.tsx
-  // specifically so MktShell can reuse them — there is still ONE
-  // authoritative gate per surface that needs the admin session.
+test("/mkt page wraps content in MktShell", () => {
   const src = read(PAGE);
   assert.match(
     src,
@@ -105,17 +108,26 @@ test("/mkt page wraps content in MktShell — the admin-session gate", () => {
   assert.match(src, /<MktShell[\s>]/);
 });
 
-test("MktShell gates on PasswordGate exported from AdminShell", () => {
-  // Pin that MktShell doesn't duplicate the gate — that would
-  // bifurcate the admin-session rules.
-  const shell = read("src/components/mkt/MktShell.tsx");
-  assert.match(
-    shell,
-    /from\s+["']@\/components\/admin\/AdminShell["']/,
-    "MktShell must import from AdminShell — the gate is shared, not duplicated",
+test("/mkt gate runs in the server-side layout, not MktShell", () => {
+  // MktShell MUST NOT carry the gate any more. If it does, every
+  // page renders chrome and then immediately swaps for a password
+  // form — which was the prior design and bypassed Supabase Auth.
+  // Comments are stripped so a docstring explaining the rule can't
+  // satisfy it.
+  const shell = code("src/components/mkt/MktShell.tsx");
+  assert.ok(
+    !/PasswordGate/.test(shell),
+    "MktShell must be pure chrome — the gate now lives in /mkt/layout.tsx",
   );
-  assert.match(shell, /PasswordGate/);
-  assert.match(shell, /readRememberedAuth/);
+
+  // The layout is the gate.
+  const layout = code("src/app/mkt/layout.tsx");
+  assert.match(
+    layout,
+    /readMktSession/,
+    "the /mkt layout must call readMktSession to run the server-side gate",
+  );
+  assert.match(layout, /redirect\(\s*["']\/mkt\/login["']/);
 });
 
 test("/mkt does NOT open to verifyAdminOrTeamOrder", () => {
