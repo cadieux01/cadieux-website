@@ -399,13 +399,17 @@ test("owes_cod fires only on a positive outstanding balance", () => {
   assert.equal(matchesSegment(row({ outstanding_cod: 42 }), "owes_cod"), true);
 });
 
-test("the CRM row surfaces 'Cancelled N · {date}' when there are no live orders", () => {
+test("the CRM row surfaces 'Cancelled N · status changed {date}' when there are no live orders", () => {
   // Pinning the surface so an operator opening /mkt?segment=tried_cancelled
   // immediately sees HOW MANY cancelled orders and WHEN — the two
   // things that tell them which conversation to open. The condition
   // intentionally fires for ANY row with total_orders=0 and >=1
   // cancelled, not just when the tried_cancelled chip is active, so
-  // the signal travels with the row wherever it is viewed.
+  // the signal travels with the row wherever it is viewed. The label
+  // says "status changed" rather than "cancelled on" because the
+  // source is status_updated_at (orders.cancelled_at is dead in
+  // prod); naming the source keeps the operator honest about what
+  // they are reading.
   const pageSrc = fs.readFileSync(
     path.join(ROOT, "src/app/mkt/page.tsx"),
     "utf8",
@@ -416,7 +420,7 @@ test("the CRM row surfaces 'Cancelled N · {date}' when there are no live orders
   );
   assert.match(
     pageSrc,
-    /Cancelled \{row\.cancelled_orders\}[\s\S]*?formatDate\(row\.last_cancellation_at\)/,
+    /Cancelled \{row\.cancelled_orders\}[\s\S]*?status changed[\s\S]*?formatDate\(row\.last_cancelled_status_at\)/,
   );
 });
 

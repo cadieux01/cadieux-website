@@ -75,8 +75,11 @@ type ListRow = {
   has_subscription: boolean;
   // cancelled_orders drives the tried_cancelled segment (and the
   // "N cancelled" badge on the row when there are no live orders).
+  // The timestamp beside it is the LAST status_updated_at on a
+  // cancelled order for this customer — orders.cancelled_at is
+  // dead in prod, so the status-change time is the honest signal.
   cancelled_orders: number;
-  last_cancellation_at: string | null;
+  last_cancelled_status_at: string | null;
   last_touch_at: string | null;
   last_touch_body: string | null;
   last_touch_kind: "note" | "call" | "edit" | "whatsapp" | null;
@@ -730,11 +733,16 @@ function PersonRow({
           {row.total_orders === 0 && row.cancelled_orders > 0 ? (
             // Surfaces the "Tried, cancelled" signal on the ROW, not
             // just as a chip filter — so a tried_cancelled customer
-            // is visible for what they are in any segment view.
+            // is visible for what they are in any segment view. The
+            // date reads "status changed {date}" rather than "cancelled
+            // {date}" because the source is status_updated_at, not
+            // the dead cancelled_at column; the operator needs to
+            // trust the number, so the label names its source.
             <>
               <span style={{ color: MKT.ash }}>·</span>
               <span style={{ color: MKT.error, fontWeight: 600 }}>
-                Cancelled {row.cancelled_orders} · {formatDate(row.last_cancellation_at)}
+                Cancelled {row.cancelled_orders} · status changed{" "}
+                {formatDate(row.last_cancelled_status_at)}
               </span>
             </>
           ) : null}

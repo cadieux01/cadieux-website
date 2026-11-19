@@ -160,8 +160,14 @@ export async function GET(req: NextRequest) {
     idChunks.map((chunk) =>
       supabaseAdmin
         .from("orders")
+        // status_updated_at is the HONEST cancellation timestamp:
+        // orders.cancelled_at is NULL on all 1207 rows in prod and is
+        // never written, so the only signal that carries "when did
+        // this cancellation happen" is the last status change. We
+        // project it here so the tried_cancelled row can render the
+        // date without a second round-trip.
         .select(
-          "id, customer_id, total_amount, created_at, status, payment_method, payment_status",
+          "id, customer_id, total_amount, created_at, status, status_updated_at, payment_method, payment_status",
         )
         .in("customer_id", chunk),
     ),
@@ -218,7 +224,13 @@ export async function GET(req: NextRequest) {
     outstanding_cod_paise: number;
     last_order_at: string | null;
     cancelled_orders: number;
-    last_cancellation_at: string | null;
+    // The latest status_updated_at we have on a row whose status is
+    // 'cancelled' for this customer. Deliberately NOT called
+    // `last_cancellation_at`: that name implies a read of the
+    // orders.cancelled_at column, which is NULL on every row in prod
+    // (verified: 0 of 1195 cancelled orders carry a value). The
+    // UI label pins the source the same way.
+    last_cancelled_status_at: string | null;
   };
   // Make sure every customer_id that appears in orders carries an Agg,
   // not just the ones with a non-cancelled order. The "Tried, cancelled"
@@ -236,7 +248,7 @@ export async function GET(req: NextRequest) {
       outstanding_cod_paise: 0,
       last_order_at: null,
       cancelled_orders: 0,
-      last_cancellation_at: null,
+      last_cancelled_status_at: null,
     };
     agg.set(cid, fresh);
     return fresh;
@@ -246,8 +258,14 @@ export async function GET(req: NextRequest) {
     if (isCancelled(row.status)) {
       const cur = ensure(row.customer_id);
       cur.cancelled_orders += 1;
-      if (!cur.last_cancellation_at || row.created_at > cur.last_cancellation_at) {
-        cur.last_cancellation_at = row.created_at;
+      // status_updated_at is the honest "when was this cancelled"
+      // field — see the Agg typedef above for why this is not
+      // cancelled_at. Fall back to created_at for the extremely rare
+      // row with a null status_updated_at (none in prod today) so the
+      // date never reads blank on a row that IS cancelled.
+      const at = row.status_updated_at ?? row.created_at;
+      if (!cur.last_cancelled_status_at || at > cur.last_cancelled_status_at) {
+        cur.last_cancelled_status_at = at;
       }
       continue; // excludes BOTH count and spend from the non-cancelled aggregates
     }
@@ -536,7 +554,7 @@ export async function GET(req: NextRequest) {
       // Drives the "Tried, cancelled" segment on /mkt — a non-zero
       // count with total_orders === 0 is the whole definition.
       cancelled_orders: a?.cancelled_orders ?? 0,
-      last_cancellation_at: a?.last_cancellation_at ?? null,
+      last_cancelled_status_at: a?.last_cancelled_status_at ?? null,
       has_subscription: subscriberSet.has(c.id),
       // Touch fields are only projected when with_touch was asked for.
       // Absent vs null is intentional: absent means "not requested",

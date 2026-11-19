@@ -226,7 +226,7 @@ test("outstanding_cod uses method='cod' AND payment_status not like 'paid%'", ()
   assert.match(get, /!\s*pay\.startsWith\s*\(\s*"paid"\s*\)/);
 });
 
-test("admin path projects cancelled_orders + last_cancellation_at — tried_cancelled rides on them", () => {
+test("admin path projects cancelled_orders + last_cancelled_status_at — tried_cancelled rides on them", () => {
   // The chip's whole point is a phone-call list, and the row needs to
   // show when the cancellation happened so the operator knows which
   // conversation to open. If these two fields stop being projected,
@@ -239,7 +239,30 @@ test("admin path projects cancelled_orders + last_cancellation_at — tried_canc
   assert.match(get, /cur\.cancelled_orders\s*\+=\s*1/);
   // And the response row projects BOTH keys.
   assert.match(get, /cancelled_orders:\s*a\?\.cancelled_orders\s*\?\?\s*0/);
-  assert.match(get, /last_cancellation_at:\s*a\?\.last_cancellation_at\s*\?\?\s*null/);
+  assert.match(
+    get,
+    /last_cancelled_status_at:\s*a\?\.last_cancelled_status_at\s*\?\?\s*null/,
+  );
+});
+
+test("admin path reads status_updated_at, NOT cancelled_at — cancelled_at is dead in prod", () => {
+  // Pinning the source column. If a future refactor swaps this for
+  // `row.cancelled_at` the tried_cancelled row will silently blank
+  // out (prod has 0 non-null cancelled_at across 130 cancelled
+  // orders). The select carries status_updated_at and the agg reads
+  // it; the fallback to created_at only fires if a row has neither,
+  // which no prod row does today.
+  const src = code(LIST_ROUTE);
+  const get = handlerSlice(src, "GET");
+  assert.ok(get);
+  // Select must project status_updated_at so the agg can read it.
+  assert.match(get, /\.select\(\s*"[^"]*status_updated_at/);
+  // The aggregation uses status_updated_at (with created_at as a
+  // defensive fallback) to populate last_cancelled_status_at.
+  assert.match(
+    get,
+    /row\.status_updated_at\s*\?\?\s*row\.created_at/,
+  );
 });
 
 // ── 4. Detail route is isAdmin-only ─────────────────────────────────
