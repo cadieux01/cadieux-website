@@ -210,46 +210,158 @@ export function splitBySource(rows: MoneyOrderRow[]): SourceSplit {
   return out;
 }
 
-// ── Repeat rate ────────────────────────────────────────────────────
+// ── "Did they come back?" — three metrics, each with its own window
+//
+// The screen used to render ONE "repeat rate" number: of customers
+// who ordered in the last 7 days, the share who ordered >=2 times IN
+// THAT WEEK. That is the wrong window for a weekly staple — most
+// customers order about once a week, so two orders within seven days
+// is unusually eager and the headline reads 9.9% when the real
+// behaviour of the business is nothing like "almost no one comes
+// back". It made the operator doubt a healthy repeat behaviour.
+//
+// Replaced with three numbers, each labelled with its window so
+// nobody has to guess:
+//
+//   A. RETURNING THIS WEEK — of customers who ordered in the last 7
+//      IST days, the share who have ANY earlier non-cancelled order.
+//   B. LIFETIME REPEAT — customers with >=2 non-cancelled orders
+//      ever / customers with >=1 non-cancelled order ever.
+//   C. NEW THIS WEEK — among this-week customers, those whose FIRST
+//      ever non-cancelled order fell in the window. Returning + new
+//      must equal this_week_customers (same denominator, disjoint).
 
-export type RepeatRate = {
+/** Lower bound of the "last N IST days" window — inclusive. The
+ *  window ends at end-of-today IST and spans N days back from there,
+ *  which means the window starts at IST-midnight (N-1) days ago. */
+export function windowStartIso(windowDays: number, today: Date = new Date()): string {
+  const istMidnightUtc = Math.floor(
+    (today.getTime() + IST_OFFSET_MS) / 86_400_000,
+  ) * 86_400_000 - IST_OFFSET_MS;
+  const startMs = istMidnightUtc - (windowDays - 1) * 86_400_000;
+  return new Date(startMs).toISOString();
+}
+
+export type ReturningMetrics = {
   window_days: number;
-  orders: number;
-  distinct_customers: number;
-  repeat_customers: number;      // customers with >= 2 orders in-window
-  repeat_rate_pct: number;       // repeat_customers / distinct, rounded to 1 dp
+  this_week_customers: number;
+  returning_count: number;
+  returning_pct: number;   // one decimal
+  new_count: number;
+  new_pct: number;         // one decimal
 };
 
-/** Compute the "almost nobody orders twice" number over the last
- *  `windowDays` IST days ending today (inclusive). */
-export function computeRepeatRate(
+/** Compute the RETURNING-THIS-WEEK + NEW-THIS-WEEK metrics in one
+ *  pass. They share a denominator (customers who ordered in the
+ *  window) and must stay disjoint, which is why they live in one
+ *  function. */
+export function computeReturningMetrics(
   rows: MoneyOrderRow[],
   windowDays: number,
   today: Date = new Date(),
-): RepeatRate {
-  const buckets = buildDayBuckets(rows, windowDays, today);
-  const keep = new Set(buckets.map((b) => b.key));
-  const perCustomer = new Map<string, number>();
-  let orders = 0;
+): ReturningMetrics {
+  const start = windowStartIso(windowDays, today);
+  // First-order time per customer, across the entire history.
+  const firstOrderAt = new Map<string, string>();
+  // Latest in-window time per customer, so we can confirm they ordered this week.
+  const orderedInWindow = new Set<string>();
   for (const r of rows) {
     if (isCancelled(r.status)) continue;
     if (!r.customer_id) continue;
-    const k = istDayKey(r.created_at);
-    if (!keep.has(k)) continue;
-    perCustomer.set(r.customer_id, (perCustomer.get(r.customer_id) ?? 0) + 1);
-    orders += 1;
+    const prior = firstOrderAt.get(r.customer_id);
+    if (!prior || r.created_at < prior) firstOrderAt.set(r.customer_id, r.created_at);
+    if (r.created_at >= start) orderedInWindow.add(r.customer_id);
   }
-  let repeaters = 0;
-  perCustomer.forEach((n) => { if (n >= 2) repeaters += 1; });
-  const distinct = perCustomer.size;
-  const pct = distinct === 0 ? 0 : Math.round((repeaters / distinct) * 1000) / 10;
+  let returning = 0;
+  let newThisWeek = 0;
+  orderedInWindow.forEach((cid) => {
+    const first = firstOrderAt.get(cid)!;
+    if (first < start) returning += 1;
+    else newThisWeek += 1;
+  });
+  const total = orderedInWindow.size;
+  const pct = (n: number) =>
+    total === 0 ? 0 : Math.round((n / total) * 1000) / 10;
   return {
     window_days: windowDays,
-    orders,
-    distinct_customers: distinct,
-    repeat_customers: repeaters,
-    repeat_rate_pct: pct,
+    this_week_customers: total,
+    returning_count: returning,
+    returning_pct: pct(returning),
+    new_count: newThisWeek,
+    new_pct: pct(newThisWeek),
   };
+}
+
+export type LifetimeRepeat = {
+  ever_ordered: number;     // customers with >=1 non-cancelled order
+  repeat_customers: number; // customers with >=2 non-cancelled orders
+  repeat_pct: number;       // one decimal
+};
+
+/** Share of customers who have ever ordered more than once. */
+export function computeLifetimeRepeat(rows: MoneyOrderRow[]): LifetimeRepeat {
+  const perCustomer = new Map<string, number>();
+  for (const r of rows) {
+    if (isCancelled(r.status)) continue;
+    if (!r.customer_id) continue;
+    perCustomer.set(r.customer_id, (perCustomer.get(r.customer_id) ?? 0) + 1);
+  }
+  let repeat = 0;
+  perCustomer.forEach((n) => { if (n >= 2) repeat += 1; });
+  const ever = perCustomer.size;
+  const pct = ever === 0 ? 0 : Math.round((repeat / ever) * 1000) / 10;
+  return { ever_ordered: ever, repeat_customers: repeat, repeat_pct: pct };
+}
+
+// ── Segment counts — "what do I do about this?" links ──────────────
+//
+// Two counts the admin reads off the Money screen and clicks straight
+// into the CRM to act on:
+//   * never_ordered — customers with 0 non-cancelled orders AND no
+//     subscription. A plan-holder with no ad-hoc orders is not a
+//     stranger (the AND is inherited from src/lib/mkt-crm.ts; a rule
+//     split between files is a trap).
+//   * lapsed >21d — customers whose most recent non-cancelled order
+//     is more than 21 days old. Disjoint from never_ordered by
+//     construction: no last_order_at → no lapsed membership.
+
+const LAPSED_DAYS = 21;
+
+export type SegmentCounts = {
+  never_ordered: number;
+  lapsed_over_21d: number;
+};
+
+export function computeSegmentCounts(
+  customerIds: string[],
+  rows: MoneyOrderRow[],
+  subscriberIds: Set<string>,
+  today: Date = new Date(),
+): SegmentCounts {
+  // Per-customer: non-cancelled order count + last order ISO.
+  const totalOrders = new Map<string, number>();
+  const lastOrderAt = new Map<string, string>();
+  for (const r of rows) {
+    if (isCancelled(r.status)) continue;
+    if (!r.customer_id) continue;
+    totalOrders.set(r.customer_id, (totalOrders.get(r.customer_id) ?? 0) + 1);
+    const prev = lastOrderAt.get(r.customer_id);
+    if (!prev || r.created_at > prev) lastOrderAt.set(r.customer_id, r.created_at);
+  }
+  let never = 0;
+  let lapsed = 0;
+  const nowMs = today.getTime();
+  const lapsedThresholdMs = LAPSED_DAYS * 86_400_000;
+  for (const cid of customerIds) {
+    const n = totalOrders.get(cid) ?? 0;
+    if (n === 0) {
+      if (!subscriberIds.has(cid)) never += 1;
+      continue;
+    }
+    const last = lastOrderAt.get(cid);
+    if (last && nowMs - Date.parse(last) > lapsedThresholdMs) lapsed += 1;
+  }
+  return { never_ordered: never, lapsed_over_21d: lapsed };
 }
 
 // ── Break-even jar ─────────────────────────────────────────────────

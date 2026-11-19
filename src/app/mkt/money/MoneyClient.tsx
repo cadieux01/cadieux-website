@@ -1,14 +1,15 @@
 "use client";
 
-// /mkt/money client — repeat rate at top (the number the business
-// turns on), break-even jar, daily + weekly bars, UPI/cash, source.
+// /mkt/money client — the three "did they come back?" metrics at
+// top, segment-count links next to them, break-even jar, daily and
+// weekly bars, UPI/cash, source.
 //
-// The screen renders in this order deliberately: the brief said
-// repeat rate is the number the business turns on and must not be
-// buried, so it lands above the fold on every viewport. The jar is
-// next because the admin sets his weekly target from there; without
-// it, the rest of the page is interesting but not actionable.
+// Order is deliberate: the three metrics + segment counts land above
+// the fold because they ARE what somebody acts on. The jar is next
+// because the admin sets his weekly target from there; without it,
+// the rest of the page is interesting but not actionable.
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { MKT } from "@/components/mkt/theme";
@@ -18,12 +19,22 @@ type RevenueBucket = { key: string; paise: number; orders: number };
 type MoneyResponse = {
   days: RevenueBucket[];
   weeks: RevenueBucket[];
-  repeat: {
+  returning: {
     window_days: number;
-    orders: number;
-    distinct_customers: number;
+    this_week_customers: number;
+    returning_count: number;
+    returning_pct: number;
+    new_count: number;
+    new_pct: number;
+  };
+  lifetime: {
+    ever_ordered: number;
     repeat_customers: number;
-    repeat_rate_pct: number;
+    repeat_pct: number;
+  };
+  segments: {
+    never_ordered: number;
+    lapsed_over_21d: number;
   };
   methodSplit: {
     cash: number;
@@ -39,7 +50,12 @@ type MoneyResponse = {
     current_week_key: string;
     pct_of_target: number;
   };
-  window: { from: string; days: number; rows_fetched: number };
+  window: {
+    returning_window_days: number;
+    customers: number;
+    orders: number;
+    subscribers: number;
+  };
 };
 
 const inr = (rupees: number) =>
@@ -90,7 +106,11 @@ export function MoneyClient() {
 
   return (
     <div style={{ display: "grid", gap: "1.6rem" }}>
-      <RepeatRateHero repeat={data.repeat} />
+      <ReturnHero
+        returning={data.returning}
+        lifetime={data.lifetime}
+        segments={data.segments}
+      />
       <BreakEvenJar jar={data.jar} onSaved={() => void load()} />
 
       <section
@@ -118,18 +138,23 @@ export function MoneyClient() {
   );
 }
 
-// ── Repeat rate hero ───────────────────────────────────────────────
+// ── Three metrics + two segment links ──────────────────────────────
+//
+// Three labelled metric tiles (so nobody has to guess the window) in
+// a row, with the two CRM segment links hanging off the right as
+// chips. Each chip links straight to that segment in /mkt so the
+// admin can act on it without hunting.
 
-function RepeatRateHero({
-  repeat,
+function ReturnHero({
+  returning,
+  lifetime,
+  segments,
 }: {
-  repeat: MoneyResponse["repeat"];
+  returning: MoneyResponse["returning"];
+  lifetime: MoneyResponse["lifetime"];
+  segments: MoneyResponse["segments"];
 }) {
-  const pct = repeat.repeat_rate_pct;
-  // colour: red when repeat rate is very low (the business is in
-  // "almost no one orders twice" territory), green when high.
-  const colour =
-    pct < 10 ? MKT.error : pct < 20 ? "#B35A00" : MKT.green;
+  const win = returning.window_days;
   return (
     <section
       style={{
@@ -139,41 +164,137 @@ function RepeatRateHero({
         boxShadow: MKT.cardShadow,
         padding: "1.2rem 1.4rem",
         display: "grid",
-        gap: "0.3rem",
+        gap: "1rem",
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "0.9rem",
+        }}
+      >
+        <MetricTile
+          label={`RETURNING THIS WEEK · last ${win} days`}
+          pct={returning.returning_pct}
+          detail={`${returning.returning_count} of ${returning.this_week_customers} customers this week had ordered before`}
+        />
+        <MetricTile
+          label="LIFETIME REPEAT · all time"
+          pct={lifetime.repeat_pct}
+          detail={`${lifetime.repeat_customers} of ${lifetime.ever_ordered} customers have ordered twice or more`}
+        />
+        <MetricTile
+          label={`NEW THIS WEEK · last ${win} days`}
+          pct={returning.new_pct}
+          detail={`${returning.new_count} of ${returning.this_week_customers} first-time customers`}
+          hue="blue"
+        />
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: "0.6rem",
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <span style={{ color: MKT.mute, fontSize: "0.9rem" }}>
+          Act on this:
+        </span>
+        <SegmentChip
+          href="/mkt?segment=never_ordered"
+          count={segments.never_ordered}
+          label="never ordered"
+        />
+        <SegmentChip
+          href="/mkt?segment=lapsed"
+          count={segments.lapsed_over_21d}
+          label="lapsed > 21 days"
+        />
+      </div>
+    </section>
+  );
+}
+
+function MetricTile({
+  label,
+  pct,
+  detail,
+  hue,
+}: {
+  label: string;
+  pct: number;
+  detail: string;
+  hue?: "blue";
+}) {
+  const colour = hue === "blue" ? MKT.blue : MKT.green;
+  return (
+    <div
+      style={{
+        border: `1px solid ${MKT.ash}`,
+        borderRadius: 10,
+        padding: "0.9rem 1rem",
+        background: MKT.cream,
+        display: "grid",
+        gap: "0.25rem",
       }}
     >
       <span
         style={{
           color: MKT.mute,
-          fontSize: "0.85rem",
-          letterSpacing: "0.08em",
+          fontSize: "0.72rem",
+          letterSpacing: "0.09em",
           textTransform: "uppercase",
           fontWeight: 700,
         }}
       >
-        Repeat rate · last {repeat.window_days} days
+        {label}
       </span>
-      <div style={{ display: "flex", alignItems: "baseline", gap: "0.8rem", flexWrap: "wrap" }}>
-        <strong
-          style={{
-            color: colour,
-            fontSize: "clamp(2.2rem, 7vw, 3.2rem)",
-            fontWeight: 700,
-            lineHeight: 1,
-          }}
-        >
-          {pct.toFixed(1)}%
-        </strong>
-        <span style={{ color: MKT.ink, fontSize: "1rem" }}>
-          {repeat.repeat_customers} of {repeat.distinct_customers} customers ordered twice or more
-        </span>
-      </div>
-      <p style={{ margin: 0, color: MKT.mute, fontSize: "0.9rem" }}>
-        {repeat.orders} order{repeat.orders === 1 ? "" : "s"} over this window. Most
-        customers order about once a week — nudging the second order up is the
-        number the business turns on.
-      </p>
-    </section>
+      <strong
+        style={{
+          color: colour,
+          fontSize: "clamp(1.8rem, 5vw, 2.4rem)",
+          fontWeight: 700,
+          lineHeight: 1,
+        }}
+      >
+        {pct.toFixed(1)}%
+      </strong>
+      <span style={{ color: MKT.ink, fontSize: "0.88rem" }}>{detail}</span>
+    </div>
+  );
+}
+
+function SegmentChip({
+  href,
+  count,
+  label,
+}: {
+  href: string;
+  count: number;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.4rem",
+        padding: "0.45rem 0.8rem",
+        border: `1px solid ${MKT.ash}`,
+        borderRadius: 999,
+        background: "#FFFFFF",
+        color: MKT.ink,
+        fontSize: "0.9rem",
+        minHeight: 44,
+      }}
+    >
+      <strong style={{ color: MKT.green, fontSize: "1rem" }}>{count}</strong>
+      <span style={{ color: MKT.mute }}>{label}</span>
+      <span aria-hidden style={{ color: MKT.blue }}>→</span>
+    </Link>
   );
 }
 

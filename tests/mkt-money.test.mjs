@@ -72,20 +72,18 @@ test("buildDayBuckets drops cancelled rows", () => {
   assert.equal(days[0].orders, 1);
 });
 
-test("computeRepeatRate drops cancelled rows", () => {
-  const today = new Date("2026-11-18T12:00:00Z");
+test("computeLifetimeRepeat drops cancelled rows", () => {
   const rows = [
-    row({ customer_id: "c1", created_at: "2026-11-17T06:00:00Z" }),
-    row({ customer_id: "c1", created_at: "2026-11-18T06:00:00Z" }),
-    // Second customer with a cancelled second order — must NOT count
-    // as a repeater.
-    row({ customer_id: "c2", created_at: "2026-11-17T06:00:00Z" }),
-    row({ customer_id: "c2", created_at: "2026-11-18T06:00:00Z", status: "cancelled" }),
+    row({ customer_id: "c1", created_at: "2026-10-01T06:00:00Z" }),
+    row({ customer_id: "c1", created_at: "2026-11-01T06:00:00Z" }),
+    // c2 has only a cancelled second — not a repeater.
+    row({ customer_id: "c2", created_at: "2026-10-01T06:00:00Z" }),
+    row({ customer_id: "c2", created_at: "2026-11-01T06:00:00Z", status: "cancelled" }),
   ];
-  const r = mod.computeRepeatRate(rows, 7, today);
-  assert.equal(r.distinct_customers, 2);
-  assert.equal(r.repeat_customers, 1, "only c1 ordered twice (c2's second was cancelled)");
-  assert.equal(r.orders, 3);
+  const r = mod.computeLifetimeRepeat(rows);
+  assert.equal(r.ever_ordered, 2, "c1 and c2 each have >=1 non-cancelled order");
+  assert.equal(r.repeat_customers, 1, "only c1 has >=2 non-cancelled orders");
+  assert.equal(r.repeat_pct, 50);
 });
 
 // ── 3. Paise arithmetic ────────────────────────────────────────────
@@ -179,6 +177,86 @@ test("MoneyClient renders the 'Set your weekly target' empty state", () => {
   assert.match(src, /targetRupees\s*===\s*null/);
 });
 
+// ── NEW: three metrics replace the single repeat-rate hero ─────────
+
+test("computeReturningMetrics — returning vs new is disjoint and sums to this_week_customers", () => {
+  // Fixed today so the window is deterministic.
+  const today = new Date("2026-11-18T12:00:00Z");
+  // Window is last 7 IST days → starts 2026-11-12 IST midnight.
+  // A pre-window order marks the customer as "has ordered before".
+  const rows = [
+    // c1: ordered in Oct (pre-window) and this week → RETURNING
+    row({ customer_id: "c1", created_at: "2026-10-05T06:00:00Z" }),
+    row({ customer_id: "c1", created_at: "2026-11-17T06:00:00Z" }),
+    // c2: first order this week → NEW
+    row({ customer_id: "c2", created_at: "2026-11-15T06:00:00Z" }),
+    // c3: ordered pre-window but NOT this week → not in this_week_customers
+    row({ customer_id: "c3", created_at: "2026-10-01T06:00:00Z" }),
+    // c4: pre-window order was cancelled; this week's order is their
+    //     FIRST non-cancelled → NEW, not returning.
+    row({ customer_id: "c4", created_at: "2026-10-01T06:00:00Z", status: "cancelled" }),
+    row({ customer_id: "c4", created_at: "2026-11-16T06:00:00Z" }),
+  ];
+  const r = mod.computeReturningMetrics(rows, 7, today);
+  assert.equal(r.this_week_customers, 3, "c1, c2, c4 ordered this week (c3 did not)");
+  assert.equal(r.returning_count, 1, "only c1 had an earlier non-cancelled order");
+  assert.equal(r.new_count, 2, "c2 and c4 (c4's earlier order was cancelled)");
+  // Returning + new = this_week_customers, by construction.
+  assert.equal(r.returning_count + r.new_count, r.this_week_customers);
+});
+
+test("computeLifetimeRepeat — denominator is customers with >=1 non-cancelled order ever", () => {
+  const rows = [
+    row({ customer_id: "c1", created_at: "2026-10-01T06:00:00Z" }),
+    row({ customer_id: "c1", created_at: "2026-11-01T06:00:00Z" }),
+    row({ customer_id: "c2", created_at: "2026-11-01T06:00:00Z" }),
+    // c3's only order was cancelled — must not join the denominator.
+    row({ customer_id: "c3", created_at: "2026-11-01T06:00:00Z", status: "cancelled" }),
+  ];
+  const r = mod.computeLifetimeRepeat(rows);
+  assert.equal(r.ever_ordered, 2);
+  assert.equal(r.repeat_customers, 1);
+  assert.equal(r.repeat_pct, 50);
+});
+
+test("computeSegmentCounts — never_ordered excludes subscribers, lapsed requires a last_order_at", () => {
+  const today = new Date("2026-11-18T12:00:00Z");
+  const rows = [
+    // c1 ordered last week → not lapsed.
+    row({ customer_id: "c1", created_at: "2026-11-15T06:00:00Z" }),
+    // c2 ordered 30 days ago → lapsed.
+    row({ customer_id: "c2", created_at: "2026-10-19T06:00:00Z" }),
+    // c3's only order was cancelled → counts as never_ordered.
+    row({ customer_id: "c3", created_at: "2026-11-01T06:00:00Z", status: "cancelled" }),
+  ];
+  // Four customer IDs total — c4 has NO orders at all.
+  const customerIds = ["c1", "c2", "c3", "c4"];
+  // c3 holds a subscription → disqualifies never_ordered.
+  const subscribers = new Set(["c3"]);
+  const s = mod.computeSegmentCounts(customerIds, rows, subscribers, today);
+  assert.equal(s.never_ordered, 1, "only c4 (c3 has a subscription)");
+  assert.equal(s.lapsed_over_21d, 1, "only c2's last order is > 21 days old");
+});
+
+test("windowStartIso — last 7 IST days ending today is 6 IST-midnights ago", () => {
+  // today @ 12:00 UTC on 2026-11-18 is 17:30 IST — well inside the
+  // IST day 2026-11-18. The window starts at IST-midnight of
+  // 2026-11-12, which is 2026-11-11T18:30:00Z.
+  const start = mod.windowStartIso(7, new Date("2026-11-18T12:00:00Z"));
+  assert.equal(start, "2026-11-11T18:30:00.000Z");
+});
+
+test("MoneyClient renders the three labelled metric tiles + the two segment chips", () => {
+  const src = read("src/app/mkt/money/MoneyClient.tsx");
+  // Labels — pinning the copy means nobody has to guess the window.
+  assert.match(src, /RETURNING THIS WEEK/);
+  assert.match(src, /LIFETIME REPEAT/);
+  assert.match(src, /NEW THIS WEEK/);
+  // Segment chips link into /mkt with the right ?segment= value.
+  assert.match(src, /\/mkt\?segment=never_ordered/);
+  assert.match(src, /\/mkt\?segment=lapsed/);
+});
+
 // ── 6. Admin-only gates ────────────────────────────────────────────
 
 test("/api/mkt/money gates to admin+active, 401/403 otherwise", () => {
@@ -211,9 +289,20 @@ test("/mkt/money page is admin-gated on the server", () => {
 test("/api/mkt/money paginates orders in 1000-row .range() pages", () => {
   const src = code("src/app/api/mkt/money/route.ts");
   // The constant + the range call + the stop-on-short-page break.
+  // The shared paginator keeps the window-size name consistent
+  // across orders / customers / subscriptions.
   assert.match(src, /PAGE\s*=\s*1000/);
-  assert.match(src, /\.range\(\s*from\s*,\s*from\s*\+\s*PAGE\s*-\s*1\s*\)/);
-  assert.match(src, /if\s*\(\s*page\.length\s*<\s*PAGE\s*\)\s*break/);
+  assert.match(src, /\.range\(\s*from\s*,\s*from\s*\+\s*size\s*-\s*1\s*\)/);
+  assert.match(src, /if\s*\(\s*page\.length\s*<\s*pageSize\s*\)\s*break/);
+});
+
+test("/api/mkt/money paginates customers + subscriptions too", () => {
+  // never_ordered needs the FULL customer table and the FULL
+  // subscription-holder set — same 1000-row PostgREST hazard. Pin
+  // that both fetches go through the shared paginator.
+  const src = code("src/app/api/mkt/money/route.ts");
+  assert.match(src, /paginateAll[\s\S]*?\.from\("customers"\)/);
+  assert.match(src, /paginateAll[\s\S]*?\.from\("subscriptions"\)/);
 });
 
 test("MoneyClient hits /api/mkt/money through mktFetch (bounded timeout)", () => {

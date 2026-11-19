@@ -3,27 +3,42 @@
 // Admin only. Returns:
 //   * days:   last 30 IST-bucketed daily revenue buckets
 //   * weeks:  last 12 IST Monday-week revenue buckets
-//   * repeat: distinct customers + repeaters across the last 7 days
+//   * returning: RETURNING-THIS-WEEK + NEW-THIS-WEEK (shared
+//                denominator = customers who ordered in the last 7
+//                IST days; disjoint).
+//   * lifetime:  LIFETIME-REPEAT across the whole non-cancelled history.
+//   * segments:  never_ordered + lapsed >21d — each of these is what
+//                the admin clicks into on /mkt and acts on.
 //   * methodSplit: cash / upi / cash_upi (split) / other / unrecorded
 //   * sourceSplit: online / offline / manual
 //   * jar:    current-week revenue + the configured weekly target
+//
+// Why we fetch the WHOLE history, not just the last 30/90 days:
+//
+// LIFETIME REPEAT and NEW-THIS-WEEK both need the earliest order per
+// customer across their entire history. A 90-day window would read
+// every customer whose first order was >90 days ago as "new this
+// week" when they returned. The order table carries ~1.2 k rows
+// today, so the pull is cheap (one or two .range() pages); the
+// alternative — a per-customer "earliest order" view/RPC — would be
+// faster but adds a second surface to keep in sync for one screen.
 //
 // How this avoids the three bugs the brief named:
 //   * Cancellations are filtered by status, not by cancelled_at.
 //     cancelled_at IS NEVER WRITTEN in prod (0 of 1207 rows have it
 //     set; status says 130 are cancelled). Using the dead column
-//     would overstate revenue; using isCancelled() from lib/mkt-money
-//     matches the orders-board rule.
+//     would overstate revenue and the returning/lifetime splits;
+//     using isCancelled() from lib/mkt-money matches the orders-
+//     board rule.
 //   * Money accumulates in PAISE all the way through the fold —
 //     Math.round(total_amount * 100) per row, divide by 100 only at
 //     render time. orders.total_amount is rupees but sometimes
 //     fractional (delivery fee), and a float-rupee accumulator
-//     drifts over 90 days of data.
-//   * Orders are fetched in 1000-row .range() pages so PostgREST's
-//     silent truncation cannot hide the tail of the window. The
-//     last-12-weeks window is ~800 orders at today's volume, so a
-//     single page suffices — but we loop anyway because it is the
-//     only way to be safe as the business grows.
+//     drifts.
+//   * Orders / customers / subscriptions all fetched in 1000-row
+//     .range() pages so PostgREST's silent truncation cannot hide
+//     the tail. Today each table clears a single page, but the loop
+//     is the only way to be safe as the business grows.
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -33,7 +48,9 @@ import {
   buildDayBuckets,
   buildWeekBuckets,
   computeJar,
-  computeRepeatRate,
+  computeLifetimeRepeat,
+  computeReturningMetrics,
+  computeSegmentCounts,
   splitByPaymentMethod,
   splitBySource,
   type MoneyOrderRow,
@@ -41,7 +58,7 @@ import {
 
 const DAYS = 30;
 const WEEKS = 12;
-const REPEAT_WINDOW_DAYS = 7;
+const RETURNING_WINDOW_DAYS = 7;
 
 // Service-role client — orders RLS is service-role-only in this
 // project, and /api/mkt/money gates on isAdmin at the route layer
@@ -72,6 +89,25 @@ async function requireAdmin() {
   return { ok: true };
 }
 
+// Paginated .range() loop — PostgREST silently truncates no-limit
+// SELECTs at 1000, so we loop until a short page confirms the tail.
+async function paginateAll<T>(
+  build: (from: number, size: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  pageSize = 1000,
+): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await build(from, pageSize);
+    if (error) return { rows, error: error.message };
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+  return { rows, error: null };
+}
+
 export async function GET() {
   const gate = await requireAdmin();
   if ("error" in gate) return gate.error;
@@ -79,36 +115,55 @@ export async function GET() {
   const svc = service();
   const today = new Date();
 
-  // Fetch a window wide enough to cover both the 30-day and the
-  // 12-week asks. 12 weeks = 84 days — go with 90 for a day of
-  // margin either side of the IST boundary.
-  const WINDOW_DAYS = Math.max(90, DAYS, WEEKS * 7);
-  const fromIso = new Date(today.getTime() - WINDOW_DAYS * 86_400_000).toISOString();
-
-  // PAGINATE. PostgREST caps at 1000 rows and does not raise. The
-  // 90-day window holds ~800 orders at today's volume — one page
-  // today, but the business grows.
+  // ── Orders — the whole non-cancelled history ────────────────────
+  //
+  // We pull ALL orders (newest first), not a dated window. Lifetime
+  // repeat and "first ever order" both need every row; buildDay-
+  // Buckets / buildWeekBuckets ignore anything outside their own
+  // window anyway, so passing the full set to them is cheap.
   const PAGE = 1000;
-  const rows: MoneyOrderRow[] = [];
-  let from = 0;
-  for (;;) {
-    const { data, error } = await svc
+  const ordersRes = await paginateAll<MoneyOrderRow>((from, size) =>
+    svc
       .from("orders")
       .select("customer_id, total_amount, created_at, status, cod_settled_method, source")
-      .gte("created_at", fromIso)
       .order("created_at", { ascending: false })
-      .range(from, from + PAGE - 1);
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    const page = (data ?? []) as MoneyOrderRow[];
-    rows.push(...page);
-    if (page.length < PAGE) break;
-    from += PAGE;
+      .range(from, from + size - 1),
+    PAGE,
+  );
+  if (ordersRes.error) {
+    return NextResponse.json({ error: ordersRes.error }, { status: 500 });
+  }
+  const orders = ordersRes.rows;
+
+  // ── Customers — for the never_ordered denominator ───────────────
+  //
+  // never_ordered needs the full customer table (not just rows that
+  // appear in orders). The CRM's segment count reads this same table
+  // through /api/admin/customers; mirroring it here keeps the Money
+  // screen's count and the CRM chip in agreement.
+  const customersRes = await paginateAll<{ id: string }>((from, size) =>
+    svc.from("customers").select("id").range(from, from + size - 1),
+    PAGE,
+  );
+  if (customersRes.error) {
+    return NextResponse.json({ error: customersRes.error }, { status: 500 });
+  }
+  const customerIds = customersRes.rows.map((c) => c.id);
+
+  // ── Subscription holders — disqualifies a row from never_ordered.
+  const subsRes = await paginateAll<{ customer_id: string | null }>((from, size) =>
+    svc.from("subscriptions").select("customer_id").range(from, from + size - 1),
+    PAGE,
+  );
+  if (subsRes.error) {
+    return NextResponse.json({ error: subsRes.error }, { status: 500 });
+  }
+  const subscriberIds = new Set<string>();
+  for (const r of subsRes.rows) {
+    if (r.customer_id) subscriberIds.add(r.customer_id);
   }
 
-  // Jar needs the current week's revenue, which is INSIDE the
-  // window. Target lives in app_config.
+  // ── Weekly target ──────────────────────────────────────────────
   const { data: cfg } = await svc
     .from("app_config")
     .select("value")
@@ -117,20 +172,29 @@ export async function GET() {
   const parsed = cfg?.value != null ? Number(cfg.value) : NaN;
   const targetPaise = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 
-  const days = buildDayBuckets(rows, DAYS, today);
-  const weeks = buildWeekBuckets(rows, WEEKS, today);
-  const repeat = computeRepeatRate(rows, REPEAT_WINDOW_DAYS, today);
-  const methodSplit = splitByPaymentMethod(rows);
-  const sourceSplit = splitBySource(rows);
-  const jar = computeJar(rows, targetPaise, today);
+  const days = buildDayBuckets(orders, DAYS, today);
+  const weeks = buildWeekBuckets(orders, WEEKS, today);
+  const returning = computeReturningMetrics(orders, RETURNING_WINDOW_DAYS, today);
+  const lifetime = computeLifetimeRepeat(orders);
+  const segments = computeSegmentCounts(customerIds, orders, subscriberIds, today);
+  const methodSplit = splitByPaymentMethod(orders);
+  const sourceSplit = splitBySource(orders);
+  const jar = computeJar(orders, targetPaise, today);
 
   return NextResponse.json({
     days,
     weeks,
-    repeat,
+    returning,
+    lifetime,
+    segments,
     methodSplit,
     sourceSplit,
     jar,
-    window: { from: fromIso, days: WINDOW_DAYS, rows_fetched: rows.length },
+    window: {
+      returning_window_days: RETURNING_WINDOW_DAYS,
+      customers: customerIds.length,
+      orders: orders.length,
+      subscribers: subscriberIds.size,
+    },
   });
 }
