@@ -175,13 +175,14 @@ function Inner() {
             background: MKT.green,
             color: MKT.cream,
             border: "none",
-            padding: "0.6rem 0.9rem",
+            padding: "0.75rem 0.9rem",
             fontWeight: 600,
             borderRadius: 6,
-            fontSize: "0.95rem",
+            fontSize: "1rem",
             cursor: busy ? "wait" : "pointer",
             opacity: busy || !email || !password ? 0.7 : 1,
             marginTop: "0.2rem",
+            minHeight: 44,
           }}
         >
           {busy ? "Signing in…" : "Sign in"}
@@ -195,10 +196,15 @@ function Inner() {
             background: "transparent",
             color: MKT.blue,
             border: "none",
-            padding: 0,
+            // iOS tap-target minimum is 44px. A plain link-like
+            // button needs real padding to reach it; the text alone
+            // reads as ~21px tall and a fat-finger tap lands between
+            // it and the Sign-in button above.
+            padding: "0.7rem 0.1rem",
             textAlign: "left",
-            fontSize: "0.86rem",
+            fontSize: "0.95rem",
             cursor: email ? "pointer" : "not-allowed",
+            minHeight: 44,
           }}
         >
           Forgot your password?
@@ -223,11 +229,19 @@ function messageFor(code: string): string {
   }
 }
 
+// fontSize: 16px (1rem) is the iOS line — anything smaller forces
+// Safari to zoom the page on focus to hit its ~16px minimum reading
+// size, which is then stuck zoomed when the keyboard dismisses.
+// Measured on iPhone 14: 0.98rem (15.68px) triggered the zoom; 1rem
+// did not. Leave this at 1rem minimum on EVERY input in the mkt
+// tree; the scoped CSS in MktShell applies the same rule to inputs
+// inside the gate.
 const inputStyle: React.CSSProperties = {
   border: `1px solid ${MKT.ash}`,
   borderRadius: 6,
-  padding: "0.55rem 0.7rem",
-  fontSize: "0.98rem",
+  padding: "0.7rem 0.8rem",
+  fontSize: "1rem",
   background: "#FFFFFF",
   color: MKT.ink,
+  minHeight: 44,
 };

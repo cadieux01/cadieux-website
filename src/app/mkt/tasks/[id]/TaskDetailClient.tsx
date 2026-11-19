@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { MKT } from "@/components/mkt/theme";
 import { useMktProfile } from "@/components/mkt/MktProfileContext";
+import { mktFetch, mktPost } from "@/lib/mkt-fetch";
 
 type Comment = {
   id: string;
@@ -41,20 +42,18 @@ export function TaskDetailClient({ id }: { id: string }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [tRes, cRes] = await Promise.all([
-        fetch("/api/mkt/tasks", { cache: "no-store" }),
-        fetch(`/api/mkt/tasks/${id}/comments`, { cache: "no-store" }),
+      const [tJ, cJ] = await Promise.all([
+        mktFetch<{ tasks: Task[] }>("/api/mkt/tasks"),
+        mktFetch<{ comments: Comment[] }>(
+          `/api/mkt/tasks/${id}/comments`,
+        ).catch((e) => {
+          setError(e instanceof Error ? e.message : "Comments failed");
+          return { comments: [] };
+        }),
       ]);
-      if (!tRes.ok) throw new Error(`tasks ${tRes.status}`);
-      const tJ = (await tRes.json()) as { tasks: Task[] };
       const match = (tJ.tasks ?? []).find((t) => t.id === id) ?? null;
       setTask(match);
-      if (cRes.ok) {
-        const cJ = (await cRes.json()) as { comments: Comment[] };
-        setComments(cJ.comments ?? []);
-      } else {
-        setError(`comments ${cRes.status}`);
-      }
+      setComments(cJ.comments ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load failed");
     }
@@ -65,18 +64,10 @@ export function TaskDetailClient({ id }: { id: string }) {
 
   const send = async () => {
     const body = draft.trim();
-    if (!body) return;
+    if (sending || !body) return; // double-click guard
     setSending(true);
     try {
-      const res = await fetch(`/api/mkt/tasks/${id}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? `HTTP ${res.status}`);
-      }
+      await mktPost(`/api/mkt/tasks/${id}/comments`, { body });
       setDraft("");
       await load();
     } catch (e) {

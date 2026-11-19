@@ -52,40 +52,65 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  let custQ = supabaseAdmin
-    .from("customers")
-    .select("id, full_name, phone, city, created_at")
-    .order("created_at", { ascending: false });
+  // Audit for the team-PIN lookup fires ONCE per request, not once per
+  // page below.
+  if (q && isTeam) {
+    const digits = q.replace(/\D/g, "");
+    queueAuditEvent({
+      req,
+      entity: "customer",
+      action: "other",
+      context: `[team-PIN] customer lookup by phone ${digits}`,
+      meta: { via: "team_order", phone: digits },
+    });
+  }
 
-  if (q) {
-    if (isTeam) {
-      // Exact phone match only. `.eq` avoids the ILIKE wildcard entirely.
-      const digits = q.replace(/\D/g, "");
-      custQ = custQ.eq("phone", digits);
-      queueAuditEvent({
-        req,
-        entity: "customer",
-        action: "other",
-        context: `[team-PIN] customer lookup by phone ${digits}`,
-        meta: { via: "team_order", phone: digits },
-      });
-    } else {
-      // ILIKE on either name or phone. Supabase's `.or` takes a string
-      // expression; escape `*` and `,` in user input to avoid breaking
-      // the parser.
-      const safe = q.replace(/[,*()]/g, " ");
-      custQ = custQ.or(
-        `full_name.ilike.%${safe}%,phone.ilike.%${safe}%`,
-      );
+  // PAGINATE. PostgREST's `max-rows` setting silently caps the top-
+  // level SELECT at 1000 — measured 2026-11-19: 1368 customers in
+  // prod, a no-limit SELECT returned 1000. The previous route
+  // shipped 368 invisible customers to the UI with no error and no
+  // warning anywhere. Fix is explicit `.range()` pagination in
+  // 1000-row pages until a short page confirms we're done.
+  //
+  // Pages are built fresh per iteration because a Supabase query
+  // builder is single-use after await — chaining .range() on an
+  // already-awaited handle throws. The .or/.eq filters are reapplied
+  // on each page because of the same single-use constraint.
+  const PAGE_SIZE = 1000;
+  const customers: Array<{
+    id: string;
+    full_name: string | null;
+    phone: string | null;
+    city: string | null;
+    created_at: string;
+  }> = [];
+  let pageFrom = 0;
+  for (;;) {
+    let page = supabaseAdmin
+      .from("customers")
+      .select("id, full_name, phone, city, created_at")
+      .order("created_at", { ascending: false })
+      .range(pageFrom, pageFrom + PAGE_SIZE - 1);
+    if (q) {
+      if (isTeam) {
+        const digits = q.replace(/\D/g, "");
+        page = page.eq("phone", digits);
+      } else {
+        const safe = q.replace(/[,*()]/g, " ");
+        page = page.or(`full_name.ilike.%${safe}%,phone.ilike.%${safe}%`);
+      }
     }
+    const res = await page;
+    if (res.error) {
+      console.error("[admin/customers list]", res.error.message);
+      return NextResponse.json({ error: res.error.message }, { status: 500 });
+    }
+    const rows = res.data ?? [];
+    customers.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+    pageFrom += PAGE_SIZE;
   }
-
-  const { data: customers, error } = await custQ;
-  if (error) {
-    console.error("[admin/customers list]", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-  if (!customers || customers.length === 0) {
+  if (customers.length === 0) {
     return NextResponse.json({ customers: [] });
   }
 

@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MKT } from "@/components/mkt/theme";
 import { useMktProfile } from "@/components/mkt/MktProfileContext";
+import { mktFetch, mktPatch, mktPost } from "@/lib/mkt-fetch";
 
 type Task = {
   id: string;
@@ -65,27 +66,23 @@ export function TasksClient() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [t, p] = await Promise.all([
-        fetch("/api/mkt/tasks", { cache: "no-store" }),
-        // profiles endpoint is admin-only; fall back silently for
-        // non-admin callers who can't assign across people they don't
-        // administer.
-        fetch("/api/mkt/profiles", { cache: "no-store" }),
+      // Fire both in parallel but handle profile failure (non-admin)
+      // without throwing the whole load.
+      const [tJ, pJ] = await Promise.all([
+        mktFetch<{ tasks: Task[]; goals: Goal[]; me: string }>(
+          "/api/mkt/tasks",
+        ),
+        mktFetch<{ profiles: Profile[] }>("/api/mkt/profiles").catch(
+          () => null,
+        ),
       ]);
-      if (!t.ok) throw new Error(`tasks ${t.status}`);
-      const tJ = (await t.json()) as {
-        tasks: Task[];
-        goals: Goal[];
-        me: string;
-      };
       setTasks(tJ.tasks ?? []);
       setGoals(tJ.goals ?? []);
-      if (p.ok) {
-        const pJ = (await p.json()) as { profiles: Profile[] };
+      if (pJ) {
         setProfiles(pJ.profiles ?? []);
       } else {
-        // Non-admin: minimum viable — at least show the signed-in
-        // user as an assignee option so they can own tasks.
+        // Non-admin fallback — show the signed-in user as an
+        // assignee option so they can own tasks.
         setProfiles([{ id: me.id, full_name: me.full_name, email: me.email }]);
       }
     } catch (e) {
@@ -98,18 +95,24 @@ export function TasksClient() {
   }, [load]);
 
   const patchTask = async (id: string, body: Partial<Task>) => {
+    // OPTIMISTIC UPDATE + ROLLBACK ON FAILURE. The inline status +
+    // assignee + due_date + progress controls all run through this
+    // function; applying the change instantly keeps the UI
+    // responsive, and snapshotting the previous state lets us roll
+    // back if the PATCH fails or times out.
+    const previous = tasks;
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? ({ ...t, ...body } as Task) : t)),
+    );
     try {
-      const res = await fetch(`/api/mkt/tasks/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j?.error ?? `HTTP ${res.status}`);
-      }
-      await load();
+      await mktPatch(`/api/mkt/tasks/${id}`, body);
+      // Re-sync in the background in case the server normalises
+      // anything. Don't await — the optimistic value is the one
+      // the user just chose.
+      void load();
     } catch (e) {
+      // ROLLBACK — put the whole list back to its pre-edit state.
+      setTasks(previous);
       setError(e instanceof Error ? e.message : "Update failed");
     }
   };
@@ -120,26 +123,28 @@ export function TasksClient() {
   const [newDue, setNewDue] = useState("");
   const [newAssignee, setNewAssignee] = useState(me.id);
   const [newGoalId, setNewGoalId] = useState("");
+  // Busy flag guards against double-clicks on Create — without it a
+  // slow network would let a rapid double-tap file two identical
+  // rows. Mirrored on createGoal below.
+  const [creatingTask, setCreatingTask] = useState(false);
   const createTask = async () => {
-    if (!newTitle.trim()) return;
+    if (creatingTask || !newTitle.trim()) return;
+    setCreatingTask(true);
     try {
-      const res = await fetch("/api/mkt/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          cadence: newCadence,
-          due_date: newDue || null,
-          assignee_id: newAssignee || null,
-          goal_id: newGoalId || null,
-        }),
+      await mktPost("/api/mkt/tasks", {
+        title: newTitle.trim(),
+        cadence: newCadence,
+        due_date: newDue || null,
+        assignee_id: newAssignee || null,
+        goal_id: newGoalId || null,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setNewTitle("");
       setNewDue("");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create failed");
+    } finally {
+      setCreatingTask(false);
     }
   };
 
@@ -147,24 +152,23 @@ export function TasksClient() {
   const [newGoalTitle, setNewGoalTitle] = useState("");
   const [newGoalHorizon, setNewGoalHorizon] = useState<"short" | "long">("short");
   const [newGoalTarget, setNewGoalTarget] = useState("");
+  const [creatingGoal, setCreatingGoal] = useState(false);
   const createGoal = async () => {
-    if (!newGoalTitle.trim()) return;
+    if (creatingGoal || !newGoalTitle.trim()) return;
+    setCreatingGoal(true);
     try {
-      const res = await fetch("/api/mkt/goals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newGoalTitle.trim(),
-          horizon: newGoalHorizon,
-          target_date: newGoalTarget || null,
-        }),
+      await mktPost("/api/mkt/goals", {
+        title: newGoalTitle.trim(),
+        horizon: newGoalHorizon,
+        target_date: newGoalTarget || null,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setNewGoalTitle("");
       setNewGoalTarget("");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create failed");
+    } finally {
+      setCreatingGoal(false);
     }
   };
 
@@ -250,7 +254,7 @@ export function TasksClient() {
             <button
               type="button"
               onClick={createGoal}
-              disabled={!newGoalTitle.trim()}
+              disabled={creatingGoal || !newGoalTitle.trim()}
               style={btnPrimary}
             >
               Add goal
@@ -395,7 +399,7 @@ export function TasksClient() {
           <button
             type="button"
             onClick={createTask}
-            disabled={!newTitle.trim()}
+            disabled={creatingTask || !newTitle.trim()}
             style={btnPrimary}
           >
             Create
@@ -567,9 +571,10 @@ const btnPrimary: React.CSSProperties = {
   background: MKT.green,
   color: MKT.cream,
   border: "none",
-  padding: "0.4rem 0.75rem",
+  padding: "0.6rem 0.9rem",
+  minHeight: 44,
   borderRadius: 6,
-  fontSize: "0.86rem",
+  fontSize: "0.92rem",
   fontWeight: 600,
   cursor: "pointer",
 };

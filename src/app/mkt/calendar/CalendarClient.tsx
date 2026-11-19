@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MKT } from "@/components/mkt/theme";
+import { mktFetch } from "@/lib/mkt-fetch";
 import {
   addDays,
   daysInMonthGrid,
@@ -61,17 +62,12 @@ export function CalendarClient() {
     setTasksError(null);
     setCampaignsError(null);
     try {
-      const res = await fetch(
-        `/api/mkt/calendar?from=${from}&to=${to}`,
-        { cache: "no-store" },
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = (await res.json()) as {
+      const j = await mktFetch<{
         tasks: CalendarTask[];
         tasks_error: string | null;
         campaigns: CalendarCampaign[];
         campaigns_error: string | null;
-      };
+      }>(`/api/mkt/calendar?from=${from}&to=${to}`);
       setTasks(j.tasks ?? []);
       setCampaigns(j.campaigns ?? []);
       if (j.tasks_error) setTasksError(j.tasks_error);
@@ -346,10 +342,12 @@ export function CalendarClient() {
 const btnQuiet: React.CSSProperties = {
   background: "transparent",
   border: `1px solid ${MKT.ash}`,
-  padding: "0.3rem 0.65rem",
+  padding: "0.6rem 0.75rem",
+  minHeight: 44,
+  minWidth: 44,
   borderRadius: 6,
   color: MKT.ink,
-  fontSize: "0.86rem",
+  fontSize: "0.92rem",
   cursor: "pointer",
 };
 const btnActive: React.CSSProperties = {

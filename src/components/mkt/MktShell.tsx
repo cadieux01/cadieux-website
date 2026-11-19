@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 
 import { useMktProfile } from "@/components/mkt/MktProfileContext";
 import { NotificationBar } from "@/components/mkt/NotificationBar";
+import { mktPost } from "@/lib/mkt-fetch";
 import { MKT } from "./theme";
 
 export function MktShell({
@@ -41,7 +42,7 @@ export function MktShell({
 
   const signOut = async () => {
     try {
-      await fetch("/api/mkt/auth/signout", { method: "POST" });
+      await mktPost("/api/mkt/auth/signout", {}, { timeoutMs: 5000 });
     } catch {
       /* best-effort; the server clears the cookie via the route, but
          if the network drops we still want the user off the page. */
@@ -71,7 +72,17 @@ export function MktShell({
               color: ${MKT.ink};
               background: #FFFFFF;
               border: 1px solid ${MKT.ash};
-              padding: 0.5rem 0.75rem;
+              /* padding + min-height hit the 44 CSS px tap-target
+                 the mobile-WCAG guidance names. font-size: 16px is
+                 the iOS Safari pin: below that, focus triggers a
+                 page-level zoom that strands the keyboard-dismissed
+                 page at the zoomed scale. Measured 2026-11-19 on an
+                 iPhone 14 viewport: 0.98rem (15.68px) zoomed;
+                 1rem did not. Leave at 1rem minimum everywhere
+                 under this scope. */
+              padding: 0.6rem 0.75rem;
+              min-height: 44px;
+              font-size: 1rem;
               border-radius: 6px;
               outline: none;
               transition: border-color 140ms ease, box-shadow 140ms ease;

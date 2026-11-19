@@ -150,7 +150,7 @@ export class AdminFetchError extends Error {
 
 export async function adminFetch<T = unknown>(
   url: string,
-  init: RequestInit = {},
+  init: RequestInit & { timeoutMs?: number } = {},
 ): Promise<T> {
   // Hold the request until the operator has logged in and a token exists,
   // so the eager on-mount fetch every admin page runs doesn't 401 against
@@ -166,12 +166,49 @@ export async function adminFetch<T = unknown>(
   ) {
     headers.set("Content-Type", "application/json");
   }
-  const res = await fetch(url, {
-    ...init,
-    headers,
-    cache: "no-store",
-    credentials: "include",
-  });
+
+  // Bound every request with a timeout so a hung connection does not
+  // leave the operator staring at a spinner. 20 s default is well
+  // above the measured medians (DB-side 193-684 ms for the slowest
+  // admin endpoints as of 2026-11-19); if a caller legitimately
+  // needs longer, pass timeoutMs on init. If the caller already set
+  // init.signal, respect that and skip our own timeout wiring —
+  // whoever owns the signal is in charge of cancellation.
+  const { timeoutMs = 20_000, signal: callerSignal, ...restInit } = init;
+  const ownController =
+    callerSignal || timeoutMs <= 0 ? null : new AbortController();
+  const timer = ownController
+    ? setTimeout(() => ownController.abort("timeout"), timeoutMs)
+    : null;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...restInit,
+      headers,
+      cache: "no-store",
+      credentials: "include",
+      signal: ownController?.signal ?? callerSignal,
+    });
+  } catch (e) {
+    if (timer) clearTimeout(timer);
+    const isAbort =
+      (e instanceof DOMException && e.name === "AbortError") ||
+      (e instanceof Error && e.name === "AbortError");
+    if (isAbort && ownController) {
+      throw new AdminFetchError(
+        0,
+        `Request timed out after ${timeoutMs}ms`,
+        "timeout",
+      );
+    }
+    throw new AdminFetchError(
+      0,
+      e instanceof Error ? e.message : "Network error",
+      "network",
+    );
+  }
+  if (timer) clearTimeout(timer);
   const text = await res.text();
   let json: unknown = null;
   if (text) {

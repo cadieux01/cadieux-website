@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MKT } from "@/components/mkt/theme";
+import { mktFetch, mktPost } from "@/lib/mkt-fetch";
 
 type Campaign = {
   id: string;
@@ -48,13 +49,10 @@ export function CampaignsClient() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [r, t] = await Promise.all([
-        fetch("/api/mkt/campaigns?template=0", { cache: "no-store" }),
-        fetch("/api/mkt/campaigns?template=1", { cache: "no-store" }),
+      const [rJ, tJ] = await Promise.all([
+        mktFetch<{ campaigns: Campaign[] }>("/api/mkt/campaigns?template=0"),
+        mktFetch<{ campaigns: Campaign[] }>("/api/mkt/campaigns?template=1"),
       ]);
-      if (!r.ok) throw new Error(`campaigns ${r.status}`);
-      const rJ = (await r.json()) as { campaigns: Campaign[] };
-      const tJ = (await t.json()) as { campaigns: Campaign[] };
       setRows(rJ.campaigns ?? []);
       setTemplates(tJ.campaigns ?? []);
     } catch (e) {
@@ -69,19 +67,14 @@ export function CampaignsClient() {
   const [newStarts, setNewStarts] = useState("");
   const [newEnds, setNewEnds] = useState("");
   const createCampaign = async () => {
-    if (!newName.trim()) return;
+    if (busy || !newName.trim()) return; // double-click guard
     setBusy(true);
     try {
-      const res = await fetch("/api/mkt/campaigns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newName.trim(),
-          starts_on: newStarts || null,
-          ends_on: newEnds || null,
-        }),
+      await mktPost("/api/mkt/campaigns", {
+        name: newName.trim(),
+        starts_on: newStarts || null,
+        ends_on: newEnds || null,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setNewName("");
       setNewStarts("");
       setNewEnds("");
@@ -94,14 +87,12 @@ export function CampaignsClient() {
   };
 
   const runAgain = async (template: Campaign) => {
+    if (busy) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/mkt/campaigns/${template.id}/clone`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: `${template.name} (new run)` }),
+      await mktPost(`/api/mkt/campaigns/${template.id}/clone`, {
+        name: `${template.name} (new run)`,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Clone failed");
@@ -414,9 +405,10 @@ const btnPrimary: React.CSSProperties = {
   background: MKT.green,
   color: MKT.cream,
   border: "none",
-  padding: "0.4rem 0.8rem",
+  padding: "0.6rem 0.9rem",
+  minHeight: 44,
   borderRadius: 6,
-  fontSize: "0.86rem",
+  fontSize: "0.92rem",
   fontWeight: 600,
   cursor: "pointer",
 };

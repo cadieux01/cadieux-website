@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MKT } from "./theme";
+import { mktFetch, mktPatch } from "@/lib/mkt-fetch";
 
 type Notification = {
   id: string;
@@ -32,12 +33,12 @@ export function NotificationBar() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const res = await fetch("/api/mkt/notifications", { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = (await res.json()) as {
+      // 10 s — the poll runs every 60 s, and we want a stuck poll to
+      // surface before the next tick overlaps.
+      const j = await mktFetch<{
         notifications: Notification[];
         unread: number;
-      };
+      }>("/api/mkt/notifications", { timeoutMs: 10_000 });
       setItems(j.notifications ?? []);
       setUnread(j.unread ?? 0);
     } catch (e) {
@@ -72,12 +73,9 @@ export function NotificationBar() {
     const unreadIds = items.filter((n) => !n.is_read).map((n) => n.id);
     if (unreadIds.length === 0) return;
     try {
-      const res = await fetch("/api/mkt/notifications", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: unreadIds }),
+      await mktPatch("/api/mkt/notifications", { ids: unreadIds }, {
+        timeoutMs: 10_000,
       });
-      if (!res.ok) return;
       setItems((prev) =>
         prev.map((n) => (unreadIds.includes(n.id) ? { ...n, is_read: true } : n)),
       );

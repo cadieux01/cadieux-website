@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { MKT } from "@/components/mkt/theme";
+import { mktFetch, mktPatch, mktPost } from "@/lib/mkt-fetch";
 import { mktUploadViaSignedUrl } from "@/lib/mkt-upload";
 
 type Campaign = {
@@ -55,17 +56,14 @@ export function CampaignDetailClient({ id }: { id: string }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [r, a] = await Promise.all([
-        fetch(`/api/mkt/campaigns/${id}`, { cache: "no-store" }),
-        fetch(`/api/mkt/campaigns/${id}/assets`, { cache: "no-store" }),
+      const [j, aJ] = await Promise.all([
+        mktFetch<{ campaign: Campaign }>(`/api/mkt/campaigns/${id}`),
+        mktFetch<{ assets: Asset[] }>(`/api/mkt/campaigns/${id}/assets`).catch(
+          () => null,
+        ),
       ]);
-      if (!r.ok) throw new Error(`campaign ${r.status}`);
-      const j = (await r.json()) as { campaign: Campaign };
       setC(j.campaign);
-      if (a.ok) {
-        const aJ = (await a.json()) as { assets: Asset[] };
-        setAssets(aJ.assets ?? []);
-      }
+      if (aJ) setAssets(aJ.assets ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load failed");
     }
@@ -77,15 +75,7 @@ export function CampaignDetailClient({ id }: { id: string }) {
   const patch = async (body: Partial<Campaign>) => {
     setBusy(true);
     try {
-      const res = await fetch(`/api/mkt/campaigns/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? `HTTP ${res.status}`);
-      }
+      await mktPatch(`/api/mkt/campaigns/${id}`, body);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
@@ -105,18 +95,10 @@ export function CampaignDetailClient({ id }: { id: string }) {
         bucket: "campaign-assets",
         prefix,
       });
-      const res = await fetch(`/api/mkt/campaigns/${id}/assets`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storage_path: up.path,
-          kind: uploadKind,
-        }),
+      await mktPost(`/api/mkt/campaigns/${id}/assets`, {
+        storage_path: up.path,
+        kind: uploadKind,
       });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? `HTTP ${res.status}`);
-      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");

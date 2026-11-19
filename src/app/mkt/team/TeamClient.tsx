@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MKT } from "@/components/mkt/theme";
+import { mktFetch, mktPatch, mktPost } from "@/lib/mkt-fetch";
 
 type Profile = {
   id: string;
@@ -47,14 +48,10 @@ export function TeamClient() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [pRes, tRes] = await Promise.all([
-        fetch("/api/mkt/profiles", { cache: "no-store" }),
-        fetch("/api/mkt/teams", { cache: "no-store" }),
+      const [pJ, tJ] = await Promise.all([
+        mktFetch<{ profiles: Profile[] }>("/api/mkt/profiles"),
+        mktFetch<{ teams: Team[]; members: Member[] }>("/api/mkt/teams"),
       ]);
-      if (!pRes.ok) throw new Error(`profiles ${pRes.status}`);
-      if (!tRes.ok) throw new Error(`teams ${tRes.status}`);
-      const pJ = (await pRes.json()) as { profiles: Profile[] };
-      const tJ = (await tRes.json()) as { teams: Team[]; members: Member[] };
       setProfiles(pJ.profiles ?? []);
       setTeams(tJ.teams ?? []);
       setMembers(tJ.members ?? []);
@@ -73,15 +70,7 @@ export function TeamClient() {
   ) => {
     setBusy(true);
     try {
-      const res = await fetch(`/api/mkt/profiles/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j?.error ?? `HTTP ${res.status}`);
-      }
+      await mktPatch(`/api/mkt/profiles/${id}`, body);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
@@ -92,15 +81,10 @@ export function TeamClient() {
 
   const [newTeamName, setNewTeamName] = useState("");
   const createTeam = async () => {
-    if (!newTeamName.trim()) return;
+    if (busy || !newTeamName.trim()) return;
     setBusy(true);
     try {
-      const res = await fetch("/api/mkt/teams", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newTeamName.trim() }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await mktPost("/api/mkt/teams", { name: newTeamName.trim() });
       setNewTeamName("");
       await load();
     } catch (e) {
@@ -116,18 +100,17 @@ export function TeamClient() {
       const existing = members.find(
         (m) => m.team_id === teamId && m.profile_id === profileId,
       );
-      const res = existing
-        ? await fetch(`/api/mkt/teams/${teamId}/members`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ profile_id: profileId, is_leader: next }),
-          })
-        : await fetch(`/api/mkt/teams/${teamId}/members`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ profile_id: profileId, is_leader: next }),
-          });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (existing) {
+        await mktPatch(`/api/mkt/teams/${teamId}/members`, {
+          profile_id: profileId,
+          is_leader: next,
+        });
+      } else {
+        await mktPost(`/api/mkt/teams/${teamId}/members`, {
+          profile_id: profileId,
+          is_leader: next,
+        });
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
@@ -139,11 +122,10 @@ export function TeamClient() {
   const removeMember = async (teamId: string, profileId: string) => {
     setBusy(true);
     try {
-      const res = await fetch(
+      await mktFetch(
         `/api/mkt/teams/${teamId}/members?profile_id=${encodeURIComponent(profileId)}`,
         { method: "DELETE" },
       );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Remove failed");
@@ -484,9 +466,10 @@ const btnPrimary: React.CSSProperties = {
   background: MKT.green,
   color: MKT.cream,
   border: "none",
-  padding: "0.35rem 0.75rem",
+  padding: "0.6rem 0.9rem",
+  minHeight: 44,
   borderRadius: 6,
-  fontSize: "0.82rem",
+  fontSize: "0.92rem",
   fontWeight: 600,
   cursor: "pointer",
 };
@@ -494,9 +477,10 @@ const btnQuiet: React.CSSProperties = {
   background: "transparent",
   color: MKT.blue,
   border: `1px solid ${MKT.ash}`,
-  padding: "0.3rem 0.6rem",
+  padding: "0.6rem 0.75rem",
+  minHeight: 44,
   borderRadius: 6,
-  fontSize: "0.8rem",
+  fontSize: "0.9rem",
   cursor: "pointer",
 };
 
@@ -529,24 +513,20 @@ function AddPersonCard({ onCreated }: { onCreated: () => void }) {
     phone.replace(/\D/g, "").length >= 10;
 
   const submit = async () => {
+    if (busy) return; // double-click guard
     setError(null);
     setCopied(false);
     setBusy(true);
     try {
-      const res = await fetch("/api/mkt/profiles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          full_name: full_name.trim(),
-          email: email.trim().toLowerCase(),
-          phone: phone.replace(/\D/g, "").slice(-10),
-          role,
-        }),
+      const j = await mktPost<{
+        profile: { id: string };
+        one_time_password: string;
+      }>("/api/mkt/profiles", {
+        full_name: full_name.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.replace(/\D/g, "").slice(-10),
+        role,
       });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(j?.error ?? `HTTP ${res.status}`);
-      }
       setCreated({
         name: full_name.trim(),
         email: email.trim().toLowerCase(),
