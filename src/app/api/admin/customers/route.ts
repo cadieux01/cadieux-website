@@ -217,17 +217,41 @@ export async function GET(req: NextRequest) {
     total_spent_paise: number;
     outstanding_cod_paise: number;
     last_order_at: string | null;
+    cancelled_orders: number;
+    last_cancellation_at: string | null;
   };
+  // Make sure every customer_id that appears in orders carries an Agg,
+  // not just the ones with a non-cancelled order. The "Tried, cancelled"
+  // segment (see src/lib/mkt-crm.ts) keys on cancelled_orders — a
+  // customer whose ONLY order was cancelled still needs cancelled_orders
+  // to be >= 1 on their row, and the old loop would never have created
+  // an Agg for them.
   const agg = new Map<string, Agg>();
-  for (const row of orders) {
-    if (!row.customer_id) continue;
-    if (isCancelled(row.status)) continue; // excludes BOTH count and spend
-    const cur = agg.get(row.customer_id) ?? {
+  const ensure = (cid: string): Agg => {
+    const cur = agg.get(cid);
+    if (cur) return cur;
+    const fresh: Agg = {
       total_orders: 0,
       total_spent_paise: 0,
       outstanding_cod_paise: 0,
       last_order_at: null,
+      cancelled_orders: 0,
+      last_cancellation_at: null,
     };
+    agg.set(cid, fresh);
+    return fresh;
+  };
+  for (const row of orders) {
+    if (!row.customer_id) continue;
+    if (isCancelled(row.status)) {
+      const cur = ensure(row.customer_id);
+      cur.cancelled_orders += 1;
+      if (!cur.last_cancellation_at || row.created_at > cur.last_cancellation_at) {
+        cur.last_cancellation_at = row.created_at;
+      }
+      continue; // excludes BOTH count and spend from the non-cancelled aggregates
+    }
+    const cur = ensure(row.customer_id);
     cur.total_orders += 1;
     const amt = Number(row.total_amount) || 0;
     const paise = Math.round(amt * 100);
@@ -243,7 +267,6 @@ export async function GET(req: NextRequest) {
     if (!cur.last_order_at || row.created_at > cur.last_order_at) {
       cur.last_order_at = row.created_at;
     }
-    agg.set(row.customer_id, cur);
   }
 
   // Integer invariant — asserted at build-up time rather than trusted.
@@ -510,6 +533,10 @@ export async function GET(req: NextRequest) {
       total_spent: a ? a.total_spent_paise / 100 : 0,
       outstanding_cod: a ? a.outstanding_cod_paise / 100 : 0,
       last_order_at: a?.last_order_at ?? null,
+      // Drives the "Tried, cancelled" segment on /mkt — a non-zero
+      // count with total_orders === 0 is the whole definition.
+      cancelled_orders: a?.cancelled_orders ?? 0,
+      last_cancellation_at: a?.last_cancellation_at ?? null,
       has_subscription: subscriberSet.has(c.id),
       // Touch fields are only projected when with_touch was asked for.
       // Absent vs null is intentional: absent means "not requested",

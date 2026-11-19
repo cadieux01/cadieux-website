@@ -226,6 +226,22 @@ test("outstanding_cod uses method='cod' AND payment_status not like 'paid%'", ()
   assert.match(get, /!\s*pay\.startsWith\s*\(\s*"paid"\s*\)/);
 });
 
+test("admin path projects cancelled_orders + last_cancellation_at — tried_cancelled rides on them", () => {
+  // The chip's whole point is a phone-call list, and the row needs to
+  // show when the cancellation happened so the operator knows which
+  // conversation to open. If these two fields stop being projected,
+  // the CRM row loses the signal AND the tried_cancelled segment
+  // silently empties (matchesSegment keys on cancelled_orders).
+  const src = code(LIST_ROUTE);
+  const get = handlerSlice(src, "GET");
+  assert.ok(get);
+  // The agg bumps a counter on every cancelled row.
+  assert.match(get, /cur\.cancelled_orders\s*\+=\s*1/);
+  // And the response row projects BOTH keys.
+  assert.match(get, /cancelled_orders:\s*a\?\.cancelled_orders\s*\?\?\s*0/);
+  assert.match(get, /last_cancellation_at:\s*a\?\.last_cancellation_at\s*\?\?\s*null/);
+});
+
 // ── 4. Detail route is isAdmin-only ─────────────────────────────────
 
 test("detail route GET is gated by isAdmin — no team-PIN opening", () => {

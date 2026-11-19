@@ -6,6 +6,7 @@
 export const SEGMENTS = [
   "all",
   "never_ordered",
+  "tried_cancelled",
   "lapsed",
   "one_and_done",
   "subscribers",
@@ -13,9 +14,17 @@ export const SEGMENTS = [
 ] as const;
 export type Segment = (typeof SEGMENTS)[number];
 
+// Labels name the ACTION, not the row shape. "Never received bread"
+// is longer than the old "Never ordered" on purpose — the previous
+// label lumped two different populations together (people the shop
+// never heard from + people whose attempt was cancelled) and the
+// operator had to guess which. The split is driven by what they do
+// next: the never-received group gets a first-time offer, the tried-
+// cancelled group gets a phone call.
 export const SEGMENT_LABEL: Record<Segment, string> = {
   all: "All",
-  never_ordered: "Never ordered",
+  never_ordered: "Never received bread",
+  tried_cancelled: "Tried, cancelled",
   lapsed: "Lapsed >21d",
   one_and_done: "One-and-done",
   subscribers: "Subscribers",
@@ -41,26 +50,41 @@ export function daysSince(iso: string | null): number | null {
 // Minimal row shape — only the fields segmentation reads, so a UI
 // row carrying extra keys can still be fed through matchesSegment()
 // without a cast.
+//
+// `cancelled_orders` is optional so that an older caller that does
+// not yet project it still type-checks; absent reads as "no
+// cancellations on record" and the tried_cancelled segment simply
+// excludes that row.
 export type SegmentableRow = {
   total_orders: number;
   has_subscription: boolean;
   last_order_at: string | null;
   outstanding_cod: number;
+  cancelled_orders?: number;
 };
 
 /** Does this customer match the given segment?
  *
- *  Two invariants worth stating explicitly, because both are easy to
- *  lose in a rewrite:
+ *  Three invariants worth stating explicitly, because every one is
+ *  easy to lose in a rewrite:
  *
- *  - never_ordered requires BOTH no orders AND no subscription. A
- *    plan-holder with no ad-hoc orders is not a stranger — the shop
- *    has served them, and win-back messaging that treats them as a
- *    cold lead will insult them. The AND is the whole point.
+ *  - never_ordered requires `total_orders === 0` (non-cancelled
+ *    count) AND no subscription. That reads as "never received
+ *    bread" — the plan-holder with no ad-hoc orders is NOT a
+ *    stranger (the shop has served them), and a customer whose
+ *    only orders were cancelled has ALSO never received bread.
+ *    Those 48 cancel-only rows appear here deliberately.
+ *
+ *  - tried_cancelled is a SUBSET of never_ordered: never_ordered
+ *    rows WITH cancelled_orders >= 1. They need a different action
+ *    (phone call, not first-time offer), so they get their own
+ *    chip. Overlap with never_ordered is by design — the chips are
+ *    different questions over the same table.
  *
  *  - lapsed requires a last_order_at. A customer who never ordered
- *    cannot be "lapsed"; that is what never_ordered is for. The two
- *    sets must stay disjoint — a customer must not appear in both.
+ *    cannot be "lapsed"; that is what never_ordered is for. A
+ *    tried_cancelled customer also has no last_order_at (their only
+ *    orders were cancelled), so they are NOT in lapsed either.
  */
 export function matchesSegment(c: SegmentableRow, seg: Segment): boolean {
   switch (seg) {
@@ -68,6 +92,12 @@ export function matchesSegment(c: SegmentableRow, seg: Segment): boolean {
       return true;
     case "never_ordered":
       return c.total_orders === 0 && !c.has_subscription;
+    case "tried_cancelled":
+      return (
+        c.total_orders === 0 &&
+        (c.cancelled_orders ?? 0) >= 1 &&
+        !c.has_subscription
+      );
     case "one_and_done":
       return c.total_orders === 1;
     case "lapsed": {

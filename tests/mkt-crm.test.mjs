@@ -310,6 +310,66 @@ test("never_ordered excludes subscribers — a plan-holder is not a stranger", (
   assert.equal(matchesSegment(subscriber, "never_ordered"), false);
 });
 
+test("never_ordered means 'never received bread' — a cancel-only row still fits", () => {
+  // Measured in prod: 48 of the 470 never-ordered rows have only
+  // cancelled orders. The user's rule: never_ordered describes "no
+  // bread delivered", regardless of whether an attempt was cancelled.
+  // Those 48 appear in BOTH never_ordered AND tried_cancelled by
+  // design; see the test below for the subset rule.
+  const cancelOnly = row({ total_orders: 0, cancelled_orders: 2 });
+  assert.equal(matchesSegment(cancelOnly, "never_ordered"), true);
+});
+
+test("tried_cancelled is a SUBSET of never_ordered — 0 live orders, >=1 cancelled, no sub", () => {
+  // A ≥ 1 cancelled, no live order, no subscription → tried_cancelled.
+  assert.equal(
+    matchesSegment(
+      row({ total_orders: 0, cancelled_orders: 1, has_subscription: false }),
+      "tried_cancelled",
+    ),
+    true,
+  );
+  // Zero cancellations → not tried_cancelled, but still never_ordered.
+  assert.equal(
+    matchesSegment(
+      row({ total_orders: 0, cancelled_orders: 0 }),
+      "tried_cancelled",
+    ),
+    false,
+  );
+  // Any live order disqualifies, however many cancellations.
+  assert.equal(
+    matchesSegment(
+      row({ total_orders: 1, cancelled_orders: 5 }),
+      "tried_cancelled",
+    ),
+    false,
+  );
+  // Subscribers never appear here (same reason as never_ordered — not
+  // strangers, don't call them "tried, cancelled").
+  assert.equal(
+    matchesSegment(
+      row({ total_orders: 0, cancelled_orders: 2, has_subscription: true }),
+      "tried_cancelled",
+    ),
+    false,
+  );
+});
+
+test("tried_cancelled ⊂ never_ordered — a cancel-only row satisfies BOTH", () => {
+  const r = row({ total_orders: 0, cancelled_orders: 1, has_subscription: false });
+  assert.equal(matchesSegment(r, "never_ordered"), true);
+  assert.equal(matchesSegment(r, "tried_cancelled"), true);
+});
+
+test("SEGMENTS + SEGMENT_LABEL both carry tried_cancelled and relabel never_ordered", () => {
+  assert.ok(libMod.SEGMENTS.includes("tried_cancelled"));
+  assert.equal(libMod.SEGMENT_LABEL.tried_cancelled, "Tried, cancelled");
+  // Re-label is the whole point — the old "Never ordered" lumped two
+  // populations together.
+  assert.equal(libMod.SEGMENT_LABEL.never_ordered, "Never received bread");
+});
+
 test("lapsed requires a last order — never-ordered customers are NOT lapsed", () => {
   // The two sets must be disjoint: "never ordered" and "lapsed"
   // measure different things and must not overlap.
@@ -337,6 +397,27 @@ test("lapsed boundary — 21 days EXACTLY is not yet lapsed", () => {
 test("owes_cod fires only on a positive outstanding balance", () => {
   assert.equal(matchesSegment(row({ outstanding_cod: 0 }), "owes_cod"), false);
   assert.equal(matchesSegment(row({ outstanding_cod: 42 }), "owes_cod"), true);
+});
+
+test("the CRM row surfaces 'Cancelled N · {date}' when there are no live orders", () => {
+  // Pinning the surface so an operator opening /mkt?segment=tried_cancelled
+  // immediately sees HOW MANY cancelled orders and WHEN — the two
+  // things that tell them which conversation to open. The condition
+  // intentionally fires for ANY row with total_orders=0 and >=1
+  // cancelled, not just when the tried_cancelled chip is active, so
+  // the signal travels with the row wherever it is viewed.
+  const pageSrc = fs.readFileSync(
+    path.join(ROOT, "src/app/mkt/page.tsx"),
+    "utf8",
+  );
+  assert.match(
+    pageSrc,
+    /row\.total_orders\s*===\s*0\s*&&\s*row\.cancelled_orders\s*>\s*0/,
+  );
+  assert.match(
+    pageSrc,
+    /Cancelled \{row\.cancelled_orders\}[\s\S]*?formatDate\(row\.last_cancellation_at\)/,
+  );
 });
 
 test("buildTimeline interleaves ALL four sources and sorts newest first", () => {

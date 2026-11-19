@@ -73,6 +73,10 @@ type ListRow = {
   outstanding_cod: number;
   last_order_at: string | null;
   has_subscription: boolean;
+  // cancelled_orders drives the tried_cancelled segment (and the
+  // "N cancelled" badge on the row when there are no live orders).
+  cancelled_orders: number;
+  last_cancellation_at: string | null;
   last_touch_at: string | null;
   last_touch_body: string | null;
   last_touch_kind: "note" | "call" | "edit" | "whatsapp" | null;
@@ -279,6 +283,7 @@ function MktCrmInner() {
     const out: Record<Segment, number> = {
       all: 0,
       never_ordered: 0,
+      tried_cancelled: 0,
       lapsed: 0,
       one_and_done: 0,
       subscribers: 0,
@@ -719,6 +724,17 @@ function PersonRow({
               <span style={{ color: MKT.ash }}>·</span>
               <span style={{ color: MKT.error, fontWeight: 600 }}>
                 Owes {formatINR(row.outstanding_cod)}
+              </span>
+            </>
+          ) : null}
+          {row.total_orders === 0 && row.cancelled_orders > 0 ? (
+            // Surfaces the "Tried, cancelled" signal on the ROW, not
+            // just as a chip filter — so a tried_cancelled customer
+            // is visible for what they are in any segment view.
+            <>
+              <span style={{ color: MKT.ash }}>·</span>
+              <span style={{ color: MKT.error, fontWeight: 600 }}>
+                Cancelled {row.cancelled_orders} · {formatDate(row.last_cancellation_at)}
               </span>
             </>
           ) : null}

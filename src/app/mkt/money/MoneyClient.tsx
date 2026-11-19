@@ -33,7 +33,8 @@ type MoneyResponse = {
     repeat_pct: number;
   };
   segments: {
-    never_ordered: number;
+    never_ordered: number;      // includes tried_cancelled
+    tried_cancelled: number;    // subset of never_ordered
     lapsed_over_21d: number;
   };
   methodSplit: {
@@ -193,25 +194,43 @@ function ReturnHero({
       </div>
       <div
         style={{
-          display: "flex",
-          gap: "0.6rem",
-          flexWrap: "wrap",
-          alignItems: "center",
+          display: "grid",
+          gap: "0.4rem",
         }}
       >
-        <span style={{ color: MKT.mute, fontSize: "0.9rem" }}>
-          Act on this:
+        <div
+          style={{
+            display: "flex",
+            gap: "0.6rem",
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          <span style={{ color: MKT.mute, fontSize: "0.9rem" }}>
+            Act on this:
+          </span>
+          <SegmentChip
+            href="/mkt?segment=never_ordered"
+            count={segments.never_ordered}
+            label="never received bread"
+          />
+          <SegmentChip
+            href="/mkt?segment=tried_cancelled"
+            count={segments.tried_cancelled}
+            label="tried, cancelled"
+            hue="error"
+          />
+          <SegmentChip
+            href="/mkt?segment=lapsed"
+            count={segments.lapsed_over_21d}
+            label="lapsed > 21 days"
+          />
+        </div>
+        <span style={{ color: MKT.mute, fontSize: "0.8rem" }}>
+          Tried-cancelled are a subset of never-received-bread — different
+          action (phone call, not first-time offer), so they get their own
+          list.
         </span>
-        <SegmentChip
-          href="/mkt?segment=never_ordered"
-          count={segments.never_ordered}
-          label="never ordered"
-        />
-        <SegmentChip
-          href="/mkt?segment=lapsed"
-          count={segments.lapsed_over_21d}
-          label="lapsed > 21 days"
-        />
       </div>
     </section>
   );
@@ -270,11 +289,14 @@ function SegmentChip({
   href,
   count,
   label,
+  hue,
 }: {
   href: string;
   count: number;
   label: string;
+  hue?: "error";
 }) {
+  const countColour = hue === "error" ? MKT.error : MKT.green;
   return (
     <Link
       href={href}
@@ -291,7 +313,7 @@ function SegmentChip({
         minHeight: 44,
       }}
     >
-      <strong style={{ color: MKT.green, fontSize: "1rem" }}>{count}</strong>
+      <strong style={{ color: countColour, fontSize: "1rem" }}>{count}</strong>
       <span style={{ color: MKT.mute }}>{label}</span>
       <span aria-hidden style={{ color: MKT.blue }}>→</span>
     </Link>

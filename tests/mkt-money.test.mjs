@@ -219,23 +219,29 @@ test("computeLifetimeRepeat — denominator is customers with >=1 non-cancelled 
   assert.equal(r.repeat_pct, 50);
 });
 
-test("computeSegmentCounts — never_ordered excludes subscribers, lapsed requires a last_order_at", () => {
+test("computeSegmentCounts — never_ordered, tried_cancelled subset, lapsed requires last_order_at", () => {
   const today = new Date("2026-11-18T12:00:00Z");
   const rows = [
-    // c1 ordered last week → not lapsed.
+    // c1 ordered last week → not lapsed, not never_ordered.
     row({ customer_id: "c1", created_at: "2026-11-15T06:00:00Z" }),
     // c2 ordered 30 days ago → lapsed.
     row({ customer_id: "c2", created_at: "2026-10-19T06:00:00Z" }),
-    // c3's only order was cancelled → counts as never_ordered.
+    // c3's only order was cancelled; c3 ALSO holds a subscription, so
+    // the subscription rules c3 out of never_ordered.
     row({ customer_id: "c3", created_at: "2026-11-01T06:00:00Z", status: "cancelled" }),
+    // c5's only order was cancelled; no subscription → BOTH
+    // never_ordered AND tried_cancelled.
+    row({ customer_id: "c5", created_at: "2026-11-02T06:00:00Z", status: "cancelled" }),
   ];
-  // Four customer IDs total — c4 has NO orders at all.
-  const customerIds = ["c1", "c2", "c3", "c4"];
-  // c3 holds a subscription → disqualifies never_ordered.
+  // c4 has NO orders at all → never_ordered only, not tried_cancelled.
+  const customerIds = ["c1", "c2", "c3", "c4", "c5"];
   const subscribers = new Set(["c3"]);
   const s = mod.computeSegmentCounts(customerIds, rows, subscribers, today);
-  assert.equal(s.never_ordered, 1, "only c4 (c3 has a subscription)");
+  assert.equal(s.never_ordered, 2, "c4 and c5 (c3 has a subscription)");
+  assert.equal(s.tried_cancelled, 1, "only c5 — cancel-only, no subscription");
   assert.equal(s.lapsed_over_21d, 1, "only c2's last order is > 21 days old");
+  // Subset invariant: tried_cancelled is always <= never_ordered.
+  assert.ok(s.tried_cancelled <= s.never_ordered);
 });
 
 test("windowStartIso — last 7 IST days ending today is 6 IST-midnights ago", () => {
@@ -246,15 +252,20 @@ test("windowStartIso — last 7 IST days ending today is 6 IST-midnights ago", (
   assert.equal(start, "2026-11-11T18:30:00.000Z");
 });
 
-test("MoneyClient renders the three labelled metric tiles + the two segment chips", () => {
+test("MoneyClient renders the three labelled metric tiles + three segment chips", () => {
   const src = read("src/app/mkt/money/MoneyClient.tsx");
   // Labels — pinning the copy means nobody has to guess the window.
   assert.match(src, /RETURNING THIS WEEK/);
   assert.match(src, /LIFETIME REPEAT/);
   assert.match(src, /NEW THIS WEEK/);
-  // Segment chips link into /mkt with the right ?segment= value.
+  // Segment chips link into /mkt with the right ?segment= value. The
+  // never_ordered chip must carry the clearer "never received bread"
+  // copy — the old "never ordered" was ambiguous with cancel-only.
   assert.match(src, /\/mkt\?segment=never_ordered/);
+  assert.match(src, /\/mkt\?segment=tried_cancelled/);
   assert.match(src, /\/mkt\?segment=lapsed/);
+  assert.match(src, /never received bread/);
+  assert.match(src, /tried, cancelled/);
 });
 
 // ── 6. Admin-only gates ────────────────────────────────────────────

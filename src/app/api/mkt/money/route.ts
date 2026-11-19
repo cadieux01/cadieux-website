@@ -7,8 +7,12 @@
 //                denominator = customers who ordered in the last 7
 //                IST days; disjoint).
 //   * lifetime:  LIFETIME-REPEAT across the whole non-cancelled history.
-//   * segments:  never_ordered + lapsed >21d — each of these is what
-//                the admin clicks into on /mkt and acts on.
+//   * segments:  never_ordered + tried_cancelled + lapsed >21d —
+//                each is a different action and each clicks straight
+//                through to that segment in /mkt. tried_cancelled is
+//                a SUBSET of never_ordered (deliberate overlap), so
+//                the two counts answer different questions over the
+//                same rows.
 //   * methodSplit: cash / upi / cash_upi (split) / other / unrecorded
 //   * sourceSplit: online / offline / manual
 //   * jar:    current-week revenue + the configured weekly target

@@ -315,20 +315,31 @@ export function computeLifetimeRepeat(rows: MoneyOrderRow[]): LifetimeRepeat {
 
 // ── Segment counts — "what do I do about this?" links ──────────────
 //
-// Two counts the admin reads off the Money screen and clicks straight
-// into the CRM to act on:
-//   * never_ordered — customers with 0 non-cancelled orders AND no
-//     subscription. A plan-holder with no ad-hoc orders is not a
-//     stranger (the AND is inherited from src/lib/mkt-crm.ts; a rule
-//     split between files is a trap).
+// Three counts the admin reads off the Money screen and clicks
+// straight into the CRM to act on. Each one describes a DIFFERENT
+// action, which is why they are three chips and not one:
+//
+//   * never_ordered (= "never received bread") — customers with 0
+//     non-cancelled orders AND no subscription. This INCLUDES the
+//     tried_cancelled group below by construction: a cancel-only
+//     customer has never received bread. The action here is a
+//     first-time offer or a welcome message.
+//   * tried_cancelled — the SUBSET of never_ordered whose record
+//     shows at least one CANCELLED order. The action is a phone
+//     call: find out what went wrong on the one attempt they made.
 //   * lapsed >21d — customers whose most recent non-cancelled order
-//     is more than 21 days old. Disjoint from never_ordered by
+//     is more than 21 days old. Disjoint from both of the above by
 //     construction: no last_order_at → no lapsed membership.
+//
+// The chip rule is deliberately the same rule as matchesSegment() in
+// src/lib/mkt-crm.ts, so what the Money screen shows and what /mkt's
+// chip filter renders cannot drift apart.
 
 const LAPSED_DAYS = 21;
 
 export type SegmentCounts = {
-  never_ordered: number;
+  never_ordered: number;      // includes tried_cancelled
+  tried_cancelled: number;    // subset of never_ordered
   lapsed_over_21d: number;
 };
 
@@ -338,30 +349,43 @@ export function computeSegmentCounts(
   subscriberIds: Set<string>,
   today: Date = new Date(),
 ): SegmentCounts {
-  // Per-customer: non-cancelled order count + last order ISO.
+  // Per-customer: non-cancelled count, cancelled count, last non-
+  // cancelled order ISO. All three are keyed on customer_id, so a
+  // single pass over rows builds them.
   const totalOrders = new Map<string, number>();
+  const cancelledOrders = new Map<string, number>();
   const lastOrderAt = new Map<string, string>();
   for (const r of rows) {
-    if (isCancelled(r.status)) continue;
     if (!r.customer_id) continue;
+    if (isCancelled(r.status)) {
+      cancelledOrders.set(r.customer_id, (cancelledOrders.get(r.customer_id) ?? 0) + 1);
+      continue;
+    }
     totalOrders.set(r.customer_id, (totalOrders.get(r.customer_id) ?? 0) + 1);
     const prev = lastOrderAt.get(r.customer_id);
     if (!prev || r.created_at > prev) lastOrderAt.set(r.customer_id, r.created_at);
   }
   let never = 0;
+  let tried = 0;
   let lapsed = 0;
   const nowMs = today.getTime();
   const lapsedThresholdMs = LAPSED_DAYS * 86_400_000;
   for (const cid of customerIds) {
     const n = totalOrders.get(cid) ?? 0;
     if (n === 0) {
-      if (!subscriberIds.has(cid)) never += 1;
+      if (subscriberIds.has(cid)) continue;
+      never += 1;
+      if ((cancelledOrders.get(cid) ?? 0) >= 1) tried += 1;
       continue;
     }
     const last = lastOrderAt.get(cid);
     if (last && nowMs - Date.parse(last) > lapsedThresholdMs) lapsed += 1;
   }
-  return { never_ordered: never, lapsed_over_21d: lapsed };
+  return {
+    never_ordered: never,
+    tried_cancelled: tried,
+    lapsed_over_21d: lapsed,
+  };
 }
 
 // ── Break-even jar ─────────────────────────────────────────────────
