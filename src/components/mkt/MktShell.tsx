@@ -148,7 +148,10 @@ export function MktShell({
             <Link href="/mkt/campaigns" style={{ color: MKT.ink }}>Campaigns</Link>
             <Link href="/mkt/calendar" style={{ color: MKT.ink }}>Calendar</Link>
             {profile.role === "admin" ? (
-              <Link href="/mkt/team" style={{ color: MKT.ink }}>Team</Link>
+              <>
+                <Link href="/mkt/money" style={{ color: MKT.ink }}>Money</Link>
+                <Link href="/mkt/team" style={{ color: MKT.ink }}>Team</Link>
+              </>
             ) : null}
             <NotificationBar />
             <IdentityChip
