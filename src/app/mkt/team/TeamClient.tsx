@@ -180,6 +180,9 @@ export function TeamClient() {
         </div>
       ) : null}
 
+      {/* New person */}
+      <AddPersonCard onCreated={() => void load()} />
+
       {/* People */}
       <section
         style={{
@@ -495,4 +498,257 @@ const btnQuiet: React.CSSProperties = {
   borderRadius: 6,
   fontSize: "0.8rem",
   cursor: "pointer",
+};
+
+// ── Add person ─────────────────────────────────────────────────────
+
+// Separate component from the main TeamClient so the one-time password
+// state (deliberately scoped to this form) cannot leak via a parent
+// re-render when the people list refreshes. The password is SHOWN
+// ONCE, with a Copy button and a Clear button; dismissing the card
+// drops it from memory. There is no way to re-reveal it — same
+// contract the API documents in its module header.
+function AddPersonCard({ onCreated }: { onCreated: () => void }) {
+  const [full_name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState<(typeof ROLES)[number]>("marketing");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<{
+    name: string;
+    email: string;
+    password: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const canSubmit =
+    !busy &&
+    full_name.trim().length > 0 &&
+    email.trim().length > 0 &&
+    phone.replace(/\D/g, "").length >= 10;
+
+  const submit = async () => {
+    setError(null);
+    setCopied(false);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/mkt/profiles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: full_name.trim(),
+          email: email.trim().toLowerCase(),
+          phone: phone.replace(/\D/g, "").slice(-10),
+          role,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(j?.error ?? `HTTP ${res.status}`);
+      }
+      setCreated({
+        name: full_name.trim(),
+        email: email.trim().toLowerCase(),
+        password: j.one_time_password,
+      });
+      // Clear the form so the admin can't accidentally re-submit.
+      setName("");
+      setEmail("");
+      setPhone("");
+      setRole("marketing");
+      onCreated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create person");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    if (!created) return;
+    try {
+      await navigator.clipboard.writeText(created.password);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard denied — operator can select+copy manually */
+    }
+  };
+
+  return (
+    <section
+      style={{
+        background: "#FFFFFF",
+        border: `1px solid ${MKT.ash}`,
+        borderRadius: 10,
+        padding: "0.8rem 1rem",
+        boxShadow: MKT.cardShadow,
+      }}
+    >
+      <h2 style={h2Style}>Add person</h2>
+      <p style={{ color: MKT.mute, fontSize: "0.86rem", margin: "0 0 0.5rem" }}>
+        Creates a login + a profile. A one-time password appears below —
+        share it with the new teammate and have them reset it on first sign-in.
+      </p>
+
+      {error ? (
+        <div
+          role="alert"
+          style={{
+            border: `1px solid ${MKT.error}`,
+            background: MKT.errorBg,
+            color: MKT.error,
+            padding: "0.5rem 0.7rem",
+            borderRadius: 6,
+            fontSize: "0.88rem",
+            marginBottom: "0.5rem",
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "0.5rem",
+          alignItems: "end",
+        }}
+      >
+        <label style={labelStyle}>
+          Name
+          <input
+            value={full_name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={busy}
+            placeholder="Full name"
+          />
+        </label>
+        <label style={labelStyle}>
+          Email
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={busy}
+            placeholder="person@example.com"
+            autoComplete="off"
+          />
+        </label>
+        <label style={labelStyle}>
+          Phone
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            disabled={busy}
+            placeholder="10-digit"
+            inputMode="numeric"
+          />
+        </label>
+        <label style={labelStyle}>
+          Role
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as (typeof ROLES)[number])}
+            disabled={busy}
+          >
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!canSubmit}
+          style={{
+            ...btnPrimary,
+            opacity: canSubmit ? 1 : 0.5,
+            cursor: canSubmit ? "pointer" : "not-allowed",
+            padding: "0.5rem 0.9rem",
+          }}
+        >
+          {busy ? "Creating…" : "Create"}
+        </button>
+      </div>
+
+      {created ? (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            marginTop: "0.6rem",
+            border: `1px solid ${MKT.green}`,
+            background: "rgba(2,70,40,0.06)",
+            padding: "0.55rem 0.8rem",
+            borderRadius: 8,
+            display: "grid",
+            gap: "0.35rem",
+          }}
+        >
+          <strong style={{ color: MKT.green, fontSize: "0.92rem" }}>
+            {created.name} ({created.email}) created
+          </strong>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={{ color: MKT.mute, fontSize: "0.82rem" }}>
+              One-time password:
+            </span>
+            <code
+              style={{
+                fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                fontSize: "1rem",
+                background: "#FFFFFF",
+                padding: "0.2rem 0.5rem",
+                border: `1px solid ${MKT.ash}`,
+                borderRadius: 4,
+                userSelect: "all",
+              }}
+            >
+              {created.password}
+            </code>
+            <button
+              type="button"
+              onClick={copy}
+              style={{
+                ...btnQuiet,
+                color: copied ? MKT.green : MKT.blue,
+                borderColor: copied ? MKT.green : MKT.ash,
+              }}
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreated(null)}
+              style={btnQuiet}
+            >
+              Clear
+            </button>
+          </div>
+          <p style={{ color: MKT.mute, fontSize: "0.78rem", margin: 0 }}>
+            This is shown ONCE. If you lose it, the new teammate can reset
+            their password from /mkt/login.
+          </p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+const labelStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "0.2rem",
+  fontSize: "0.84rem",
+  color: MKT.mute,
 };
