@@ -32,6 +32,7 @@
 // REUSE: list data from /api/admin/customers?with_touch=1, detail
 // from /api/admin/customers/[id], both already gated and tested.
 
+import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -412,6 +413,10 @@ function MktCrmInner() {
             countShown={visible.length}
           />
 
+          {segment !== "all" && visible.length > 0 ? (
+            <WorkThisList segment={segment} count={visible.length} />
+          ) : null}
+
           {touchError ? (
             <PaneError>Touch merge failed: {touchError}</PaneError>
           ) : null}
@@ -539,6 +544,44 @@ function SearchBox({
         {countShown} {countShown === 1 ? "person" : "people"}
       </span>
     </div>
+  );
+}
+
+// ── Work-this-list call-to-action ──────────────────────────────────
+//
+// Only shown when a specific segment is selected (segment !== 'all')
+// and there is at least one person to work. Links straight into
+// /mkt/worklist?segment=X; the brief said one tap into a queue.
+function WorkThisList({
+  segment,
+  count,
+}: {
+  segment: Segment;
+  count: number;
+}) {
+  return (
+    <Link
+      href={`/mkt/worklist?segment=${encodeURIComponent(segment)}`}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        margin: "0.4rem 0 0.8rem",
+        padding: "0.6rem 0.9rem",
+        borderRadius: 8,
+        background: MKT.green,
+        color: MKT.cream,
+        textDecoration: "none",
+        minHeight: 44,
+        fontWeight: 600,
+        fontSize: "0.95rem",
+      }}
+    >
+      Work this list →
+      <span style={{ color: MKT.cream, opacity: 0.75, fontWeight: 400 }}>
+        {count} to work
+      </span>
+    </Link>
   );
 }
 

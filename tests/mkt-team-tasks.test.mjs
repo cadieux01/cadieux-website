@@ -85,6 +85,11 @@ test("/mkt is fully gated — every handler under /api/mkt/** reads auth.getUser
   // Every route handler must resolve the signed-in user. Any new
   // handler that forgets to will leak data under RLS-only enforcement
   // because the service role is never used here.
+  //
+  // readMktSession() is the ratified wrapper around sb.auth.getUser()
+  // + the logistics.profiles row — a handler that calls it has done
+  // the gate strictly MORE carefully than an inline getUser (it also
+  // filters on status='active'). Accept either shape.
   const apiDir = path.join(ROOT, "src/app/api/mkt");
   const walk = (dir) => {
     const files = [];
@@ -104,10 +109,11 @@ test("/mkt is fully gated — every handler under /api/mkt/** reads auth.getUser
     // not need to validate the user ahead of that (signing out an
     // absent session is a no-op). Skip it.
     if (rel.endsWith("/api/mkt/auth/signout/route.ts")) continue;
-    assert.match(
-      src,
-      /sb\.auth\.getUser\s*\(/,
-      `${rel} does not call sb.auth.getUser() — the route is anonymous or leaks under RLS`,
+    const callsGetUser = /sb\.auth\.getUser\s*\(/.test(src);
+    const callsReadSession = /readMktSession\s*\(/.test(src);
+    assert.ok(
+      callsGetUser || callsReadSession,
+      `${rel} does not call sb.auth.getUser() or readMktSession() — the route is anonymous or leaks under RLS`,
     );
   }
 });
